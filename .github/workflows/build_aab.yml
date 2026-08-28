@@ -1,0 +1,52 @@
+name: Build Games Khabar AAB for Play Store
+
+on:
+  push:
+    branches: [ main ]
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Java 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'zulu'
+          java-version: '17'
+
+      - name: Setup Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          flutter-version: '3.22.2'
+          channel: 'stable'
+
+      - name: Install dependencies
+        run: flutter pub get
+
+      - name: Setup NDK 28 for 16KB support (Play Store Nov 2025 requirement)
+        run: |
+          echo "y" | sdkmanager --install "ndk;28.0.12433566"
+          echo "ndkVersion=28.0.12433566" >> android/local.properties
+
+      - name: Build AAB (App Bundle for Play Store)
+        run: flutter build appbundle --release
+
+      - name: Build APK for testing
+        run: flutter build apk --release --split-per-abi
+
+      - name: Upload AAB artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: games-khabar-aab
+          path: build/app/outputs/bundle/release/app-release.aab
+
+      - name: Upload APK artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: games-khabar-apk
+          path: build/app/outputs/flutter-apk/app-release.apk
