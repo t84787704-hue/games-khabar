@@ -1,0 +1,6 @@
+{
+  "name": "Games Khabar",
+  "description": "Games Khabar - Free Games & Gaming News in Roman Urdu for Pakistan, Saudi, UAE audience",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
