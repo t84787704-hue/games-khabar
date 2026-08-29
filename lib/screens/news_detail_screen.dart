@@ -1,9 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import 'package:cached_network_image/cached_network_image.dart';
 import 'package:url_launcher/url_launcher.dart';
-import 'package:video_player/video_player.dart';
+import 'package:youtube_player_flutter/youtube_player_flutter.dart';
 import '../models/news_model.dart';
+import '../widgets/app_image_view.dart';
 
 class NewsDetailScreen extends StatelessWidget {
   final NewsModel news;
@@ -13,15 +13,34 @@ class NewsDetailScreen extends StatelessWidget {
   static const Color neonGreen = Color(0xFF00FF88);
   static const Color bgDark = Color(0xFF0A0A0F);
   static const Color cardDark = Color(0xFF1E1E24);
-  static const Color cardDark2 = Color(0xFF15151A);
   static const Color borderDark = Color(0xFF2E2E38);
+  static const Color alertRed = Color(0xFFFF4655);
   static const Color textWhite = Color(0xFFFFFFFF);
   static const Color textGray = Color(0xFF9E9EA7);
   static const Color textLightGray = Color(0xFFD4D4D8);
 
-  bool get hasVideo => news.videoUrl != null && news.videoUrl!.trim().isNotEmpty;
+  bool get hasVideoUrl => news.videoUrl != null && news.videoUrl!.trim().isNotEmpty;
 
-  String? _extractUrl(String text) {
+  bool get isYouTubeVideo {
+    if (!hasVideoUrl) return false;
+    final lower = news.videoUrl!.toLowerCase();
+    return lower.contains('youtube.com') || lower.contains('youtu.be');
+  }
+
+  String? get youTubeVideoId {
+    if (!isYouTubeVideo) return null;
+    final url = news.videoUrl!.trim();
+    final converted = YoutubePlayer.convertUrlToId(url);
+    if (converted != null && converted.isNotEmpty) return converted;
+    final regExp = RegExp(
+      r'(?:youtu\.be\/|youtube\.com\/(?:embed\/|v\/|watch\?v=|watch\?.+&v=|shorts\/))([\w-]{11})',
+      caseSensitive: false,
+    );
+    final match = regExp.firstMatch(url);
+    return match?.group(1);
+  }
+
+  String? _extractSourceUrl(String text) {
     if (news.sourceUrl != null && news.sourceUrl!.trim().isNotEmpty) {
       return news.sourceUrl!.trim();
     }
@@ -40,7 +59,7 @@ class NewsDetailScreen extends StatelessWidget {
     return null;
   }
 
-  Future<void> _launchUrlString(BuildContext context, String url) async {
+  Future<void> _launchExternalUrl(BuildContext context, String url) async {
     final uri = Uri.tryParse(url);
     if (uri != null && await canLaunchUrl(uri)) {
       await launchUrl(uri, mode: LaunchMode.externalApplication);
@@ -83,121 +102,69 @@ class NewsDetailScreen extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final directUrl = _extractUrl(news.description);
+    final directUrl = _extractSourceUrl(news.description);
+    final ytId = youTubeVideoId;
+    final isOtherVideo = hasVideoUrl && !isYouTubeVideo;
 
     return Scaffold(
       backgroundColor: bgDark,
       body: CustomScrollView(
         slivers: [
-          // Sliver Header: Video Player or Hero Image
-          if (hasVideo)
-            SliverAppBar(
-              expandedHeight: 280,
-              pinned: true,
-              backgroundColor: bgDark,
-              elevation: 0,
-              leading: Padding(
-                padding: const EdgeInsets.all(8.0),
-                child: CircleAvatar(
-                  backgroundColor: Colors.black.withOpacity(0.7),
-                  child: IconButton(
-                    icon: const Icon(Icons.arrow_back_ios_new, color: textWhite, size: 18),
-                    onPressed: () => Navigator.pop(context),
-                  ),
+          // Hero Cover Image (SliverAppBar with base64 / network image support)
+          SliverAppBar(
+            expandedHeight: 280,
+            pinned: true,
+            backgroundColor: bgDark,
+            elevation: 0,
+            leading: Padding(
+              padding: const EdgeInsets.all(8.0),
+              child: CircleAvatar(
+                backgroundColor: Colors.black.withOpacity(0.65),
+                child: IconButton(
+                  icon: const Icon(Icons.arrow_back_ios_new, color: textWhite, size: 18),
+                  onPressed: () => Navigator.pop(context),
                 ),
               ),
-              actions: [
-                Padding(
-                  padding: const EdgeInsets.all(8.0),
-                  child: CircleAvatar(
-                    backgroundColor: Colors.black.withOpacity(0.7),
-                    child: IconButton(
-                      icon: const Icon(Icons.share_outlined, color: neonGreen, size: 20),
-                      onPressed: () => _shareArticle(context),
-                    ),
-                  ),
-                ),
-              ],
-              flexibleSpace: FlexibleSpaceBar(
-                background: Container(
-                  color: Colors.black,
-                  child: Center(
-                    child: GamingVideoPlayer(
-                      videoUrl: news.videoUrl!,
-                      thumbnailUrl: news.imageUrl,
-                    ),
-                  ),
-                ),
-              ),
-            )
-          else
-            SliverAppBar(
-              expandedHeight: 300,
-              pinned: true,
-              backgroundColor: bgDark,
-              elevation: 0,
-              leading: Padding(
+            ),
+            actions: [
+              Padding(
                 padding: const EdgeInsets.all(8.0),
                 child: CircleAvatar(
                   backgroundColor: Colors.black.withOpacity(0.65),
                   child: IconButton(
-                    icon: const Icon(Icons.arrow_back_ios_new, color: textWhite, size: 18),
-                    onPressed: () => Navigator.pop(context),
+                    icon: const Icon(Icons.share_outlined, color: neonGreen, size: 20),
+                    onPressed: () => _shareArticle(context),
                   ),
                 ),
               ),
-              actions: [
-                Padding(
-                  padding: const EdgeInsets.all(8.0),
-                  child: CircleAvatar(
-                    backgroundColor: Colors.black.withOpacity(0.65),
-                    child: IconButton(
-                      icon: const Icon(Icons.share_outlined, color: neonGreen, size: 20),
-                      onPressed: () => _shareArticle(context),
+            ],
+            flexibleSpace: FlexibleSpaceBar(
+              background: Stack(
+                fit: StackFit.expand,
+                children: [
+                  AppImageView(
+                    imageUrl: news.imageUrl,
+                    fit: BoxFit.cover,
+                  ),
+                  Container(
+                    decoration: BoxDecoration(
+                      gradient: LinearGradient(
+                        begin: Alignment.topCenter,
+                        end: Alignment.bottomCenter,
+                        colors: [
+                          Colors.black.withOpacity(0.4),
+                          Colors.transparent,
+                          bgDark.withOpacity(0.9),
+                          bgDark,
+                        ],
+                        stops: const [0.0, 0.4, 0.85, 1.0],
+                      ),
                     ),
                   ),
-                ),
-              ],
-              flexibleSpace: FlexibleSpaceBar(
-                background: Stack(
-                  fit: StackFit.expand,
-                  children: [
-                    CachedNetworkImage(
-                      imageUrl: news.imageUrl,
-                      fit: BoxFit.cover,
-                      placeholder: (context, url) => Container(
-                        color: cardDark,
-                        child: const Center(
-                          child: CircularProgressIndicator(
-                            strokeWidth: 2,
-                            valueColor: AlwaysStoppedAnimation<Color>(neonGreen),
-                          ),
-                        ),
-                      ),
-                      errorWidget: (context, url, error) => Container(
-                        color: cardDark,
-                        child: const Icon(Icons.broken_image_rounded, color: textGray, size: 48),
-                      ),
-                    ),
-                    Container(
-                      decoration: BoxDecoration(
-                        gradient: LinearGradient(
-                          begin: Alignment.topCenter,
-                          end: Alignment.bottomCenter,
-                          colors: [
-                            Colors.black.withOpacity(0.4),
-                            Colors.transparent,
-                            bgDark.withOpacity(0.9),
-                            bgDark,
-                          ],
-                          stops: const [0.0, 0.4, 0.85, 1.0],
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
+                ],
               ),
             ),
+          ),
 
           // Content body
           SliverToBoxAdapter(
@@ -206,7 +173,7 @@ class NewsDetailScreen extends StatelessWidget {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  // Category Badge + Video Tag + Time
+                  // Category Badge + Video Indicator + Time + Views
                   Row(
                     children: [
                       Container(
@@ -226,24 +193,24 @@ class NewsDetailScreen extends StatelessWidget {
                           ),
                         ),
                       ),
-                      if (hasVideo) ...[
+                      if (hasVideoUrl) ...[
                         const SizedBox(width: 8),
                         Container(
                           padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                           decoration: BoxDecoration(
-                            color: const Color(0xFFFF4655).withOpacity(0.2),
+                            color: alertRed.withOpacity(0.2),
                             borderRadius: BorderRadius.circular(4),
-                            border: Border.all(color: const Color(0xFFFF4655), width: 1),
+                            border: Border.all(color: alertRed, width: 1),
                           ),
                           child: Row(
                             mainAxisSize: MainAxisSize.min,
                             children: const [
-                              Icon(Icons.play_arrow_rounded, color: Color(0xFFFF4655), size: 14),
+                              Icon(Icons.play_arrow_rounded, color: alertRed, size: 14),
                               SizedBox(width: 2),
                               Text(
                                 'VIDEO',
                                 style: TextStyle(
-                                  color: Color(0xFFFF4655),
+                                  color: alertRed,
                                   fontSize: 10,
                                   fontWeight: FontWeight.w900,
                                 ),
@@ -274,7 +241,7 @@ class NewsDetailScreen extends StatelessWidget {
                   ),
                   const SizedBox(height: 14),
 
-                  // IGN Style Bold Title
+                  // News Title (IGN Bold Style)
                   Text(
                     news.title,
                     style: const TextStyle(
@@ -296,7 +263,42 @@ class NewsDetailScreen extends StatelessWidget {
                       borderRadius: BorderRadius.circular(1),
                     ),
                   ),
-                  const SizedBox(height: 18),
+                  const SizedBox(height: 20),
+
+                  // YouTube Player (if YouTube link)
+                  if (ytId != null) ...[
+                    YouTubePlayerContainer(videoId: ytId),
+                    const SizedBox(height: 20),
+                  ],
+
+                  // Watch Video Button (if other mp4/video link)
+                  if (isOtherVideo) ...[
+                    SizedBox(
+                      width: double.infinity,
+                      height: 50,
+                      child: ElevatedButton.icon(
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: alertRed,
+                          foregroundColor: Colors.white,
+                          elevation: 2,
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                        ),
+                        onPressed: () => _launchExternalUrl(context, news.videoUrl!),
+                        icon: const Icon(Icons.play_circle_fill_rounded, size: 22, color: Colors.white),
+                        label: const Text(
+                          'Watch Video',
+                          style: TextStyle(
+                            fontWeight: FontWeight.w900,
+                            fontSize: 15,
+                            letterSpacing: 0.5,
+                          ),
+                        ),
+                      ),
+                    ),
+                    const SizedBox(height: 20),
+                  ],
 
                   // Description Body Text
                   Text(
@@ -324,7 +326,7 @@ class NewsDetailScreen extends StatelessWidget {
                             side: const BorderSide(color: neonGreen, width: 1.2),
                           ),
                         ),
-                        onPressed: () => _launchUrlString(context, directUrl),
+                        onPressed: () => _launchExternalUrl(context, directUrl),
                         icon: const Icon(Icons.open_in_new, size: 18),
                         label: const Text(
                           'Read Full Article / Source Link',
@@ -372,234 +374,75 @@ class NewsDetailScreen extends StatelessWidget {
   }
 }
 
-class GamingVideoPlayer extends StatefulWidget {
-  final String videoUrl;
-  final String? thumbnailUrl;
+class YouTubePlayerContainer extends StatefulWidget {
+  final String videoId;
 
-  const GamingVideoPlayer({
-    super.key,
-    required this.videoUrl,
-    this.thumbnailUrl,
-  });
+  const YouTubePlayerContainer({super.key, required this.videoId});
 
   @override
-  State<GamingVideoPlayer> createState() => _GamingVideoPlayerState();
+  State<YouTubePlayerContainer> createState() => _YouTubePlayerContainerState();
 }
 
-class _GamingVideoPlayerState extends State<GamingVideoPlayer> {
-  late VideoPlayerController _controller;
-  bool _isInitialized = false;
-  bool _hasError = false;
-  bool _showControls = true;
-  bool _isMuted = false;
-
-  static const Color neonGreen = Color(0xFF00FF88);
+class _YouTubePlayerContainerState extends State<YouTubePlayerContainer> {
+  late YoutubePlayerController _controller;
 
   @override
   void initState() {
     super.initState();
-    _initializePlayer();
-  }
-
-  Future<void> _initializePlayer() async {
-    try {
-      final uri = Uri.parse(widget.videoUrl);
-      _controller = VideoPlayerController.networkUrl(uri);
-      await _controller.initialize();
-      _controller.setLooping(true);
-      if (mounted) {
-        setState(() {
-          _isInitialized = true;
-        });
-      }
-    } catch (e) {
-      if (mounted) {
-        setState(() {
-          _hasError = true;
-        });
-      }
-    }
-  }
-
-  String _formatDuration(Duration duration) {
-    String twoDigits(int n) => n.toString().padLeft(2, '0');
-    final minutes = twoDigits(duration.inMinutes.remainder(60));
-    final seconds = twoDigits(duration.inSeconds.remainder(60));
-    return '$minutes:$seconds';
+    _controller = YoutubePlayerController(
+      initialVideoId: widget.videoId,
+      flags: const YoutubePlayerFlags(
+        autoPlay: false,
+        mute: false,
+        disableDragSeek: false,
+        loop: false,
+        isLive: false,
+        forceHD: false,
+        enableCaption: true,
+      ),
+    );
   }
 
   @override
   void dispose() {
-    if (_isInitialized) {
-      _controller.dispose();
-    }
+    _controller.dispose();
     super.dispose();
   }
 
   @override
   Widget build(BuildContext context) {
-    if (_hasError) {
-      return Container(
-        color: const Color(0xFF1E1E24),
-        child: Center(
-          child: Column(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: const [
-              Icon(Icons.error_outline, color: Color(0xFFFF4655), size: 36),
-              SizedBox(height: 8),
-              Text(
-                'Unable to play video',
-                style: TextStyle(color: Colors.white, fontSize: 13, fontWeight: FontWeight.bold),
-              ),
-            ],
+    return Container(
+      decoration: BoxDecoration(
+        color: Colors.black,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: const Color(0xFFFF4655), width: 1.5),
+        boxShadow: [
+          BoxShadow(
+            color: const Color(0xFFFF4655).withOpacity(0.2),
+            blurRadius: 10,
+            spreadRadius: 1,
           ),
-        ),
-      );
-    }
-
-    if (!_isInitialized) {
-      return Container(
-        color: const Color(0xFF0A0A0F),
-        child: const Center(
-          child: CircularProgressIndicator(
-            valueColor: AlwaysStoppedAnimation<Color>(neonGreen),
-          ),
-        ),
-      );
-    }
-
-    return GestureDetector(
-      onTap: () {
-        setState(() {
-          _showControls = !_showControls;
-        });
-      },
-      child: Stack(
-        alignment: Alignment.center,
-        children: [
-          // Video viewport
-          Center(
-            child: AspectRatio(
-              aspectRatio: _controller.value.aspectRatio,
-              child: VideoPlayer(_controller),
-            ),
-          ),
-
-          // Controls Overlay
-          if (_showControls)
-            Container(
-              color: Colors.black.withOpacity(0.45),
-              child: Column(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  // Top bar with Mute toggle
-                  Padding(
-                    padding: const EdgeInsets.only(top: 40, right: 16, left: 16),
-                    child: Row(
-                      mainAxisAlignment: MainAxisAlignment.end,
-                      children: [
-                        Container(
-                          decoration: BoxDecoration(
-                            color: Colors.black54,
-                            borderRadius: BorderRadius.circular(20),
-                          ),
-                          child: IconButton(
-                            icon: Icon(
-                              _isMuted ? Icons.volume_off_rounded : Icons.volume_up_rounded,
-                              color: neonGreen,
-                              size: 20,
-                            ),
-                            onPressed: () {
-                              setState(() {
-                                _isMuted = !_isMuted;
-                                _controller.setVolume(_isMuted ? 0 : 1.0);
-                              });
-                            },
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-
-                  // Center Big Play/Pause Button
-                  GestureDetector(
-                    onTap: () {
-                      setState(() {
-                        if (_controller.value.isPlaying) {
-                          _controller.pause();
-                        } else {
-                          _controller.play();
-                        }
-                      });
-                    },
-                    child: Container(
-                      padding: const EdgeInsets.all(14),
-                      decoration: BoxDecoration(
-                        color: Colors.black.withOpacity(0.6),
-                        shape: BoxShape.circle,
-                        border: Border.all(color: neonGreen, width: 2),
-                      ),
-                      child: Icon(
-                        _controller.value.isPlaying
-                            ? Icons.pause_rounded
-                            : Icons.play_arrow_rounded,
-                        color: neonGreen,
-                        size: 38,
-                      ),
-                    ),
-                  ),
-
-                  // Bottom Progress Bar & Time
-                  Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                    decoration: BoxDecoration(
-                      gradient: LinearGradient(
-                        begin: Alignment.bottomCenter,
-                        end: Alignment.topCenter,
-                        colors: [
-                          Colors.black.withOpacity(0.8),
-                          Colors.transparent,
-                        ],
-                      ),
-                    ),
-                    child: Column(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        VideoProgressIndicator(
-                          _controller,
-                          allowScrubbing: true,
-                          colors: const VideoProgressColors(
-                            playedColor: neonGreen,
-                            bufferedColor: Colors.white30,
-                            backgroundColor: Colors.white12,
-                          ),
-                          padding: const EdgeInsets.symmetric(vertical: 4),
-                        ),
-                        Row(
-                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                          children: [
-                            ValueListenableBuilder(
-                              valueListenable: _controller,
-                              builder: (context, VideoPlayerValue value, child) {
-                                return Text(
-                                  _formatDuration(value.position),
-                                  style: const TextStyle(color: Colors.white, fontSize: 11),
-                                );
-                              },
-                            ),
-                            Text(
-                              _formatDuration(_controller.value.duration),
-                              style: const TextStyle(color: Colors.white70, fontSize: 11),
-                            ),
-                          ],
-                        ),
-                      ],
-                    ),
-                  ),
-                ],
-              ),
-            ),
         ],
+      ),
+      child: ClipRRect(
+        borderRadius: BorderRadius.circular(11),
+        child: YoutubePlayer(
+          controller: _controller,
+          showVideoProgressIndicator: true,
+          progressIndicatorColor: const Color(0xFF00FF88),
+          progressColors: const ProgressBarColors(
+            playedColor: Color(0xFF00FF88),
+            handleColor: Color(0xFF00FF88),
+            bufferedColor: Colors.white24,
+            backgroundColor: Colors.white10,
+          ),
+          bottomActions: [
+            CurrentPosition(),
+            ProgressBar(isExpanded: true),
+            RemainingDuration(),
+            const PlaybackSpeedButton(),
+          ],
+        ),
       ),
     );
   }

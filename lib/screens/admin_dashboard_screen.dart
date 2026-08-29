@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import '../models/news_model.dart';
 import '../services/firestore_service.dart';
+import '../widgets/app_image_view.dart';
 import 'add_news_screen.dart';
 
 class AdminDashboardScreen extends StatefulWidget {
@@ -462,20 +463,11 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
                                 borderRadius: BorderRadius.circular(8),
                                 child: Stack(
                                   children: [
-                                    Image.network(
-                                      item.imageUrl,
+                                    AppImageView(
+                                      imageUrl: item.imageUrl,
                                       width: 76,
                                       height: 76,
                                       fit: BoxFit.cover,
-                                      errorBuilder: (_, __, ___) => Container(
-                                        width: 76,
-                                        height: 76,
-                                        color: cardDark2,
-                                        child: const Icon(
-                                            Icons.image_not_supported_outlined,
-                                            color: textGray,
-                                            size: 24),
-                                      ),
                                     ),
                                     if (item.videoUrl != null && item.videoUrl!.isNotEmpty)
                                       Positioned(

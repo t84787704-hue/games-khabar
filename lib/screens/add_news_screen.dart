@@ -1,11 +1,10 @@
-import 'dart:io';
+import 'dart:convert';
+import 'dart:typed_data';
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
-import 'package:firebase_storage/firebase_storage.dart';
-import 'package:cached_network_image/cached_network_image.dart';
-import 'package:video_player/video_player.dart';
 import '../models/news_model.dart';
 import '../services/firestore_service.dart';
+import '../widgets/app_image_view.dart';
 
 class AddNewsScreen extends StatefulWidget {
   final NewsModel? editItem;
@@ -17,30 +16,20 @@ class AddNewsScreen extends StatefulWidget {
 }
 
 class _AddNewsScreenState extends State<AddNewsScreen> {
-  final _formKey = GlobalKey<FormState>();
+  final _formKey =迫GlobalKey<FormState>();
   late final TextEditingController _titleController;
   late final TextEditingController _descController;
+  late final TextEditingController _videoUrlController;
   final FirestoreService _firestoreService = FirestoreService();
   final ImagePicker _picker = ImagePicker();
 
   late String _selectedCategory;
   bool _isPublishing = false;
+  bool _isProcessingImage = false;
 
-  // Media upload state
-  bool _isUploading = false;
-  double _uploadProgress = 0.0;
-  String _uploadStatus = '';
-  UploadTask? _activeUploadTask;
-
-  // Selected/Uploaded media
-  File? _localMediaFile;
-  bool _isVideo = false;
-  String? _uploadedImageUrl;
-  String? _uploadedVideoUrl;
-  String? _mediaSizeText;
-
-  // Mini preview player for video
-  VideoPlayerController? _videoPreviewController;
+  // Selected image representation (base64 string and bytes for preview)
+  String? _base64ImageUrl;
+  Uint8List? _localImageBytes;
 
   static const List<String> categories = [
     'BGMI',
@@ -69,13 +58,12 @@ class _AddNewsScreenState extends State<AddNewsScreen> {
     final item = widget.editItem;
     _titleController = TextEditingController(text: item?.title ?? '');
     _descController = TextEditingController(text: item?.description ?? '');
+    _videoUrlController = TextEditingController(text: item?.videoUrl ?? '');
 
-    if (item != null) {
-      _uploadedImageUrl = item.imageUrl;
-      _uploadedVideoUrl = item.videoUrl;
-      _isVideo = item.videoUrl != null && item.videoUrl!.isNotEmpty;
-      if (_isVideo && _uploadedVideoUrl != null) {
-        _initVideoPreview(url: _uploadedVideoUrl);
+    if (item != null && item.imageUrl.isNotEmpty) {
+      _base64ImageUrl = item.imageUrl;
+      if (AppImageView.isBase64(item.imageUrl)) {
+        _localImageBytes = AppImageView.decodeBase64(item.imageUrl);
       }
     }
 
@@ -86,118 +74,37 @@ class _AddNewsScreenState extends State<AddNewsScreen> {
     }
   }
 
-  Future<void> _initVideoPreview({File? file, String? url}) async {
+  Future<void> _pickAndCompressImage(ImageSource source) async {
     try {
-      _videoPreviewController?.dispose();
-      if (file != null) {
-        _videoPreviewController = VideoPlayerController.file(file);
-      } else if (url != null) {
-        _videoPreviewController = VideoPlayerController.networkUrl(Uri.parse(url));
-      }
-      if (_videoPreviewController != null) {
-        await _videoPreviewController!.initialize();
-        _videoPreviewController!.setLooping(true);
-        _videoPreviewController!.play();
-        if (mounted) setState(() {});
-      }
-    } catch (_) {}
-  }
-
-  Future<void> _pickAndUploadMedia({required ImageSource source, required bool isVideo}) async {
-    if (_isUploading) return;
-
-    try {
-      final XFile? pickedFile = isVideo
-          ? await _picker.pickVideo(
-              source: source,
-              maxDuration: const Duration(minutes: 5),
-            )
-          : await _picker.pickImage(
-              source: source,
-              imageQuality: 88,
-            );
-
-      if (pickedFile == null) return;
-
-      final file = File(pickedFile.path);
-      final int fileBytes = await file.length();
-      final double sizeInMb = fileBytes / (1024 * 1024);
-
-      // File Size Validation
-      if (!isVideo && sizeInMb > 10.0) {
-        _showErrorDialog(
-          title: 'Image Size Exceeded',
-          message: 'Selected image is ${sizeInMb.toStringAsFixed(1)} MB. Maximum allowed image size is 10 MB.',
-        );
-        return;
-      }
-
-      if (isVideo && sizeInMb > 50.0) {
-        _showErrorDialog(
-          title: 'Video Size Exceeded',
-          message: 'Selected video is ${sizeInMb.toStringAsFixed(1)} MB. Maximum allowed video size is 50 MB.',
-        );
-        return;
-      }
-
       setState(() {
-        _localMediaFile = file;
-        _isVideo = isVideo;
-        _mediaSizeText = '${sizeInMb.toStringAsFixed(1)} MB';
-        _isUploading = true;
-        _uploadProgress = 0.05;
-        _uploadStatus = 'Preparing ${isVideo ? 'video' : 'image'}...';
+        _isProcessingImage = true;
       });
 
-      if (isVideo) {
-        _initVideoPreview(file: file);
-      }
-
-      // Upload to Firebase Storage in folder news_media/
-      final timestamp = DateTime.now().millisecondsSinceEpoch;
-      final safeName = pickedFile.name.replaceAll(RegExp(r'[^a-zA-Z0-9._-]'), '_');
-      final storagePath = 'news_media/${timestamp}_$safeName';
-
-      final ref = FirebaseStorage.instance.ref().child(storagePath);
-      final metadata = SettableMetadata(
-        contentType: isVideo ? 'video/mp4' : 'image/jpeg',
+      // Compress to 600x600 with optimal JPEG quality
+      final XFile? pickedFile = await _picker.pickImage(
+        source: source,
+        maxWidth: 600,
+        maxHeight: 600,
+        imageQuality: 80,
       );
 
-      final uploadTask = ref.putFile(file, metadata);
-      _activeUploadTask = uploadTask;
+      if (pickedFile == null) {
+        setState(() {
+          _isProcessingImage = false;
+        });
+        return;
+      }
 
-      uploadTask.snapshotEvents.listen((TaskSnapshot snapshot) {
-        if (snapshot.totalBytes > 0) {
-          final progress = snapshot.bytesTransferred / snapshot.totalBytes;
-          if (mounted) {
-            setState(() {
-              _uploadProgress = progress;
-              _uploadStatus = 'Uploading ${(progress * 100).toInt()}% (${(snapshot.bytesTransferred / (1024 * 1024)).toStringAsFixed(1)}MB / ${(snapshot.totalBytes / (1024 * 1024)).toStringAsFixed(1)}MB)';
-            });
-          }
-        }
+      final bytes = await pickedFile.readAsBytes();
+      final base64String = 'data:image/jpeg;base64,${base64Encode(bytes)}';
+
+      setState(() {
+        _localImageBytes = bytes;
+        _base64ImageUrl = base64String;
+        _isProcessingImage = false;
       });
 
-      final snapshot = await uploadTask;
-      final downloadUrl = await snapshot.ref.getDownloadURL();
-
       if (mounted) {
-        setState(() {
-          _isUploading = false;
-          _uploadProgress = 1.0;
-          _uploadStatus = 'Upload complete!';
-          if (isVideo) {
-            _uploadedVideoUrl = downloadUrl;
-            // Default gaming cover image if no separate cover exists
-            if (_uploadedImageUrl == null || _uploadedImageUrl!.isEmpty) {
-              _uploadedImageUrl = 'https://images.unsplash.com/photo-1542751371-adc38448a05e?auto=format&fit=crop&w=1000&q=80';
-            }
-          } else {
-            _uploadedImageUrl = downloadUrl;
-            _uploadedVideoUrl = null;
-          }
-        });
-
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             backgroundColor: cardDark,
@@ -208,11 +115,11 @@ class _AddNewsScreenState extends State<AddNewsScreen> {
             ),
             content: Row(
               children: [
-                const Icon(Icons.cloud_done_rounded, color: neonGreen, size: 20),
+                const Icon(Icons.check_circle_rounded, color: neonGreen, size: 20),
                 const SizedBox(width: 10),
                 Text(
-                  '${isVideo ? 'Video' : 'Image'} uploaded to Firebase Storage!',
-                  style: const TextStyle(color: textWhite, fontWeight: FontWeight.bold),
+                  'Image compressed (600x600) & ready! (${(bytes.length / 1024).toStringAsFixed(1)} KB)',
+                  style: const TextStyle(color: textWhite, fontWeight: FontWeight.bold, fontSize: 12),
                 ),
               ],
             ),
@@ -220,90 +127,36 @@ class _AddNewsScreenState extends State<AddNewsScreen> {
         );
       }
     } catch (e) {
+      setState(() {
+        _isProcessingImage = false;
+      });
       if (mounted) {
-        setState(() {
-          _isUploading = false;
-          // Fallback url in case Firebase Storage rule requires auth / offline
-          if (isVideo) {
-            _uploadedVideoUrl = 'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/BigBuckBunny.mp4';
-            _uploadedImageUrl = 'https://images.unsplash.com/photo-1542751371-adc38448a05e?auto=format&fit=crop&w=1000&q=80';
-          } else {
-            _uploadedImageUrl = 'https://images.unsplash.com/photo-1542751371-adc38448a05e?auto=format&fit=crop&w=1000&q=80';
-          }
-        });
-
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            backgroundColor: cardDark,
-            content: Text(
-              'Media selected. (Storage Notice: $e)',
-              style: const TextStyle(color: textWhite),
-            ),
+            backgroundColor: alertRed,
+            content: Text('Failed to pick image: $e', style: const TextStyle(color: Colors.white)),
           ),
         );
       }
     }
   }
 
-  void _showErrorDialog({required String title, required String message}) {
-    showDialog(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        backgroundColor: cardDark,
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(14),
-          side: const BorderSide(color: alertRed),
-        ),
-        title: Row(
-          children: [
-            const Icon(Icons.warning_amber_rounded, color: alertRed, size: 24),
-            const SizedBox(width: 8),
-            Text(title, style: const TextStyle(color: textWhite, fontWeight: FontWeight.bold, fontSize: 16)),
-          ],
-        ),
-        content: Text(message, style: const TextStyle(color: textGray, fontSize: 13)),
-        actions: [
-          ElevatedButton(
-            style: ElevatedButton.styleFrom(backgroundColor: alertRed),
-            onPressed: () => Navigator.pop(ctx),
-            child: const Text('OK', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
-          ),
-        ],
-      ),
-    );
-  }
-
-  void _removeSelectedMedia() {
-    _activeUploadTask?.cancel();
-    _videoPreviewController?.dispose();
-    _videoPreviewController = null;
+  void _removeSelectedImage() {
     setState(() {
-      _localMediaFile = null;
-      _uploadedImageUrl = null;
-      _uploadedVideoUrl = null;
-      _isVideo = false;
-      _isUploading = false;
-      _mediaSizeText = null;
+      _localImageBytes = null;
+      _base64ImageUrl = null;
     });
   }
 
   Future<void> _submitNews() async {
     if (!_formKey.currentState!.validate()) return;
 
-    if (_isUploading) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          backgroundColor: cardDark,
-          content: Text('Please wait for media upload to finish', style: TextStyle(color: neonGreen)),
-        ),
-      );
-      return;
-    }
-
     // Default image if none uploaded
-    final finalImageUrl = (_uploadedImageUrl != null && _uploadedImageUrl!.isNotEmpty)
-        ? _uploadedImageUrl!
-        : 'https://images.unsplash.com/photo-1542751371-adc38448a05e?auto=format&fit=crop&w=1000&q=80';
+    final finalImageUrl = (_base64ImageUrl != null && _base64ImageUrl!.isNotEmpty)
+        ? _base64ImageUrl!
+        : 'https://images.unsplash.com/photo-1542751371-adc38448a05e?auto=format&fit=crop&w=600&q=80';
+
+    final videoUrl = _videoUrlController.text.trim();
 
     setState(() {
       _isPublishing = true;
@@ -318,7 +171,7 @@ class _AddNewsScreenState extends State<AddNewsScreen> {
         'description': description,
         'category': _selectedCategory,
         'imageUrl': finalImageUrl,
-        'videoUrl': _uploadedVideoUrl,
+        'videoUrl': videoUrl, // Empty string if empty
         'isFree': _selectedCategory.toLowerCase().contains('free'),
       };
 
@@ -375,16 +228,13 @@ class _AddNewsScreenState extends State<AddNewsScreen> {
   void dispose() {
     _titleController.dispose();
     _descController.dispose();
-    _videoPreviewController?.dispose();
-    _activeUploadTask?.cancel();
+    _videoUrlController.dispose();
     super.dispose();
   }
 
   @override
   Widget build(BuildContext context) {
-    final hasMedia = (_localMediaFile != null) ||
-        (_uploadedImageUrl != null && _uploadedImageUrl!.isNotEmpty) ||
-        (_uploadedVideoUrl != null && _uploadedVideoUrl!.isNotEmpty);
+    final hasImage = _localImageBytes != null || (_base64ImageUrl != null && _base64ImageUrl!.isNotEmpty);
 
     return Scaffold(
       backgroundColor: bgDark,
@@ -510,25 +360,25 @@ class _AddNewsScreenState extends State<AddNewsScreen> {
               ),
               const SizedBox(height: 22),
 
-              // Media Upload Section Header
+              // Image Upload Section Header
               Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
                   Row(
                     children: const [
-                      Icon(Icons.cloud_upload_outlined, color: neonGreen, size: 18),
+                      Icon(Icons.image_outlined, color: neonGreen, size: 18),
                       SizedBox(width: 6),
                       Text(
-                        'Upload Media (Firebase Storage)',
+                        'News Cover Image (Compressed 600x600)',
                         style: TextStyle(color: textWhite, fontSize: 13, fontWeight: FontWeight.bold),
                       ),
                     ],
                   ),
-                  if (hasMedia && !_isUploading)
+                  if (hasImage && !_isProcessingImage)
                     GestureDetector(
-                      onTap: _removeSelectedMedia,
+                      onTap: _removeSelectedImage,
                       child: const Text(
-                        'Remove Media',
+                        'Remove',
                         style: TextStyle(
                           color: alertRed,
                           fontSize: 12,
@@ -540,7 +390,7 @@ class _AddNewsScreenState extends State<AddNewsScreen> {
               ),
               const SizedBox(height: 10),
 
-              // Upload Buttons Container (3 Buttons as requested)
+              // Upload Buttons Container
               Container(
                 padding: const EdgeInsets.all(14),
                 decoration: BoxDecoration(
@@ -549,274 +399,146 @@ class _AddNewsScreenState extends State<AddNewsScreen> {
                   border: Border.all(color: borderDark),
                 ),
                 child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    // Button 1: Upload Image from Gallery
-                    SizedBox(
-                      width: double.infinity,
-                      height: 44,
-                      child: OutlinedButton.icon(
-                        style: OutlinedButton.styleFrom(
-                          foregroundColor: textWhite,
-                          side: const BorderSide(color: borderDark),
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(10),
-                          ),
-                          backgroundColor: cardDark2,
-                        ),
-                        onPressed: _isUploading
-                            ? null
-                            : () => _pickAndUploadMedia(
-                                  source: ImageSource.gallery,
-                                  isVideo: false,
+                    Row(
+                      children: [
+                        // Button 1: Gallery
+                        Expanded(
+                          child: SizedBox(
+                            height: 44,
+                            child: OutlinedButton.icon(
+                              style: OutlinedButton.styleFrom(
+                                foregroundColor: textWhite,
+                                side: const BorderSide(color: borderDark),
+                                shape: RoundedRectangleBorder(
+                                  borderRadius: BorderRadius.circular(10),
                                 ),
-                        icon: const Icon(Icons.photo_library_rounded, color: neonGreen, size: 18),
-                        label: const Text(
-                          'Upload Image from Gallery (Max 10MB)',
-                          style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600),
-                        ),
-                      ),
-                    ),
-                    const SizedBox(height: 10),
-
-                    // Button 2: Take Photo with Camera
-                    SizedBox(
-                      width: double.infinity,
-                      height: 44,
-                      child: OutlinedButton.icon(
-                        style: OutlinedButton.styleFrom(
-                          foregroundColor: textWhite,
-                          side: const BorderSide(color: borderDark),
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(10),
-                          ),
-                          backgroundColor: cardDark2,
-                        ),
-                        onPressed: _isUploading
-                            ? null
-                            : () => _pickAndUploadMedia(
-                                  source: ImageSource.camera,
-                                  isVideo: false,
-                                ),
-                        icon: const Icon(Icons.camera_alt_rounded, color: neonGreen, size: 18),
-                        label: const Text(
-                          'Take Photo with Camera',
-                          style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600),
-                        ),
-                      ),
-                    ),
-                    const SizedBox(height: 10),
-
-                    // Button 3: Upload Video from Gallery
-                    SizedBox(
-                      width: double.infinity,
-                      height: 44,
-                      child: OutlinedButton.icon(
-                        style: OutlinedButton.styleFrom(
-                          foregroundColor: textWhite,
-                          side: const BorderSide(color: neonGreen, width: 1.2),
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(10),
-                          ),
-                          backgroundColor: cardDark2,
-                        ),
-                        onPressed: _isUploading
-                            ? null
-                            : () => _pickAndUploadMedia(
-                                  source: ImageSource.gallery,
-                                  isVideo: true,
-                                ),
-                        icon: const Icon(Icons.video_library_rounded, color: Color(0xFFFF4655), size: 18),
-                        label: const Text(
-                          'Upload Video from Gallery (Max 50MB)',
-                          style: TextStyle(fontSize: 13, fontWeight: FontWeight.bold),
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-
-              // Uploading Progress Card
-              if (_isUploading) ...[
-                const SizedBox(height: 12),
-                Container(
-                  padding: const EdgeInsets.all(14),
-                  decoration: BoxDecoration(
-                    color: cardDark2,
-                    borderRadius: BorderRadius.circular(12),
-                    border: Border.all(color: neonGreen.withOpacity(0.5)),
-                  ),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Row(
-                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                        children: [
-                          Row(
-                            children: [
-                              const SizedBox(
-                                width: 16,
-                                height: 16,
-                                child: CircularProgressIndicator(
-                                  strokeWidth: 2,
-                                  valueColor: AlwaysStoppedAnimation<Color>(neonGreen),
-                                ),
+                                backgroundColor: cardDark2,
                               ),
-                              const SizedBox(width: 10),
-                              Text(
-                                _uploadStatus,
-                                style: const TextStyle(
-                                  color: textWhite,
-                                  fontSize: 12,
-                                  fontWeight: FontWeight.bold,
-                                ),
+                              onPressed: _isProcessingImage
+                                  ? null
+                                  : () => _pickAndCompressImage(ImageSource.gallery),
+                              icon: const Icon(Icons.photo_library_rounded, color: neonGreen, size: 18),
+                              label: const Text(
+                                'Gallery',
+                                style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600),
                               ),
-                            ],
-                          ),
-                          Text(
-                            '${(_uploadProgress * 100).toInt()}%',
-                            style: const TextStyle(
-                              color: neonGreen,
-                              fontSize: 13,
-                              fontWeight: FontWeight.w900,
                             ),
                           ),
-                        ],
-                      ),
-                      const SizedBox(height: 10),
-                      ClipRRect(
-                        borderRadius: BorderRadius.circular(4),
-                        child: LinearProgressIndicator(
-                          value: _uploadProgress,
-                          backgroundColor: borderDark,
-                          valueColor: const AlwaysStoppedAnimation<Color>(neonGreen),
-                          minHeight: 6,
                         ),
+                        const SizedBox(width: 10),
+                        // Button 2: Camera
+                        Expanded(
+                          child: SizedBox(
+                            height: 44,
+                            child: OutlinedButton.icon(
+                              style: OutlinedButton.styleFrom(
+                                foregroundColor: textWhite,
+                                side: const BorderSide(color: borderDark),
+                                shape: RoundedRectangleBorder(
+                                  borderRadius: BorderRadius.circular(10),
+                                ),
+                                backgroundColor: cardDark2,
+                              ),
+                              onPressed: _isProcessingImage
+                                  ? null
+                                  : () => _pickAndCompressImage(ImageSource.camera),
+                              icon: const Icon(Icons.camera_alt_rounded, color: neonGreen, size: 18),
+                              label: const Text(
+                                'Camera',
+                                style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600),
+                              ),
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+
+                    if (_isProcessingImage) ...[
+                      const SizedBox(height: 12),
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: const [
+                          SizedBox(
+                            width: 16,
+                            height: 16,
+                            child: CircularProgressIndicator(
+                              strokeWidth: 2,
+                              valueColor: AlwaysStoppedAnimation<Color>(neonGreen),
+                            ),
+                          ),
+                          SizedBox(width: 8),
+                          Text(
+                            'Compressing to 600x600 base64...',
+                            style: TextStyle(color: textGray, fontSize: 12),
+                          ),
+                        ],
                       ),
                     ],
-                  ),
-                ),
-              ],
 
-              // Media Preview Section
-              if (hasMedia && !_isUploading) ...[
-                const SizedBox(height: 14),
-                Container(
-                  padding: const EdgeInsets.all(12),
-                  decoration: BoxDecoration(
-                    color: cardDark,
-                    borderRadius: BorderRadius.circular(14),
-                    border: Border.all(color: neonGreen.withOpacity(0.4)),
-                  ),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Row(
-                        children: [
-                          Icon(
-                            _isVideo ? Icons.videocam_rounded : Icons.image_rounded,
-                            color: _isVideo ? const Color(0xFFFF4655) : neonGreen,
-                            size: 18,
-                          ),
-                          const SizedBox(width: 6),
-                          Text(
-                            _isVideo ? 'Video Preview' : 'Image Preview',
-                            style: const TextStyle(
-                              color: textWhite,
-                              fontWeight: FontWeight.bold,
-                              fontSize: 13,
-                            ),
-                          ),
-                          if (_mediaSizeText != null) ...[
-                            const SizedBox(width: 8),
-                            Container(
-                              padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                              decoration: BoxDecoration(
-                                color: borderDark,
-                                borderRadius: BorderRadius.circular(4),
-                              ),
-                              child: Text(
-                                _mediaSizeText!,
-                                style: const TextStyle(color: textGray, fontSize: 10),
-                              ),
-                            ),
-                          ],
-                          const Spacer(),
-                          IconButton(
-                            icon: const Icon(Icons.close, color: alertRed, size: 18),
-                            onPressed: _removeSelectedMedia,
-                            padding: EdgeInsets.zero,
-                            constraints: const BoxConstraints(),
-                            tooltip: 'Remove',
-                          ),
-                        ],
-                      ),
-                      const SizedBox(height: 10),
-
-                      // Preview Widget
+                    // Image Preview
+                    if (hasImage && !_isProcessingImage) ...[
+                      const SizedBox(height: 12),
                       ClipRRect(
                         borderRadius: BorderRadius.circular(10),
                         child: Container(
-                          height: 180,
+                          height: 160,
                           width: double.infinity,
                           color: cardDark2,
-                          child: _isVideo
-                              ? (_videoPreviewController != null &&
-                                      _videoPreviewController!.value.isInitialized)
-                                  ? AspectRatio(
-                                      aspectRatio: _videoPreviewController!.value.aspectRatio,
-                                      child: VideoPlayer(_videoPreviewController!),
-                                    )
-                                  : Stack(
-                                      alignment: Alignment.center,
-                                      children: [
-                                        if (_uploadedImageUrl != null && _uploadedImageUrl!.isNotEmpty)
-                                          CachedNetworkImage(
-                                            imageUrl: _uploadedImageUrl!,
-                                            fit: BoxFit.cover,
-                                            width: double.infinity,
-                                            height: double.infinity,
-                                          ),
-                                        Container(
-                                          padding: const EdgeInsets.all(12),
-                                          decoration: BoxDecoration(
-                                            color: Colors.black.withOpacity(0.7),
-                                            shape: BoxShape.circle,
-                                            border: Border.all(color: neonGreen, width: 2),
-                                          ),
-                                          child: const Icon(
-                                            Icons.play_arrow_rounded,
-                                            color: neonGreen,
-                                            size: 32,
-                                          ),
-                                        ),
-                                      ],
-                                    )
-                              : (_localMediaFile != null)
-                                  ? Image.file(
-                                      _localMediaFile!,
-                                      fit: BoxFit.cover,
-                                    )
-                                  : CachedNetworkImage(
-                                      imageUrl: _uploadedImageUrl ?? '',
-                                      fit: BoxFit.cover,
-                                      placeholder: (_, __) => const Center(
-                                        child: CircularProgressIndicator(
-                                          valueColor: AlwaysStoppedAnimation<Color>(neonGreen),
-                                        ),
-                                      ),
-                                      errorWidget: (_, __, ___) => const Center(
-                                        child: Icon(Icons.broken_image_rounded, color: textGray, size: 36),
-                                      ),
-                                    ),
+                          child: _localImageBytes != null
+                              ? Image.memory(
+                                  _localImageBytes!,
+                                  fit: BoxFit.cover,
+                                )
+                              : AppImageView(
+                                  imageUrl: _base64ImageUrl ?? '',
+                                  fit: BoxFit.cover,
+                                ),
                         ),
                       ),
                     ],
-                  ),
+                  ],
                 ),
-              ],
-              const SizedBox(height: 18),
+              ),
+              const SizedBox(height: 20),
+
+              // Video (Optional) Section
+              Row(
+                children: const [
+                  Icon(Icons.video_library_rounded, color: Color(0xFFFF4655), size: 18),
+                  SizedBox(width: 6),
+                  Text(
+                    'Video (Optional)',
+                    style: TextStyle(color: textWhite, fontSize: 13, fontWeight: FontWeight.bold),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 8),
+              TextFormField(
+                controller: _videoUrlController,
+                style: const TextStyle(color: textWhite, fontSize: 14),
+                decoration: InputDecoration(
+                  hintText: 'Paste YouTube link here (e.g. https://youtu.be/...)',
+                  hintStyle: const TextStyle(color: textGray, fontSize: 13),
+                  prefixIcon: const Icon(Icons.link_rounded, color: neonGreen, size: 20),
+                  filled: true,
+                  fillColor: cardDark,
+                  border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(12),
+                    borderSide: const BorderSide(color: borderDark),
+                  ),
+                  enabledBorder: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(12),
+                    borderSide: const BorderSide(color: borderDark),
+                  ),
+                  focusedBorder: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(12),
+                    borderSide: const BorderSide(color: Color(0xFFFF4655), width: 1.5),
+                  ),
+                  contentPadding: const EdgeInsets.all(14),
+                ),
+              ),
+              const SizedBox(height: 20),
 
               // Description Multi-line
               const Text(
@@ -857,7 +579,7 @@ class _AddNewsScreenState extends State<AddNewsScreen> {
                 width: double.infinity,
                 height: 52,
                 child: ElevatedButton.icon(
-                  onPressed: (_isPublishing || _isUploading) ? null : _submitNews,
+                  onPressed: (_isPublishing || _isProcessingImage) ? null : _submitNews,
                   style: ElevatedButton.styleFrom(
                     backgroundColor: neonGreen,
                     foregroundColor: const Color(0xFF05080D),

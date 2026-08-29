@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import '../models/news_model.dart';
 import '../services/firestore_service.dart';
+import '../widgets/app_image_view.dart';
 import 'news_detail_screen.dart';
 
 class HomeScreen extends StatefulWidget {
@@ -333,14 +334,9 @@ class _HomeScreenState extends State<HomeScreen> {
                           child: Stack(
                             fit: StackFit.expand,
                             children: [
-                              CachedNetworkImage(
+                              AppImageView(
                                 imageUrl: featuredNews.imageUrl,
                                 fit: BoxFit.cover,
-                                placeholder: (_, __) => Container(color: cardDark2),
-                                errorWidget: (_, __, ___) => Container(
-                                  color: cardDark2,
-                                  child: const Icon(Icons.videogame_asset, color: textGray, size: 48),
-                                ),
                               ),
                               // IGN Dramatic Black Gradient Overlay
                               Container(
@@ -524,14 +520,9 @@ class _HomeScreenState extends State<HomeScreen> {
                                       child: Stack(
                                         fit: StackFit.expand,
                                         children: [
-                                          CachedNetworkImage(
+                                          AppImageView(
                                             imageUrl: item.imageUrl,
                                             fit: BoxFit.cover,
-                                            placeholder: (_, __) => Container(color: cardDark2),
-                                            errorWidget: (_, __, ___) => Container(
-                                              color: cardDark2,
-                                              child: const Icon(Icons.videogame_asset, color: textGray),
-                                            ),
                                           ),
                                           if (item.videoUrl != null && item.videoUrl!.isNotEmpty)
                                             Center(
@@ -660,14 +651,9 @@ class _HomeScreenState extends State<HomeScreen> {
                                       child: Stack(
                                         fit: StackFit.expand,
                                         children: [
-                                          CachedNetworkImage(
+                                          AppImageView(
                                             imageUrl: item.imageUrl,
                                             fit: BoxFit.cover,
-                                            placeholder: (_, __) => Container(color: cardDark2),
-                                            errorWidget: (_, __, ___) => Container(
-                                              color: cardDark2,
-                                              child: const Icon(Icons.videogame_asset, color: textGray),
-                                            ),
                                           ),
                                           if (item.videoUrl != null && item.videoUrl!.isNotEmpty)
                                             Positioned(
