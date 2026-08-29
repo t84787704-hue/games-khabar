@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:share_plus/share_plus.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'package:youtube_player_iframe/youtube_player_iframe.dart';
 import '../models/news_model.dart';
@@ -75,29 +76,54 @@ class NewsDetailScreen extends StatelessWidget {
     }
   }
 
-  void _shareArticle(BuildContext context) {
-    final textToShare = '${news.title}\n\nRead more on Games Khabar App';
-    Clipboard.setData(ClipboardData(text: textToShare));
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        backgroundColor: cardDark,
-        behavior: SnackBarBehavior.floating,
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(10),
-          side: const BorderSide(color: neonGreen, width: 1),
-        ),
-        content: Row(
-          children: const [
-            Icon(Icons.check_circle_outline, color: neonGreen, size: 20),
-            SizedBox(width: 10),
-            Text(
-              'Article link copied to clipboard!',
-              style: TextStyle(color: textWhite, fontWeight: FontWeight.bold, fontSize: 13),
+  void _shareArticle(BuildContext context) async {
+    const String packageName = 'com.gameskhabar.games_khabar';
+    final String playStoreUrl =
+        'https://play.google.com/store/apps/details?id=$packageName';
+
+    final String shareMessage =
+        '🔥 ${news.title}\n\n'
+        '${news.description}\n\n'
+        '🎮 Read more on Games Khabar App 👇\n'
+        '📲 Download Now: $playStoreUrl';
+
+    try {
+      await Share.share(
+        shareMessage,
+        subject: '🎮 ${news.title} - Games Khabar',
+      );
+    } catch (_) {
+      // Fallback copy to clipboard if share intent fails
+      await Clipboard.setData(ClipboardData(text: shareMessage));
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            backgroundColor: cardDark,
+            behavior: SnackBarBehavior.floating,
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(10),
+              side: const BorderSide(color: neonGreen, width: 1),
             ),
-          ],
-        ),
-      ),
-    );
+            content: Row(
+              children: const [
+                Icon(Icons.check_circle_outline, color: neonGreen, size: 20),
+                SizedBox(width: 10),
+                Expanded(
+                  child: Text(
+                    'Article & App link copied to clipboard!',
+                    style: TextStyle(
+                      color: textWhite,
+                      fontWeight: FontWeight.bold,
+                      fontSize: 13,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        );
+      }
+    }
   }
 
   @override
