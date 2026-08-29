@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "164275029482",
+    "project_id": "rh-group-9123a",
+    "storage_bucket": "rh-group-9123a.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:164275029482:android:8e4ca8591cc7639c119e93",
+        "android_client_info": {
+          "package_name": "com.gameskhabar.games_khabar"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyDuqznzyQmH3xcjmHYsH3NbIkfQnO5j4gc"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
