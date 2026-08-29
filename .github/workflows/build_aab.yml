@@ -34,7 +34,7 @@ jobs:
         run: flutter build appbundle --release
 
       - name: Build APK
-        run: flutter build apk --release --split-per-abi
+        run: flutter build apk --release
 
       - name: Upload AAB artifact
         uses: actions/upload-artifact@v4
