@@ -214,4 +214,48 @@ class FirestoreService {
       }
     } catch (_) {}
   }
+
+  // Update existing article - instant UI update + background Firestore sync
+  Future<void> updateNews(String id, Map<String, dynamic> data) async {
+    final idx = _currentNewsList.indexWhere((item) => item.id == id);
+    final title = data['title'] as String? ?? 'Untitled';
+    final description = data['description'] as String? ?? '';
+    final category = data['category'] as String? ?? 'Gaming News';
+    final imageUrl = (data['imageUrl'] as String? ?? '').isNotEmpty
+        ? data['imageUrl'] as String
+        : 'https://images.unsplash.com/photo-1542751371-adc38448a05e?auto=format&fit=crop&w=1000&q=80';
+    final isFree = data['isFree'] as bool? ?? category.toLowerCase().contains('free');
+
+    if (idx != -1) {
+      final old = _currentNewsList[idx];
+      _currentNewsList[idx] = NewsModel(
+        id: old.id,
+        title: title,
+        description: description,
+        category: category,
+        imageUrl: imageUrl,
+        timeAgo: old.timeAgo,
+        views: old.views,
+        isFree: isFree,
+        sourceUrl: data['sourceUrl'] as String? ?? old.sourceUrl,
+        timestamp: old.timestamp,
+      );
+      _streamController.add(List.from(_currentNewsList));
+    }
+
+    try {
+      if (!id.startsWith('dummy-') && !id.startsWith('local-')) {
+        await _db.collection('news').doc(id).update({
+          'title': title,
+          'description': description,
+          'category': category,
+          'imageUrl': imageUrl,
+          'isFree': isFree,
+          if (data['sourceUrl'] != null) 'sourceUrl': data['sourceUrl'],
+        }).timeout(const Duration(seconds: 3));
+      }
+    } catch (_) {
+      // Local state already updated
+    }
+  }
 }

@@ -1,8 +1,11 @@
 import 'package:flutter/material.dart';
+import '../models/news_model.dart';
 import '../services/firestore_service.dart';
 
 class AddNewsScreen extends StatefulWidget {
-  const AddNewsScreen({super.key});
+  final NewsModel? editItem;
+
+  const AddNewsScreen({super.key, this.editItem});
 
   @override
   State<AddNewsScreen> createState() => _AddNewsScreenState();
@@ -10,12 +13,12 @@ class AddNewsScreen extends StatefulWidget {
 
 class _AddNewsScreenState extends State<AddNewsScreen> {
   final _formKey = GlobalKey<FormState>();
-  final TextEditingController _titleController = TextEditingController();
-  final TextEditingController _descController = TextEditingController();
-  final TextEditingController _imageUrlController = TextEditingController();
+  late final TextEditingController _titleController;
+  late final TextEditingController _descController;
+  late final TextEditingController _imageUrlController;
   final FirestoreService _firestoreService = FirestoreService();
 
-  String _selectedCategory = 'BGMI';
+  late String _selectedCategory;
   bool _isLoading = false;
 
   static const List<String> categories = [
@@ -30,17 +33,31 @@ class _AddNewsScreenState extends State<AddNewsScreen> {
   static const Color neonGreen = Color(0xFF00FF88);
   static const Color bgDark = Color(0xFF0A0A0F);
   static const Color cardDark = Color(0xFF1E1E24);
+  static const Color cardDark2 = Color(0xFF15151A);
   static const Color borderDark = Color(0xFF2E2E38);
   static const Color alertRed = Color(0xFFFF4655);
   static const Color textWhite = Color(0xFFFFFFFF);
   static const Color textGray = Color(0xFF9E9EA7);
 
+  bool get isEditing => widget.editItem != null;
+
   @override
   void initState() {
     super.initState();
-    // Default gaming placeholder
-    _imageUrlController.text =
-        'https://images.unsplash.com/photo-1542751371-adc38448a05e?auto=format&fit=crop&w=1000&q=80';
+
+    final item = widget.editItem;
+    _titleController = TextEditingController(text: item?.title ?? '');
+    _descController = TextEditingController(text: item?.description ?? '');
+    _imageUrlController = TextEditingController(
+      text: item?.imageUrl ??
+          'https://images.unsplash.com/photo-1542751371-adc38448a05e?auto=format&fit=crop&w=1000&q=80',
+    );
+
+    if (item != null && categories.contains(item.category)) {
+      _selectedCategory = item.category;
+    } else {
+      _selectedCategory = 'BGMI';
+    }
   }
 
   Future<void> _submitNews() async {
@@ -57,13 +74,23 @@ class _AddNewsScreenState extends State<AddNewsScreen> {
           ? _imageUrlController.text.trim()
           : 'https://images.unsplash.com/photo-1542751371-adc38448a05e?auto=format&fit=crop&w=1000&q=80';
 
-      await _firestoreService.addNews({
-        'title': title,
-        'description': description,
-        'category': _selectedCategory,
-        'imageUrl': imageUrl,
-        'isFree': _selectedCategory.toLowerCase().contains('free'),
-      });
+      if (isEditing) {
+        await _firestoreService.updateNews(widget.editItem!.id, {
+          'title': title,
+          'description': description,
+          'category': _selectedCategory,
+          'imageUrl': imageUrl,
+          'isFree': _selectedCategory.toLowerCase().contains('free'),
+        });
+      } else {
+        await _firestoreService.addNews({
+          'title': title,
+          'description': description,
+          'category': _selectedCategory,
+          'imageUrl': imageUrl,
+          'isFree': _selectedCategory.toLowerCase().contains('free'),
+        });
+      }
 
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -75,12 +102,14 @@ class _AddNewsScreenState extends State<AddNewsScreen> {
               side: const BorderSide(color: neonGreen, width: 1),
             ),
             content: Row(
-              children: const [
-                Icon(Icons.check_circle_rounded, color: neonGreen, size: 20),
-                SizedBox(width: 10),
+              children: [
+                const Icon(Icons.check_circle_rounded, color: neonGreen, size: 20),
+                const SizedBox(width: 10),
                 Text(
-                  'Khabar Published Successfully! 🎉',
-                  style: TextStyle(color: textWhite, fontWeight: FontWeight.bold),
+                  isEditing
+                      ? 'Khabar Updated Successfully! 🎮'
+                      : 'Khabar Published Successfully! 🎉',
+                  style: const TextStyle(color: textWhite, fontWeight: FontWeight.bold),
                 ),
               ],
             ),
@@ -93,7 +122,7 @@ class _AddNewsScreenState extends State<AddNewsScreen> {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             backgroundColor: alertRed,
-            content: Text('Error saving: $e', style: const TextStyle(color: Colors.white)),
+            content: Text('Error: $e', style: const TextStyle(color: Colors.white)),
           ),
         );
       }
@@ -125,13 +154,24 @@ class _AddNewsScreenState extends State<AddNewsScreen> {
           icon: const Icon(Icons.arrow_back_ios_new, color: textWhite, size: 20),
           onPressed: () => Navigator.pop(context),
         ),
-        title: const Text(
-          'Add New Khabar',
-          style: TextStyle(
-            color: textWhite,
-            fontWeight: FontWeight.w900,
-            fontSize: 18,
-          ),
+        title: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(
+              isEditing ? Icons.edit_note_rounded : Icons.add_circle_outline_rounded,
+              color: neonGreen,
+              size: 22,
+            ),
+            const SizedBox(width: 8),
+            Text(
+              isEditing ? 'Edit Khabar' : 'Add New Khabar',
+              style: const TextStyle(
+                color: textWhite,
+                fontWeight: FontWeight.w900,
+                fontSize: 18,
+              ),
+            ),
+          ],
         ),
         centerTitle: true,
       ),
@@ -258,7 +298,38 @@ class _AddNewsScreenState extends State<AddNewsScreen> {
                   ),
                   contentPadding: const EdgeInsets.all(14),
                 ),
+                onChanged: (_) => setState(() {}),
               ),
+              if (_imageUrlController.text.trim().isNotEmpty) ...[
+                const SizedBox(height: 10),
+                ClipRRect(
+                  borderRadius: BorderRadius.circular(10),
+                  child: Container(
+                    height: 130,
+                    width: double.infinity,
+                    decoration: BoxDecoration(
+                      color: cardDark2,
+                      border: Border.all(color: borderDark),
+                      borderRadius: BorderRadius.circular(10),
+                    ),
+                    child: Image.network(
+                      _imageUrlController.text.trim(),
+                      fit: BoxFit.cover,
+                      errorBuilder: (_, __, ___) => const Center(
+                        child: Row(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            Icon(Icons.broken_image_rounded, color: textGray, size: 20),
+                            SizedBox(width: 8),
+                            Text('Preview unavailable for this URL',
+                                style: TextStyle(color: textGray, fontSize: 12)),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+              ],
               const SizedBox(height: 18),
 
               // Description Multi-line
@@ -311,7 +382,11 @@ class _AddNewsScreenState extends State<AddNewsScreen> {
                   ),
                   icon: _isLoading
                       ? const SizedBox.shrink()
-                      : const Icon(Icons.publish_rounded, color: Color(0xFF05080D), size: 20),
+                      : Icon(
+                          isEditing ? Icons.check_circle_outline_rounded : Icons.publish_rounded,
+                          color: const Color(0xFF05080D),
+                          size: 20,
+                        ),
                   label: _isLoading
                       ? const SizedBox(
                           width: 22,
@@ -321,9 +396,9 @@ class _AddNewsScreenState extends State<AddNewsScreen> {
                             valueColor: AlwaysStoppedAnimation<Color>(Color(0xFF05080D)),
                           ),
                         )
-                      : const Text(
-                          'Save & Publish Khabar',
-                          style: TextStyle(
+                      : Text(
+                          isEditing ? 'Update & Save Changes' : 'Save & Publish Khabar',
+                          style: const TextStyle(
                             fontSize: 15,
                             fontWeight: FontWeight.w900,
                           ),
