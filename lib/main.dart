@@ -29,13 +29,13 @@ class GamesKhabarApp extends StatelessWidget {
       title: 'Games Khabar',
       debugShowCheckedModeBanner: false,
       theme: ThemeData.dark().copyWith(
-        scaffoldBackgroundColor: const Color(0xFF0A0E13),
+        scaffoldBackgroundColor: const Color(0xFF0A0A0F),
         primaryColor: const Color(0xFF00FF88),
         colorScheme: const ColorScheme.dark(
           primary: Color(0xFF00FF88),
           secondary: Color(0xFFFF4655),
-          surface: Color(0xFF151A23),
-          background: Color(0xFF0A0E13),
+          surface: Color(0xFF1E1E24),
+          background: Color(0xFF0A0A0F),
         ),
       ),
       initialRoute: '/',
