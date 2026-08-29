@@ -4,57 +4,37 @@ plugins {
     id "dev.flutter.flutter-gradle-plugin"
 }
 
-def localProperties = new Properties()
-def localPropertiesFile = rootProject.file('local.properties')
-if (localPropertiesFile.exists()) {
-    localPropertiesFile.withReader('UTF-8') { reader ->
-        localProperties.load(reader)
-    }
-}
-
-def flutterVersionCode = localProperties.getProperty('flutter.versionCode')
-if (flutterVersionCode == null) {
-    flutterVersionCode = '1'
-}
-
-def flutterVersionName = localProperties.getProperty('flutter.versionName')
-if (flutterVersionName == null) {
-    flutterVersionName = '1.0'
-}
-
 android {
     namespace = "com.gameskhabar.games_khabar"
-    compileSdk = 34
-    ndkVersion = "28.0.12433566"
+    compileSdk 34
+    ndkVersion "28.0.12433566"
 
     compileOptions {
-        sourceCompatibility = JavaVersion.VERSION_17
-        targetCompatibility = JavaVersion.VERSION_17
+        sourceCompatibility JavaVersion.VERSION_1_8
+        targetCompatibility JavaVersion.VERSION_1_8
     }
-
     kotlinOptions {
-        jvmTarget = '17'
+        jvmTarget = '1.8'
     }
-
+    sourceSets {
+        main.java.srcDirs += 'src/main/kotlin'
+    }
     defaultConfig {
-        applicationId = "com.gameskhabar.games_khabar"
-        minSdk = 21
-        targetSdk = 34
-        versionCode = flutterVersionCode.toInteger()
-        versionName = flutterVersionName
-        
-        ndk {
-            abiFilters "arm64-v8a", "x86_64"
-        }
+        applicationId "com.gameskhabar.games_khabar"
+        minSdk 21
+        targetSdk 34
+        versionCode 1
+        versionName "1.0"
     }
-
     buildTypes {
         release {
-            signingConfig = signingConfigs.debug
+            signingConfig signingConfigs.debug
         }
     }
 }
 
 flutter {
-    source = "../.."
+    source '../..'
 }
+
+dependencies {}
