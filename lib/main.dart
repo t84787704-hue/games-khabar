@@ -5,12 +5,15 @@ import 'screens/home_screen.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
-  
-  // Real Firebase Initialization
-  await Firebase.initializeApp(
-    options: DefaultFirebaseOptions.currentPlatform,
-  );
-
+  try {
+    await Firebase.initializeApp(
+      options: DefaultFirebaseOptions.currentPlatform,
+    );
+  } catch (e) {
+    try {
+      await Firebase.initializeApp();
+    } catch (_) {}
+  }
   runApp(const GamesKhabarApp());
 }
 
