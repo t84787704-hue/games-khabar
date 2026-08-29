@@ -3,6 +3,7 @@ import 'package:firebase_auth/firebase_auth.dart';
 import '../models/news_model.dart';
 import '../services/firestore_service.dart';
 import '../widgets/app_image_view.dart';
+import '../utils/admin_security.dart';
 import 'add_news_screen.dart';
 
 class AdminDashboardScreen extends StatefulWidget {
@@ -24,6 +25,30 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
 
   String _searchQuery = '';
   String _selectedFilter = 'All';
+
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      final user = FirebaseAuth.instance.currentUser;
+      final email = (user?.email ?? '').trim().toLowerCase();
+      if (user == null || email != 't84787704@gmail.com') {
+        if (mounted) {
+          Navigator.of(context).pushReplacementNamed('/');
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              backgroundColor: Color(0xFFFF4655),
+              behavior: SnackBarBehavior.floating,
+              content: Text(
+                'Access Denied - Not Admin',
+                style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
+              ),
+            ),
+          );
+        }
+      }
+    });
+  }
 
   final List<String> _filters = [
     'All',
@@ -150,13 +175,25 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
     }
   }
 
-  void _openEditScreen(NewsModel item) {
+  Future<void> _openEditScreen(NewsModel item) async {
+    final verified = await promptAdminPinDialog(context);
+    if (!verified) return;
+    if (!mounted) return;
+
     Navigator.push(
       context,
       MaterialPageRoute(
         builder: (_) => AddNewsScreen(editItem: item),
       ),
     );
+  }
+
+  Future<void> _openAddScreen() async {
+    final verified = await promptAdminPinDialog(context);
+    if (!verified) return;
+    if (!mounted) return;
+
+    Navigator.pushNamed(context, '/add-news');
   }
 
   @override
@@ -203,7 +240,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
           IconButton(
             tooltip: 'Add New Khabar',
             icon: const Icon(Icons.add_circle_outline, color: neonGreen, size: 24),
-            onPressed: () => Navigator.pushNamed(context, '/add-news'),
+            onPressed: _openAddScreen,
           ),
           IconButton(
             tooltip: 'Logout',
@@ -222,9 +259,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
       floatingActionButton: FloatingActionButton.extended(
         backgroundColor: neonGreen,
         foregroundColor: const Color(0xFF05080D),
-        onPressed: () {
-          Navigator.pushNamed(context, '/add-news');
-        },
+        onPressed: _openAddScreen,
         icon: const Icon(Icons.add, color: Color(0xFF05080D), size: 22),
         label: const Text(
           'Add New Khabar',

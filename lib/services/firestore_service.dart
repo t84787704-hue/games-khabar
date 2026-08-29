@@ -2,6 +2,30 @@ import 'dart:async';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import '../models/news_model.dart';
 
+// =========================================================================
+// RECOMMENDED FIRESTORE SECURITY RULES FOR GAMES KHABAR:
+//
+// Paste these in Firebase Console > Firestore Database > Rules:
+//
+// rules_version = '2';
+// service cloud.firestore {
+//   match /databases/{database}/documents {
+//     match /news/{newsId} {
+//       // 1. Anyone (public) can read gaming news
+//       allow read: if true;
+//
+//       // 2. Only the verified Admin email (t84787704@gmail.com) can create or delete
+//       allow create, delete: if request.auth != null &&
+//                                request.auth.token.email == "t84787704@gmail.com";
+//
+//       // 3. Admin can update full document, OR public can increment view counter
+//       allow update: if (request.auth != null && request.auth.token.email == "t84787704@gmail.com")
+//                     || request.resource.data.diff(resource.data).affectedKeys().hasOnly(['views']);
+//     }
+//   }
+// }
+// =========================================================================
+
 class FirestoreService {
   static final FirestoreService _instance = FirestoreService._internal();
   factory FirestoreService() => _instance;

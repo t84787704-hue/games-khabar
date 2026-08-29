@@ -37,6 +37,13 @@ class _AdminLoginScreenState extends State<AdminLoginScreen> {
       final email = _emailController.text.trim();
       final password = _passwordController.text.trim();
 
+      if (email.toLowerCase() != 't84787704@gmail.com') {
+        setState(() {
+          _errorMessage = 'Access Denied: Only t84787704@gmail.com is authorized as Admin.';
+        });
+        return;
+      }
+
       // Try Firebase Authentication
       try {
         await FirebaseAuth.instance.signInWithEmailAndPassword(
@@ -50,7 +57,7 @@ class _AdminLoginScreenState extends State<AdminLoginScreen> {
             password: password,
           );
         } catch (_) {
-          // If Firebase Auth API key is dummy/offline, allow local admin session
+          // If Firebase Auth offline or mock, continue if email matches admin
         }
       }
 
@@ -58,9 +65,10 @@ class _AdminLoginScreenState extends State<AdminLoginScreen> {
         Navigator.pushReplacementNamed(context, '/admin-dashboard');
       }
     } catch (e) {
-      // Direct access fallback for admin
       if (mounted) {
-        Navigator.pushReplacementNamed(context, '/admin-dashboard');
+        setState(() {
+          _errorMessage = 'Login failed: $e';
+        });
       }
     } finally {
       if (mounted) {

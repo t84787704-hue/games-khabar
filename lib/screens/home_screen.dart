@@ -4,6 +4,7 @@ import '../models/news_model.dart';
 import '../services/firestore_service.dart';
 import '../widgets/app_image_view.dart';
 import 'news_detail_screen.dart';
+import 'profile_screen.dart';
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
@@ -13,6 +14,7 @@ class HomeScreen extends StatefulWidget {
 }
 
 class _HomeScreenState extends State<HomeScreen> {
+  int _selectedNavIndex = 0;
   final FirestoreService _firestoreService = FirestoreService();
   String _selectedCategory = 'All';
   bool _isSearching = false;
@@ -123,68 +125,100 @@ class _HomeScreenState extends State<HomeScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: bgDark,
-      appBar: AppBar(
-        backgroundColor: cardDark,
-        elevation: 0,
-        centerTitle: false,
-        title: GestureDetector(
-          onLongPress: () {
-            // Hidden admin access on long press
-            Navigator.pushNamed(context, '/admin-login');
-          },
-          child: Row(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              // Green GK Logo Badge
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 4),
-                decoration: BoxDecoration(
-                  color: neonGreen,
-                  borderRadius: BorderRadius.circular(6),
-                ),
-                child: const Text(
-                  'GK',
-                  style: TextStyle(
-                    color: Color(0xFF05080D),
-                    fontWeight: FontWeight.w900,
-                    fontSize: 13,
-                    letterSpacing: -0.5,
-                  ),
-                ),
-              ),
-              const SizedBox(width: 8),
-              const Text(
-                'GAMES KHABAR',
-                style: TextStyle(
-                  color: textWhite,
-                  fontWeight: FontWeight.w900,
-                  fontSize: 17,
-                  letterSpacing: 1.1,
-                ),
-              ),
-            ],
+      bottomNavigationBar: Container(
+        decoration: const BoxDecoration(
+          color: cardDark,
+          border: Border(
+            top: BorderSide(color: borderDark, width: 1),
           ),
         ),
-        actions: [
-          IconButton(
-            icon: Icon(
-              _isSearching ? Icons.close : Icons.search_rounded,
-              color: neonGreen,
-              size: 24,
+        child: BottomNavigationBar(
+          currentIndex: _selectedNavIndex,
+          onTap: (index) {
+            setState(() {
+              _selectedNavIndex = index;
+            });
+          },
+          backgroundColor: cardDark,
+          selectedItemColor: neonGreen,
+          unselectedItemColor: textGray,
+          selectedLabelStyle: const TextStyle(fontWeight: FontWeight.bold, fontSize: 12),
+          unselectedLabelStyle: const TextStyle(fontWeight: FontWeight.normal, fontSize: 12),
+          elevation: 0,
+          items: const [
+            BottomNavigationBarItem(
+              icon: Icon(Icons.sports_esports_outlined),
+              activeIcon: Icon(Icons.sports_esports_rounded),
+              label: 'Khabar',
             ),
-            onPressed: () {
-              setState(() {
-                _isSearching = !_isSearching;
-                if (!_isSearching) {
-                  _searchQuery = '';
-                  _searchController.clear();
-                }
-              });
-            },
-          ),
-        ],
+            BottomNavigationBarItem(
+              icon: Icon(Icons.person_outline_rounded),
+              activeIcon: Icon(Icons.person_rounded),
+              label: 'Profile',
+            ),
+          ],
+        ),
       ),
-      body: StreamBuilder<List<NewsModel>>(
+      appBar: _selectedNavIndex == 1
+          ? null
+          : AppBar(
+              backgroundColor: cardDark,
+              elevation: 0,
+              centerTitle: false,
+              title: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  // Green GK Logo Badge
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 4),
+                    decoration: BoxDecoration(
+                      color: neonGreen,
+                      borderRadius: BorderRadius.circular(6),
+                    ),
+                    child: const Text(
+                      'GK',
+                      style: TextStyle(
+                        color: Color(0xFF05080D),
+                        fontWeight: FontWeight.w900,
+                        fontSize: 13,
+                        letterSpacing: -0.5,
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  const Text(
+                    'GAMES KHABAR',
+                    style: TextStyle(
+                      color: textWhite,
+                      fontWeight: FontWeight.w900,
+                      fontSize: 17,
+                      letterSpacing: 1.1,
+                    ),
+                  ),
+                ],
+              ),
+              actions: [
+                IconButton(
+                  icon: Icon(
+                    _isSearching ? Icons.close : Icons.search_rounded,
+                    color: neonGreen,
+                    size: 24,
+                  ),
+                  onPressed: () {
+                    setState(() {
+                      _isSearching = !_isSearching;
+                      if (!_isSearching) {
+                        _searchQuery = '';
+                        _searchController.clear();
+                      }
+                    });
+                  },
+                ),
+              ],
+            ),
+      body: _selectedNavIndex == 1
+          ? const ProfileScreen()
+          : StreamBuilder<List<NewsModel>>(
         stream: _firestoreService.getNewsStream(),
         builder: (context, snapshot) {
           if (snapshot.connectionState == ConnectionState.waiting) {

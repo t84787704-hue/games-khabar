@@ -1,10 +1,12 @@
 import 'dart:convert';
 import 'dart:typed_data';
 import 'package:flutter/material.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:image_picker/image_picker.dart';
 import '../models/news_model.dart';
 import '../services/firestore_service.dart';
 import '../widgets/app_image_view.dart';
+import '../utils/admin_security.dart';
 
 class AddNewsScreen extends StatefulWidget {
   final NewsModel? editItem;
@@ -54,6 +56,27 @@ class _AddNewsScreenState extends State<AddNewsScreen> {
   @override
   void initState() {
     super.initState();
+
+    // Security check: only allow t84787704@gmail.com
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      final user = FirebaseAuth.instance.currentUser;
+      final email = (user?.email ?? '').trim().toLowerCase();
+      if (user == null || email != 't84787704@gmail.com') {
+        if (mounted) {
+          Navigator.of(context).pop();
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              backgroundColor: Color(0xFFFF4655),
+              behavior: SnackBarBehavior.floating,
+              content: Text(
+                'Access Denied - Not Admin',
+                style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
+              ),
+            ),
+          );
+        }
+      }
+    });
 
     final item = widget.editItem;
     _titleController = TextEditingController(text: item?.title ?? '');
