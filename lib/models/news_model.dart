@@ -6,6 +6,7 @@ class NewsModel {
   final String description;
   final String category;
   final String imageUrl;
+  final String? videoUrl;
   final String? youtubeId;
   final String timeAgo;
   final int views;
@@ -24,6 +25,7 @@ class NewsModel {
     required this.description,
     required this.category,
     required this.imageUrl,
+    this.videoUrl,
     this.youtubeId,
     required this.timeAgo,
     this.views = 0,
@@ -62,6 +64,7 @@ class NewsModel {
       imageUrl: (data['imageUrl'] as String? ?? '').isNotEmpty
           ? data['imageUrl'] as String
           : 'https://picsum.photos/800/600?random=1',
+      videoUrl: data['videoUrl'] as String?,
       youtubeId: data['youtubeId'] as String?,
       timeAgo: formattedTime,
       views: (data['views'] as num?)?.toInt() ?? 0,

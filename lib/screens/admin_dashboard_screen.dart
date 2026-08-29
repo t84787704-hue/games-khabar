@@ -477,6 +477,20 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
                                             size: 24),
                                       ),
                                     ),
+                                    if (item.videoUrl != null && item.videoUrl!.isNotEmpty)
+                                      Positioned(
+                                        top: 3,
+                                        left: 3,
+                                        child: Container(
+                                          padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 1),
+                                          decoration: BoxDecoration(
+                                            color: Colors.black.withOpacity(0.75),
+                                            borderRadius: BorderRadius.circular(3),
+                                            border: Border.all(color: alertRed, width: 0.8),
+                                          ),
+                                          child: const Icon(Icons.play_arrow_rounded, color: alertRed, size: 10),
+                                        ),
+                                      ),
                                     Positioned(
                                       bottom: 0,
                                       left: 0,

@@ -361,21 +361,50 @@ class _HomeScreenState extends State<HomeScreen> {
                               Positioned(
                                 top: 12,
                                 left: 12,
-                                child: Container(
-                                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                                  decoration: BoxDecoration(
-                                    color: neonGreen,
-                                    borderRadius: BorderRadius.circular(4),
-                                  ),
-                                  child: const Text(
-                                    'FEATURED',
-                                    style: TextStyle(
-                                      color: Color(0xFF05080D),
-                                      fontSize: 10,
-                                      fontWeight: FontWeight.w900,
-                                      letterSpacing: 0.5,
+                                child: Row(
+                                  children: [
+                                    Container(
+                                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                                      decoration: BoxDecoration(
+                                        color: neonGreen,
+                                        borderRadius: BorderRadius.circular(4),
+                                      ),
+                                      child: const Text(
+                                        'FEATURED',
+                                        style: TextStyle(
+                                          color: Color(0xFF05080D),
+                                          fontSize: 10,
+                                          fontWeight: FontWeight.w900,
+                                          letterSpacing: 0.5,
+                                        ),
+                                      ),
                                     ),
-                                  ),
+                                    if (featuredNews.videoUrl != null && featuredNews.videoUrl!.isNotEmpty) ...[
+                                      const SizedBox(width: 6),
+                                      Container(
+                                        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 4),
+                                        decoration: BoxDecoration(
+                                          color: const Color(0xFFFF4655),
+                                          borderRadius: BorderRadius.circular(4),
+                                        ),
+                                        child: Row(
+                                          mainAxisSize: MainAxisSize.min,
+                                          children: const [
+                                            Icon(Icons.play_arrow_rounded, color: Colors.white, size: 12),
+                                            SizedBox(width: 2),
+                                            Text(
+                                              'VIDEO',
+                                              style: TextStyle(
+                                                color: Colors.white,
+                                                fontSize: 9,
+                                                fontWeight: FontWeight.w900,
+                                              ),
+                                            ),
+                                          ],
+                                        ),
+                                      ),
+                                    ],
+                                  ],
                                 ),
                               ),
                               // Title & Time Overlay
@@ -492,14 +521,35 @@ class _HomeScreenState extends State<HomeScreen> {
                                     child: SizedBox(
                                       width: 120,
                                       height: double.infinity,
-                                      child: CachedNetworkImage(
-                                        imageUrl: item.imageUrl,
-                                        fit: BoxFit.cover,
-                                        placeholder: (_, __) => Container(color: cardDark2),
-                                        errorWidget: (_, __, ___) => Container(
-                                          color: cardDark2,
-                                          child: const Icon(Icons.videogame_asset, color: textGray),
-                                        ),
+                                      child: Stack(
+                                        fit: StackFit.expand,
+                                        children: [
+                                          CachedNetworkImage(
+                                            imageUrl: item.imageUrl,
+                                            fit: BoxFit.cover,
+                                            placeholder: (_, __) => Container(color: cardDark2),
+                                            errorWidget: (_, __, ___) => Container(
+                                              color: cardDark2,
+                                              child: const Icon(Icons.videogame_asset, color: textGray),
+                                            ),
+                                          ),
+                                          if (item.videoUrl != null && item.videoUrl!.isNotEmpty)
+                                            Center(
+                                              child: Container(
+                                                padding: const EdgeInsets.all(6),
+                                                decoration: BoxDecoration(
+                                                  color: Colors.black.withOpacity(0.65),
+                                                  shape: BoxShape.circle,
+                                                  border: Border.all(color: const Color(0xFFFF4655), width: 1.5),
+                                                ),
+                                                child: const Icon(
+                                                  Icons.play_arrow_rounded,
+                                                  color: Color(0xFFFF4655),
+                                                  size: 18,
+                                                ),
+                                              ),
+                                            ),
+                                        ],
                                       ),
                                     ),
                                   ),
@@ -607,14 +657,47 @@ class _HomeScreenState extends State<HomeScreen> {
                                     borderRadius: const BorderRadius.vertical(top: Radius.circular(11)),
                                     child: AspectRatio(
                                       aspectRatio: 16 / 10,
-                                      child: CachedNetworkImage(
-                                        imageUrl: item.imageUrl,
-                                        fit: BoxFit.cover,
-                                        placeholder: (_, __) => Container(color: cardDark2),
-                                        errorWidget: (_, __, ___) => Container(
-                                          color: cardDark2,
-                                          child: const Icon(Icons.videogame_asset, color: textGray),
-                                        ),
+                                      child: Stack(
+                                        fit: StackFit.expand,
+                                        children: [
+                                          CachedNetworkImage(
+                                            imageUrl: item.imageUrl,
+                                            fit: BoxFit.cover,
+                                            placeholder: (_, __) => Container(color: cardDark2),
+                                            errorWidget: (_, __, ___) => Container(
+                                              color: cardDark2,
+                                              child: const Icon(Icons.videogame_asset, color: textGray),
+                                            ),
+                                          ),
+                                          if (item.videoUrl != null && item.videoUrl!.isNotEmpty)
+                                            Positioned(
+                                              bottom: 6,
+                                              right: 6,
+                                              child: Container(
+                                                padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 2),
+                                                decoration: BoxDecoration(
+                                                  color: Colors.black.withOpacity(0.8),
+                                                  borderRadius: BorderRadius.circular(4),
+                                                  border: Border.all(color: const Color(0xFFFF4655), width: 1),
+                                                ),
+                                                child: Row(
+                                                  mainAxisSize: MainAxisSize.min,
+                                                  children: const [
+                                                    Icon(Icons.play_arrow_rounded, color: Color(0xFFFF4655), size: 12),
+                                                    SizedBox(width: 2),
+                                                    Text(
+                                                      'VIDEO',
+                                                      style: TextStyle(
+                                                        color: Colors.white,
+                                                        fontSize: 9,
+                                                        fontWeight: FontWeight.w900,
+                                                      ),
+                                                    ),
+                                                  ],
+                                                ),
+                                              ),
+                                            ),
+                                        ],
                                       ),
                                     ),
                                   ),
