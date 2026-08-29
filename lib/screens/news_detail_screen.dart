@@ -2,9 +2,20 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:share_plus/share_plus.dart';
 import 'package:url_launcher/url_launcher.dart';
-import 'package:youtube_player_iframe/youtube_player_iframe.dart';
 import '../models/news_model.dart';
 import '../widgets/app_image_view.dart';
+
+/// Helper function to extract YouTube video ID from various YouTube URL formats
+String? extractYoutubeId(String? url) {
+  if (url == null || url.trim().isEmpty) return null;
+  final cleanUrl = url.trim();
+  final regExp = RegExp(
+    r'(?:youtu\.be\/|youtube\.com\/(?:embed\/|v\/|watch\?v=|watch\?.+&v=|shorts\/|live\/))([\w-]{11})',
+    caseSensitive: false,
+  );
+  final match = regExp.firstMatch(cleanUrl);
+  return match?.group(1);
+}
 
 class NewsDetailScreen extends StatelessWidget {
   final NewsModel news;
@@ -15,31 +26,14 @@ class NewsDetailScreen extends StatelessWidget {
   static const Color bgDark = Color(0xFF0A0A0F);
   static const Color cardDark = Color(0xFF1E1E24);
   static const Color borderDark = Color(0xFF2E2E38);
-  static const Color alertRed = Color(0xFFFF4655);
+  static const Color alertRed = Color(0xFFFF0000);
   static const Color textWhite = Color(0xFFFFFFFF);
   static const Color textGray = Color(0xFF9E9EA7);
   static const Color textLightGray = Color(0xFFD4D4D8);
 
   bool get hasVideoUrl => news.videoUrl != null && news.videoUrl!.trim().isNotEmpty;
 
-  bool get isYouTubeVideo {
-    if (!hasVideoUrl) return false;
-    final lower = news.videoUrl!.toLowerCase();
-    return lower.contains('youtube.com') || lower.contains('youtu.be');
-  }
-
-  String? get youTubeVideoId {
-    if (!isYouTubeVideo) return null;
-    final url = news.videoUrl!.trim();
-    final converted = YoutubePlayerController.convertUrlToId(url);
-    if (converted != null && converted.isNotEmpty) return converted;
-    final regExp = RegExp(
-      r'(?:youtu\.be\/|youtube\.com\/(?:embed\/|v\/|watch\?v=|watch\?.+&v=|shorts\/))([\w-]{11})',
-      caseSensitive: false,
-    );
-    final match = regExp.firstMatch(url);
-    return match?.group(1);
-  }
+  String? get youTubeVideoId => extractYoutubeId(news.videoUrl);
 
   String? _extractSourceUrl(String text) {
     if (news.sourceUrl != null && news.sourceUrl!.trim().isNotEmpty) {
@@ -58,6 +52,22 @@ class NewsDetailScreen extends StatelessWidget {
       return url;
     }
     return null;
+  }
+
+  Future<void> _openYouTubeVideo(BuildContext context, String videoId) async {
+    final uri = Uri.parse("https://www.youtube.com/watch?v=$videoId");
+    try {
+      await launchUrl(uri, mode: LaunchMode.externalApplication);
+    } catch (_) {
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            backgroundColor: cardDark,
+            content: Text('Could not open YouTube', style: TextStyle(color: neonGreen)),
+          ),
+        );
+      }
+    }
   }
 
   Future<void> _launchExternalUrl(BuildContext context, String url) async {
@@ -130,7 +140,7 @@ class NewsDetailScreen extends StatelessWidget {
   Widget build(BuildContext context) {
     final directUrl = _extractSourceUrl(news.description);
     final ytId = youTubeVideoId;
-    final isOtherVideo = hasVideoUrl && !isYouTubeVideo;
+    final isOtherVideo = hasVideoUrl && ytId == null;
 
     return Scaffold(
       backgroundColor: bgDark,
@@ -267,7 +277,7 @@ class NewsDetailScreen extends StatelessWidget {
                   ),
                   const SizedBox(height: 14),
 
-                  // News Title (IGN Bold Style)
+                  // News Title
                   Text(
                     news.title,
                     style: const TextStyle(
@@ -291,13 +301,16 @@ class NewsDetailScreen extends StatelessWidget {
                   ),
                   const SizedBox(height: 20),
 
-                  // YouTube Player (if YouTube link)
+                  // YouTube Thumbnail Player Preview (Opens directly in YouTube App)
                   if (ytId != null) ...[
-                    YouTubePlayerContainer(videoId: ytId),
+                    YouTubeThumbnailCard(
+                      videoId: ytId,
+                      onTap: () => _openYouTubeVideo(context, ytId),
+                    ),
                     const SizedBox(height: 20),
                   ],
 
-                  // Watch Video Button (if other mp4/video link)
+                  // Watch Video Button (if other direct mp4/video link)
                   if (isOtherVideo) ...[
                     SizedBox(
                       width: double.infinity,
@@ -400,60 +413,178 @@ class NewsDetailScreen extends StatelessWidget {
   }
 }
 
-class YouTubePlayerContainer extends StatefulWidget {
+/// Custom YouTube Thumbnail Card with big red play button and black overlay
+class YouTubeThumbnailCard extends StatelessWidget {
   final String videoId;
+  final VoidCallback onTap;
 
-  const YouTubePlayerContainer({super.key, required this.videoId});
-
-  @override
-  State<YouTubePlayerContainer> createState() => _YouTubePlayerContainerState();
-}
-
-class _YouTubePlayerContainerState extends State<YouTubePlayerContainer> {
-  late final YoutubePlayerController _controller;
-
-  @override
-  void initState() {
-    super.initState();
-    _controller = YoutubePlayerController.fromVideoId(
-      videoId: widget.videoId,
-      autoPlay: false,
-      params: const YoutubePlayerParams(
-        showFullscreenButton: true,
-        showControls: true,
-        mute: false,
-      ),
-    );
-  }
-
-  @override
-  void dispose() {
-    _controller.close();
-    super.dispose();
-  }
+  const YouTubeThumbnailCard({
+    super.key,
+    required this.videoId,
+    required this.onTap,
+  });
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      decoration: BoxDecoration(
-        color: Colors.black,
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: const Color(0xFFFF4655), width: 1.5),
-        boxShadow: [
-          BoxShadow(
-            color: const Color(0xFFFF4655).withOpacity(0.2),
-            blurRadius: 10,
-            spreadRadius: 1,
+    final maxResUrl = 'https://img.youtube.com/vi/$videoId/maxresdefault.jpg';
+    final hqDefaultUrl = 'https://img.youtube.com/vi/$videoId/hqdefault.jpg';
+
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        decoration: BoxDecoration(
+          color: const Color(0xFF15151A),
+          borderRadius: BorderRadius.circular(14),
+          border: Border.all(color: const Color(0xFFFF0000).withOpacity(0.6), width: 1.5),
+          boxShadow: [
+            BoxShadow(
+              color: const Color(0xFFFF0000).withOpacity(0.2),
+              blurRadius: 16,
+              spreadRadius: 1,
+            ),
+          ],
+        ),
+        child: ClipRRect(
+          borderRadius: BorderRadius.circular(12),
+          child: AspectRatio(
+            aspectRatio: 16 / 9,
+            child: Stack(
+              fit: StackFit.expand,
+              children: [
+                // YouTube High Quality Thumbnail Image
+                Image.network(
+                  maxResUrl,
+                  fit: BoxFit.cover,
+                  errorBuilder: (context, error, stackTrace) {
+                    return Image.network(
+                      hqDefaultUrl,
+                      fit: BoxFit.cover,
+                      errorBuilder: (_, __, ___) => Container(
+                        color: const Color(0xFF15151A),
+                        child: const Center(
+                          child: Icon(Icons.movie_rounded, color: Colors.white24, size: 48),
+                        ),
+                      ),
+                    );
+                  },
+                  loadingBuilder: (context, child, loadingProgress) {
+                    if (loadingProgress == null) return child;
+                    return Container(
+                      color: const Color(0xFF15151A),
+                      child: const Center(
+                        child: CircularProgressIndicator(
+                          color: Color(0xFFFF0000),
+                          strokeWidth: 2.5,
+                        ),
+                      ),
+                    );
+                  },
+                ),
+
+                // Semi-transparent Black Overlay
+                Container(
+                  color: Colors.black.withOpacity(0.35),
+                ),
+
+                // Subtle vignette gradient
+                Container(
+                  decoration: BoxDecoration(
+                    gradient: LinearGradient(
+                      begin: Alignment.topCenter,
+                      end: Alignment.bottomCenter,
+                      colors: [
+                        Colors.black.withOpacity(0.2),
+                        Colors.transparent,
+                        Colors.black.withOpacity(0.7),
+                      ],
+                    ),
+                  ),
+                ),
+
+                // Big Red YouTube Play Button in Center
+                Center(
+                  child: Container(
+                    width: 68,
+                    height: 48,
+                    decoration: BoxDecoration(
+                      color: const Color(0xFFFF0000),
+                      borderRadius: BorderRadius.circular(14),
+                      boxShadow: [
+                        BoxShadow(
+                          color: const Color(0xFFFF0000).withOpacity(0.6),
+                          blurRadius: 20,
+                          spreadRadius: 3,
+                        ),
+                        BoxShadow(
+                          color: Colors.black.withOpacity(0.5),
+                          blurRadius: 10,
+                          offset: const Offset(0, 4),
+                        ),
+                      ],
+                    ),
+                    child: const Center(
+                      child: Icon(
+                        Icons.play_arrow_rounded,
+                        color: Colors.white,
+                        size: 34,
+                      ),
+                    ),
+                  ),
+                ),
+
+                // Bottom Banner: "Watch on YouTube"
+                Positioned(
+                  bottom: 10,
+                  left: 12,
+                  right: 12,
+                  child: Row(
+                    children: [
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+                        decoration: BoxDecoration(
+                          color: Colors.black.withOpacity(0.75),
+                          borderRadius: BorderRadius.circular(6),
+                          border: Border.all(color: Colors.white24, width: 0.8),
+                        ),
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: const [
+                            Icon(Icons.play_circle_filled_rounded, color: Color(0xFFFF0000), size: 16),
+                            SizedBox(width: 6),
+                            Text(
+                              'Watch on YouTube',
+                              style: TextStyle(
+                                color: Colors.white,
+                                fontSize: 11,
+                                fontWeight: FontWeight.w900,
+                                letterSpacing: 0.3,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                      const Spacer(),
+                      Container(
+                        padding: const EdgeInsets.all(5),
+                        decoration: BoxDecoration(
+                          color: Colors.black.withOpacity(0.75),
+                          shape: BoxShape.circle,
+                        ),
+                        child: const Icon(
+                          Icons.open_in_new_rounded,
+                          color: Colors.white70,
+                          size: 14,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
           ),
-        ],
-      ),
-      child: ClipRRect(
-        borderRadius: BorderRadius.circular(11),
-        child: YoutubePlayer(
-          controller: _controller,
-          aspectRatio: 16 / 9,
         ),
       ),
     );
   }
 }
+
