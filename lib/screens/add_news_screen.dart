@@ -1,12 +1,55 @@
 import 'dart:convert';
 import 'dart:typed_data';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:image_picker/image_picker.dart';
 import '../models/news_model.dart';
 import '../services/firestore_service.dart';
 import '../widgets/app_image_view.dart';
 import '../utils/admin_security.dart';
+
+/// Helper function to extract 11-char YouTube video ID from various YouTube URL formats or direct ID
+String? extractYoutubeId(String? url) {
+  if (url == null || url.trim().isEmpty) return null;
+  String cleanUrl = url.trim();
+
+  // 1. Direct 11-character video ID
+  final directIdRegex = RegExp(r'^[a-zA-Z0-9_-]{11}$');
+  if (directIdRegex.hasMatch(cleanUrl)) {
+    return cleanUrl;
+  }
+
+  // 2. Remove ?si= or &si= parameter
+  if (cleanUrl.contains('?si=') || cleanUrl.contains('&si=')) {
+    cleanUrl = cleanUrl.replaceAll(RegExp(r'[?&]si=[^&#]+'), '');
+  }
+
+  // 3. Extract ID using RegExp supporting youtu.be/, watch?v=, shorts/, embed/, live/, etc.
+  final regExp = RegExp(
+    r'(?:youtu\.be\/|youtube\.com\/(?:embed\/|v\/|watch\?v=|watch\?.+&v=|shorts\/|live\/)|(?:v=))([a-zA-Z0-9_-]{11})',
+    caseSensitive: false,
+  );
+  final match = regExp.firstMatch(cleanUrl);
+  if (match != null && match.group(1) != null) {
+    return match.group(1);
+  }
+
+  // Fallback pattern matching v= or youtu.be/
+  final fallbackRegExp = RegExp(
+    r'(?:v=|youtu\.be\/)([a-zA-Z0-9_-]{11})',
+    caseSensitive: false,
+  );
+  final fallbackMatch = fallbackRegExp.firstMatch(cleanUrl);
+  return fallbackMatch?.group(1);
+}
+
+/// Validates whether the given string is a valid YouTube URL or 11-char ID
+bool isValidYoutubeUrl(String? url) {
+  if (url == null || url.trim().isEmpty) return false;
+  final id = extractYoutubeId(url);
+  return id != null && id.length == 11;
+}
 
 class AddNewsScreen extends StatefulWidget {
   final NewsModel? editItem;
@@ -177,7 +220,16 @@ class _AddNewsScreenState extends State<AddNewsScreen> {
         ? _base64ImageUrl!
         : 'https://images.unsplash.com/photo-1542751371-adc38448a05e?auto=format&fit=crop&w=600&q=80';
 
-    final videoUrl = _videoUrlController.text.trim();
+    final rawVideoUrl = _videoUrlController.text.trim();
+    String videoUrl = '';
+    if (rawVideoUrl.isNotEmpty) {
+      final ytId = extractYoutubeId(rawVideoUrl);
+      if (ytId != null) {
+        videoUrl = 'https://www.youtube.com/watch?v=$ytId';
+      } else {
+        videoUrl = rawVideoUrl;
+      }
+    }
 
     setState(() {
       _isPublishing = true;
@@ -302,12 +354,14 @@ class _AddNewsScreenState extends State<AddNewsScreen> {
               const SizedBox(height: 8),
               TextFormField(
                 controller: _titleController,
+                maxLength: 200,
                 style: const TextStyle(color: textWhite, fontSize: 14),
                 decoration: InputDecoration(
                   hintText: 'e.g. BGMI 3.4 Update Release Date & Features',
                   hintStyle: const TextStyle(color: textGray, fontSize: 13),
                   filled: true,
                   fillColor: cardDark,
+                  counterStyle: const TextStyle(color: textGray, fontSize: 11),
                   border: OutlineInputBorder(
                     borderRadius: BorderRadius.circular(12),
                     borderSide: const BorderSide(color: borderDark),
@@ -322,7 +376,15 @@ class _AddNewsScreenState extends State<AddNewsScreen> {
                   ),
                   contentPadding: const EdgeInsets.all(14),
                 ),
-                validator: (val) => val == null || val.trim().isEmpty ? 'Title is required' : null,
+                validator: (val) {
+                  if (val == null || val.trim().isEmpty) {
+                    return 'Title is required';
+                  }
+                  if (val.trim().length > 200) {
+                    return 'Title cannot exceed 200 characters';
+                  }
+                  return null;
+                },
               ),
               const SizedBox(height: 18),
 
@@ -539,8 +601,10 @@ class _AddNewsScreenState extends State<AddNewsScreen> {
                 controller: _videoUrlController,
                 style: const TextStyle(color: textWhite, fontSize: 14),
                 decoration: InputDecoration(
-                  hintText: 'Paste YouTube link here (e.g. https://youtu.be/...)',
+                  hintText: 'e.g. https://youtu.be/xxx or watch?v=xxx or Video ID',
                   hintStyle: const TextStyle(color: textGray, fontSize: 13),
+                  helperText: 'Supports youtu.be, youtube.com, Shorts, or 11-character Video ID',
+                  helperStyle: const TextStyle(color: textGray, fontSize: 11),
                   prefixIcon: const Icon(Icons.link_rounded, color: neonGreen, size: 20),
                   filled: true,
                   fillColor: cardDark,
@@ -558,6 +622,15 @@ class _AddNewsScreenState extends State<AddNewsScreen> {
                   ),
                   contentPadding: const EdgeInsets.all(14),
                 ),
+                validator: (val) {
+                  if (val == null || val.trim().isEmpty) {
+                    return null; // Optional
+                  }
+                  if (!isValidYoutubeUrl(val)) {
+                    return 'Please enter a valid YouTube URL or 11-char Video ID';
+                  }
+                  return null;
+                },
               ),
               const SizedBox(height: 20),
 

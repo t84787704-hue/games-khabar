@@ -5,16 +5,38 @@ import 'package:url_launcher/url_launcher.dart';
 import '../models/news_model.dart';
 import '../widgets/app_image_view.dart';
 
-/// Helper function to extract YouTube video ID from various YouTube URL formats
+/// Helper function to extract YouTube video ID from various YouTube URL formats or direct ID
 String? extractYoutubeId(String? url) {
   if (url == null || url.trim().isEmpty) return null;
-  final cleanUrl = url.trim();
+  String cleanUrl = url.trim();
+
+  // 1. Direct 11-character video ID
+  final directIdRegex = RegExp(r'^[a-zA-Z0-9_-]{11}$');
+  if (directIdRegex.hasMatch(cleanUrl)) {
+    return cleanUrl;
+  }
+
+  // 2. Remove ?si= or &si= parameter
+  if (cleanUrl.contains('?si=') || cleanUrl.contains('&si=')) {
+    cleanUrl = cleanUrl.replaceAll(RegExp(r'[?&]si=[^&#]+'), '');
+  }
+
+  // 3. Extract ID using RegExp
   final regExp = RegExp(
-    r'(?:youtu\.be\/|youtube\.com\/(?:embed\/|v\/|watch\?v=|watch\?.+&v=|shorts\/|live\/))([\w-]{11})',
+    r'(?:youtu\.be\/|youtube\.com\/(?:embed\/|v\/|watch\?v=|watch\?.+&v=|shorts\/|live\/)|(?:v=))([a-zA-Z0-9_-]{11})',
     caseSensitive: false,
   );
   final match = regExp.firstMatch(cleanUrl);
-  return match?.group(1);
+  if (match != null && match.group(1) != null) {
+    return match.group(1);
+  }
+
+  final fallbackRegExp = RegExp(
+    r'(?:v=|youtu\.be\/)([a-zA-Z0-9_-]{11})',
+    caseSensitive: false,
+  );
+  final fallbackMatch = fallbackRegExp.firstMatch(cleanUrl);
+  return fallbackMatch?.group(1);
 }
 
 class NewsDetailScreen extends StatelessWidget {
