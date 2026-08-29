@@ -2,6 +2,9 @@ import 'package:flutter/material.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'firebase_options.dart';
 import 'screens/home_screen.dart';
+import 'screens/admin_login_screen.dart';
+import 'screens/admin_dashboard_screen.dart';
+import 'screens/add_news_screen.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -35,7 +38,13 @@ class GamesKhabarApp extends StatelessWidget {
           background: Color(0xFF0A0E13),
         ),
       ),
-      home: const HomeScreen(),
+      initialRoute: '/',
+      routes: {
+        '/': (context) => const HomeScreen(),
+        '/admin-login': (context) => const AdminLoginScreen(),
+        '/admin-dashboard': (context) => const AdminDashboardScreen(),
+        '/add-news': (context) => const AddNewsScreen(),
+      },
     );
   }
 }

@@ -28,6 +28,39 @@ class _HomeScreenState extends State<HomeScreen> {
   static const Color textWhite = Color(0xFFFFFFFF);
   static const Color textGray = Color(0xFF9CA3AF);
 
+  // Fallback dummy news items if Firestore is empty or connecting for the first time
+  final List<NewsModel> _fallbackNews = [
+    NewsModel(
+      id: 'dummy-1',
+      title: 'BGMI 3.4 Update: Vampire Blood Moon Mode, New Flying Horse & Release Date',
+      description: 'BGMI 3.4 update is arriving with exciting vampire themed mode, supernatural powers, flying horse vehicle, and new weapon balances. Download the update from Play Store.',
+      category: NewsCategory.NEWS,
+      imageUrl: 'https://images.unsplash.com/photo-1542751371-adc38448a05e?auto=format&fit=crop&w=1000&q=80',
+      timeAgo: '10 min pehle',
+      views: 340,
+    ),
+    NewsModel(
+      id: 'dummy-2',
+      title: 'Free Fire World Series Tournament 2024 - Pakistan Squads Qualified',
+      description: 'Free Fire announced official registrations and prize pool details for the upcoming World Series championships with exclusive custom bundles.',
+      category: NewsCategory.FREE,
+      imageUrl: 'https://images.unsplash.com/photo-1511512578047-dfb367046420?auto=format&fit=crop&w=1000&q=80',
+      timeAgo: '1 ghanta pehle',
+      views: 520,
+      isFree: true,
+      originalPrice: '100% FREE',
+    ),
+    NewsModel(
+      id: 'dummy-3',
+      title: 'PUBG Mobile 3.2 120 FPS Support Officially Released on Android',
+      description: 'Players can now experience ultra smooth 120 frames per second gameplay on supported flagship Snapdragon and Dimensity devices.',
+      category: NewsCategory.NEWS,
+      imageUrl: 'https://images.unsplash.com/photo-1538481199705-c710c4e965fc?auto=format&fit=crop&w=1000&q=80',
+      timeAgo: '3 ghante pehle',
+      views: 890,
+    ),
+  ];
+
   Color _getCategoryColor(NewsCategory category) {
     switch (category) {
       case NewsCategory.FREE:
@@ -48,8 +81,9 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 
   void _openDetailSheet(NewsModel newsItem) {
-    // Increment view count in real-time in Firestore
-    _firestoreService.incrementView(newsItem.id);
+    if (!newsItem.id.startsWith('dummy')) {
+      _firestoreService.incrementView(newsItem.id);
+    }
 
     showModalBottomSheet(
       context: context,
@@ -137,7 +171,7 @@ class _HomeScreenState extends State<HomeScreen> {
                       const SizedBox(width: 8),
                       const Icon(Icons.visibility_outlined, color: textGray, size: 13),
                       const SizedBox(width: 4),
-                      Text('${newsItem.views + 1} views', style: const TextStyle(color: textGray, fontSize: 12)),
+                      Text('${newsItem.views} views', style: const TextStyle(color: textGray, fontSize: 12)),
                     ],
                   ),
                   const SizedBox(height: 16),
@@ -178,11 +212,70 @@ class _HomeScreenState extends State<HomeScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: bgScaffold,
+      appBar: AppBar(
+        backgroundColor: cardBg,
+        elevation: 0,
+        centerTitle: false,
+        title: GestureDetector(
+          onLongPress: () {
+            // Hidden entry to Admin Login on 2-second long press
+            Navigator.pushNamed(context, '/admin-login');
+          },
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Container(
+                width: 32,
+                height: 32,
+                decoration: BoxDecoration(
+                  color: neonGreen,
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: const Center(
+                  child: Text(
+                    'GK',
+                    style: TextStyle(
+                      color: bgOuter,
+                      fontSize: 14,
+                      fontWeight: FontWeight.w900,
+                    ),
+                  ),
+                ),
+              ),
+              const SizedBox(width: 10),
+              Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                mainAxisSize: MainAxisSize.min,
+                children: const [
+                  Text(
+                    'Games Khabar',
+                    style: TextStyle(
+                      color: neonGreen,
+                      fontSize: 18,
+                      fontWeight: FontWeight.w900,
+                      letterSpacing: 0.5,
+                    ),
+                  ),
+                  Text(
+                    'URDU GAMING NEWS & FREE GAMES',
+                    style: TextStyle(
+                      color: textGray,
+                      fontSize: 9,
+                      fontWeight: FontWeight.bold,
+                      letterSpacing: 0.8,
+                    ),
+                  ),
+                ],
+              ),
+            ],
+          ),
+        ),
+      ),
       body: SafeArea(
         child: StreamBuilder<List<NewsModel>>(
           stream: _firestoreService.getNewsStream(),
           builder: (context, snapshot) {
-            // State 1: Loading indicator in neon green #00ff88
+            // State 1: Loading
             if (snapshot.connectionState == ConnectionState.waiting) {
               return const Center(
                 child: CircularProgressIndicator(
@@ -191,66 +284,13 @@ class _HomeScreenState extends State<HomeScreen> {
               );
             }
 
-            // State 2: Error handling
-            if (snapshot.hasError) {
-              return Center(
-                child: Padding(
-                  padding: const EdgeInsets.all(24.0),
-                  child: Column(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      const Icon(Icons.wifi_off_rounded, color: alertRed, size: 48),
-                      const SizedBox(height: 12),
-                      const Text(
-                        'Koi khabar nahi mili - Admin ne abhi koi khabar publish nahi ki',
-                        textAlign: TextAlign.center,
-                        style: TextStyle(
-                          color: textWhite,
-                          fontSize: 16,
-                          fontWeight: FontWeight.bold,
-                        ),
-                      ),
-                      const SizedBox(height: 6),
-                      Text(
-                        'Firebase Error: ${snapshot.error}',
-                        textAlign: TextAlign.center,
-                        style: const TextStyle(color: textGray, fontSize: 11),
-                      ),
-                    ],
-                  ),
-                ),
-              );
-            }
+            // If error or empty, fallback gracefully to the 3 dummy cards
+            final List<NewsModel> rawList = (snapshot.hasData && snapshot.data!.isNotEmpty)
+                ? snapshot.data!
+                : _fallbackNews;
 
-            final allNews = snapshot.data ?? [];
-
-            // State 3: Empty data
-            if (allNews.isEmpty) {
-              return Center(
-                child: Padding(
-                  padding: const EdgeInsets.all(24.0),
-                  child: Column(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: const [
-                      Icon(Icons.feed_outlined, color: neonGreen, size: 54),
-                      SizedBox(height: 12),
-                      Text(
-                        'Koi khabar nahi mili - Admin ne abhi koi khabar publish nahi ki',
-                        textAlign: TextAlign.center,
-                        style: TextStyle(
-                          color: textWhite,
-                          fontSize: 16,
-                          fontWeight: FontWeight.bold,
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              );
-            }
-
-            // Filter real data by category and search query
-            final filteredNews = allNews.where((item) {
+            // Filter data by category and search query
+            final filteredNews = rawList.where((item) {
               final matchesCategory = _selectedCategory == NewsCategory.ALL || item.category == _selectedCategory;
               final matchesSearch = _searchQuery.isEmpty ||
                   item.title.toLowerCase().contains(_searchQuery.toLowerCase()) ||
@@ -258,79 +298,20 @@ class _HomeScreenState extends State<HomeScreen> {
               return matchesCategory && matchesSearch;
             }).toList();
 
-            // Free & Discount Games Section
-            final freeGames = allNews.where((item) =>
+            final freeGames = rawList.where((item) =>
                 item.isFree || item.category == NewsCategory.FREE || item.category == NewsCategory.DISCOUNT).toList();
 
-            final heroItem = allNews.isNotEmpty ? allNews.first : null;
+            final heroItem = rawList.isNotEmpty ? rawList.first : null;
 
             return CustomScrollView(
               slivers: [
-                // Top App Bar
-                SliverToBoxAdapter(
-                  child: Padding(
-                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-                    child: Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                      children: [
-                        Row(
-                          children: [
-                            Container(
-                              width: 36,
-                              height: 36,
-                              decoration: BoxDecoration(
-                                color: neonGreen,
-                                borderRadius: BorderRadius.circular(10),
-                              ),
-                              child: const Center(
-                                child: Text(
-                                  'GK',
-                                  style: TextStyle(
-                                    color: bgOuter,
-                                    fontSize: 16,
-                                    fontWeight: FontWeight.w900,
-                                  ),
-                                ),
-                              ),
-                            ),
-                            const SizedBox(width: 10),
-                            Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: const [
-                                Text(
-                                  'GAMES KHABAR',
-                                  style: TextStyle(
-                                    color: textWhite,
-                                    fontSize: 17,
-                                    fontWeight: FontWeight.w900,
-                                    letterSpacing: 0.5,
-                                  ),
-                                ),
-                                Text(
-                                  'FREE GAMES • REAL FIRESTORE',
-                                  style: TextStyle(
-                                    color: textGray,
-                                    fontSize: 10,
-                                    fontWeight: FontWeight.bold,
-                                    letterSpacing: 1,
-                                  ),
-                                ),
-                              ],
-                            ),
-                          ],
-                        ),
-                      ],
-                    ),
-                  ),
-                ),
-
                 // Search Bar
                 SliverToBoxAdapter(
                   child: Padding(
-                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
+                    padding: const EdgeInsets.fromLTRB(16, 12, 16, 6),
                     child: Container(
                       decoration: BoxDecoration(
-                        color: cardBg2,
+                        color: cardBg,
                         borderRadius: BorderRadius.circular(24),
                         border: Border.all(color: borderColor),
                       ),
@@ -343,7 +324,7 @@ class _HomeScreenState extends State<HomeScreen> {
                           });
                         },
                         decoration: InputDecoration(
-                          hintText: 'Koi game search karo... PUBG, GTA',
+                          hintText: 'Game khabar search karo... BGMI, Free Fire, PUBG',
                           hintStyle: const TextStyle(color: textGray, fontSize: 13),
                           prefixIcon: const Icon(Icons.search, color: textGray, size: 20),
                           suffixIcon: _searchQuery.isNotEmpty
@@ -365,7 +346,7 @@ class _HomeScreenState extends State<HomeScreen> {
                   ),
                 ),
 
-                // Category Horizontal Filter Chips
+                // Category Filter Chips
                 SliverToBoxAdapter(
                   child: SizedBox(
                     height: 48,
@@ -381,13 +362,13 @@ class _HomeScreenState extends State<HomeScreen> {
                           label: Text(cat.displayName),
                           selected: isSelected,
                           selectedColor: neonGreen,
-                          backgroundColor: cardBg2,
+                          backgroundColor: cardBg,
                           labelStyle: TextStyle(
                             color: isSelected ? bgOuter : textGray,
                             fontWeight: isSelected ? FontWeight.w900 : FontWeight.w500,
                             fontSize: 12,
                           ),
-                          shape: RoundedCornerShape(20),
+                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
                           side: BorderSide(
                             color: isSelected ? neonGreen : borderColor,
                           ),
@@ -404,7 +385,7 @@ class _HomeScreenState extends State<HomeScreen> {
                   ),
                 ),
 
-                // Hero Card (When search is empty & ALL category)
+                // Hero Featured Card
                 if (_searchQuery.isEmpty && _selectedCategory == NewsCategory.ALL && heroItem != null)
                   SliverToBoxAdapter(
                     child: GestureDetector(
@@ -425,6 +406,10 @@ class _HomeScreenState extends State<HomeScreen> {
                                 Image.network(
                                   heroItem.imageUrl,
                                   fit: BoxFit.cover,
+                                  errorBuilder: (_, __, ___) => Container(
+                                    color: cardBg2,
+                                    child: const Icon(Icons.videogame_asset, color: textGray, size: 48),
+                                  ),
                                 ),
                                 Container(
                                   decoration: BoxDecoration(
@@ -504,7 +489,7 @@ class _HomeScreenState extends State<HomeScreen> {
                     ),
                   ),
 
-                // Aaj FREE Hai 🔥 Horizontal Section
+                // Aaj FREE Hai Horizontal Section
                 if (_searchQuery.isEmpty && (_selectedCategory == NewsCategory.ALL || _selectedCategory == NewsCategory.FREE) && freeGames.isNotEmpty)
                   SliverToBoxAdapter(
                     child: Column(
@@ -549,6 +534,11 @@ class _HomeScreenState extends State<HomeScreen> {
                                           height: 100,
                                           width: double.infinity,
                                           fit: BoxFit.cover,
+                                          errorBuilder: (_, __, ___) => Container(
+                                            height: 100,
+                                            color: cardBg2,
+                                            child: const Icon(Icons.videogame_asset, color: textGray),
+                                          ),
                                         ),
                                       ),
                                       Padding(
@@ -633,6 +623,12 @@ class _HomeScreenState extends State<HomeScreen> {
                                   width: 86,
                                   height: 86,
                                   fit: BoxFit.cover,
+                                  errorBuilder: (_, __, ___) => Container(
+                                    width: 86,
+                                    height: 86,
+                                    color: cardBg2,
+                                    child: const Icon(Icons.videogame_asset, color: textGray, size: 28),
+                                  ),
                                 ),
                               ),
                               const SizedBox(width: 12),
@@ -699,8 +695,4 @@ class _HomeScreenState extends State<HomeScreen> {
       ),
     );
   }
-}
-
-class RoundedCornerShape extends RoundedRectangleBorder {
-  RoundedCornerShape(double radius) : super(borderRadius: BorderRadius.circular(radius));
 }
