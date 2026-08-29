@@ -30,9 +30,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
   void initState() {
     super.initState();
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      final user = FirebaseAuth.instance.currentUser;
-      final email = (user?.email ?? '').trim().toLowerCase();
-      if (user == null || email != 't84787704@gmail.com') {
+      if (!isAdminUser()) {
         if (mounted) {
           Navigator.of(context).pushReplacementNamed('/');
           ScaffoldMessenger.of(context).showSnackBar(

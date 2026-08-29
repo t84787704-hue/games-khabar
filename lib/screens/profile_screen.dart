@@ -26,7 +26,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
   @override
   void initState() {
     super.initState();
-    // If already logged in as admin, check if previously unlocked
+    // If already verified as admin, keep unlocked
     if (isAdminUser()) {
       _adminOptionUnlocked = true;
     }
@@ -37,11 +37,10 @@ class _ProfileScreenState extends State<ProfileScreen> {
       _logoTapCount++;
     });
 
-    final currentEmail = FirebaseAuth.instance.currentUser?.email?.toLowerCase().trim();
-    final isAdmin = currentEmail == kAdminEmail.toLowerCase();
+    final isCurrentAdmin = isAdminUser();
 
-    if (_logoTapCount >= 5) {
-      if (isAdmin) {
+    if (_logoTapCount >= 5 || isCurrentAdmin) {
+      if (isCurrentAdmin) {
         setState(() {
           _adminOptionUnlocked = true;
         });
@@ -77,15 +76,13 @@ class _ProfileScreenState extends State<ProfileScreen> {
               side: const BorderSide(color: alertRed, width: 1),
             ),
             content: Row(
-              children: [
-                const Icon(Icons.shield_outlined, color: alertRed, size: 20),
-                const SizedBox(width: 10),
+              children: const [
+                Icon(Icons.shield_outlined, color: alertRed, size: 20),
+                SizedBox(width: 10),
                 Expanded(
                   child: Text(
-                    currentEmail == null
-                        ? 'Admin access restricted. Please log in with $kAdminEmail'
-                        : 'Access Denied - Not Admin ($currentEmail)',
-                    style: const TextStyle(color: textWhite, fontWeight: FontWeight.bold, fontSize: 12),
+                    'Admin access restricted. Please log in with t84787704@gmail.com',
+                    style: TextStyle(color: textWhite, fontWeight: FontWeight.bold, fontSize: 12),
                   ),
                 ),
               ],
@@ -93,7 +90,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
           ),
         );
       }
-    } else if (_logoTapCount >= 2 && isAdmin) {
+    } else if (_logoTapCount >= 2) {
       ScaffoldMessenger.of(context).hideCurrentSnackBar();
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
@@ -118,9 +115,8 @@ class _ProfileScreenState extends State<ProfileScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final currentUser = FirebaseAuth.instance.currentUser;
-    final userEmail = currentUser?.email;
     final isCurrentAdmin = isAdminUser();
+    final userEmail = FirebaseAuth.instance.currentUser?.email ?? AdminSession.adminEmail;
 
     return Scaffold(
       backgroundColor: bgDark,
@@ -229,8 +225,8 @@ class _ProfileScreenState extends State<ProfileScreen> {
             ),
             const SizedBox(height: 28),
 
-            // HIDDEN ADMIN PANEL ENTRY (Revealed only if 5 taps AND admin email)
-            if (isCurrentAdmin && _adminOptionUnlocked) ...[
+            // HIDDEN ADMIN PANEL ENTRY (Revealed for verified admin)
+            if (isCurrentAdmin || _adminOptionUnlocked) ...[
               Container(
                 margin: const EdgeInsets.only(bottom: 20),
                 decoration: BoxDecoration(
@@ -341,7 +337,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
               ),
               child: Column(
                 children: [
-                  if (currentUser == null) ...[
+                  if (!isCurrentAdmin) ...[
                     ListTile(
                       leading: const Icon(Icons.login_rounded, color: neonGreen, size: 22),
                       title: const Text(
@@ -358,7 +354,11 @@ class _ProfileScreenState extends State<ProfileScreen> {
                           context,
                           MaterialPageRoute(builder: (_) => const AdminLoginScreen()),
                         ).then((_) {
-                          setState(() {});
+                          setState(() {
+                            if (isAdminUser()) {
+                              _adminOptionUnlocked = true;
+                            }
+                          });
                         });
                       },
                     ),
@@ -374,7 +374,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                         style: const TextStyle(color: textGray, fontSize: 12),
                       ),
                       onTap: () async {
-                        await FirebaseAuth.instance.signOut();
+                        AdminSession.logout();
                         setState(() {
                           _adminOptionUnlocked = false;
                         });

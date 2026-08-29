@@ -57,11 +57,9 @@ class _AddNewsScreenState extends State<AddNewsScreen> {
   void initState() {
     super.initState();
 
-    // Security check: only allow t84787704@gmail.com
+    // Security check: only allow authorized admin
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      final user = FirebaseAuth.instance.currentUser;
-      final email = (user?.email ?? '').trim().toLowerCase();
-      if (user == null || email != 't84787704@gmail.com') {
+      if (!isAdminUser()) {
         if (mounted) {
           Navigator.of(context).pop();
           ScaffoldMessenger.of(context).showSnackBar(
