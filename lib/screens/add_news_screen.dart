@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import 'package:cloud_firestore/cloud_firestore.dart';
+import '../services/firestore_service.dart';
 
 class AddNewsScreen extends StatefulWidget {
   const AddNewsScreen({super.key});
@@ -13,6 +13,7 @@ class _AddNewsScreenState extends State<AddNewsScreen> {
   final TextEditingController _titleController = TextEditingController();
   final TextEditingController _descController = TextEditingController();
   final TextEditingController _imageUrlController = TextEditingController();
+  final FirestoreService _firestoreService = FirestoreService();
 
   String _selectedCategory = 'BGMI';
   bool _isLoading = false;
@@ -27,19 +28,19 @@ class _AddNewsScreenState extends State<AddNewsScreen> {
   ];
 
   static const Color neonGreen = Color(0xFF00FF88);
-  static const Color bgScaffold = Color(0xFF0A0E13);
-  static const Color cardBg = Color(0xFF151A23);
-  static const Color cardBg2 = Color(0xFF1A2230);
-  static const Color borderColor = Color(0xFF222C3A);
+  static const Color bgDark = Color(0xFF0A0A0F);
+  static const Color cardDark = Color(0xFF1E1E24);
+  static const Color borderDark = Color(0xFF2E2E38);
   static const Color alertRed = Color(0xFFFF4655);
   static const Color textWhite = Color(0xFFFFFFFF);
-  static const Color textGray = Color(0xFF9CA3AF);
+  static const Color textGray = Color(0xFF9E9EA7);
 
   @override
   void initState() {
     super.initState();
-    // Default placeholder image
-    _imageUrlController.text = 'https://images.unsplash.com/photo-1542751371-adc38448a05e?auto=format&fit=crop&w=1000&q=80';
+    // Default gaming placeholder
+    _imageUrlController.text =
+        'https://images.unsplash.com/photo-1542751371-adc38448a05e?auto=format&fit=crop&w=1000&q=80';
   }
 
   Future<void> _submitNews() async {
@@ -56,25 +57,32 @@ class _AddNewsScreenState extends State<AddNewsScreen> {
           ? _imageUrlController.text.trim()
           : 'https://images.unsplash.com/photo-1542751371-adc38448a05e?auto=format&fit=crop&w=1000&q=80';
 
-      await FirebaseFirestore.instance.collection('news').add({
+      await _firestoreService.addNews({
         'title': title,
         'description': description,
         'category': _selectedCategory,
         'imageUrl': imageUrl,
-        'timestamp': FieldValue.serverTimestamp(),
-        'isPublished': true,
-        'views': 0,
         'isFree': _selectedCategory.toLowerCase().contains('free'),
-        'timeAgo': 'Abhi abhi',
       });
 
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            backgroundColor: cardBg,
-            content: Text(
-              'Khabar Published Successfully! 🎉',
-              style: TextStyle(color: neonGreen, fontWeight: FontWeight.bold),
+          SnackBar(
+            backgroundColor: cardDark,
+            behavior: SnackBarBehavior.floating,
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(10),
+              side: const BorderSide(color: neonGreen, width: 1),
+            ),
+            content: Row(
+              children: const [
+                Icon(Icons.check_circle_rounded, color: neonGreen, size: 20),
+                SizedBox(width: 10),
+                Text(
+                  'Khabar Published Successfully! 🎉',
+                  style: TextStyle(color: textWhite, fontWeight: FontWeight.bold),
+                ),
+              ],
             ),
           ),
         );
@@ -109,9 +117,9 @@ class _AddNewsScreenState extends State<AddNewsScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: bgScaffold,
+      backgroundColor: bgDark,
       appBar: AppBar(
-        backgroundColor: cardBg,
+        backgroundColor: cardDark,
         elevation: 0,
         leading: IconButton(
           icon: const Icon(Icons.arrow_back_ios_new, color: textWhite, size: 20),
@@ -144,17 +152,17 @@ class _AddNewsScreenState extends State<AddNewsScreen> {
                 controller: _titleController,
                 style: const TextStyle(color: textWhite, fontSize: 14),
                 decoration: InputDecoration(
-                  hintText: 'e.g. BGMI 3.4 Update Release Date & New Features',
+                  hintText: 'e.g. BGMI 3.4 Update Release Date & Features',
                   hintStyle: const TextStyle(color: textGray, fontSize: 13),
                   filled: true,
-                  fillColor: cardBg,
+                  fillColor: cardDark,
                   border: OutlineInputBorder(
                     borderRadius: BorderRadius.circular(12),
-                    borderSide: const BorderSide(color: borderColor),
+                    borderSide: const BorderSide(color: borderDark),
                   ),
                   enabledBorder: OutlineInputBorder(
                     borderRadius: BorderRadius.circular(12),
-                    borderSide: const BorderSide(color: borderColor),
+                    borderSide: const BorderSide(color: borderDark),
                   ),
                   focusedBorder: OutlineInputBorder(
                     borderRadius: BorderRadius.circular(12),
@@ -175,17 +183,21 @@ class _AddNewsScreenState extends State<AddNewsScreen> {
               Container(
                 padding: const EdgeInsets.symmetric(horizontal: 14),
                 decoration: BoxDecoration(
-                  color: cardBg,
+                  color: cardDark,
                   borderRadius: BorderRadius.circular(12),
-                  border: Border.all(color: borderColor),
+                  border: Border.all(color: borderDark),
                 ),
                 child: DropdownButtonHideUnderline(
                   child: DropdownButton<String>(
                     value: _selectedCategory,
-                    dropdownColor: cardBg,
+                    dropdownColor: cardDark,
                     isExpanded: true,
                     icon: const Icon(Icons.keyboard_arrow_down, color: neonGreen),
-                    style: const TextStyle(color: textWhite, fontSize: 14, fontWeight: FontWeight.bold),
+                    style: const TextStyle(
+                      color: textWhite,
+                      fontSize: 14,
+                      fontWeight: FontWeight.bold,
+                    ),
                     items: categories.map((cat) {
                       return DropdownMenuItem<String>(
                         value: cat,
@@ -230,15 +242,15 @@ class _AddNewsScreenState extends State<AddNewsScreen> {
                   hintText: 'https://...',
                   hintStyle: const TextStyle(color: textGray, fontSize: 13),
                   filled: true,
-                  fillColor: cardBg,
+                  fillColor: cardDark,
                   prefixIcon: const Icon(Icons.image_outlined, color: textGray, size: 20),
                   border: OutlineInputBorder(
                     borderRadius: BorderRadius.circular(12),
-                    borderSide: const BorderSide(color: borderColor),
+                    borderSide: const BorderSide(color: borderDark),
                   ),
                   enabledBorder: OutlineInputBorder(
                     borderRadius: BorderRadius.circular(12),
-                    borderSide: const BorderSide(color: borderColor),
+                    borderSide: const BorderSide(color: borderDark),
                   ),
                   focusedBorder: OutlineInputBorder(
                     borderRadius: BorderRadius.circular(12),
@@ -263,14 +275,14 @@ class _AddNewsScreenState extends State<AddNewsScreen> {
                   hintText: 'Enter full news details in Urdu/English...',
                   hintStyle: const TextStyle(color: textGray, fontSize: 13),
                   filled: true,
-                  fillColor: cardBg,
+                  fillColor: cardDark,
                   border: OutlineInputBorder(
                     borderRadius: BorderRadius.circular(12),
-                    borderSide: const BorderSide(color: borderColor),
+                    borderSide: const BorderSide(color: borderDark),
                   ),
                   enabledBorder: OutlineInputBorder(
                     borderRadius: BorderRadius.circular(12),
-                    borderSide: const BorderSide(color: borderColor),
+                    borderSide: const BorderSide(color: borderDark),
                   ),
                   focusedBorder: OutlineInputBorder(
                     borderRadius: BorderRadius.circular(12),
@@ -278,7 +290,8 @@ class _AddNewsScreenState extends State<AddNewsScreen> {
                   ),
                   contentPadding: const EdgeInsets.all(14),
                 ),
-                validator: (val) => val == null || val.trim().isEmpty ? 'Description is required' : null,
+                validator: (val) =>
+                    val == null || val.trim().isEmpty ? 'Description is required' : null,
               ),
               const SizedBox(height: 28),
 

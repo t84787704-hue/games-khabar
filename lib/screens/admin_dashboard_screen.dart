@@ -1,28 +1,29 @@
 import 'package:flutter/material.dart';
-import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import '../models/news_model.dart';
+import '../services/firestore_service.dart';
 
 class AdminDashboardScreen extends StatelessWidget {
   const AdminDashboardScreen({super.key});
 
   static const Color neonGreen = Color(0xFF00FF88);
-  static const Color bgScaffold = Color(0xFF0A0E13);
-  static const Color cardBg = Color(0xFF151A23);
-  static const Color cardBg2 = Color(0xFF1A2230);
-  static const Color borderColor = Color(0xFF222C3A);
+  static const Color bgDark = Color(0xFF0A0A0F);
+  static const Color cardDark = Color(0xFF1E1E24);
+  static const Color cardDark2 = Color(0xFF15151A);
+  static const Color borderDark = Color(0xFF2E2E38);
   static const Color alertRed = Color(0xFFFF4655);
   static const Color textWhite = Color(0xFFFFFFFF);
-  static const Color textGray = Color(0xFF9CA3AF);
+  static const Color textGray = Color(0xFF9E9EA7);
 
-  Future<void> _deleteNews(BuildContext context, String docId, String title) async {
+  Future<void> _deleteNews(
+      BuildContext context, String docId, String title) async {
     final confirm = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
-        backgroundColor: cardBg,
+        backgroundColor: cardDark,
         shape: RoundedRectangleBorder(
           borderRadius: BorderRadius.circular(16),
-          side: const BorderSide(color: borderColor),
+          side: const BorderSide(color: borderDark),
         ),
         title: const Text(
           'Delete Khabar?',
@@ -51,12 +52,15 @@ class AdminDashboardScreen extends StatelessWidget {
 
     if (confirm == true) {
       try {
-        await FirebaseFirestore.instance.collection('news').doc(docId).delete();
+        await FirestoreService().deleteNews(docId);
         if (context.mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-              backgroundColor: cardBg2,
-              content: Text('Khabar deleted successfully', style: TextStyle(color: neonGreen)),
+            SnackBar(
+              backgroundColor: cardDark,
+              content: const Text(
+                'Khabar deleted successfully',
+                style: TextStyle(color: neonGreen, fontWeight: FontWeight.bold),
+              ),
             ),
           );
         }
@@ -65,7 +69,8 @@ class AdminDashboardScreen extends StatelessWidget {
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(
               backgroundColor: alertRed,
-              content: Text('Error deleting: $e', style: const TextStyle(color: Colors.white)),
+              content: Text('Error deleting: $e',
+                  style: const TextStyle(color: Colors.white)),
             ),
           );
         }
@@ -76,9 +81,9 @@ class AdminDashboardScreen extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: bgScaffold,
+      backgroundColor: bgDark,
       appBar: AppBar(
-        backgroundColor: cardBg,
+        backgroundColor: cardDark,
         elevation: 0,
         leading: IconButton(
           icon: const Icon(Icons.arrow_back_ios_new, color: textWhite, size: 20),
@@ -149,9 +154,9 @@ class AdminDashboardScreen extends StatelessWidget {
             child: Container(
               padding: const EdgeInsets.all(16),
               decoration: BoxDecoration(
-                color: cardBg,
+                color: cardDark,
                 borderRadius: BorderRadius.circular(16),
-                border: Border.all(color: borderColor),
+                border: Border.all(color: borderDark),
               ),
               child: Row(
                 children: [
@@ -160,7 +165,7 @@ class AdminDashboardScreen extends StatelessWidget {
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: const [
                         Text(
-                          'Firestore News Manager',
+                          'Live News Manager',
                           style: TextStyle(
                             color: textWhite,
                             fontSize: 15,
@@ -183,7 +188,8 @@ class AdminDashboardScreen extends StatelessWidget {
                       shape: RoundedRectangleBorder(
                         borderRadius: BorderRadius.circular(10),
                       ),
-                      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 14, vertical: 10),
                     ),
                     onPressed: () => Navigator.pushNamed(context, '/add-news'),
                     icon: const Icon(Icons.add, size: 18),
@@ -209,13 +215,10 @@ class AdminDashboardScreen extends StatelessWidget {
             ),
           ),
 
-          // News Stream from Firestore
+          // News Stream from Firestore Service
           Expanded(
-            child: StreamBuilder<QuerySnapshot>(
-              stream: FirebaseFirestore.instance
-                  .collection('news')
-                  .orderBy('timestamp', descending: true)
-                  .snapshots(),
+            child: StreamBuilder<List<NewsModel>>(
+              stream: FirestoreService().getNewsStream(),
               builder: (context, snapshot) {
                 if (snapshot.connectionState == ConnectionState.waiting) {
                   return const Center(
@@ -225,21 +228,9 @@ class AdminDashboardScreen extends StatelessWidget {
                   );
                 }
 
-                if (snapshot.hasError) {
-                  return Center(
-                    child: Padding(
-                      padding: const EdgeInsets.all(24.0),
-                      child: Text(
-                        'Error loading news: ${snapshot.error}',
-                        style: const TextStyle(color: alertRed),
-                      ),
-                    ),
-                  );
-                }
+                final newsList = snapshot.data ?? [];
 
-                final docs = snapshot.data?.docs ?? [];
-
-                if (docs.isEmpty) {
+                if (newsList.isEmpty) {
                   return Center(
                     child: Padding(
                       padding: const EdgeInsets.all(32.0),
@@ -249,8 +240,11 @@ class AdminDashboardScreen extends StatelessWidget {
                           const Icon(Icons.newspaper, color: textGray, size: 48),
                           const SizedBox(height: 12),
                           const Text(
-                            'No news found in Firestore',
-                            style: TextStyle(color: textWhite, fontSize: 16, fontWeight: FontWeight.bold),
+                            'No news found',
+                            style: TextStyle(
+                                color: textWhite,
+                                fontSize: 16,
+                                fontWeight: FontWeight.bold),
                           ),
                           const SizedBox(height: 6),
                           const Text(
@@ -264,9 +258,11 @@ class AdminDashboardScreen extends StatelessWidget {
                               backgroundColor: neonGreen,
                               foregroundColor: const Color(0xFF05080D),
                             ),
-                            onPressed: () => Navigator.pushNamed(context, '/add-news'),
+                            onPressed: () =>
+                                Navigator.pushNamed(context, '/add-news'),
                             icon: const Icon(Icons.add),
-                            label: const Text('Add News Now', style: TextStyle(fontWeight: FontWeight.bold)),
+                            label: const Text('Add News Now',
+                                style: TextStyle(fontWeight: FontWeight.bold)),
                           ),
                         ],
                       ),
@@ -276,22 +272,17 @@ class AdminDashboardScreen extends StatelessWidget {
 
                 return ListView.separated(
                   padding: const EdgeInsets.fromLTRB(16, 8, 16, 90),
-                  itemCount: docs.length,
+                  itemCount: newsList.length,
                   separatorBuilder: (_, __) => const SizedBox(height: 10),
                   itemBuilder: (context, index) {
-                    final doc = docs[index];
-                    final data = doc.data() as Map<String, dynamic>? ?? {};
-                    final title = data['title'] as String? ?? 'Untitled';
-                    final category = data['category'] as String? ?? 'NEWS';
-                    final imageUrl = data['imageUrl'] as String? ?? '';
-                    final desc = data['description'] as String? ?? '';
+                    final item = newsList[index];
 
                     return Container(
                       padding: const EdgeInsets.all(12),
                       decoration: BoxDecoration(
-                        color: cardBg,
+                        color: cardDark,
                         borderRadius: BorderRadius.circular(14),
-                        border: Border.all(color: borderColor),
+                        border: Border.all(color: borderDark),
                       ),
                       child: Row(
                         crossAxisAlignment: CrossAxisAlignment.start,
@@ -299,15 +290,16 @@ class AdminDashboardScreen extends StatelessWidget {
                           ClipRRect(
                             borderRadius: BorderRadius.circular(8),
                             child: Image.network(
-                              imageUrl,
+                              item.imageUrl,
                               width: 70,
                               height: 70,
                               fit: BoxFit.cover,
                               errorBuilder: (_, __, ___) => Container(
                                 width: 70,
                                 height: 70,
-                                color: cardBg2,
-                                child: const Icon(Icons.image_not_supported, color: textGray, size: 24),
+                                color: cardDark2,
+                                child: const Icon(Icons.image_not_supported,
+                                    color: textGray, size: 24),
                               ),
                             ),
                           ),
@@ -317,13 +309,14 @@ class AdminDashboardScreen extends StatelessWidget {
                               crossAxisAlignment: CrossAxisAlignment.start,
                               children: [
                                 Container(
-                                  padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                                  padding: const EdgeInsets.symmetric(
+                                      horizontal: 6, vertical: 2),
                                   decoration: BoxDecoration(
                                     color: neonGreen.withOpacity(0.15),
                                     borderRadius: BorderRadius.circular(4),
                                   ),
                                   child: Text(
-                                    category.toUpperCase(),
+                                    item.category.toUpperCase(),
                                     style: const TextStyle(
                                       color: neonGreen,
                                       fontSize: 10,
@@ -333,7 +326,7 @@ class AdminDashboardScreen extends StatelessWidget {
                                 ),
                                 const SizedBox(height: 4),
                                 Text(
-                                  title,
+                                  item.title,
                                   maxLines: 2,
                                   overflow: TextOverflow.ellipsis,
                                   style: const TextStyle(
@@ -344,17 +337,20 @@ class AdminDashboardScreen extends StatelessWidget {
                                 ),
                                 const SizedBox(height: 4),
                                 Text(
-                                  desc,
+                                  item.description,
                                   maxLines: 1,
                                   overflow: TextOverflow.ellipsis,
-                                  style: const TextStyle(color: textGray, fontSize: 11),
+                                  style: const TextStyle(
+                                      color: textGray, fontSize: 11),
                                 ),
                               ],
                             ),
                           ),
                           IconButton(
-                            icon: const Icon(Icons.delete_outline_rounded, color: alertRed, size: 22),
-                            onPressed: () => _deleteNews(context, doc.id, title),
+                            icon: const Icon(Icons.delete_outline_rounded,
+                                color: alertRed, size: 22),
+                            onPressed: () =>
+                                _deleteNews(context, item.id, item.title),
                             tooltip: 'Delete Khabar',
                           ),
                         ],
