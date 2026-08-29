@@ -16,7 +16,7 @@ class AddNewsScreen extends StatefulWidget {
 }
 
 class _AddNewsScreenState extends State<AddNewsScreen> {
-  final _formKey =迫GlobalKey<FormState>();
+  final _formKey = GlobalKey<FormState>();
   late final TextEditingController _titleController;
   late final TextEditingController _descController;
   late final TextEditingController _videoUrlController;

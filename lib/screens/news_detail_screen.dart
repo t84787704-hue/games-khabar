@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:url_launcher/url_launcher.dart';
-import 'package:youtube_player_flutter/youtube_player_flutter.dart';
+import 'package:youtube_player_iframe/youtube_player_iframe.dart';
 import '../models/news_model.dart';
 import '../widgets/app_image_view.dart';
 
@@ -30,7 +30,7 @@ class NewsDetailScreen extends StatelessWidget {
   String? get youTubeVideoId {
     if (!isYouTubeVideo) return null;
     final url = news.videoUrl!.trim();
-    final converted = YoutubePlayer.convertUrlToId(url);
+    final converted = YoutubePlayerController.convertUrlToId(url);
     if (converted != null && converted.isNotEmpty) return converted;
     final regExp = RegExp(
       r'(?:youtu\.be\/|youtube\.com\/(?:embed\/|v\/|watch\?v=|watch\?.+&v=|shorts\/))([\w-]{11})',
@@ -384,28 +384,25 @@ class YouTubePlayerContainer extends StatefulWidget {
 }
 
 class _YouTubePlayerContainerState extends State<YouTubePlayerContainer> {
-  late YoutubePlayerController _controller;
+  late final YoutubePlayerController _controller;
 
   @override
   void initState() {
     super.initState();
-    _controller = YoutubePlayerController(
-      initialVideoId: widget.videoId,
-      flags: const YoutubePlayerFlags(
-        autoPlay: false,
+    _controller = YoutubePlayerController.fromVideoId(
+      videoId: widget.videoId,
+      autoPlay: false,
+      params: const YoutubePlayerParams(
+        showFullscreenButton: true,
+        showControls: true,
         mute: false,
-        disableDragSeek: false,
-        loop: false,
-        isLive: false,
-        forceHD: false,
-        enableCaption: true,
       ),
     );
   }
 
   @override
   void dispose() {
-    _controller.dispose();
+    _controller.close();
     super.dispose();
   }
 
@@ -428,20 +425,7 @@ class _YouTubePlayerContainerState extends State<YouTubePlayerContainer> {
         borderRadius: BorderRadius.circular(11),
         child: YoutubePlayer(
           controller: _controller,
-          showVideoProgressIndicator: true,
-          progressIndicatorColor: const Color(0xFF00FF88),
-          progressColors: const ProgressBarColors(
-            playedColor: Color(0xFF00FF88),
-            handleColor: Color(0xFF00FF88),
-            bufferedColor: Colors.white24,
-            backgroundColor: Colors.white10,
-          ),
-          bottomActions: [
-            CurrentPosition(),
-            ProgressBar(isExpanded: true),
-            RemainingDuration(),
-            const PlaybackSpeedButton(),
-          ],
+          aspectRatio: 16 / 9,
         ),
       ),
     );
