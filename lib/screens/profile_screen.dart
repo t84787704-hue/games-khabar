@@ -13,7 +13,9 @@ class ProfileScreen extends StatefulWidget {
 }
 
 class _ProfileScreenState extends State<ProfileScreen> {
-  int _logoTapCount = 0;
+  final List<DateTime> _logoTaps = [];
+  final List<DateTime> _versionTaps = [];
+  bool _adminCardRevealed = false;
   bool _adminOptionUnlocked = false;
 
   static const Color neonGreen = Color(0xFF00FF88);
@@ -28,83 +30,94 @@ class _ProfileScreenState extends State<ProfileScreen> {
   @override
   void initState() {
     super.initState();
-    // If already verified as admin, keep unlocked
+    // If user is already authenticated as admin, show admin options
     if (isAdminUser()) {
       _adminOptionUnlocked = true;
+      _adminCardRevealed = true;
     }
   }
 
   void _onLogoTapped() {
-    setState(() {
-      _logoTapCount++;
-    });
+    final now = DateTime.now();
+    _logoTaps.add(now);
+    // Keep only taps within the last 3 seconds
+    _logoTaps.removeWhere((t) => now.difference(t).inMilliseconds > 3000);
 
-    final isCurrentAdmin = isAdminUser();
-
-    if (_logoTapCount >= 5 || isCurrentAdmin) {
-      if (isCurrentAdmin) {
-        setState(() {
-          _adminOptionUnlocked = true;
-        });
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            backgroundColor: cardDark,
-            behavior: SnackBarBehavior.floating,
-            shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(10),
-              side: const BorderSide(color: neonGreen, width: 1.5),
-            ),
-            content: Row(
-              children: const [
-                Icon(Icons.lock_open_rounded, color: neonGreen, size: 20),
-                SizedBox(width: 10),
-                Expanded(
-                  child: Text(
-                    'Admin Panel Unlocked for t84787704@gmail.com! 🎮',
-                    style: TextStyle(color: textWhite, fontWeight: FontWeight.bold, fontSize: 12),
-                  ),
-                ),
-              ],
-            ),
-          ),
-        );
-      } else {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            backgroundColor: cardDark,
-            behavior: SnackBarBehavior.floating,
-            shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(10),
-              side: const BorderSide(color: alertRed, width: 1),
-            ),
-            content: Row(
-              children: const [
-                Icon(Icons.shield_outlined, color: alertRed, size: 20),
-                SizedBox(width: 10),
-                Expanded(
-                  child: Text(
-                    'Admin access restricted. Please log in with t84787704@gmail.com',
-                    style: TextStyle(color: textWhite, fontWeight: FontWeight.bold, fontSize: 12),
-                  ),
-                ),
-              ],
-            ),
-          ),
-        );
-      }
-    } else if (_logoTapCount >= 2) {
+    if (_logoTaps.length >= 5) {
+      _logoTaps.clear();
+      _revealAdminAccess();
+    } else if (_logoTaps.length >= 2 && !_adminCardRevealed && !isAdminUser()) {
       ScaffoldMessenger.of(context).hideCurrentSnackBar();
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           backgroundColor: cardDark2,
           duration: const Duration(milliseconds: 600),
           content: Text(
-            'Tap ${5 - _logoTapCount} more times to reveal Admin Panel',
+            '${5 - _logoTaps.length} more taps to unlock',
             style: const TextStyle(color: neonGreen, fontSize: 11),
           ),
         ),
       );
     }
+  }
+
+  void _onVersionTapped() {
+    final now = DateTime.now();
+    _versionTaps.add(now);
+    // Keep only taps within the last 3 seconds
+    _versionTaps.removeWhere((t) => now.difference(t).inMilliseconds > 3000);
+
+    if (_versionTaps.length >= 7) {
+      _versionTaps.clear();
+      _revealAdminAccess();
+    } else if (_versionTaps.length >= 3 && !_adminCardRevealed && !isAdminUser()) {
+      ScaffoldMessenger.of(context).hideCurrentSnackBar();
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          backgroundColor: cardDark2,
+          duration: const Duration(milliseconds: 600),
+          content: Text(
+            '${7 - _versionTaps.length} more taps to unlock Admin',
+            style: const TextStyle(color: neonGreen, fontSize: 11),
+          ),
+        ),
+      );
+    }
+  }
+
+  void _revealAdminAccess() {
+    if (_adminCardRevealed && _adminOptionUnlocked) return;
+    setState(() {
+      _adminCardRevealed = true;
+      if (isAdminUser()) {
+        _adminOptionUnlocked = true;
+      }
+    });
+
+    ScaffoldMessenger.of(context).hideCurrentSnackBar();
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        backgroundColor: cardDark,
+        behavior: SnackBarBehavior.floating,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(10),
+          side: const BorderSide(color: neonGreen, width: 1.5),
+        ),
+        content: Row(
+          children: const [
+            Icon(Icons.lock_open_rounded, color: neonGreen, size: 20),
+            SizedBox(width: 10),
+            Expanded(
+              child: Text(
+                '🔓 Secret Admin Login revealed!',
+                style: TextStyle(color: textWhite, fontWeight: FontWeight.bold, fontSize: 12),
+              ),
+            ),
+          ],
+        ),
+        duration: const Duration(seconds: 2),
+      ),
+    );
   }
 
   Future<void> _openAdminDashboard() async {
@@ -350,78 +363,149 @@ class _ProfileScreenState extends State<ProfileScreen> {
                       'App Version',
                       style: TextStyle(color: textWhite, fontSize: 14, fontWeight: FontWeight.bold),
                     ),
+                    subtitle: const Text(
+                      'Tap for build info',
+                      style: TextStyle(color: textGray, fontSize: 11),
+                    ),
                     trailing: const Text(
                       'v1.2.0 (Build 4)',
                       style: TextStyle(color: textGray, fontSize: 13),
                     ),
+                    onTap: _onVersionTapped,
                   ),
                 ],
               ),
             ),
             const SizedBox(height: 20),
 
-            // Account / Login / Logout Section
-            Container(
-              decoration: BoxDecoration(
-                color: cardDark,
-                borderRadius: BorderRadius.circular(16),
-                border: Border.all(color: borderDark),
-              ),
-              child: Column(
-                children: [
-                  if (!isCurrentAdmin) ...[
-                    ListTile(
-                      leading: const Icon(Icons.login_rounded, color: neonGreen, size: 22),
-                      title: const Text(
-                        'Admin Login',
-                        style: TextStyle(color: textWhite, fontSize: 14, fontWeight: FontWeight.bold),
-                      ),
-                      subtitle: const Text(
-                        'Sign in to manage news',
-                        style: TextStyle(color: textGray, fontSize: 12),
-                      ),
-                      trailing: const Icon(Icons.arrow_forward_ios_rounded, color: neonGreen, size: 14),
-                      onTap: () {
-                        Navigator.push(
-                          context,
-                          MaterialPageRoute(builder: (_) => const AdminLoginScreen()),
-                        ).then((_) {
-                          setState(() {
-                            if (isAdminUser()) {
-                              _adminOptionUnlocked = true;
-                            }
-                          });
-                        });
-                      },
-                    ),
-                  ] else ...[
-                    ListTile(
-                      leading: const Icon(Icons.logout_rounded, color: alertRed, size: 22),
-                      title: const Text(
-                        'Sign Out',
-                        style: TextStyle(color: alertRed, fontSize: 14, fontWeight: FontWeight.bold),
-                      ),
-                      subtitle: Text(
-                        'Signed in as $userEmail',
-                        style: const TextStyle(color: textGray, fontSize: 12),
-                      ),
-                      onTap: () async {
-                        AdminSession.logout();
-                        setState(() {
-                          _adminOptionUnlocked = false;
-                        });
-                        if (mounted) {
-                          ScaffoldMessenger.of(context).showSnackBar(
-                            const SnackBar(
-                              backgroundColor: cardDark2,
-                              content: Text('Signed out successfully', style: TextStyle(color: textWhite)),
+            // Secret Admin Login / Logout Section
+            AnimatedSize(
+              duration: const Duration(milliseconds: 350),
+              curve: Curves.easeInOut,
+              child: AnimatedOpacity(
+                opacity: (_adminCardRevealed || isCurrentAdmin) ? 1.0 : 0.0,
+                duration: const Duration(milliseconds: 350),
+                child: (_adminCardRevealed || isCurrentAdmin)
+                    ? Container(
+                        margin: const EdgeInsets.only(bottom: 20),
+                        decoration: BoxDecoration(
+                          color: cardDark,
+                          borderRadius: BorderRadius.circular(16),
+                          border: Border.all(
+                            color: isCurrentAdmin ? neonGreen : neonGreen.withOpacity(0.6),
+                            width: 1.2,
+                          ),
+                          boxShadow: [
+                            BoxShadow(
+                              color: neonGreen.withOpacity(0.08),
+                              blurRadius: 12,
+                              spreadRadius: 1,
                             ),
-                          );
-                        }
-                      },
-                    ),
-                  ],
-                ],
+                          ],
+                        ),
+                        child: Column(
+                          children: [
+                            if (!isCurrentAdmin) ...[
+                              ListTile(
+                                leading: Container(
+                                  padding: const EdgeInsets.all(8),
+                                  decoration: BoxDecoration(
+                                    color: neonGreen.withOpacity(0.15),
+                                    borderRadius: BorderRadius.circular(8),
+                                  ),
+                                  child: const Icon(Icons.lock_open_rounded, color: neonGreen, size: 20),
+                                ),
+                                title: Row(
+                                  children: [
+                                    const Text(
+                                      'Admin Login',
+                                      style: TextStyle(color: textWhite, fontSize: 14, fontWeight: FontWeight.bold),
+                                    ),
+                                    const SizedBox(width: 8),
+                                    Container(
+                                      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                                      decoration: BoxDecoration(
+                                        color: neonGreen.withOpacity(0.15),
+                                        borderRadius: BorderRadius.circular(4),
+                                      ),
+                                      child: const Text(
+                                        'UNLOCKED',
+                                        style: TextStyle(
+                                          color: neonGreen,
+                                          fontSize: 9,
+                                          fontWeight: FontWeight.w900,
+                                          letterSpacing: 0.5,
+                                        ),
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                                subtitle: const Text(
+                                  'Sign in to manage & publish news',
+                                  style: TextStyle(color: textGray, fontSize: 12),
+                                ),
+                                trailing: IconButton(
+                                  icon: const Icon(Icons.lock_outline_rounded, color: textGray, size: 18),
+                                  tooltip: 'Hide Admin Login',
+                                  onPressed: () {
+                                    setState(() {
+                                      _adminCardRevealed = false;
+                                    });
+                                    ScaffoldMessenger.of(context).showSnackBar(
+                                      const SnackBar(
+                                        backgroundColor: cardDark2,
+                                        duration: Duration(seconds: 1),
+                                        content: Text('Admin Login hidden', style: TextStyle(color: textGray)),
+                                      ),
+                                    );
+                                  },
+                                ),
+                                onTap: () {
+                                  Navigator.push(
+                                    context,
+                                    MaterialPageRoute(builder: (_) => const AdminLoginScreen()),
+                                  ).then((_) {
+                                    setState(() {
+                                      if (isAdminUser()) {
+                                        _adminOptionUnlocked = true;
+                                        _adminCardRevealed = true;
+                                      }
+                                    });
+                                  });
+                                },
+                              ),
+                            ] else ...[
+                              ListTile(
+                                leading: const Icon(Icons.logout_rounded, color: alertRed, size: 22),
+                                title: const Text(
+                                  'Sign Out',
+                                  style: TextStyle(color: alertRed, fontSize: 14, fontWeight: FontWeight.bold),
+                                ),
+                                subtitle: Text(
+                                  'Signed in as $userEmail',
+                                  style: const TextStyle(color: textGray, fontSize: 12),
+                                ),
+                                onTap: () async {
+                                  AdminSession.logout();
+                                  setState(() {
+                                    _adminOptionUnlocked = false;
+                                    _adminCardRevealed = false;
+                                  });
+                                  if (mounted) {
+                                    ScaffoldMessenger.of(context).showSnackBar(
+                                      const SnackBar(
+                                        backgroundColor: cardDark2,
+                                        content: Text('Signed out successfully', style: TextStyle(color: textWhite)),
+                                      ),
+                                    );
+                                  }
+                                },
+                              ),
+                            ],
+                          ],
+                        ),
+                      )
+                    : const SizedBox.shrink(),
               ),
             ),
           ],
