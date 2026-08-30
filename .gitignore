@@ -19,3 +19,5 @@ debug.keystore
 android/app/upload-keystore.jks
 android/key.properties
 keystore_base64.txt
+android/app/google-services.json
+google-services.json
