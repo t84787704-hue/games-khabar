@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import '../utils/admin_security.dart';
+import '../services/bookmark_service.dart';
 import 'admin_login_screen.dart';
+import 'saved_news_screen.dart';
 
 class ProfileScreen extends StatefulWidget {
   const ProfileScreen({super.key});
@@ -278,6 +280,36 @@ class _ProfileScreenState extends State<ProfileScreen> {
               ),
               child: Column(
                 children: [
+                  ValueListenableBuilder<Set<String>>(
+                    valueListenable: BookmarkService.bookmarkedIdsNotifier,
+                    builder: (context, ids, _) {
+                      return ListTile(
+                        leading: const Icon(Icons.bookmark_rounded, color: neonGreen, size: 22),
+                        title: const Text(
+                          'Saved Articles',
+                          style: TextStyle(color: textWhite, fontSize: 14, fontWeight: FontWeight.bold),
+                        ),
+                        subtitle: Text(
+                          ids.isEmpty ? 'No articles saved yet' : '${ids.length} saved articles',
+                          style: const TextStyle(color: textGray, fontSize: 12),
+                        ),
+                        trailing: const Icon(Icons.arrow_forward_ios_rounded, color: textGray, size: 14),
+                        onTap: () {
+                          Navigator.push(
+                            context,
+                            MaterialPageRoute(
+                              builder: (_) => Scaffold(
+                                body: SavedNewsScreen(
+                                  onExploreTap: () => Navigator.pop(context),
+                                ),
+                              ),
+                            ),
+                          );
+                        },
+                      );
+                    },
+                  ),
+                  const Divider(color: borderDark, height: 1),
                   ListTile(
                     leading: const Icon(Icons.notifications_active_outlined, color: neonGreen, size: 22),
                     title: const Text(

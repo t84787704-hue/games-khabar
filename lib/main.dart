@@ -1,10 +1,13 @@
 import 'package:flutter/material.dart';
 import 'package:firebase_core/firebase_core.dart';
+import 'package:firebase_messaging/firebase_messaging.dart';
 import 'firebase_options.dart';
 import 'screens/home_screen.dart';
 import 'screens/admin_login_screen.dart';
 import 'screens/admin_dashboard_screen.dart';
 import 'screens/add_news_screen.dart';
+import 'services/notification_service.dart';
+import 'services/bookmark_service.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -17,6 +20,22 @@ void main() async {
       await Firebase.initializeApp();
     } catch (_) {}
   }
+
+  // Initialize local bookmarks cache
+  try {
+    await BookmarkService().init();
+  } catch (_) {}
+
+  // Register background handler for FCM
+  try {
+    FirebaseMessaging.onBackgroundMessage(firebaseMessagingBackgroundHandler);
+  } catch (_) {}
+
+  // Initialize push notification channel, listeners and topic subscriptions
+  try {
+    await NotificationService().initialize();
+  } catch (_) {}
+
   runApp(const GamesKhabarApp());
 }
 
@@ -26,6 +45,7 @@ class GamesKhabarApp extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
+      navigatorKey: NotificationService.navigatorKey,
       title: 'Games Khabar',
       debugShowCheckedModeBanner: false,
       theme: ThemeData.dark().copyWith(

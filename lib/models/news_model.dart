@@ -78,4 +78,52 @@ class NewsModel {
       timestamp: ts,
     );
   }
+
+  Map<String, dynamic> toJson() {
+    return {
+      'id': id,
+      'title': title,
+      'description': description,
+      'category': category,
+      'imageUrl': imageUrl,
+      'videoUrl': videoUrl,
+      'youtubeId': youtubeId,
+      'timeAgo': timeAgo,
+      'views': views,
+      'rating': rating,
+      'originalPrice': originalPrice,
+      'isFree': isFree,
+      'timeLeft': timeLeft,
+      'storeName': storeName,
+      'downloadSize': downloadSize,
+      'sourceUrl': sourceUrl,
+      'timestampMillis': timestamp?.millisecondsSinceEpoch,
+    };
+  }
+
+  factory NewsModel.fromJson(Map<String, dynamic> json) {
+    Timestamp? ts;
+    if (json['timestampMillis'] != null) {
+      ts = Timestamp.fromMillisecondsSinceEpoch(json['timestampMillis'] as int);
+    }
+    return NewsModel(
+      id: json['id'] as String? ?? '',
+      title: json['title'] as String? ?? '',
+      description: json['description'] as String? ?? '',
+      category: json['category'] as String? ?? 'Gaming News',
+      imageUrl: json['imageUrl'] as String? ?? 'https://picsum.photos/800/600?random=1',
+      videoUrl: json['videoUrl'] as String?,
+      youtubeId: json['youtubeId'] as String?,
+      timeAgo: json['timeAgo'] as String? ?? 'Recently',
+      views: (json['views'] as num?)?.toInt() ?? 0,
+      rating: (json['rating'] as num?)?.toDouble(),
+      originalPrice: json['originalPrice'] as String?,
+      isFree: json['isFree'] as bool? ?? false,
+      timeLeft: json['timeLeft'] as String?,
+      storeName: json['storeName'] as String?,
+      downloadSize: json['downloadSize'] as String?,
+      sourceUrl: json['sourceUrl'] as String?,
+      timestamp: ts,
+    );
+  }
 }

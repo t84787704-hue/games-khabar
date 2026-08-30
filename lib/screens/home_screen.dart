@@ -2,8 +2,10 @@ import 'package:flutter/material.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import '../models/news_model.dart';
 import '../services/firestore_service.dart';
+import '../services/bookmark_service.dart';
 import '../widgets/app_image_view.dart';
 import 'news_detail_screen.dart';
+import 'saved_news_screen.dart';
 import 'profile_screen.dart';
 
 class HomeScreen extends StatefulWidget {
@@ -16,6 +18,7 @@ class HomeScreen extends StatefulWidget {
 class _HomeScreenState extends State<HomeScreen> {
   int _selectedNavIndex = 0;
   final FirestoreService _firestoreService = FirestoreService();
+  final BookmarkService _bookmarkService = BookmarkService();
   String _selectedCategory = 'All';
   bool _isSearching = false;
   String _searchQuery = '';
@@ -115,6 +118,41 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 
+  void _toggleBookmark(NewsModel news) async {
+    final isSaved = await _bookmarkService.toggleBookmark(news);
+    if (mounted) {
+      ScaffoldMessenger.of(context).hideCurrentSnackBar();
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          backgroundColor: cardDark,
+          behavior: SnackBarBehavior.floating,
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(10),
+            side: BorderSide(color: isSaved ? neonGreen : borderDark, width: 1.2),
+          ),
+          content: Row(
+            children: [
+              Icon(
+                isSaved ? Icons.bookmark_rounded : Icons.bookmark_border_rounded,
+                color: isSaved ? neonGreen : textGray,
+                size: 20,
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Text(
+                  isSaved
+                      ? 'Saved to Bookmarks! 🔖 (Available in Saved)'
+                      : 'Removed from Bookmarks',
+                  style: const TextStyle(color: textWhite, fontWeight: FontWeight.bold, fontSize: 12),
+                ),
+              ),
+            ],
+          ),
+        ),
+      );
+    }
+  }
+
   @override
   void dispose() {
     _searchController.dispose();
@@ -132,34 +170,71 @@ class _HomeScreenState extends State<HomeScreen> {
             top: BorderSide(color: borderDark, width: 1),
           ),
         ),
-        child: BottomNavigationBar(
-          currentIndex: _selectedNavIndex,
-          onTap: (index) {
-            setState(() {
-              _selectedNavIndex = index;
-            });
+        child: ValueListenableBuilder<Set<String>>(
+          valueListenable: BookmarkService.bookmarkedIdsNotifier,
+          builder: (context, bookmarkedIds, _) {
+            final savedCount = bookmarkedIds.length;
+            return BottomNavigationBar(
+              currentIndex: _selectedNavIndex,
+              onTap: (index) {
+                setState(() {
+                  _selectedNavIndex = index;
+                });
+              },
+              backgroundColor: cardDark,
+              selectedItemColor: neonGreen,
+              unselectedItemColor: textGray,
+              selectedLabelStyle: const TextStyle(fontWeight: FontWeight.bold, fontSize: 12),
+              unselectedLabelStyle: const TextStyle(fontWeight: FontWeight.normal, fontSize: 12),
+              elevation: 0,
+              items: [
+                const BottomNavigationBarItem(
+                  icon: Icon(Icons.sports_esports_outlined),
+                  activeIcon: Icon(Icons.sports_esports_rounded),
+                  label: 'Khabar',
+                ),
+                BottomNavigationBarItem(
+                  icon: savedCount > 0
+                      ? Badge(
+                          label: Text(
+                            '$savedCount',
+                            style: const TextStyle(
+                              color: Color(0xFF05080D),
+                              fontSize: 10,
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
+                          backgroundColor: neonGreen,
+                          child: const Icon(Icons.bookmark_border_rounded),
+                        )
+                      : const Icon(Icons.bookmark_border_rounded),
+                  activeIcon: savedCount > 0
+                      ? Badge(
+                          label: Text(
+                            '$savedCount',
+                            style: const TextStyle(
+                              color: Color(0xFF05080D),
+                              fontSize: 10,
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
+                          backgroundColor: neonGreen,
+                          child: const Icon(Icons.bookmark_rounded),
+                        )
+                      : const Icon(Icons.bookmark_rounded),
+                  label: 'Saved',
+                ),
+                const BottomNavigationBarItem(
+                  icon: Icon(Icons.person_outline_rounded),
+                  activeIcon: Icon(Icons.person_rounded),
+                  label: 'Profile',
+                ),
+              ],
+            );
           },
-          backgroundColor: cardDark,
-          selectedItemColor: neonGreen,
-          unselectedItemColor: textGray,
-          selectedLabelStyle: const TextStyle(fontWeight: FontWeight.bold, fontSize: 12),
-          unselectedLabelStyle: const TextStyle(fontWeight: FontWeight.normal, fontSize: 12),
-          elevation: 0,
-          items: const [
-            BottomNavigationBarItem(
-              icon: Icon(Icons.sports_esports_outlined),
-              activeIcon: Icon(Icons.sports_esports_rounded),
-              label: 'Khabar',
-            ),
-            BottomNavigationBarItem(
-              icon: Icon(Icons.person_outline_rounded),
-              activeIcon: Icon(Icons.person_rounded),
-              label: 'Profile',
-            ),
-          ],
         ),
       ),
-      appBar: _selectedNavIndex == 1
+      appBar: _selectedNavIndex != 0
           ? null
           : AppBar(
               backgroundColor: cardDark,
@@ -217,8 +292,16 @@ class _HomeScreenState extends State<HomeScreen> {
               ],
             ),
       body: _selectedNavIndex == 1
-          ? const ProfileScreen()
-          : StreamBuilder<List<NewsModel>>(
+          ? SavedNewsScreen(
+              onExploreTap: () {
+                setState(() {
+                  _selectedNavIndex = 0;
+                });
+              },
+            )
+          : _selectedNavIndex == 2
+              ? const ProfileScreen()
+              : StreamBuilder<List<NewsModel>>(
         stream: _firestoreService.getNewsStream(),
         builder: (context, snapshot) {
           if (snapshot.connectionState == ConnectionState.waiting) {
@@ -252,10 +335,20 @@ class _HomeScreenState extends State<HomeScreen> {
           final horizontalCards = remainingNews.take(2).toList();
           final gridCards = remainingNews.skip(2).toList();
 
-          return CustomScrollView(
-            physics: const BouncingScrollPhysics(),
-            slivers: [
-              // Search field (if search toggle is open)
+          return RefreshIndicator(
+            color: neonGreen,
+            backgroundColor: cardDark,
+            displacement: 40,
+            strokeWidth: 2.5,
+            onRefresh: () async {
+              await _firestoreService.refreshNews();
+            },
+            child: CustomScrollView(
+              physics: const AlwaysScrollableScrollPhysics(
+                parent: BouncingScrollPhysics(),
+              ),
+              slivers: [
+                // Search field (if search toggle is open)
               if (_isSearching)
                 SliverToBoxAdapter(
                   child: Padding(
@@ -435,6 +528,32 @@ class _HomeScreenState extends State<HomeScreen> {
                                       ),
                                     ],
                                   ],
+                                ),
+                              ),
+                              // Bookmark Action Button
+                              Positioned(
+                                top: 10,
+                                right: 10,
+                                child: ValueListenableBuilder<Set<String>>(
+                                  valueListenable: BookmarkService.bookmarkedIdsNotifier,
+                                  builder: (context, ids, _) {
+                                    final isSaved = ids.contains(featuredNews.id);
+                                    return GestureDetector(
+                                      onTap: () => _toggleBookmark(featuredNews),
+                                      child: Container(
+                                        padding: const EdgeInsets.all(6),
+                                        decoration: BoxDecoration(
+                                          color: Colors.black.withOpacity(0.65),
+                                          shape: BoxShape.circle,
+                                        ),
+                                        child: Icon(
+                                          isSaved ? Icons.bookmark_rounded : Icons.bookmark_border_rounded,
+                                          color: isSaved ? neonGreen : textWhite,
+                                          size: 18,
+                                        ),
+                                      ),
+                                    );
+                                  },
                                 ),
                               ),
                               // Title & Time Overlay
@@ -630,6 +749,24 @@ class _HomeScreenState extends State<HomeScreen> {
                                                 '${item.views}',
                                                 style: const TextStyle(color: textGray, fontSize: 10),
                                               ),
+                                              const Spacer(),
+                                              ValueListenableBuilder<Set<String>>(
+                                                valueListenable: BookmarkService.bookmarkedIdsNotifier,
+                                                builder: (context, ids, _) {
+                                                  final isSaved = ids.contains(item.id);
+                                                  return GestureDetector(
+                                                    onTap: () => _toggleBookmark(item),
+                                                    child: Padding(
+                                                      padding: const EdgeInsets.all(2.0),
+                                                      child: Icon(
+                                                        isSaved ? Icons.bookmark_rounded : Icons.bookmark_border_rounded,
+                                                        color: isSaved ? neonGreen : textGray,
+                                                        size: 17,
+                                                      ),
+                                                    ),
+                                                  );
+                                                },
+                                              ),
                                             ],
                                           ),
                                         ],
@@ -769,10 +906,32 @@ class _HomeScreenState extends State<HomeScreen> {
                                               ),
                                             ),
                                           ),
-                                          // Time Ago
-                                          Text(
-                                            item.timeAgo,
-                                            style: const TextStyle(color: textGray, fontSize: 10),
+                                          // Time Ago & Bookmark Action
+                                          Row(
+                                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                            children: [
+                                              Text(
+                                                item.timeAgo,
+                                                style: const TextStyle(color: textGray, fontSize: 10),
+                                              ),
+                                              ValueListenableBuilder<Set<String>>(
+                                                valueListenable: BookmarkService.bookmarkedIdsNotifier,
+                                                builder: (context, ids, _) {
+                                                  final isSaved = ids.contains(item.id);
+                                                  return GestureDetector(
+                                                    onTap: () => _toggleBookmark(item),
+                                                    child: Padding(
+                                                      padding: const EdgeInsets.all(2.0),
+                                                      child: Icon(
+                                                        isSaved ? Icons.bookmark_rounded : Icons.bookmark_border_rounded,
+                                                        color: isSaved ? neonGreen : textGray,
+                                                        size: 15,
+                                                      ),
+                                                    ),
+                                                  );
+                                                },
+                                              ),
+                                            ],
                                           ),
                                         ],
                                       ),
@@ -808,9 +967,9 @@ class _HomeScreenState extends State<HomeScreen> {
                   ),
                 ),
             ],
-          );
-        },
-      ),
+          ),
+        );
+      },
     );
   }
 }

@@ -4,6 +4,7 @@ import 'package:share_plus/share_plus.dart';
 import 'package:url_launcher/url_launcher.dart';
 import '../models/news_model.dart';
 import '../widgets/app_image_view.dart';
+import '../services/bookmark_service.dart';
 
 /// Helper function to extract YouTube video ID from various YouTube URL formats or direct ID
 String? extractYoutubeId(String? url) {
@@ -158,6 +159,41 @@ class NewsDetailScreen extends StatelessWidget {
     }
   }
 
+  void _toggleBookmark(BuildContext context) async {
+    final isSaved = await BookmarkService().toggleBookmark(news);
+    if (context.mounted) {
+      ScaffoldMessenger.of(context).hideCurrentSnackBar();
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          backgroundColor: cardDark,
+          behavior: SnackBarBehavior.floating,
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(10),
+            side: BorderSide(color: isSaved ? neonGreen : borderDark, width: 1.2),
+          ),
+          content: Row(
+            children: [
+              Icon(
+                isSaved ? Icons.bookmark_rounded : Icons.bookmark_border_rounded,
+                color: isSaved ? neonGreen : textGray,
+                size: 20,
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Text(
+                  isSaved
+                      ? 'Saved to Bookmarks! 🔖 (Available Offline)'
+                      : 'Removed from Bookmarks',
+                  style: const TextStyle(color: textWhite, fontWeight: FontWeight.bold, fontSize: 12),
+                ),
+              ),
+            ],
+          ),
+        ),
+      );
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final directUrl = _extractSourceUrl(news.description);
@@ -185,6 +221,28 @@ class NewsDetailScreen extends StatelessWidget {
               ),
             ),
             actions: [
+              // Bookmark Button
+              Padding(
+                padding: const EdgeInsets.symmetric(vertical: 8.0, horizontal: 4.0),
+                child: ValueListenableBuilder<Set<String>>(
+                  valueListenable: BookmarkService.bookmarkedIdsNotifier,
+                  builder: (context, bookmarkedIds, _) {
+                    final isSaved = bookmarkedIds.contains(news.id);
+                    return CircleAvatar(
+                      backgroundColor: Colors.black.withOpacity(0.65),
+                      child: IconButton(
+                        icon: Icon(
+                          isSaved ? Icons.bookmark_rounded : Icons.bookmark_border_rounded,
+                          color: isSaved ? neonGreen : textWhite,
+                          size: 20,
+                        ),
+                        onPressed: () => _toggleBookmark(context),
+                      ),
+                    );
+                  },
+                ),
+              ),
+              // Share Button
               Padding(
                 padding: const EdgeInsets.all(8.0),
                 child: CircleAvatar(

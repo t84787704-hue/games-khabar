@@ -8,6 +8,7 @@ import '../models/news_model.dart';
 import '../services/firestore_service.dart';
 import '../widgets/app_image_view.dart';
 import '../utils/admin_security.dart';
+import '../services/notification_service.dart';
 
 /// Helper function to extract 11-char YouTube video ID from various YouTube URL formats or direct ID
 String? extractYoutubeId(String? url) {
@@ -251,7 +252,17 @@ class _AddNewsScreenState extends State<AddNewsScreen> {
       if (isEditing) {
         await _firestoreService.updateNews(widget.editItem!.id, payload);
       } else {
-        await _firestoreService.addNews(payload);
+        final newNewsId = await _firestoreService.addNews(payload);
+        // Send FCM notification to topic 'all_news'
+        try {
+          await NotificationService().sendNewsNotification(
+            newsId: newNewsId,
+            title: title,
+            description: description,
+            category: _selectedCategory,
+            imageUrl: finalImageUrl,
+          );
+        } catch (_) {}
       }
 
       if (mounted) {

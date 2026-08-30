@@ -151,6 +151,38 @@ class FirestoreService {
     yield* _streamController.stream;
   }
 
+  // Force refresh news from Firestore (pull-to-refresh)
+  Future<void> refreshNews() async {
+    try {
+      final snapshot = await _db
+          .collection('news')
+          .orderBy('timestamp', descending: true)
+          .get(const GetOptions(source: Source.serverAndCache))
+          .timeout(const Duration(seconds: 4));
+
+      if (snapshot.docs.isNotEmpty) {
+        final firestoreItems =
+            snapshot.docs.map((doc) => NewsModel.fromFirestore(doc)).toList();
+
+        final Map<String, NewsModel> map = {};
+        for (var item in firestoreItems) {
+          map[item.id] = item;
+        }
+        for (var local in _currentNewsList) {
+          if (!map.containsKey(local.id)) {
+            map[local.id] = local;
+          }
+        }
+
+        _currentNewsList = map.values.toList();
+        _streamController.add(List.from(_currentNewsList));
+      }
+    } catch (_) {
+      // Re-emit existing list on error or timeout
+      _streamController.add(List.from(_currentNewsList));
+    }
+  }
+
   // Increment views
   Future<void> incrementView(String id) async {
     final idx = _currentNewsList.indexWhere((item) => item.id == id);
@@ -182,8 +214,27 @@ class FirestoreService {
     } catch (_) {}
   }
 
-  // Add new article - instant UI update + background Firestore sync
-  Future<void> addNews(Map<String, dynamic> data) async {
+  // Get single news article by ID (checks memory fallback first, then Firestore)
+  Future<NewsModel?> getNewsById(String id) async {
+    final cleanId = id.trim();
+    if (cleanId.isEmpty) return null;
+
+    final inMemory = _currentNewsList.where((item) => item.id == cleanId).toList();
+    if (inMemory.isNotEmpty) {
+      return inMemory.first;
+    }
+
+    try {
+      final doc = await _db.collection('news').doc(cleanId).get().timeout(const Duration(seconds: 4));
+      if (doc.exists && doc.data() != null) {
+        return NewsModel.fromFirestore(doc);
+      }
+    } catch (_) {}
+    return null;
+  }
+
+  // Add new article - instant UI update + background Firestore sync (returns created newsId)
+  Future<String> addNews(Map<String, dynamic> data) async {
     final localId = 'local-${DateTime.now().millisecondsSinceEpoch}';
     final videoUrl = data['videoUrl'] as String? ?? '';
     final newModel = NewsModel(
@@ -206,9 +257,11 @@ class FirestoreService {
     _currentNewsList.insert(0, newModel);
     _streamController.add(List.from(_currentNewsList));
 
+    String createdId = localId;
+
     // Try to sync with Firestore in background with 3-second timeout
     try {
-      await _db.collection('news').add({
+      final docRef = await _db.collection('news').add({
         'title': newModel.title,
         'description': newModel.description,
         'category': newModel.category,
@@ -220,10 +273,13 @@ class FirestoreService {
         'isFree': newModel.isFree,
         'timeAgo': 'Just now',
         if (newModel.sourceUrl != null) 'sourceUrl': newModel.sourceUrl,
-      }).timeout(const Duration(seconds: 3));
+      }).timeout(const Duration(seconds: 4));
+      createdId = docRef.id;
     } catch (_) {
       // If Firestore write times out or fails (e.g. offline/permission), local store already has it
     }
+
+    return createdId;
   }
 
   // Delete article
