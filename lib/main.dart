@@ -11,6 +11,8 @@ import 'services/bookmark_service.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
+
+  // 1. Initialize Firebase first
   try {
     await Firebase.initializeApp(
       options: DefaultFirebaseOptions.currentPlatform,
@@ -18,23 +20,32 @@ void main() async {
   } catch (e) {
     try {
       await Firebase.initializeApp();
-    } catch (_) {}
+    } catch (err) {
+      debugPrint("Firebase init fallback error: $err");
+    }
   }
 
-  // Initialize local bookmarks cache
+  // 2. Initialize local bookmarks cache
   try {
     await BookmarkService().init();
-  } catch (_) {}
+  } catch (e) {
+    debugPrint("BookmarkService init error: $e");
+  }
 
-  // Register background handler for FCM
+  // 3. Setup Firebase Messaging in try-catch so app always opens
   try {
     FirebaseMessaging.onBackgroundMessage(firebaseMessagingBackgroundHandler);
-  } catch (_) {}
+  } catch (e) {
+    debugPrint("FCM background handler error: $e");
+  }
 
-  // Initialize push notification channel, listeners and topic subscriptions
   try {
-    await NotificationService().initialize();
-  } catch (_) {}
+    final messaging = FirebaseMessaging.instance;
+    await messaging.requestPermission();
+    await messaging.subscribeToTopic('all_news');
+  } catch (e) {
+    debugPrint("FCM messaging setup error: $e");
+  }
 
   runApp(const GamesKhabarApp());
 }

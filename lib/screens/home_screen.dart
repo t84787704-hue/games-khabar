@@ -106,7 +106,12 @@ class _HomeScreenState extends State<HomeScreen> {
     ),
   ];
 
-  void _navigateToDetail(NewsModel news) {
+  void _navigateToDetail(NewsModel? news) {
+    if (news == null) {
+      debugPrint("Warning: Tried to navigate to detail with null news data");
+      return;
+    }
+    print("Clicked news: ${news.id}");
     if (!news.id.startsWith('dummy')) {
       _firestoreService.incrementView(news.id);
     }

@@ -10,7 +10,8 @@
     <application
         android:label="Games Khabar"
         android:name="${applicationName}"
-        android:icon="@mipmap/ic_launcher">
+        android:icon="@mipmap/ic_launcher"
+        android:usesCleartextTraffic="true">
         <meta-data
             android:name="com.google.firebase.messaging.default_notification_channel_id"
             android:value="games_khabar_news_channel" />
