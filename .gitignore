@@ -16,3 +16,6 @@
 local.properties
 .env
 debug.keystore
+android/app/upload-keystore.jks
+android/key.properties
+keystore_base64.txt
