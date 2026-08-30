@@ -26,11 +26,6 @@ class GamesKhabarApp extends StatelessWidget {
           backgroundColor: Color(0xFF141414),
           elevation: 0,
         ),
-        colorScheme: const ColorScheme.dark(
-          primary: Color(0xFF00FF88),
-          secondary: Color(0xFFFF4655),
-          surface: Color(0xFF1E1E24),
-        ),
       ),
       home: const HomeScreen(),
       routes: {
