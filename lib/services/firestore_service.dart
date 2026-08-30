@@ -30,7 +30,14 @@ class FirestoreService {
   static final FirestoreService _instance = FirestoreService._internal();
   factory FirestoreService() => _instance;
 
-  final FirebaseFirestore _db = FirebaseFirestore.instance;
+  FirebaseFirestore? get _db {
+    try {
+      return FirebaseFirestore.instance;
+    } catch (_) {
+      return null;
+    }
+  }
+
   final StreamController<List<NewsModel>> _streamController =
       StreamController<List<NewsModel>>.broadcast();
 
@@ -110,7 +117,9 @@ class FirestoreService {
 
   void _initFirestoreListener() {
     try {
-      _db
+      final db = _db;
+      if (db == null) return;
+      db
           .collection('news')
           .orderBy('timestamp', descending: true)
           .snapshots()
@@ -154,33 +163,36 @@ class FirestoreService {
   // Force refresh news from Firestore (pull-to-refresh)
   Future<void> refreshNews() async {
     try {
-      final snapshot = await _db
-          .collection('news')
-          .orderBy('timestamp', descending: true)
-          .get(const GetOptions(source: Source.serverAndCache))
-          .timeout(const Duration(seconds: 4));
+      final db = _db;
+      if (db != null) {
+        final snapshot = await db
+            .collection('news')
+            .orderBy('timestamp', descending: true)
+            .get(const GetOptions(source: Source.serverAndCache))
+            .timeout(const Duration(seconds: 4));
 
-      if (snapshot.docs.isNotEmpty) {
-        final firestoreItems =
-            snapshot.docs.map((doc) => NewsModel.fromFirestore(doc)).toList();
+        if (snapshot.docs.isNotEmpty) {
+          final firestoreItems =
+              snapshot.docs.map((doc) => NewsModel.fromFirestore(doc)).toList();
 
-        final Map<String, NewsModel> map = {};
-        for (var item in firestoreItems) {
-          map[item.id] = item;
-        }
-        for (var local in _currentNewsList) {
-          if (!map.containsKey(local.id)) {
-            map[local.id] = local;
+          final Map<String, NewsModel> map = {};
+          for (var item in firestoreItems) {
+            map[item.id] = item;
           }
-        }
+          for (var local in _currentNewsList) {
+            if (!map.containsKey(local.id)) {
+              map[local.id] = local;
+            }
+          }
 
-        _currentNewsList = map.values.toList();
-        _streamController.add(List.from(_currentNewsList));
+          _currentNewsList = map.values.toList();
+          _streamController.add(List.from(_currentNewsList));
+          return;
+        }
       }
-    } catch (_) {
-      // Re-emit existing list on error or timeout
-      _streamController.add(List.from(_currentNewsList));
-    }
+    } catch (_) {}
+    // Re-emit existing list on error or timeout
+    _streamController.add(List.from(_currentNewsList));
   }
 
   // Increment views
@@ -204,8 +216,9 @@ class FirestoreService {
     }
 
     try {
-      if (!id.startsWith('dummy-') && !id.startsWith('local-')) {
-        await _db
+      final db = _db;
+      if (db != null && !id.startsWith('dummy-') && !id.startsWith('local-')) {
+        await db
             .collection('news')
             .doc(id)
             .update({'views': FieldValue.increment(1)})
@@ -225,9 +238,12 @@ class FirestoreService {
     }
 
     try {
-      final doc = await _db.collection('news').doc(cleanId).get().timeout(const Duration(seconds: 4));
-      if (doc.exists && doc.data() != null) {
-        return NewsModel.fromFirestore(doc);
+      final db = _db;
+      if (db != null) {
+        final doc = await db.collection('news').doc(cleanId).get().timeout(const Duration(seconds: 4));
+        if (doc.exists && doc.data() != null) {
+          return NewsModel.fromFirestore(doc);
+        }
       }
     } catch (_) {}
     return null;
@@ -261,20 +277,23 @@ class FirestoreService {
 
     // Try to sync with Firestore in background with 3-second timeout
     try {
-      final docRef = await _db.collection('news').add({
-        'title': newModel.title,
-        'description': newModel.description,
-        'category': newModel.category,
-        'imageUrl': newModel.imageUrl,
-        'videoUrl': videoUrl,
-        'timestamp': FieldValue.serverTimestamp(),
-        'isPublished': true,
-        'views': 0,
-        'isFree': newModel.isFree,
-        'timeAgo': 'Just now',
-        if (newModel.sourceUrl != null) 'sourceUrl': newModel.sourceUrl,
-      }).timeout(const Duration(seconds: 4));
-      createdId = docRef.id;
+      final db = _db;
+      if (db != null) {
+        final docRef = await db.collection('news').add({
+          'title': newModel.title,
+          'description': newModel.description,
+          'category': newModel.category,
+          'imageUrl': newModel.imageUrl,
+          'videoUrl': videoUrl,
+          'timestamp': FieldValue.serverTimestamp(),
+          'isPublished': true,
+          'views': 0,
+          'isFree': newModel.isFree,
+          'timeAgo': 'Just now',
+          if (newModel.sourceUrl != null) 'sourceUrl': newModel.sourceUrl,
+        }).timeout(const Duration(seconds: 4));
+        createdId = docRef.id;
+      }
     } catch (_) {
       // If Firestore write times out or fails (e.g. offline/permission), local store already has it
     }
@@ -288,8 +307,9 @@ class FirestoreService {
     _streamController.add(List.from(_currentNewsList));
 
     try {
-      if (!id.startsWith('dummy-') && !id.startsWith('local-')) {
-        await _db
+      final db = _db;
+      if (db != null && !id.startsWith('dummy-') && !id.startsWith('local-')) {
+        await db
             .collection('news')
             .doc(id)
             .delete()
@@ -329,7 +349,8 @@ class FirestoreService {
     }
 
     try {
-      if (!id.startsWith('dummy-') && !id.startsWith('local-')) {
+      final db = _db;
+      if (db != null && !id.startsWith('dummy-') && !id.startsWith('local-')) {
         final updateData = <String, dynamic>{
           'title': title,
           'description': description,
@@ -339,10 +360,8 @@ class FirestoreService {
           'isFree': isFree,
           if (data['sourceUrl'] != null) 'sourceUrl': data['sourceUrl'],
         };
-        await _db.collection('news').doc(id).update(updateData).timeout(const Duration(seconds: 3));
+        await db.collection('news').doc(id).update(updateData).timeout(const Duration(seconds: 3));
       }
-    } catch (_) {
-      // Local state already updated
-    }
+    } catch (_) {}
   }
 }

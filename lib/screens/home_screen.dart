@@ -1,8 +1,12 @@
 import 'package:flutter/material.dart';
+import 'package:firebase_core/firebase_core.dart';
+import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:cached_network_image/cached_network_image.dart';
+import '../firebase_options.dart';
 import '../models/news_model.dart';
 import '../services/firestore_service.dart';
 import '../services/bookmark_service.dart';
+import '../services/notification_service.dart';
 import '../widgets/app_image_view.dart';
 import 'news_detail_screen.dart';
 import 'saved_news_screen.dart';
@@ -24,13 +28,50 @@ class _HomeScreenState extends State<HomeScreen> {
   String _searchQuery = '';
   final TextEditingController _searchController = TextEditingController();
 
-  static const Color bgDark = Color(0xFF0A0A0F);
+  static const Color bgDark = Color(0xFF0A0A0A);
   static const Color cardDark = Color(0xFF1E1E24);
   static const Color cardDark2 = Color(0xFF15151A);
   static const Color borderDark = Color(0xFF2E2E38);
   static const Color neonGreen = Color(0xFF00FF88);
   static const Color textWhite = Color(0xFFFFFFFF);
   static const Color textGray = Color(0xFF9E9EA7);
+
+  @override
+  void initState() {
+    super.initState();
+    _initFirebaseAndServices();
+  }
+
+  Future<void> _initFirebaseAndServices() async {
+    try {
+      await Firebase.initializeApp(
+        options: DefaultFirebaseOptions.currentPlatform,
+      ).timeout(const Duration(seconds: 3));
+    } catch (_) {
+      try {
+        await Firebase.initializeApp().timeout(const Duration(seconds: 3));
+      } catch (_) {}
+    }
+
+    try {
+      await BookmarkService().init().timeout(const Duration(seconds: 2));
+    } catch (_) {}
+
+    try {
+      FirebaseMessaging.onBackgroundMessage(firebaseMessagingBackgroundHandler);
+    } catch (_) {}
+
+    try {
+      final messaging = FirebaseMessaging.instance;
+      await messaging.requestPermission().timeout(const Duration(seconds: 3));
+      await messaging.subscribeToTopic('all_news').timeout(const Duration(seconds: 3));
+    } catch (_) {}
+
+    _firestoreService.refreshNews();
+    if (mounted) {
+      setState(() {});
+    }
+  }
 
   final List<String> _categories = [
     'All',
@@ -309,10 +350,60 @@ class _HomeScreenState extends State<HomeScreen> {
               : StreamBuilder<List<NewsModel>>(
         stream: _firestoreService.getNewsStream(),
         builder: (context, snapshot) {
-          if (snapshot.connectionState == ConnectionState.waiting) {
-            return const Center(
-              child: CircularProgressIndicator(
-                valueColor: AlwaysStoppedAnimation<Color>(neonGreen),
+          if (snapshot.connectionState == ConnectionState.waiting && (!snapshot.hasData || snapshot.data!.isEmpty)) {
+            return Center(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: const [
+                  CircularProgressIndicator(
+                    valueColor: AlwaysStoppedAnimation<Color>(neonGreen),
+                  ),
+                  SizedBox(height: 16),
+                  Text(
+                    'Loading Khabar...',
+                    style: TextStyle(
+                      color: textWhite,
+                      fontSize: 14,
+                      fontWeight: FontWeight.bold,
+                      letterSpacing: 0.5,
+                    ),
+                  ),
+                ],
+              ),
+            );
+          }
+
+          if (snapshot.hasError && (!snapshot.hasData || snapshot.data!.isEmpty)) {
+            return Center(
+              child: Padding(
+                padding: const EdgeInsets.all(24.0),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    const Icon(Icons.error_outline_rounded, color: Colors.redAccent, size: 48),
+                    const SizedBox(height: 12),
+                    Text(
+                      "Error: ${snapshot.error}",
+                      textAlign: TextAlign.center,
+                      style: const TextStyle(color: textWhite, fontSize: 13),
+                    ),
+                    const SizedBox(height: 16),
+                    ElevatedButton.icon(
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: neonGreen,
+                        foregroundColor: const Color(0xFF05080D),
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                      ),
+                      onPressed: () {
+                        setState(() {
+                          _firestoreService.refreshNews();
+                        });
+                      },
+                      icon: const Icon(Icons.refresh_rounded),
+                      label: const Text('Retry', style: TextStyle(fontWeight: FontWeight.bold)),
+                    ),
+                  ],
+                ),
               ),
             );
           }
@@ -321,6 +412,26 @@ class _HomeScreenState extends State<HomeScreen> {
               (snapshot.hasData && snapshot.data!.isNotEmpty)
                   ? snapshot.data!
                   : _fallbackNews;
+
+          if (rawList.isEmpty) {
+            return Center(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: const [
+                  Icon(Icons.sports_esports_outlined, color: textGray, size: 64),
+                  SizedBox(height: 16),
+                  Text(
+                    'No news yet',
+                    style: TextStyle(
+                      color: textWhite,
+                      fontSize: 18,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                ],
+              ),
+            );
+          }
 
           // Filter by category and search
           final filteredList = rawList.where((item) {
