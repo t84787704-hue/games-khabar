@@ -14,12 +14,11 @@ import '../models/news_model.dart';
 //       // 1. Anyone (public) can read gaming news
 //       allow read: if true;
 //
-//       // 2. Only the verified Admin email (t84787704@gmail.com) can create or delete
-//       allow create, delete: if request.auth != null &&
-//                                request.auth.token.email == "t84787704@gmail.com";
+//       // 2. Only authenticated Admin can create or delete
+//       allow create, delete: if request.auth != null;
 //
 //       // 3. Admin can update full document, OR public can increment view counter
-//       allow update: if (request.auth != null && request.auth.token.email == "t84787704@gmail.com")
+//       allow update: if request.auth != null
 //                     || request.resource.data.diff(resource.data).affectedKeys().hasOnly(['views']);
 //     }
 //   }

@@ -10,8 +10,7 @@ class AdminLoginScreen extends StatefulWidget {
 }
 
 class _AdminLoginScreenState extends State<AdminLoginScreen> {
-  final TextEditingController _emailController =
-      TextEditingController(text: 't84787704@gmail.com');
+  final TextEditingController _emailController = TextEditingController();
   final TextEditingController _passwordController = TextEditingController();
   final _formKey = GlobalKey<FormState>();
   bool _isLoading = false;
@@ -35,46 +34,57 @@ class _AdminLoginScreenState extends State<AdminLoginScreen> {
       _errorMessage = null;
     });
 
+    final email = _emailController.text.trim();
+    final password = _passwordController.text.trim();
+
     try {
-      final email = _emailController.text.trim();
-      final password = _passwordController.text.trim();
+      // Firebase Authentication
+      final userCredential = await FirebaseAuth.instance.signInWithEmailAndPassword(
+        email: email,
+        password: password,
+      );
 
-      if (email.toLowerCase() != kAdminEmail.toLowerCase()) {
-        setState(() {
-          _errorMessage = 'Access Denied: Only $kAdminEmail is authorized as Admin.';
-        });
-        return;
-      }
-
-      // Try Firebase Authentication
-      try {
-        await FirebaseAuth.instance.signInWithEmailAndPassword(
-          email: email,
-          password: password,
-        );
-      } catch (authError) {
-        try {
-          await FirebaseAuth.instance.createUserWithEmailAndPassword(
-            email: email,
-            password: password,
-          );
-        } catch (_) {
-          // Fallback allowed for admin session
+      final user = userCredential.user;
+      if (user != null) {
+        AdminSession.setLoggedIn(user.email ?? email);
+        if (mounted) {
+          Navigator.pushReplacementNamed(context, '/admin-dashboard');
         }
+      } else {
+        setState(() {
+          _errorMessage = 'Authentication failed. Please check credentials.';
+        });
       }
-
-      // Activate verified admin session
-      AdminSession.setLoggedIn(email, password: password);
-
-      if (mounted) {
-        Navigator.pushReplacementNamed(context, '/admin-dashboard');
-      }
+    } on FirebaseAuthException catch (e) {
+      setState(() {
+        switch (e.code) {
+          case 'user-not-found':
+            _errorMessage = 'No registered admin found with this email.';
+            break;
+          case 'wrong-password':
+          case 'invalid-credential':
+            _errorMessage = 'Invalid email or password.';
+            break;
+          case 'invalid-email':
+            _errorMessage = 'Please enter a valid email address.';
+            break;
+          case 'user-disabled':
+            _errorMessage = 'This user account has been disabled.';
+            break;
+          case 'too-many-requests':
+            _errorMessage = 'Too many failed attempts. Please try again later.';
+            break;
+          case 'network-request-failed':
+            _errorMessage = 'Network connection error. Check your internet.';
+            break;
+          default:
+            _errorMessage = e.message ?? 'Login failed. Please verify credentials.';
+        }
+      });
     } catch (e) {
-      // In case of any transient error, if verified admin email, still proceed
-      AdminSession.setLoggedIn(_emailController.text.trim(), password: _passwordController.text.trim());
-      if (mounted) {
-        Navigator.pushReplacementNamed(context, '/admin-dashboard');
-      }
+      setState(() {
+        _errorMessage = 'An error occurred during authentication. Please retry.';
+      });
     } finally {
       if (mounted) {
         setState(() {
@@ -82,6 +92,136 @@ class _AdminLoginScreenState extends State<AdminLoginScreen> {
         });
       }
     }
+  }
+
+  Future<void> _showForgotPasswordDialog() async {
+    final resetEmailController = TextEditingController(text: _emailController.text.trim());
+    String? resetError;
+    bool isSending = false;
+
+    await showDialog(
+      context: context,
+      builder: (ctx) => StatefulBuilder(
+        builder: (context, setDialogState) {
+          return AlertDialog(
+            backgroundColor: cardBg,
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(16),
+              side: const BorderSide(color: borderColor),
+            ),
+            title: Row(
+              children: const [
+                Icon(Icons.lock_reset_rounded, color: neonGreen, size: 22),
+                SizedBox(width: 8),
+                Text(
+                  'Reset Password',
+                  style: TextStyle(color: textWhite, fontWeight: FontWeight.bold, fontSize: 16),
+                ),
+              ],
+            ),
+            content: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Text(
+                  'Enter your Admin email to receive a password reset link:',
+                  style: TextStyle(color: textGray, fontSize: 13),
+                ),
+                const SizedBox(height: 12),
+                TextField(
+                  controller: resetEmailController,
+                  keyboardType: TextInputType.emailAddress,
+                  style: const TextStyle(color: textWhite, fontSize: 14),
+                  decoration: InputDecoration(
+                    hintText: 'admin@example.com',
+                    hintStyle: const TextStyle(color: textGray, fontSize: 13),
+                    filled: true,
+                    fillColor: cardBg2,
+                    prefixIcon: const Icon(Icons.email_outlined, color: textGray, size: 18),
+                    border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(10),
+                      borderSide: const BorderSide(color: borderColor),
+                    ),
+                    enabledBorder: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(10),
+                      borderSide: const BorderSide(color: borderColor),
+                    ),
+                    focusedBorder: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(10),
+                      borderSide: const BorderSide(color: neonGreen, width: 1.5),
+                    ),
+                    contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+                  ),
+                ),
+                if (resetError != null) ...[
+                  const SizedBox(height: 8),
+                  Text(
+                    resetError!,
+                    style: const TextStyle(color: alertRed, fontSize: 12),
+                  ),
+                ],
+              ],
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(ctx),
+                child: const Text('Cancel', style: TextStyle(color: textGray)),
+              ),
+              ElevatedButton(
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: neonGreen,
+                  foregroundColor: const Color(0xFF05080D),
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                ),
+                onPressed: isSending
+                    ? null
+                    : () async {
+                        final email = resetEmailController.text.trim();
+                        if (email.isEmpty || !email.contains('@')) {
+                          setDialogState(() {
+                            resetError = 'Please enter a valid email';
+                          });
+                          return;
+                        }
+                        setDialogState(() {
+                          isSending = true;
+                          resetError = null;
+                        });
+                        try {
+                          await FirebaseAuth.instance.sendPasswordResetEmail(email: email);
+                          if (ctx.mounted) {
+                            Navigator.pop(ctx);
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              const SnackBar(
+                                backgroundColor: cardBg,
+                                behavior: SnackBarBehavior.floating,
+                                content: Text(
+                                  'Password reset link sent to your email!',
+                                  style: TextStyle(color: neonGreen, fontWeight: FontWeight.bold),
+                                ),
+                              ),
+                            );
+                          }
+                        } catch (e) {
+                          setDialogState(() {
+                            isSending = false;
+                            resetError = 'Failed to send reset email. Check email address.';
+                          });
+                        }
+                      },
+                child: isSending
+                    ? const SizedBox(
+                        width: 16,
+                        height: 16,
+                        child: CircularProgressIndicator(strokeWidth: 2, color: Color(0xFF05080D)),
+                      )
+                    : const Text('Send Link', style: TextStyle(fontWeight: FontWeight.bold)),
+              ),
+            ],
+          );
+        },
+      ),
+    );
   }
 
   @override
@@ -216,7 +356,7 @@ class _AdminLoginScreenState extends State<AdminLoginScreen> {
                     keyboardType: TextInputType.emailAddress,
                     style: const TextStyle(color: textWhite, fontSize: 14),
                     decoration: InputDecoration(
-                      hintText: 'admin@gameskhabar.com',
+                      hintText: 'admin@yourdomain.com',
                       hintStyle: const TextStyle(color: textGray, fontSize: 13),
                       filled: true,
                       fillColor: cardBg2,
@@ -237,7 +377,10 @@ class _AdminLoginScreenState extends State<AdminLoginScreen> {
                     ),
                     validator: (val) {
                       if (val == null || val.trim().isEmpty) {
-                        return 'Email required';
+                        return 'Email is required';
+                      }
+                      if (!val.contains('@')) {
+                        return 'Enter a valid email';
                       }
                       return null;
                     },
@@ -245,13 +388,29 @@ class _AdminLoginScreenState extends State<AdminLoginScreen> {
                   const SizedBox(height: 18),
 
                   // Password
-                  const Text(
-                    'Password',
-                    style: TextStyle(
-                      color: textWhite,
-                      fontSize: 13,
-                      fontWeight: FontWeight.bold,
-                    ),
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      const Text(
+                        'Password',
+                        style: TextStyle(
+                          color: textWhite,
+                          fontSize: 13,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                      GestureDetector(
+                        onTap: _showForgotPasswordDialog,
+                        child: const Text(
+                          'Forgot Password?',
+                          style: TextStyle(
+                            color: neonGreen,
+                            fontSize: 12,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                      ),
+                    ],
                   ),
                   const SizedBox(height: 8),
                   TextFormField(

@@ -1,0 +1,25 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    
+    // News Collection Rules
+    match /news/{newsId} {
+      // 1. Anyone (public users) can read and view news articles
+      allow read: if true;
+      
+      // 2. Only authenticated Admin can create or delete news articles
+      // Replace YOUR_ADMIN_EMAIL with your specific admin email in Firebase Console,
+      // or use request.auth != null to allow any authenticated admin user in your Firebase project.
+      allow create, delete: if request.auth != null;
+      
+      // 3. Admin can update full document, OR public users can increment view counters
+      allow update: if request.auth != null 
+                    || request.resource.data.diff(resource.data).affectedKeys().hasOnly(['views']);
+    }
+
+    // Default deny all other collections
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}
