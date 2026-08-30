@@ -154,6 +154,8 @@ class FirestoreService {
     }
   }
 
+  List<NewsModel> get currentNews => List.from(_currentNewsList);
+
   // Reactive stream of all news sorted by newest
   Stream<List<NewsModel>> getNewsStream() async* {
     yield List.from(_currentNewsList);

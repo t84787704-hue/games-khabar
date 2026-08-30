@@ -348,6 +348,7 @@ class _HomeScreenState extends State<HomeScreen> {
           : _selectedNavIndex == 2
               ? const ProfileScreen()
               : StreamBuilder<List<NewsModel>>(
+        initialData: _firestoreService.currentNews,
         stream: _firestoreService.getNewsStream(),
         builder: (context, snapshot) {
           if (snapshot.connectionState == ConnectionState.waiting && (!snapshot.hasData || snapshot.data!.isEmpty)) {

@@ -30,7 +30,6 @@ class GamesKhabarApp extends StatelessWidget {
           primary: Color(0xFF00FF88),
           secondary: Color(0xFFFF4655),
           surface: Color(0xFF1E1E24),
-          background: Color(0xFF0A0A0A),
         ),
       ),
       home: const HomeScreen(),

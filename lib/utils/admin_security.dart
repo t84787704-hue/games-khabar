@@ -25,7 +25,9 @@ class AdminSession {
     _isLoggedIn = false;
     _adminEmail = null;
     _adminPassword = null;
-    FirebaseAuth.instance.signOut();
+    try {
+      FirebaseAuth.instance.signOut();
+    } catch (_) {}
   }
 
   static bool verifyPinOrPassword(String input) {
@@ -44,13 +46,15 @@ bool isAdminUser() {
       AdminSession.adminEmail?.toLowerCase() == kAdminEmail.toLowerCase()) {
     return true;
   }
-  final user = FirebaseAuth.instance.currentUser;
-  if (user != null) {
-    final email = (user.email ?? '').trim().toLowerCase();
-    if (email == kAdminEmail.toLowerCase()) {
-      return true;
+  try {
+    final user = FirebaseAuth.instance.currentUser;
+    if (user != null) {
+      final email = (user.email ?? '').trim().toLowerCase();
+      if (email == kAdminEmail.toLowerCase()) {
+        return true;
+      }
     }
-  }
+  } catch (_) {}
   return false;
 }
 

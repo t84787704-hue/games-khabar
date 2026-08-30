@@ -25,7 +25,14 @@ class NotificationService {
 
   static final GlobalKey<NavigatorState> navigatorKey = GlobalKey<NavigatorState>();
 
-  final FirebaseMessaging _fcm = FirebaseMessaging.instance;
+  FirebaseMessaging? get _fcm {
+    try {
+      return FirebaseMessaging.instance;
+    } catch (_) {
+      return null;
+    }
+  }
+
   final FlutterLocalNotificationsPlugin _localNotifications = FlutterLocalNotificationsPlugin();
 
   static const String topicName = 'all_news';
@@ -61,14 +68,18 @@ class NotificationService {
     await subscribeToAllNewsTopic();
 
     // 4. Foreground Message Handler
-    FirebaseMessaging.onMessage.listen((RemoteMessage message) {
-      _showForegroundNotification(message);
-    });
+    try {
+      FirebaseMessaging.onMessage.listen((RemoteMessage message) {
+        _showForegroundNotification(message);
+      });
+    } catch (_) {}
 
     // 5. Background Notification Tap Handler (App running in background)
-    FirebaseMessaging.onMessageOpenedApp.listen((RemoteMessage message) {
-      _handleMessageTap(message.data);
-    });
+    try {
+      FirebaseMessaging.onMessageOpenedApp.listen((RemoteMessage message) {
+        _handleMessageTap(message.data);
+      });
+    } catch (_) {}
 
     // 6. Terminated State Notification Tap Handler (App launched from notification)
     _checkInitialMessage();
@@ -77,15 +88,18 @@ class NotificationService {
   /// Request permissions for iOS and Android 13+ (POST_NOTIFICATIONS)
   Future<void> requestPermissions() async {
     try {
-      final settings = await _fcm.requestPermission(
-        alert: true,
-        announcement: false,
-        badge: true,
-        carPlay: false,
-        criticalAlert: false,
-        provisional: false,
-        sound: true,
-      );
+      final fcm = _fcm;
+      if (fcm != null) {
+        await fcm.requestPermission(
+          alert: true,
+          announcement: false,
+          badge: true,
+          carPlay: false,
+          criticalAlert: false,
+          provisional: false,
+          sound: true,
+        );
+      }
 
       // Setup Android notification channel
       final androidPlugin = _localNotifications.resolvePlatformSpecificImplementation<
@@ -100,7 +114,10 @@ class NotificationService {
   /// Subscribe to topic 'all_news'
   Future<void> subscribeToAllNewsTopic() async {
     try {
-      await _fcm.subscribeToTopic(topicName);
+      final fcm = _fcm;
+      if (fcm != null) {
+        await fcm.subscribeToTopic(topicName);
+      }
     } catch (_) {}
   }
 
