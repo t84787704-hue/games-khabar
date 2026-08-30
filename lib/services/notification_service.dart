@@ -153,7 +153,7 @@ class NotificationService {
   /// Check if app was opened from a terminated notification
   Future<void> _checkInitialMessage() async {
     try {
-      final initialMessage = await _fcm.getInitialMessage();
+      final initialMessage = await _fcm?.getInitialMessage();
       if (initialMessage != null) {
         // Slight delay to allow navigation stack / widget tree to be fully ready
         Future.delayed(const Duration(milliseconds: 500), () {
