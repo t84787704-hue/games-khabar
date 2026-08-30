@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "798094452885",
+    "project_id": "games-khabar",
+    "storage_bucket": "games-khabar.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:798094452885:android:afc18994563bf03d97139c",
+        "android_client_info": {
+          "package_name": "com.gameskhabar.games_khabar"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyC9EAEGzSBEVoMY_p6Pq8uIOk6fvj_QsHg"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
