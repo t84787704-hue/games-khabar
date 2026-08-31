@@ -4,19 +4,10 @@ import 'screens/home_screen.dart';
 import 'screens/admin_login_screen.dart';
 import 'screens/admin_dashboard_screen.dart';
 import 'screens/add_news_screen.dart';
-import 'services/notification_service.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
   await Firebase.initializeApp();
-  
-  // Notification service agar aap use kar rahe ho
-  try {
-    await NotificationService().init();
-  } catch (e) {
-    debugPrint("Notification init error: $e");
-  }
-
   runApp(const MyApp());
 }
 
