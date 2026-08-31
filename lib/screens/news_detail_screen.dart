@@ -6,6 +6,7 @@ import 'package:url_launcher/url_launcher.dart';
 import '../models/news_model.dart';
 import '../widgets/app_image_view.dart';
 import '../services/bookmark_service.dart';
+import '../services/firestore_service.dart';
 
 /// Helper function to extract YouTube video ID from various YouTube URL formats or direct ID
 String? extractYoutubeId(String? url) {
@@ -558,11 +559,227 @@ class NewsDetailScreen extends StatelessWidget {
                   ),
                 ),
               ),
-              const SizedBox(height: 24),
+              const SizedBox(height: 16),
+
+              // 10. Related News Section
+              _buildRelatedNewsSection(context),
             ],
           ),
         ),
       ),
+    );
+  }
+
+  List<NewsModel> _getRelatedNews(List<NewsModel> allNews) {
+    // 1. Exclude current news itself
+    final otherNews = allNews.where((n) => n.id != news.id).toList();
+
+    // 2. Filter by same category (up to 4)
+    final List<NewsModel> related = otherNews
+        .where((n) => n.category.trim().toLowerCase() == news.category.trim().toLowerCase())
+        .take(4)
+        .toList();
+
+    // 3. If related count is less than 2, also find news where title contains same keywords
+    if (related.length < 2) {
+      final words = news.title
+          .toLowerCase()
+          .replaceAll(RegExp(r'[^a-zA-Z0-9\s]'), '')
+          .split(RegExp(r'\s+'))
+          .where((w) => w.length > 3)
+          .toSet();
+
+      final relatedIds = related.map((e) => e.id).toSet();
+
+      for (final item in otherNews) {
+        if (related.length >= 4) break;
+        if (relatedIds.contains(item.id)) continue;
+
+        final itemTitleLower = item.title.toLowerCase();
+        final hasKeyword = words.any((w) => itemTitleLower.contains(w));
+        if (hasKeyword) {
+          related.add(item);
+          relatedIds.add(item.id);
+        }
+      }
+    }
+
+    return related;
+  }
+
+  Widget _buildRelatedNewsSection(BuildContext context) {
+    return StreamBuilder<List<NewsModel>>(
+      stream: FirestoreService().getNewsStream(),
+      initialData: FirestoreService().currentNews,
+      builder: (context, snapshot) {
+        final allNews = snapshot.data ?? [];
+        final relatedList = _getRelatedNews(allNews);
+
+        // 5. Hide the whole section if no related news found
+        if (relatedList.isEmpty) {
+          return const SizedBox.shrink();
+        }
+
+        return Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const SizedBox(height: 10),
+            Divider(color: borderDark, thickness: 1),
+            const SizedBox(height: 16),
+            Row(
+              children: [
+                Container(
+                  width: 4,
+                  height: 18,
+                  decoration: BoxDecoration(
+                    color: neonGreen,
+                    borderRadius: BorderRadius.circular(2),
+                  ),
+                ),
+                const SizedBox(width: 8),
+                Text(
+                  'Related News',
+                  style: TextStyle(
+                    color: textWhite,
+                    fontWeight: FontWeight.bold,
+                    fontSize: 18,
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 10),
+            ListView.separated(
+              shrinkWrap: true,
+              physics: const NeverScrollableScrollPhysics(),
+              itemCount: relatedList.length,
+              separatorBuilder: (_, __) => const SizedBox(height: 10),
+              itemBuilder: (context, index) {
+                final item = relatedList[index];
+                return Material(
+                  color: Colors.transparent,
+                  child: InkWell(
+                    onTap: () {
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (_) => NewsDetailScreen(news: item),
+                        ),
+                      );
+                    },
+                    borderRadius: BorderRadius.circular(12),
+                    splashColor: neonGreen.withOpacity(0.15),
+                    highlightColor: neonGreen.withOpacity(0.08),
+                    child: Container(
+                      height: 100,
+                      decoration: BoxDecoration(
+                        color: cardDark,
+                        borderRadius: BorderRadius.circular(12),
+                        border: Border.all(color: borderDark),
+                      ),
+                      child: Row(
+                        children: [
+                          // Thumbnail Image
+                          ClipRRect(
+                            borderRadius: const BorderRadius.horizontal(left: Radius.circular(11)),
+                            child: SizedBox(
+                              width: 110,
+                              height: double.infinity,
+                              child: Stack(
+                                fit: StackFit.expand,
+                                children: [
+                                  AppImageView(
+                                    imageUrl: item.imageUrl,
+                                    fit: BoxFit.cover,
+                                  ),
+                                  if (item.videoUrl != null && item.videoUrl!.isNotEmpty)
+                                    Center(
+                                      child: Container(
+                                        padding: const EdgeInsets.all(4),
+                                        decoration: BoxDecoration(
+                                          color: Colors.black.withOpacity(0.65),
+                                          shape: BoxShape.circle,
+                                          border: Border.all(color: alertRed, width: 1.2),
+                                        ),
+                                        child: Icon(
+                                          Icons.play_arrow_rounded,
+                                          color: alertRed,
+                                          size: 16,
+                                        ),
+                                      ),
+                                    ),
+                                ],
+                              ),
+                            ),
+                          ),
+                          // Content Info
+                          Expanded(
+                            child: Padding(
+                              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                children: [
+                                  Row(
+                                    children: [
+                                      Container(
+                                        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                                        decoration: BoxDecoration(
+                                          color: neonGreen.withOpacity(0.15),
+                                          borderRadius: BorderRadius.circular(4),
+                                          border: Border.all(color: neonGreen.withOpacity(0.5)),
+                                        ),
+                                        child: Text(
+                                          item.category.toUpperCase(),
+                                          style: TextStyle(
+                                            color: neonGreen,
+                                            fontSize: 9,
+                                            fontWeight: FontWeight.w900,
+                                          ),
+                                        ),
+                                      ),
+                                      const Spacer(),
+                                      Text(
+                                        item.timeAgo,
+                                        style: TextStyle(color: textGray, fontSize: 10),
+                                      ),
+                                    ],
+                                  ),
+                                  Text(
+                                    item.title,
+                                    maxLines: 2,
+                                    overflow: TextOverflow.ellipsis,
+                                    style: TextStyle(
+                                      color: textWhite,
+                                      fontSize: 13,
+                                      fontWeight: FontWeight.w800,
+                                      height: 1.25,
+                                    ),
+                                  ),
+                                  Row(
+                                    children: [
+                                      Icon(Icons.visibility_outlined, color: textGray, size: 12),
+                                      const SizedBox(width: 4),
+                                      Text(
+                                        '${item.views} views',
+                                        style: TextStyle(color: textGray, fontSize: 10),
+                                      ),
+                                    ],
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                );
+              },
+            ),
+            const SizedBox(height: 20),
+          ],
+        );
+      },
     );
   }
 }
