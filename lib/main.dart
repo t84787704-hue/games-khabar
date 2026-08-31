@@ -5,11 +5,14 @@ import 'screens/admin_login_screen.dart';
 import 'screens/admin_dashboard_screen.dart';
 import 'screens/add_news_screen.dart';
 import 'services/notification_service.dart';
+import 'services/theme_service.dart';
 import 'firebase_options.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
   
+  await ThemeService.init();
+
   try {
     await Firebase.initializeApp(
       options: DefaultFirebaseOptions.currentPlatform,
@@ -27,23 +30,23 @@ class GamesKhabarApp extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return MaterialApp(
-      navigatorKey: NotificationService.navigatorKey,
-      title: 'Games Khabar',
-      debugShowCheckedModeBanner: false,
-      theme: ThemeData.dark().copyWith(
-        scaffoldBackgroundColor: const Color(0xFF0A0A0A),
-        primaryColor: const Color(0xFF00FF88),
-        appBarTheme: const AppBarTheme(
-          backgroundColor: Color(0xFF141414),
-          elevation: 0,
-        ),
-      ),
-      home: const HomeScreen(),
-      routes: {
-        '/admin-login': (context) => const AdminLoginScreen(),
-        '/admin-dashboard': (context) => const AdminDashboardScreen(),
-        '/add-news': (context) => const AddNewsScreen(),
+    return ValueListenableBuilder<ThemeMode>(
+      valueListenable: ThemeService.themeModeNotifier,
+      builder: (context, currentMode, _) {
+        return MaterialApp(
+          navigatorKey: NotificationService.navigatorKey,
+          title: 'Games Khabar',
+          debugShowCheckedModeBanner: false,
+          theme: ThemeService.lightTheme,
+          darkTheme: ThemeService.darkTheme,
+          themeMode: currentMode,
+          home: const HomeScreen(),
+          routes: {
+            '/admin-login': (context) => const AdminLoginScreen(),
+            '/admin-dashboard': (context) => const AdminDashboardScreen(),
+            '/add-news': (context) => const AddNewsScreen(),
+          },
+        );
       },
     );
   }

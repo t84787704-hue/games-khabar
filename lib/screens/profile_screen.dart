@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import '../utils/admin_security.dart';
 import '../services/bookmark_service.dart';
+import '../services/theme_service.dart';
 import 'admin_login_screen.dart';
 import 'saved_news_screen.dart';
 import 'about_us_screen.dart';
@@ -341,6 +342,35 @@ class _ProfileScreenState extends State<ProfileScreen> {
                       activeColor: neonGreen,
                       onChanged: (_) {},
                     ),
+                  ),
+                  const Divider(color: borderDark, height: 1),
+                  ValueListenableBuilder<ThemeMode>(
+                    valueListenable: ThemeService.themeModeNotifier,
+                    builder: (context, mode, _) {
+                      final isDark = mode == ThemeMode.dark;
+                      return ListTile(
+                        leading: Icon(
+                          isDark ? Icons.dark_mode_rounded : Icons.light_mode_rounded,
+                          color: neonGreen,
+                          size: 22,
+                        ),
+                        title: const Text(
+                          'Day & Night Mode',
+                          style: TextStyle(color: textWhite, fontSize: 14, fontWeight: FontWeight.bold),
+                        ),
+                        subtitle: Text(
+                          isDark ? 'Dark Theme (Night Mode)' : 'Light Theme (Day Mode)',
+                          style: const TextStyle(color: textGray, fontSize: 12),
+                        ),
+                        trailing: Switch(
+                          value: isDark,
+                          activeColor: neonGreen,
+                          onChanged: (val) {
+                            ThemeService.setTheme(val);
+                          },
+                        ),
+                      );
+                    },
                   ),
                   const Divider(color: borderDark, height: 1),
                   ListTile(
