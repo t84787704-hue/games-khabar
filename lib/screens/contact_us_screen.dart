@@ -1,18 +1,19 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:url_launcher/url_launcher.dart';
+import '../services/theme_service.dart';
 
 class ContactUsScreen extends StatelessWidget {
   const ContactUsScreen({super.key});
 
-  static const Color bgDark = Color(0xFF0A0A0A);
-  static const Color appBarDark = Color(0xFF141414);
-  static const Color primaryGreen = Color(0xFF00FF88);
-  static const Color cardDark = Color(0xFF1E1E24);
-  static const Color cardDark2 = Color(0xFF15151A);
-  static const Color borderDark = Color(0xFF2E2E38);
-  static const Color textWhite = Color(0xFFFFFFFF);
-  static const Color textGray = Color(0xFF9E9EA7);
+  Color get bgDark => ThemeService.bg;
+  Color get appBarDark => ThemeService.appBarBg;
+  Color get primaryGreen => ThemeService.primaryGreen;
+  Color get cardDark => ThemeService.card;
+  Color get cardDark2 => ThemeService.cardSecondary;
+  Color get borderDark => ThemeService.border;
+  Color get textWhite => ThemeService.textPrimary;
+  Color get textGray => ThemeService.textSecondary;
 
   static const String contactEmail = 'gameskhabar.help@gmail.com';
   static const String instagramHandle = '@gameskhabar';
@@ -57,16 +58,16 @@ class ContactUsScreen extends StatelessWidget {
         behavior: SnackBarBehavior.floating,
         shape: RoundedRectangleBorder(
           borderRadius: BorderRadius.circular(10),
-          side: const BorderSide(color: primaryGreen, width: 1.2),
+          side: BorderSide(color: primaryGreen, width: 1.2),
         ),
         content: Row(
           children: [
-            const Icon(Icons.check_circle_rounded, color: primaryGreen, size: 20),
+            Icon(Icons.check_circle_rounded, color: primaryGreen, size: 20),
             const SizedBox(width: 10),
             Expanded(
               child: Text(
                 message,
-                style: const TextStyle(color: textWhite, fontWeight: FontWeight.bold, fontSize: 13),
+                style: TextStyle(color: textWhite, fontWeight: FontWeight.bold, fontSize: 13),
               ),
             ),
           ],
@@ -78,139 +79,144 @@ class ContactUsScreen extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: bgDark,
-      appBar: AppBar(
-        backgroundColor: appBarDark,
-        elevation: 0,
-        centerTitle: true,
-        leading: IconButton(
-          icon: const Icon(Icons.arrow_back_ios_new_rounded, color: primaryGreen, size: 20),
-          onPressed: () => Navigator.pop(context),
-        ),
-        title: const Text(
-          'Contact Us',
-          style: TextStyle(
-            color: textWhite,
-            fontWeight: FontWeight.w900,
-            fontSize: 18,
-          ),
-        ),
-      ),
-      body: SingleChildScrollView(
-        padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 24),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            // Intro header card
-            Container(
-              width: double.infinity,
-              padding: const EdgeInsets.all(18),
-              decoration: BoxDecoration(
-                color: cardDark,
-                borderRadius: BorderRadius.circular(16),
-                border: Border.all(color: borderDark),
-              ),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: const [
-                  Text(
-                    'Get in Touch with Games Khabar',
-                    style: TextStyle(
-                      color: textWhite,
-                      fontWeight: FontWeight.w900,
-                      fontSize: 16,
-                    ),
-                  ),
-                  SizedBox(height: 6),
-                  Text(
-                    'Have gaming news tips, partnership inquiries, or need support? Reach out to us directly through email or social media.',
-                    style: TextStyle(
-                      color: textGray,
-                      fontSize: 13,
-                      height: 1.5,
-                    ),
-                  ),
-                ],
-              ),
+    return ValueListenableBuilder<ThemeMode>(
+      valueListenable: ThemeService.themeModeNotifier,
+      builder: (context, _, __) {
+        return Scaffold(
+          backgroundColor: bgDark,
+          appBar: AppBar(
+            backgroundColor: appBarDark,
+            elevation: 0,
+            centerTitle: true,
+            leading: IconButton(
+              icon: Icon(Icons.arrow_back_ios_new_rounded, color: primaryGreen, size: 20),
+              onPressed: () => Navigator.pop(context),
             ),
-            const SizedBox(height: 24),
-
-            const Text(
-              'Direct Channels',
+            title: Text(
+              'Contact Us',
               style: TextStyle(
                 color: textWhite,
-                fontSize: 15,
                 fontWeight: FontWeight.w900,
+                fontSize: 18,
               ),
             ),
-            const SizedBox(height: 12),
-
-            // Email Card
-            _buildContactCard(
-              context: context,
-              icon: Icons.email_rounded,
-              title: 'Official Email Support',
-              subtitle: contactEmail,
-              actionLabel: 'Send Email',
-              onAction: () => _launchEmail(context),
-              onCopy: () => _copyToClipboard(context, contactEmail, 'Email copied to clipboard!'),
-            ),
-
-            const SizedBox(height: 14),
-
-            // Instagram Card
-            _buildContactCard(
-              context: context,
-              icon: Icons.camera_alt_rounded,
-              title: 'Instagram Official',
-              subtitle: '$instagramHandle • Daily Gaming Updates & Reels',
-              actionLabel: 'Open Instagram',
-              onAction: () => _launchInstagram(context),
-              onCopy: () => _copyToClipboard(context, instagramHandle, 'Instagram handle copied!'),
-            ),
-
-            const SizedBox(height: 28),
-
-            // Response Time Card
-            Container(
-              padding: const EdgeInsets.all(16),
-              decoration: BoxDecoration(
-                color: cardDark2,
-                borderRadius: BorderRadius.circular(14),
-                border: Border.all(color: primaryGreen.withOpacity(0.25)),
-              ),
-              child: Row(
-                children: [
-                  const Icon(Icons.access_time_rounded, color: primaryGreen, size: 22),
-                  const SizedBox(width: 12),
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: const [
-                        Text(
-                          'Quick Response Promise',
-                          style: TextStyle(
-                            color: textWhite,
-                            fontWeight: FontWeight.bold,
-                            fontSize: 13,
-                          ),
-                        ),
-                        SizedBox(height: 2),
-                        Text(
-                          'We typically respond to inquiries within 24 to 48 hours.',
-                          style: TextStyle(color: textGray, fontSize: 11.5),
-                        ),
-                      ],
-                    ),
+          ),
+          body: SingleChildScrollView(
+            padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 24),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                // Intro header card
+                Container(
+                  width: double.infinity,
+                  padding: const EdgeInsets.all(18),
+                  decoration: BoxDecoration(
+                    color: cardDark,
+                    borderRadius: BorderRadius.circular(16),
+                    border: Border.all(color: borderDark),
                   ),
-                ],
-              ),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        'Get in Touch with Games Khabar',
+                        style: TextStyle(
+                          color: textWhite,
+                          fontWeight: FontWeight.w900,
+                          fontSize: 16,
+                        ),
+                      ),
+                      const SizedBox(height: 6),
+                      Text(
+                        'Have gaming news tips, partnership inquiries, or need support? Reach out to us directly through email or social media.',
+                        style: TextStyle(
+                          color: textGray,
+                          fontSize: 13,
+                          height: 1.5,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(height: 24),
+
+                Text(
+                  'Direct Channels',
+                  style: TextStyle(
+                    color: textWhite,
+                    fontSize: 15,
+                    fontWeight: FontWeight.w900,
+                  ),
+                ),
+                const SizedBox(height: 12),
+
+                // Email Card
+                _buildContactCard(
+                  context: context,
+                  icon: Icons.email_rounded,
+                  title: 'Official Email Support',
+                  subtitle: contactEmail,
+                  actionLabel: 'Send Email',
+                  onAction: () => _launchEmail(context),
+                  onCopy: () => _copyToClipboard(context, contactEmail, 'Email copied to clipboard!'),
+                ),
+
+                const SizedBox(height: 14),
+
+                // Instagram Card
+                _buildContactCard(
+                  context: context,
+                  icon: Icons.camera_alt_rounded,
+                  title: 'Instagram Official',
+                  subtitle: '$instagramHandle • Daily Gaming Updates & Reels',
+                  actionLabel: 'Open Instagram',
+                  onAction: () => _launchInstagram(context),
+                  onCopy: () => _copyToClipboard(context, instagramHandle, 'Instagram handle copied!'),
+                ),
+
+                const SizedBox(height: 28),
+
+                // Response Time Card
+                Container(
+                  padding: const EdgeInsets.all(16),
+                  decoration: BoxDecoration(
+                    color: cardDark2,
+                    borderRadius: BorderRadius.circular(14),
+                    border: Border.all(color: primaryGreen.withOpacity(0.25)),
+                  ),
+                  child: Row(
+                    children: [
+                      Icon(Icons.access_time_rounded, color: primaryGreen, size: 22),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              'Quick Response Promise',
+                              style: TextStyle(
+                                color: textWhite,
+                                fontWeight: FontWeight.bold,
+                                fontSize: 13,
+                              ),
+                            ),
+                            const SizedBox(height: 2),
+                            Text(
+                              'We typically respond to inquiries within 24 to 48 hours.',
+                              style: TextStyle(color: textGray, fontSize: 11.5),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(height: 20),
+              ],
             ),
-            const SizedBox(height: 20),
-          ],
-        ),
-      ),
+          ),
+        );
+      },
     );
   }
 
@@ -250,7 +256,7 @@ class ContactUsScreen extends StatelessWidget {
                   children: [
                     Text(
                       title,
-                      style: const TextStyle(
+                      style: TextStyle(
                         color: textWhite,
                         fontWeight: FontWeight.bold,
                         fontSize: 14,
@@ -259,7 +265,7 @@ class ContactUsScreen extends StatelessWidget {
                     const SizedBox(height: 2),
                     Text(
                       subtitle,
-                      style: const TextStyle(
+                      style: TextStyle(
                         color: primaryGreen,
                         fontSize: 12.5,
                         fontWeight: FontWeight.w600,
@@ -296,14 +302,14 @@ class ContactUsScreen extends StatelessWidget {
               ),
               const SizedBox(width: 10),
               IconButton(
-                icon: const Icon(Icons.copy_rounded, color: textGray, size: 20),
+                icon: Icon(Icons.copy_rounded, color: textGray, size: 20),
                 tooltip: 'Copy',
                 onPressed: onCopy,
                 style: IconButton.styleFrom(
                   backgroundColor: cardDark2,
                   shape: RoundedRectangleBorder(
                     borderRadius: BorderRadius.circular(10),
-                    side: const BorderSide(color: borderDark),
+                    side: BorderSide(color: borderDark),
                   ),
                 ),
               ),

@@ -7,6 +7,7 @@ import '../models/news_model.dart';
 import '../services/firestore_service.dart';
 import '../services/bookmark_service.dart';
 import '../services/notification_service.dart';
+import '../services/theme_service.dart';
 import '../widgets/app_image_view.dart';
 import 'news_detail_screen.dart';
 import 'saved_news_screen.dart';
@@ -28,13 +29,13 @@ class _HomeScreenState extends State<HomeScreen> {
   String _searchQuery = '';
   final TextEditingController _searchController = TextEditingController();
 
-  static const Color bgDark = Color(0xFF0A0A0A);
-  static const Color cardDark = Color(0xFF1E1E24);
-  static const Color cardDark2 = Color(0xFF15151A);
-  static const Color borderDark = Color(0xFF2E2E38);
-  static const Color neonGreen = Color(0xFF00FF88);
-  static const Color textWhite = Color(0xFFFFFFFF);
-  static const Color textGray = Color(0xFF9E9EA7);
+  Color get bgDark => ThemeService.bg;
+  Color get cardDark => ThemeService.card;
+  Color get cardDark2 => ThemeService.cardSecondary;
+  Color get borderDark => ThemeService.border;
+  Color get neonGreen => ThemeService.primaryGreen;
+  Color get textWhite => ThemeService.textPrimary;
+  Color get textGray => ThemeService.textSecondary;
 
   @override
   void initState() {
@@ -216,15 +217,18 @@ class _HomeScreenState extends State<HomeScreen> {
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: bgDark,
-      bottomNavigationBar: Container(
-        decoration: const BoxDecoration(
-          color: cardDark,
-          border: Border(
-            top: BorderSide(color: borderDark, width: 1),
-          ),
-        ),
+    return ValueListenableBuilder<ThemeMode>(
+      valueListenable: ThemeService.themeModeNotifier,
+      builder: (context, _, __) {
+        return Scaffold(
+          backgroundColor: bgDark,
+          bottomNavigationBar: Container(
+            decoration: BoxDecoration(
+              color: cardDark,
+              border: Border(
+                top: BorderSide(color: borderDark, width: 1),
+              ),
+            ),
         child: ValueListenableBuilder<Set<String>>(
           valueListenable: BookmarkService.bookmarkedIdsNotifier,
           builder: (context, bookmarkedIds, _) {
@@ -1080,9 +1084,9 @@ class _HomeScreenState extends State<HomeScreen> {
                     padding: const EdgeInsets.all(40.0),
                     child: Center(
                       child: Column(
-                        children: const [
+                        children: [
                           Icon(Icons.search_off_rounded, color: textGray, size: 48),
-                          SizedBox(height: 12),
+                          const SizedBox(height: 12),
                           Text(
                             'No articles found',
                             style: TextStyle(color: textWhite, fontWeight: FontWeight.bold),
@@ -1098,5 +1102,7 @@ class _HomeScreenState extends State<HomeScreen> {
       },
     ),
   );
-}
+      },
+    );
+  }
 }

@@ -22,14 +22,14 @@ class _ProfileScreenState extends State<ProfileScreen> {
   bool _adminCardRevealed = false;
   bool _adminOptionUnlocked = false;
 
-  static const Color neonGreen = Color(0xFF00FF88);
-  static const Color bgDark = Color(0xFF0A0A0F);
-  static const Color cardDark = Color(0xFF1E1E24);
-  static const Color cardDark2 = Color(0xFF15151A);
-  static const Color borderDark = Color(0xFF2E2E38);
-  static const Color alertRed = Color(0xFFFF4655);
-  static const Color textWhite = Color(0xFFFFFFFF);
-  static const Color textGray = Color(0xFF9E9EA7);
+  Color get neonGreen => ThemeService.primaryGreen;
+  Color get bgDark => ThemeService.bg;
+  Color get cardDark => ThemeService.card;
+  Color get cardDark2 => ThemeService.cardSecondary;
+  Color get borderDark => ThemeService.border;
+  Color get alertRed => const Color(0xFFFF4655);
+  Color get textWhite => ThemeService.textPrimary;
+  Color get textGray => ThemeService.textSecondary;
 
   @override
   void initState() {
@@ -134,24 +134,27 @@ class _ProfileScreenState extends State<ProfileScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final isCurrentAdmin = isAdminUser();
-    final userEmail = AdminSession.adminEmail;
+    return ValueListenableBuilder<ThemeMode>(
+      valueListenable: ThemeService.themeModeNotifier,
+      builder: (context, _, __) {
+        final isCurrentAdmin = isAdminUser();
+        final userEmail = AdminSession.adminEmail;
 
-    return Scaffold(
-      backgroundColor: bgDark,
-      appBar: AppBar(
-        backgroundColor: cardDark,
-        elevation: 0,
-        centerTitle: true,
-        title: const Text(
-          'Profile & Settings',
-          style: TextStyle(
-            color: textWhite,
-            fontWeight: FontWeight.w900,
-            fontSize: 18,
+        return Scaffold(
+          backgroundColor: bgDark,
+          appBar: AppBar(
+            backgroundColor: cardDark,
+            elevation: 0,
+            centerTitle: true,
+            title: Text(
+              'Profile & Settings',
+              style: TextStyle(
+                color: textWhite,
+                fontWeight: FontWeight.w900,
+                fontSize: 18,
+              ),
+            ),
           ),
-        ),
-      ),
       body: SingleChildScrollView(
         padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 20),
         child: Column(
@@ -601,6 +604,8 @@ class _ProfileScreenState extends State<ProfileScreen> {
           ],
         ),
       ),
+    );
+      },
     );
   }
 }

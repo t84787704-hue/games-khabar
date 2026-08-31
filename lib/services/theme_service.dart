@@ -10,6 +10,17 @@ class ThemeService {
 
   static bool get isDarkMode => themeModeNotifier.value == ThemeMode.dark;
 
+  // Dynamic Theme Colors based on Day / Night Mode
+  static Color get bg => isDarkMode ? const Color(0xFF0A0A0A) : const Color(0xFFF7F8FA);
+  static Color get appBarBg => isDarkMode ? const Color(0xFF141414) : const Color(0xFFFFFFFF);
+  static Color get card => isDarkMode ? const Color(0xFF1E1E24) : const Color(0xFFFFFFFF);
+  static Color get cardSecondary => isDarkMode ? const Color(0xFF15151A) : const Color(0xFFF0F2F5);
+  static Color get border => isDarkMode ? const Color(0xFF2E2E38) : const Color(0xFFE2E4E9);
+  static Color get textPrimary => isDarkMode ? const Color(0xFFFFFFFF) : const Color(0xFF111111);
+  static Color get textSecondary => isDarkMode ? const Color(0xFF9E9EA7) : const Color(0xFF6B7280);
+  static Color get primaryGreen => isDarkMode ? const Color(0xFF00FF88) : const Color(0xFF00B05C);
+  static Color get bottomNavBg => isDarkMode ? const Color(0xFF141414) : const Color(0xFFFFFFFF);
+
   /// Initialize theme from SharedPreferences on app startup
   static Future<void> init() async {
     try {
