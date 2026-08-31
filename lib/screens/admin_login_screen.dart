@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
+import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import '../utils/admin_security.dart';
+import '../firebase_options.dart';
 
 class AdminLoginScreen extends StatefulWidget {
   const AdminLoginScreen({super.key});
@@ -38,6 +40,20 @@ class _AdminLoginScreenState extends State<AdminLoginScreen> {
     final password = _passwordController.text.trim();
 
     try {
+      // Ensure Firebase is initialized
+      if (Firebase.apps.isEmpty) {
+        try {
+          await Firebase.initializeApp();
+        } catch (_) {
+          if (DefaultFirebaseOptions.currentPlatform.apiKey.isNotEmpty &&
+              !DefaultFirebaseOptions.currentPlatform.apiKey.contains('Dummy')) {
+            await Firebase.initializeApp(
+              options: DefaultFirebaseOptions.currentPlatform,
+            );
+          }
+        }
+      }
+
       // Firebase Authentication
       final userCredential = await FirebaseAuth.instance.signInWithEmailAndPassword(
         email: email,
@@ -63,7 +79,7 @@ class _AdminLoginScreenState extends State<AdminLoginScreen> {
             break;
           case 'wrong-password':
           case 'invalid-credential':
-            _errorMessage = 'Invalid email or password.';
+            _errorMessage = 'Invalid email or password. Please re-check.';
             break;
           case 'invalid-email':
             _errorMessage = 'Please enter a valid email address.';
@@ -72,18 +88,32 @@ class _AdminLoginScreenState extends State<AdminLoginScreen> {
             _errorMessage = 'This user account has been disabled.';
             break;
           case 'too-many-requests':
-            _errorMessage = 'Too many failed attempts. Please try again later.';
+            _errorMessage = 'Too many failed attempts. Please wait a moment.';
             break;
           case 'network-request-failed':
-            _errorMessage = 'Network connection error. Check your internet.';
+            _errorMessage = 'Network connection error. Check internet connection.';
+            break;
+          case 'api-key-not-valid':
+            _errorMessage = 'Firebase API key is invalid or not configured.';
             break;
           default:
-            _errorMessage = e.message ?? 'Login failed. Please verify credentials.';
+            _errorMessage = e.message ?? 'Login failed (${e.code}). Please verify.';
         }
       });
-    } catch (e) {
+    } on FirebaseException catch (e) {
       setState(() {
-        _errorMessage = 'An error occurred during authentication. Please retry.';
+        _errorMessage = e.message ?? 'Firebase service error (${e.code}).';
+      });
+    } catch (e) {
+      final errStr = e.toString();
+      setState(() {
+        if (errStr.contains('no-app') || errStr.contains('not initialized')) {
+          _errorMessage = 'Firebase is not initialized. Please check connection.';
+        } else if (errStr.contains('network') || errStr.contains('SocketException')) {
+          _errorMessage = 'Network error. Please check your internet.';
+        } else {
+          _errorMessage = 'Authentication error: ${errStr.replaceAll('Exception:', '').trim()}';
+        }
       });
     } finally {
       if (mounted) {
