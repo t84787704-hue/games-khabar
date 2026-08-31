@@ -3,24 +3,14 @@ import 'package:flutter/foundation.dart' show defaultTargetPlatform, kIsWeb, Tar
 
 class DefaultFirebaseOptions {
   static FirebaseOptions get currentPlatform {
-    if (kIsWeb) {
-      return android;
-    }
-    switch (defaultTargetPlatform) {
-      case TargetPlatform.android:
-        return android;
-      case TargetPlatform.iOS:
-        return android;
-      default:
-        return android;
-    }
+    return android;
   }
 
   static const FirebaseOptions android = FirebaseOptions(
-    apiKey: 'AIzaSyDummy_Replace_With_Real_Key',
-    appId: '1:1234567890:android:abcdef1234567890abcdef',
-    messagingSenderId: '1234567890',
-    projectId: 'games-khabar-dummy',
-    storageBucket: 'games-khabar-dummy.appspot.com',
+    apiKey: 'AIzaSyC9EAEGzSBEVoMY_p6Pq8uIOk6fvj_QsHg',
+    appId: '1:798094452885:android:afc18994563bf03d97139c',
+    messagingSenderId: '798094452885',
+    projectId: 'games-khabar',
+    storageBucket: 'games-khabar.firebasestorage.app',
   );
 }
