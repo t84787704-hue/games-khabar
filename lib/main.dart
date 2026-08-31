@@ -4,30 +4,36 @@ import 'screens/home_screen.dart';
 import 'screens/admin_login_screen.dart';
 import 'screens/admin_dashboard_screen.dart';
 import 'screens/add_news_screen.dart';
+import 'services/notification_service.dart';
+import 'firebase_options.dart';
 
-void main() async {
+void main() {
   WidgetsFlutterBinding.ensureInitialized();
-  await Firebase.initializeApp();
-  runApp(const MyApp());
+  runApp(const GamesKhabarApp());
 }
 
-class MyApp extends StatelessWidget {
-  const MyApp({super.key});
+class GamesKhabarApp extends StatelessWidget {
+  const GamesKhabarApp({super.key});
 
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
-      debugShowCheckedModeBanner: false,
+      navigatorKey: NotificationService.navigatorKey,
       title: 'Games Khabar',
-      theme: ThemeData(
-        primarySwatch: Colors.blue,
-        useMaterial3: true,
+      debugShowCheckedModeBanner: false,
+      theme: ThemeData.dark().copyWith(
+        scaffoldBackgroundColor: const Color(0xFF0A0A0A),
+        primaryColor: const Color(0xFF00FF88),
+        appBarTheme: const AppBarTheme(
+          backgroundColor: Color(0xFF141414),
+          elevation: 0,
+        ),
       ),
       home: const HomeScreen(),
       routes: {
-        '/adminLogin': (context) => const AdminLoginScreen(),
-        '/adminDashboard': (context) => const AdminDashboardScreen(),
-        '/addNews': (context) => const AddNewsScreen(),
+        '/admin-login': (context) => const AdminLoginScreen(),
+        '/admin-dashboard': (context) => const AdminDashboardScreen(),
+        '/add-news': (context) => const AddNewsScreen(),
       },
     );
   }
