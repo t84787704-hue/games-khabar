@@ -7,12 +7,20 @@ class AdminSession {
   static String? _adminEmail;
 
   static bool get isLoggedIn {
-    final user = FirebaseAuth.instance.currentUser;
-    return (user != null) || _isLoggedIn;
+    try {
+      final user = FirebaseAuth.instance.currentUser;
+      return (user != null) || _isLoggedIn;
+    } catch (_) {
+      return _isLoggedIn;
+    }
   }
 
   static String? get adminEmail {
-    return FirebaseAuth.instance.currentUser?.email ?? _adminEmail;
+    try {
+      return FirebaseAuth.instance.currentUser?.email ?? _adminEmail;
+    } catch (_) {
+      return _adminEmail;
+    }
   }
 
   static void setLoggedIn(String email) {

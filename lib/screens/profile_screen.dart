@@ -131,7 +131,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
   @override
   Widget build(BuildContext context) {
     final isCurrentAdmin = isAdminUser();
-    final userEmail = FirebaseAuth.instance.currentUser?.email ?? AdminSession.adminEmail;
+    final userEmail = AdminSession.adminEmail;
 
     return Scaffold(
       backgroundColor: bgDark,
