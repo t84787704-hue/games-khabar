@@ -44,12 +44,21 @@ class _HomeScreenState extends State<HomeScreen> {
 
   Future<void> _initFirebaseAndServices() async {
     try {
-      await Firebase.initializeApp(
-        options: DefaultFirebaseOptions.currentPlatform,
-      ).timeout(const Duration(seconds: 3));
+      if (Firebase.apps.isEmpty) {
+        if (DefaultFirebaseOptions.currentPlatform.apiKey.isNotEmpty &&
+            !DefaultFirebaseOptions.currentPlatform.apiKey.contains('Dummy')) {
+          await Firebase.initializeApp(
+            options: DefaultFirebaseOptions.currentPlatform,
+          ).timeout(const Duration(seconds: 3));
+        } else {
+          await Firebase.initializeApp().timeout(const Duration(seconds: 3));
+        }
+      }
     } catch (_) {
       try {
-        await Firebase.initializeApp().timeout(const Duration(seconds: 3));
+        if (Firebase.apps.isEmpty) {
+          await Firebase.initializeApp().timeout(const Duration(seconds: 3));
+        }
       } catch (_) {}
     }
 

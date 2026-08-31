@@ -1,12 +1,28 @@
 import 'package:flutter/material.dart';
+import 'package:firebase_core/firebase_core.dart';
 import 'screens/home_screen.dart';
 import 'screens/admin_login_screen.dart';
 import 'screens/admin_dashboard_screen.dart';
 import 'screens/add_news_screen.dart';
 import 'services/notification_service.dart';
+import 'firebase_options.dart';
 
-void main() {
+void main() async {
   WidgetsFlutterBinding.ensureInitialized();
+  try {
+    if (DefaultFirebaseOptions.currentPlatform.apiKey.isNotEmpty &&
+        !DefaultFirebaseOptions.currentPlatform.apiKey.contains('Dummy')) {
+      await Firebase.initializeApp(
+        options: DefaultFirebaseOptions.currentPlatform,
+      );
+    } else {
+      await Firebase.initializeApp();
+    }
+  } catch (_) {
+    try {
+      await Firebase.initializeApp();
+    } catch (_) {}
+  }
   runApp(const GamesKhabarApp());
 }
 
