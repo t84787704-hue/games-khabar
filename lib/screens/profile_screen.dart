@@ -108,9 +108,9 @@ class _ProfileScreenState extends State<ProfileScreen> {
           side: const BorderSide(color: neonGreen, width: 1.5),
         ),
         content: Row(
-          children: const [
+          children: [
             Icon(Icons.lock_open_rounded, color: neonGreen, size: 20),
-            SizedBox(width: 10),
+            const SizedBox(width: 10),
             Expanded(
               child: Text(
                 '🔓 Secret Admin Login revealed!',
@@ -533,21 +533,21 @@ class _ProfileScreenState extends State<ProfileScreen> {
                                     ),
                                   ],
                                 ),
-                                subtitle: const Text(
+                                subtitle: Text(
                                   'Sign in to manage & publish news',
                                   style: TextStyle(color: textGray, fontSize: 12),
                                 ),
                                 trailing: IconButton(
-                                  icon: const Icon(Icons.lock_outline_rounded, color: textGray, size: 18),
+                                  icon: Icon(Icons.lock_outline_rounded, color: textGray, size: 18),
                                   tooltip: 'Hide Admin Login',
                                   onPressed: () {
                                     setState(() {
                                       _adminCardRevealed = false;
                                     });
                                     ScaffoldMessenger.of(context).showSnackBar(
-                                      const SnackBar(
+                                      SnackBar(
                                         backgroundColor: cardDark2,
-                                        duration: Duration(seconds: 1),
+                                        duration: const Duration(seconds: 1),
                                         content: Text('Admin Login hidden', style: TextStyle(color: textGray)),
                                       ),
                                     );
@@ -569,14 +569,14 @@ class _ProfileScreenState extends State<ProfileScreen> {
                               ),
                             ] else ...[
                               ListTile(
-                                leading: const Icon(Icons.logout_rounded, color: alertRed, size: 22),
-                                title: const Text(
+                                leading: Icon(Icons.logout_rounded, color: alertRed, size: 22),
+                                title: Text(
                                   'Sign Out',
                                   style: TextStyle(color: alertRed, fontSize: 14, fontWeight: FontWeight.bold),
                                 ),
                                 subtitle: Text(
                                   'Signed in as $userEmail',
-                                  style: const TextStyle(color: textGray, fontSize: 12),
+                                  style: TextStyle(color: textGray, fontSize: 12),
                                 ),
                                 onTap: () async {
                                   AdminSession.logout();
@@ -586,7 +586,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                                   });
                                   if (mounted) {
                                     ScaffoldMessenger.of(context).showSnackBar(
-                                      const SnackBar(
+                                      SnackBar(
                                         backgroundColor: cardDark2,
                                         content: Text('Signed out successfully', style: TextStyle(color: textWhite)),
                                       ),
