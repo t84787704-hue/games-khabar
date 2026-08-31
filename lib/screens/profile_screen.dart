@@ -4,6 +4,9 @@ import '../utils/admin_security.dart';
 import '../services/bookmark_service.dart';
 import 'admin_login_screen.dart';
 import 'saved_news_screen.dart';
+import 'about_us_screen.dart';
+import 'contact_us_screen.dart';
+import 'privacy_policy_screen.dart';
 
 class ProfileScreen extends StatefulWidget {
   const ProfileScreen({super.key});
@@ -353,6 +356,63 @@ class _ProfileScreenState extends State<ProfileScreen> {
                           backgroundColor: cardDark2,
                           content: Text('Image cache cleared', style: TextStyle(color: neonGreen)),
                         ),
+                      );
+                    },
+                  ),
+                  const Divider(color: borderDark, height: 1),
+                  ListTile(
+                    leading: const Icon(Icons.groups_rounded, color: neonGreen, size: 22),
+                    title: const Text(
+                      'About Us',
+                      style: TextStyle(color: textWhite, fontSize: 14, fontWeight: FontWeight.bold),
+                    ),
+                    subtitle: const Text(
+                      'Games Khabar coverage & esports info',
+                      style: TextStyle(color: textGray, fontSize: 12),
+                    ),
+                    trailing: const Icon(Icons.arrow_forward_ios_rounded, color: textGray, size: 14),
+                    onTap: () {
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(builder: (_) => const AboutUsScreen()),
+                      );
+                    },
+                  ),
+                  const Divider(color: borderDark, height: 1),
+                  ListTile(
+                    leading: const Icon(Icons.support_agent_rounded, color: neonGreen, size: 22),
+                    title: const Text(
+                      'Contact Us',
+                      style: TextStyle(color: textWhite, fontSize: 14, fontWeight: FontWeight.bold),
+                    ),
+                    subtitle: const Text(
+                      'Email & Instagram support channels',
+                      style: TextStyle(color: textGray, fontSize: 12),
+                    ),
+                    trailing: const Icon(Icons.arrow_forward_ios_rounded, color: textGray, size: 14),
+                    onTap: () {
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(builder: (_) => const ContactUsScreen()),
+                      );
+                    },
+                  ),
+                  const Divider(color: borderDark, height: 1),
+                  ListTile(
+                    leading: const Icon(Icons.privacy_tip_outlined, color: neonGreen, size: 22),
+                    title: const Text(
+                      'Privacy Policy',
+                      style: TextStyle(color: textWhite, fontSize: 14, fontWeight: FontWeight.bold),
+                    ),
+                    subtitle: const Text(
+                      'AdMob & Firebase data terms',
+                      style: TextStyle(color: textGray, fontSize: 12),
+                    ),
+                    trailing: const Icon(Icons.arrow_forward_ios_rounded, color: textGray, size: 14),
+                    onTap: () {
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(builder: (_) => const PrivacyPolicyScreen()),
                       );
                     },
                   ),
