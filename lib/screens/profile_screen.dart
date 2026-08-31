@@ -58,7 +58,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
           duration: const Duration(milliseconds: 600),
           content: Text(
             '${5 - _logoTaps.length} more taps to unlock',
-            style: const TextStyle(color: neonGreen, fontSize: 11),
+            style: TextStyle(color: neonGreen, fontSize: 11),
           ),
         ),
       );
@@ -82,7 +82,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
           duration: const Duration(milliseconds: 600),
           content: Text(
             '${7 - _versionTaps.length} more taps to unlock Admin',
-            style: const TextStyle(color: neonGreen, fontSize: 11),
+            style: TextStyle(color: neonGreen, fontSize: 11),
           ),
         ),
       );
@@ -105,7 +105,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
         behavior: SnackBarBehavior.floating,
         shape: RoundedRectangleBorder(
           borderRadius: BorderRadius.circular(10),
-          side: const BorderSide(color: neonGreen, width: 1.5),
+          side: BorderSide(color: neonGreen, width: 1.5),
         ),
         content: Row(
           children: [
@@ -205,7 +205,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                     ),
                   ),
                   const SizedBox(height: 10),
-                  const Text(
+                  Text(
                     'Games Khabar',
                     style: TextStyle(
                       color: textWhite,
@@ -231,7 +231,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                         borderRadius: BorderRadius.circular(6),
                         border: Border.all(color: neonGreen, width: 1),
                       ),
-                      child: const Text(
+                      child: Text(
                         '🛡️ VERIFIED ADMIN',
                         style: TextStyle(
                           color: neonGreen,
@@ -271,9 +271,9 @@ class _ProfileScreenState extends State<ProfileScreen> {
                       color: neonGreen.withOpacity(0.15),
                       borderRadius: BorderRadius.circular(10),
                     ),
-                    child: const Icon(Icons.admin_panel_settings_rounded, color: neonGreen, size: 24),
+                    child: Icon(Icons.admin_panel_settings_rounded, color: neonGreen, size: 24),
                   ),
-                  title: const Text(
+                  title: Text(
                     'Admin Management Panel',
                     style: TextStyle(
                       color: textWhite,
@@ -281,11 +281,11 @@ class _ProfileScreenState extends State<ProfileScreen> {
                       fontSize: 15,
                     ),
                   ),
-                  subtitle: const Text(
+                  subtitle: Text(
                     'Manage, publish, edit & delete news articles',
                     style: TextStyle(color: textGray, fontSize: 12),
                   ),
-                  trailing: const Icon(Icons.arrow_forward_ios_rounded, color: neonGreen, size: 16),
+                  trailing: Icon(Icons.arrow_forward_ios_rounded, color: neonGreen, size: 16),
                   onTap: _openAdminDashboard,
                 ),
               ),
@@ -304,16 +304,16 @@ class _ProfileScreenState extends State<ProfileScreen> {
                     valueListenable: BookmarkService.bookmarkedIdsNotifier,
                     builder: (context, ids, _) {
                       return ListTile(
-                        leading: const Icon(Icons.bookmark_rounded, color: neonGreen, size: 22),
-                        title: const Text(
+                        leading: Icon(Icons.bookmark_rounded, color: neonGreen, size: 22),
+                        title: Text(
                           'Saved Articles',
                           style: TextStyle(color: textWhite, fontSize: 14, fontWeight: FontWeight.bold),
                         ),
                         subtitle: Text(
                           ids.isEmpty ? 'No articles saved yet' : '${ids.length} saved articles',
-                          style: const TextStyle(color: textGray, fontSize: 12),
+                          style: TextStyle(color: textGray, fontSize: 12),
                         ),
-                        trailing: const Icon(Icons.arrow_forward_ios_rounded, color: textGray, size: 14),
+                        trailing: Icon(Icons.arrow_forward_ios_rounded, color: textGray, size: 14),
                         onTap: () {
                           Navigator.push(
                             context,
@@ -329,14 +329,14 @@ class _ProfileScreenState extends State<ProfileScreen> {
                       );
                     },
                   ),
-                  const Divider(color: borderDark, height: 1),
+                  Divider(color: borderDark, height: 1),
                   ListTile(
-                    leading: const Icon(Icons.notifications_active_outlined, color: neonGreen, size: 22),
-                    title: const Text(
+                    leading: Icon(Icons.notifications_active_outlined, color: neonGreen, size: 22),
+                    title: Text(
                       'Gaming News Alerts',
                       style: TextStyle(color: textWhite, fontSize: 14, fontWeight: FontWeight.bold),
                     ),
-                    subtitle: const Text(
+                    subtitle: Text(
                       'Instant notifications for BGMI & esports updates',
                       style: TextStyle(color: textGray, fontSize: 12),
                     ),
@@ -346,7 +346,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                       onChanged: (_) {},
                     ),
                   ),
-                  const Divider(color: borderDark, height: 1),
+                  Divider(color: borderDark, height: 1),
                   ValueListenableBuilder<ThemeMode>(
                     valueListenable: ThemeService.themeModeNotifier,
                     builder: (context, mode, _) {
@@ -357,13 +357,13 @@ class _ProfileScreenState extends State<ProfileScreen> {
                           color: neonGreen,
                           size: 22,
                         ),
-                        title: const Text(
+                        title: Text(
                           'Day & Night Mode',
                           style: TextStyle(color: textWhite, fontSize: 14, fontWeight: FontWeight.bold),
                         ),
                         subtitle: Text(
                           isDark ? 'Dark Theme (Night Mode)' : 'Light Theme (Day Mode)',
-                          style: const TextStyle(color: textGray, fontSize: 12),
+                          style: TextStyle(color: textGray, fontSize: 12),
                         ),
                         trailing: Switch(
                           value: isDark,
@@ -375,35 +375,35 @@ class _ProfileScreenState extends State<ProfileScreen> {
                       );
                     },
                   ),
-                  const Divider(color: borderDark, height: 1),
+                  Divider(color: borderDark, height: 1),
                   ListTile(
-                    leading: const Icon(Icons.cleaning_services_rounded, color: neonGreen, size: 22),
-                    title: const Text(
+                    leading: Icon(Icons.cleaning_services_rounded, color: neonGreen, size: 22),
+                    title: Text(
                       'Clear Image Cache',
                       style: TextStyle(color: textWhite, fontSize: 14, fontWeight: FontWeight.bold),
                     ),
-                    trailing: const Icon(Icons.arrow_forward_ios_rounded, color: textGray, size: 14),
+                    trailing: Icon(Icons.arrow_forward_ios_rounded, color: textGray, size: 14),
                     onTap: () {
                       ScaffoldMessenger.of(context).showSnackBar(
-                        const SnackBar(
+                        SnackBar(
                           backgroundColor: cardDark2,
                           content: Text('Image cache cleared', style: TextStyle(color: neonGreen)),
                         ),
                       );
                     },
                   ),
-                  const Divider(color: borderDark, height: 1),
+                  Divider(color: borderDark, height: 1),
                   ListTile(
-                    leading: const Icon(Icons.groups_rounded, color: neonGreen, size: 22),
-                    title: const Text(
+                    leading: Icon(Icons.groups_rounded, color: neonGreen, size: 22),
+                    title: Text(
                       'About Us',
                       style: TextStyle(color: textWhite, fontSize: 14, fontWeight: FontWeight.bold),
                     ),
-                    subtitle: const Text(
+                    subtitle: Text(
                       'Games Khabar coverage & esports info',
                       style: TextStyle(color: textGray, fontSize: 12),
                     ),
-                    trailing: const Icon(Icons.arrow_forward_ios_rounded, color: textGray, size: 14),
+                    trailing: Icon(Icons.arrow_forward_ios_rounded, color: textGray, size: 14),
                     onTap: () {
                       Navigator.push(
                         context,
@@ -411,18 +411,18 @@ class _ProfileScreenState extends State<ProfileScreen> {
                       );
                     },
                   ),
-                  const Divider(color: borderDark, height: 1),
+                  Divider(color: borderDark, height: 1),
                   ListTile(
-                    leading: const Icon(Icons.support_agent_rounded, color: neonGreen, size: 22),
-                    title: const Text(
+                    leading: Icon(Icons.support_agent_rounded, color: neonGreen, size: 22),
+                    title: Text(
                       'Contact Us',
                       style: TextStyle(color: textWhite, fontSize: 14, fontWeight: FontWeight.bold),
                     ),
-                    subtitle: const Text(
+                    subtitle: Text(
                       'Email & Instagram support channels',
                       style: TextStyle(color: textGray, fontSize: 12),
                     ),
-                    trailing: const Icon(Icons.arrow_forward_ios_rounded, color: textGray, size: 14),
+                    trailing: Icon(Icons.arrow_forward_ios_rounded, color: textGray, size: 14),
                     onTap: () {
                       Navigator.push(
                         context,
@@ -430,18 +430,18 @@ class _ProfileScreenState extends State<ProfileScreen> {
                       );
                     },
                   ),
-                  const Divider(color: borderDark, height: 1),
+                  Divider(color: borderDark, height: 1),
                   ListTile(
-                    leading: const Icon(Icons.privacy_tip_outlined, color: neonGreen, size: 22),
-                    title: const Text(
+                    leading: Icon(Icons.privacy_tip_outlined, color: neonGreen, size: 22),
+                    title: Text(
                       'Privacy Policy',
                       style: TextStyle(color: textWhite, fontSize: 14, fontWeight: FontWeight.bold),
                     ),
-                    subtitle: const Text(
+                    subtitle: Text(
                       'AdMob & Firebase data terms',
                       style: TextStyle(color: textGray, fontSize: 12),
                     ),
-                    trailing: const Icon(Icons.arrow_forward_ios_rounded, color: textGray, size: 14),
+                    trailing: Icon(Icons.arrow_forward_ios_rounded, color: textGray, size: 14),
                     onTap: () {
                       Navigator.push(
                         context,
@@ -449,18 +449,18 @@ class _ProfileScreenState extends State<ProfileScreen> {
                       );
                     },
                   ),
-                  const Divider(color: borderDark, height: 1),
+                  Divider(color: borderDark, height: 1),
                   ListTile(
-                    leading: const Icon(Icons.info_outline_rounded, color: neonGreen, size: 22),
-                    title: const Text(
+                    leading: Icon(Icons.info_outline_rounded, color: neonGreen, size: 22),
+                    title: Text(
                       'App Version',
                       style: TextStyle(color: textWhite, fontSize: 14, fontWeight: FontWeight.bold),
                     ),
-                    subtitle: const Text(
+                    subtitle: Text(
                       'Tap for build info',
                       style: TextStyle(color: textGray, fontSize: 11),
                     ),
-                    trailing: const Text(
+                    trailing: Text(
                       'v1.2.0 (Build 4)',
                       style: TextStyle(color: textGray, fontSize: 13),
                     ),
@@ -506,11 +506,11 @@ class _ProfileScreenState extends State<ProfileScreen> {
                                     color: neonGreen.withOpacity(0.15),
                                     borderRadius: BorderRadius.circular(8),
                                   ),
-                                  child: const Icon(Icons.lock_open_rounded, color: neonGreen, size: 20),
+                                  child: Icon(Icons.lock_open_rounded, color: neonGreen, size: 20),
                                 ),
                                 title: Row(
                                   children: [
-                                    const Text(
+                                    Text(
                                       'Admin Login',
                                       style: TextStyle(color: textWhite, fontSize: 14, fontWeight: FontWeight.bold),
                                     ),
@@ -521,7 +521,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                                         color: neonGreen.withOpacity(0.15),
                                         borderRadius: BorderRadius.circular(4),
                                       ),
-                                      child: const Text(
+                                      child: Text(
                                         'UNLOCKED',
                                         style: TextStyle(
                                           color: neonGreen,

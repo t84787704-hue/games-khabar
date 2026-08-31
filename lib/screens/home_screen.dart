@@ -199,7 +199,7 @@ class _HomeScreenState extends State<HomeScreen> {
                   isSaved
                       ? 'Saved to Bookmarks! 🔖 (Available in Saved)'
                       : 'Removed from Bookmarks',
-                  style: const TextStyle(color: textWhite, fontWeight: FontWeight.bold, fontSize: 12),
+                  style: TextStyle(color: textWhite, fontWeight: FontWeight.bold, fontSize: 12),
                 ),
               ),
             ],
@@ -320,7 +320,7 @@ class _HomeScreenState extends State<HomeScreen> {
                     ),
                   ),
                   const SizedBox(width: 8),
-                  const Text(
+                  Text(
                     'GAMES KHABAR',
                     style: TextStyle(
                       color: textWhite,
@@ -368,11 +368,11 @@ class _HomeScreenState extends State<HomeScreen> {
             return Center(
               child: Column(
                 mainAxisSize: MainAxisSize.min,
-                children: const [
+                children: [
                   CircularProgressIndicator(
                     valueColor: AlwaysStoppedAnimation<Color>(neonGreen),
                   ),
-                  SizedBox(height: 16),
+                  const SizedBox(height: 16),
                   Text(
                     'Loading Khabar...',
                     style: TextStyle(
@@ -399,7 +399,7 @@ class _HomeScreenState extends State<HomeScreen> {
                     Text(
                       "Error: ${snapshot.error}",
                       textAlign: TextAlign.center,
-                      style: const TextStyle(color: textWhite, fontSize: 13),
+                      style: TextStyle(color: textWhite, fontSize: 13),
                     ),
                     const SizedBox(height: 16),
                     ElevatedButton.icon(
@@ -431,9 +431,9 @@ class _HomeScreenState extends State<HomeScreen> {
             return Center(
               child: Column(
                 mainAxisSize: MainAxisSize.min,
-                children: const [
+                children: [
                   Icon(Icons.sports_esports_outlined, color: textGray, size: 64),
-                  SizedBox(height: 16),
+                  const SizedBox(height: 16),
                   Text(
                     'No news yet',
                     style: TextStyle(
@@ -492,7 +492,7 @@ class _HomeScreenState extends State<HomeScreen> {
                       child: TextField(
                         controller: _searchController,
                         autofocus: true,
-                        style: const TextStyle(color: textWhite, fontSize: 14),
+                        style: TextStyle(color: textWhite, fontSize: 14),
                         onChanged: (val) {
                           setState(() {
                             _searchQuery = val;
@@ -500,11 +500,11 @@ class _HomeScreenState extends State<HomeScreen> {
                         },
                         decoration: InputDecoration(
                           hintText: 'Search gaming news, BGMI, Free Fire...',
-                          hintStyle: const TextStyle(color: textGray, fontSize: 13),
-                          prefixIcon: const Icon(Icons.search, color: neonGreen, size: 20),
+                          hintStyle: TextStyle(color: textGray, fontSize: 13),
+                          prefixIcon: Icon(Icons.search, color: neonGreen, size: 20),
                           suffixIcon: _searchQuery.isNotEmpty
                               ? IconButton(
-                                  icon: const Icon(Icons.clear, color: textGray, size: 18),
+                                  icon: Icon(Icons.clear, color: textGray, size: 18),
                                   onPressed: () {
                                     _searchController.clear();
                                     setState(() {
@@ -698,7 +698,7 @@ class _HomeScreenState extends State<HomeScreen> {
                                       featuredNews.title,
                                       maxLines: 2,
                                       overflow: TextOverflow.ellipsis,
-                                      style: const TextStyle(
+                                      style: TextStyle(
                                         color: textWhite,
                                         fontSize: 16,
                                         fontWeight: FontWeight.w900,
@@ -710,18 +710,18 @@ class _HomeScreenState extends State<HomeScreen> {
                                       children: [
                                         Text(
                                           featuredNews.category.toUpperCase(),
-                                          style: const TextStyle(
+                                          style: TextStyle(
                                             color: neonGreen,
                                             fontSize: 10,
                                             fontWeight: FontWeight.bold,
                                           ),
                                         ),
                                         const SizedBox(width: 8),
-                                        const Text('•', style: TextStyle(color: textGray, fontSize: 11)),
+                                        Text('•', style: TextStyle(color: textGray, fontSize: 11)),
                                         const SizedBox(width: 8),
                                         Text(
                                           featuredNews.timeAgo,
-                                          style: const TextStyle(color: textGray, fontSize: 11),
+                                          style: TextStyle(color: textGray, fontSize: 11),
                                         ),
                                       ],
                                     ),
@@ -753,7 +753,7 @@ class _HomeScreenState extends State<HomeScreen> {
                       const SizedBox(width: 8),
                       Text(
                         _selectedCategory == 'All' ? 'LATEST NEWS' : _selectedCategory.toUpperCase(),
-                        style: const TextStyle(
+                        style: TextStyle(
                           color: textWhite,
                           fontSize: 16,
                           fontWeight: FontWeight.w900,
@@ -763,7 +763,7 @@ class _HomeScreenState extends State<HomeScreen> {
                       const Spacer(),
                       Text(
                         '${filteredList.length} articles',
-                        style: const TextStyle(color: textGray, fontSize: 12),
+                        style: TextStyle(color: textGray, fontSize: 12),
                       ),
                     ],
                   ),
@@ -846,7 +846,7 @@ class _HomeScreenState extends State<HomeScreen> {
                                                 ),
                                                 child: Text(
                                                   item.category.toUpperCase(),
-                                                  style: const TextStyle(
+                                                  style: TextStyle(
                                                     color: neonGreen,
                                                     fontSize: 9,
                                                     fontWeight: FontWeight.w900,
@@ -856,7 +856,7 @@ class _HomeScreenState extends State<HomeScreen> {
                                               const Spacer(),
                                               Text(
                                                 item.timeAgo,
-                                                style: const TextStyle(color: textGray, fontSize: 10),
+                                                style: TextStyle(color: textGray, fontSize: 10),
                                               ),
                                             ],
                                           ),
@@ -864,7 +864,7 @@ class _HomeScreenState extends State<HomeScreen> {
                                             item.title,
                                             maxLines: 2,
                                             overflow: TextOverflow.ellipsis,
-                                            style: const TextStyle(
+                                            style: TextStyle(
                                               color: textWhite,
                                               fontSize: 13,
                                               fontWeight: FontWeight.w800,
@@ -873,11 +873,11 @@ class _HomeScreenState extends State<HomeScreen> {
                                           ),
                                           Row(
                                             children: [
-                                              const Icon(Icons.visibility_outlined, color: textGray, size: 12),
+                                              Icon(Icons.visibility_outlined, color: textGray, size: 12),
                                               const SizedBox(width: 4),
                                               Text(
                                                 '${item.views}',
-                                                style: const TextStyle(color: textGray, fontSize: 10),
+                                                style: TextStyle(color: textGray, fontSize: 10),
                                               ),
                                               const Spacer(),
                                               ValueListenableBuilder<Set<String>>(
@@ -1001,7 +1001,7 @@ class _HomeScreenState extends State<HomeScreen> {
                                               Container(
                                                 width: 6,
                                                 height: 6,
-                                                decoration: const BoxDecoration(
+                                                decoration: BoxDecoration(
                                                   color: neonGreen,
                                                   shape: BoxShape.circle,
                                                 ),
@@ -1012,7 +1012,7 @@ class _HomeScreenState extends State<HomeScreen> {
                                                   item.category.toUpperCase(),
                                                   maxLines: 1,
                                                   overflow: TextOverflow.ellipsis,
-                                                  style: const TextStyle(
+                                                  style: TextStyle(
                                                     color: neonGreen,
                                                     fontSize: 10,
                                                     fontWeight: FontWeight.w900,
@@ -1028,7 +1028,7 @@ class _HomeScreenState extends State<HomeScreen> {
                                               item.title,
                                               maxLines: 2,
                                               overflow: TextOverflow.ellipsis,
-                                              style: const TextStyle(
+                                              style: TextStyle(
                                                 color: textWhite,
                                                 fontSize: 12,
                                                 fontWeight: FontWeight.w800,
@@ -1042,7 +1042,7 @@ class _HomeScreenState extends State<HomeScreen> {
                                             children: [
                                               Text(
                                                 item.timeAgo,
-                                                style: const TextStyle(color: textGray, fontSize: 10),
+                                                style: TextStyle(color: textGray, fontSize: 10),
                                               ),
                                               ValueListenableBuilder<Set<String>>(
                                                 valueListenable: BookmarkService.bookmarkedIdsNotifier,
