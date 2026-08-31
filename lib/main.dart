@@ -7,8 +7,11 @@ import 'screens/add_news_screen.dart';
 import 'services/notification_service.dart';
 import 'firebase_options.dart';
 
-void main() {
+void main() async {
   WidgetsFlutterBinding.ensureInitialized();
+  await Firebase.initializeApp(
+    options: DefaultFirebaseOptions.currentPlatform,
+  );
   runApp(const GamesKhabarApp());
 }
 
