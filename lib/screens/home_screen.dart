@@ -734,9 +734,11 @@ class _HomeScreenState extends State<HomeScreen> {
 
               // Latest News List with Native Ad after every 3 articles
               if (remainingNews.isNotEmpty)
-                SliverList(
-                  delegate: SliverChildBuilderDelegate(
-                    (context, index) {
+                SliverPadding(
+                  padding: const EdgeInsets.only(bottom: 90),
+                  sliver: SliverList(
+                    delegate: SliverChildBuilderDelegate(
+                      (context, index) {
                       final item = remainingNews[index];
                       return Column(
                         mainAxisSize: MainAxisSize.min,
@@ -883,6 +885,7 @@ class _HomeScreenState extends State<HomeScreen> {
                     childCount: remainingNews.length,
                   ),
                 ),
+              ),
 
               if (filteredList.isEmpty)
                 SliverToBoxAdapter(

@@ -36,6 +36,9 @@ class _NativeAdWidgetState extends State<NativeAdWidget> {
       adUnitId: widget.adUnitId,
       factoryId: 'listTile',
       request: const AdRequest(),
+      nativeAdOptions: NativeAdOptions(
+        adChoicesPlacement: AdChoicesPlacement.topRightCorner,
+      ),
       nativeTemplateStyle: NativeTemplateStyle(
         templateType: TemplateType.medium,
         mainBackgroundColor: _cardDark,
@@ -106,14 +109,17 @@ class _NativeAdWidgetState extends State<NativeAdWidget> {
       ),
       clipBehavior: Clip.antiAlias,
       child: _isAdLoaded && _nativeAd != null
-          ? ConstrainedBox(
-              constraints: const BoxConstraints(
-                minWidth: 320,
-                minHeight: 120,
-                maxHeight: 340,
-                maxWidth: 400,
+          ? Container(
+              margin: const EdgeInsets.all(4),
+              child: ConstrainedBox(
+                constraints: const BoxConstraints(
+                  minWidth: 320,
+                  minHeight: 120,
+                  maxHeight: 340,
+                  maxWidth: 400,
+                ),
+                child: AdWidget(ad: _nativeAd!),
               ),
-              child: AdWidget(ad: _nativeAd!),
             )
           : Container(
               height: 120,
