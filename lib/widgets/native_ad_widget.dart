@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 import 'package:google_mobile_ads/google_mobile_ads.dart';
-import '../services/theme_service.dart';
 
 class NativeAdWidget extends StatefulWidget {
   final String adUnitId;
@@ -19,6 +18,13 @@ class _NativeAdWidgetState extends State<NativeAdWidget> {
   bool _isAdLoaded = false;
   bool _adFailedToLoad = false;
 
+  static const Color _cardDark = Color(0xFF1E1E1E);
+  static const Color _borderDark = Color(0xFF2A2A2A);
+  static const Color _neonGreen = Color(0xFF00FF88);
+  static const Color _textWhite = Colors.white;
+  static const Color _textBlack = Color(0xFF05080D);
+  static const Color _textGray = Colors.grey;
+
   @override
   void initState() {
     super.initState();
@@ -32,26 +38,26 @@ class _NativeAdWidgetState extends State<NativeAdWidget> {
       request: const AdRequest(),
       nativeTemplateStyle: NativeTemplateStyle(
         templateType: TemplateType.medium,
-        mainBackgroundColor: ThemeService.cardDark,
+        mainBackgroundColor: _cardDark,
         cornerRadius: 12.0,
         callToActionTextStyle: NativeTemplateTextStyle(
-          textColor: ThemeService.textBlack,
-          backgroundColor: ThemeService.neonGreen,
+          textColor: _textBlack,
+          backgroundColor: _neonGreen,
           style: NativeTemplateFontStyle.bold,
           size: 14.0,
         ),
         primaryTextStyle: NativeTemplateTextStyle(
-          textColor: ThemeService.textWhite,
+          textColor: _textWhite,
           style: NativeTemplateFontStyle.bold,
           size: 15.0,
         ),
         secondaryTextStyle: NativeTemplateTextStyle(
-          textColor: ThemeService.textGray,
+          textColor: _textGray,
           style: NativeTemplateFontStyle.normal,
           size: 12.0,
         ),
         tertiaryTextStyle: NativeTemplateTextStyle(
-          textColor: ThemeService.textGray,
+          textColor: _textGray,
           style: NativeTemplateFontStyle.normal,
           size: 10.0,
         ),
@@ -94,9 +100,9 @@ class _NativeAdWidgetState extends State<NativeAdWidget> {
     return Container(
       margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
       decoration: BoxDecoration(
-        color: ThemeService.cardDark,
+        color: _cardDark,
         borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: ThemeService.borderDark),
+        border: Border.all(color: _borderDark),
       ),
       clipBehavior: Clip.antiAlias,
       child: _isAdLoaded && _nativeAd != null
@@ -113,7 +119,7 @@ class _NativeAdWidgetState extends State<NativeAdWidget> {
               height: 120,
               alignment: Alignment.center,
               padding: const EdgeInsets.all(16),
-              child: Row(
+              child: const Row(
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
                   SizedBox(
@@ -121,14 +127,14 @@ class _NativeAdWidgetState extends State<NativeAdWidget> {
                     height: 20,
                     child: CircularProgressIndicator(
                       strokeWidth: 2,
-                      valueColor: AlwaysStoppedAnimation<Color>(ThemeService.neonGreen),
+                      valueColor: AlwaysStoppedAnimation<Color>(_neonGreen),
                     ),
                   ),
-                  const SizedBox(width: 12),
+                  SizedBox(width: 12),
                   Text(
                     'Loading Sponsored Ad...',
                     style: TextStyle(
-                      color: ThemeService.textGray,
+                      color: _textGray,
                       fontSize: 12,
                       fontWeight: FontWeight.w600,
                     ),
