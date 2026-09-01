@@ -10,6 +10,7 @@ import '../services/bookmark_service.dart';
 import '../services/notification_service.dart';
 import '../services/theme_service.dart';
 import '../services/language_service.dart';
+import '../services/ad_free_service.dart';
 import '../widgets/app_image_view.dart';
 import '../widgets/native_ad_widget.dart';
 import 'news_detail_screen.dart';
@@ -265,12 +266,13 @@ class _HomeScreenState extends State<HomeScreen> {
               backgroundColor: cardDark,
               elevation: 0,
               centerTitle: false,
+              titleSpacing: 12,
               title: Row(
                 mainAxisSize: MainAxisSize.min,
                 children: [
                   // Green GK Logo Badge
                   Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 4),
+                    padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 3),
                     decoration: BoxDecoration(
                       color: neonGreen,
                       borderRadius: BorderRadius.circular(6),
@@ -280,29 +282,125 @@ class _HomeScreenState extends State<HomeScreen> {
                       style: TextStyle(
                         color: Color(0xFF05080D),
                         fontWeight: FontWeight.w900,
-                        fontSize: 13,
+                        fontSize: 12,
                         letterSpacing: -0.5,
                       ),
                     ),
                   ),
-                  const SizedBox(width: 8),
+                  const SizedBox(width: 6),
                   Text(
                     'GAMES KHABAR',
                     style: TextStyle(
                       color: textWhite,
                       fontWeight: FontWeight.w900,
-                      fontSize: 17,
-                      letterSpacing: 1.1,
+                      fontSize: 15,
+                      letterSpacing: 0.8,
                     ),
                   ),
                 ],
               ),
               actions: [
+                // 1-Hour Ad-Free Button / Countdown Timer
+                ValueListenableBuilder<DateTime?>(
+                  valueListenable: AdFreeService.adFreeUntilNotifier,
+                  builder: (context, adFreeUntil, _) {
+                    final isAdFree = AdFreeService().isAdFree;
+                    return ValueListenableBuilder<String>(
+                      valueListenable: AdFreeService.remainingTimeNotifier,
+                      builder: (context, remainingText, _) {
+                        return ValueListenableBuilder<bool>(
+                          valueListenable: AdFreeService.isLoadingAdNotifier,
+                          builder: (context, isLoading, _) {
+                            if (isAdFree) {
+                              return Center(
+                                child: Container(
+                                  margin: const EdgeInsets.symmetric(vertical: 8, horizontal: 4),
+                                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 5),
+                                  decoration: BoxDecoration(
+                                    color: neonGreen.withOpacity(0.12),
+                                    borderRadius: BorderRadius.circular(16),
+                                    border: Border.all(color: neonGreen, width: 1.2),
+                                  ),
+                                  child: Row(
+                                    mainAxisSize: MainAxisSize.min,
+                                    children: [
+                                      Icon(Icons.timer_outlined, color: neonGreen, size: 13),
+                                      const SizedBox(width: 4),
+                                      Text(
+                                        'Ad-Free: $remainingText',
+                                        style: TextStyle(
+                                          color: neonGreen,
+                                          fontWeight: FontWeight.w800,
+                                          fontSize: 11,
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                              );
+                            }
+
+                            return Center(
+                              child: Material(
+                                color: Colors.transparent,
+                                child: InkWell(
+                                  onTap: isLoading ? null : () => AdFreeService().showRewardedAd(context),
+                                  borderRadius: BorderRadius.circular(16),
+                                  child: Container(
+                                    margin: const EdgeInsets.symmetric(vertical: 8, horizontal: 4),
+                                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 5),
+                                    decoration: BoxDecoration(
+                                      color: const Color(0xFF2E2200),
+                                      borderRadius: BorderRadius.circular(16),
+                                      border: Border.all(
+                                        color: const Color(0xFFFFC107),
+                                        width: 1.2,
+                                      ),
+                                    ),
+                                    child: Row(
+                                      mainAxisSize: MainAxisSize.min,
+                                      children: [
+                                        if (isLoading)
+                                          const SizedBox(
+                                            width: 12,
+                                            height: 12,
+                                            child: CircularProgressIndicator(
+                                              strokeWidth: 2,
+                                              valueColor: AlwaysStoppedAnimation<Color>(Color(0xFFFFC107)),
+                                            ),
+                                          )
+                                        else
+                                          const Icon(
+                                            Icons.timer_outlined,
+                                            color: Color(0xFFFFC107),
+                                            size: 13,
+                                          ),
+                                        const SizedBox(width: 4),
+                                        const Text(
+                                          '1 Ghante Ad-Free - Ad Dekho',
+                                          style: TextStyle(
+                                            color: Color(0xFFFFD54F),
+                                            fontWeight: FontWeight.w800,
+                                            fontSize: 10.5,
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                  ),
+                                ),
+                              ),
+                            );
+                          },
+                        );
+                      },
+                    );
+                  },
+                ),
                 IconButton(
                   icon: Icon(
                     _isSearching ? Icons.close : Icons.search_rounded,
                     color: neonGreen,
-                    size: 24,
+                    size: 22,
                   ),
                   onPressed: () {
                     setState(() {
@@ -314,6 +412,7 @@ class _HomeScreenState extends State<HomeScreen> {
                     });
                   },
                 ),
+                const SizedBox(width: 4),
               ],
             ),
       body: _selectedNavIndex == 1
@@ -908,9 +1007,17 @@ class _HomeScreenState extends State<HomeScreen> {
                               ),
                             ),
                           ),
-                          // Show Native Ad after every 3 articles (index % 3 == 2)
-                          if (index % 3 == 2)
-                            const NativeAdWidget(),
+                          // Show Native Ad after every 3 articles (index % 3 == 2) only when NOT ad-free
+                          ValueListenableBuilder<DateTime?>(
+                            valueListenable: AdFreeService.adFreeUntilNotifier,
+                            builder: (context, adFreeUntil, _) {
+                              final isAdFree = AdFreeService().isAdFree;
+                              if (!isAdFree && index % 3 == 2) {
+                                return const NativeAdWidget();
+                              }
+                              return const SizedBox.shrink();
+                            },
+                          ),
                         ],
                       );
                     },

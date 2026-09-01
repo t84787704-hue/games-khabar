@@ -9,6 +9,7 @@ import 'screens/add_news_screen.dart';
 import 'services/notification_service.dart';
 import 'services/theme_service.dart';
 import 'services/language_service.dart';
+import 'services/ad_free_service.dart';
 import 'firebase_options.dart';
 
 void main() async {
@@ -19,6 +20,7 @@ void main() async {
   await MobileAds.instance.initialize();
 
   await ThemeService.init();
+  await AdFreeService().init();
 
   // Auto-detect initial language code
   final initialLangCode = await LanguageService.getAutoDetectedLanguageCode();
