@@ -91,7 +91,7 @@ class NewsDetailScreen extends StatelessWidget {
     } catch (_) {
       if (context.mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
+          SnackBar(
             backgroundColor: cardDark,
             content: Text('Could not open YouTube', style: TextStyle(color: neonGreen)),
           ),
@@ -107,7 +107,7 @@ class NewsDetailScreen extends StatelessWidget {
     } else {
       if (context.mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
+          SnackBar(
             backgroundColor: cardDark,
             content: Text('Could not open link', style: TextStyle(color: neonGreen)),
           ),
@@ -141,7 +141,7 @@ class NewsDetailScreen extends StatelessWidget {
             behavior: SnackBarBehavior.floating,
             shape: RoundedRectangleBorder(
               borderRadius: BorderRadius.circular(10),
-              side: const BorderSide(color: neonGreen, width: 1),
+              side: BorderSide(color: neonGreen, width: 1),
             ),
             content: Row(
               children: const [
@@ -190,7 +190,7 @@ class NewsDetailScreen extends StatelessWidget {
                   isSaved
                       ? 'Saved to Bookmarks! 🔖'
                       : 'Removed from Bookmarks',
-                  style: const TextStyle(color: textWhite, fontWeight: FontWeight.bold, fontSize: 12),
+                  style: TextStyle(color: textWhite, fontWeight: FontWeight.bold, fontSize: 12),
                 ),
               ),
             ],
@@ -212,12 +212,12 @@ class NewsDetailScreen extends StatelessWidget {
         backgroundColor: cardDark,
         elevation: 0,
         leading: IconButton(
-          icon: const Icon(Icons.arrow_back_ios_new_rounded, color: textWhite, size: 20),
+          icon: Icon(Icons.arrow_back_ios_new_rounded, color: textWhite, size: 20),
           onPressed: () => Navigator.pop(context),
         ),
         title: Text(
           news.category.isNotEmpty ? news.category : 'Gaming Khabar',
-          style: const TextStyle(
+          style: TextStyle(
             color: textWhite,
             fontSize: 16,
             fontWeight: FontWeight.bold,
@@ -243,7 +243,7 @@ class NewsDetailScreen extends StatelessWidget {
           ),
           // Share Icon Button
           IconButton(
-            icon: const Icon(Icons.share_outlined, color: neonGreen, size: 22),
+            icon: Icon(Icons.share_outlined, color: neonGreen, size: 22),
             tooltip: 'Share',
             onPressed: () => _shareArticle(context),
           ),
@@ -282,7 +282,7 @@ class NewsDetailScreen extends StatelessWidget {
                     ),
                     child: Text(
                       news.category.toUpperCase(),
-                      style: const TextStyle(
+                      style: TextStyle(
                         color: neonGreen,
                         fontSize: 11,
                         fontWeight: FontWeight.w900,
@@ -317,22 +317,22 @@ class NewsDetailScreen extends StatelessWidget {
                     ),
                   ],
                   const SizedBox(width: 10),
-                  const Icon(Icons.access_time_rounded, color: textGray, size: 14),
+                  Icon(Icons.access_time_rounded, color: textGray, size: 14),
                   const SizedBox(width: 4),
                   Text(
                     news.timeAgo,
-                    style: const TextStyle(
+                    style: TextStyle(
                       color: textGray,
                       fontSize: 12,
                       fontWeight: FontWeight.w500,
                     ),
                   ),
                   const Spacer(),
-                  const Icon(Icons.visibility_outlined, color: textGray, size: 14),
+                  Icon(Icons.visibility_outlined, color: textGray, size: 14),
                   const SizedBox(width: 4),
                   Text(
                     '${news.views} views',
-                    style: const TextStyle(color: textGray, fontSize: 12),
+                    style: TextStyle(color: textGray, fontSize: 12),
                   ),
                 ],
               ),
@@ -341,7 +341,7 @@ class NewsDetailScreen extends StatelessWidget {
               // 3. News Title
               Text(
                 news.title,
-                style: const TextStyle(
+                style: TextStyle(
                   color: textWhite,
                   fontSize: 22,
                   fontWeight: FontWeight.w900,
@@ -385,13 +385,13 @@ class NewsDetailScreen extends StatelessWidget {
                               fit: BoxFit.cover,
                               placeholder: (context, url) => Container(
                                 color: cardDark,
-                                child: const Center(
+                                child: Center(
                                   child: CircularProgressIndicator(color: alertRed, strokeWidth: 2),
                                 ),
                               ),
                               errorWidget: (context, url, error) => Container(
                                 color: cardDark,
-                                child: const Center(
+                                child: Center(
                                   child: Icon(Icons.movie_rounded, color: textGray, size: 40),
                                 ),
                               ),
@@ -522,7 +522,7 @@ class NewsDetailScreen extends StatelessWidget {
                   child: OutlinedButton.icon(
                     style: OutlinedButton.styleFrom(
                       foregroundColor: neonGreen,
-                      side: const BorderSide(color: neonGreen, width: 1.2),
+                      side: BorderSide(color: neonGreen, width: 1.2),
                       shape: RoundedRectangleBorder(
                         borderRadius: BorderRadius.circular(10),
                       ),

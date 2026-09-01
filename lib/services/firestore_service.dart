@@ -210,6 +210,7 @@ class FirestoreService {
         timeAgo: old.timeAgo,
         views: old.views + 1,
         isFree: old.isFree,
+        isFeatured: old.isFeatured,
         sourceUrl: old.sourceUrl,
         timestamp: old.timestamp,
       );
@@ -266,6 +267,7 @@ class FirestoreService {
       timeAgo: 'Just now',
       views: 0,
       isFree: data['isFree'] as bool? ?? false,
+      isFeatured: data['isFeatured'] as bool? ?? false,
       sourceUrl: data['sourceUrl'] as String?,
       timestamp: Timestamp.now(),
     );
@@ -290,6 +292,7 @@ class FirestoreService {
           'isPublished': true,
           'views': 0,
           'isFree': newModel.isFree,
+          'isFeatured': newModel.isFeatured,
           'timeAgo': 'Just now',
           if (newModel.sourceUrl != null) 'sourceUrl': newModel.sourceUrl,
         }).timeout(const Duration(seconds: 4));
@@ -330,6 +333,7 @@ class FirestoreService {
         : 'https://images.unsplash.com/photo-1542751371-adc38448a05e?auto=format&fit=crop&w=1000&q=80';
     final videoUrl = data['videoUrl'] as String? ?? '';
     final isFree = data['isFree'] as bool? ?? category.toLowerCase().contains('free');
+    final isFeatured = data['isFeatured'] as bool? ?? false;
 
     if (idx != -1) {
       final old = _currentNewsList[idx];
@@ -343,6 +347,7 @@ class FirestoreService {
         timeAgo: old.timeAgo,
         views: old.views,
         isFree: isFree,
+        isFeatured: isFeatured,
         sourceUrl: data['sourceUrl'] as String? ?? old.sourceUrl,
         timestamp: old.timestamp,
       );
@@ -359,6 +364,7 @@ class FirestoreService {
           'imageUrl': imageUrl,
           'videoUrl': videoUrl,
           'isFree': isFree,
+          'isFeatured': isFeatured,
           if (data['sourceUrl'] != null) 'sourceUrl': data['sourceUrl'],
         };
         await db.collection('news').doc(id).update(updateData).timeout(const Duration(seconds: 3));

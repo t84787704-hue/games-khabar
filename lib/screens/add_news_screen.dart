@@ -70,6 +70,7 @@ class _AddNewsScreenState extends State<AddNewsScreen> {
   final ImagePicker _picker = ImagePicker();
 
   late String _selectedCategory;
+  bool _isFeatured = false;
   bool _isPublishing = false;
   bool _isProcessingImage = false;
 
@@ -137,6 +138,7 @@ class _AddNewsScreenState extends State<AddNewsScreen> {
     } else {
       _selectedCategory = 'BGMI';
     }
+    _isFeatured = item?.isFeatured ?? false;
   }
 
   Future<void> _pickAndCompressImage(ImageSource source) async {
@@ -176,15 +178,15 @@ class _AddNewsScreenState extends State<AddNewsScreen> {
             behavior: SnackBarBehavior.floating,
             shape: RoundedRectangleBorder(
               borderRadius: BorderRadius.circular(10),
-              side: const BorderSide(color: neonGreen, width: 1),
+              side: BorderSide(color: neonGreen, width: 1),
             ),
             content: Row(
               children: [
-                const Icon(Icons.check_circle_rounded, color: neonGreen, size: 20),
+                Icon(Icons.check_circle_rounded, color: neonGreen, size: 20),
                 const SizedBox(width: 10),
                 Text(
                   'Image compressed (600x600) & ready! (${(bytes.length / 1024).toStringAsFixed(1)} KB)',
-                  style: const TextStyle(color: textWhite, fontWeight: FontWeight.bold, fontSize: 12),
+                  style: TextStyle(color: textWhite, fontWeight: FontWeight.bold, fontSize: 12),
                 ),
               ],
             ),
@@ -247,6 +249,7 @@ class _AddNewsScreenState extends State<AddNewsScreen> {
         'imageUrl': finalImageUrl,
         'videoUrl': videoUrl, // Empty string if empty
         'isFree': _selectedCategory.toLowerCase().contains('free'),
+        'isFeatured': _isFeatured,
       };
 
       if (isEditing) {
@@ -272,17 +275,17 @@ class _AddNewsScreenState extends State<AddNewsScreen> {
             behavior: SnackBarBehavior.floating,
             shape: RoundedRectangleBorder(
               borderRadius: BorderRadius.circular(10),
-              side: const BorderSide(color: neonGreen, width: 1),
+              side: BorderSide(color: neonGreen, width: 1),
             ),
             content: Row(
               children: [
-                const Icon(Icons.check_circle_rounded, color: neonGreen, size: 20),
+                Icon(Icons.check_circle_rounded, color: neonGreen, size: 20),
                 const SizedBox(width: 10),
                 Text(
                   isEditing
                       ? 'Khabar Updated Successfully! 🎮'
                       : 'Khabar Published Successfully! 🎉',
-                  style: const TextStyle(color: textWhite, fontWeight: FontWeight.bold),
+                  style: TextStyle(color: textWhite, fontWeight: FontWeight.bold),
                 ),
               ],
             ),
@@ -326,7 +329,7 @@ class _AddNewsScreenState extends State<AddNewsScreen> {
         backgroundColor: cardDark,
         elevation: 0,
         leading: IconButton(
-          icon: const Icon(Icons.arrow_back_ios_new, color: textWhite, size: 20),
+          icon: Icon(Icons.arrow_back_ios_new, color: textWhite, size: 20),
           onPressed: () => Navigator.pop(context),
         ),
         title: Row(
@@ -340,7 +343,7 @@ class _AddNewsScreenState extends State<AddNewsScreen> {
             const SizedBox(width: 8),
             Text(
               isEditing ? 'Edit Khabar' : 'Add New Khabar',
-              style: const TextStyle(
+              style: TextStyle(
                 color: textWhite,
                 fontWeight: FontWeight.w900,
                 fontSize: 18,
@@ -358,7 +361,7 @@ class _AddNewsScreenState extends State<AddNewsScreen> {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               // Title Field
-              const Text(
+              Text(
                 'News Title (Heading)',
                 style: TextStyle(color: textWhite, fontSize: 13, fontWeight: FontWeight.bold),
               ),
@@ -366,24 +369,24 @@ class _AddNewsScreenState extends State<AddNewsScreen> {
               TextFormField(
                 controller: _titleController,
                 maxLength: 200,
-                style: const TextStyle(color: textWhite, fontSize: 14),
+                style: TextStyle(color: textWhite, fontSize: 14),
                 decoration: InputDecoration(
                   hintText: 'e.g. BGMI 3.4 Update Release Date & Features',
-                  hintStyle: const TextStyle(color: textGray, fontSize: 13),
+                  hintStyle: TextStyle(color: textGray, fontSize: 13),
                   filled: true,
                   fillColor: cardDark,
-                  counterStyle: const TextStyle(color: textGray, fontSize: 11),
+                  counterStyle: TextStyle(color: textGray, fontSize: 11),
                   border: OutlineInputBorder(
                     borderRadius: BorderRadius.circular(12),
-                    borderSide: const BorderSide(color: borderDark),
+                    borderSide: BorderSide(color: borderDark),
                   ),
                   enabledBorder: OutlineInputBorder(
                     borderRadius: BorderRadius.circular(12),
-                    borderSide: const BorderSide(color: borderDark),
+                    borderSide: BorderSide(color: borderDark),
                   ),
                   focusedBorder: OutlineInputBorder(
                     borderRadius: BorderRadius.circular(12),
-                    borderSide: const BorderSide(color: neonGreen, width: 1.5),
+                    borderSide: BorderSide(color: neonGreen, width: 1.5),
                   ),
                   contentPadding: const EdgeInsets.all(14),
                 ),
@@ -400,7 +403,7 @@ class _AddNewsScreenState extends State<AddNewsScreen> {
               const SizedBox(height: 18),
 
               // Category Dropdown
-              const Text(
+              Text(
                 'Category',
                 style: TextStyle(color: textWhite, fontSize: 13, fontWeight: FontWeight.bold),
               ),
@@ -417,8 +420,8 @@ class _AddNewsScreenState extends State<AddNewsScreen> {
                     value: _selectedCategory,
                     dropdownColor: cardDark,
                     isExpanded: true,
-                    icon: const Icon(Icons.keyboard_arrow_down, color: neonGreen),
-                    style: const TextStyle(
+                    icon: Icon(Icons.keyboard_arrow_down, color: neonGreen),
+                    style: TextStyle(
                       color: textWhite,
                       fontSize: 14,
                       fontWeight: FontWeight.bold,
@@ -431,7 +434,7 @@ class _AddNewsScreenState extends State<AddNewsScreen> {
                             Container(
                               width: 8,
                               height: 8,
-                              decoration: const BoxDecoration(
+                              decoration: BoxDecoration(
                                 color: neonGreen,
                                 shape: BoxShape.circle,
                               ),
@@ -452,6 +455,53 @@ class _AddNewsScreenState extends State<AddNewsScreen> {
                   ),
                 ),
               ),
+              const SizedBox(height: 18),
+
+              // Mark as Featured Switch
+              Container(
+                decoration: BoxDecoration(
+                  color: cardDark,
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(
+                    color: _isFeatured ? neonGreen : borderDark,
+                    width: _isFeatured ? 1.5 : 1,
+                  ),
+                ),
+                child: SwitchListTile(
+                  activeColor: neonGreen,
+                  activeTrackColor: neonGreen.withOpacity(0.3),
+                  inactiveThumbColor: textGray,
+                  inactiveTrackColor: cardDark2,
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                  contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 4),
+                  secondary: Icon(
+                    _isFeatured ? Icons.star_rounded : Icons.star_outline_rounded,
+                    color: _isFeatured ? neonGreen : textGray,
+                    size: 24,
+                  ),
+                  title: Text(
+                    'Mark as Featured - Show on Top Banner',
+                    style: TextStyle(
+                      color: textWhite,
+                      fontSize: 13,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                  subtitle: Text(
+                    'Displays this news in the top big hero card on the home screen',
+                    style: TextStyle(
+                      color: textGray,
+                      fontSize: 11,
+                    ),
+                  ),
+                  value: _isFeatured,
+                  onChanged: (val) {
+                    setState(() {
+                      _isFeatured = val;
+                    });
+                  },
+                ),
+              ),
               const SizedBox(height: 22),
 
               // Image Upload Section Header
@@ -459,9 +509,9 @@ class _AddNewsScreenState extends State<AddNewsScreen> {
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
                   Row(
-                    children: const [
+                    children: [
                       Icon(Icons.image_outlined, color: neonGreen, size: 18),
-                      SizedBox(width: 6),
+                      const SizedBox(width: 6),
                       Text(
                         'News Cover Image (Compressed 600x600)',
                         style: TextStyle(color: textWhite, fontSize: 13, fontWeight: FontWeight.bold),
@@ -471,7 +521,7 @@ class _AddNewsScreenState extends State<AddNewsScreen> {
                   if (hasImage && !_isProcessingImage)
                     GestureDetector(
                       onTap: _removeSelectedImage,
-                      child: const Text(
+                      child: Text(
                         'Remove',
                         style: TextStyle(
                           color: alertRed,
@@ -503,7 +553,7 @@ class _AddNewsScreenState extends State<AddNewsScreen> {
                             child: OutlinedButton.icon(
                               style: OutlinedButton.styleFrom(
                                 foregroundColor: textWhite,
-                                side: const BorderSide(color: borderDark),
+                                side: BorderSide(color: borderDark),
                                 shape: RoundedRectangleBorder(
                                   borderRadius: BorderRadius.circular(10),
                                 ),
@@ -512,7 +562,7 @@ class _AddNewsScreenState extends State<AddNewsScreen> {
                               onPressed: _isProcessingImage
                                   ? null
                                   : () => _pickAndCompressImage(ImageSource.gallery),
-                              icon: const Icon(Icons.photo_library_rounded, color: neonGreen, size: 18),
+                              icon: Icon(Icons.photo_library_rounded, color: neonGreen, size: 18),
                               label: const Text(
                                 'Gallery',
                                 style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600),
@@ -528,7 +578,7 @@ class _AddNewsScreenState extends State<AddNewsScreen> {
                             child: OutlinedButton.icon(
                               style: OutlinedButton.styleFrom(
                                 foregroundColor: textWhite,
-                                side: const BorderSide(color: borderDark),
+                                side: BorderSide(color: borderDark),
                                 shape: RoundedRectangleBorder(
                                   borderRadius: BorderRadius.circular(10),
                                 ),
@@ -537,7 +587,7 @@ class _AddNewsScreenState extends State<AddNewsScreen> {
                               onPressed: _isProcessingImage
                                   ? null
                                   : () => _pickAndCompressImage(ImageSource.camera),
-                              icon: const Icon(Icons.camera_alt_rounded, color: neonGreen, size: 18),
+                              icon: Icon(Icons.camera_alt_rounded, color: neonGreen, size: 18),
                               label: const Text(
                                 'Camera',
                                 style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600),
@@ -610,22 +660,22 @@ class _AddNewsScreenState extends State<AddNewsScreen> {
               const SizedBox(height: 8),
               TextFormField(
                 controller: _videoUrlController,
-                style: const TextStyle(color: textWhite, fontSize: 14),
+                style: TextStyle(color: textWhite, fontSize: 14),
                 decoration: InputDecoration(
                   hintText: 'e.g. https://youtu.be/xxx or watch?v=xxx or Video ID',
-                  hintStyle: const TextStyle(color: textGray, fontSize: 13),
+                  hintStyle: TextStyle(color: textGray, fontSize: 13),
                   helperText: 'Supports youtu.be, youtube.com, Shorts, or 11-character Video ID',
-                  helperStyle: const TextStyle(color: textGray, fontSize: 11),
-                  prefixIcon: const Icon(Icons.link_rounded, color: neonGreen, size: 20),
+                  helperStyle: TextStyle(color: textGray, fontSize: 11),
+                  prefixIcon: Icon(Icons.link_rounded, color: neonGreen, size: 20),
                   filled: true,
                   fillColor: cardDark,
                   border: OutlineInputBorder(
                     borderRadius: BorderRadius.circular(12),
-                    borderSide: const BorderSide(color: borderDark),
+                    borderSide: BorderSide(color: borderDark),
                   ),
                   enabledBorder: OutlineInputBorder(
                     borderRadius: BorderRadius.circular(12),
-                    borderSide: const BorderSide(color: borderDark),
+                    borderSide: BorderSide(color: borderDark),
                   ),
                   focusedBorder: OutlineInputBorder(
                     borderRadius: BorderRadius.circular(12),
@@ -646,7 +696,7 @@ class _AddNewsScreenState extends State<AddNewsScreen> {
               const SizedBox(height: 20),
 
               // Description Multi-line
-              const Text(
+              Text(
                 'Description / Content',
                 style: TextStyle(color: textWhite, fontSize: 13, fontWeight: FontWeight.bold),
               ),
@@ -654,23 +704,23 @@ class _AddNewsScreenState extends State<AddNewsScreen> {
               TextFormField(
                 controller: _descController,
                 maxLines: 6,
-                style: const TextStyle(color: textWhite, fontSize: 14, height: 1.4),
+                style: TextStyle(color: textWhite, fontSize: 14, height: 1.4),
                 decoration: InputDecoration(
                   hintText: 'Enter full news details in Urdu/English...',
-                  hintStyle: const TextStyle(color: textGray, fontSize: 13),
+                  hintStyle: TextStyle(color: textGray, fontSize: 13),
                   filled: true,
                   fillColor: cardDark,
                   border: OutlineInputBorder(
                     borderRadius: BorderRadius.circular(12),
-                    borderSide: const BorderSide(color: borderDark),
+                    borderSide: BorderSide(color: borderDark),
                   ),
                   enabledBorder: OutlineInputBorder(
                     borderRadius: BorderRadius.circular(12),
-                    borderSide: const BorderSide(color: borderDark),
+                    borderSide: BorderSide(color: borderDark),
                   ),
                   focusedBorder: OutlineInputBorder(
                     borderRadius: BorderRadius.circular(12),
-                    borderSide: const BorderSide(color: neonGreen, width: 1.5),
+                    borderSide: BorderSide(color: neonGreen, width: 1.5),
                   ),
                   contentPadding: const EdgeInsets.all(14),
                 ),

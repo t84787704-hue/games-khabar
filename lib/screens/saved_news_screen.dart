@@ -51,7 +51,7 @@ class _SavedNewsScreenState extends State<SavedNewsScreen> {
         backgroundColor: cardDark,
         shape: RoundedRectangleBorder(
           borderRadius: BorderRadius.circular(16),
-          side: const BorderSide(color: borderDark, width: 1.5),
+          side: BorderSide(color: borderDark, width: 1.5),
         ),
         title: Row(
           children: const [
@@ -63,14 +63,14 @@ class _SavedNewsScreenState extends State<SavedNewsScreen> {
             ),
           ],
         ),
-        content: const Text(
+        content: Text(
           'Are you sure you want to remove all saved articles from your local storage?',
           style: TextStyle(color: textGray, fontSize: 13),
         ),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(ctx),
-            child: const Text('Cancel', style: TextStyle(color: textGray)),
+            child: Text('Cancel', style: TextStyle(color: textGray)),
           ),
           ElevatedButton(
             style: ElevatedButton.styleFrom(
@@ -87,9 +87,9 @@ class _SavedNewsScreenState extends State<SavedNewsScreen> {
                     behavior: SnackBarBehavior.floating,
                     shape: RoundedRectangleBorder(
                       borderRadius: BorderRadius.circular(10),
-                      side: const BorderSide(color: borderDark),
+                      side: BorderSide(color: borderDark),
                     ),
-                    content: const Text(
+                    content: Text(
                       'All saved articles removed',
                       style: TextStyle(color: textWhite),
                     ),
@@ -97,7 +97,7 @@ class _SavedNewsScreenState extends State<SavedNewsScreen> {
                 );
               }
             },
-            child: const Text('Clear All', style: TextStyle(color: textWhite, fontWeight: FontWeight.bold)),
+            child: Text('Clear All', style: TextStyle(color: textWhite, fontWeight: FontWeight.bold)),
           ),
         ],
       ),
@@ -121,10 +121,10 @@ class _SavedNewsScreenState extends State<SavedNewsScreen> {
                 borderRadius: BorderRadius.circular(8),
                 border: Border.all(color: neonGreen.withOpacity(0.4), width: 1),
               ),
-              child: const Icon(Icons.bookmark_rounded, color: neonGreen, size: 18),
+              child: Icon(Icons.bookmark_rounded, color: neonGreen, size: 18),
             ),
             const SizedBox(width: 10),
-            const Text(
+            Text(
               'Saved Articles',
               style: TextStyle(
                 color: textWhite,
@@ -159,7 +159,7 @@ class _SavedNewsScreenState extends State<SavedNewsScreen> {
                     },
                   ),
                   IconButton(
-                    icon: const Icon(Icons.delete_sweep_outlined, color: textGray, size: 22),
+                    icon: Icon(Icons.delete_sweep_outlined, color: textGray, size: 22),
                     tooltip: 'Clear All',
                     onPressed: () => _confirmClearAll(context),
                   ),
@@ -197,7 +197,7 @@ class _SavedNewsScreenState extends State<SavedNewsScreen> {
                   padding: const EdgeInsets.fromLTRB(16, 12, 16, 4),
                   child: TextField(
                     controller: _searchController,
-                    style: const TextStyle(color: textWhite, fontSize: 14),
+                    style: TextStyle(color: textWhite, fontSize: 14),
                     autofocus: true,
                     onChanged: (val) {
                       setState(() {
@@ -206,11 +206,11 @@ class _SavedNewsScreenState extends State<SavedNewsScreen> {
                     },
                     decoration: InputDecoration(
                       hintText: 'Search saved articles...',
-                      hintStyle: const TextStyle(color: textGray, fontSize: 13),
-                      prefixIcon: const Icon(Icons.search_rounded, color: neonGreen, size: 20),
+                      hintStyle: TextStyle(color: textGray, fontSize: 13),
+                      prefixIcon: Icon(Icons.search_rounded, color: neonGreen, size: 20),
                       suffixIcon: _searchQuery.isNotEmpty
                           ? IconButton(
-                              icon: const Icon(Icons.clear, color: textGray, size: 18),
+                              icon: Icon(Icons.clear, color: textGray, size: 18),
                               onPressed: () {
                                 _searchController.clear();
                                 setState(() {
@@ -224,15 +224,15 @@ class _SavedNewsScreenState extends State<SavedNewsScreen> {
                       contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
                       border: OutlineInputBorder(
                         borderRadius: BorderRadius.circular(12),
-                        borderSide: const BorderSide(color: borderDark),
+                        borderSide: BorderSide(color: borderDark),
                       ),
                       enabledBorder: OutlineInputBorder(
                         borderRadius: BorderRadius.circular(12),
-                        borderSide: const BorderSide(color: borderDark),
+                        borderSide: BorderSide(color: borderDark),
                       ),
                       focusedBorder: OutlineInputBorder(
                         borderRadius: BorderRadius.circular(12),
-                        borderSide: const BorderSide(color: neonGreen, width: 1.5),
+                        borderSide: BorderSide(color: neonGreen, width: 1.5),
                       ),
                     ),
                   ),
@@ -282,16 +282,16 @@ class _SavedNewsScreenState extends State<SavedNewsScreen> {
                   children: [
                     Text(
                       '${filtered.length} ${filtered.length == 1 ? 'Article' : 'Articles'} Saved Locally',
-                      style: const TextStyle(
+                      style: TextStyle(
                         color: textGray,
                         fontSize: 12,
                         fontWeight: FontWeight.w600,
                       ),
                     ),
                     const Spacer(),
-                    const Icon(Icons.offline_pin_rounded, color: neonGreen, size: 14),
+                    Icon(Icons.offline_pin_rounded, color: neonGreen, size: 14),
                     const SizedBox(width: 4),
-                    const Text(
+                    Text(
                       'Available Offline',
                       style: TextStyle(
                         color: neonGreen,
@@ -368,11 +368,11 @@ class _SavedNewsScreenState extends State<SavedNewsScreen> {
             behavior: SnackBarBehavior.floating,
             shape: RoundedRectangleBorder(
               borderRadius: BorderRadius.circular(10),
-              side: const BorderSide(color: borderDark),
+              side: BorderSide(color: borderDark),
             ),
             content: Text(
               'Removed "${item.title.length > 25 ? '${item.title.substring(0, 22)}...' : item.title}"',
-              style: const TextStyle(color: textWhite, fontSize: 12),
+              style: TextStyle(color: textWhite, fontSize: 12),
             ),
             action: SnackBarAction(
               label: 'UNDO',
@@ -421,7 +421,7 @@ class _SavedNewsScreenState extends State<SavedNewsScreen> {
                       if (item.videoUrl != null && item.videoUrl!.isNotEmpty)
                         Container(
                           color: Colors.black.withOpacity(0.3),
-                          child: const Center(
+                          child: Center(
                             child: CircleAvatar(
                               radius: 14,
                               backgroundColor: Colors.black54,
@@ -453,7 +453,7 @@ class _SavedNewsScreenState extends State<SavedNewsScreen> {
                             ),
                             child: Text(
                               item.category.toUpperCase(),
-                              style: const TextStyle(
+                              style: TextStyle(
                                 color: neonGreen,
                                 fontSize: 9,
                                 fontWeight: FontWeight.w900,
@@ -464,7 +464,7 @@ class _SavedNewsScreenState extends State<SavedNewsScreen> {
                           const Spacer(),
                           Text(
                             item.timeAgo,
-                            style: const TextStyle(color: textGray, fontSize: 10),
+                            style: TextStyle(color: textGray, fontSize: 10),
                           ),
                         ],
                       ),
@@ -475,7 +475,7 @@ class _SavedNewsScreenState extends State<SavedNewsScreen> {
                         item.title,
                         maxLines: 2,
                         overflow: TextOverflow.ellipsis,
-                        style: const TextStyle(
+                        style: TextStyle(
                           color: textWhite,
                           fontSize: 13,
                           fontWeight: FontWeight.bold,
@@ -487,9 +487,9 @@ class _SavedNewsScreenState extends State<SavedNewsScreen> {
                       // Action bar: View details & Remove
                       Row(
                         children: [
-                          const Icon(Icons.touch_app_outlined, color: textGray, size: 12),
+                          Icon(Icons.touch_app_outlined, color: textGray, size: 12),
                           const SizedBox(width: 4),
-                          const Text(
+                          Text(
                             'Tap to read',
                             style: TextStyle(color: textGray, fontSize: 11),
                           ),
@@ -505,9 +505,9 @@ class _SavedNewsScreenState extends State<SavedNewsScreen> {
                                     duration: const Duration(seconds: 2),
                                     shape: RoundedRectangleBorder(
                                       borderRadius: BorderRadius.circular(10),
-                                      side: const BorderSide(color: borderDark),
+                                      side: BorderSide(color: borderDark),
                                     ),
-                                    content: const Text(
+                                    content: Text(
                                       'Removed from Saved',
                                       style: TextStyle(color: textWhite, fontSize: 12),
                                     ),
@@ -529,7 +529,7 @@ class _SavedNewsScreenState extends State<SavedNewsScreen> {
                                 shape: BoxShape.circle,
                                 border: Border.all(color: borderDark, width: 0.8),
                               ),
-                              child: const Icon(
+                              child: Icon(
                                 Icons.bookmark_remove_rounded,
                                 color: alertRed,
                                 size: 16,
@@ -572,7 +572,7 @@ class _SavedNewsScreenState extends State<SavedNewsScreen> {
                   ),
                 ],
               ),
-              child: const Center(
+              child: Center(
                 child: Icon(
                   Icons.bookmark_border_rounded,
                   color: neonGreen,
@@ -581,7 +581,7 @@ class _SavedNewsScreenState extends State<SavedNewsScreen> {
               ),
             ),
             const SizedBox(height: 24),
-            const Text(
+            Text(
               'No Saved Articles Yet',
               style: TextStyle(
                 color: textWhite,
@@ -590,7 +590,7 @@ class _SavedNewsScreenState extends State<SavedNewsScreen> {
               ),
             ),
             const SizedBox(height: 10),
-            const Text(
+            Text(
               'Save your favorite gaming news, BGMI updates, and esports guides to read them anytime, even offline.',
               textAlign: TextAlign.center,
               style: TextStyle(

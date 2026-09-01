@@ -458,8 +458,34 @@ class _HomeScreenState extends State<HomeScreen> {
             return matchesCat && matchesSearch;
           }).toList();
 
-          final featuredNews = filteredList.isNotEmpty ? filteredList.first : null;
-          final remainingNews = filteredList.length > 1 ? filteredList.sublist(1) : <NewsModel>[];
+          // Featured card (top big card):
+          // Query Firestore 'news' where isFeatured == true, orderBy 'timestamp' desc, limit 1.
+          // Show it as FEATURED. If no document with isFeatured true found, then show latest document as fallback.
+          NewsModel? featuredNews;
+          if (filteredList.isNotEmpty) {
+            final featuredList = filteredList.where((item) => item.isFeatured == true).toList();
+            if (featuredList.isNotEmpty) {
+              featuredNews = featuredList.first;
+            } else {
+              featuredNews = filteredList.first; // Fallback to latest document
+            }
+          }
+
+          // LATEST NEWS section (horizontal list) and Grid section below:
+          // Query Firestore 'news' orderBy 'timestamp' desc and filter in code:
+          // only show docs where isFeatured != true (to handle old docs where field is missing).
+          // Make sure same news ID does not show in both Featured and Latest.
+          final List<NewsModel> remainingNews;
+          if (_searchQuery.isNotEmpty) {
+            remainingNews = filteredList;
+          } else {
+            remainingNews = filteredList.where((item) {
+              if (featuredNews != null && item.id == featuredNews.id) {
+                return false;
+              }
+              return item.isFeatured != true;
+            }).toList();
+          }
 
           // IGN Mixed Layout split: first 2 large horizontal, rest 2-column grid
           final horizontalCards = remainingNews.take(2).toList();
@@ -762,7 +788,7 @@ class _HomeScreenState extends State<HomeScreen> {
                       ),
                       const Spacer(),
                       Text(
-                        '${filteredList.length} articles',
+                        '${remainingNews.length} articles',
                         style: TextStyle(color: textGray, fontSize: 12),
                       ),
                     ],

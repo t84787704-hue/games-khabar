@@ -66,7 +66,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
         backgroundColor: cardDark,
         shape: RoundedRectangleBorder(
           borderRadius: BorderRadius.circular(16),
-          side: const BorderSide(color: borderDark),
+          side: BorderSide(color: borderDark),
         ),
         title: Row(
           children: const [
@@ -82,7 +82,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            const Text(
+            Text(
               'Are you sure you want to delete this article?',
               style: TextStyle(color: textGray, fontSize: 13),
             ),
@@ -98,7 +98,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
                 title,
                 maxLines: 2,
                 overflow: TextOverflow.ellipsis,
-                style: const TextStyle(
+                style: TextStyle(
                   color: textWhite,
                   fontWeight: FontWeight.w600,
                   fontSize: 13,
@@ -106,7 +106,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
               ),
             ),
             const SizedBox(height: 8),
-            const Text(
+            Text(
               'This action will remove it live from all users.',
               style: TextStyle(color: alertRed, fontSize: 11, fontWeight: FontWeight.w500),
             ),
@@ -115,7 +115,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(ctx, false),
-            child: const Text('Cancel', style: TextStyle(color: textGray, fontWeight: FontWeight.bold)),
+            child: Text('Cancel', style: TextStyle(color: textGray, fontWeight: FontWeight.bold)),
           ),
           ElevatedButton.icon(
             style: ElevatedButton.styleFrom(
@@ -144,7 +144,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
               behavior: SnackBarBehavior.floating,
               shape: RoundedRectangleBorder(
                 borderRadius: BorderRadius.circular(10),
-                side: const BorderSide(color: neonGreen, width: 1),
+                side: BorderSide(color: neonGreen, width: 1),
               ),
               content: Row(
                 children: const [
@@ -202,7 +202,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
         backgroundColor: cardDark,
         elevation: 0,
         leading: IconButton(
-          icon: const Icon(Icons.arrow_back_ios_new, color: textWhite, size: 20),
+          icon: Icon(Icons.arrow_back_ios_new, color: textWhite, size: 20),
           onPressed: () => Navigator.pushReplacementNamed(context, '/'),
         ),
         title: Row(
@@ -214,7 +214,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
                 borderRadius: BorderRadius.circular(6),
                 border: Border.all(color: neonGreen),
               ),
-              child: const Text(
+              child: Text(
                 'ADMIN',
                 style: TextStyle(
                   color: neonGreen,
@@ -224,7 +224,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
               ),
             ),
             const SizedBox(width: 8),
-            const Text(
+            Text(
               'Manage News',
               style: TextStyle(
                 color: textWhite,
@@ -237,12 +237,12 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
         actions: [
           IconButton(
             tooltip: 'Add New Khabar',
-            icon: const Icon(Icons.add_circle_outline, color: neonGreen, size: 24),
+            icon: Icon(Icons.add_circle_outline, color: neonGreen, size: 24),
             onPressed: _openAddScreen,
           ),
           IconButton(
             tooltip: 'Logout',
-            icon: const Icon(Icons.logout_rounded, color: alertRed, size: 22),
+            icon: Icon(Icons.logout_rounded, color: alertRed, size: 22),
             onPressed: () async {
               try {
                 await FirebaseAuth.instance.signOut();
@@ -285,7 +285,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
                       color: neonGreen.withOpacity(0.12),
                       borderRadius: BorderRadius.circular(8),
                     ),
-                    child: const Icon(Icons.dashboard_customize_rounded,
+                    child: Icon(Icons.dashboard_customize_rounded,
                         color: neonGreen, size: 20),
                   ),
                   const SizedBox(width: 12),
@@ -323,14 +323,14 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
                   _searchQuery = val.toLowerCase().trim();
                 });
               },
-              style: const TextStyle(color: textWhite, fontSize: 13),
+              style: TextStyle(color: textWhite, fontSize: 13),
               decoration: InputDecoration(
                 hintText: 'Search by title or category...',
-                hintStyle: const TextStyle(color: textGray, fontSize: 13),
-                prefixIcon: const Icon(Icons.search, color: textGray, size: 20),
+                hintStyle: TextStyle(color: textGray, fontSize: 13),
+                prefixIcon: Icon(Icons.search, color: textGray, size: 20),
                 suffixIcon: _searchQuery.isNotEmpty
                     ? IconButton(
-                        icon: const Icon(Icons.clear, color: textGray, size: 18),
+                        icon: Icon(Icons.clear, color: textGray, size: 18),
                         onPressed: () {
                           setState(() {
                             _searchQuery = '';
@@ -343,15 +343,15 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
                 contentPadding: const EdgeInsets.symmetric(vertical: 10, horizontal: 14),
                 border: OutlineInputBorder(
                   borderRadius: BorderRadius.circular(12),
-                  borderSide: const BorderSide(color: borderDark),
+                  borderSide: BorderSide(color: borderDark),
                 ),
                 enabledBorder: OutlineInputBorder(
                   borderRadius: BorderRadius.circular(12),
-                  borderSide: const BorderSide(color: borderDark),
+                  borderSide: BorderSide(color: borderDark),
                 ),
                 focusedBorder: OutlineInputBorder(
                   borderRadius: BorderRadius.circular(12),
-                  borderSide: const BorderSide(color: neonGreen, width: 1.5),
+                  borderSide: BorderSide(color: neonGreen, width: 1.5),
                 ),
               ),
             ),
@@ -403,7 +403,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
               stream: FirestoreService().getNewsStream(),
               builder: (context, snapshot) {
                 if (snapshot.connectionState == ConnectionState.waiting) {
-                  return const Center(
+                  return Center(
                     child: CircularProgressIndicator(
                       valueColor: AlwaysStoppedAnimation<Color>(neonGreen),
                     ),
@@ -430,13 +430,13 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
                       child: Column(
                         mainAxisAlignment: MainAxisAlignment.center,
                         children: [
-                          const Icon(Icons.newspaper_outlined, color: textGray, size: 48),
+                          Icon(Icons.newspaper_outlined, color: textGray, size: 48),
                           const SizedBox(height: 12),
                           Text(
                             _searchQuery.isNotEmpty || _selectedFilter != 'All'
                                 ? 'No matching news found'
                                 : 'No news found',
-                            style: const TextStyle(
+                            style: TextStyle(
                                 color: textWhite,
                                 fontSize: 16,
                                 fontWeight: FontWeight.bold),
@@ -446,7 +446,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
                             _searchQuery.isNotEmpty || _selectedFilter != 'All'
                                 ? 'Try changing your search or filter'
                                 : 'Tap "Add New Khabar" to publish your first article',
-                            style: const TextStyle(color: textGray, fontSize: 12),
+                            style: TextStyle(color: textGray, fontSize: 12),
                             textAlign: TextAlign.center,
                           ),
                           if (_searchQuery.isEmpty && _selectedFilter == 'All') ...[
@@ -513,7 +513,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
                                             borderRadius: BorderRadius.circular(3),
                                             border: Border.all(color: alertRed, width: 0.8),
                                           ),
-                                          child: const Icon(Icons.play_arrow_rounded, color: alertRed, size: 10),
+                                          child: Icon(Icons.play_arrow_rounded, color: alertRed, size: 10),
                                         ),
                                       ),
                                     Positioned(
@@ -566,7 +566,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
                                           ),
                                           child: Text(
                                             item.category.toUpperCase(),
-                                            style: const TextStyle(
+                                            style: TextStyle(
                                               color: neonGreen,
                                               fontSize: 10,
                                               fontWeight: FontWeight.bold,
@@ -576,7 +576,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
                                         const Spacer(),
                                         Text(
                                           item.timeAgo,
-                                          style: const TextStyle(
+                                          style: TextStyle(
                                               color: textGray, fontSize: 10),
                                         ),
                                       ],
@@ -586,7 +586,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
                                       item.title,
                                       maxLines: 2,
                                       overflow: TextOverflow.ellipsis,
-                                      style: const TextStyle(
+                                      style: TextStyle(
                                         color: textWhite,
                                         fontSize: 13.5,
                                         fontWeight: FontWeight.bold,
@@ -598,7 +598,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
                                       item.description,
                                       maxLines: 1,
                                       overflow: TextOverflow.ellipsis,
-                                      style: const TextStyle(
+                                      style: TextStyle(
                                           color: textGray, fontSize: 11),
                                     ),
                                   ],
@@ -621,7 +621,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
                                         color: neonGreen.withOpacity(0.12),
                                         borderRadius: BorderRadius.circular(8),
                                       ),
-                                      child: const Icon(Icons.edit_outlined,
+                                      child: Icon(Icons.edit_outlined,
                                           color: neonGreen, size: 18),
                                     ),
                                     onPressed: () => _openEditScreen(item),
@@ -640,7 +640,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
                                         color: alertRed.withOpacity(0.12),
                                         borderRadius: BorderRadius.circular(8),
                                       ),
-                                      child: const Icon(
+                                      child: Icon(
                                           Icons.delete_outline_rounded,
                                           color: alertRed,
                                           size: 18),

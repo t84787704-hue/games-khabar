@@ -153,7 +153,7 @@ class _AdminLoginScreenState extends State<AdminLoginScreen> {
               mainAxisSize: MainAxisSize.min,
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                const Text(
+                Text(
                   'Enter your Admin email to receive a password reset link:',
                   style: TextStyle(color: textGray, fontSize: 13),
                 ),
@@ -161,13 +161,13 @@ class _AdminLoginScreenState extends State<AdminLoginScreen> {
                 TextField(
                   controller: resetEmailController,
                   keyboardType: TextInputType.emailAddress,
-                  style: const TextStyle(color: textWhite, fontSize: 14),
+                  style: TextStyle(color: textWhite, fontSize: 14),
                   decoration: InputDecoration(
                     hintText: 'admin@example.com',
-                    hintStyle: const TextStyle(color: textGray, fontSize: 13),
+                    hintStyle: TextStyle(color: textGray, fontSize: 13),
                     filled: true,
                     fillColor: cardBg2,
-                    prefixIcon: const Icon(Icons.email_outlined, color: textGray, size: 18),
+                    prefixIcon: Icon(Icons.email_outlined, color: textGray, size: 18),
                     border: OutlineInputBorder(
                       borderRadius: BorderRadius.circular(10),
                       borderSide: const BorderSide(color: borderColor),
@@ -178,7 +178,7 @@ class _AdminLoginScreenState extends State<AdminLoginScreen> {
                     ),
                     focusedBorder: OutlineInputBorder(
                       borderRadius: BorderRadius.circular(10),
-                      borderSide: const BorderSide(color: neonGreen, width: 1.5),
+                      borderSide: BorderSide(color: neonGreen, width: 1.5),
                     ),
                     contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
                   ),
@@ -187,7 +187,7 @@ class _AdminLoginScreenState extends State<AdminLoginScreen> {
                   const SizedBox(height: 8),
                   Text(
                     resetError!,
-                    style: const TextStyle(color: alertRed, fontSize: 12),
+                    style: TextStyle(color: alertRed, fontSize: 12),
                   ),
                 ],
               ],
@@ -195,7 +195,7 @@ class _AdminLoginScreenState extends State<AdminLoginScreen> {
             actions: [
               TextButton(
                 onPressed: () => Navigator.pop(ctx),
-                child: const Text('Cancel', style: TextStyle(color: textGray)),
+                child: Text('Cancel', style: TextStyle(color: textGray)),
               ),
               ElevatedButton(
                 style: ElevatedButton.styleFrom(
@@ -222,7 +222,7 @@ class _AdminLoginScreenState extends State<AdminLoginScreen> {
                           if (ctx.mounted) {
                             Navigator.pop(ctx);
                             ScaffoldMessenger.of(context).showSnackBar(
-                              const SnackBar(
+                              SnackBar(
                                 backgroundColor: cardBg,
                                 behavior: SnackBarBehavior.floating,
                                 content: Text(
@@ -269,10 +269,10 @@ class _AdminLoginScreenState extends State<AdminLoginScreen> {
         backgroundColor: cardBg,
         elevation: 0,
         leading: IconButton(
-          icon: const Icon(Icons.arrow_back_ios_new, color: textWhite, size: 20),
+          icon: Icon(Icons.arrow_back_ios_new, color: textWhite, size: 20),
           onPressed: () => Navigator.pop(context),
         ),
-        title: const Text(
+        title: Text(
           'Admin Access',
           style: TextStyle(
             color: textWhite,
@@ -315,7 +315,7 @@ class _AdminLoginScreenState extends State<AdminLoginScreen> {
                         shape: BoxShape.circle,
                         border: Border.all(color: neonGreen, width: 2),
                       ),
-                      child: const Center(
+                      child: Center(
                         child: Icon(
                           Icons.admin_panel_settings_rounded,
                           color: neonGreen,
@@ -325,7 +325,7 @@ class _AdminLoginScreenState extends State<AdminLoginScreen> {
                     ),
                   ),
                   const SizedBox(height: 16),
-                  const Center(
+                  Center(
                     child: Text(
                       'Admin Login',
                       style: TextStyle(
@@ -336,7 +336,7 @@ class _AdminLoginScreenState extends State<AdminLoginScreen> {
                     ),
                   ),
                   const SizedBox(height: 6),
-                  const Center(
+                  Center(
                     child: Text(
                       'Games Khabar Content Management',
                       style: TextStyle(
@@ -357,12 +357,12 @@ class _AdminLoginScreenState extends State<AdminLoginScreen> {
                       ),
                       child: Row(
                         children: [
-                          const Icon(Icons.error_outline, color: alertRed, size: 18),
+                          Icon(Icons.error_outline, color: alertRed, size: 18),
                           const SizedBox(width: 8),
                           Expanded(
                             child: Text(
                               _errorMessage!,
-                              style: const TextStyle(color: alertRed, fontSize: 12),
+                              style: TextStyle(color: alertRed, fontSize: 12),
                             ),
                           ),
                         ],
@@ -372,7 +372,7 @@ class _AdminLoginScreenState extends State<AdminLoginScreen> {
                   ],
 
                   // Email
-                  const Text(
+                  Text(
                     'Admin Email',
                     style: TextStyle(
                       color: textWhite,
@@ -384,13 +384,13 @@ class _AdminLoginScreenState extends State<AdminLoginScreen> {
                   TextFormField(
                     controller: _emailController,
                     keyboardType: TextInputType.emailAddress,
-                    style: const TextStyle(color: textWhite, fontSize: 14),
+                    style: TextStyle(color: textWhite, fontSize: 14),
                     decoration: InputDecoration(
                       hintText: 'admin@yourdomain.com',
-                      hintStyle: const TextStyle(color: textGray, fontSize: 13),
+                      hintStyle: TextStyle(color: textGray, fontSize: 13),
                       filled: true,
                       fillColor: cardBg2,
-                      prefixIcon: const Icon(Icons.email_outlined, color: textGray, size: 20),
+                      prefixIcon: Icon(Icons.email_outlined, color: textGray, size: 20),
                       border: OutlineInputBorder(
                         borderRadius: BorderRadius.circular(12),
                         borderSide: const BorderSide(color: borderColor),
@@ -401,7 +401,7 @@ class _AdminLoginScreenState extends State<AdminLoginScreen> {
                       ),
                       focusedBorder: OutlineInputBorder(
                         borderRadius: BorderRadius.circular(12),
-                        borderSide: const BorderSide(color: neonGreen, width: 1.5),
+                        borderSide: BorderSide(color: neonGreen, width: 1.5),
                       ),
                       contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
                     ),
@@ -421,7 +421,7 @@ class _AdminLoginScreenState extends State<AdminLoginScreen> {
                   Row(
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
-                      const Text(
+                      Text(
                         'Password',
                         style: TextStyle(
                           color: textWhite,
@@ -431,7 +431,7 @@ class _AdminLoginScreenState extends State<AdminLoginScreen> {
                       ),
                       GestureDetector(
                         onTap: _showForgotPasswordDialog,
-                        child: const Text(
+                        child: Text(
                           'Forgot Password?',
                           style: TextStyle(
                             color: neonGreen,
@@ -446,13 +446,13 @@ class _AdminLoginScreenState extends State<AdminLoginScreen> {
                   TextFormField(
                     controller: _passwordController,
                     obscureText: _obscurePassword,
-                    style: const TextStyle(color: textWhite, fontSize: 14),
+                    style: TextStyle(color: textWhite, fontSize: 14),
                     decoration: InputDecoration(
                       hintText: '••••••••',
-                      hintStyle: const TextStyle(color: textGray, fontSize: 13),
+                      hintStyle: TextStyle(color: textGray, fontSize: 13),
                       filled: true,
                       fillColor: cardBg2,
-                      prefixIcon: const Icon(Icons.lock_outline, color: textGray, size: 20),
+                      prefixIcon: Icon(Icons.lock_outline, color: textGray, size: 20),
                       suffixIcon: IconButton(
                         icon: Icon(
                           _obscurePassword ? Icons.visibility_off : Icons.visibility,
@@ -475,7 +475,7 @@ class _AdminLoginScreenState extends State<AdminLoginScreen> {
                       ),
                       focusedBorder: OutlineInputBorder(
                         borderRadius: BorderRadius.circular(12),
-                        borderSide: const BorderSide(color: neonGreen, width: 1.5),
+                        borderSide: BorderSide(color: neonGreen, width: 1.5),
                       ),
                       contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
                     ),

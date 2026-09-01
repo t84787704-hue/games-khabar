@@ -13,6 +13,7 @@ class NewsModel {
   final double? rating;
   final String? originalPrice;
   final bool isFree;
+  final bool isFeatured;
   final String? timeLeft;
   final String? storeName;
   final String? downloadSize;
@@ -32,6 +33,7 @@ class NewsModel {
     this.rating,
     this.originalPrice,
     this.isFree = false,
+    this.isFeatured = false,
     this.timeLeft,
     this.storeName,
     this.downloadSize,
@@ -71,6 +73,7 @@ class NewsModel {
       rating: (data['rating'] as num?)?.toDouble(),
       originalPrice: data['originalPrice'] as String?,
       isFree: data['isFree'] as bool? ?? false,
+      isFeatured: data['isFeatured'] as bool? ?? false,
       timeLeft: data['timeLeft'] as String?,
       storeName: data['storeName'] as String?,
       downloadSize: data['downloadSize'] as String?,
@@ -93,6 +96,7 @@ class NewsModel {
       'rating': rating,
       'originalPrice': originalPrice,
       'isFree': isFree,
+      'isFeatured': isFeatured,
       'timeLeft': timeLeft,
       'storeName': storeName,
       'downloadSize': downloadSize,
@@ -119,6 +123,7 @@ class NewsModel {
       rating: (json['rating'] as num?)?.toDouble(),
       originalPrice: json['originalPrice'] as String?,
       isFree: json['isFree'] as bool? ?? false,
+      isFeatured: json['isFeatured'] as bool? ?? false,
       timeLeft: json['timeLeft'] as String?,
       storeName: json['storeName'] as String?,
       downloadSize: json['downloadSize'] as String?,
