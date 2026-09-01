@@ -93,79 +93,13 @@ class _HomeScreenState extends State<HomeScreen> {
     'Gaming News',
   ];
 
-  // 6 Fallback dummy gaming articles if Firestore has 0 documents
-  final List<NewsModel> _fallbackNews = [
-    NewsModel(
-      id: 'dummy-1',
-      title: 'BGMI 3.2 Update: New Map, Mecha Fusion Mode & Futuristic Weapons',
-      description:
-          'Battlegrounds Mobile India (BGMI) rolls out the massive 3.2 update featuring robotic suits, new weapon attachments, enhanced 90/120 FPS performance, and exciting Royale Pass rewards.',
-      category: 'BGMI',
-      imageUrl: 'https://images.unsplash.com/photo-1542751371-adc38448a05e?auto=format&fit=crop&w=1000&q=80',
-      timeAgo: '15m ago',
-      views: 1240,
-    ),
-    NewsModel(
-      id: 'dummy-2',
-      title: 'Free Fire MAX World Series Tournament 2024 Announced with \$2M Prize Pool',
-      description:
-          'Garena unveils official roadmap and qualifying tournament slots for Free Fire World Series with regional qualifiers and exclusive in-game character bundles.',
-      category: 'Free Fire',
-      imageUrl: 'https://images.unsplash.com/photo-1511512578047-dfb367046420?auto=format&fit=crop&w=1000&q=80',
-      timeAgo: '1h ago',
-      views: 980,
-    ),
-    NewsModel(
-      id: 'dummy-3',
-      title: 'PUBG Mobile 3.4 Vampire Blood Moon Mode & Flying Steed Details',
-      description:
-          'The upcoming PUBG Mobile 3.4 version brings gothic vampire powers, transformed werewolf mechanics, and magical mounts across Erangel and Livik.',
-      category: 'PUBG',
-      imageUrl: 'https://images.unsplash.com/photo-1538481199705-c710c4e965fc?auto=format&fit=crop&w=1000&q=80',
-      timeAgo: '3h ago',
-      views: 750,
-    ),
-    NewsModel(
-      id: 'dummy-4',
-      title: 'Call of Duty Warzone Mobile Season 4: Rebirth Island & Ranked Play',
-      description:
-          'Activision drops Season 4 with significant optimization passes for mid-range chipsets, Rebirth Island Resurgence mode, and shared Battle Pass progression.',
-      category: 'COD',
-      imageUrl: 'https://images.unsplash.com/photo-1550745165-9bc0b252726f?auto=format&fit=crop&w=1000&q=80',
-      timeAgo: '5h ago',
-      views: 620,
-    ),
-    NewsModel(
-      id: 'dummy-5',
-      title: 'Valorant Mobile Closed Beta Regional Rollout Dates Confirmed',
-      description:
-          'Riot Games starts regional technical testing for Valorant Mobile with intuitive touch controls, gyro aiming support, and customized mobile maps.',
-      category: 'Valorant',
-      imageUrl: 'https://images.unsplash.com/photo-1612287233207-6f81c9535032?auto=format&fit=crop&w=1000&q=80',
-      timeAgo: '8h ago',
-      views: 1430,
-    ),
-    NewsModel(
-      id: 'dummy-6',
-      title: 'GTA 6 Official Release Window & Vice City Map Size Comparisons',
-      description:
-          'Rockstar Games re-confirms Autumn 2025 release window for Grand Theft Auto VI, highlighting next-gen AI simulations and expanded Leonida state map.',
-      category: 'Gaming News',
-      imageUrl: 'https://images.unsplash.com/photo-1579373903781-fd5c0c30c4cd?auto=format&fit=crop&w=1000&q=80',
-      timeAgo: '12h ago',
-      views: 2890,
-    ),
-  ];
-
   void _navigateToDetail(NewsModel? news) {
     if (news == null) {
       debugPrint("Warning: Tried to navigate to detail with null news data");
       return;
     }
     print("Clicked news: ${news.id}");
-    if (!news.id.startsWith('dummy')) {
-      _firestoreService.incrementView(news.id);
-    }
+    _firestoreService.incrementView(news.id);
     Navigator.push(
       context,
       MaterialPageRoute(
@@ -422,10 +356,7 @@ class _HomeScreenState extends State<HomeScreen> {
             );
           }
 
-          final List<NewsModel> rawList =
-              (snapshot.hasData && snapshot.data!.isNotEmpty)
-                  ? snapshot.data!
-                  : _fallbackNews;
+          final List<NewsModel> rawList = snapshot.data ?? [];
 
           if (rawList.isEmpty) {
             return Center(
