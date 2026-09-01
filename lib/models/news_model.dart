@@ -2,8 +2,8 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 
 class NewsModel {
   final String id;
-  final String title;
-  final String description;
+  final Map<String, String> titleMap;
+  final Map<String, String> descriptionMap;
   final String category;
   final String imageUrl;
   final String? videoUrl;
@@ -22,8 +22,10 @@ class NewsModel {
 
   NewsModel({
     required this.id,
-    required this.title,
-    required this.description,
+    String? title,
+    Map<String, String>? titleMap,
+    String? description,
+    Map<String, String>? descriptionMap,
     required this.category,
     required this.imageUrl,
     this.videoUrl,
@@ -39,7 +41,76 @@ class NewsModel {
     this.downloadSize,
     this.sourceUrl,
     this.timestamp,
-  });
+  })  : titleMap = titleMap ?? _createDefaultMap(title ?? ''),
+        descriptionMap = descriptionMap ?? _createDefaultMap(description ?? '');
+
+  static Map<String, String> _createDefaultMap(String text) {
+    return {
+      'roman': text,
+      'ro': text,
+      'en': text,
+      'hi': text,
+      'ur': text,
+      'bn': text,
+      'ar': text,
+      'zh': text,
+      'zh-cn': text,
+    };
+  }
+
+  String get title => getTitle();
+  String get description => getDescription();
+  String get content => getDescription();
+
+  /// Retrieve title for a given language code (e.g. 'ro', 'roman', 'en', 'hi', 'ur', 'bn', 'ar', 'zh')
+  String getTitle([String? langCode]) {
+    if (langCode != null && langCode.isNotEmpty) {
+      final code = langCode.toLowerCase();
+      if (titleMap.containsKey(code) && titleMap[code]!.trim().isNotEmpty) {
+        return titleMap[code]!;
+      }
+      if (code == 'ro' && titleMap.containsKey('roman') && titleMap['roman']!.trim().isNotEmpty) {
+        return titleMap['roman']!;
+      }
+      if (code == 'roman' && titleMap.containsKey('ro') && titleMap['ro']!.trim().isNotEmpty) {
+        return titleMap['ro']!;
+      }
+      if (code == 'zh' && titleMap.containsKey('zh-cn') && titleMap['zh-cn']!.trim().isNotEmpty) {
+        return titleMap['zh-cn']!;
+      }
+    }
+    return titleMap['roman'] ??
+        titleMap['ro'] ??
+        titleMap['en'] ??
+        titleMap['ur'] ??
+        (titleMap.values.isNotEmpty ? titleMap.values.first : '');
+  }
+
+  /// Retrieve description / content for a given language code
+  String getDescription([String? langCode]) {
+    if (langCode != null && langCode.isNotEmpty) {
+      final code = langCode.toLowerCase();
+      if (descriptionMap.containsKey(code) && descriptionMap[code]!.trim().isNotEmpty) {
+        return descriptionMap[code]!;
+      }
+      if (code == 'ro' && descriptionMap.containsKey('roman') && descriptionMap['roman']!.trim().isNotEmpty) {
+        return descriptionMap['roman']!;
+      }
+      if (code == 'roman' && descriptionMap.containsKey('ro') && descriptionMap['ro']!.trim().isNotEmpty) {
+        return descriptionMap['ro']!;
+      }
+      if (code == 'zh' && descriptionMap.containsKey('zh-cn') && descriptionMap['zh-cn']!.trim().isNotEmpty) {
+        return descriptionMap['zh-cn']!;
+      }
+    }
+    return descriptionMap['roman'] ??
+        descriptionMap['ro'] ??
+        descriptionMap['en'] ??
+        descriptionMap['ur'] ??
+        (descriptionMap.values.isNotEmpty ? descriptionMap.values.first : '');
+  }
+
+  String getContent([String? langCode]) => getDescription(langCode);
 
   factory NewsModel.fromFirestore(DocumentSnapshot doc) {
     final data = doc.data() as Map<String, dynamic>? ?? {};
@@ -58,10 +129,29 @@ class NewsModel {
       }
     }
 
+    Map<String, String> parseTextMap(dynamic val, String fallback) {
+      if (val is Map) {
+        final res = <String, String>{};
+        val.forEach((k, v) {
+          if (v != null) res[k.toString()] = v.toString();
+        });
+        if (res.containsKey('roman') && !res.containsKey('ro')) {
+          res['ro'] = res['roman']!;
+        }
+        if (res.containsKey('ro') && !res.containsKey('roman')) {
+          res['roman'] = res['ro']!;
+        }
+        return res;
+      } else if (val is String && val.isNotEmpty) {
+        return _createDefaultMap(val);
+      }
+      return _createDefaultMap(fallback);
+    }
+
     return NewsModel(
       id: doc.id,
-      title: data['title'] as String? ?? '',
-      description: data['description'] as String? ?? '',
+      titleMap: parseTextMap(data['title'], ''),
+      descriptionMap: parseTextMap(data['content'] ?? data['description'], ''),
       category: data['category'] as String? ?? 'Gaming News',
       imageUrl: (data['imageUrl'] as String? ?? '').isNotEmpty
           ? data['imageUrl'] as String
@@ -85,7 +175,9 @@ class NewsModel {
   NewsModel copyWith({
     String? id,
     String? title,
+    Map<String, String>? titleMap,
     String? description,
+    Map<String, String>? descriptionMap,
     String? category,
     String? imageUrl,
     String? videoUrl,
@@ -104,8 +196,8 @@ class NewsModel {
   }) {
     return NewsModel(
       id: id ?? this.id,
-      title: title ?? this.title,
-      description: description ?? this.description,
+      titleMap: titleMap ?? (title != null ? _createDefaultMap(title) : this.titleMap),
+      descriptionMap: descriptionMap ?? (description != null ? _createDefaultMap(description) : this.descriptionMap),
       category: category ?? this.category,
       imageUrl: imageUrl ?? this.imageUrl,
       videoUrl: videoUrl ?? this.videoUrl,
@@ -127,8 +219,9 @@ class NewsModel {
   Map<String, dynamic> toJson() {
     return {
       'id': id,
-      'title': title,
-      'description': description,
+      'title': titleMap,
+      'content': descriptionMap,
+      'description': descriptionMap,
       'category': category,
       'imageUrl': imageUrl,
       'videoUrl': videoUrl,
@@ -152,10 +245,30 @@ class NewsModel {
     if (json['timestampMillis'] != null) {
       ts = Timestamp.fromMillisecondsSinceEpoch(json['timestampMillis'] as int);
     }
+
+    Map<String, String> parseTextMap(dynamic val, String fallback) {
+      if (val is Map) {
+        final res = <String, String>{};
+        val.forEach((k, v) {
+          if (v != null) res[k.toString()] = v.toString();
+        });
+        if (res.containsKey('roman') && !res.containsKey('ro')) {
+          res['ro'] = res['roman']!;
+        }
+        if (res.containsKey('ro') && !res.containsKey('roman')) {
+          res['roman'] = res['ro']!;
+        }
+        return res;
+      } else if (val is String && val.isNotEmpty) {
+        return _createDefaultMap(val);
+      }
+      return _createDefaultMap(fallback);
+    }
+
     return NewsModel(
       id: json['id'] as String? ?? '',
-      title: json['title'] as String? ?? '',
-      description: json['description'] as String? ?? '',
+      titleMap: parseTextMap(json['title'], ''),
+      descriptionMap: parseTextMap(json['content'] ?? json['description'], ''),
       category: json['category'] as String? ?? 'Gaming News',
       imageUrl: json['imageUrl'] as String? ?? 'https://picsum.photos/800/600?random=1',
       videoUrl: json['videoUrl'] as String?,

@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:cached_network_image/cached_network_image.dart';
+import 'package:easy_localization/easy_localization.dart';
 import 'package:share_plus/share_plus.dart';
 import 'package:url_launcher/url_launcher.dart';
 import '../models/news_model.dart';
@@ -121,16 +122,20 @@ class NewsDetailScreen extends StatelessWidget {
     final String playStoreUrl =
         'https://play.google.com/store/apps/details?id=$packageName';
 
+    final langCode = context.locale.languageCode;
+    final displayTitle = news.getTitle(langCode);
+    final displayDescription = news.getDescription(langCode);
+
     final String shareMessage =
-        '🔥 ${news.title}\n\n'
-        '${news.description}\n\n'
+        '🔥 $displayTitle\n\n'
+        '$displayDescription\n\n'
         '🎮 Read more on Games Khabar App 👇\n'
         '📲 Download Now: $playStoreUrl';
 
     try {
       await Share.share(
         shareMessage,
-        subject: '🎮 ${news.title} - Games Khabar',
+        subject: '🎮 $displayTitle - Games Khabar',
       );
     } catch (_) {
       await Clipboard.setData(ClipboardData(text: shareMessage));
@@ -202,7 +207,10 @@ class NewsDetailScreen extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final directUrl = _extractSourceUrl(news.description);
+    final langCode = context.locale.languageCode;
+    final displayTitle = news.getTitle(langCode);
+    final displayDescription = news.getDescription(langCode);
+    final directUrl = _extractSourceUrl(displayDescription);
     final ytId = youTubeVideoId;
     final isOtherVideo = hasVideoUrl && ytId == null;
 
@@ -340,7 +348,7 @@ class NewsDetailScreen extends StatelessWidget {
 
               // 3. News Title
               Text(
-                news.title,
+                displayTitle,
                 style: TextStyle(
                   color: textWhite,
                   fontSize: 22,
@@ -504,7 +512,7 @@ class NewsDetailScreen extends StatelessWidget {
 
               // 7. News Description Text
               Text(
-                news.description,
+                displayDescription,
                 style: const TextStyle(
                   color: textLightGray,
                   fontSize: 15,

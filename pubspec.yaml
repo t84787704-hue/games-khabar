@@ -25,6 +25,7 @@ dependencies:
   google_mobile_ads: ^5.1.0
   easy_localization: ^3.0.7
   google_fonts: ^6.2.1
+  translator: ^1.0.3
 
 dev_dependencies:
   flutter_test:

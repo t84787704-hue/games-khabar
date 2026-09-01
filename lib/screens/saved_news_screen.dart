@@ -184,10 +184,13 @@ class _SavedNewsScreenState extends State<SavedNewsScreen> {
           final categories = ['All', ...savedList.map((e) => e.category).toSet()];
 
           // Filter by category & search query
+          final langCode = context.locale.languageCode;
           final filtered = savedList.where((item) {
             final matchesCat = _selectedCategory == 'All' ||
                 item.category.toLowerCase() == _selectedCategory.toLowerCase();
             final matchesSearch = _searchQuery.isEmpty ||
+                item.getTitle(langCode).toLowerCase().contains(_searchQuery.toLowerCase()) ||
+                item.getDescription(langCode).toLowerCase().contains(_searchQuery.toLowerCase()) ||
                 item.title.toLowerCase().contains(_searchQuery.toLowerCase()) ||
                 item.description.toLowerCase().contains(_searchQuery.toLowerCase());
             return matchesCat && matchesSearch;
@@ -475,9 +478,9 @@ class _SavedNewsScreenState extends State<SavedNewsScreen> {
                       ),
                       const SizedBox(height: 6),
 
-                      // Title (Kept in original/Roman placeholder as requested)
+                      // Title
                       Text(
-                        item.title,
+                        item.getTitle(context.locale.languageCode),
                         maxLines: 2,
                         overflow: TextOverflow.ellipsis,
                         style: TextStyle(

@@ -9,6 +9,7 @@ import '../services/firestore_service.dart';
 import '../widgets/app_image_view.dart';
 import '../utils/admin_security.dart';
 import '../services/notification_service.dart';
+import '../services/translation_service.dart';
 
 /// Helper function to extract 11-char YouTube video ID from various YouTube URL formats or direct ID
 String? extractYoutubeId(String? url) {
@@ -72,6 +73,7 @@ class _AddNewsScreenState extends State<AddNewsScreen> {
   late String _selectedCategory;
   bool _isFeatured = false;
   bool _isPublishing = false;
+  String _publishingStatus = '';
   bool _isProcessingImage = false;
 
   // Selected image representation (base64 string and bytes for preview)
@@ -236,15 +238,28 @@ class _AddNewsScreenState extends State<AddNewsScreen> {
 
     setState(() {
       _isPublishing = true;
+      _publishingStatus = 'Translating to 7 languages...';
     });
 
     try {
       final title = _titleController.text.trim();
       final description = _descController.text.trim();
 
+      // Auto-translate title and description into 7 target languages:
+      // Roman, English, Hindi, Urdu, Bengali, Arabic, Chinese
+      final titleMap = await TranslationService.translateTo7Languages(title);
+      final contentMap = await TranslationService.translateTo7Languages(description);
+
+      if (mounted) {
+        setState(() {
+          _publishingStatus = 'Saving to Firestore...';
+        });
+      }
+
       final payload = {
-        'title': title,
-        'description': description,
+        'title': titleMap,
+        'content': contentMap,
+        'description': contentMap,
         'category': _selectedCategory,
         'imageUrl': finalImageUrl,
         'videoUrl': videoUrl, // Empty string if empty
@@ -260,8 +275,8 @@ class _AddNewsScreenState extends State<AddNewsScreen> {
         try {
           await NotificationService().sendNewsNotification(
             newsId: newNewsId,
-            title: title,
-            description: description,
+            title: titleMap['roman'] ?? title,
+            description: contentMap['roman'] ?? description,
             category: _selectedCategory,
             imageUrl: finalImageUrl,
           );
@@ -281,11 +296,13 @@ class _AddNewsScreenState extends State<AddNewsScreen> {
               children: [
                 Icon(Icons.check_circle_rounded, color: neonGreen, size: 20),
                 const SizedBox(width: 10),
-                Text(
-                  isEditing
-                      ? 'Khabar Updated Successfully! 🎮'
-                      : 'Khabar Published Successfully! 🎉',
-                  style: TextStyle(color: textWhite, fontWeight: FontWeight.bold),
+                Expanded(
+                  child: Text(
+                    isEditing
+                        ? 'Khabar Updated in 7 Languages! 🎮'
+                        : 'Khabar Published in 7 Languages! 🎉',
+                    style: TextStyle(color: textWhite, fontWeight: FontWeight.bold),
+                  ),
                 ),
               ],
             ),
@@ -306,6 +323,7 @@ class _AddNewsScreenState extends State<AddNewsScreen> {
       if (mounted) {
         setState(() {
           _isPublishing = false;
+          _publishingStatus = '';
         });
       }
     }
@@ -360,9 +378,58 @@ class _AddNewsScreenState extends State<AddNewsScreen> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
+              // 7-Language Auto-Translate Banner
+              Container(
+                margin: const EdgeInsets.only(bottom: 20),
+                padding: const EdgeInsets.all(14),
+                decoration: BoxDecoration(
+                  color: neonGreen.withOpacity(0.08),
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(color: neonGreen.withOpacity(0.4), width: 1),
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      children: [
+                        Icon(Icons.g_translate_rounded, color: neonGreen, size: 20),
+                        const SizedBox(width: 8),
+                        Text(
+                          'Multi-Language 7X Auto-Publish',
+                          style: TextStyle(
+                            color: neonGreen,
+                            fontWeight: FontWeight.bold,
+                            fontSize: 13.5,
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 6),
+                    Text(
+                      'Write only in Roman (or English). On publish, it will automatically translate to 7 languages and save directly to Firestore for instant display.',
+                      style: TextStyle(color: textGray, fontSize: 11.5, height: 1.35),
+                    ),
+                    const SizedBox(height: 10),
+                    Wrap(
+                      spacing: 6,
+                      runSpacing: 6,
+                      children: const [
+                        _LangPill(label: 'Roman', flag: '🇵🇰'),
+                        _LangPill(label: 'English', flag: '🇬🇧'),
+                        _LangPill(label: 'हिंदी', flag: '🇮🇳'),
+                        _LangPill(label: 'اردو', flag: '🇵🇰'),
+                        _LangPill(label: 'বাংলা', flag: '🇧🇩'),
+                        _LangPill(label: 'العربية', flag: '🇸🇦'),
+                        _LangPill(label: '中文', flag: '🇨🇳'),
+                      ],
+                    ),
+                  ],
+                ),
+              ),
+
               // Title Field
               Text(
-                'News Title (Heading)',
+                'News Title (Heading in Roman / English)',
                 style: TextStyle(color: textWhite, fontSize: 13, fontWeight: FontWeight.bold),
               ),
               const SizedBox(height: 8),
@@ -697,7 +764,7 @@ class _AddNewsScreenState extends State<AddNewsScreen> {
 
               // Description Multi-line
               Text(
-                'Description / Content',
+                'Description / Content (in Roman / English)',
                 style: TextStyle(color: textWhite, fontSize: 13, fontWeight: FontWeight.bold),
               ),
               const SizedBox(height: 8),
@@ -706,7 +773,7 @@ class _AddNewsScreenState extends State<AddNewsScreen> {
                 maxLines: 6,
                 style: TextStyle(color: textWhite, fontSize: 14, height: 1.4),
                 decoration: InputDecoration(
-                  hintText: 'Enter full news details in Urdu/English...',
+                  hintText: 'Enter full news details in Roman or English (auto-translates to 7 languages)...',
                   hintStyle: TextStyle(color: textGray, fontSize: 13),
                   filled: true,
                   fillColor: cardDark,
@@ -733,7 +800,7 @@ class _AddNewsScreenState extends State<AddNewsScreen> {
               SizedBox(
                 width: double.infinity,
                 height: 52,
-                child: ElevatedButton.icon(
+                child: ElevatedButton(
                   onPressed: (_isPublishing || _isProcessingImage) ? null : _submitNews,
                   style: ElevatedButton.styleFrom(
                     backgroundColor: neonGreen,
@@ -743,28 +810,48 @@ class _AddNewsScreenState extends State<AddNewsScreen> {
                       borderRadius: BorderRadius.circular(12),
                     ),
                   ),
-                  icon: _isPublishing
-                      ? const SizedBox.shrink()
-                      : Icon(
-                          isEditing ? Icons.check_circle_outline_rounded : Icons.publish_rounded,
-                          color: const Color(0xFF05080D),
-                          size: 20,
-                        ),
-                  label: _isPublishing
-                      ? const SizedBox(
-                          width: 22,
-                          height: 22,
-                          child: CircularProgressIndicator(
-                            strokeWidth: 2.5,
-                            valueColor: AlwaysStoppedAnimation<Color>(Color(0xFF05080D)),
-                          ),
+                  child: _isPublishing
+                      ? Row(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            const SizedBox(
+                              width: 20,
+                              height: 20,
+                              child: CircularProgressIndicator(
+                                strokeWidth: 2.5,
+                                valueColor: AlwaysStoppedAnimation<Color>(Color(0xFF05080D)),
+                              ),
+                            ),
+                            const SizedBox(width: 12),
+                            Text(
+                              _publishingStatus.isNotEmpty
+                                  ? _publishingStatus
+                                  : 'Translating to 7 languages...',
+                              style: const TextStyle(
+                                fontSize: 14,
+                                fontWeight: FontWeight.w900,
+                                color: Color(0xFF05080D),
+                              ),
+                            ),
+                          ],
                         )
-                      : Text(
-                          isEditing ? 'Update & Save Changes' : 'Save & Publish Khabar',
-                          style: const TextStyle(
-                            fontSize: 15,
-                            fontWeight: FontWeight.w900,
-                          ),
+                      : Row(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            Icon(
+                              isEditing ? Icons.check_circle_outline_rounded : Icons.publish_rounded,
+                              color: const Color(0xFF05080D),
+                              size: 20,
+                            ),
+                            const SizedBox(width: 8),
+                            Text(
+                              isEditing ? 'Update & Save Changes' : 'Save & Publish Khabar',
+                              style: const TextStyle(
+                                fontSize: 15,
+                                fontWeight: FontWeight.w900,
+                              ),
+                            ),
+                          ],
                         ),
                 ),
               ),
@@ -772,6 +859,40 @@ class _AddNewsScreenState extends State<AddNewsScreen> {
             ],
           ),
         ),
+      ),
+    );
+  }
+}
+
+class _LangPill extends StatelessWidget {
+  final String label;
+  final String flag;
+
+  const _LangPill({required this.label, required this.flag});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+      decoration: BoxDecoration(
+        color: const Color(0xFF1E1E24),
+        borderRadius: BorderRadius.circular(6),
+        border: Border.all(color: const Color(0xFF2E2E38)),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Text(flag, style: const TextStyle(fontSize: 11)),
+          const SizedBox(width: 4),
+          Text(
+            label,
+            style: const TextStyle(
+              color: Color(0xFF00FF88),
+              fontSize: 11,
+              fontWeight: FontWeight.bold,
+            ),
+          ),
+        ],
       ),
     );
   }

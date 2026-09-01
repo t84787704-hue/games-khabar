@@ -109,19 +109,7 @@ class FirestoreService {
     final idx = _currentNewsList.indexWhere((item) => item.id == id);
     if (idx != -1) {
       final old = _currentNewsList[idx];
-      _currentNewsList[idx] = NewsModel(
-        id: old.id,
-        title: old.title,
-        description: old.description,
-        category: old.category,
-        imageUrl: old.imageUrl,
-        timeAgo: old.timeAgo,
-        views: old.views + 1,
-        isFree: old.isFree,
-        isFeatured: old.isFeatured,
-        sourceUrl: old.sourceUrl,
-        timestamp: old.timestamp,
-      );
+      _currentNewsList[idx] = old.copyWith(views: old.views + 1);
       _streamController.add(List.from(_currentNewsList));
     }
 
@@ -159,14 +147,56 @@ class FirestoreService {
     return null;
   }
 
+  Map<String, String> _parseTextMap(dynamic val, String fallback) {
+    if (val is Map) {
+      final res = <String, String>{};
+      val.forEach((k, v) {
+        if (v != null) res[k.toString()] = v.toString();
+      });
+      if (res.containsKey('roman') && !res.containsKey('ro')) {
+        res['ro'] = res['roman']!;
+      }
+      if (res.containsKey('ro') && !res.containsKey('roman')) {
+        res['roman'] = res['ro']!;
+      }
+      return res;
+    } else if (val is String && val.isNotEmpty) {
+      return {
+        'roman': val,
+        'ro': val,
+        'en': val,
+        'hi': val,
+        'ur': val,
+        'bn': val,
+        'ar': val,
+        'zh': val,
+        'zh-cn': val,
+      };
+    }
+    return {
+      'roman': fallback,
+      'ro': fallback,
+      'en': fallback,
+      'hi': fallback,
+      'ur': fallback,
+      'bn': fallback,
+      'ar': fallback,
+      'zh': fallback,
+      'zh-cn': fallback,
+    };
+  }
+
   // Add new article - instant UI update + background Firestore sync (returns created newsId)
   Future<String> addNews(Map<String, dynamic> data) async {
     final localId = 'local-${DateTime.now().millisecondsSinceEpoch}';
     final videoUrl = data['videoUrl'] as String? ?? '';
+    final titleMap = _parseTextMap(data['title'], 'Untitled');
+    final descriptionMap = _parseTextMap(data['content'] ?? data['description'], '');
+
     final newModel = NewsModel(
       id: localId,
-      title: data['title'] as String? ?? 'Untitled',
-      description: data['description'] as String? ?? '',
+      titleMap: titleMap,
+      descriptionMap: descriptionMap,
       category: data['category'] as String? ?? 'Gaming News',
       imageUrl: (data['imageUrl'] as String? ?? '').isNotEmpty
           ? data['imageUrl'] as String
@@ -186,13 +216,14 @@ class FirestoreService {
 
     String createdId = localId;
 
-    // Try to sync with Firestore in background with 3-second timeout
+    // Try to sync with Firestore in background with 4-second timeout
     try {
       final db = _db;
       if (db != null) {
         final docRef = await db.collection('news').add({
-          'title': newModel.title,
-          'description': newModel.description,
+          'title': titleMap,
+          'content': descriptionMap,
+          'description': descriptionMap,
           'category': newModel.category,
           'imageUrl': newModel.imageUrl,
           'videoUrl': videoUrl,
@@ -233,8 +264,8 @@ class FirestoreService {
   // Update existing article - instant UI update + background Firestore sync
   Future<void> updateNews(String id, Map<String, dynamic> data) async {
     final idx = _currentNewsList.indexWhere((item) => item.id == id);
-    final title = data['title'] as String? ?? 'Untitled';
-    final description = data['description'] as String? ?? '';
+    final titleMap = _parseTextMap(data['title'], 'Untitled');
+    final descriptionMap = _parseTextMap(data['content'] ?? data['description'], '');
     final category = data['category'] as String? ?? 'Gaming News';
     final imageUrl = (data['imageUrl'] as String? ?? '').isNotEmpty
         ? data['imageUrl'] as String
@@ -247,8 +278,8 @@ class FirestoreService {
       final old = _currentNewsList[idx];
       _currentNewsList[idx] = NewsModel(
         id: old.id,
-        title: title,
-        description: description,
+        titleMap: titleMap,
+        descriptionMap: descriptionMap,
         category: category,
         imageUrl: imageUrl,
         videoUrl: videoUrl,
@@ -266,8 +297,9 @@ class FirestoreService {
       final db = _db;
       if (db != null && !id.startsWith('local-')) {
         final updateData = <String, dynamic>{
-          'title': title,
-          'description': description,
+          'title': titleMap,
+          'content': descriptionMap,
+          'description': descriptionMap,
           'category': category,
           'imageUrl': imageUrl,
           'videoUrl': videoUrl,

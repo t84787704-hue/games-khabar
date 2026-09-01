@@ -510,11 +510,14 @@ class _HomeScreenState extends State<HomeScreen> {
           }
 
           // Filter by category and search
+          final langCode = context.locale.languageCode;
           final filteredList = rawList.where((item) {
             final matchesCat = _selectedCategory == 'All' ||
                 item.category.toLowerCase().contains(_selectedCategory.toLowerCase()) ||
                 _selectedCategory.toLowerCase().contains(item.category.toLowerCase());
             final matchesSearch = _searchQuery.isEmpty ||
+                item.getTitle(langCode).toLowerCase().contains(_searchQuery.toLowerCase()) ||
+                item.getDescription(langCode).toLowerCase().contains(_searchQuery.toLowerCase()) ||
                 item.title.toLowerCase().contains(_searchQuery.toLowerCase()) ||
                 item.description.toLowerCase().contains(_searchQuery.toLowerCase());
             return matchesCat && matchesSearch;
@@ -788,7 +791,7 @@ class _HomeScreenState extends State<HomeScreen> {
                                   crossAxisAlignment: CrossAxisAlignment.start,
                                   children: [
                                     Text(
-                                      featuredNews!.title,
+                                      featuredNews!.getTitle(langCode),
                                       maxLines: 2,
                                       overflow: TextOverflow.ellipsis,
                                       style: TextStyle(
@@ -959,7 +962,7 @@ class _HomeScreenState extends State<HomeScreen> {
                                                 ],
                                               ),
                                               Text(
-                                                item.title,
+                                                item.getTitle(langCode),
                                                 maxLines: 2,
                                                 overflow: TextOverflow.ellipsis,
                                                 style: TextStyle(
