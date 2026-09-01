@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:firebase_core/firebase_core.dart';
+import 'package:google_mobile_ads/google_mobile_ads.dart';
 import 'screens/home_screen.dart';
 import 'screens/admin_login_screen.dart';
 import 'screens/admin_dashboard_screen.dart';
@@ -11,6 +12,9 @@ import 'firebase_options.dart';
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
   
+  // Initialize Google Mobile Ads SDK
+  await MobileAds.instance.initialize();
+
   await ThemeService.init();
 
   try {

@@ -9,6 +9,7 @@ import '../services/bookmark_service.dart';
 import '../services/notification_service.dart';
 import '../services/theme_service.dart';
 import '../widgets/app_image_view.dart';
+import '../widgets/native_ad_widget.dart';
 import 'news_detail_screen.dart';
 import 'saved_news_screen.dart';
 import 'profile_screen.dart';
@@ -731,311 +732,155 @@ class _HomeScreenState extends State<HomeScreen> {
                 ),
               ),
 
-              // Layout 1: First 2 Cards - Large Horizontal Card (IGN style)
-              if (horizontalCards.isNotEmpty)
+              // Latest News List with Native Ad after every 3 articles
+              if (remainingNews.isNotEmpty)
                 SliverList(
                   delegate: SliverChildBuilderDelegate(
                     (context, index) {
-                      final item = horizontalCards[index];
-                      return Padding(
-                        padding: const EdgeInsets.fromLTRB(16, 0, 16, 10),
-                        child: Material(
-                          color: Colors.transparent,
-                          child: InkWell(
-                            onTap: () => _navigateToDetail(item),
-                            borderRadius: BorderRadius.circular(12),
-                            splashColor: neonGreen.withOpacity(0.15),
-                            highlightColor: neonGreen.withOpacity(0.08),
-                            child: Container(
-                              height: 110,
-                              decoration: BoxDecoration(
-                                color: cardDark,
+                      final item = remainingNews[index];
+                      return Column(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Padding(
+                            padding: const EdgeInsets.fromLTRB(16, 0, 16, 10),
+                            child: Material(
+                              color: Colors.transparent,
+                              child: InkWell(
+                                onTap: () => _navigateToDetail(item),
                                 borderRadius: BorderRadius.circular(12),
-                                border: Border.all(color: borderDark),
-                              ),
-                              child: Row(
-                                children: [
-                                  // Left Image (120px)
-                                  ClipRRect(
-                                    borderRadius: const BorderRadius.horizontal(left: Radius.circular(11)),
-                                    child: SizedBox(
-                                      width: 120,
-                                      height: double.infinity,
-                                      child: Stack(
-                                        fit: StackFit.expand,
-                                        children: [
-                                          AppImageView(
-                                            imageUrl: item.imageUrl,
-                                            fit: BoxFit.cover,
-                                          ),
-                                          if (item.videoUrl != null && item.videoUrl!.isNotEmpty)
-                                            Center(
-                                              child: Container(
-                                                padding: const EdgeInsets.all(6),
-                                                decoration: BoxDecoration(
-                                                  color: Colors.black.withOpacity(0.65),
-                                                  shape: BoxShape.circle,
-                                                  border: Border.all(color: const Color(0xFFFF4655), width: 1.5),
-                                                ),
-                                                child: const Icon(
-                                                  Icons.play_arrow_rounded,
-                                                  color: Color(0xFFFF4655),
-                                                  size: 18,
-                                                ),
-                                              ),
-                                            ),
-                                        ],
-                                      ),
-                                    ),
+                                splashColor: neonGreen.withOpacity(0.15),
+                                highlightColor: neonGreen.withOpacity(0.08),
+                                child: Container(
+                                  height: 110,
+                                  decoration: BoxDecoration(
+                                    color: cardDark,
+                                    borderRadius: BorderRadius.circular(12),
+                                    border: Border.all(color: borderDark),
                                   ),
-                                  // Right Content
-                                  Expanded(
-                                    child: Padding(
-                                      padding: const EdgeInsets.all(10.0),
-                                      child: Column(
-                                        crossAxisAlignment: CrossAxisAlignment.start,
-                                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                                        children: [
-                                          Row(
+                                  child: Row(
+                                    children: [
+                                      // Left Image (120px)
+                                      ClipRRect(
+                                        borderRadius: const BorderRadius.horizontal(left: Radius.circular(11)),
+                                        child: SizedBox(
+                                          width: 120,
+                                          height: double.infinity,
+                                          child: Stack(
+                                            fit: StackFit.expand,
                                             children: [
-                                              Container(
-                                                padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                                                decoration: BoxDecoration(
-                                                  color: neonGreen.withOpacity(0.15),
-                                                  borderRadius: BorderRadius.circular(4),
-                                                  border: Border.all(color: neonGreen.withOpacity(0.5)),
-                                                ),
-                                                child: Text(
-                                                  item.category.toUpperCase(),
-                                                  style: TextStyle(
-                                                    color: neonGreen,
-                                                    fontSize: 9,
-                                                    fontWeight: FontWeight.w900,
+                                              AppImageView(
+                                                imageUrl: item.imageUrl,
+                                                fit: BoxFit.cover,
+                                              ),
+                                              if (item.videoUrl != null && item.videoUrl!.isNotEmpty)
+                                                Center(
+                                                  child: Container(
+                                                    padding: const EdgeInsets.all(6),
+                                                    decoration: BoxDecoration(
+                                                      color: Colors.black.withOpacity(0.65),
+                                                      shape: BoxShape.circle,
+                                                      border: Border.all(color: const Color(0xFFFF4655), width: 1.5),
+                                                    ),
+                                                    child: const Icon(
+                                                      Icons.play_arrow_rounded,
+                                                      color: Color(0xFFFF4655),
+                                                      size: 18,
+                                                    ),
                                                   ),
                                                 ),
-                                              ),
-                                              const Spacer(),
-                                              Text(
-                                                item.timeAgo,
-                                                style: TextStyle(color: textGray, fontSize: 10),
-                                              ),
                                             ],
                                           ),
-                                          Text(
-                                            item.title,
-                                            maxLines: 2,
-                                            overflow: TextOverflow.ellipsis,
-                                            style: TextStyle(
-                                              color: textWhite,
-                                              fontSize: 13,
-                                              fontWeight: FontWeight.w800,
-                                              height: 1.25,
-                                            ),
-                                          ),
-                                          Row(
-                                            children: [
-                                              Icon(Icons.visibility_outlined, color: textGray, size: 12),
-                                              const SizedBox(width: 4),
-                                              Text(
-                                                '${item.views}',
-                                                style: TextStyle(color: textGray, fontSize: 10),
-                                              ),
-                                              const Spacer(),
-                                              ValueListenableBuilder<Set<String>>(
-                                                valueListenable: BookmarkService.bookmarkedIdsNotifier,
-                                                builder: (context, ids, _) {
-                                                  final isSaved = ids.contains(item.id);
-                                                  return GestureDetector(
-                                                    onTap: () => _toggleBookmark(item),
-                                                    child: Padding(
-                                                      padding: const EdgeInsets.all(2.0),
-                                                      child: Icon(
-                                                        isSaved ? Icons.bookmark_rounded : Icons.bookmark_border_rounded,
-                                                        color: isSaved ? neonGreen : textGray,
-                                                        size: 17,
-                                                      ),
-                                                    ),
-                                                  );
-                                                },
-                                              ),
-                                            ],
-                                          ),
-                                        ],
+                                        ),
                                       ),
-                                    ),
-                                  ),
-                                ],
-                              ),
-                            ),
-                          ),
-                        ),
-                      );
-                    },
-                    childCount: horizontalCards.length,
-                  ),
-                ),
-
-              // Layout 2: Rest of News - 2 Columns Grid (IGN Style)
-              if (gridCards.isNotEmpty)
-                SliverPadding(
-                  padding: const EdgeInsets.fromLTRB(16, 4, 16, 30),
-                  sliver: SliverGrid(
-                    gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-                      crossAxisCount: 2,
-                      crossAxisSpacing: 12,
-                      mainAxisSpacing: 12,
-                      childAspectRatio: 0.78,
-                    ),
-                    delegate: SliverChildBuilderDelegate(
-                      (context, index) {
-                        final item = gridCards[index];
-                        return Material(
-                          color: Colors.transparent,
-                          child: InkWell(
-                            onTap: () => _navigateToDetail(item),
-                            borderRadius: BorderRadius.circular(12),
-                            splashColor: neonGreen.withOpacity(0.15),
-                            highlightColor: neonGreen.withOpacity(0.08),
-                            child: Container(
-                              decoration: BoxDecoration(
-                                color: cardDark,
-                                borderRadius: BorderRadius.circular(12),
-                                border: Border.all(color: borderDark),
-                              ),
-                              child: Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  // Top Image
-                                  ClipRRect(
-                                    borderRadius: const BorderRadius.vertical(top: Radius.circular(11)),
-                                    child: AspectRatio(
-                                      aspectRatio: 16 / 10,
-                                      child: Stack(
-                                        fit: StackFit.expand,
-                                        children: [
-                                          AppImageView(
-                                            imageUrl: item.imageUrl,
-                                            fit: BoxFit.cover,
-                                          ),
-                                          if (item.videoUrl != null && item.videoUrl!.isNotEmpty)
-                                            Positioned(
-                                              bottom: 6,
-                                              right: 6,
-                                              child: Container(
-                                                padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 2),
-                                                decoration: BoxDecoration(
-                                                  color: Colors.black.withOpacity(0.8),
-                                                  borderRadius: BorderRadius.circular(4),
-                                                  border: Border.all(color: const Color(0xFFFF4655), width: 1),
-                                                ),
-                                                child: Row(
-                                                  mainAxisSize: MainAxisSize.min,
-                                                  children: const [
-                                                    Icon(Icons.play_arrow_rounded, color: Color(0xFFFF4655), size: 12),
-                                                    SizedBox(width: 2),
-                                                    Text(
-                                                      'VIDEO',
+                                      // Right Content
+                                      Expanded(
+                                        child: Padding(
+                                          padding: const EdgeInsets.all(10.0),
+                                          child: Column(
+                                            crossAxisAlignment: CrossAxisAlignment.start,
+                                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                            children: [
+                                              Row(
+                                                children: [
+                                                  Container(
+                                                    padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                                                    decoration: BoxDecoration(
+                                                      color: neonGreen.withOpacity(0.15),
+                                                      borderRadius: BorderRadius.circular(4),
+                                                      border: Border.all(color: neonGreen.withOpacity(0.5)),
+                                                    ),
+                                                    child: Text(
+                                                      item.category.toUpperCase(),
                                                       style: TextStyle(
-                                                        color: Colors.white,
+                                                        color: neonGreen,
                                                         fontSize: 9,
                                                         fontWeight: FontWeight.w900,
                                                       ),
                                                     ),
-                                                  ],
-                                                ),
-                                              ),
-                                            ),
-                                        ],
-                                      ),
-                                    ),
-                                  ),
-                                  // Details below
-                                  Expanded(
-                                    child: Padding(
-                                      padding: const EdgeInsets.all(8.0),
-                                      child: Column(
-                                        crossAxisAlignment: CrossAxisAlignment.start,
-                                        children: [
-                                          // Category Dot + Category Name
-                                          Row(
-                                            children: [
-                                              Container(
-                                                width: 6,
-                                                height: 6,
-                                                decoration: BoxDecoration(
-                                                  color: neonGreen,
-                                                  shape: BoxShape.circle,
-                                                ),
-                                              ),
-                                              const SizedBox(width: 5),
-                                              Expanded(
-                                                child: Text(
-                                                  item.category.toUpperCase(),
-                                                  maxLines: 1,
-                                                  overflow: TextOverflow.ellipsis,
-                                                  style: TextStyle(
-                                                    color: neonGreen,
-                                                    fontSize: 10,
-                                                    fontWeight: FontWeight.w900,
                                                   ),
+                                                  const Spacer(),
+                                                  Text(
+                                                    item.timeAgo,
+                                                    style: TextStyle(color: textGray, fontSize: 10),
+                                                  ),
+                                                ],
+                                              ),
+                                              Text(
+                                                item.title,
+                                                maxLines: 2,
+                                                overflow: TextOverflow.ellipsis,
+                                                style: TextStyle(
+                                                  color: textWhite,
+                                                  fontSize: 13,
+                                                  fontWeight: FontWeight.w800,
+                                                  height: 1.25,
                                                 ),
                                               ),
-                                            ],
-                                          ),
-                                          const SizedBox(height: 5),
-                                          // Title (max 2 lines)
-                                          Expanded(
-                                            child: Text(
-                                              item.title,
-                                              maxLines: 2,
-                                              overflow: TextOverflow.ellipsis,
-                                              style: TextStyle(
-                                                color: textWhite,
-                                                fontSize: 12,
-                                                fontWeight: FontWeight.w800,
-                                                height: 1.25,
-                                              ),
-                                            ),
-                                          ),
-                                          // Time Ago & Bookmark Action
-                                          Row(
-                                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                                            children: [
-                                              Text(
-                                                item.timeAgo,
-                                                style: TextStyle(color: textGray, fontSize: 10),
-                                              ),
-                                              ValueListenableBuilder<Set<String>>(
-                                                valueListenable: BookmarkService.bookmarkedIdsNotifier,
-                                                builder: (context, ids, _) {
-                                                  final isSaved = ids.contains(item.id);
-                                                  return GestureDetector(
-                                                    onTap: () => _toggleBookmark(item),
-                                                    child: Padding(
-                                                      padding: const EdgeInsets.all(2.0),
-                                                      child: Icon(
-                                                        isSaved ? Icons.bookmark_rounded : Icons.bookmark_border_rounded,
-                                                        color: isSaved ? neonGreen : textGray,
-                                                        size: 15,
-                                                      ),
-                                                    ),
-                                                  );
-                                                },
+                                              Row(
+                                                children: [
+                                                  Icon(Icons.visibility_outlined, color: textGray, size: 12),
+                                                  const SizedBox(width: 4),
+                                                  Text(
+                                                    '${item.views}',
+                                                    style: TextStyle(color: textGray, fontSize: 10),
+                                                  ),
+                                                  const Spacer(),
+                                                  ValueListenableBuilder<Set<String>>(
+                                                    valueListenable: BookmarkService.bookmarkedIdsNotifier,
+                                                    builder: (context, ids, _) {
+                                                      final isSaved = ids.contains(item.id);
+                                                      return GestureDetector(
+                                                        onTap: () => _toggleBookmark(item),
+                                                        child: Padding(
+                                                          padding: const EdgeInsets.all(2.0),
+                                                          child: Icon(
+                                                            isSaved ? Icons.bookmark_rounded : Icons.bookmark_border_rounded,
+                                                            color: isSaved ? neonGreen : textGray,
+                                                            size: 17,
+                                                          ),
+                                                        ),
+                                                      );
+                                                    },
+                                                  ),
+                                                ],
                                               ),
                                             ],
                                           ),
-                                        ],
+                                        ),
                                       ),
-                                    ),
+                                    ],
                                   ),
-                                ],
+                                ),
                               ),
                             ),
                           ),
-                        );
-                      },
-                      childCount: gridCards.length,
-                    ),
+                          // Show Native Ad after every 3 articles (index % 3 == 2)
+                          if (index % 3 == 2)
+                            const NativeAdWidget(),
+                        ],
+                      );
+                    },
+                    childCount: remainingNews.length,
                   ),
                 ),
 
