@@ -550,43 +550,51 @@ class _HomeScreenState extends State<HomeScreen> {
               // Category Filter Chips
               SliverToBoxAdapter(
                 child: SizedBox(
-                  height: 48,
-                  child: ListView.separated(
-                    scrollDirection: Axis.horizontal,
-                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                    itemCount: _categories.length,
-                    separatorBuilder: (_, __) => const SizedBox(width: 8),
-                    itemBuilder: (context, index) {
-                      final cat = _categories[index];
-                      final isSelected = _selectedCategory == cat;
-                      return GestureDetector(
-                        onTap: () {
-                          setState(() {
-                            _selectedCategory = cat;
-                          });
-                        },
-                        child: AnimatedContainer(
-                          duration: const Duration(milliseconds: 200),
-                          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
-                          decoration: BoxDecoration(
-                            color: isSelected ? neonGreen.withOpacity(0.12) : cardDark,
-                            borderRadius: BorderRadius.circular(20),
-                            border: Border.all(
-                              color: isSelected ? neonGreen : borderDark,
-                              width: isSelected ? 1.5 : 1,
+                  height: 52,
+                  child: Align(
+                    alignment: Alignment.center,
+                    child: SingleChildScrollView(
+                      scrollDirection: Axis.horizontal,
+                      physics: const BouncingScrollPhysics(),
+                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                      child: Row(
+                        children: _categories.map((cat) {
+                          final isSelected = _selectedCategory == cat;
+                          return Padding(
+                            padding: const EdgeInsets.only(right: 8),
+                            child: GestureDetector(
+                              onTap: () {
+                                setState(() {
+                                  _selectedCategory = cat;
+                                });
+                              },
+                              child: AnimatedContainer(
+                                duration: const Duration(milliseconds: 200),
+                                height: 36,
+                                alignment: Alignment.center,
+                                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                                decoration: BoxDecoration(
+                                  color: isSelected ? neonGreen.withOpacity(0.12) : cardDark,
+                                  borderRadius: BorderRadius.circular(20),
+                                  border: Border.all(
+                                    color: isSelected ? neonGreen : borderDark,
+                                    width: isSelected ? 1.5 : 1,
+                                  ),
+                                ),
+                                child: Text(
+                                  cat,
+                                  style: TextStyle(
+                                    color: isSelected ? neonGreen : textGray,
+                                    fontSize: 12,
+                                    fontWeight: isSelected ? FontWeight.w900 : FontWeight.w600,
+                                  ),
+                                ),
+                              ),
                             ),
-                          ),
-                          child: Text(
-                            cat,
-                            style: TextStyle(
-                              color: isSelected ? neonGreen : textGray,
-                              fontSize: 12,
-                              fontWeight: isSelected ? FontWeight.w900 : FontWeight.w600,
-                            ),
-                          ),
-                        ),
-                      );
-                    },
+                          );
+                        }).toList(),
+                      ),
+                    ),
                   ),
                 ),
               ),
