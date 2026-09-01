@@ -500,6 +500,7 @@ class _HomeScreenState extends State<HomeScreen> {
               await _firestoreService.refreshNews();
             },
             child: CustomScrollView(
+              clipBehavior: Clip.none,
               physics: const AlwaysScrollableScrollPhysics(
                 parent: BouncingScrollPhysics(),
               ),
@@ -537,7 +538,7 @@ class _HomeScreenState extends State<HomeScreen> {
                                       _searchQuery = '';
                                     });
                                   },
-                                )
+                                  )
                               : null,
                           border: InputBorder.none,
                           contentPadding: const EdgeInsets.symmetric(vertical: 12),
@@ -551,49 +552,44 @@ class _HomeScreenState extends State<HomeScreen> {
               SliverToBoxAdapter(
                 child: SizedBox(
                   height: 52,
-                  child: Align(
-                    alignment: Alignment.center,
-                    child: SingleChildScrollView(
-                      scrollDirection: Axis.horizontal,
-                      physics: const BouncingScrollPhysics(),
-                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                      child: Row(
-                        children: _categories.map((cat) {
-                          final isSelected = _selectedCategory == cat;
-                          return Padding(
-                            padding: const EdgeInsets.only(right: 8),
-                            child: GestureDetector(
-                              onTap: () {
-                                setState(() {
-                                  _selectedCategory = cat;
-                                });
-                              },
-                              child: AnimatedContainer(
-                                duration: const Duration(milliseconds: 200),
-                                height: 36,
-                                alignment: Alignment.center,
-                                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                                decoration: BoxDecoration(
-                                  color: isSelected ? neonGreen.withOpacity(0.12) : cardDark,
-                                  borderRadius: BorderRadius.circular(20),
-                                  border: Border.all(
-                                    color: isSelected ? neonGreen : borderDark,
-                                    width: isSelected ? 1.5 : 1,
-                                  ),
-                                ),
-                                child: Text(
-                                  cat,
-                                  style: TextStyle(
-                                    color: isSelected ? neonGreen : textGray,
-                                    fontSize: 12,
-                                    fontWeight: isSelected ? FontWeight.w900 : FontWeight.w600,
-                                  ),
-                                ),
+                  child: SingleChildScrollView(
+                    scrollDirection: Axis.horizontal,
+                    clipBehavior: Clip.none,
+                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                    child: Row(
+                      crossAxisAlignment: CrossAxisAlignment.center,
+                      children: _categories.map((cat) {
+                        final selected = _selectedCategory == cat;
+                        return Padding(
+                          padding: const EdgeInsets.only(right: 8),
+                          child: ChoiceChip(
+                            label: Text(cat),
+                            selected: selected,
+                            onSelected: (val) {
+                              setState(() {
+                                _selectedCategory = cat;
+                              });
+                            },
+                            showCheckmark: false,
+                            materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                            visualDensity: VisualDensity.compact,
+                            backgroundColor: cardDark,
+                            selectedColor: neonGreen.withOpacity(0.15),
+                            labelStyle: TextStyle(
+                              fontSize: 14,
+                              color: selected ? neonGreen : textWhite,
+                              fontWeight: selected ? FontWeight.bold : FontWeight.w500,
+                            ),
+                            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                            shape: StadiumBorder(
+                              side: BorderSide(
+                                color: selected ? neonGreen : borderDark,
+                                width: selected ? 1.5 : 1,
                               ),
                             ),
-                          );
-                        }).toList(),
-                      ),
+                          ),
+                        );
+                      }).toList(),
                     ),
                   ),
                 ),
