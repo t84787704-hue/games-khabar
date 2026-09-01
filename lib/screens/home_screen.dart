@@ -2,12 +2,14 @@ import 'package:flutter/material.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:cached_network_image/cached_network_image.dart';
+import 'package:easy_localization/easy_localization.dart';
 import '../firebase_options.dart';
 import '../models/news_model.dart';
 import '../services/firestore_service.dart';
 import '../services/bookmark_service.dart';
 import '../services/notification_service.dart';
 import '../services/theme_service.dart';
+import '../services/language_service.dart';
 import '../widgets/app_image_view.dart';
 import '../widgets/native_ad_widget.dart';
 import 'news_detail_screen.dart';
@@ -42,6 +44,22 @@ class _HomeScreenState extends State<HomeScreen> {
   void initState() {
     super.initState();
     _initFirebaseAndServices();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _checkFirstLaunchLanguage();
+    });
+  }
+
+  Future<void> _checkFirstLaunchLanguage() async {
+    final shouldShow = await LanguageService.shouldShowFirstLaunchPicker();
+    if (shouldShow && mounted) {
+      LanguageService.showLanguageBottomSheet(
+        context,
+        isFirstLaunch: true,
+        onLanguageChanged: () {
+          if (mounted) setState(() {});
+        },
+      );
+    }
   }
 
   Future<void> _initFirebaseAndServices() async {
@@ -93,6 +111,19 @@ class _HomeScreenState extends State<HomeScreen> {
     'Valorant',
     'Gaming News',
   ];
+
+  String _getCategoryDisplayName(String cat) {
+    switch (cat.toLowerCase()) {
+      case 'all':
+        return 'category_all'.tr();
+      case 'gaming news':
+        return 'category_gaming_news'.tr();
+      case 'valorant':
+        return 'category_valorant'.tr();
+      default:
+        return cat;
+    }
+  }
 
   void _navigateToDetail(NewsModel? news) {
     if (news == null) {
@@ -182,10 +213,10 @@ class _HomeScreenState extends State<HomeScreen> {
               unselectedLabelStyle: const TextStyle(fontWeight: FontWeight.normal, fontSize: 12),
               elevation: 0,
               items: [
-                const BottomNavigationBarItem(
-                  icon: Icon(Icons.sports_esports_outlined),
-                  activeIcon: Icon(Icons.sports_esports_rounded),
-                  label: 'Khabar',
+                BottomNavigationBarItem(
+                  icon: const Icon(Icons.sports_esports_outlined),
+                  activeIcon: const Icon(Icons.sports_esports_rounded),
+                  label: 'nav_khabar'.tr(),
                 ),
                 BottomNavigationBarItem(
                   icon: savedCount > 0
@@ -216,12 +247,12 @@ class _HomeScreenState extends State<HomeScreen> {
                           child: const Icon(Icons.bookmark_rounded),
                         )
                       : const Icon(Icons.bookmark_rounded),
-                  label: 'Saved',
+                  label: 'nav_saved'.tr(),
                 ),
-                const BottomNavigationBarItem(
-                  icon: Icon(Icons.person_outline_rounded),
-                  activeIcon: Icon(Icons.person_rounded),
-                  label: 'Profile',
+                BottomNavigationBarItem(
+                  icon: const Icon(Icons.person_outline_rounded),
+                  activeIcon: const Icon(Icons.person_rounded),
+                  label: 'nav_profile'.tr(),
                 ),
               ],
             );
@@ -458,7 +489,7 @@ class _HomeScreenState extends State<HomeScreen> {
                           });
                         },
                         decoration: InputDecoration(
-                          hintText: 'Search gaming news, BGMI, Free Fire...',
+                          hintText: 'search_hint'.tr(),
                           hintStyle: TextStyle(color: textGray, fontSize: 13),
                           prefixIcon: Icon(Icons.search, color: neonGreen, size: 20),
                           suffixIcon: _searchQuery.isNotEmpty
@@ -492,10 +523,11 @@ class _HomeScreenState extends State<HomeScreen> {
                       crossAxisAlignment: CrossAxisAlignment.center,
                       children: _categories.map((cat) {
                         final selected = _selectedCategory == cat;
+                        final displayName = _getCategoryDisplayName(cat);
                         return Padding(
                           padding: const EdgeInsets.only(right: 8),
                           child: ChoiceChip(
-                            label: Text(cat),
+                            label: Text(displayName),
                             selected: selected,
                             onSelected: (val) {
                               setState(() {
@@ -714,7 +746,7 @@ class _HomeScreenState extends State<HomeScreen> {
                       ),
                       const SizedBox(width: 8),
                       Text(
-                        _selectedCategory == 'All' ? 'LATEST NEWS' : _selectedCategory.toUpperCase(),
+                        _selectedCategory == 'All' ? 'latest_news'.tr() : _getCategoryDisplayName(_selectedCategory).toUpperCase(),
                         style: TextStyle(
                           color: textWhite,
                           fontSize: 16,
@@ -724,7 +756,7 @@ class _HomeScreenState extends State<HomeScreen> {
                       ),
                       const Spacer(),
                       Text(
-                        '${remainingNews.length} articles',
+                        'articles_count'.tr(args: ['${remainingNews.length}']),
                         style: TextStyle(color: textGray, fontSize: 12),
                       ),
                     ],

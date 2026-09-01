@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
+import 'package:easy_localization/easy_localization.dart';
 import '../models/news_model.dart';
 import '../services/bookmark_service.dart';
+import '../services/theme_service.dart';
 import '../widgets/app_image_view.dart';
 import 'news_detail_screen.dart';
 
@@ -20,14 +22,14 @@ class _SavedNewsScreenState extends State<SavedNewsScreen> {
   final TextEditingController _searchController = TextEditingController();
   bool _isSearching = false;
 
-  static const Color bgDark = Color(0xFF0A0A0F);
-  static const Color cardDark = Color(0xFF1E1E24);
-  static const Color cardDark2 = Color(0xFF15151A);
-  static const Color borderDark = Color(0xFF2E2E38);
-  static const Color neonGreen = Color(0xFF00FF88);
-  static const Color alertRed = Color(0xFFFF4655);
-  static const Color textWhite = Color(0xFFFFFFFF);
-  static const Color textGray = Color(0xFF9E9EA7);
+  Color get bgDark => ThemeService.bg;
+  Color get cardDark => ThemeService.card;
+  Color get cardDark2 => ThemeService.cardSecondary;
+  Color get borderDark => ThemeService.border;
+  Color get neonGreen => ThemeService.primaryGreen;
+  Color get alertRed => const Color(0xFFFF4655);
+  Color get textWhite => ThemeService.textPrimary;
+  Color get textGray => ThemeService.textSecondary;
 
   @override
   void dispose() {
@@ -54,23 +56,25 @@ class _SavedNewsScreenState extends State<SavedNewsScreen> {
           side: BorderSide(color: borderDark, width: 1.5),
         ),
         title: Row(
-          children: const [
-            Icon(Icons.delete_sweep_rounded, color: alertRed, size: 24),
-            SizedBox(width: 10),
-            Text(
-              'Clear All Bookmarks?',
-              style: TextStyle(color: textWhite, fontWeight: FontWeight.bold, fontSize: 16),
+          children: [
+            const Icon(Icons.delete_sweep_rounded, color: Color(0xFFFF4655), size: 24),
+            const SizedBox(width: 10),
+            Expanded(
+              child: Text(
+                'clear_all_bookmarks_q'.tr(),
+                style: TextStyle(color: textWhite, fontWeight: FontWeight.bold, fontSize: 16),
+              ),
             ),
           ],
         ),
         content: Text(
-          'Are you sure you want to remove all saved articles from your local storage?',
+          'clear_all_bookmarks_confirm'.tr(),
           style: TextStyle(color: textGray, fontSize: 13),
         ),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(ctx),
-            child: Text('Cancel', style: TextStyle(color: textGray)),
+            child: Text('cancel'.tr(), style: TextStyle(color: textGray)),
           ),
           ElevatedButton(
             style: ElevatedButton.styleFrom(
@@ -90,14 +94,14 @@ class _SavedNewsScreenState extends State<SavedNewsScreen> {
                       side: BorderSide(color: borderDark),
                     ),
                     content: Text(
-                      'All saved articles removed',
+                      'all_bookmarks_removed'.tr(),
                       style: TextStyle(color: textWhite),
                     ),
                   ),
                 );
               }
             },
-            child: Text('Clear All', style: TextStyle(color: textWhite, fontWeight: FontWeight.bold)),
+            child: Text('clear_all'.tr(), style: TextStyle(color: textWhite, fontWeight: FontWeight.bold)),
           ),
         ],
       ),
@@ -125,7 +129,7 @@ class _SavedNewsScreenState extends State<SavedNewsScreen> {
             ),
             const SizedBox(width: 10),
             Text(
-              'Saved Articles',
+              'saved_articles'.tr(),
               style: TextStyle(
                 color: textWhite,
                 fontWeight: FontWeight.w900,
@@ -160,7 +164,7 @@ class _SavedNewsScreenState extends State<SavedNewsScreen> {
                   ),
                   IconButton(
                     icon: Icon(Icons.delete_sweep_outlined, color: textGray, size: 22),
-                    tooltip: 'Clear All',
+                    tooltip: 'clear_all'.tr(),
                     onPressed: () => _confirmClearAll(context),
                   ),
                 ],
@@ -205,7 +209,7 @@ class _SavedNewsScreenState extends State<SavedNewsScreen> {
                       });
                     },
                     decoration: InputDecoration(
-                      hintText: 'Search saved articles...',
+                      hintText: 'search_saved_hint'.tr(),
                       hintStyle: TextStyle(color: textGray, fontSize: 13),
                       prefixIcon: Icon(Icons.search_rounded, color: neonGreen, size: 20),
                       suffixIcon: _searchQuery.isNotEmpty
@@ -251,8 +255,9 @@ class _SavedNewsScreenState extends State<SavedNewsScreen> {
                     itemBuilder: (context, index) {
                       final cat = categories[index];
                       final isSelected = cat == _selectedCategory;
+                      final label = cat == 'All' ? 'category_all'.tr() : cat;
                       return ChoiceChip(
-                        label: Text(cat),
+                        label: Text(label),
                         selected: isSelected,
                         selectedColor: neonGreen,
                         backgroundColor: cardDark,
@@ -281,7 +286,7 @@ class _SavedNewsScreenState extends State<SavedNewsScreen> {
                 child: Row(
                   children: [
                     Text(
-                      '${filtered.length} ${filtered.length == 1 ? 'Article' : 'Articles'} Saved Locally',
+                      'articles_count'.tr(args: ['${filtered.length}']),
                       style: TextStyle(
                         color: textGray,
                         fontSize: 12,
@@ -292,7 +297,7 @@ class _SavedNewsScreenState extends State<SavedNewsScreen> {
                     Icon(Icons.offline_pin_rounded, color: neonGreen, size: 14),
                     const SizedBox(width: 4),
                     Text(
-                      'Available Offline',
+                      'available_offline'.tr(),
                       style: TextStyle(
                         color: neonGreen,
                         fontSize: 11,
@@ -309,11 +314,11 @@ class _SavedNewsScreenState extends State<SavedNewsScreen> {
                     ? Center(
                         child: Column(
                           mainAxisAlignment: MainAxisAlignment.center,
-                          children: const [
+                          children: [
                             Icon(Icons.search_off_rounded, color: textGray, size: 48),
-                            SizedBox(height: 12),
+                            const SizedBox(height: 12),
                             Text(
-                              'No saved articles match your search',
+                              'no_news_found'.tr(),
                               style: TextStyle(color: textWhite, fontWeight: FontWeight.bold, fontSize: 14),
                             ),
                           ],
@@ -350,12 +355,12 @@ class _SavedNewsScreenState extends State<SavedNewsScreen> {
         ),
         child: Row(
           mainAxisSize: MainAxisSize.min,
-          children: const [
-            Icon(Icons.delete_outline_rounded, color: textWhite, size: 24),
-            SizedBox(width: 6),
+          children: [
+            const Icon(Icons.delete_outline_rounded, color: Colors.white, size: 24),
+            const SizedBox(width: 6),
             Text(
-              'Remove',
-              style: TextStyle(color: textWhite, fontWeight: FontWeight.bold, fontSize: 13),
+              'remove'.tr(),
+              style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 13),
             ),
           ],
         ),
@@ -470,7 +475,7 @@ class _SavedNewsScreenState extends State<SavedNewsScreen> {
                       ),
                       const SizedBox(height: 6),
 
-                      // Title
+                      // Title (Kept in original/Roman placeholder as requested)
                       Text(
                         item.title,
                         maxLines: 2,
@@ -490,7 +495,7 @@ class _SavedNewsScreenState extends State<SavedNewsScreen> {
                           Icon(Icons.touch_app_outlined, color: textGray, size: 12),
                           const SizedBox(width: 4),
                           Text(
-                            'Tap to read',
+                            'tap_to_read'.tr(),
                             style: TextStyle(color: textGray, fontSize: 11),
                           ),
                           const Spacer(),
@@ -508,7 +513,7 @@ class _SavedNewsScreenState extends State<SavedNewsScreen> {
                                       side: BorderSide(color: borderDark),
                                     ),
                                     content: Text(
-                                      'Removed from Saved',
+                                      'removed_from_saved'.tr(),
                                       style: TextStyle(color: textWhite, fontSize: 12),
                                     ),
                                     action: SnackBarAction(
@@ -582,7 +587,8 @@ class _SavedNewsScreenState extends State<SavedNewsScreen> {
             ),
             const SizedBox(height: 24),
             Text(
-              'No Saved Articles Yet',
+              'no_saved_news'.tr(),
+              textAlign: TextAlign.center,
               style: TextStyle(
                 color: textWhite,
                 fontWeight: FontWeight.w900,
@@ -591,7 +597,7 @@ class _SavedNewsScreenState extends State<SavedNewsScreen> {
             ),
             const SizedBox(height: 10),
             Text(
-              'Save your favorite gaming news, BGMI updates, and esports guides to read them anytime, even offline.',
+              'no_saved_news_desc'.tr(),
               textAlign: TextAlign.center,
               style: TextStyle(
                 color: textGray,
@@ -614,9 +620,9 @@ class _SavedNewsScreenState extends State<SavedNewsScreen> {
               ),
               onPressed: widget.onExploreTap,
               icon: const Icon(Icons.sports_esports_rounded, size: 20),
-              label: const Text(
-                'Explore Latest News',
-                style: TextStyle(
+              label: Text(
+                'explore_latest_news'.tr(),
+                style: const TextStyle(
                   fontWeight: FontWeight.w900,
                   fontSize: 14,
                   letterSpacing: 0.3,
