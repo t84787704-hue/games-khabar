@@ -36,7 +36,6 @@ class ListTileNativeAdFactory(private val layoutInflater: LayoutInflater) : Goog
         val callToActionView = adView.findViewById<Button>(R.id.ad_call_to_action)
         val iconView = adView.findViewById<ImageView>(R.id.ad_app_icon)
         val mediaView = adView.findViewById<com.google.android.gms.ads.nativead.MediaView>(R.id.ad_media)
-        val adChoicesView = adView.findViewById<com.google.android.gms.ads.nativead.AdChoicesView>(R.id.ad_choices)
 
         adView.headlineView = headlineView
         adView.advertiserView = advertiserView
@@ -44,9 +43,6 @@ class ListTileNativeAdFactory(private val layoutInflater: LayoutInflater) : Goog
         adView.callToActionView = callToActionView
         adView.iconView = iconView
         adView.mediaView = mediaView
-        if (adChoicesView != null) {
-            adView.adChoicesView = adChoicesView
-        }
 
         headlineView?.text = nativeAd.headline
         advertiserView?.text = nativeAd.advertiser ?: ""
