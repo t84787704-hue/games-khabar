@@ -480,7 +480,7 @@ class _HomeScreenState extends State<HomeScreen> {
             remainingNews = filteredList;
           } else {
             remainingNews = filteredList.where((item) {
-              if (featuredNews != null && item.id == featuredNews.id) {
+              if (featuredNews != null && item.id == featuredNews!.id) {
                 return false;
               }
               return item.isFeatured != true;
@@ -597,7 +597,7 @@ class _HomeScreenState extends State<HomeScreen> {
                   child: Padding(
                     padding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
                     child: GestureDetector(
-                      onTap: () => _navigateToDetail(featuredNews),
+                      onTap: () => _navigateToDetail(featuredNews!),
                       child: Container(
                         height: 200,
                         decoration: BoxDecoration(
@@ -618,7 +618,7 @@ class _HomeScreenState extends State<HomeScreen> {
                             fit: StackFit.expand,
                             children: [
                               AppImageView(
-                                imageUrl: featuredNews.imageUrl,
+                                imageUrl: featuredNews!.imageUrl,
                                 fit: BoxFit.cover,
                               ),
                               // IGN Dramatic Black Gradient Overlay
@@ -658,7 +658,7 @@ class _HomeScreenState extends State<HomeScreen> {
                                         ),
                                       ),
                                     ),
-                                    if (featuredNews.videoUrl != null && featuredNews.videoUrl!.isNotEmpty) ...[
+                                    if (featuredNews!.videoUrl != null && featuredNews!.videoUrl!.isNotEmpty) ...[
                                       const SizedBox(width: 6),
                                       Container(
                                         padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 4),
@@ -693,9 +693,9 @@ class _HomeScreenState extends State<HomeScreen> {
                                 child: ValueListenableBuilder<Set<String>>(
                                   valueListenable: BookmarkService.bookmarkedIdsNotifier,
                                   builder: (context, ids, _) {
-                                    final isSaved = ids.contains(featuredNews.id);
+                                    final isSaved = ids.contains(featuredNews!.id);
                                     return GestureDetector(
-                                      onTap: () => _toggleBookmark(featuredNews),
+                                      onTap: () => _toggleBookmark(featuredNews!),
                                       child: Container(
                                         padding: const EdgeInsets.all(6),
                                         decoration: BoxDecoration(
@@ -721,7 +721,7 @@ class _HomeScreenState extends State<HomeScreen> {
                                   crossAxisAlignment: CrossAxisAlignment.start,
                                   children: [
                                     Text(
-                                      featuredNews.title,
+                                      featuredNews!.title,
                                       maxLines: 2,
                                       overflow: TextOverflow.ellipsis,
                                       style: TextStyle(
@@ -735,7 +735,7 @@ class _HomeScreenState extends State<HomeScreen> {
                                     Row(
                                       children: [
                                         Text(
-                                          featuredNews.category.toUpperCase(),
+                                          featuredNews!.category.toUpperCase(),
                                           style: TextStyle(
                                             color: neonGreen,
                                             fontSize: 10,
@@ -746,7 +746,7 @@ class _HomeScreenState extends State<HomeScreen> {
                                         Text('•', style: TextStyle(color: textGray, fontSize: 11)),
                                         const SizedBox(width: 8),
                                         Text(
-                                          featuredNews.timeAgo,
+                                          featuredNews!.timeAgo,
                                           style: TextStyle(color: textGray, fontSize: 11),
                                         ),
                                       ],
