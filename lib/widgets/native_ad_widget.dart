@@ -21,8 +21,6 @@ class _NativeAdWidgetState extends State<NativeAdWidget> {
   static const Color _cardDark = Color(0xFF1E1E1E);
   static const Color _borderDark = Color(0xFF2A2A2A);
   static const Color _neonGreen = Color(0xFF00FF88);
-  static const Color _textWhite = Colors.white;
-  static const Color _textBlack = Color(0xFF05080D);
   static const Color _textGray = Colors.grey;
 
   @override
@@ -38,32 +36,6 @@ class _NativeAdWidgetState extends State<NativeAdWidget> {
       request: const AdRequest(),
       nativeAdOptions: NativeAdOptions(
         adChoicesPlacement: AdChoicesPlacement.topRightCorner,
-      ),
-      nativeTemplateStyle: NativeTemplateStyle(
-        templateType: TemplateType.medium,
-        mainBackgroundColor: _cardDark,
-        cornerRadius: 12.0,
-        callToActionTextStyle: NativeTemplateTextStyle(
-          textColor: _textBlack,
-          backgroundColor: _neonGreen,
-          style: NativeTemplateFontStyle.bold,
-          size: 14.0,
-        ),
-        primaryTextStyle: NativeTemplateTextStyle(
-          textColor: _textWhite,
-          style: NativeTemplateFontStyle.bold,
-          size: 15.0,
-        ),
-        secondaryTextStyle: NativeTemplateTextStyle(
-          textColor: _textGray,
-          style: NativeTemplateFontStyle.normal,
-          size: 12.0,
-        ),
-        tertiaryTextStyle: NativeTemplateTextStyle(
-          textColor: _textGray,
-          style: NativeTemplateFontStyle.normal,
-          size: 10.0,
-        ),
       ),
       listener: NativeAdListener(
         onAdLoaded: (ad) {
@@ -102,6 +74,7 @@ class _NativeAdWidgetState extends State<NativeAdWidget> {
 
     return Container(
       margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+      height: 400,
       decoration: BoxDecoration(
         color: _cardDark,
         borderRadius: BorderRadius.circular(12),
@@ -109,20 +82,9 @@ class _NativeAdWidgetState extends State<NativeAdWidget> {
       ),
       clipBehavior: Clip.antiAlias,
       child: _isAdLoaded && _nativeAd != null
-          ? Container(
-              margin: const EdgeInsets.all(4),
-              child: ConstrainedBox(
-                constraints: const BoxConstraints(
-                  minWidth: 320,
-                  minHeight: 120,
-                  maxHeight: 340,
-                  maxWidth: 400,
-                ),
-                child: AdWidget(ad: _nativeAd!),
-              ),
-            )
+          ? AdWidget(ad: _nativeAd!)
           : Container(
-              height: 120,
+              height: 400,
               alignment: Alignment.center,
               padding: const EdgeInsets.all(16),
               child: const Row(
