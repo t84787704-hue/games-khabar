@@ -82,6 +82,48 @@ class NewsModel {
     );
   }
 
+  NewsModel copyWith({
+    String? id,
+    String? title,
+    String? description,
+    String? category,
+    String? imageUrl,
+    String? videoUrl,
+    String? youtubeId,
+    String? timeAgo,
+    int? views,
+    double? rating,
+    String? originalPrice,
+    bool? isFree,
+    bool? isFeatured,
+    String? timeLeft,
+    String? storeName,
+    String? downloadSize,
+    String? sourceUrl,
+    Timestamp? timestamp,
+  }) {
+    return NewsModel(
+      id: id ?? this.id,
+      title: title ?? this.title,
+      description: description ?? this.description,
+      category: category ?? this.category,
+      imageUrl: imageUrl ?? this.imageUrl,
+      videoUrl: videoUrl ?? this.videoUrl,
+      youtubeId: youtubeId ?? this.youtubeId,
+      timeAgo: timeAgo ?? this.timeAgo,
+      views: views ?? this.views,
+      rating: rating ?? this.rating,
+      originalPrice: originalPrice ?? this.originalPrice,
+      isFree: isFree ?? this.isFree,
+      isFeatured: isFeatured ?? this.isFeatured,
+      timeLeft: timeLeft ?? this.timeLeft,
+      storeName: storeName ?? this.storeName,
+      downloadSize: downloadSize ?? this.downloadSize,
+      sourceUrl: sourceUrl ?? this.sourceUrl,
+      timestamp: timestamp ?? this.timestamp,
+    );
+  }
+
   Map<String, dynamic> toJson() {
     return {
       'id': id,

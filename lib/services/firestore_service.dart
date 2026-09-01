@@ -278,4 +278,47 @@ class FirestoreService {
       }
     } catch (_) {}
   }
+
+  // Set an article as featured and demote previous featured articles without deleting them
+  Future<void> makeFeatured(String newDocId) async {
+    // 1. Update in-memory state for immediate UI reactivity
+    for (int i = 0; i < _currentNewsList.length; i++) {
+      final item = _currentNewsList[i];
+      if (item.id == newDocId) {
+        _currentNewsList[i] = item.copyWith(isFeatured: true);
+      } else if (item.isFeatured == true) {
+        _currentNewsList[i] = item.copyWith(isFeatured: false);
+      }
+    }
+    _streamController.add(List.from(_currentNewsList));
+
+    // 2. Perform atomic batch update on Firestore
+    try {
+      final db = _db;
+      if (db != null) {
+        final batch = db.batch();
+
+        // Find all currently featured documents
+        final querySnapshot = await db
+            .collection('news')
+            .where('isFeatured', isEqualTo: true)
+            .get();
+
+        for (var doc in querySnapshot.docs) {
+          if (doc.id != newDocId) {
+            // Demote old featured document to regular news (do NOT delete)
+            batch.update(doc.reference, {'isFeatured': false});
+          }
+        }
+
+        // Promote new document to featured
+        final newDocRef = db.collection('news').doc(newDocId);
+        batch.update(newDocRef, {'isFeatured': true});
+
+        await batch.commit();
+      }
+    } catch (e) {
+      debugPrint('Error making news featured: $e');
+    }
+  }
 }
