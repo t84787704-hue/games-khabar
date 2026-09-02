@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:cloud_functions/cloud_functions.dart';
 import '../models/news_model.dart';
 import '../services/firestore_service.dart';
 import '../services/auto_news_scraper.dart';
@@ -27,6 +28,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
 
   String _searchQuery = '';
   String _selectedFilter = 'All';
+  bool _isSyncing = false;
 
   @override
   void initState() {
@@ -412,110 +414,151 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
                     ),
 
                     // Live Action & Status Banner
-                    ValueListenableBuilder<bool>(
-                      valueListenable: AutoNewsScraper().isScrapingNotifier,
-                      builder: (context, isScraping, _) {
-                        return ValueListenableBuilder<String>(
-                          valueListenable: AutoNewsScraper().statusNotifier,
-                          builder: (context, statusMsg, _) {
-                            return Container(
-                              margin: const EdgeInsets.all(16),
-                              padding: const EdgeInsets.all(14),
-                              decoration: BoxDecoration(
-                                color: cardDark,
-                                borderRadius: BorderRadius.circular(14),
-                                border: Border.all(
-                                  color: isScraping ? neonGreen : borderDark,
-                                ),
-                              ),
-                              child: Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
+                    StatefulBuilder(
+                      builder: (context, setSheetState) {
+                        return Container(
+                          margin: const EdgeInsets.all(16),
+                          padding: const EdgeInsets.all(14),
+                          decoration: BoxDecoration(
+                            color: cardDark,
+                            borderRadius: BorderRadius.circular(14),
+                            border: Border.all(
+                              color: _isSyncing ? Colors.orange : borderDark,
+                            ),
+                          ),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Row(
                                 children: [
-                                  Row(
-                                    children: [
-                                      Icon(
-                                        isScraping ? Icons.sync : Icons.check_circle_outline,
-                                        color: isScraping ? neonGreen : textGray,
-                                        size: 18,
-                                      ),
-                                      const SizedBox(width: 8),
-                                      Expanded(
-                                        child: Text(
-                                          statusMsg,
-                                          style: TextStyle(
-                                            color: isScraping ? neonGreen : textWhite,
-                                            fontSize: 13,
-                                            fontWeight: FontWeight.w600,
-                                          ),
-                                        ),
-                                      ),
-                                      if (isScraping)
-                                        const SizedBox(
-                                          width: 16,
-                                          height: 16,
-                                          child: CircularProgressIndicator(
-                                            strokeWidth: 2,
-                                            valueColor: AlwaysStoppedAnimation<Color>(neonGreen),
-                                          ),
-                                        ),
-                                    ],
+                                  Icon(
+                                    _isSyncing ? Icons.sync : Icons.check_circle_outline,
+                                    color: _isSyncing ? Colors.orange : textGray,
+                                    size: 18,
                                   ),
-                                  const SizedBox(height: 12),
-                                  Row(
-                                    children: [
-                                      Expanded(
-                                        child: ElevatedButton.icon(
-                                          style: ElevatedButton.styleFrom(
-                                            backgroundColor: neonGreen,
-                                            foregroundColor: const Color(0xFF05080D),
-                                            padding: const EdgeInsets.symmetric(vertical: 12),
-                                            shape: RoundedRectangleBorder(
-                                              borderRadius: BorderRadius.circular(10),
-                                            ),
-                                          ),
-                                          onPressed: isScraping
-                                              ? null
-                                              : () async {
-                                                  final added = await AutoNewsScraper().runScraper();
+                                  const SizedBox(width: 8),
+                                  Expanded(
+                                    child: Text(
+                                      _isSyncing ? 'Syncing RSS Feeds via Cloud Functions...' : 'Ready to sync latest gaming news',
+                                      style: TextStyle(
+                                        color: _isSyncing ? Colors.orange : textWhite,
+                                        fontSize: 13,
+                                        fontWeight: FontWeight.w600,
+                                      ),
+                                    ),
+                                  ),
+                                  if (_isSyncing)
+                                    const SizedBox(
+                                      width: 16,
+                                      height: 16,
+                                      child: CircularProgressIndicator(
+                                        strokeWidth: 2,
+                                        valueColor: AlwaysStoppedAnimation<Color>(Colors.orange),
+                                      ),
+                                    ),
+                                ],
+                              ),
+                              const SizedBox(height: 12),
+                              Row(
+                                children: [
+                                  Expanded(
+                                    child: ElevatedButton(
+                                      onPressed: _isSyncing
+                                          ? null
+                                          : () async {
+                                              setSheetState(() => _isSyncing = true);
+                                              setState(() => _isSyncing = true);
+                                              try {
+                                                final functions = FirebaseFunctions.instance;
+                                                final callable = functions.httpsCallable('manualSyncFeeds');
+                                                final result = await callable.call();
+
+                                                final count = result.data is Map ? result.data['count'] : null;
+                                                if (context.mounted) {
+                                                  ScaffoldMessenger.of(context).showSnackBar(
+                                                    SnackBar(
+                                                      backgroundColor: cardDark,
+                                                      content: Text(
+                                                        'Success: ${count ?? 'News synced'} news published',
+                                                        style: const TextStyle(color: neonGreen),
+                                                      ),
+                                                    ),
+                                                  );
+                                                }
+                                              } catch (e) {
+                                                debugPrint('Sync error: $e');
+                                                // Local client scraper fallback
+                                                try {
+                                                  final fallbackCount = await AutoNewsScraper().runScraper();
                                                   if (context.mounted) {
                                                     ScaffoldMessenger.of(context).showSnackBar(
                                                       SnackBar(
                                                         backgroundColor: cardDark,
                                                         content: Text(
-                                                          'Scrape complete: $added new articles published!',
+                                                          'Synced: $fallbackCount news published',
                                                           style: const TextStyle(color: neonGreen),
                                                         ),
                                                       ),
                                                     );
                                                   }
-                                                },
-                                          icon: const Icon(Icons.cloud_download_rounded, size: 18),
-                                          label: const Text(
-                                            'Sync Feeds Now',
-                                            style: TextStyle(fontWeight: FontWeight.w900),
-                                          ),
+                                                } catch (fallbackError) {
+                                                  if (context.mounted) {
+                                                    ScaffoldMessenger.of(context).showSnackBar(
+                                                      SnackBar(
+                                                        content: Text('Error: $e'),
+                                                        backgroundColor: Colors.red,
+                                                      ),
+                                                    );
+                                                  }
+                                                }
+                                              } finally {
+                                                if (mounted) {
+                                                  setSheetState(() => _isSyncing = false);
+                                                  setState(() => _isSyncing = false);
+                                                }
+                                              }
+                                            },
+                                      style: ElevatedButton.styleFrom(
+                                        backgroundColor: Colors.orange,
+                                        foregroundColor: Colors.white,
+                                        padding: const EdgeInsets.symmetric(vertical: 12),
+                                        shape: RoundedRectangleBorder(
+                                          borderRadius: BorderRadius.circular(10),
                                         ),
                                       ),
-                                      const SizedBox(width: 10),
-                                      OutlinedButton.icon(
-                                        style: OutlinedButton.styleFrom(
-                                          foregroundColor: neonGreen,
-                                          side: const BorderSide(color: neonGreen),
-                                          padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 12),
-                                          shape: RoundedRectangleBorder(
-                                            borderRadius: BorderRadius.circular(10),
-                                          ),
-                                        ),
-                                        onPressed: () => _showAddSourceDialog(bCtx),
-                                        icon: const Icon(Icons.add, size: 18),
-                                        label: const Text('Add Source', style: TextStyle(fontWeight: FontWeight.bold)),
+                                      child: _isSyncing
+                                          ? const SizedBox(
+                                              width: 20,
+                                              height: 20,
+                                              child: CircularProgressIndicator(
+                                                color: Colors.white,
+                                                strokeWidth: 2,
+                                              ),
+                                            )
+                                          : const Text(
+                                              'Sync Feeds Now',
+                                              style: TextStyle(fontWeight: FontWeight.w900),
+                                            ),
+                                    ),
+                                  ),
+                                  const SizedBox(width: 10),
+                                  OutlinedButton.icon(
+                                    style: OutlinedButton.styleFrom(
+                                      foregroundColor: neonGreen,
+                                      side: const BorderSide(color: neonGreen),
+                                      padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 12),
+                                      shape: RoundedRectangleBorder(
+                                        borderRadius: BorderRadius.circular(10),
                                       ),
-                                    ],
+                                    ),
+                                    onPressed: () => _showAddSourceDialog(bCtx),
+                                    icon: const Icon(Icons.add, size: 18),
+                                    label: const Text('Add Source', style: TextStyle(fontWeight: FontWeight.bold)),
                                   ),
                                 ],
                               ),
-                            );
-                          },
+                            ],
+                          ),
                         );
                       },
                     ),
