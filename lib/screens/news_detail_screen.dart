@@ -3,7 +3,7 @@ import 'package:flutter/services.dart';
 import 'package:easy_localization/easy_localization.dart';
 import 'package:share_plus/share_plus.dart';
 import 'package:url_launcher/url_launcher.dart';
-import 'package:youtube_player_flutter/youtube_player_flutter.dart';
+import 'package:youtube_player_iframe/youtube_player_iframe.dart';
 import '../models/news_model.dart';
 import '../widgets/app_image_view.dart';
 import '../widgets/native_ad_widget.dart';
@@ -11,9 +11,9 @@ import '../services/bookmark_service.dart';
 import '../services/firestore_service.dart';
 import '../services/ad_free_service.dart';
 
-/// Extract YouTube Video ID
+/// Robust ID extractor - shorts + share
 String? getYoutubeId(String? url) {
-  if (url == null || url.isEmpty) return null;
+  if (url == null) return null;
   url = url.trim();
   final reg = RegExp(r'(?:youtube\.com\/(?:watch\?v=|embed\/|shorts\/)|youtu\.be\/)([^&?\/\s]+)');
   return reg.firstMatch(url)?.group(1);
@@ -29,8 +29,8 @@ class NewsDetailScreen extends StatefulWidget {
 }
 
 class _NewsDetailScreenState extends State<NewsDetailScreen> {
-  YoutubePlayerController? _controller;
-  String? _ytId;
+  String? videoId;
+  late YoutubePlayerController _ytController;
   bool _isPlaying = false;
 
   static const Color neonGreen = Color(0xFF00FF88);
@@ -45,29 +45,20 @@ class _NewsDetailScreenState extends State<NewsDetailScreen> {
   @override
   void initState() {
     super.initState();
-    _ytId = getYoutubeId(widget.news.videoUrl);
-    _ytId ??= getYoutubeId(widget.news.sourceUrl);
-
-    if (_ytId != null && _ytId!.isNotEmpty) {
-      _controller = YoutubePlayerController(
-        initialVideoId: _ytId!,
-        flags: const YoutubePlayerFlags(
-          autoPlay: true,
-          mute: false,
-          loop: false,
-          disableDragSeek: false,
-          isLive: false,
-          forceHD: false,
-          enableCaption: true,
-          showLiveFullscreenButton: false,
-        ),
+    videoId = getYoutubeId(widget.news.videoUrl);
+    videoId ??= getYoutubeId(widget.news.sourceUrl);
+    if (videoId != null) {
+      _ytController = YoutubePlayerController.fromVideoId(
+        videoId: videoId!,
+        autoPlay: true,
+        params: const YoutubePlayerParams(showControls: true, showFullscreenButton: true),
       );
     }
   }
 
   @override
   void dispose() {
-    _controller?.dispose();
+    if (videoId != null) _ytController.close();
     super.dispose();
   }
 
@@ -96,7 +87,7 @@ class _NewsDetailScreenState extends State<NewsDetailScreen> {
   }
 
   String _cleanContentText(String text) {
-    if (_ytId != null) {
+    if (videoId != null) {
       return text
           .replaceAll(
             RegExp(r'https?:\/\/(?:www\.)?(?:youtube\.com\/[^\s]+|youtu\.be\/[^\s]+)'),
@@ -115,9 +106,9 @@ class _NewsDetailScreenState extends State<NewsDetailScreen> {
     } else {
       if (context.mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
+          const SnackBar(
             backgroundColor: cardDark,
-            content: const Text('Could not open link', style: TextStyle(color: neonGreen)),
+            content: Text('Could not open link', style: TextStyle(color: neonGreen)),
           ),
         );
       }
@@ -155,8 +146,8 @@ class _NewsDetailScreenState extends State<NewsDetailScreen> {
               borderRadius: BorderRadius.circular(10),
               side: const BorderSide(color: neonGreen, width: 1),
             ),
-            content: Row(
-              children: const [
+            content: const Row(
+              children: [
                 Icon(Icons.check_circle_outline, color: neonGreen, size: 20),
                 SizedBox(width: 10),
                 Expanded(
@@ -253,7 +244,7 @@ class _NewsDetailScreenState extends State<NewsDetailScreen> {
     final rawDescription = widget.news.getDescription(langCode);
     final displayDescription = _cleanContentText(rawDescription);
     final directUrl = _extractSourceUrl(rawDescription);
-    final hasVideo = _ytId != null || (widget.news.videoUrl != null && widget.news.videoUrl!.isNotEmpty);
+    final hasVideo = videoId != null || (widget.news.videoUrl != null && widget.news.videoUrl!.isNotEmpty);
 
     return Scaffold(
       backgroundColor: scaffoldBg,
@@ -335,9 +326,9 @@ class _NewsDetailScreenState extends State<NewsDetailScreen> {
                         borderRadius: BorderRadius.circular(6),
                         border: Border.all(color: alertRed, width: 1),
                       ),
-                      child: Row(
+                      child: const Row(
                         mainAxisSize: MainAxisSize.min,
-                        children: const [
+                        children: [
                           Icon(Icons.play_arrow_rounded, color: alertRed, size: 14),
                           SizedBox(width: 2),
                           Text(
@@ -399,77 +390,69 @@ class _NewsDetailScreenState extends State<NewsDetailScreen> {
               const SizedBox(height: 16),
 
               // 4. Video / Media Area
-              if (_ytId != null && _controller != null) ...[
-                if (_isPlaying) ...[
-                  ClipRRect(
-                    borderRadius: BorderRadius.circular(14),
-                    child: AspectRatio(
-                      aspectRatio: 16 / 9,
-                      child: YoutubePlayer(
-                        controller: _controller!,
-                        showVideoProgressIndicator: true,
-                        progressIndicatorColor: neonGreen,
-                      ),
-                    ),
-                  ),
-                ] else ...[
-                  GestureDetector(
-                    onTap: () {
-                      setState(() {
-                        _isPlaying = true;
-                      });
-                    },
-                    child: Stack(
-                      alignment: Alignment.center,
-                      children: [
-                        ClipRRect(
-                          borderRadius: BorderRadius.circular(14),
-                          child: AspectRatio(
-                            aspectRatio: 16 / 9,
-                            child: Image.network(
-                              "https://img.youtube.com/vi/$_ytId/0.jpg",
-                              fit: BoxFit.cover,
-                              errorBuilder: (_, __, ___) => AppImageView(
-                                imageUrl: widget.news.thumbnailUrl,
-                                fit: BoxFit.cover,
-                              ),
-                            ),
-                          ),
-                        ),
-                        Container(
-                          width: double.infinity,
-                          height: 200,
-                          decoration: BoxDecoration(
-                            borderRadius: BorderRadius.circular(14),
-                            color: Colors.black.withOpacity(0.3),
-                          ),
-                        ),
-                        const Icon(
-                          Icons.play_circle_fill,
-                          size: 64,
-                          color: Colors.white,
-                        ),
-                      ],
-                    ),
-                  ),
-                ],
-                const SizedBox(height: 16),
-              ] else ...[
+              if (videoId == null) ...[
                 ClipRRect(
                   borderRadius: BorderRadius.circular(14),
                   child: AspectRatio(
                     aspectRatio: 16 / 9,
                     child: AppImageView(
-                      imageUrl: widget.news.thumbnailUrl,
+                      imageUrl: widget.news.imageUrl,
                       fit: BoxFit.cover,
                     ),
+                  ),
+                ),
+                const SizedBox(height: 16),
+              ] else if (!_isPlaying) ...[
+                GestureDetector(
+                  onTap: () => setState(() => _isPlaying = true),
+                  child: Stack(
+                    alignment: Alignment.center,
+                    children: [
+                      ClipRRect(
+                        borderRadius: BorderRadius.circular(14),
+                        child: Image.network(
+                          "https://img.youtube.com/vi/$videoId/hqdefault.jpg",
+                          fit: BoxFit.cover,
+                          width: double.infinity,
+                          height: 220,
+                          errorBuilder: (_, __, ___) => AppImageView(
+                            imageUrl: widget.news.imageUrl,
+                            fit: BoxFit.cover,
+                            height: 220,
+                            width: double.infinity,
+                          ),
+                        ),
+                      ),
+                      Container(
+                        width: double.infinity,
+                        height: 220,
+                        decoration: BoxDecoration(
+                          borderRadius: BorderRadius.circular(14),
+                          color: Colors.black.withOpacity(0.3),
+                        ),
+                      ),
+                      const Icon(
+                        Icons.play_circle_fill,
+                        size: 64,
+                        color: Colors.white,
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(height: 16),
+              ] else ...[
+                ClipRRect(
+                  borderRadius: BorderRadius.circular(14),
+                  child: YoutubePlayer(
+                    controller: _ytController,
+                    aspectRatio: 16 / 9,
                   ),
                 ),
                 const SizedBox(height: 16),
               ],
 
               // 5. Direct Video Link Button (for non-YouTube direct MP4/stream video links only)
-              if (widget.news.videoUrl != null && widget.news.videoUrl!.isNotEmpty && _ytId == null) ...[
+              if (widget.news.videoUrl != null && widget.news.videoUrl!.isNotEmpty && videoId == null) ...[
                 SizedBox(
                   width: double.infinity,
                   height: 48,
@@ -559,8 +542,8 @@ class _NewsDetailScreenState extends State<NewsDetailScreen> {
                   if (AdFreeService().isAdFree) {
                     return const SizedBox.shrink();
                   }
-                  return Column(
-                    children: const [
+                  return const Column(
+                    children: [
                       SizedBox(height: 12),
                       NativeAdWidget(),
                       SizedBox(height: 12),
