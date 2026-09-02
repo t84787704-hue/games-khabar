@@ -50,7 +50,13 @@ class _NewsDetailScreenState extends State<NewsDetailScreen> {
     if (videoId != null) {
       _webController = WebViewController()
         ..setJavaScriptMode(JavaScriptMode.unrestricted)
-        ..loadHtmlString('<html><body style="margin:0;padding:0;"><iframe width="100%" height="100%" src="https://www.youtube.com/embed/$videoId?autoplay=1" frameborder="0" allow="autoplay; fullscreen" allowfullscreen></iframe></body></html>');
+        ..setBackgroundColor(const Color(0xFF000000))
+        ..setNavigationDelegate(
+          NavigationDelegate(
+            onNavigationRequest: (request) => NavigationDecision.navigate,
+          ),
+        )
+        ..loadRequest(Uri.parse('https://www.youtube.com/watch?v=$videoId'));
     }
   }
 
@@ -446,7 +452,19 @@ class _NewsDetailScreenState extends State<NewsDetailScreen> {
                     child: WebViewWidget(controller: _webController),
                   ),
                 ),
-                const SizedBox(height: 16),
+                const SizedBox(height: 8),
+                Align(
+                  alignment: Alignment.centerRight,
+                  child: TextButton.icon(
+                    onPressed: () => _launchExternalUrl(context, 'https://www.youtube.com/watch?v=$videoId'),
+                    icon: const Icon(Icons.open_in_new, size: 14, color: textGray),
+                    label: const Text(
+                      'Watch in YouTube App',
+                      style: TextStyle(color: textGray, fontSize: 12),
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 8),
               ],
 
               // 5. Direct Video Link Button (for non-YouTube direct MP4/stream video links only)
