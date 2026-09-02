@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
-import 'package:webfeed/webfeed.dart';
+import 'package:xml/xml.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import '../../services/auto_news_scraper.dart';
 
@@ -30,9 +30,9 @@ class _RssSourcesScreenState extends State<RssSourcesScreen> {
       _isSyncing = true;
       _publishedCount = 0;
     });
+    int count = 0;
 
     try {
-      // 1. Fetch sources from Firestore
       var sourcesSnap = await FirebaseFirestore.instance
           .collection('rss_sources')
           .where('isActive', isEqualTo: true)
@@ -45,7 +45,7 @@ class _RssSourcesScreenState extends State<RssSourcesScreen> {
             .get();
       }
 
-      // If still empty, auto-seed default sources
+      // If empty, seed default sources
       if (sourcesSnap.docs.isEmpty) {
         await AutoNewsScraper.seedDefaultSourcesIfEmpty();
         sourcesSnap = await FirebaseFirestore.instance
@@ -68,45 +68,58 @@ class _RssSourcesScreenState extends State<RssSourcesScreen> {
 
       for (var doc in sourcesSnap.docs) {
         final source = doc.data();
-        final url = source['url'] as String? ?? '';
-        final sourceName = source['name'] ?? 'Unknown';
+        final url = (source['url'] as String?)?.trim() ?? '';
+        final sourceName = source['name'] ?? 'Gaming Feed';
         final category = source['category'] ?? source['categoryHint'] ?? 'General';
+        final logo = source['logo'] ?? '';
 
         if (url.isEmpty) continue;
 
         try {
-          final response = await http.get(Uri.parse(url)).timeout(const Duration(seconds: 15));
-          if (response.statusCode != 200) continue;
+          final res = await http.get(Uri.parse(url)).timeout(const Duration(seconds: 15));
+          if (res.statusCode != 200) continue;
 
-          final feed = RssFeed.parse(response.body);
-          if (feed.items == null) continue;
+          final document = XmlDocument.parse(res.body);
+          final items = document.findAllElements('item').take(5);
 
-          for (var item in feed.items!.take(5)) {
-            // 5 latest per source
-            if (item.link == null || item.link!.isEmpty) continue;
+          for (var item in items) {
+            String getText(String tag) {
+              final elems = item.findElements(tag);
+              return elems.isEmpty ? '' : elems.first.innerText.trim();
+            }
+
+            final link = getText('link').isNotEmpty ? getText('link') : getText('guid');
+            if (link.isEmpty) continue;
 
             // Duplicate check
-            final existing = await FirebaseFirestore.instance
+            final dup = await FirebaseFirestore.instance
                 .collection('news')
-                .where('link', isEqualTo: item.link)
+                .where('link', isEqualTo: link)
                 .limit(1)
                 .get();
-            if (existing.docs.isNotEmpty) continue;
+            if (dup.docs.isNotEmpty) continue;
 
-            // Extract image
+            // Image extraction
             String imageUrl = '';
-            if (item.enclosure?.url != null && item.enclosure!.url!.isNotEmpty) {
-              imageUrl = item.enclosure!.url!;
-            }
-            if (imageUrl.isEmpty && item.media?.contents?.isNotEmpty == true) {
-              imageUrl = item.media!.contents!.first.url ?? '';
-            }
-            if (imageUrl.isEmpty && item.media?.thumbnails?.isNotEmpty == true) {
-              imageUrl = item.media!.thumbnails!.first.url ?? '';
+            final enclosure = item.findElements('enclosure');
+            if (enclosure.isNotEmpty) {
+              imageUrl = enclosure.first.getAttribute('url') ?? '';
             }
             if (imageUrl.isEmpty) {
-              final rawDesc = item.description ?? item.content?.value ?? '';
-              final imgMatch = RegExp(r'''<img[^>]+src=["']([^"']+)["']''', caseSensitive: false).firstMatch(rawDesc);
+              final mediaContent = item.findElements('media:content');
+              if (mediaContent.isNotEmpty) {
+                imageUrl = mediaContent.first.getAttribute('url') ?? '';
+              }
+            }
+            if (imageUrl.isEmpty) {
+              final mediaThumb = item.findElements('media:thumbnail');
+              if (mediaThumb.isNotEmpty) {
+                imageUrl = mediaThumb.first.getAttribute('url') ?? '';
+              }
+            }
+            if (imageUrl.isEmpty) {
+              final rawContent = getText('description') + getText('content:encoded');
+              final imgMatch = RegExp(r'''<img[^>]+src=["']([^"']+)["']''', caseSensitive: false).firstMatch(rawContent);
               if (imgMatch != null && imgMatch.group(1) != null) {
                 imageUrl = imgMatch.group(1)!;
               }
@@ -115,38 +128,39 @@ class _RssSourcesScreenState extends State<RssSourcesScreen> {
               imageUrl = 'https://images.unsplash.com/photo-1542751371-adc38448a05e?q=80&w=1200&auto=format&fit=crop';
             }
 
-            final cleanDesc = (item.description ?? item.content?.value ?? 'Stay tuned for more gaming updates.')
-                .replaceAll(RegExp(r'<[^>]*>'), '')
-                .trim();
+            final rawDesc = getText('description').isNotEmpty ? getText('description') : getText('content:encoded');
+            final cleanDesc = rawDesc.replaceAll(RegExp(r'<[^>]*>'), '').trim();
+            final pubDateStr = getText('pubDate');
 
             await FirebaseFirestore.instance.collection('news').add({
-              'title': item.title ?? 'No Title',
+              'title': getText('title').isNotEmpty ? getText('title') : 'Gaming Update',
               'content': cleanDesc.isNotEmpty ? cleanDesc : 'Stay tuned for more gaming updates.',
               'description': cleanDesc.isNotEmpty ? cleanDesc : 'Stay tuned for more gaming updates.',
               'imageUrl': imageUrl,
-              'link': item.link,
-              'sourceUrl': item.link,
+              'link': link,
+              'sourceUrl': link,
               'sourceName': sourceName,
-              'sourceLogo': source['logo'] ?? '',
+              'sourceLogo': logo,
               'category': category,
               'isAuto': true,
               'tag': 'AUTO',
               'isVerified': true,
               'createdAt': FieldValue.serverTimestamp(),
-              'publishedAt': item.pubDate?.toIso8601String() ?? DateTime.now().toIso8601String(),
+              'publishedAt': pubDateStr.isNotEmpty ? pubDateStr : DateTime.now().toIso8601String(),
               'views': 0,
             });
-            _publishedCount++;
+            count++;
           }
         } catch (e) {
-          debugPrint('Failed for $url : $e');
+          debugPrint('RSS fail $url $e');
         }
       }
 
+      _publishedCount = count;
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text('$_publishedCount news published successfully!'),
+            content: Text('$count news published successfully!'),
             backgroundColor: Colors.green,
           ),
         );
@@ -334,7 +348,7 @@ class _RssSourcesScreenState extends State<RssSourcesScreen> {
                           child: Text(
                             _isSyncing
                                 ? 'Syncing feeds directly from client...'
-                                : 'Client-Side Auto RSS Engine (No Cloud Bill)',
+                                : 'Client-Side Auto RSS Engine',
                             style: TextStyle(
                               color: _isSyncing ? Colors.orange : textWhite,
                               fontSize: 13,
