@@ -486,7 +486,7 @@ class _NewsDetailScreenState extends State<NewsDetailScreen> {
               const SizedBox(height: 16),
 
               // 4. Video / Featured Media Area
-              if (_detectedVideoId != null && _youtubeController != null) ...[
+              if (_detectedVideoId != null && _youtubeController != null)
                 if (_isPlaying && playerWidget != null) ...[
                   // Active embedded YouTube player
                   Container(
@@ -540,50 +540,52 @@ class _NewsDetailScreenState extends State<NewsDetailScreen> {
                         child: AspectRatio(
                           aspectRatio: 16 / 9,
                           child: Stack(
-                            fit: StackFit.expand,
+                            alignment: Alignment.center,
                             children: [
                               // Thumbnail Image
-                              AppImageView(
-                                imageUrl: widget.news.imageUrl.isNotEmpty
-                                    ? widget.news.imageUrl
-                                    : 'https://img.youtube.com/vi/$_detectedVideoId/hqdefault.jpg',
-                                fit: BoxFit.cover,
+                              Positioned.fill(
+                                child: AppImageView(
+                                  imageUrl: widget.news.imageUrl.isNotEmpty
+                                      ? widget.news.imageUrl
+                                      : 'https://img.youtube.com/vi/$_detectedVideoId/hqdefault.jpg',
+                                  fit: BoxFit.cover,
+                                ),
                               ),
                               // Dark Overlay for Contrast
-                              Container(
-                                decoration: BoxDecoration(
-                                  gradient: LinearGradient(
-                                    begin: Alignment.topCenter,
-                                    end: Alignment.bottomCenter,
-                                    colors: [
-                                      Colors.black.withOpacity(0.2),
-                                      Colors.black.withOpacity(0.65),
-                                    ],
+                              Positioned.fill(
+                                child: Container(
+                                  decoration: BoxDecoration(
+                                    gradient: LinearGradient(
+                                      begin: Alignment.topCenter,
+                                      end: Alignment.bottomCenter,
+                                      colors: [
+                                        Colors.black.withOpacity(0.2),
+                                        Colors.black.withOpacity(0.65),
+                                      ],
+                                    ),
                                   ),
                                 ),
                               ),
-                              // Glowing Center Play Button
-                              Center(
-                                child: Container(
-                                  width: 62,
-                                  height: 62,
-                                  decoration: BoxDecoration(
-                                    color: alertRed,
-                                    shape: BoxShape.circle,
-                                    boxShadow: [
-                                      BoxShadow(
-                                        color: alertRed.withOpacity(0.6),
-                                        blurRadius: 18,
-                                        spreadRadius: 2,
-                                      ),
-                                    ],
-                                    border: Border.all(color: Colors.white, width: 2),
-                                  ),
-                                  child: const Icon(
-                                    Icons.play_arrow_rounded,
-                                    color: Colors.white,
-                                    size: 38,
-                                  ),
+                              // Play Icon Button
+                              Container(
+                                width: 62,
+                                height: 62,
+                                decoration: BoxDecoration(
+                                  color: alertRed,
+                                  shape: BoxShape.circle,
+                                  boxShadow: [
+                                    BoxShadow(
+                                      color: alertRed.withOpacity(0.6),
+                                      blurRadius: 18,
+                                      spreadRadius: 2,
+                                    ),
+                                  ],
+                                  border: Border.all(color: Colors.white, width: 2),
+                                ),
+                                child: const Icon(
+                                  Icons.play_arrow_rounded,
+                                  color: Colors.white,
+                                  size: 38,
                                 ),
                               ),
                               // Play pill hint
@@ -642,8 +644,8 @@ class _NewsDetailScreenState extends State<NewsDetailScreen> {
                       ],
                     ),
                     const SizedBox(height: 16),
-                  ],
-                ] else ...[
+                  ]
+              else ...[
                 // Featured Image (No video)
                 ClipRRect(
                   borderRadius: BorderRadius.circular(14),
