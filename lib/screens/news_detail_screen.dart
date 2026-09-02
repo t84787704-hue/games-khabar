@@ -539,17 +539,6 @@ class _NewsDetailScreenState extends State<NewsDetailScreen> {
                   ),
                   const SizedBox(height: 10),
                 ],
-                      style: const TextStyle(
-                        color: textLightGray,
-                        fontSize: 15,
-                        height: 1.6,
-                        letterSpacing: 0.2,
-                      ),
-                    ),
-                  ),
-                ),
-                const SizedBox(height: 10),
-              ],
 
               // 9. Source Article Link (Non-YouTube external source only)
               if (directUrl != null) ...[
