@@ -20,7 +20,7 @@ class RssSource {
     required this.name,
     required this.url,
     required this.categoryHint,
-    required this.searchVolumeDesc,
+    this.searchVolumeDesc = '',
     this.isEnabled = true,
   });
 
@@ -28,22 +28,24 @@ class RssSource {
         'id': id,
         'name': name,
         'url': url,
+        'category': categoryHint,
         'categoryHint': categoryHint,
         'searchVolumeDesc': searchVolumeDesc,
         'isEnabled': isEnabled,
       };
 
-  factory RssSource.fromJson(Map<String, dynamic> json) => RssSource(
-        id: json['id'] as String? ?? UniqueKey().toString(),
+  factory RssSource.fromJson(Map<String, dynamic> json, [String? id]) => RssSource(
+        id: id ?? json['id'] as String? ?? UniqueKey().toString(),
         name: json['name'] as String? ?? 'Gaming Feed',
         url: json['url'] as String? ?? '',
-        categoryHint: json['categoryHint'] as String? ?? 'Gaming News',
+        categoryHint: (json['category'] ?? json['categoryHint']) as String? ?? 'Gaming News',
         searchVolumeDesc: json['searchVolumeDesc'] as String? ?? '',
         isEnabled: json['isEnabled'] as bool? ?? true,
       );
 }
 
 class AutoNewsScraper {
+  static const String collectionName = 'scraper_sources';
   static final AutoNewsScraper _instance = AutoNewsScraper._internal();
   factory AutoNewsScraper() => _instance;
 
@@ -61,177 +63,242 @@ class AutoNewsScraper {
   final ValueNotifier<List<RssSource>> sourcesNotifier = ValueNotifier<List<RssSource>>([]);
 
   // Top 10 High Search Volume Sources
-  static final List<RssSource> defaultSources = [
-    RssSource(
-      id: 'source-1-sportskeeda',
-      name: 'Sportskeeda Esports',
-      url: 'https://www.sportskeeda.com/esports/feed',
-      categoryHint: 'BGMI / Free Fire',
-      searchVolumeDesc: 'No.1 BGMI / Free Fire search in India',
-      isEnabled: true,
-    ),
-    RssSource(
-      id: 'source-2-freefiremania',
-      name: 'Free Fire Mania',
-      url: 'https://www.freefiremania.com/feed',
-      categoryHint: 'Free Fire',
-      searchVolumeDesc: 'Free Fire dedicated - bahut zyada search',
-      isEnabled: true,
-    ),
-    RssSource(
-      id: 'source-3-afkgaming',
-      name: 'AFK Gaming',
-      url: 'https://afkgaming.com/esports/feed',
-      categoryHint: 'BGMI / Esports',
-      searchVolumeDesc: 'BGMI / Valorant / Esports',
-      isEnabled: true,
-    ),
-    RssSource(
-      id: 'source-4-talkesport',
-      name: 'TalkEsport',
-      url: 'https://www.talkesport.com/feed',
-      categoryHint: 'Indian Esports',
-      searchVolumeDesc: 'Indian Esports - BGMI, Free Fire news',
-      isEnabled: true,
-    ),
-    RssSource(
-      id: 'source-5-gamerant',
-      name: 'Game Rant',
-      url: 'https://gamerant.com/feed/',
-      categoryHint: 'GTA / PUBG / Minecraft',
-      searchVolumeDesc: 'GTA 6, PUBG, Minecraft - global trending',
-      isEnabled: true,
-    ),
-    RssSource(
-      id: 'source-6-ign',
-      name: 'IGN Articles',
-      url: 'https://www.ign.com/rss/articles/feed',
-      categoryHint: 'GTA / COD',
-      searchVolumeDesc: 'GTA 6, COD - international high search',
-      isEnabled: true,
-    ),
-    RssSource(
-      id: 'source-7-gamespot',
-      name: 'GameSpot Mashup',
-      url: 'https://www.gamespot.com/feeds/mashup/',
-      categoryHint: 'GTA / COD / Minecraft',
-      searchVolumeDesc: 'GTA 6, COD, Minecraft',
-      isEnabled: true,
-    ),
-    RssSource(
-      id: 'source-8-gamingonphone',
-      name: 'GamingonPhone',
-      url: 'https://www.gamingonphone.com/feed/',
-      categoryHint: 'Free Fire / COD Mobile',
-      searchVolumeDesc: 'Free Fire, COD Mobile, Mobile Gaming - India me top search',
-      isEnabled: true,
-    ),
-    RssSource(
-      id: 'source-9-pocketgamer',
-      name: 'Pocket Gamer',
-      url: 'https://www.pocketgamer.com/feed/',
-      categoryHint: 'Free Fire / PUBG',
-      searchVolumeDesc: 'Mobile games - Free Fire, PUBG Mobile',
-      isEnabled: true,
-    ),
-    RssSource(
-      id: 'source-10-dexerto',
-      name: 'Dexerto Gaming',
-      url: 'https://www.dexerto.com/feed/',
-      categoryHint: 'GTA 6 / Warzone',
-      searchVolumeDesc: 'GTA 6 Leaks, Warzone, Fortnite - viral news',
-      isEnabled: true,
-    ),
+  static final List<Map<String, dynamic>> defaultFirestoreSources = [
+    {
+      'id': 'source_1_sportskeeda',
+      'name': 'Sportskeeda',
+      'url': 'https://www.sportskeeda.com/esports/feed',
+      'category': 'BGMI / Free Fire',
+      'isEnabled': true,
+      'order': 1,
+    },
+    {
+      'id': 'source_2_freefiremania',
+      'name': 'FreeFireMania',
+      'url': 'https://www.freefiremania.com/feed',
+      'category': 'Free Fire',
+      'isEnabled': true,
+      'order': 2,
+    },
+    {
+      'id': 'source_3_afkgaming',
+      'name': 'AFK Gaming',
+      'url': 'https://afkgaming.com/esports/feed',
+      'category': 'BGMI / Valorant',
+      'isEnabled': true,
+      'order': 3,
+    },
+    {
+      'id': 'source_4_talkesport',
+      'name': 'TalkEsport',
+      'url': 'https://www.talkesport.com/feed',
+      'category': 'BGMI / Free Fire',
+      'isEnabled': true,
+      'order': 4,
+    },
+    {
+      'id': 'source_5_gamerant',
+      'name': 'Gamerant',
+      'url': 'https://gamerant.com/feed/',
+      'category': 'GTA / PUBG',
+      'isEnabled': true,
+      'order': 5,
+    },
+    {
+      'id': 'source_6_ign',
+      'name': 'IGN',
+      'url': 'https://www.ign.com/rss/articles/feed',
+      'category': 'GTA / COD',
+      'isEnabled': true,
+      'order': 6,
+    },
+    {
+      'id': 'source_7_gamespot',
+      'name': 'Gamespot',
+      'url': 'https://www.gamespot.com/feeds/mashup/',
+      'category': 'GTA / Minecraft',
+      'isEnabled': true,
+      'order': 7,
+    },
+    {
+      'id': 'source_8_gamingonphone',
+      'name': 'GamingOnPhone',
+      'url': 'https://www.gamingonphone.com/feed/',
+      'category': 'Free Fire / COD Mobile',
+      'isEnabled': true,
+      'order': 8,
+    },
+    {
+      'id': 'source_9_pocketgamer',
+      'name': 'PocketGamer',
+      'url': 'https://www.pocketgamer.com/feed/',
+      'category': 'Mobile Gaming',
+      'isEnabled': true,
+      'order': 9,
+    },
+    {
+      'id': 'source_10_dexerto',
+      'name': 'Dexerto',
+      'url': 'https://www.dexerto.com/feed/',
+      'category': 'GTA 6 Leaks',
+      'isEnabled': true,
+      'order': 10,
+    },
   ];
+
+  static List<RssSource> get defaultSources => defaultFirestoreSources
+      .map((s) => RssSource(
+            id: s['id'] as String,
+            name: s['name'] as String,
+            url: s['url'] as String,
+            categoryHint: s['category'] as String,
+            searchVolumeDesc: s['category'] as String,
+            isEnabled: s['isEnabled'] as bool? ?? true,
+          ))
+      .toList();
 
   AutoNewsScraper._internal();
 
+  /// Seed 10 default sources to Firestore 'scraper_sources' collection if empty
+  static Future<void> seedDefaultSourcesIfEmpty() async {
+    try {
+      final snap = await FirebaseFirestore.instance.collection(collectionName).limit(1).get();
+      if (snap.docs.isEmpty) {
+        final batch = FirebaseFirestore.instance.batch();
+        for (int i = 0; i < defaultFirestoreSources.length; i++) {
+          final s = defaultFirestoreSources[i];
+          final docRef = FirebaseFirestore.instance.collection(collectionName).doc(s['id'] as String);
+          batch.set(docRef, {
+            'name': s['name'],
+            'url': s['url'],
+            'category': s['category'],
+            'categoryHint': s['category'],
+            'isEnabled': true,
+            'order': s['order'] ?? (i + 1),
+            'createdAt': FieldValue.serverTimestamp(),
+          });
+        }
+        await batch.commit();
+      }
+    } catch (e) {
+      debugPrint('Error seeding default sources: $e');
+    }
+  }
+
+  /// Reset to 10 default sources in Firestore
+  static Future<void> resetDefaultSources() async {
+    try {
+      final snap = await FirebaseFirestore.instance.collection(collectionName).get();
+      final batch = FirebaseFirestore.instance.batch();
+      for (final doc in snap.docs) {
+        batch.delete(doc.reference);
+      }
+      for (int i = 0; i < defaultFirestoreSources.length; i++) {
+        final s = defaultFirestoreSources[i];
+        final docRef = FirebaseFirestore.instance.collection(collectionName).doc(s['id'] as String);
+        batch.set(docRef, {
+          'name': s['name'],
+          'url': s['url'],
+          'category': s['category'],
+          'categoryHint': s['category'],
+          'isEnabled': true,
+          'order': s['order'] ?? (i + 1),
+          'createdAt': FieldValue.serverTimestamp(),
+        });
+      }
+      await batch.commit();
+    } catch (e) {
+      debugPrint('Error resetting default sources: $e');
+    }
+  }
+
+  /// Add a source to Firestore 'scraper_sources'
+  static Future<void> addFirestoreSource({
+    required String name,
+    required String url,
+    required String category,
+  }) async {
+    final cleanUrl = url.trim();
+    if (cleanUrl.isEmpty) return;
+
+    try {
+      await FirebaseFirestore.instance.collection(collectionName).add({
+        'name': name.trim().isEmpty ? 'Custom RSS Feed' : name.trim(),
+        'url': cleanUrl,
+        'category': category.trim().isEmpty ? 'Gaming News' : category.trim(),
+        'categoryHint': category.trim().isEmpty ? 'Gaming News' : category.trim(),
+        'isEnabled': true,
+        'order': DateTime.now().millisecondsSinceEpoch,
+        'createdAt': FieldValue.serverTimestamp(),
+      });
+    } catch (e) {
+      debugPrint('Error adding source: $e');
+    }
+  }
+
+  /// Delete a source from Firestore 'scraper_sources'
+  static Future<void> deleteFirestoreSource(String docId) async {
+    try {
+      await FirebaseFirestore.instance.collection(collectionName).doc(docId).delete();
+    } catch (e) {
+      debugPrint('Error deleting source: $e');
+    }
+  }
+
+  /// Toggle source enabled state in Firestore
+  static Future<void> toggleFirestoreSource(String docId, bool isEnabled) async {
+    try {
+      await FirebaseFirestore.instance.collection(collectionName).doc(docId).update({
+        'isEnabled': isEnabled,
+      });
+    } catch (e) {
+      debugPrint('Error toggling source: $e');
+    }
+  }
+
   /// Initialize scraper with stored or default sources and start 30-minute interval
   Future<void> init() async {
+    await seedDefaultSourcesIfEmpty();
     await _loadSources();
     startPeriodicScraping();
   }
 
   Future<void> _loadSources() async {
     try {
-      final prefs = await SharedPreferences.getInstance();
-      final storedJson = prefs.getString('auto_news_sources');
-      if (storedJson != null && storedJson.isNotEmpty) {
-        final List decoded = jsonDecode(storedJson);
-        final List<RssSource> list =
-            decoded.map((item) => RssSource.fromJson(item)).toList();
-        
-        // Merge missing default sources if any were added
-        final existingUrls = list.map((e) => e.url.trim().toLowerCase()).toSet();
-        for (final def in defaultSources) {
-          if (!existingUrls.contains(def.url.trim().toLowerCase())) {
-            list.add(def);
-          }
-        }
+      await seedDefaultSourcesIfEmpty();
+      final snap = await FirebaseFirestore.instance.collection(collectionName).get();
+      if (snap.docs.isNotEmpty) {
+        final list = snap.docs.map((d) => RssSource.fromJson(d.data(), d.id)).toList();
         sourcesNotifier.value = list;
-      } else {
-        sourcesNotifier.value = List.from(defaultSources);
-        await _saveSources();
+        return;
       }
-    } catch (e) {
-      sourcesNotifier.value = List.from(defaultSources);
-    }
-  }
-
-  Future<void> _saveSources() async {
-    try {
-      final prefs = await SharedPreferences.getInstance();
-      final jsonStr = jsonEncode(
-        sourcesNotifier.value.map((s) => s.toJson()).toList(),
-      );
-      await prefs.setString('auto_news_sources', jsonStr);
     } catch (_) {}
+    sourcesNotifier.value = List.from(defaultSources);
   }
 
   Future<void> addSource({
     required String name,
     required String url,
     required String categoryHint,
-    required String searchVolumeDesc,
+    String searchVolumeDesc = '',
   }) async {
-    final cleanUrl = url.trim();
-    if (cleanUrl.isEmpty) return;
-
-    final current = List<RssSource>.from(sourcesNotifier.value);
-    current.add(
-      RssSource(
-        id: 'source-${DateTime.now().millisecondsSinceEpoch}',
-        name: name.trim().isEmpty ? 'Custom RSS Feed' : name.trim(),
-        url: cleanUrl,
-        categoryHint: categoryHint.trim().isEmpty ? 'Gaming News' : categoryHint.trim(),
-        searchVolumeDesc: searchVolumeDesc.trim().isEmpty ? 'Custom User Source' : searchVolumeDesc.trim(),
-        isEnabled: true,
-      ),
-    );
-    sourcesNotifier.value = current;
-    await _saveSources();
+    await addFirestoreSource(name: name, url: url, category: categoryHint);
+    await _loadSources();
   }
 
   Future<void> toggleSource(String id, bool enabled) async {
-    final current = List<RssSource>.from(sourcesNotifier.value);
-    final idx = current.indexWhere((s) => s.id == id);
-    if (idx != -1) {
-      current[idx].isEnabled = enabled;
-      sourcesNotifier.value = current;
-      await _saveSources();
-    }
+    await toggleFirestoreSource(id, enabled);
+    await _loadSources();
   }
 
   Future<void> deleteSource(String id) async {
-    final current = List<RssSource>.from(sourcesNotifier.value);
-    current.removeWhere((s) => s.id == id);
-    sourcesNotifier.value = current;
-    await _saveSources();
+    await deleteFirestoreSource(id);
+    await _loadSources();
   }
 
   Future<void> resetToDefaultSources() async {
-    sourcesNotifier.value = List.from(defaultSources);
-    await _saveSources();
+    await resetDefaultSources();
+    await _loadSources();
   }
 
   /// Start background timer every 30 minutes
