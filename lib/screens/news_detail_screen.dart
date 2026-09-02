@@ -73,7 +73,7 @@ class NewsDetailScreen extends StatefulWidget {
 }
 
 class _NewsDetailScreenState extends State<NewsDetailScreen> {
-  YoutubePlayerController? _youtubeController;
+  YoutubePlayerController? _controller;
   String? _detectedVideoId;
   bool _isPlaying = false;
 
@@ -95,7 +95,7 @@ class _NewsDetailScreenState extends State<NewsDetailScreen> {
   void _initYoutubePlayer() {
     _detectedVideoId = _findYouTubeVideoId(widget.news);
     if (_detectedVideoId != null && _detectedVideoId!.isNotEmpty) {
-      _youtubeController = YoutubePlayerController(
+      _controller = YoutubePlayerController(
         initialVideoId: _detectedVideoId!,
         flags: const YoutubePlayerFlags(
           autoPlay: true,
@@ -142,7 +142,7 @@ class _NewsDetailScreenState extends State<NewsDetailScreen> {
 
   @override
   void dispose() {
-    _youtubeController?.dispose();
+    _controller?.dispose();
     super.dispose();
   }
 
@@ -296,12 +296,125 @@ class _NewsDetailScreenState extends State<NewsDetailScreen> {
     }
   }
 
+  Widget buildVideoSection({Widget? playerWidget}) {
+    if (_isPlaying) {
+      return Container(
+        decoration: BoxDecoration(
+          color: Colors.black,
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(color: alertRed.withOpacity(0.5), width: 1),
+        ),
+        child: ClipRRect(
+          borderRadius: BorderRadius.circular(11),
+          child: AspectRatio(
+            aspectRatio: 16 / 9,
+            child: playerWidget ??
+                YoutubePlayer(
+                  controller: _controller!,
+                  showVideoProgressIndicator: true,
+                  progressIndicatorColor: neonGreen,
+                ),
+          ),
+        ),
+      );
+    } else {
+      return GestureDetector(
+        behavior: HitTestBehavior.opaque,
+        onTap: () {
+          setState(() {
+            _isPlaying = true;
+          });
+          _controller?.play();
+        },
+        child: Container(
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(14),
+            border: Border.all(color: borderDark, width: 1.2),
+          ),
+          child: ClipRRect(
+            borderRadius: BorderRadius.circular(14),
+            child: AspectRatio(
+              aspectRatio: 16 / 9,
+              child: Stack(
+                alignment: Alignment.center,
+                children: [
+                  Positioned.fill(
+                    child: Image.network(
+                      widget.news.thumbnailUrl,
+                      fit: BoxFit.cover,
+                      errorBuilder: (_, __, ___) => Container(
+                        color: cardDark,
+                        child: const Icon(Icons.videocam, color: textGray, size: 40),
+                      ),
+                    ),
+                  ),
+                  Positioned.fill(
+                    child: Container(
+                      decoration: BoxDecoration(
+                        gradient: LinearGradient(
+                          begin: Alignment.topCenter,
+                          end: Alignment.bottomCenter,
+                          colors: [
+                            Colors.black.withOpacity(0.2),
+                            Colors.black.withOpacity(0.65),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ),
+                  const Icon(
+                    Icons.play_circle_fill,
+                    size: 64,
+                    color: Colors.white,
+                  ),
+                  Positioned(
+                    bottom: 12,
+                    left: 12,
+                    right: 12,
+                    child: Row(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+                          decoration: BoxDecoration(
+                            color: Colors.black.withOpacity(0.8),
+                            borderRadius: BorderRadius.circular(20),
+                            border: Border.all(color: alertRed.withOpacity(0.7), width: 1),
+                          ),
+                          child: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: const [
+                              Icon(Icons.play_circle_fill_rounded, color: alertRed, size: 14),
+                              SizedBox(width: 5),
+                              Text(
+                                'Tap to Play Video',
+                                style: TextStyle(
+                                  color: Colors.white,
+                                  fontSize: 12,
+                                  fontWeight: FontWeight.bold,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ),
+      );
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
-    if (_detectedVideoId != null && _youtubeController != null) {
+    if (_detectedVideoId != null && _controller != null) {
       return YoutubePlayerBuilder(
         player: YoutubePlayer(
-          controller: _youtubeController!,
+          controller: _controller!,
           showVideoProgressIndicator: true,
           progressIndicatorColor: neonGreen,
           progressColors: const ProgressBarColors(
@@ -314,7 +427,7 @@ class _NewsDetailScreenState extends State<NewsDetailScreen> {
             const SizedBox(width: 8),
             Expanded(
               child: Text(
-                _youtubeController!.metadata.title,
+                _controller!.metadata.title,
                 style: const TextStyle(
                   color: Colors.white,
                   fontSize: 14,
@@ -486,166 +599,26 @@ class _NewsDetailScreenState extends State<NewsDetailScreen> {
               const SizedBox(height: 16),
 
               // 4. Video / Featured Media Area
-              if (_detectedVideoId != null && _youtubeController != null)
-                if (_isPlaying && playerWidget != null) ...[
-                  // Active embedded YouTube player
-                  Container(
-                    decoration: BoxDecoration(
-                      color: Colors.black,
-                      borderRadius: BorderRadius.circular(12),
-                      border: Border.all(color: alertRed.withOpacity(0.5), width: 1),
-                    ),
-                    child: ClipRRect(
-                      borderRadius: BorderRadius.circular(11),
-                      child: AspectRatio(
-                        aspectRatio: 16 / 9,
-                        child: playerWidget,
+              if (_detectedVideoId != null && _controller != null) ...[
+                buildVideoSection(playerWidget: playerWidget),
+                const SizedBox(height: 6),
+                Row(
+                  children: const [
+                    Icon(Icons.verified_user_outlined, color: textGray, size: 12),
+                    SizedBox(width: 4),
+                    Text(
+                      'Video Credit: Official Channel',
+                      style: TextStyle(
+                        color: textGray,
+                        fontSize: 11,
+                        fontStyle: FontStyle.italic,
+                        letterSpacing: 0.2,
                       ),
                     ),
-                  ),
-                  const SizedBox(height: 6),
-                  Row(
-                    children: const [
-                      Icon(Icons.verified_user_outlined, color: textGray, size: 12),
-                      SizedBox(width: 4),
-                      Text(
-                        'Video Credit: Official Channel',
-                        style: TextStyle(
-                          color: textGray,
-                          fontSize: 11,
-                          fontStyle: FontStyle.italic,
-                          letterSpacing: 0.2,
-                        ),
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 16),
-                ] else ...[
-                  // Thumbnail with Play Icon & Click-to-Play GestureDetector
-                  GestureDetector(
-                    behavior: HitTestBehavior.opaque,
-                    onTap: () {
-                      setState(() {
-                        _isPlaying = true;
-                      });
-                      _youtubeController?.play();
-                    },
-                    child: Container(
-                      decoration: BoxDecoration(
-                        borderRadius: BorderRadius.circular(14),
-                        border: Border.all(color: borderDark, width: 1.2),
-                      ),
-                      child: ClipRRect(
-                        borderRadius: BorderRadius.circular(14),
-                        child: AspectRatio(
-                          aspectRatio: 16 / 9,
-                          child: Stack(
-                            alignment: Alignment.center,
-                            children: [
-                              // Thumbnail Image
-                              Positioned.fill(
-                                child: AppImageView(
-                                  imageUrl: widget.news.imageUrl.isNotEmpty
-                                      ? widget.news.imageUrl
-                                      : 'https://img.youtube.com/vi/$_detectedVideoId/hqdefault.jpg',
-                                  fit: BoxFit.cover,
-                                ),
-                              ),
-                              // Dark Overlay for Contrast
-                              Positioned.fill(
-                                child: Container(
-                                  decoration: BoxDecoration(
-                                    gradient: LinearGradient(
-                                      begin: Alignment.topCenter,
-                                      end: Alignment.bottomCenter,
-                                      colors: [
-                                        Colors.black.withOpacity(0.2),
-                                        Colors.black.withOpacity(0.65),
-                                      ],
-                                    ),
-                                  ),
-                                ),
-                              ),
-                              // Play Icon Button
-                              Container(
-                                width: 62,
-                                height: 62,
-                                decoration: BoxDecoration(
-                                  color: alertRed,
-                                  shape: BoxShape.circle,
-                                  boxShadow: [
-                                    BoxShadow(
-                                      color: alertRed.withOpacity(0.6),
-                                      blurRadius: 18,
-                                      spreadRadius: 2,
-                                    ),
-                                  ],
-                                  border: Border.all(color: Colors.white, width: 2),
-                                ),
-                                child: const Icon(
-                                  Icons.play_arrow_rounded,
-                                  color: Colors.white,
-                                  size: 38,
-                                ),
-                              ),
-                              // Play pill hint
-                              Positioned(
-                                bottom: 12,
-                                left: 12,
-                                right: 12,
-                                child: Row(
-                                  mainAxisAlignment: MainAxisAlignment.center,
-                                  children: [
-                                    Container(
-                                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
-                                      decoration: BoxDecoration(
-                                        color: Colors.black.withOpacity(0.8),
-                                        borderRadius: BorderRadius.circular(20),
-                                        border: Border.all(color: alertRed.withOpacity(0.7), width: 1),
-                                      ),
-                                      child: Row(
-                                        mainAxisSize: MainAxisSize.min,
-                                        children: const [
-                                          Icon(Icons.play_circle_fill_rounded, color: alertRed, size: 14),
-                                          SizedBox(width: 5),
-                                          Text(
-                                            'Tap to Play Video',
-                                            style: TextStyle(
-                                              color: Colors.white,
-                                              fontSize: 12,
-                                              fontWeight: FontWeight.bold,
-                                            ),
-                                          ),
-                                        ],
-                                      ),
-                                    ),
-                                  ],
-                                ),
-                              ),
-                            ],
-                          ),
-                        ),
-                      ),
-                    ),
-                    const SizedBox(height: 6),
-                    Row(
-                      children: const [
-                        Icon(Icons.verified_user_outlined, color: textGray, size: 12),
-                        SizedBox(width: 4),
-                        Text(
-                          'Video Credit: Official Channel',
-                          style: TextStyle(
-                            color: textGray,
-                            fontSize: 11,
-                            fontStyle: FontStyle.italic,
-                            letterSpacing: 0.2,
-                          ),
-                        ),
-                      ],
-                    ),
-                    const SizedBox(height: 16),
-                  ]
-              else ...[
+                  ],
+                ),
+                const SizedBox(height: 16),
+              ] else ...[
                 // Featured Image (No video)
                 ClipRRect(
                   borderRadius: BorderRadius.circular(14),

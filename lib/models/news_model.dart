@@ -61,6 +61,7 @@ class NewsModel {
   String get title => getTitle();
   String get description => getDescription();
   String get content => getDescription();
+  String get thumbnailUrl => imageUrl;
 
   /// Retrieve title for a given language code (e.g. 'ro', 'roman', 'en', 'hi', 'ur', 'bn', 'ar', 'zh')
   String getTitle([String? langCode]) {
