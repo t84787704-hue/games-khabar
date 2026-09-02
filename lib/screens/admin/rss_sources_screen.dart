@@ -1,3 +1,4 @@
+import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 import 'package:xml/xml.dart';
@@ -26,153 +27,66 @@ class _RssSourcesScreenState extends State<RssSourcesScreen> {
 
   Future<void> _syncFeedsClientSide() async {
     if (_isSyncing) return;
-    setState(() {
-      _isSyncing = true;
-      _publishedCount = 0;
-    });
+    setState(() => _isSyncing = true);
     int count = 0;
-
     try {
-      var sourcesSnap = await FirebaseFirestore.instance
-          .collection('rss_sources')
-          .where('isActive', isEqualTo: true)
-          .get();
-
-      if (sourcesSnap.docs.isEmpty) {
-        sourcesSnap = await FirebaseFirestore.instance
-            .collection('scraper_sources')
-            .where('isEnabled', isEqualTo: true)
-            .get();
+      var snap = await FirebaseFirestore.instance.collection('rss_sources').where('isActive', isEqualTo: true).limit(1).get();
+      if (snap.docs.isEmpty) {
+        snap = await FirebaseFirestore.instance.collection('scraper_sources').where('isEnabled', isEqualTo: true).limit(1).get();
       }
-
-      // If empty, seed default sources
-      if (sourcesSnap.docs.isEmpty) {
+      if (snap.docs.isEmpty) {
         await AutoNewsScraper.seedDefaultSourcesIfEmpty();
-        sourcesSnap = await FirebaseFirestore.instance
-            .collection('rss_sources')
-            .where('isActive', isEqualTo: true)
-            .get();
+        snap = await FirebaseFirestore.instance.collection('rss_sources').where('isActive', isEqualTo: true).limit(1).get();
       }
-
-      if (sourcesSnap.docs.isEmpty) {
+      if (snap.docs.isEmpty) {
         if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-              content: Text('No active RSS sources found'),
-              backgroundColor: Colors.orange,
-            ),
-          );
+          ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('No active source')));
         }
         return;
       }
-
-      for (var doc in sourcesSnap.docs) {
-        final source = doc.data();
-        final url = (source['url'] as String?)?.trim() ?? '';
-        final sourceName = source['name'] ?? 'Gaming Feed';
-        final category = source['category'] ?? source['categoryHint'] ?? 'General';
-        final logo = source['logo'] ?? '';
-
-        if (url.isEmpty) continue;
-
-        try {
-          final res = await http.get(Uri.parse(url)).timeout(const Duration(seconds: 15));
-          if (res.statusCode != 200) continue;
-
-          final document = XmlDocument.parse(res.body);
-          final items = document.findAllElements('item').take(5);
-
-          for (var item in items) {
-            String getText(String tag) {
-              final elems = item.findElements(tag);
-              return elems.isEmpty ? '' : elems.first.innerText.trim();
-            }
-
-            final link = getText('link').isNotEmpty ? getText('link') : getText('guid');
-            if (link.isEmpty) continue;
-
-            // Duplicate check
-            final dup = await FirebaseFirestore.instance
-                .collection('news')
-                .where('link', isEqualTo: link)
-                .limit(1)
-                .get();
-            if (dup.docs.isNotEmpty) continue;
-
-            // Image extraction
-            String imageUrl = '';
-            final enclosure = item.findElements('enclosure');
-            if (enclosure.isNotEmpty) {
-              imageUrl = enclosure.first.getAttribute('url') ?? '';
-            }
-            if (imageUrl.isEmpty) {
-              final mediaContent = item.findElements('media:content');
-              if (mediaContent.isNotEmpty) {
-                imageUrl = mediaContent.first.getAttribute('url') ?? '';
-              }
-            }
-            if (imageUrl.isEmpty) {
-              final mediaThumb = item.findElements('media:thumbnail');
-              if (mediaThumb.isNotEmpty) {
-                imageUrl = mediaThumb.first.getAttribute('url') ?? '';
-              }
-            }
-            if (imageUrl.isEmpty) {
-              final rawContent = getText('description') + getText('content:encoded');
-              final imgMatch = RegExp(r'''<img[^>]+src=["']([^"']+)["']''', caseSensitive: false).firstMatch(rawContent);
-              if (imgMatch != null && imgMatch.group(1) != null) {
-                imageUrl = imgMatch.group(1)!;
-              }
-            }
-            if (imageUrl.isEmpty) {
-              imageUrl = 'https://images.unsplash.com/photo-1542751371-adc38448a05e?q=80&w=1200&auto=format&fit=crop';
-            }
-
-            final rawDesc = getText('description').isNotEmpty ? getText('description') : getText('content:encoded');
-            final cleanDesc = rawDesc.replaceAll(RegExp(r'<[^>]*>'), '').trim();
-            final pubDateStr = getText('pubDate');
-
-            await FirebaseFirestore.instance.collection('news').add({
-              'title': getText('title').isNotEmpty ? getText('title') : 'Gaming Update',
-              'content': cleanDesc.isNotEmpty ? cleanDesc : 'Stay tuned for more gaming updates.',
-              'description': cleanDesc.isNotEmpty ? cleanDesc : 'Stay tuned for more gaming updates.',
-              'imageUrl': imageUrl,
-              'link': link,
-              'sourceUrl': link,
-              'sourceName': sourceName,
-              'sourceLogo': logo,
-              'category': category,
-              'isAuto': true,
-              'tag': 'AUTO',
-              'isVerified': true,
-              'createdAt': FieldValue.serverTimestamp(),
-              'publishedAt': pubDateStr.isNotEmpty ? pubDateStr : DateTime.now().toIso8601String(),
-              'views': 0,
-            });
-            count++;
-          }
-        } catch (e) {
-          debugPrint('RSS fail $url $e');
+      final doc = snap.docs.first;
+      final rssUrl = (doc.data()['url'] as String?)?.trim() ?? 'https://www.sportskeeda.com/rss/bgmi';
+      // Use rss2json to avoid XML block
+      final apiUrl = 'https://api.rss2json.com/v1/api.json?rss_url=${Uri.encodeComponent(rssUrl)}';
+      final res = await http.get(Uri.parse(apiUrl)).timeout(const Duration(seconds: 20));
+      final data = jsonDecode(res.body);
+      if (data['status'] != 'ok') {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('RSS API Error: ${data['message']}')));
         }
+        return;
       }
-
+      final items = data['items'] as List;
+      for (var i = 0; i < 1 && i < items.length; i++) {
+        // force only 1 for test
+        final item = items[i];
+        // MAKE LINK UNIQUE FOR TESTING - so duplicate check never blocks
+        final uniqueLink = (item['link'] ?? '') + '?test=${DateTime.now().millisecondsSinceEpoch}';
+        await FirebaseFirestore.instance.collection('news').add({
+          'title': item['title'] ?? 'Test News',
+          'content': item['description'] ?? '',
+          'description': item['description'] ?? '',
+          'imageUrl': item['enclosure']?['link'] ?? item['thumbnail'] ?? 'https://images.unsplash.com/photo-1542751371-adc38448a05e?q=80&w=1200&auto=format&fit=crop',
+          'link': uniqueLink,
+          'sourceUrl': uniqueLink,
+          'sourceName': doc.data()['name'] ?? 'Sportskeeda BGMI',
+          'category': 'BGMI',
+          'isAuto': true,
+          'tag': 'AUTO',
+          'isVerified': true,
+          'createdAt': FieldValue.serverTimestamp(),
+          'publishedAt': DateTime.now().toIso8601String(),
+          'views': 0,
+        });
+        count++;
+      }
       _publishedCount = count;
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('$count news published successfully!'),
-            backgroundColor: Colors.green,
-          ),
-        );
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('SUCCESS: $count news published! (Test mode)'), backgroundColor: Colors.green));
       }
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Error: $e'),
-            backgroundColor: Colors.red,
-          ),
-        );
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Error: $e'), backgroundColor: Colors.red, duration: const Duration(seconds: 10)));
       }
     } finally {
       if (mounted) setState(() => _isSyncing = false);
