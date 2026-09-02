@@ -10,7 +10,6 @@ import 'services/notification_service.dart';
 import 'services/theme_service.dart';
 import 'services/language_service.dart';
 import 'services/ad_free_service.dart';
-import 'services/auto_news_scraper.dart';
 import 'firebase_options.dart';
 
 void main() async {
@@ -35,8 +34,8 @@ void main() async {
     await Firebase.initializeApp();
   }
 
-  // Initialize Auto News RSS Scraper (runs every 30 minutes)
-  unawaited(AutoNewsScraper().init());
+  // Auto news scraper will be migrated to Cloud Functions backend
+  // AutoNewsScraper().init();
 
   runApp(
     EasyLocalization(

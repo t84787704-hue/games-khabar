@@ -553,7 +553,7 @@ class AutoNewsScraper {
         final title = _extractXmlTag(itemBlock, 'title');
         String link = _extractXmlTag(itemBlock, 'link');
         if (link.isEmpty) {
-          final linkHrefMatch = RegExp(r'<link[^>]+href=["\']([^"\']+)["\']', caseSensitive: false)
+          final linkHrefMatch = RegExp(r'''<link[^>]+href=["']([^"']+)["']''', caseSensitive: false)
               .firstMatch(itemBlock);
           if (linkHrefMatch != null) {
             link = linkHrefMatch.group(1) ?? '';
@@ -576,14 +576,14 @@ class AutoNewsScraper {
 
         // Extract image
         String? imageUrl;
-        final mediaMatch = RegExp(r'<media:(?:content|thumbnail)[^>]+url=["\']([^"\']+)["\']', caseSensitive: false)
+        final mediaMatch = RegExp(r'''<media:(?:content|thumbnail)[^>]+url=["']([^"']+)["']''', caseSensitive: false)
             .firstMatch(itemBlock);
         if (mediaMatch != null) {
           imageUrl = mediaMatch.group(1);
         }
 
         if (imageUrl == null) {
-          final enclosureMatch = RegExp(r'<enclosure[^>]+url=["\']([^"\']+)["\']', caseSensitive: false)
+          final enclosureMatch = RegExp(r'''<enclosure[^>]+url=["']([^"']+)["']''', caseSensitive: false)
               .firstMatch(itemBlock);
           if (enclosureMatch != null) {
             imageUrl = enclosureMatch.group(1);
@@ -591,7 +591,7 @@ class AutoNewsScraper {
         }
 
         if (imageUrl == null) {
-          final imgMatch = RegExp(r'<img[^>]+src=["\']([^"\']+)["\']', caseSensitive: false)
+          final imgMatch = RegExp(r'''<img[^>]+src=["']([^"']+)["']''', caseSensitive: false)
               .firstMatch(itemBlock);
           if (imgMatch != null) {
             imageUrl = imgMatch.group(1);
