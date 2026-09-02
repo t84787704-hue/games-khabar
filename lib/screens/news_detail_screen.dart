@@ -4,33 +4,44 @@ import 'package:cached_network_image/cached_network_image.dart';
 import 'package:easy_localization/easy_localization.dart';
 import 'package:share_plus/share_plus.dart';
 import 'package:url_launcher/url_launcher.dart';
+import 'package:youtube_player_flutter/youtube_player_flutter.dart';
 import '../models/news_model.dart';
 import '../widgets/app_image_view.dart';
+import '../widgets/native_ad_widget.dart';
 import '../services/bookmark_service.dart';
 import '../services/firestore_service.dart';
+import '../services/ad_free_service.dart';
 
-/// Helper function to extract YouTube video ID from various YouTube URL formats or direct ID
-String? extractYoutubeId(String? url) {
-  if (url == null || url.trim().isEmpty) return null;
-  String cleanUrl = url.trim();
+/// Helper function to extract 11-char YouTube video ID from various YouTube URL formats, direct ID, or content text
+String? extractYoutubeId(String? urlOrText) {
+  if (urlOrText == null || urlOrText.trim().isEmpty) return null;
+  String clean = urlOrText.trim();
 
   // 1. Direct 11-character video ID
   final directIdRegex = RegExp(r'^[a-zA-Z0-9_-]{11}$');
-  if (directIdRegex.hasMatch(cleanUrl)) {
-    return cleanUrl;
+  if (directIdRegex.hasMatch(clean)) {
+    return clean;
   }
 
-  // 2. Remove ?si= or &si= parameter
-  if (cleanUrl.contains('?si=') || cleanUrl.contains('&si=')) {
-    cleanUrl = cleanUrl.replaceAll(RegExp(r'[?&]si=[^&#]+'), '');
+  // 2. Try YoutubePlayer.convertUrlToId
+  try {
+    final converted = YoutubePlayer.convertUrlToId(clean);
+    if (converted != null && converted.trim().length == 11) {
+      return converted.trim();
+    }
+  } catch (_) {}
+
+  // 3. Clean tracking query parameters
+  if (clean.contains('?si=') || clean.contains('&si=')) {
+    clean = clean.replaceAll(RegExp(r'[?&]si=[^&#\s]+'), '');
   }
 
-  // 3. Extract ID using RegExp
+  // 4. Extract ID using regex matching youtube.com or youtu.be
   final regExp = RegExp(
     r'(?:youtu\.be\/|youtube\.com\/(?:embed\/|v\/|watch\?v=|watch\?.+&v=|shorts\/|live\/)|(?:v=))([a-zA-Z0-9_-]{11})',
     caseSensitive: false,
   );
-  final match = regExp.firstMatch(cleanUrl);
+  final match = regExp.firstMatch(clean);
   if (match != null && match.group(1) != null) {
     return match.group(1);
   }
@@ -39,14 +50,31 @@ String? extractYoutubeId(String? url) {
     r'(?:v=|youtu\.be\/)([a-zA-Z0-9_-]{11})',
     caseSensitive: false,
   );
-  final fallbackMatch = fallbackRegExp.firstMatch(cleanUrl);
+  final fallbackMatch = fallbackRegExp.firstMatch(clean);
   return fallbackMatch?.group(1);
 }
 
-class NewsDetailScreen extends StatelessWidget {
+/// Helper to detect if a given URL is a YouTube URL
+bool isYouTubeUrl(String? url) {
+  if (url == null || url.trim().isEmpty) return false;
+  final lower = url.trim().toLowerCase();
+  return lower.contains('youtube.com') ||
+      lower.contains('youtu.be') ||
+      extractYoutubeId(url) != null;
+}
+
+class NewsDetailScreen extends StatefulWidget {
   final NewsModel news;
 
   const NewsDetailScreen({super.key, required this.news});
+
+  @override
+  State<NewsDetailScreen> createState() => _NewsDetailScreenState();
+}
+
+class _NewsDetailScreenState extends State<NewsDetailScreen> {
+  YoutubePlayerController? _youtubeController;
+  String? _detectedVideoId;
 
   static const Color neonGreen = Color(0xFF00FF88);
   static const Color scaffoldBg = Color(0xFF121318);
@@ -57,13 +85,79 @@ class NewsDetailScreen extends StatelessWidget {
   static const Color textGray = Color(0xFF9E9EA7);
   static const Color textLightGray = Color(0xFFD4D4D8);
 
-  bool get hasVideoUrl => news.videoUrl != null && news.videoUrl!.trim().isNotEmpty;
+  @override
+  void initState() {
+    super.initState();
+    _initYoutubePlayer();
+  }
 
-  String? get youTubeVideoId => extractYoutubeId(news.videoUrl);
+  void _initYoutubePlayer() {
+    _detectedVideoId = _findYouTubeVideoId(widget.news);
+    if (_detectedVideoId != null && _detectedVideoId!.isNotEmpty) {
+      _youtubeController = YoutubePlayerController(
+        initialVideoId: _detectedVideoId!,
+        flags: const YoutubePlayerFlags(
+          autoPlay: false,
+          mute: false,
+          disableDragSeek: false,
+          loop: false,
+          isLive: false,
+          forceHD: false,
+          enableCaption: true,
+          showLiveFullscreenButton: false,
+        ),
+      );
+    }
+  }
+
+  String? _findYouTubeVideoId(NewsModel news) {
+    // 1. Check videoUrl field
+    if (news.videoUrl != null && news.videoUrl!.trim().isNotEmpty) {
+      final id = extractYoutubeId(news.videoUrl);
+      if (id != null) return id;
+    }
+
+    // 2. Check sourceUrl field
+    if (news.sourceUrl != null && news.sourceUrl!.trim().isNotEmpty) {
+      final id = extractYoutubeId(news.sourceUrl);
+      if (id != null) return id;
+    }
+
+    // 3. Check all translated descriptions in descriptionMap
+    for (final desc in news.descriptionMap.values) {
+      final id = extractYoutubeId(desc);
+      if (id != null) return id;
+    }
+
+    // 4. Check raw description / title
+    final rawDescId = extractYoutubeId(news.description);
+    if (rawDescId != null) return rawDescId;
+
+    final rawTitleId = extractYoutubeId(news.title);
+    if (rawTitleId != null) return rawTitleId;
+
+    return null;
+  }
+
+  @override
+  void dispose() {
+    _youtubeController?.dispose();
+    super.dispose();
+  }
+
+  bool get hasOtherNonYoutubeVideo =>
+      widget.news.videoUrl != null &&
+      widget.news.videoUrl!.trim().isNotEmpty &&
+      _detectedVideoId == null &&
+      !isYouTubeUrl(widget.news.videoUrl);
 
   String? _extractSourceUrl(String text) {
-    if (news.sourceUrl != null && news.sourceUrl!.trim().isNotEmpty) {
-      return news.sourceUrl!.trim();
+    if (widget.news.sourceUrl != null && widget.news.sourceUrl!.trim().isNotEmpty) {
+      final sUrl = widget.news.sourceUrl!.trim();
+      // Remove clickable action if it's a YouTube URL since player is embedded
+      if (!isYouTubeUrl(sUrl)) {
+        return sUrl;
+      }
     }
     final urlRegExp = RegExp(
       r'((https?:\/\/)|(www\.))[^\s]+',
@@ -75,30 +169,26 @@ class NewsDetailScreen extends StatelessWidget {
       if (!url.startsWith('http://') && !url.startsWith('https://')) {
         url = 'https://$url';
       }
-      return url;
+      // If it's a YouTube URL, suppress clickable external link
+      if (!isYouTubeUrl(url)) {
+        return url;
+      }
     }
     return null;
   }
 
-  Future<void> _openYouTubeVideo(BuildContext context, String videoId) async {
-    final uri = Uri.parse("https://www.youtube.com/watch?v=$videoId");
-    try {
-      final canOpen = await canLaunchUrl(uri);
-      if (canOpen) {
-        await launchUrl(uri, mode: LaunchMode.externalApplication);
-      } else {
-        await launchUrl(uri, mode: LaunchMode.platformDefault);
-      }
-    } catch (_) {
-      if (context.mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            backgroundColor: cardDark,
-            content: Text('Could not open YouTube', style: TextStyle(color: neonGreen)),
-          ),
-        );
-      }
+  String _cleanContentText(String text) {
+    // If YouTube player is already shown, remove raw YouTube URLs to keep content readable
+    if (_detectedVideoId != null) {
+      return text
+          .replaceAll(
+            RegExp(r'https?:\/\/(?:www\.)?(?:youtube\.com\/[^\s]+|youtu\.be\/[^\s]+)'),
+            '',
+          )
+          .replaceAll(RegExp(r'\n{3,}'), '\n\n')
+          .trim();
     }
+    return text.trim();
   }
 
   Future<void> _launchExternalUrl(BuildContext context, String url) async {
@@ -123,8 +213,8 @@ class NewsDetailScreen extends StatelessWidget {
         'https://play.google.com/store/apps/details?id=$packageName';
 
     final langCode = context.locale.languageCode;
-    final displayTitle = news.getTitle(langCode);
-    final displayDescription = news.getDescription(langCode);
+    final displayTitle = widget.news.getTitle(langCode);
+    final displayDescription = widget.news.getDescription(langCode);
 
     final String shareMessage =
         '🔥 $displayTitle\n\n'
@@ -171,7 +261,7 @@ class NewsDetailScreen extends StatelessWidget {
   }
 
   void _toggleBookmark(BuildContext context) async {
-    final isSaved = await BookmarkService().toggleBookmark(news);
+    final isSaved = await BookmarkService().toggleBookmark(widget.news);
     if (context.mounted) {
       ScaffoldMessenger.of(context).hideCurrentSnackBar();
       ScaffoldMessenger.of(context).showSnackBar(
@@ -207,12 +297,49 @@ class NewsDetailScreen extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    if (_youtubeController != null) {
+      return YoutubePlayerBuilder(
+        player: YoutubePlayer(
+          controller: _youtubeController!,
+          showVideoProgressIndicator: true,
+          progressIndicatorColor: neonGreen,
+          progressColors: const ProgressBarColors(
+            playedColor: neonGreen,
+            handleColor: neonGreen,
+            bufferedColor: Colors.grey,
+            backgroundColor: Colors.black26,
+          ),
+          topActions: [
+            const SizedBox(width: 8),
+            Expanded(
+              child: Text(
+                _youtubeController!.metadata.title,
+                style: const TextStyle(
+                  color: Colors.white,
+                  fontSize: 14,
+                  overflow: TextOverflow.ellipsis,
+                ),
+                maxLines: 1,
+              ),
+            ),
+          ],
+        ),
+        builder: (context, player) {
+          return _buildScaffoldContent(context, playerWidget: player);
+        },
+      );
+    }
+
+    return _buildScaffoldContent(context);
+  }
+
+  Widget _buildScaffoldContent(BuildContext context, {Widget? playerWidget}) {
     final langCode = context.locale.languageCode;
-    final displayTitle = news.getTitle(langCode);
-    final displayDescription = news.getDescription(langCode);
-    final directUrl = _extractSourceUrl(displayDescription);
-    final ytId = youTubeVideoId;
-    final isOtherVideo = hasVideoUrl && ytId == null;
+    final displayTitle = widget.news.getTitle(langCode);
+    final rawDescription = widget.news.getDescription(langCode);
+    final displayDescription = _cleanContentText(rawDescription);
+    final directUrl = _extractSourceUrl(rawDescription);
+    final hasVideo = _detectedVideoId != null || hasOtherNonYoutubeVideo;
 
     return Scaffold(
       backgroundColor: scaffoldBg,
@@ -224,7 +351,7 @@ class NewsDetailScreen extends StatelessWidget {
           onPressed: () => Navigator.pop(context),
         ),
         title: Text(
-          news.category.isNotEmpty ? news.category : 'Gaming Khabar',
+          widget.news.category.isNotEmpty ? widget.news.category : 'Gaming Khabar',
           style: TextStyle(
             color: textWhite,
             fontSize: 16,
@@ -237,7 +364,7 @@ class NewsDetailScreen extends StatelessWidget {
           ValueListenableBuilder<Set<String>>(
             valueListenable: BookmarkService.bookmarkedIdsNotifier,
             builder: (context, bookmarkedIds, _) {
-              final isSaved = bookmarkedIds.contains(news.id);
+              final isSaved = bookmarkedIds.contains(widget.news.id);
               return IconButton(
                 icon: Icon(
                   isSaved ? Icons.bookmark_rounded : Icons.bookmark_border_rounded,
@@ -265,20 +392,7 @@ class NewsDetailScreen extends StatelessWidget {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              // 1. News Featured Image
-              ClipRRect(
-                borderRadius: BorderRadius.circular(14),
-                child: AspectRatio(
-                  aspectRatio: 16 / 9,
-                  child: AppImageView(
-                    imageUrl: news.imageUrl,
-                    fit: BoxFit.cover,
-                  ),
-                ),
-              ),
-              const SizedBox(height: 16),
-
-              // 2. Metadata Bar (Category Badge, Video Tag, Time, Views)
+              // 1. Metadata Bar (Category Badge, Video Tag, Time, Views)
               Row(
                 children: [
                   Container(
@@ -289,7 +403,7 @@ class NewsDetailScreen extends StatelessWidget {
                       border: Border.all(color: neonGreen, width: 1),
                     ),
                     child: Text(
-                      news.category.toUpperCase(),
+                      widget.news.category.toUpperCase(),
                       style: TextStyle(
                         color: neonGreen,
                         fontSize: 11,
@@ -298,7 +412,7 @@ class NewsDetailScreen extends StatelessWidget {
                       ),
                     ),
                   ),
-                  if (hasVideoUrl) ...[
+                  if (hasVideo) ...[
                     const SizedBox(width: 8),
                     Container(
                       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
@@ -328,7 +442,7 @@ class NewsDetailScreen extends StatelessWidget {
                   Icon(Icons.access_time_rounded, color: textGray, size: 14),
                   const SizedBox(width: 4),
                   Text(
-                    news.timeAgo,
+                    widget.news.timeAgo,
                     style: TextStyle(
                       color: textGray,
                       fontSize: 12,
@@ -339,14 +453,14 @@ class NewsDetailScreen extends StatelessWidget {
                   Icon(Icons.visibility_outlined, color: textGray, size: 14),
                   const SizedBox(width: 4),
                   Text(
-                    '${news.views} views',
+                    '${widget.news.views} views',
                     style: TextStyle(color: textGray, fontSize: 12),
                   ),
                 ],
               ),
-              const SizedBox(height: 16),
+              const SizedBox(height: 14),
 
-              // 3. News Title
+              // 2. News Title
               Text(
                 displayTitle,
                 style: TextStyle(
@@ -359,7 +473,7 @@ class NewsDetailScreen extends StatelessWidget {
               ),
               const SizedBox(height: 12),
 
-              // 4. Accent Divider
+              // 3. Accent Divider
               Container(
                 height: 3,
                 width: 44,
@@ -368,125 +482,61 @@ class NewsDetailScreen extends StatelessWidget {
                   borderRadius: BorderRadius.circular(2),
                 ),
               ),
-              const SizedBox(height: 18),
+              const SizedBox(height: 16),
 
-              // 5. YouTube Video Preview Card (Click to open YouTube App / Web)
-              if (ytId != null) ...[
-                GestureDetector(
-                  onTap: () => _openYouTubeVideo(context, ytId),
-                  child: Container(
-                    decoration: BoxDecoration(
-                      color: cardDark,
-                      borderRadius: BorderRadius.circular(14),
-                      border: Border.all(color: alertRed.withOpacity(0.7), width: 1.5),
-                    ),
-                    child: ClipRRect(
-                      borderRadius: BorderRadius.circular(12),
-                      child: AspectRatio(
-                        aspectRatio: 16 / 9,
-                        child: Stack(
-                          fit: StackFit.expand,
-                          children: [
-                            // YouTube Thumbnail (0.jpg standard)
-                            CachedNetworkImage(
-                              imageUrl: 'https://img.youtube.com/vi/$ytId/0.jpg',
-                              fit: BoxFit.cover,
-                              placeholder: (context, url) => Container(
-                                color: cardDark,
-                                child: Center(
-                                  child: CircularProgressIndicator(color: alertRed, strokeWidth: 2),
-                                ),
-                              ),
-                              errorWidget: (context, url, error) => Container(
-                                color: cardDark,
-                                child: Center(
-                                  child: Icon(Icons.movie_rounded, color: textGray, size: 40),
-                                ),
-                              ),
-                            ),
-                            // Dark Overlay
-                            Container(
-                              color: Colors.black.withOpacity(0.35),
-                            ),
-                            // Centered Red Play Button
-                            Center(
-                              child: Container(
-                                width: 64,
-                                height: 46,
-                                decoration: BoxDecoration(
-                                  color: alertRed,
-                                  borderRadius: BorderRadius.circular(12),
-                                  boxShadow: [
-                                    BoxShadow(
-                                      color: alertRed.withOpacity(0.6),
-                                      blurRadius: 16,
-                                      spreadRadius: 2,
-                                    ),
-                                  ],
-                                ),
-                                child: const Icon(
-                                  Icons.play_arrow_rounded,
-                                  color: Colors.white,
-                                  size: 34,
-                                ),
-                              ),
-                            ),
-                            // Bottom Action Banner
-                            Positioned(
-                              bottom: 10,
-                              left: 12,
-                              right: 12,
-                              child: Row(
-                                children: [
-                                  Container(
-                                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
-                                    decoration: BoxDecoration(
-                                      color: Colors.black.withOpacity(0.8),
-                                      borderRadius: BorderRadius.circular(6),
-                                    ),
-                                    child: Row(
-                                      mainAxisSize: MainAxisSize.min,
-                                      children: const [
-                                        Icon(Icons.play_circle_fill_rounded, color: alertRed, size: 16),
-                                        SizedBox(width: 6),
-                                        Text(
-                                          'Watch on YouTube',
-                                          style: TextStyle(
-                                            color: Colors.white,
-                                            fontSize: 11,
-                                            fontWeight: FontWeight.bold,
-                                          ),
-                                        ),
-                                      ],
-                                    ),
-                                  ),
-                                  const Spacer(),
-                                  Container(
-                                    padding: const EdgeInsets.all(5),
-                                    decoration: BoxDecoration(
-                                      color: Colors.black.withOpacity(0.8),
-                                      shape: BoxShape.circle,
-                                    ),
-                                    child: const Icon(
-                                      Icons.open_in_new_rounded,
-                                      color: Colors.white,
-                                      size: 14,
-                                    ),
-                                  ),
-                                ],
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
+              // 4. Embedded YouTube Player (at top below title) or Featured Image
+              if (playerWidget != null && _detectedVideoId != null) ...[
+                // Embedded YouTube Player
+                Container(
+                  decoration: BoxDecoration(
+                    color: Colors.black,
+                    borderRadius: BorderRadius.circular(12),
+                    border: Border.all(color: alertRed.withOpacity(0.5), width: 1),
+                  ),
+                  child: ClipRRect(
+                    borderRadius: BorderRadius.circular(11),
+                    child: AspectRatio(
+                      aspectRatio: 16 / 9,
+                      child: playerWidget,
                     ),
                   ),
                 ),
-                const SizedBox(height: 20),
+                const SizedBox(height: 6),
+                // Video Credit: Official Channel
+                Row(
+                  children: const [
+                    Icon(Icons.verified_user_outlined, color: textGray, size: 12),
+                    SizedBox(width: 4),
+                    Text(
+                      'Video Credit: Official Channel',
+                      style: TextStyle(
+                        color: textGray,
+                        fontSize: 11,
+                        fontStyle: FontStyle.italic,
+                        letterSpacing: 0.2,
+                      ),
+                    ),
+                  ],
+                ),
+                // 12px+ Gap between YouTube player and any Ad / content (Play Store & YouTube + AdMob compliance)
+                const SizedBox(height: 16),
+              ] else ...[
+                // Featured Image
+                ClipRRect(
+                  borderRadius: BorderRadius.circular(14),
+                  child: AspectRatio(
+                    aspectRatio: 16 / 9,
+                    child: AppImageView(
+                      imageUrl: widget.news.imageUrl,
+                      fit: BoxFit.cover,
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 16),
               ],
 
-              // 6. Direct Video Link Button (if other direct URL)
-              if (isOtherVideo) ...[
+              // 5. Direct Video Link Button (for non-YouTube direct MP4/stream video links only)
+              if (hasOtherNonYoutubeVideo) ...[
                 SizedBox(
                   width: double.infinity,
                   height: 48,
@@ -499,7 +549,7 @@ class NewsDetailScreen extends StatelessWidget {
                         borderRadius: BorderRadius.circular(10),
                       ),
                     ),
-                    onPressed: () => _launchExternalUrl(context, news.videoUrl!),
+                    onPressed: () => _launchExternalUrl(context, widget.news.videoUrl!),
                     icon: const Icon(Icons.play_circle_fill_rounded, size: 20),
                     label: const Text(
                       'Watch Video',
@@ -507,10 +557,10 @@ class NewsDetailScreen extends StatelessWidget {
                     ),
                   ),
                 ),
-                const SizedBox(height: 20),
+                const SizedBox(height: 16),
               ],
 
-              // 7. News Description Text
+              // 6. News Description Text (Cleaned from raw YouTube URLs)
               Text(
                 displayDescription,
                 style: const TextStyle(
@@ -520,9 +570,9 @@ class NewsDetailScreen extends StatelessWidget {
                   letterSpacing: 0.2,
                 ),
               ),
-              const SizedBox(height: 28),
+              const SizedBox(height: 24),
 
-              // 8. Source Article Link (if present)
+              // 7. Source Article Link (Non-YouTube external source only)
               if (directUrl != null) ...[
                 SizedBox(
                   width: double.infinity,
@@ -546,7 +596,7 @@ class NewsDetailScreen extends StatelessWidget {
                 const SizedBox(height: 14),
               ],
 
-              // 9. Share Button
+              // 8. Share Button
               SizedBox(
                 width: double.infinity,
                 height: 48,
@@ -567,10 +617,27 @@ class NewsDetailScreen extends StatelessWidget {
                   ),
                 ),
               ),
-              const SizedBox(height: 16),
+              const SizedBox(height: 20),
+
+              // 9. AdMob Ad Section (Separated by >= 12px gap from player & content for YouTube + AdMob compliance)
+              ValueListenableBuilder<DateTime?>(
+                valueListenable: AdFreeService.adFreeUntilNotifier,
+                builder: (context, adFreeUntil, _) {
+                  if (AdFreeService().isAdFree) {
+                    return const SizedBox.shrink();
+                  }
+                  return Column(
+                    children: const [
+                      SizedBox(height: 12), // Explicit 12px+ buffer
+                      NativeAdWidget(),
+                      SizedBox(height: 12),
+                    ],
+                  );
+                },
+              ),
 
               // 10. Related News Section
-              _buildRelatedNewsSection(context),
+              _buildRelatedNewsSection(context, langCode),
             ],
           ),
         ),
@@ -578,19 +645,20 @@ class NewsDetailScreen extends StatelessWidget {
     );
   }
 
-  List<NewsModel> _getRelatedNews(List<NewsModel> allNews) {
+  List<NewsModel> _getRelatedNews(List<NewsModel> allNews, String langCode) {
     // 1. Exclude current news itself
-    final otherNews = allNews.where((n) => n.id != news.id).toList();
+    final otherNews = allNews.where((n) => n.id != widget.news.id).toList();
 
     // 2. Filter by same category (up to 4)
     final List<NewsModel> related = otherNews
-        .where((n) => n.category.trim().toLowerCase() == news.category.trim().toLowerCase())
+        .where((n) => n.category.trim().toLowerCase() == widget.news.category.trim().toLowerCase())
         .take(4)
         .toList();
 
     // 3. If related count is less than 2, also find news where title contains same keywords
     if (related.length < 2) {
-      final words = news.title
+      final currentTitle = widget.news.getTitle(langCode);
+      final words = currentTitle
           .toLowerCase()
           .replaceAll(RegExp(r'[^a-zA-Z0-9\s]'), '')
           .split(RegExp(r'\s+'))
@@ -603,7 +671,7 @@ class NewsDetailScreen extends StatelessWidget {
         if (related.length >= 4) break;
         if (relatedIds.contains(item.id)) continue;
 
-        final itemTitleLower = item.title.toLowerCase();
+        final itemTitleLower = item.getTitle(langCode).toLowerCase();
         final hasKeyword = words.any((w) => itemTitleLower.contains(w));
         if (hasKeyword) {
           related.add(item);
@@ -615,15 +683,15 @@ class NewsDetailScreen extends StatelessWidget {
     return related;
   }
 
-  Widget _buildRelatedNewsSection(BuildContext context) {
+  Widget _buildRelatedNewsSection(BuildContext context, String langCode) {
     return StreamBuilder<List<NewsModel>>(
       stream: FirestoreService().getNewsStream(),
       initialData: FirestoreService().currentNews,
       builder: (context, snapshot) {
         final allNews = snapshot.data ?? [];
-        final relatedList = _getRelatedNews(allNews);
+        final relatedList = _getRelatedNews(allNews, langCode);
 
-        // 5. Hide the whole section if no related news found
+        // Hide the whole section if no related news found
         if (relatedList.isEmpty) {
           return const SizedBox.shrink();
         }
@@ -655,7 +723,7 @@ class NewsDetailScreen extends StatelessWidget {
                 ),
               ],
             ),
-            const SizedBox(height: 10),
+            const SizedBox(height: 12),
             ListView.separated(
               shrinkWrap: true,
               physics: const NeverScrollableScrollPhysics(),
@@ -663,6 +731,7 @@ class NewsDetailScreen extends StatelessWidget {
               separatorBuilder: (_, __) => const SizedBox(height: 10),
               itemBuilder: (context, index) {
                 final item = relatedList[index];
+                final itemTitle = item.getTitle(langCode);
                 return Material(
                   color: Colors.transparent,
                   child: InkWell(
@@ -753,7 +822,7 @@ class NewsDetailScreen extends StatelessWidget {
                                     ],
                                   ),
                                   Text(
-                                    item.title,
+                                    itemTitle,
                                     maxLines: 2,
                                     overflow: TextOverflow.ellipsis,
                                     style: TextStyle(
