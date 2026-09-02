@@ -1,6 +1,6 @@
-import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
+import 'package:xml/xml.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import '../services/auto_news_scraper.dart';
 
@@ -27,56 +27,44 @@ class _RssScreenState extends State<RssScreen> {
     setState(() => _isSyncing = true);
     int count = 0;
     try {
-      var snap = await FirebaseFirestore.instance.collection('rss_sources').where('isActive', isEqualTo: true).limit(1).get();
-      if (snap.docs.isEmpty) {
-        snap = await FirebaseFirestore.instance.collection('scraper_sources').where('isEnabled', isEqualTo: true).limit(1).get();
-      }
-      if (snap.docs.isEmpty) {
-        await AutoNewsScraper.seedDefaultSourcesIfEmpty();
-        snap = await FirebaseFirestore.instance.collection('rss_sources').where('isActive', isEqualTo: true).limit(1).get();
-      }
-      if (snap.docs.isEmpty) {
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('No active source')));
+      final snap = await FirebaseFirestore.instance.collection('rss_sources').where('isActive', isEqualTo: true).get();
+      for (var doc in snap.docs) {
+        try {
+          final rssUrl = doc['url'];
+          final res = await http.get(
+            Uri.parse(rssUrl),
+            headers: {'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64)'},
+          ).timeout(const Duration(seconds: 15));
+          if (res.statusCode != 200) continue;
+          final xmlDoc = XmlDocument.parse(res.body);
+          final items = xmlDoc.findAllElements('item').take(2);
+          for (var item in items) {
+            final title = item.findElements('title').first.text;
+            final linkRaw = item.findElements('link').first.text;
+            final uniqueLink = linkRaw + '?t=${DateTime.now().millisecondsSinceEpoch}_$count';
+            final desc = item.findElements('description').isNotEmpty ? item.findElements('description').first.text : '';
+            await FirebaseFirestore.instance.collection('news').add({
+              'title': title,
+              'content': desc,
+              'imageUrl': '',
+              'link': uniqueLink,
+              'sourceName': doc['name'],
+              'category': doc['category'] ?? 'PUBG',
+              'isAuto': true,
+              'tag': 'AUTO',
+              'createdAt': FieldValue.serverTimestamp(),
+              'views': 0,
+            });
+            count++;
+          }
+        } catch (e) {
+          debugPrint('Feed error ${doc['name']} $e');
         }
-        return;
-      }
-      final doc = snap.docs.first;
-      final rssUrl = (doc.data()['url'] as String?)?.trim() ?? 'https://www.sportskeeda.com/rss/bgmi';
-      final apiUrl = 'https://api.rss2json.com/v1/api.json?rss_url=${Uri.encodeComponent(rssUrl)}';
-      final res = await http.get(Uri.parse(apiUrl)).timeout(const Duration(seconds: 20));
-      final data = jsonDecode(res.body);
-      if (data['status'] != 'ok') {
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('RSS API Error: ${data['message']}')));
-        }
-        return;
-      }
-      final items = data['items'] as List;
-      for (var i = 0; i < 1 && i < items.length; i++) {
-        final item = items[i];
-        final uniqueLink = (item['link'] ?? '') + '?test=${DateTime.now().millisecondsSinceEpoch}';
-        await FirebaseFirestore.instance.collection('news').add({
-          'title': item['title'] ?? 'Test News',
-          'content': item['description'] ?? '',
-          'description': item['description'] ?? '',
-          'imageUrl': item['enclosure']?['link'] ?? item['thumbnail'] ?? 'https://images.unsplash.com/photo-1542751371-adc38448a05e?q=80&w=1200&auto=format&fit=crop',
-          'link': uniqueLink,
-          'sourceUrl': uniqueLink,
-          'sourceName': doc.data()['name'] ?? 'Sportskeeda BGMI',
-          'category': 'BGMI',
-          'isAuto': true,
-          'tag': 'AUTO',
-          'isVerified': true,
-          'createdAt': FieldValue.serverTimestamp(),
-          'publishedAt': DateTime.now().toIso8601String(),
-          'views': 0,
-        });
-        count++;
+        await Future.delayed(const Duration(seconds: 1));
       }
       _publishedCount = count;
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('SUCCESS: $count news published! (Test mode)'), backgroundColor: Colors.green));
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('SUCCESS: $count news published!'), backgroundColor: Colors.green));
       }
     } catch (e) {
       if (mounted) {
