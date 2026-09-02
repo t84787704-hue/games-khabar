@@ -6,6 +6,7 @@ import 'package:easy_localization/easy_localization.dart';
 import 'package:share_plus/share_plus.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'package:youtube_player_flutter/youtube_player_flutter.dart';
+import 'package:google_mobile_ads/google_mobile_ads.dart';
 import '../models/news_model.dart';
 import '../widgets/app_image_view.dart';
 import '../widgets/native_ad_widget.dart';
@@ -37,6 +38,9 @@ class NewsDetailScreen extends StatefulWidget {
 class _NewsDetailScreenState extends State<NewsDetailScreen> {
   String? videoId;
   YoutubePlayerController? _ytController;
+  RewardedAd? _rewardedAd;
+  bool _isRewardedReady = false;
+  bool _isVideoUnlocked = false;
 
   static const Color neonGreen = Color(0xFF00FF88);
   static const Color scaffoldBg = Color(0xFF121318);
@@ -53,6 +57,10 @@ class _NewsDetailScreenState extends State<NewsDetailScreen> {
     videoId = getYoutubeId(widget.news.videoUrl);
     videoId ??= getYoutubeId(widget.news.sourceUrl);
 
+    if (AdFreeService().isAdFree) {
+      _isVideoUnlocked = true;
+    }
+
     if (videoId != null && videoId!.isNotEmpty) {
       _ytController = YoutubePlayerController(
         initialVideoId: videoId!,
@@ -68,11 +76,66 @@ class _NewsDetailScreenState extends State<NewsDetailScreen> {
         ),
       );
     }
+
+    _loadRewardedAd();
+  }
+
+  void _loadRewardedAd() {
+    RewardedAd.load(
+      adUnitId: 'ca-app-pub-3940256099942544/5224354917', // Test rewarded ad unit ID
+      request: const AdRequest(),
+      rewardedAdLoadCallback: RewardedAdLoadCallback(
+        onAdLoaded: (ad) {
+          _rewardedAd = ad;
+          if (mounted) setState(() => _isRewardedReady = true);
+        },
+        onAdFailedToLoad: (err) {
+          debugPrint('Rewarded ad failed to load: $err');
+          if (mounted) setState(() => _isRewardedReady = false);
+        },
+      ),
+    );
+  }
+
+  void _showRewardedAd() {
+    if (_rewardedAd == null) return;
+    _rewardedAd!.fullScreenContentCallback = FullScreenContentCallback(
+      onAdDismissedFullScreenContent: (ad) {
+        ad.dispose();
+        _loadRewardedAd();
+      },
+      onAdFailedToShowFullScreenContent: (ad, err) {
+        ad.dispose();
+        _loadRewardedAd();
+      },
+    );
+    _rewardedAd!.show(
+      onUserEarnedReward: (ad, reward) {
+        if (mounted) {
+          setState(() => _isVideoUnlocked = true);
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              backgroundColor: cardDark,
+              behavior: SnackBarBehavior.floating,
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+              content: Text(
+                'Reward mil gaya! Video unlocked 🎉 (${reward.amount} ${reward.type})',
+                style: const TextStyle(color: neonGreen, fontWeight: FontWeight.bold),
+              ),
+            ),
+          );
+        }
+        _ytController?.play();
+      },
+    );
+    _rewardedAd = null;
+    if (mounted) setState(() => _isRewardedReady = false);
   }
 
   @override
   void dispose() {
     _ytController?.dispose();
+    _rewardedAd?.dispose();
     super.dispose();
   }
 
@@ -426,9 +489,75 @@ class _NewsDetailScreenState extends State<NewsDetailScreen> {
                     child: SizedBox(
                       height: 220,
                       width: double.infinity,
-                      child: AspectRatio(
-                        aspectRatio: 16 / 9,
-                        child: playerWidget,
+                      child: Stack(
+                        alignment: Alignment.center,
+                        children: [
+                          AspectRatio(
+                            aspectRatio: 16 / 9,
+                            child: playerWidget,
+                          ),
+                          if (!_isVideoUnlocked && !AdFreeService().isAdFree)
+                            Positioned.fill(
+                              child: Container(
+                                color: Colors.black.withOpacity(0.85),
+                                padding: const EdgeInsets.symmetric(horizontal: 16),
+                                child: Column(
+                                  mainAxisAlignment: MainAxisAlignment.center,
+                                  children: [
+                                    const Icon(
+                                      Icons.lock_rounded,
+                                      color: Colors.orangeAccent,
+                                      size: 44,
+                                    ),
+                                    const SizedBox(height: 8),
+                                    const Text(
+                                      'Watch Video',
+                                      style: TextStyle(
+                                        color: textWhite,
+                                        fontWeight: FontWeight.bold,
+                                        fontSize: 15,
+                                      ),
+                                    ),
+                                    const SizedBox(height: 12),
+                                    ElevatedButton.icon(
+                                      style: ElevatedButton.styleFrom(
+                                        backgroundColor: Colors.orange,
+                                        foregroundColor: Colors.white,
+                                        padding: const EdgeInsets.symmetric(
+                                          horizontal: 20,
+                                          vertical: 12,
+                                        ),
+                                        shape: RoundedRectangleBorder(
+                                          borderRadius: BorderRadius.circular(10),
+                                        ),
+                                        elevation: 3,
+                                      ),
+                                      onPressed: _isRewardedReady ? _showRewardedAd : null,
+                                      icon: _isRewardedReady
+                                          ? const Icon(Icons.play_circle_fill_rounded, size: 20)
+                                          : const SizedBox(
+                                              width: 16,
+                                              height: 16,
+                                              child: CircularProgressIndicator(
+                                                strokeWidth: 2,
+                                                color: Colors.white70,
+                                              ),
+                                            ),
+                                      label: Text(
+                                        _isRewardedReady
+                                            ? 'Ad Dekho & Video Unlock Karo'
+                                            : 'Ad Loading...',
+                                        style: const TextStyle(
+                                          fontWeight: FontWeight.bold,
+                                          fontSize: 13,
+                                        ),
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            ),
+                        ],
                       ),
                     ),
                   ),
