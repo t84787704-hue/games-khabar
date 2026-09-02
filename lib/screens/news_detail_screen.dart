@@ -3,7 +3,7 @@ import 'package:flutter/services.dart';
 import 'package:easy_localization/easy_localization.dart';
 import 'package:share_plus/share_plus.dart';
 import 'package:url_launcher/url_launcher.dart';
-import 'package:youtube_player_iframe/youtube_player_iframe.dart';
+import 'package:webview_flutter/webview_flutter.dart';
 import '../models/news_model.dart';
 import '../widgets/app_image_view.dart';
 import '../widgets/native_ad_widget.dart';
@@ -30,7 +30,7 @@ class NewsDetailScreen extends StatefulWidget {
 
 class _NewsDetailScreenState extends State<NewsDetailScreen> {
   String? videoId;
-  late YoutubePlayerController _ytController;
+  late WebViewController _webController;
   bool _isPlaying = false;
 
   static const Color neonGreen = Color(0xFF00FF88);
@@ -48,17 +48,14 @@ class _NewsDetailScreenState extends State<NewsDetailScreen> {
     videoId = getYoutubeId(widget.news.videoUrl);
     videoId ??= getYoutubeId(widget.news.sourceUrl);
     if (videoId != null) {
-      _ytController = YoutubePlayerController.fromVideoId(
-        videoId: videoId!,
-        autoPlay: true,
-        params: const YoutubePlayerParams(showControls: true, showFullscreenButton: true),
-      );
+      _webController = WebViewController()
+        ..setJavaScriptMode(JavaScriptMode.unrestricted)
+        ..loadHtmlString('<html><body style="margin:0;padding:0;"><iframe width="100%" height="100%" src="https://www.youtube.com/embed/$videoId?autoplay=1" frameborder="0" allow="autoplay; fullscreen" allowfullscreen></iframe></body></html>');
     }
   }
 
   @override
   void dispose() {
-    if (videoId != null) _ytController.close();
     super.dispose();
   }
 
@@ -443,9 +440,10 @@ class _NewsDetailScreenState extends State<NewsDetailScreen> {
               ] else ...[
                 ClipRRect(
                   borderRadius: BorderRadius.circular(14),
-                  child: YoutubePlayer(
-                    controller: _ytController,
-                    aspectRatio: 16 / 9,
+                  child: SizedBox(
+                    height: 220,
+                    width: double.infinity,
+                    child: WebViewWidget(controller: _webController),
                   ),
                 ),
                 const SizedBox(height: 16),
