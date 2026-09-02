@@ -1,9 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:flutter/foundation.dart';
+import 'package:flutter/gestures.dart';
 import 'package:easy_localization/easy_localization.dart';
 import 'package:share_plus/share_plus.dart';
 import 'package:url_launcher/url_launcher.dart';
-import 'package:webview_flutter/webview_flutter.dart';
+import 'package:youtube_player_flutter/youtube_player_flutter.dart';
 import '../models/news_model.dart';
 import '../widgets/app_image_view.dart';
 import '../widgets/native_ad_widget.dart';
@@ -15,6 +17,10 @@ import '../services/ad_free_service.dart';
 String? getYoutubeId(String? url) {
   if (url == null) return null;
   url = url.trim();
+  final converted = YoutubePlayer.convertUrlToId(url);
+  if (converted != null && converted.isNotEmpty) {
+    return converted;
+  }
   final reg = RegExp(r'(?:youtube\.com\/(?:watch\?v=|embed\/|shorts\/)|youtu\.be\/)([^&?\/\s]+)');
   return reg.firstMatch(url)?.group(1);
 }
@@ -30,8 +36,7 @@ class NewsDetailScreen extends StatefulWidget {
 
 class _NewsDetailScreenState extends State<NewsDetailScreen> {
   String? videoId;
-  late WebViewController _webController;
-  bool _isPlaying = false;
+  YoutubePlayerController? _ytController;
 
   static const Color neonGreen = Color(0xFF00FF88);
   static const Color scaffoldBg = Color(0xFF121318);
@@ -47,21 +52,27 @@ class _NewsDetailScreenState extends State<NewsDetailScreen> {
     super.initState();
     videoId = getYoutubeId(widget.news.videoUrl);
     videoId ??= getYoutubeId(widget.news.sourceUrl);
-    if (videoId != null) {
-      _webController = WebViewController()
-        ..setJavaScriptMode(JavaScriptMode.unrestricted)
-        ..setBackgroundColor(const Color(0xFF000000))
-        ..setNavigationDelegate(
-          NavigationDelegate(
-            onNavigationRequest: (request) => NavigationDecision.navigate,
-          ),
-        )
-        ..loadRequest(Uri.parse('https://www.youtube.com/watch?v=$videoId'));
+
+    if (videoId != null && videoId!.isNotEmpty) {
+      _ytController = YoutubePlayerController(
+        initialVideoId: videoId!,
+        flags: const YoutubePlayerFlags(
+          autoPlay: false,
+          mute: false,
+          enableCaption: false,
+          isLive: false,
+          forceHD: false,
+          hideControls: false,
+          controlsVisibleAtStart: true,
+          useHybridComposition: true,
+        ),
+      );
     }
   }
 
   @override
   void dispose() {
+    _ytController?.dispose();
     super.dispose();
   }
 
@@ -257,296 +268,277 @@ class _NewsDetailScreenState extends State<NewsDetailScreen> {
     final firstParagraph = paragraphs.isNotEmpty ? paragraphs.first : displayDescription;
     final remainingParagraphs = paragraphs.length > 1 ? paragraphs.sublist(1) : <String>[];
 
-    return Scaffold(
-      backgroundColor: scaffoldBg,
-      extendBody: false,
-      resizeToAvoidBottomInset: true,
-      appBar: AppBar(
-        backgroundColor: cardDark,
-        elevation: 0,
-        leading: IconButton(
-          icon: const Icon(Icons.arrow_back_ios_new_rounded, color: textWhite, size: 20),
-          onPressed: () => Navigator.pop(context),
-        ),
-        title: Text(
-          widget.news.category.isNotEmpty ? widget.news.category : 'Gaming Khabar',
-          style: const TextStyle(
-            color: textWhite,
-            fontSize: 16,
-            fontWeight: FontWeight.bold,
+    Widget buildScaffold({Widget? playerWidget}) {
+      return Scaffold(
+        backgroundColor: scaffoldBg,
+        extendBody: false,
+        resizeToAvoidBottomInset: true,
+        appBar: AppBar(
+          backgroundColor: cardDark,
+          elevation: 0,
+          leading: IconButton(
+            icon: const Icon(Icons.arrow_back_ios_new_rounded, color: textWhite, size: 20),
+            onPressed: () => Navigator.pop(context),
           ),
-        ),
-        centerTitle: false,
-        actions: [
-          // Bookmark Icon Button
-          ValueListenableBuilder<Set<String>>(
-            valueListenable: BookmarkService.bookmarkedIdsNotifier,
-            builder: (context, bookmarkedIds, _) {
-              final isSaved = bookmarkedIds.contains(widget.news.id);
-              return IconButton(
-                icon: Icon(
-                  isSaved ? Icons.bookmark_rounded : Icons.bookmark_border_rounded,
-                  color: isSaved ? neonGreen : textWhite,
-                  size: 22,
-                ),
-                tooltip: 'Bookmark',
-                onPressed: () => _toggleBookmark(context),
-              );
-            },
+          title: Text(
+            widget.news.category.isNotEmpty ? widget.news.category : 'Gaming Khabar',
+            style: const TextStyle(
+              color: textWhite,
+              fontSize: 16,
+              fontWeight: FontWeight.bold,
+            ),
           ),
-          // Share Icon Button
-          IconButton(
-            icon: const Icon(Icons.share_outlined, color: neonGreen, size: 22),
-            tooltip: 'Share',
-            onPressed: () => _shareArticle(context),
-          ),
-          const SizedBox(width: 6),
-        ],
-      ),
-      body: SafeArea(
-        child: SingleChildScrollView(
-          physics: const BouncingScrollPhysics(),
-          padding: EdgeInsets.only(
-            left: 16,
-            right: 16,
-            top: 16,
-            bottom: MediaQuery.of(context).padding.bottom + 80,
-          ),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              // 1. Metadata Bar (Category Badge, Video Tag, Time, Views)
-              Row(
-                children: [
-                  Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                    decoration: BoxDecoration(
-                      color: neonGreen.withOpacity(0.15),
-                      borderRadius: BorderRadius.circular(6),
-                      border: Border.all(color: neonGreen, width: 1),
-                    ),
-                    child: Text(
-                      widget.news.category.toUpperCase(),
-                      style: const TextStyle(
-                        color: neonGreen,
-                        fontSize: 11,
-                        fontWeight: FontWeight.w900,
-                        letterSpacing: 0.8,
-                      ),
-                    ),
+          centerTitle: false,
+          actions: [
+            // Bookmark Icon Button
+            ValueListenableBuilder<Set<String>>(
+              valueListenable: BookmarkService.bookmarkedIdsNotifier,
+              builder: (context, bookmarkedIds, _) {
+                final isSaved = bookmarkedIds.contains(widget.news.id);
+                return IconButton(
+                  icon: Icon(
+                    isSaved ? Icons.bookmark_rounded : Icons.bookmark_border_rounded,
+                    color: isSaved ? neonGreen : textWhite,
+                    size: 22,
                   ),
-                  if (hasVideo) ...[
-                    const SizedBox(width: 8),
+                  tooltip: 'Bookmark',
+                  onPressed: () => _toggleBookmark(context),
+                );
+              },
+            ),
+            // Share Icon Button
+            IconButton(
+              icon: const Icon(Icons.share_outlined, color: neonGreen, size: 22),
+              tooltip: 'Share',
+              onPressed: () => _shareArticle(context),
+            ),
+            const SizedBox(width: 6),
+          ],
+        ),
+        body: SafeArea(
+          child: SingleChildScrollView(
+            physics: const BouncingScrollPhysics(),
+            padding: EdgeInsets.only(
+              left: 16,
+              right: 16,
+              top: 16,
+              bottom: MediaQuery.of(context).padding.bottom + 80,
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                // 1. Metadata Bar (Category Badge, Video Tag, Time, Views)
+                Row(
+                  children: [
                     Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
                       decoration: BoxDecoration(
-                        color: alertRed.withOpacity(0.2),
+                        color: neonGreen.withOpacity(0.15),
                         borderRadius: BorderRadius.circular(6),
-                        border: Border.all(color: alertRed, width: 1),
+                        border: Border.all(color: neonGreen, width: 1),
                       ),
-                      child: const Row(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          Icon(Icons.play_arrow_rounded, color: alertRed, size: 14),
-                          SizedBox(width: 2),
-                          Text(
-                            'VIDEO',
-                            style: TextStyle(
-                              color: alertRed,
-                              fontSize: 10,
-                              fontWeight: FontWeight.w900,
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                  ],
-                  const SizedBox(width: 10),
-                  const Icon(Icons.access_time_rounded, color: textGray, size: 14),
-                  const SizedBox(width: 4),
-                  Text(
-                    widget.news.timeAgo,
-                    style: const TextStyle(
-                      color: textGray,
-                      fontSize: 12,
-                      fontWeight: FontWeight.w500,
-                    ),
-                  ),
-                  const Spacer(),
-                  const Icon(Icons.visibility_outlined, color: textGray, size: 14),
-                  const SizedBox(width: 4),
-                  Text(
-                    '${widget.news.views} views',
-                    style: const TextStyle(color: textGray, fontSize: 12),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 14),
-
-              // 2. News Title
-              Text(
-                displayTitle,
-                style: const TextStyle(
-                  color: textWhite,
-                  fontSize: 22,
-                  fontWeight: FontWeight.w900,
-                  height: 1.3,
-                  letterSpacing: -0.2,
-                ),
-              ),
-              const SizedBox(height: 12),
-
-              // 3. Accent Divider
-              Container(
-                height: 3,
-                width: 44,
-                decoration: BoxDecoration(
-                  color: neonGreen,
-                  borderRadius: BorderRadius.circular(2),
-                ),
-              ),
-              const SizedBox(height: 16),
-
-              // 4. Video / Media Area
-              if (videoId == null) ...[
-                ClipRRect(
-                  borderRadius: BorderRadius.circular(14),
-                  child: AspectRatio(
-                    aspectRatio: 16 / 9,
-                    child: AppImageView(
-                      imageUrl: widget.news.imageUrl,
-                      fit: BoxFit.cover,
-                    ),
-                  ),
-                ),
-                const SizedBox(height: 16),
-              ] else if (!_isPlaying) ...[
-                GestureDetector(
-                  onTap: () => setState(() => _isPlaying = true),
-                  child: Stack(
-                    alignment: Alignment.center,
-                    children: [
-                      ClipRRect(
-                        borderRadius: BorderRadius.circular(14),
-                        child: Image.network(
-                          "https://img.youtube.com/vi/$videoId/hqdefault.jpg",
-                          fit: BoxFit.cover,
-                          width: double.infinity,
-                          height: 220,
-                          errorBuilder: (_, __, ___) => AppImageView(
-                            imageUrl: widget.news.imageUrl,
-                            fit: BoxFit.cover,
-                            height: 220,
-                            width: double.infinity,
-                          ),
+                      child: Text(
+                        widget.news.category.toUpperCase(),
+                        style: const TextStyle(
+                          color: neonGreen,
+                          fontSize: 11,
+                          fontWeight: FontWeight.w900,
+                          letterSpacing: 0.8,
                         ),
                       ),
+                    ),
+                    if (hasVideo) ...[
+                      const SizedBox(width: 8),
                       Container(
-                        width: double.infinity,
-                        height: 220,
+                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                         decoration: BoxDecoration(
-                          borderRadius: BorderRadius.circular(14),
-                          color: Colors.black.withOpacity(0.3),
+                          color: alertRed.withOpacity(0.2),
+                          borderRadius: BorderRadius.circular(6),
+                          border: Border.all(color: alertRed, width: 1),
                         ),
-                      ),
-                      const Icon(
-                        Icons.play_circle_fill,
-                        size: 64,
-                        color: Colors.white,
+                        child: const Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Icon(Icons.play_arrow_rounded, color: alertRed, size: 14),
+                            SizedBox(width: 2),
+                            Text(
+                              'VIDEO',
+                              style: TextStyle(
+                                color: alertRed,
+                                fontSize: 10,
+                                fontWeight: FontWeight.w900,
+                              ),
+                            ),
+                          ],
+                        ),
                       ),
                     ],
-                  ),
-                ),
-                const SizedBox(height: 16),
-              ] else ...[
-                ClipRRect(
-                  borderRadius: BorderRadius.circular(14),
-                  child: SizedBox(
-                    height: 220,
-                    width: double.infinity,
-                    child: WebViewWidget(controller: _webController),
-                  ),
-                ),
-                const SizedBox(height: 8),
-                Align(
-                  alignment: Alignment.centerRight,
-                  child: TextButton.icon(
-                    onPressed: () => _launchExternalUrl(context, 'https://www.youtube.com/watch?v=$videoId'),
-                    icon: const Icon(Icons.open_in_new, size: 14, color: textGray),
-                    label: const Text(
-                      'Watch in YouTube App',
-                      style: TextStyle(color: textGray, fontSize: 12),
-                    ),
-                  ),
-                ),
-                const SizedBox(height: 8),
-              ],
-
-              // 5. Direct Video Link Button (for non-YouTube direct MP4/stream video links only)
-              if (widget.news.videoUrl != null && widget.news.videoUrl!.isNotEmpty && videoId == null) ...[
-                SizedBox(
-                  width: double.infinity,
-                  height: 48,
-                  child: ElevatedButton.icon(
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: alertRed,
-                      foregroundColor: Colors.white,
-                      elevation: 0,
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(10),
+                    const SizedBox(width: 10),
+                    const Icon(Icons.access_time_rounded, color: textGray, size: 14),
+                    const SizedBox(width: 4),
+                    Text(
+                      widget.news.timeAgo,
+                      style: const TextStyle(
+                        color: textGray,
+                        fontSize: 12,
+                        fontWeight: FontWeight.w500,
                       ),
                     ),
-                    onPressed: () => _launchExternalUrl(context, widget.news.videoUrl!),
-                    icon: const Icon(Icons.play_circle_fill_rounded, size: 20),
-                    label: const Text(
-                      'Watch Video',
-                      style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
+                    const Spacer(),
+                    const Icon(Icons.visibility_outlined, color: textGray, size: 14),
+                    const SizedBox(width: 4),
+                    Text(
+                      '${widget.news.views} views',
+                      style: const TextStyle(color: textGray, fontSize: 12),
                     ),
+                  ],
+                ),
+                const SizedBox(height: 14),
+
+                // 2. News Title
+                Text(
+                  displayTitle,
+                  style: const TextStyle(
+                    color: textWhite,
+                    fontSize: 22,
+                    fontWeight: FontWeight.w900,
+                    height: 1.3,
+                    letterSpacing: -0.2,
+                  ),
+                ),
+                const SizedBox(height: 12),
+
+                // 3. Accent Divider
+                Container(
+                  height: 3,
+                  width: 44,
+                  decoration: BoxDecoration(
+                    color: neonGreen,
+                    borderRadius: BorderRadius.circular(2),
                   ),
                 ),
                 const SizedBox(height: 16),
-              ],
 
-              // 6. News Description - First Paragraph
-              if (firstParagraph.isNotEmpty) ...[
-                Text(
-                  firstParagraph,
-                  style: const TextStyle(
-                    color: textLightGray,
-                    fontSize: 15,
-                    height: 1.6,
-                    letterSpacing: 0.2,
+                // 4. Video / Media Area
+                if (playerWidget != null) ...[
+                  ClipRRect(
+                    borderRadius: BorderRadius.circular(14),
+                    child: SizedBox(
+                      height: 220,
+                      width: double.infinity,
+                      child: AspectRatio(
+                        aspectRatio: 16 / 9,
+                        child: playerWidget,
+                      ),
+                    ),
                   ),
+                  const SizedBox(height: 8),
+                  Align(
+                    alignment: Alignment.centerRight,
+                    child: TextButton.icon(
+                      onPressed: () => _launchExternalUrl(context, 'https://www.youtube.com/watch?v=$videoId'),
+                      icon: const Icon(Icons.open_in_new, size: 14, color: textGray),
+                      label: const Text(
+                        'Watch in YouTube App',
+                        style: TextStyle(color: textGray, fontSize: 12),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+                ] else ...[
+                  ClipRRect(
+                    borderRadius: BorderRadius.circular(14),
+                    child: AspectRatio(
+                      aspectRatio: 16 / 9,
+                      child: AppImageView(
+                        imageUrl: widget.news.imageUrl,
+                        fit: BoxFit.cover,
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 16),
+                ],
+
+                // 5. Direct Video Link Button (for non-YouTube direct MP4/stream video links only)
+                if (widget.news.videoUrl != null && widget.news.videoUrl!.isNotEmpty && videoId == null) ...[
+                  SizedBox(
+                    width: double.infinity,
+                    height: 48,
+                    child: ElevatedButton.icon(
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: alertRed,
+                        foregroundColor: Colors.white,
+                        elevation: 0,
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(10),
+                        ),
+                      ),
+                      onPressed: () => _launchExternalUrl(context, widget.news.videoUrl!),
+                      icon: const Icon(Icons.play_circle_fill_rounded, size: 20),
+                      label: const Text(
+                        'Watch Video',
+                        style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 16),
+                ],
+
+                // 6. News Description - First Paragraph
+                if (firstParagraph.isNotEmpty) ...[
+                  Text(
+                    firstParagraph,
+                    style: const TextStyle(
+                      color: textLightGray,
+                      fontSize: 15,
+                      height: 1.6,
+                      letterSpacing: 0.2,
+                    ),
+                  ),
+                  const SizedBox(height: 14),
+                ],
+
+                // 7. Native Ad Inside Scroll Content (After 1st paragraph) - Isolated via StatefulBuilder
+                StatefulBuilder(
+                  builder: (context, setAdState) {
+                    return ValueListenableBuilder<DateTime?>(
+                      valueListenable: AdFreeService.adFreeUntilNotifier,
+                      builder: (context, adFreeUntil, _) {
+                        if (AdFreeService().isAdFree) {
+                          return const SizedBox.shrink();
+                        }
+                        return Container(
+                          margin: const EdgeInsets.only(
+                            top: 10,
+                            bottom: 18,
+                          ),
+                          child: const NativeAdWidget(
+                            margin: EdgeInsets.zero,
+                          ),
+                        );
+                      },
+                    );
+                  },
                 ),
-                const SizedBox(height: 14),
-              ],
 
-              // 7. Native Ad Inside Scroll Content (After 1st paragraph)
-              ValueListenableBuilder<DateTime?>(
-                valueListenable: AdFreeService.adFreeUntilNotifier,
-                builder: (context, adFreeUntil, _) {
-                  if (AdFreeService().isAdFree) {
-                    return const SizedBox.shrink();
-                  }
-                  return Container(
-                    margin: const EdgeInsets.only(
-                      top: 10,
-                      bottom: 18,
+                // 8. Remaining Paragraphs
+                if (remainingParagraphs.isNotEmpty) ...[
+                  ...remainingParagraphs.map(
+                    (para) => Padding(
+                      padding: const EdgeInsets.only(bottom: 14),
+                      child: Text(
+                        para,
+                        style: const TextStyle(
+                          color: textLightGray,
+                          fontSize: 15,
+                          height: 1.6,
+                          letterSpacing: 0.2,
+                        ),
+                      ),
                     ),
-                    child: const NativeAdWidget(
-                      margin: EdgeInsets.zero,
-                    ),
-                  );
-                },
-              ),
-
-              // 8. Remaining Paragraphs
-              if (remainingParagraphs.isNotEmpty) ...[
-                ...remainingParagraphs.map(
-                  (para) => Padding(
-                    padding: const EdgeInsets.only(bottom: 14),
-                    child: Text(
-                      para,
+                  ),
+                  const SizedBox(height: 10),
+                ],
                       style: const TextStyle(
                         color: textLightGray,
                         fontSize: 15,
@@ -783,5 +775,27 @@ class _NewsDetailScreenState extends State<NewsDetailScreen> {
         ),
       ),
     );
+    }
+
+    if (_ytController != null) {
+      return YoutubePlayerBuilder(
+        player: YoutubePlayer(
+          controller: _ytController!,
+          showVideoProgressIndicator: true,
+          progressIndicatorColor: alertRed,
+          progressColors: const ProgressBarColors(
+            playedColor: alertRed,
+            handleColor: Colors.redAccent,
+            bufferedColor: Colors.white24,
+            backgroundColor: Colors.grey,
+          ),
+        ),
+        builder: (context, player) {
+          return buildScaffold(playerWidget: player);
+        },
+      );
+    }
+
+    return buildScaffold();
   }
 }
