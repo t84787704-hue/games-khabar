@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
+import 'package:http/http.dart' as http;
+import 'package:webfeed/webfeed.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:cloud_functions/cloud_functions.dart';
 import '../../services/auto_news_scraper.dart';
 
 class RssSourcesScreen extends StatefulWidget {
@@ -21,6 +22,148 @@ class _RssSourcesScreenState extends State<RssSourcesScreen> {
   static const Color textGray = Color(0xFF9E9EA7);
 
   bool _isSyncing = false;
+  int _publishedCount = 0;
+
+  Future<void> _syncFeedsClientSide() async {
+    if (_isSyncing) return;
+    setState(() {
+      _isSyncing = true;
+      _publishedCount = 0;
+    });
+
+    try {
+      // 1. Fetch sources from Firestore
+      var sourcesSnap = await FirebaseFirestore.instance
+          .collection('rss_sources')
+          .where('isActive', isEqualTo: true)
+          .get();
+
+      if (sourcesSnap.docs.isEmpty) {
+        sourcesSnap = await FirebaseFirestore.instance
+            .collection('scraper_sources')
+            .where('isEnabled', isEqualTo: true)
+            .get();
+      }
+
+      // If still empty, auto-seed default sources
+      if (sourcesSnap.docs.isEmpty) {
+        await AutoNewsScraper.seedDefaultSourcesIfEmpty();
+        sourcesSnap = await FirebaseFirestore.instance
+            .collection('rss_sources')
+            .where('isActive', isEqualTo: true)
+            .get();
+      }
+
+      if (sourcesSnap.docs.isEmpty) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('No active RSS sources found'),
+              backgroundColor: Colors.orange,
+            ),
+          );
+        }
+        return;
+      }
+
+      for (var doc in sourcesSnap.docs) {
+        final source = doc.data();
+        final url = source['url'] as String? ?? '';
+        final sourceName = source['name'] ?? 'Unknown';
+        final category = source['category'] ?? source['categoryHint'] ?? 'General';
+
+        if (url.isEmpty) continue;
+
+        try {
+          final response = await http.get(Uri.parse(url)).timeout(const Duration(seconds: 15));
+          if (response.statusCode != 200) continue;
+
+          final feed = RssFeed.parse(response.body);
+          if (feed.items == null) continue;
+
+          for (var item in feed.items!.take(5)) {
+            // 5 latest per source
+            if (item.link == null || item.link!.isEmpty) continue;
+
+            // Duplicate check
+            final existing = await FirebaseFirestore.instance
+                .collection('news')
+                .where('link', isEqualTo: item.link)
+                .limit(1)
+                .get();
+            if (existing.docs.isNotEmpty) continue;
+
+            // Extract image
+            String imageUrl = '';
+            if (item.enclosure?.url != null && item.enclosure!.url!.isNotEmpty) {
+              imageUrl = item.enclosure!.url!;
+            }
+            if (imageUrl.isEmpty && item.media?.contents?.isNotEmpty == true) {
+              imageUrl = item.media!.contents!.first.url ?? '';
+            }
+            if (imageUrl.isEmpty && item.media?.thumbnails?.isNotEmpty == true) {
+              imageUrl = item.media!.thumbnails!.first.url ?? '';
+            }
+            if (imageUrl.isEmpty) {
+              final rawDesc = item.description ?? item.content?.value ?? '';
+              final imgMatch = RegExp(r'''<img[^>]+src=["']([^"']+)["']''', caseSensitive: false).firstMatch(rawDesc);
+              if (imgMatch != null && imgMatch.group(1) != null) {
+                imageUrl = imgMatch.group(1)!;
+              }
+            }
+            if (imageUrl.isEmpty) {
+              imageUrl = 'https://images.unsplash.com/photo-1542751371-adc38448a05e?q=80&w=1200&auto=format&fit=crop';
+            }
+
+            final cleanDesc = (item.description ?? item.content?.value ?? 'Stay tuned for more gaming updates.')
+                .replaceAll(RegExp(r'<[^>]*>'), '')
+                .trim();
+
+            await FirebaseFirestore.instance.collection('news').add({
+              'title': item.title ?? 'No Title',
+              'content': cleanDesc.isNotEmpty ? cleanDesc : 'Stay tuned for more gaming updates.',
+              'description': cleanDesc.isNotEmpty ? cleanDesc : 'Stay tuned for more gaming updates.',
+              'imageUrl': imageUrl,
+              'link': item.link,
+              'sourceUrl': item.link,
+              'sourceName': sourceName,
+              'sourceLogo': source['logo'] ?? '',
+              'category': category,
+              'isAuto': true,
+              'tag': 'AUTO',
+              'isVerified': true,
+              'createdAt': FieldValue.serverTimestamp(),
+              'publishedAt': item.pubDate?.toIso8601String() ?? DateTime.now().toIso8601String(),
+              'views': 0,
+            });
+            _publishedCount++;
+          }
+        } catch (e) {
+          debugPrint('Failed for $url : $e');
+        }
+      }
+
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('$_publishedCount news published successfully!'),
+            backgroundColor: Colors.green,
+          ),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Error: $e'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _isSyncing = false);
+    }
+  }
 
   void _showAddSourceDialog(BuildContext ctx) {
     final nameCtrl = TextEditingController();
@@ -127,7 +270,7 @@ class _RssSourcesScreenState extends State<RssSourcesScreen> {
                 ScaffoldMessenger.of(ctx).showSnackBar(
                   const SnackBar(
                     backgroundColor: cardDark,
-                    content: Text('RSS Source Added to Firestore Successfully!', style: TextStyle(color: neonGreen)),
+                    content: Text('RSS Source Added Successfully!', style: TextStyle(color: neonGreen)),
                   ),
                 );
               }
@@ -159,13 +302,13 @@ class _RssSourcesScreenState extends State<RssSourcesScreen> {
         ],
       ),
       body: StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
-        stream: FirebaseFirestore.instance.collection('scraper_sources').snapshots(),
+        stream: FirebaseFirestore.instance.collection('rss_sources').snapshots(),
         builder: (context, snapshot) {
           final docs = snapshot.data?.docs ?? [];
 
           return Column(
             children: [
-              // Live Sync Card
+              // Client Side Sync Header
               Container(
                 margin: const EdgeInsets.all(16),
                 padding: const EdgeInsets.all(14),
@@ -182,16 +325,16 @@ class _RssSourcesScreenState extends State<RssSourcesScreen> {
                     Row(
                       children: [
                         Icon(
-                          _isSyncing ? Icons.sync : Icons.check_circle_outline,
-                          color: _isSyncing ? Colors.orange : textGray,
+                          _isSyncing ? Icons.sync : Icons.rss_feed,
+                          color: _isSyncing ? Colors.orange : neonGreen,
                           size: 18,
                         ),
                         const SizedBox(width: 8),
                         Expanded(
                           child: Text(
                             _isSyncing
-                                ? 'Syncing feeds in progress...'
-                                : 'Top 10 High Search Volume Feeds',
+                                ? 'Syncing feeds directly from client...'
+                                : 'Client-Side Auto RSS Engine (No Cloud Bill)',
                             style: TextStyle(
                               color: _isSyncing ? Colors.orange : textWhite,
                               fontSize: 13,
@@ -199,15 +342,6 @@ class _RssSourcesScreenState extends State<RssSourcesScreen> {
                             ),
                           ),
                         ),
-                        if (_isSyncing)
-                          const SizedBox(
-                            width: 16,
-                            height: 16,
-                            child: CircularProgressIndicator(
-                              strokeWidth: 2,
-                              valueColor: AlwaysStoppedAnimation<Color>(Colors.orange),
-                            ),
-                          ),
                       ],
                     ),
                     const SizedBox(height: 12),
@@ -215,78 +349,39 @@ class _RssSourcesScreenState extends State<RssSourcesScreen> {
                       children: [
                         Expanded(
                           child: ElevatedButton(
-                            onPressed: _isSyncing
-                                ? null
-                                : () async {
-                                    setState(() => _isSyncing = true);
-                                    try {
-                                      final functions = FirebaseFunctions.instance;
-                                      // if deployed in asia-south1: FirebaseFunctions.instanceFor(region: 'asia-south1')
-                                      final callable = functions.httpsCallable('manualSyncFeeds');
-                                      final result = await callable.call();
-
-                                      final count = result.data is Map ? result.data['count'] : null;
-                                      if (context.mounted) {
-                                        ScaffoldMessenger.of(context).showSnackBar(
-                                          SnackBar(
-                                            backgroundColor: cardDark,
-                                            content: Text(
-                                              'Success: ${count ?? 'News synced'} news published',
-                                              style: const TextStyle(color: neonGreen),
-                                            ),
-                                          ),
-                                        );
-                                      }
-                                    } catch (e) {
-                                      debugPrint('Sync error: $e');
-                                      // Client fallback
-                                      try {
-                                        final fallbackCount = await AutoNewsScraper().runScraper();
-                                        if (context.mounted) {
-                                          ScaffoldMessenger.of(context).showSnackBar(
-                                            SnackBar(
-                                              backgroundColor: cardDark,
-                                              content: Text(
-                                                'Synced: $fallbackCount news published',
-                                                style: const TextStyle(color: neonGreen),
-                                              ),
-                                            ),
-                                          );
-                                        }
-                                      } catch (fallbackErr) {
-                                        if (context.mounted) {
-                                          ScaffoldMessenger.of(context).showSnackBar(
-                                            SnackBar(
-                                              content: Text('Error: $e'),
-                                              backgroundColor: Colors.red,
-                                            ),
-                                          );
-                                        }
-                                      }
-                                    } finally {
-                                      if (mounted) setState(() => _isSyncing = false);
-                                    }
-                                  },
+                            onPressed: _isSyncing ? null : _syncFeedsClientSide,
                             style: ElevatedButton.styleFrom(
                               backgroundColor: Colors.orange,
                               foregroundColor: Colors.white,
-                              padding: const EdgeInsets.symmetric(vertical: 12),
+                              padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
                               shape: RoundedRectangleBorder(
                                 borderRadius: BorderRadius.circular(10),
                               ),
                             ),
                             child: _isSyncing
-                                ? const SizedBox(
-                                    width: 20,
-                                    height: 20,
-                                    child: CircularProgressIndicator(
-                                      color: Colors.white,
-                                      strokeWidth: 2,
-                                    ),
+                                ? const Row(
+                                    mainAxisSize: MainAxisSize.min,
+                                    children: [
+                                      SizedBox(
+                                        width: 18,
+                                        height: 18,
+                                        child: CircularProgressIndicator(
+                                          color: Colors.white,
+                                          strokeWidth: 2,
+                                        ),
+                                      ),
+                                      SizedBox(width: 10),
+                                      Text(
+                                        'Syncing...',
+                                        style: TextStyle(fontWeight: FontWeight.bold),
+                                      ),
+                                    ],
                                   )
-                                : const Text(
-                                    'Sync Feeds Now',
-                                    style: TextStyle(fontWeight: FontWeight.w900),
+                                : Text(
+                                    _publishedCount > 0
+                                        ? 'Sync Feeds Now ($_publishedCount)'
+                                        : 'Sync Feeds Now',
+                                    style: const TextStyle(fontWeight: FontWeight.w900),
                                   ),
                           ),
                         ),
@@ -325,8 +420,11 @@ class _RssSourcesScreenState extends State<RssSourcesScreen> {
                             ),
                             const SizedBox(height: 12),
                             ElevatedButton(
-                              style: ElevatedButton.styleFrom(backgroundColor: neonGreen, foregroundColor: Colors.black),
-                              onPressed: () async => await AutoNewsScraper.resetDefaultSources(),
+                              style: ElevatedButton.styleFrom(
+                                backgroundColor: neonGreen,
+                                foregroundColor: Colors.black,
+                              ),
+                              onPressed: () async => await AutoNewsScraper.seedDefaultSourcesIfEmpty(),
                               child: const Text('Seed 10 Default Sources'),
                             ),
                           ],
@@ -341,8 +439,7 @@ class _RssSourcesScreenState extends State<RssSourcesScreen> {
                           final data = doc.data();
                           final name = data['name'] as String? ?? 'Gaming Feed';
                           final url = data['url'] as String? ?? '';
-                          final category = (data['category'] ?? data['categoryHint'] ?? 'Gaming News') as String;
-                          final isEnabled = data['isEnabled'] as bool? ?? true;
+                          final isEnabled = (data['isActive'] ?? data['isEnabled']) as bool? ?? true;
 
                           return Container(
                             padding: const EdgeInsets.all(12),

@@ -29,6 +29,7 @@ dependencies:
   webview_flutter: ^4.7.0
   youtube_player_flutter: ^9.0.1
   cloud_functions: ^4.7.0
+  webfeed: ^0.7.0
 
 dev_dependencies:
   flutter_test:
