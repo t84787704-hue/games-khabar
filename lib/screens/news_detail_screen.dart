@@ -75,6 +75,7 @@ class NewsDetailScreen extends StatefulWidget {
 class _NewsDetailScreenState extends State<NewsDetailScreen> {
   YoutubePlayerController? _youtubeController;
   String? _detectedVideoId;
+  bool _isPlaying = false;
 
   static const Color neonGreen = Color(0xFF00FF88);
   static const Color scaffoldBg = Color(0xFF121318);
@@ -97,7 +98,7 @@ class _NewsDetailScreenState extends State<NewsDetailScreen> {
       _youtubeController = YoutubePlayerController(
         initialVideoId: _detectedVideoId!,
         flags: const YoutubePlayerFlags(
-          autoPlay: false,
+          autoPlay: true,
           mute: false,
           disableDragSeek: false,
           loop: false,
@@ -178,7 +179,7 @@ class _NewsDetailScreenState extends State<NewsDetailScreen> {
   }
 
   String _cleanContentText(String text) {
-    // If YouTube player is already shown, remove raw YouTube URLs to keep content readable
+    // If YouTube video is present, remove raw YouTube URLs to keep content readable
     if (_detectedVideoId != null) {
       return text
           .replaceAll(
@@ -297,7 +298,7 @@ class _NewsDetailScreenState extends State<NewsDetailScreen> {
 
   @override
   Widget build(BuildContext context) {
-    if (_youtubeController != null) {
+    if (_detectedVideoId != null && _youtubeController != null) {
       return YoutubePlayerBuilder(
         player: YoutubePlayer(
           controller: _youtubeController!,
@@ -484,44 +485,166 @@ class _NewsDetailScreenState extends State<NewsDetailScreen> {
               ),
               const SizedBox(height: 16),
 
-              // 4. Embedded YouTube Player (at top below title) or Featured Image
-              if (playerWidget != null && _detectedVideoId != null) ...[
-                // Embedded YouTube Player
-                Container(
-                  decoration: BoxDecoration(
-                    color: Colors.black,
-                    borderRadius: BorderRadius.circular(12),
-                    border: Border.all(color: alertRed.withOpacity(0.5), width: 1),
-                  ),
-                  child: ClipRRect(
-                    borderRadius: BorderRadius.circular(11),
-                    child: AspectRatio(
-                      aspectRatio: 16 / 9,
-                      child: playerWidget,
+              // 4. Video / Featured Media Area
+              if (_detectedVideoId != null && _youtubeController != null) ...[
+                if (_isPlaying && playerWidget != null) ...[
+                  // Active embedded YouTube player
+                  Container(
+                    decoration: BoxDecoration(
+                      color: Colors.black,
+                      borderRadius: BorderRadius.circular(12),
+                      border: Border.all(color: alertRed.withOpacity(0.5), width: 1),
                     ),
-                  ),
-                ),
-                const SizedBox(height: 6),
-                // Video Credit: Official Channel
-                Row(
-                  children: const [
-                    Icon(Icons.verified_user_outlined, color: textGray, size: 12),
-                    SizedBox(width: 4),
-                    Text(
-                      'Video Credit: Official Channel',
-                      style: TextStyle(
-                        color: textGray,
-                        fontSize: 11,
-                        fontStyle: FontStyle.italic,
-                        letterSpacing: 0.2,
+                    child: ClipRRect(
+                      borderRadius: BorderRadius.circular(11),
+                      child: AspectRatio(
+                        aspectRatio: 16 / 9,
+                        child: playerWidget,
                       ),
                     ),
+                  ),
+                  const SizedBox(height: 6),
+                  Row(
+                    children: const [
+                      Icon(Icons.verified_user_outlined, color: textGray, size: 12),
+                      SizedBox(width: 4),
+                      Text(
+                        'Video Credit: Official Channel',
+                        style: TextStyle(
+                          color: textGray,
+                          fontSize: 11,
+                          fontStyle: FontStyle.italic,
+                          letterSpacing: 0.2,
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 16),
+                ] else ...[
+                  // Thumbnail with Play Icon & Click-to-Play GestureDetector
+                  GestureDetector(
+                    behavior: HitTestBehavior.opaque,
+                    onTap: () {
+                      setState(() {
+                        _isPlaying = true;
+                      });
+                      _youtubeController?.play();
+                    },
+                    child: Container(
+                      decoration: BoxDecoration(
+                        borderRadius: BorderRadius.circular(14),
+                        border: Border.all(color: borderDark, width: 1.2),
+                      ),
+                      child: ClipRRect(
+                        borderRadius: BorderRadius.circular(14),
+                        child: AspectRatio(
+                          aspectRatio: 16 / 9,
+                          child: Stack(
+                            fit: StackFit.expand,
+                            children: [
+                              // Thumbnail Image
+                              AppImageView(
+                                imageUrl: widget.news.imageUrl.isNotEmpty
+                                    ? widget.news.imageUrl
+                                    : 'https://img.youtube.com/vi/$_detectedVideoId/hqdefault.jpg',
+                                fit: BoxFit.cover,
+                              ),
+                              // Dark Overlay for Contrast
+                              Container(
+                                decoration: BoxDecoration(
+                                  gradient: LinearGradient(
+                                    begin: Alignment.topCenter,
+                                    end: Alignment.bottomCenter,
+                                    colors: [
+                                      Colors.black.withOpacity(0.2),
+                                      Colors.black.withOpacity(0.65),
+                                    ],
+                                  ),
+                                ),
+                              ),
+                              // Glowing Center Play Button
+                              Center(
+                                child: Container(
+                                  width: 62,
+                                  height: 62,
+                                  decoration: BoxDecoration(
+                                    color: alertRed,
+                                    shape: BoxShape.circle,
+                                    boxShadow: [
+                                      BoxShadow(
+                                        color: alertRed.withOpacity(0.6),
+                                        blurRadius: 18,
+                                        spreadRadius: 2,
+                                      ),
+                                    ],
+                                    border: Border.all(color: Colors.white, width: 2),
+                                  ),
+                                  child: const Icon(
+                                    Icons.play_arrow_rounded,
+                                    color: Colors.white,
+                                    size: 38,
+                                  ),
+                                ),
+                              ),
+                              // Play pill hint
+                              Positioned(
+                                bottom: 12,
+                                left: 12,
+                                right: 12,
+                                child: Row(
+                                  mainAxisAlignment: MainAxisAlignment.center,
+                                  children: [
+                                    Container(
+                                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+                                      decoration: BoxDecoration(
+                                        color: Colors.black.withOpacity(0.8),
+                                        borderRadius: BorderRadius.circular(20),
+                                        border: Border.all(color: alertRed.withOpacity(0.7), width: 1),
+                                      ),
+                                      child: Row(
+                                        mainAxisSize: MainAxisSize.min,
+                                        children: const [
+                                          Icon(Icons.play_circle_fill_rounded, color: alertRed, size: 14),
+                                          SizedBox(width: 5),
+                                          Text(
+                                            'Tap to Play Video',
+                                            style: TextStyle(
+                                              color: Colors.white,
+                                              fontSize: 12,
+                                              fontWeight: FontWeight.bold,
+                                            ),
+                                          ),
+                                        ],
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+                    ),
+                    const SizedBox(height: 6),
+                    Row(
+                      children: const [
+                        Icon(Icons.verified_user_outlined, color: textGray, size: 12),
+                        SizedBox(width: 4),
+                        Text(
+                          'Video Credit: Official Channel',
+                          style: TextStyle(
+                            color: textGray,
+                            fontSize: 11,
+                            fontStyle: FontStyle.italic,
+                            letterSpacing: 0.2,
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 16),
                   ],
-                ),
-                // 12px+ Gap between YouTube player and any Ad / content (Play Store & YouTube + AdMob compliance)
-                const SizedBox(height: 16),
-              ] else ...[
-                // Featured Image
+                ] else ...[
+                // Featured Image (No video)
                 ClipRRect(
                   borderRadius: BorderRadius.circular(14),
                   child: AspectRatio(
