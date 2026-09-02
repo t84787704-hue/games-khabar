@@ -159,24 +159,28 @@ class AutoNewsScraper {
 
   AutoNewsScraper._internal();
 
-  /// Seed 10 default sources to Firestore 'scraper_sources' collection if empty
+  /// Seed 10 default sources to Firestore 'rss_sources' and 'scraper_sources' collections if empty
   static Future<void> seedDefaultSourcesIfEmpty() async {
     try {
-      final snap = await FirebaseFirestore.instance.collection(collectionName).limit(1).get();
+      final snap = await FirebaseFirestore.instance.collection('rss_sources').limit(1).get();
       if (snap.docs.isEmpty) {
         final batch = FirebaseFirestore.instance.batch();
         for (int i = 0; i < defaultFirestoreSources.length; i++) {
           final s = defaultFirestoreSources[i];
-          final docRef = FirebaseFirestore.instance.collection(collectionName).doc(s['id'] as String);
-          batch.set(docRef, {
+          final docRef1 = FirebaseFirestore.instance.collection('rss_sources').doc(s['id'] as String);
+          final docRef2 = FirebaseFirestore.instance.collection('scraper_sources').doc(s['id'] as String);
+          final data = {
             'name': s['name'],
             'url': s['url'],
             'category': s['category'],
             'categoryHint': s['category'],
+            'isActive': true,
             'isEnabled': true,
             'order': s['order'] ?? (i + 1),
             'createdAt': FieldValue.serverTimestamp(),
-          });
+          };
+          batch.set(docRef1, data);
+          batch.set(docRef2, data);
         }
         await batch.commit();
       }
@@ -188,23 +192,31 @@ class AutoNewsScraper {
   /// Reset to 10 default sources in Firestore
   static Future<void> resetDefaultSources() async {
     try {
-      final snap = await FirebaseFirestore.instance.collection(collectionName).get();
+      final snap1 = await FirebaseFirestore.instance.collection('rss_sources').get();
+      final snap2 = await FirebaseFirestore.instance.collection('scraper_sources').get();
       final batch = FirebaseFirestore.instance.batch();
-      for (final doc in snap.docs) {
+      for (final doc in snap1.docs) {
+        batch.delete(doc.reference);
+      }
+      for (final doc in snap2.docs) {
         batch.delete(doc.reference);
       }
       for (int i = 0; i < defaultFirestoreSources.length; i++) {
         final s = defaultFirestoreSources[i];
-        final docRef = FirebaseFirestore.instance.collection(collectionName).doc(s['id'] as String);
-        batch.set(docRef, {
+        final docRef1 = FirebaseFirestore.instance.collection('rss_sources').doc(s['id'] as String);
+        final docRef2 = FirebaseFirestore.instance.collection('scraper_sources').doc(s['id'] as String);
+        final data = {
           'name': s['name'],
           'url': s['url'],
           'category': s['category'],
           'categoryHint': s['category'],
+          'isActive': true,
           'isEnabled': true,
           'order': s['order'] ?? (i + 1),
           'createdAt': FieldValue.serverTimestamp(),
-        });
+        };
+        batch.set(docRef1, data);
+        batch.set(docRef2, data);
       }
       await batch.commit();
     } catch (e) {
@@ -212,7 +224,7 @@ class AutoNewsScraper {
     }
   }
 
-  /// Add a source to Firestore 'scraper_sources'
+  /// Add a source to Firestore 'rss_sources' and 'scraper_sources'
   static Future<void> addFirestoreSource({
     required String name,
     required String url,
@@ -222,24 +234,28 @@ class AutoNewsScraper {
     if (cleanUrl.isEmpty) return;
 
     try {
-      await FirebaseFirestore.instance.collection(collectionName).add({
+      final data = {
         'name': name.trim().isEmpty ? 'Custom RSS Feed' : name.trim(),
         'url': cleanUrl,
         'category': category.trim().isEmpty ? 'Gaming News' : category.trim(),
         'categoryHint': category.trim().isEmpty ? 'Gaming News' : category.trim(),
+        'isActive': true,
         'isEnabled': true,
         'order': DateTime.now().millisecondsSinceEpoch,
         'createdAt': FieldValue.serverTimestamp(),
-      });
+      };
+      await FirebaseFirestore.instance.collection('rss_sources').add(data);
+      await FirebaseFirestore.instance.collection('scraper_sources').add(data);
     } catch (e) {
       debugPrint('Error adding source: $e');
     }
   }
 
-  /// Delete a source from Firestore 'scraper_sources'
+  /// Delete a source from Firestore
   static Future<void> deleteFirestoreSource(String docId) async {
     try {
-      await FirebaseFirestore.instance.collection(collectionName).doc(docId).delete();
+      await FirebaseFirestore.instance.collection('rss_sources').doc(docId).delete();
+      await FirebaseFirestore.instance.collection('scraper_sources').doc(docId).delete();
     } catch (e) {
       debugPrint('Error deleting source: $e');
     }
@@ -248,7 +264,12 @@ class AutoNewsScraper {
   /// Toggle source enabled state in Firestore
   static Future<void> toggleFirestoreSource(String docId, bool isEnabled) async {
     try {
-      await FirebaseFirestore.instance.collection(collectionName).doc(docId).update({
+      await FirebaseFirestore.instance.collection('rss_sources').doc(docId).update({
+        'isActive': isEnabled,
+        'isEnabled': isEnabled,
+      });
+      await FirebaseFirestore.instance.collection('scraper_sources').doc(docId).update({
+        'isActive': isEnabled,
         'isEnabled': isEnabled,
       });
     } catch (e) {
