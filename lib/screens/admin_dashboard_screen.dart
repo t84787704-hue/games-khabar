@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import '../models/news_model.dart';
 import '../services/firestore_service.dart';
+import '../services/auto_news_scraper.dart';
 import '../widgets/app_image_view.dart';
 import '../utils/admin_security.dart';
 import 'add_news_screen.dart';
@@ -50,11 +51,13 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
 
   final List<String> _filters = [
     'All',
-    'BGMI',
+    'Auto Scraped',
     'Free Fire',
+    'BGMI',
     'PUBG',
-    'COD',
-    'Valorant',
+    'GTA',
+    'MINECRAFT',
+    'ESPORTS',
     'Gaming News',
   ];
 
@@ -194,6 +197,466 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
     Navigator.pushNamed(context, '/add-news');
   }
 
+  void _showAddSourceDialog(BuildContext ctx) {
+    final nameCtrl = TextEditingController();
+    final urlCtrl = TextEditingController();
+    final hintCtrl = TextEditingController(text: 'Free Fire / BGMI / GTA');
+
+    showDialog(
+      context: ctx,
+      builder: (dCtx) => AlertDialog(
+        backgroundColor: cardDark,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(16),
+          side: BorderSide(color: borderDark),
+        ),
+        title: Row(
+          children: const [
+            Icon(Icons.rss_feed_rounded, color: neonGreen, size: 22),
+            SizedBox(width: 8),
+            Text(
+              'Add RSS Source',
+              style: TextStyle(color: textWhite, fontWeight: FontWeight.bold, fontSize: 18),
+            ),
+          ],
+        ),
+        content: SingleChildScrollView(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              TextField(
+                controller: nameCtrl,
+                style: const TextStyle(color: textWhite, fontSize: 13),
+                decoration: InputDecoration(
+                  labelText: 'Source Name (e.g. Sportskeeda / IGN)',
+                  labelStyle: const TextStyle(color: textGray, fontSize: 12),
+                  filled: true,
+                  fillColor: cardDark2,
+                  border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(10),
+                    borderSide: BorderSide(color: borderDark),
+                  ),
+                ),
+              ),
+              const SizedBox(height: 12),
+              TextField(
+                controller: urlCtrl,
+                style: const TextStyle(color: textWhite, fontSize: 13),
+                decoration: InputDecoration(
+                  labelText: 'RSS Feed URL (https://...)',
+                  labelStyle: const TextStyle(color: textGray, fontSize: 12),
+                  filled: true,
+                  fillColor: cardDark2,
+                  border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(10),
+                    borderSide: BorderSide(color: borderDark),
+                  ),
+                ),
+              ),
+              const SizedBox(height: 12),
+              TextField(
+                controller: hintCtrl,
+                style: const TextStyle(color: textWhite, fontSize: 13),
+                decoration: InputDecoration(
+                  labelText: 'Category Hint / Target Games',
+                  labelStyle: const TextStyle(color: textGray, fontSize: 12),
+                  filled: true,
+                  fillColor: cardDark2,
+                  border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(10),
+                    borderSide: BorderSide(color: borderDark),
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(dCtx),
+            child: const Text('Cancel', style: TextStyle(color: textGray)),
+          ),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(
+              backgroundColor: neonGreen,
+              foregroundColor: const Color(0xFF05080D),
+            ),
+            onPressed: () async {
+              final url = urlCtrl.text.trim();
+              if (url.isEmpty || (!url.startsWith('http://') && !url.startsWith('https://'))) {
+                ScaffoldMessenger.of(ctx).showSnackBar(
+                  const SnackBar(
+                    backgroundColor: alertRed,
+                    content: Text('Please enter a valid RSS feed URL starting with https://'),
+                  ),
+                );
+                return;
+              }
+              await AutoNewsScraper().addSource(
+                name: nameCtrl.text.trim().isEmpty ? 'Custom RSS Feed' : nameCtrl.text.trim(),
+                url: url,
+                categoryHint: hintCtrl.text.trim().isEmpty ? 'Gaming News' : hintCtrl.text.trim(),
+                searchVolumeDesc: 'Custom Admin RSS Source',
+              );
+              if (dCtx.mounted) Navigator.pop(dCtx);
+              if (ctx.mounted) {
+                ScaffoldMessenger.of(ctx).showSnackBar(
+                  const SnackBar(
+                    backgroundColor: cardDark,
+                    content: Text('RSS Source Added Successfully!', style: TextStyle(color: neonGreen)),
+                  ),
+                );
+              }
+            },
+            child: const Text('Add Source', style: TextStyle(fontWeight: FontWeight.bold)),
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _showAutoScraperSheet() {
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: bgDark,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      builder: (bCtx) {
+        return DraggableScrollableSheet(
+          initialChildSize: 0.85,
+          minChildSize: 0.5,
+          maxChildSize: 0.95,
+          expand: false,
+          builder: (context, scrollController) {
+            return Column(
+              children: [
+                // Header Bar
+                Container(
+                  padding: const EdgeInsets.fromLTRB(20, 16, 16, 12),
+                  decoration: BoxDecoration(
+                    color: cardDark,
+                    border: Border(bottom: BorderSide(color: borderDark)),
+                  ),
+                  child: Row(
+                    children: [
+                      Container(
+                        padding: const EdgeInsets.all(8),
+                        decoration: BoxDecoration(
+                          color: neonGreen.withOpacity(0.15),
+                          borderRadius: BorderRadius.circular(8),
+                        ),
+                        child: const Icon(Icons.rss_feed_rounded, color: neonGreen, size: 20),
+                      ),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: const [
+                            Text(
+                              'Auto News Scraper',
+                              style: TextStyle(
+                                color: textWhite,
+                                fontSize: 16,
+                                fontWeight: FontWeight.bold,
+                              ),
+                            ),
+                            SizedBox(height: 2),
+                            Text(
+                              'Top 10 High Search Volume RSS Feeds (Every 30m)',
+                              style: TextStyle(color: textGray, fontSize: 11),
+                            ),
+                          ],
+                        ),
+                      ),
+                      IconButton(
+                        icon: const Icon(Icons.close, color: textGray, size: 20),
+                        onPressed: () => Navigator.pop(bCtx),
+                      ),
+                    ],
+                  ),
+                ),
+
+                // Live Action & Status Banner
+                ValueListenableBuilder<bool>(
+                  valueListenable: AutoNewsScraper().isScrapingNotifier,
+                  builder: (context, isScraping, _) {
+                    return ValueListenableBuilder<String>(
+                      valueListenable: AutoNewsScraper().statusNotifier,
+                      builder: (context, statusMsg, _) {
+                        return Container(
+                          margin: const EdgeInsets.all(16),
+                          padding: const EdgeInsets.all(14),
+                          decoration: BoxDecoration(
+                            color: cardDark,
+                            borderRadius: BorderRadius.circular(14),
+                            border: Border.all(
+                              color: isScraping ? neonGreen : borderDark,
+                            ),
+                          ),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Row(
+                                children: [
+                                  Icon(
+                                    isScraping ? Icons.sync : Icons.check_circle_outline,
+                                    color: isScraping ? neonGreen : textGray,
+                                    size: 18,
+                                  ),
+                                  const SizedBox(width: 8),
+                                  Expanded(
+                                    child: Text(
+                                      statusMsg,
+                                      style: TextStyle(
+                                        color: isScraping ? neonGreen : textWhite,
+                                        fontSize: 13,
+                                        fontWeight: FontWeight.w600,
+                                      ),
+                                    ),
+                                  ),
+                                  if (isScraping)
+                                    const SizedBox(
+                                      width: 16,
+                                      height: 16,
+                                      child: CircularProgressIndicator(
+                                        strokeWidth: 2,
+                                        valueColor: AlwaysStoppedAnimation<Color>(neonGreen),
+                                      ),
+                                    ),
+                                ],
+                              ),
+                              const SizedBox(height: 12),
+                              Row(
+                                children: [
+                                  Expanded(
+                                    child: ElevatedButton.icon(
+                                      style: ElevatedButton.styleFrom(
+                                        backgroundColor: neonGreen,
+                                        foregroundColor: const Color(0xFF05080D),
+                                        padding: const EdgeInsets.symmetric(vertical: 12),
+                                        shape: RoundedRectangleBorder(
+                                          borderRadius: BorderRadius.circular(10),
+                                        ),
+                                      ),
+                                      onPressed: isScraping
+                                          ? null
+                                          : () async {
+                                              final added = await AutoNewsScraper().runScraper();
+                                              if (context.mounted) {
+                                                ScaffoldMessenger.of(context).showSnackBar(
+                                                  SnackBar(
+                                                    backgroundColor: cardDark,
+                                                    content: Text(
+                                                      'Scrape complete: $added new articles published!',
+                                                      style: const TextStyle(color: neonGreen),
+                                                    ),
+                                                  ),
+                                                );
+                                              }
+                                            },
+                                      icon: const Icon(Icons.cloud_download_rounded, size: 18),
+                                      label: const Text(
+                                        'Sync Feeds Now',
+                                        style: TextStyle(fontWeight: FontWeight.w900),
+                                      ),
+                                    ),
+                                  ),
+                                  const SizedBox(width: 10),
+                                  OutlinedButton.icon(
+                                    style: OutlinedButton.styleFrom(
+                                      foregroundColor: neonGreen,
+                                      side: const BorderSide(color: neonGreen),
+                                      padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 12),
+                                      shape: RoundedRectangleBorder(
+                                        borderRadius: BorderRadius.circular(10),
+                                      ),
+                                    ),
+                                    onPressed: () => _showAddSourceDialog(bCtx),
+                                    icon: const Icon(Icons.add, size: 18),
+                                    label: const Text('Add Source', style: TextStyle(fontWeight: FontWeight.bold)),
+                                  ),
+                                ],
+                              ),
+                            ],
+                          ),
+                        );
+                      },
+                    );
+                  },
+                ),
+
+                // Sources List
+                Expanded(
+                  child: ValueListenableBuilder<List<RssSource>>(
+                    valueListenable: AutoNewsScraper().sourcesNotifier,
+                    builder: (context, sources, _) {
+                      return ListView.separated(
+                        controller: scrollController,
+                        padding: const EdgeInsets.fromLTRB(16, 0, 16, 24),
+                        itemCount: sources.length,
+                        separatorBuilder: (_, __) => const SizedBox(height: 10),
+                        itemBuilder: (context, idx) {
+                          final src = sources[idx];
+                          return Container(
+                            padding: const EdgeInsets.all(12),
+                            decoration: BoxDecoration(
+                              color: cardDark,
+                              borderRadius: BorderRadius.circular(12),
+                              border: Border.all(
+                                color: src.isEnabled ? borderDark : Colors.transparent,
+                              ),
+                            ),
+                            child: Row(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Container(
+                                  width: 28,
+                                  height: 28,
+                                  alignment: Alignment.center,
+                                  decoration: BoxDecoration(
+                                    color: neonGreen.withOpacity(0.12),
+                                    borderRadius: BorderRadius.circular(6),
+                                  ),
+                                  child: Text(
+                                    '${idx + 1}',
+                                    style: const TextStyle(
+                                      color: neonGreen,
+                                      fontWeight: FontWeight.bold,
+                                      fontSize: 12,
+                                    ),
+                                  ),
+                                ),
+                                const SizedBox(width: 12),
+                                Expanded(
+                                  child: Column(
+                                    crossAxisAlignment: CrossAxisAlignment.start,
+                                    children: [
+                                      Row(
+                                        children: [
+                                          Expanded(
+                                            child: Text(
+                                              src.name,
+                                              style: TextStyle(
+                                                color: src.isEnabled ? textWhite : textGray,
+                                                fontWeight: FontWeight.bold,
+                                                fontSize: 14,
+                                              ),
+                                            ),
+                                          ),
+                                          Container(
+                                            padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                                            decoration: BoxDecoration(
+                                              color: neonGreen.withOpacity(0.12),
+                                              borderRadius: BorderRadius.circular(4),
+                                            ),
+                                            child: Text(
+                                              src.categoryHint,
+                                              style: const TextStyle(
+                                                color: neonGreen,
+                                                fontSize: 10,
+                                                fontWeight: FontWeight.bold,
+                                              ),
+                                            ),
+                                          ),
+                                        ],
+                                      ),
+                                      const SizedBox(height: 4),
+                                      Text(
+                                        src.searchVolumeDesc,
+                                        style: const TextStyle(
+                                          color: Color(0xFFFFB800),
+                                          fontSize: 11,
+                                          fontWeight: FontWeight.w500,
+                                        ),
+                                      ),
+                                      const SizedBox(height: 2),
+                                      Text(
+                                        src.url,
+                                        maxLines: 1,
+                                        overflow: TextOverflow.ellipsis,
+                                        style: const TextStyle(
+                                          color: textGray,
+                                          fontSize: 10,
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                                const SizedBox(width: 8),
+                                Switch(
+                                  value: src.isEnabled,
+                                  activeColor: neonGreen,
+                                  activeTrackColor: neonGreen.withOpacity(0.3),
+                                  inactiveThumbColor: textGray,
+                                  inactiveTrackColor: cardDark2,
+                                  onChanged: (val) {
+                                    AutoNewsScraper().toggleSource(src.id, val);
+                                  },
+                                ),
+                                if (!src.id.startsWith('source-')) ...[
+                                  IconButton(
+                                    icon: const Icon(Icons.delete_outline, color: alertRed, size: 18),
+                                    onPressed: () {
+                                      AutoNewsScraper().deleteSource(src.id);
+                                    },
+                                  ),
+                                ],
+                              ],
+                            ),
+                          );
+                        },
+                      );
+                    },
+                  ),
+                ),
+
+                // Bottom Reset Bar
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                  decoration: BoxDecoration(
+                    color: cardDark,
+                    border: Border(top: BorderSide(color: borderDark)),
+                  ),
+                  child: Row(
+                    children: [
+                      TextButton.icon(
+                        onPressed: () async {
+                          await AutoNewsScraper().resetToDefaultSources();
+                          if (bCtx.mounted) {
+                            ScaffoldMessenger.of(bCtx).showSnackBar(
+                              const SnackBar(
+                                backgroundColor: cardDark,
+                                content: Text('Reset to 10 Default High Search Sources', style: TextStyle(color: neonGreen)),
+                              ),
+                            );
+                          }
+                        },
+                        icon: const Icon(Icons.restore, color: textGray, size: 16),
+                        label: const Text('Reset 10 Sources', style: TextStyle(color: textGray, fontSize: 12)),
+                      ),
+                      const Spacer(),
+                      ElevatedButton(
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: cardDark2,
+                          foregroundColor: textWhite,
+                          side: BorderSide(color: borderDark),
+                        ),
+                        onPressed: () => Navigator.pop(bCtx),
+                        child: const Text('Done'),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            );
+          },
+        );
+      },
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -236,6 +699,11 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
         ),
         actions: [
           IconButton(
+            tooltip: 'Auto RSS Scraper',
+            icon: Icon(Icons.rss_feed_rounded, color: neonGreen, size: 22),
+            onPressed: _showAutoScraperSheet,
+          ),
+          IconButton(
             tooltip: 'Add New Khabar',
             icon: Icon(Icons.add_circle_outline, color: neonGreen, size: 24),
             onPressed: _openAddScreen,
@@ -267,49 +735,107 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
       body: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // Manage News Quick Overview Bar
+          // Auto RSS Scraper Quick Control Panel Banner
           Padding(
-            padding: const EdgeInsets.fromLTRB(16, 14, 16, 8),
-            child: Container(
-              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-              decoration: BoxDecoration(
-                color: cardDark,
+            padding: const EdgeInsets.fromLTRB(16, 12, 16, 4),
+            child: Material(
+              color: Colors.transparent,
+              child: InkWell(
+                onTap: _showAutoScraperSheet,
                 borderRadius: BorderRadius.circular(14),
-                border: Border.all(color: borderDark),
-              ),
-              child: Row(
-                children: [
-                  Container(
-                    padding: const EdgeInsets.all(8),
-                    decoration: BoxDecoration(
-                      color: neonGreen.withOpacity(0.12),
-                      borderRadius: BorderRadius.circular(8),
-                    ),
-                    child: Icon(Icons.dashboard_customize_rounded,
-                        color: neonGreen, size: 20),
+                child: Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                  decoration: BoxDecoration(
+                    color: cardDark,
+                    borderRadius: BorderRadius.circular(14),
+                    border: Border.all(color: borderDark),
                   ),
-                  const SizedBox(width: 12),
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: const [
-                        Text(
-                          'Live News Control Panel',
-                          style: TextStyle(
-                            color: textWhite,
-                            fontSize: 14,
-                            fontWeight: FontWeight.bold,
+                  child: Row(
+                    children: [
+                      Container(
+                        padding: const EdgeInsets.all(8),
+                        decoration: BoxDecoration(
+                          color: neonGreen.withOpacity(0.12),
+                          borderRadius: BorderRadius.circular(8),
+                        ),
+                        child: Icon(Icons.rss_feed_rounded, color: neonGreen, size: 20),
+                      ),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Row(
+                              children: [
+                                const Text(
+                                  'Auto Scraper (10 Feeds)',
+                                  style: TextStyle(
+                                    color: textWhite,
+                                    fontSize: 13.5,
+                                    fontWeight: FontWeight.bold,
+                                  ),
+                                ),
+                                const SizedBox(width: 6),
+                                ValueListenableBuilder<bool>(
+                                  valueListenable: AutoNewsScraper().isScrapingNotifier,
+                                  builder: (context, isScraping, _) {
+                                    return Container(
+                                      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 1),
+                                      decoration: BoxDecoration(
+                                        color: (isScraping ? neonGreen : Colors.green).withOpacity(0.15),
+                                        borderRadius: BorderRadius.circular(4),
+                                      ),
+                                      child: Text(
+                                        isScraping ? 'SYNCING...' : 'ACTIVE 30m',
+                                        style: TextStyle(
+                                          color: isScraping ? neonGreen : Colors.greenAccent,
+                                          fontSize: 9,
+                                          fontWeight: FontWeight.bold,
+                                        ),
+                                      ),
+                                    );
+                                  },
+                                ),
+                              ],
+                            ),
+                            const SizedBox(height: 2),
+                            ValueListenableBuilder<String>(
+                              valueListenable: AutoNewsScraper().statusNotifier,
+                              builder: (context, statusMsg, _) {
+                                return Text(
+                                  statusMsg == 'Idle'
+                                      ? 'Sportskeeda, FF Mania, AFK, TalkEsport, GameRant, IGN & 4 more'
+                                      : statusMsg,
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                  style: const TextStyle(color: textGray, fontSize: 11),
+                                );
+                              },
+                            ),
+                          ],
+                        ),
+                      ),
+                      const SizedBox(width: 6),
+                      ElevatedButton(
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: neonGreen,
+                          foregroundColor: const Color(0xFF05080D),
+                          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+                          minimumSize: Size.zero,
+                          tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(8),
                           ),
                         ),
-                        SizedBox(height: 2),
-                        Text(
-                          'Tap Edit (✏️) or Delete (🗑️) to update articles live',
-                          style: TextStyle(color: textGray, fontSize: 11),
+                        onPressed: _showAutoScraperSheet,
+                        child: const Text(
+                          'Sources',
+                          style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold),
                         ),
-                      ],
-                    ),
+                      ),
+                    ],
                   ),
-                ],
+                ),
               ),
             ),
           ),
@@ -414,8 +940,15 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
 
                 // Filter by search and category
                 final newsList = rawList.where((item) {
-                  final matchesFilter = _selectedFilter == 'All' ||
-                      item.category.toLowerCase() == _selectedFilter.toLowerCase();
+                  final bool matchesFilter;
+                  if (_selectedFilter == 'All') {
+                    matchesFilter = true;
+                  } else if (_selectedFilter == 'Auto Scraped') {
+                    matchesFilter = item.isAuto;
+                  } else {
+                    matchesFilter = item.category.toLowerCase() == _selectedFilter.toLowerCase();
+                  }
+
                   final matchesSearch = _searchQuery.isEmpty ||
                       item.title.toLowerCase().contains(_searchQuery) ||
                       item.description.toLowerCase().contains(_searchQuery) ||
@@ -573,6 +1106,29 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
                                             ),
                                           ),
                                         ),
+                                        if (item.isAuto) ...[
+                                          const SizedBox(width: 4),
+                                          Container(
+                                            padding: const EdgeInsets.symmetric(
+                                                horizontal: 5, vertical: 2),
+                                            decoration: BoxDecoration(
+                                              color: Colors.blueAccent.withOpacity(0.2),
+                                              borderRadius:
+                                                  BorderRadius.circular(4),
+                                              border: Border.all(
+                                                  color: Colors.blueAccent.withOpacity(0.4),
+                                                  width: 0.8),
+                                            ),
+                                            child: const Text(
+                                              'AUTO RSS',
+                                              style: TextStyle(
+                                                color: Colors.lightBlueAccent,
+                                                fontSize: 8.5,
+                                                fontWeight: FontWeight.w900,
+                                              ),
+                                            ),
+                                          ),
+                                        ],
                                         const Spacer(),
                                         Text(
                                           item.timeAgo,

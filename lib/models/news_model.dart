@@ -18,6 +18,7 @@ class NewsModel {
   final String? storeName;
   final String? downloadSize;
   final String? sourceUrl;
+  final bool isAuto;
   final Timestamp? timestamp;
 
   NewsModel({
@@ -40,6 +41,7 @@ class NewsModel {
     this.storeName,
     this.downloadSize,
     this.sourceUrl,
+    this.isAuto = false,
     this.timestamp,
   })  : titleMap = titleMap ?? _createDefaultMap(title ?? ''),
         descriptionMap = descriptionMap ?? _createDefaultMap(description ?? '');
@@ -169,6 +171,7 @@ class NewsModel {
       storeName: data['storeName'] as String?,
       downloadSize: data['downloadSize'] as String?,
       sourceUrl: data['sourceUrl'] as String?,
+      isAuto: data['isAuto'] as bool? ?? false,
       timestamp: ts,
     );
   }
@@ -193,6 +196,7 @@ class NewsModel {
     String? storeName,
     String? downloadSize,
     String? sourceUrl,
+    bool? isAuto,
     Timestamp? timestamp,
   }) {
     return NewsModel(
@@ -213,6 +217,7 @@ class NewsModel {
       storeName: storeName ?? this.storeName,
       downloadSize: downloadSize ?? this.downloadSize,
       sourceUrl: sourceUrl ?? this.sourceUrl,
+      isAuto: isAuto ?? this.isAuto,
       timestamp: timestamp ?? this.timestamp,
     );
   }
@@ -237,6 +242,7 @@ class NewsModel {
       'storeName': storeName,
       'downloadSize': downloadSize,
       'sourceUrl': sourceUrl,
+      'isAuto': isAuto,
       'timestampMillis': timestamp?.millisecondsSinceEpoch,
     };
   }
@@ -284,6 +290,7 @@ class NewsModel {
       storeName: json['storeName'] as String?,
       downloadSize: json['downloadSize'] as String?,
       sourceUrl: json['sourceUrl'] as String?,
+      isAuto: json['isAuto'] as bool? ?? false,
       timestamp: ts,
     );
   }
