@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import 'package:cached_network_image/cached_network_image.dart';
 import 'package:easy_localization/easy_localization.dart';
 import 'package:share_plus/share_plus.dart';
 import 'package:url_launcher/url_launcher.dart';
@@ -12,40 +11,28 @@ import '../services/bookmark_service.dart';
 import '../services/firestore_service.dart';
 import '../services/ad_free_service.dart';
 
-/// Helper function to extract 11-char YouTube video ID from various YouTube URL formats, direct ID, or content text
-String? extractYoutubeId(String? urlOrText) {
-  if (urlOrText == null || urlOrText.trim().isEmpty) return null;
-  String clean = urlOrText.trim();
+/// 1. Robust function to extract YouTube Video ID
+String? getYoutubeId(String? url) {
+  if (url == null || url.trim().isEmpty) return null;
+  final clean = url.trim();
 
-  // 1. Direct 11-character video ID
+  // Pattern matching youtube watch, youtu.be, embed, shorts, live
+  final RegExp reg = RegExp(
+    r'(?:youtube\.com\/watch\?v=|youtu\.be\/|youtube\.com\/embed\/|youtube\.com\/shorts\/|youtube\.com\/live\/)([^&?\/]+)',
+    caseSensitive: false,
+  );
+  final match = reg.firstMatch(clean);
+  if (match != null && match.group(1) != null && match.group(1)!.length >= 10) {
+    return match.group(1);
+  }
+
+  // Also check if raw string itself is a direct 11-char ID
   final directIdRegex = RegExp(r'^[a-zA-Z0-9_-]{11}$');
   if (directIdRegex.hasMatch(clean)) {
     return clean;
   }
 
-  // 2. Try YoutubePlayer.convertUrlToId
-  try {
-    final converted = YoutubePlayer.convertUrlToId(clean);
-    if (converted != null && converted.trim().length == 11) {
-      return converted.trim();
-    }
-  } catch (_) {}
-
-  // 3. Clean tracking query parameters
-  if (clean.contains('?si=') || clean.contains('&si=')) {
-    clean = clean.replaceAll(RegExp(r'[?&]si=[^&#\s]+'), '');
-  }
-
-  // 4. Extract ID using regex matching youtube.com or youtu.be
-  final regExp = RegExp(
-    r'(?:youtu\.be\/|youtube\.com\/(?:embed\/|v\/|watch\?v=|watch\?.+&v=|shorts\/|live\/)|(?:v=))([a-zA-Z0-9_-]{11})',
-    caseSensitive: false,
-  );
-  final match = regExp.firstMatch(clean);
-  if (match != null && match.group(1) != null) {
-    return match.group(1);
-  }
-
+  // Fallback pattern matching v=
   final fallbackRegExp = RegExp(
     r'(?:v=|youtu\.be\/)([a-zA-Z0-9_-]{11})',
     caseSensitive: false,
@@ -57,10 +44,7 @@ String? extractYoutubeId(String? urlOrText) {
 /// Helper to detect if a given URL is a YouTube URL
 bool isYouTubeUrl(String? url) {
   if (url == null || url.trim().isEmpty) return false;
-  final lower = url.trim().toLowerCase();
-  return lower.contains('youtube.com') ||
-      lower.contains('youtu.be') ||
-      extractYoutubeId(url) != null;
+  return getYoutubeId(url) != null;
 }
 
 class NewsDetailScreen extends StatefulWidget {
@@ -74,12 +58,14 @@ class NewsDetailScreen extends StatefulWidget {
 
 class _NewsDetailScreenState extends State<NewsDetailScreen> {
   YoutubePlayerController? _controller;
-  String? _detectedVideoId;
+  String? ytId;
+  bool isYoutubeVideo = false;
   bool _isPlaying = false;
 
   static const Color neonGreen = Color(0xFF00FF88);
   static const Color scaffoldBg = Color(0xFF121318);
   static const Color cardDark = Color(0xFF1E1F28);
+  static const Color cardDark2 = Color(0xFF181920);
   static const Color borderDark = Color(0xFF2E303E);
   static const Color alertRed = Color(0xFFFF3344);
   static const Color textWhite = Color(0xFFFFFFFF);
@@ -89,55 +75,29 @@ class _NewsDetailScreenState extends State<NewsDetailScreen> {
   @override
   void initState() {
     super.initState();
-    _initYoutubePlayer();
-  }
+    // 2. Extract video ID and initialize player controller
+    ytId = getYoutubeId(widget.news.videoUrl);
+    ytId ??= getYoutubeId(widget.news.sourceUrl);
+    print("VIDEO URL: ${widget.news.videoUrl} ID: $ytId"); // for debugging
 
-  void _initYoutubePlayer() {
-    _detectedVideoId = _findYouTubeVideoId(widget.news);
-    if (_detectedVideoId != null && _detectedVideoId!.isNotEmpty) {
+    if (ytId != null && ytId!.isNotEmpty) {
+      isYoutubeVideo = true;
       _controller = YoutubePlayerController(
-        initialVideoId: _detectedVideoId!,
+        initialVideoId: ytId!,
         flags: const YoutubePlayerFlags(
           autoPlay: true,
           mute: false,
-          disableDragSeek: false,
           loop: false,
+          disableDragSeek: false,
           isLive: false,
           forceHD: false,
           enableCaption: true,
           showLiveFullscreenButton: false,
         ),
       );
+    } else {
+      isYoutubeVideo = false;
     }
-  }
-
-  String? _findYouTubeVideoId(NewsModel news) {
-    // 1. Check videoUrl field
-    if (news.videoUrl != null && news.videoUrl!.trim().isNotEmpty) {
-      final id = extractYoutubeId(news.videoUrl);
-      if (id != null) return id;
-    }
-
-    // 2. Check sourceUrl field
-    if (news.sourceUrl != null && news.sourceUrl!.trim().isNotEmpty) {
-      final id = extractYoutubeId(news.sourceUrl);
-      if (id != null) return id;
-    }
-
-    // 3. Check all translated descriptions in descriptionMap
-    for (final desc in news.descriptionMap.values) {
-      final id = extractYoutubeId(desc);
-      if (id != null) return id;
-    }
-
-    // 4. Check raw description / title
-    final rawDescId = extractYoutubeId(news.description);
-    if (rawDescId != null) return rawDescId;
-
-    final rawTitleId = extractYoutubeId(news.title);
-    if (rawTitleId != null) return rawTitleId;
-
-    return null;
   }
 
   @override
@@ -149,13 +109,11 @@ class _NewsDetailScreenState extends State<NewsDetailScreen> {
   bool get hasOtherNonYoutubeVideo =>
       widget.news.videoUrl != null &&
       widget.news.videoUrl!.trim().isNotEmpty &&
-      _detectedVideoId == null &&
-      !isYouTubeUrl(widget.news.videoUrl);
+      !isYoutubeVideo;
 
   String? _extractSourceUrl(String text) {
     if (widget.news.sourceUrl != null && widget.news.sourceUrl!.trim().isNotEmpty) {
       final sUrl = widget.news.sourceUrl!.trim();
-      // Remove clickable action if it's a YouTube URL since player is embedded
       if (!isYouTubeUrl(sUrl)) {
         return sUrl;
       }
@@ -170,7 +128,6 @@ class _NewsDetailScreenState extends State<NewsDetailScreen> {
       if (!url.startsWith('http://') && !url.startsWith('https://')) {
         url = 'https://$url';
       }
-      // If it's a YouTube URL, suppress clickable external link
       if (!isYouTubeUrl(url)) {
         return url;
       }
@@ -179,8 +136,7 @@ class _NewsDetailScreenState extends State<NewsDetailScreen> {
   }
 
   String _cleanContentText(String text) {
-    // If YouTube video is present, remove raw YouTube URLs to keep content readable
-    if (_detectedVideoId != null) {
+    if (isYoutubeVideo) {
       return text
           .replaceAll(
             RegExp(r'https?:\/\/(?:www\.)?(?:youtube\.com\/[^\s]+|youtu\.be\/[^\s]+)'),
@@ -296,28 +252,46 @@ class _NewsDetailScreenState extends State<NewsDetailScreen> {
     }
   }
 
+  /// 3. Video section widget
   Widget buildVideoSection({Widget? playerWidget}) {
-    if (_isPlaying) {
-      return Container(
-        decoration: BoxDecoration(
-          color: Colors.black,
-          borderRadius: BorderRadius.circular(12),
-          border: Border.all(color: alertRed.withOpacity(0.5), width: 1),
-        ),
-        child: ClipRRect(
-          borderRadius: BorderRadius.circular(11),
-          child: AspectRatio(
-            aspectRatio: 16 / 9,
-            child: playerWidget ??
-                YoutubePlayer(
-                  controller: _controller!,
-                  showVideoProgressIndicator: true,
-                  progressIndicatorColor: neonGreen,
-                ),
+    if (!isYoutubeVideo) {
+      // Show only Image - NOT player
+      return ClipRRect(
+        borderRadius: BorderRadius.circular(14),
+        child: AspectRatio(
+          aspectRatio: 16 / 9,
+          child: AppImageView(
+            imageUrl: widget.news.thumbnailUrl,
+            fit: BoxFit.cover,
           ),
         ),
       );
     } else {
+      if (_isPlaying) {
+        return Container(
+          decoration: BoxDecoration(
+            color: Colors.black,
+            borderRadius: BorderRadius.circular(12),
+            border: Border.all(color: alertRed.withOpacity(0.5), width: 1),
+          ),
+          child: ClipRRect(
+            borderRadius: BorderRadius.circular(11),
+            child: AspectRatio(
+              aspectRatio: 16 / 9,
+              child: playerWidget ??
+                  YoutubePlayer(
+                    controller: _controller!,
+                    showVideoProgressIndicator: true,
+                    progressIndicatorColor: neonGreen,
+                  ),
+          ),
+        ),
+      );
+    } else {
+      final String thumbnail = ytId != null && ytId!.isNotEmpty
+          ? "https://img.youtube.com/vi/$ytId/0.jpg"
+          : widget.news.thumbnailUrl;
+
       return GestureDetector(
         behavior: HitTestBehavior.opaque,
         onTap: () {
@@ -340,11 +314,11 @@ class _NewsDetailScreenState extends State<NewsDetailScreen> {
                 children: [
                   Positioned.fill(
                     child: Image.network(
-                      widget.news.thumbnailUrl,
+                      thumbnail,
                       fit: BoxFit.cover,
-                      errorBuilder: (_, __, ___) => Container(
-                        color: cardDark,
-                        child: const Icon(Icons.videocam, color: textGray, size: 40),
+                      errorBuilder: (_, __, ___) => AppImageView(
+                        imageUrl: widget.news.thumbnailUrl,
+                        fit: BoxFit.cover,
                       ),
                     ),
                   ),
@@ -411,7 +385,7 @@ class _NewsDetailScreenState extends State<NewsDetailScreen> {
 
   @override
   Widget build(BuildContext context) {
-    if (_detectedVideoId != null && _controller != null) {
+    if (isYoutubeVideo && _controller != null) {
       return YoutubePlayerBuilder(
         player: YoutubePlayer(
           controller: _controller!,
@@ -453,7 +427,7 @@ class _NewsDetailScreenState extends State<NewsDetailScreen> {
     final rawDescription = widget.news.getDescription(langCode);
     final displayDescription = _cleanContentText(rawDescription);
     final directUrl = _extractSourceUrl(rawDescription);
-    final hasVideo = _detectedVideoId != null || hasOtherNonYoutubeVideo;
+    final hasVideo = isYoutubeVideo || hasOtherNonYoutubeVideo;
 
     return Scaffold(
       backgroundColor: scaffoldBg,
@@ -599,7 +573,7 @@ class _NewsDetailScreenState extends State<NewsDetailScreen> {
               const SizedBox(height: 16),
 
               // 4. Video / Featured Media Area
-              if (_detectedVideoId != null && _controller != null) ...[
+              if (isYoutubeVideo && _controller != null) ...[
                 buildVideoSection(playerWidget: playerWidget),
                 const SizedBox(height: 6),
                 Row(
@@ -619,13 +593,13 @@ class _NewsDetailScreenState extends State<NewsDetailScreen> {
                 ),
                 const SizedBox(height: 16),
               ] else ...[
-                // Featured Image (No video)
+                // Featured Image (No video or non-YouTube)
                 ClipRRect(
                   borderRadius: BorderRadius.circular(14),
                   child: AspectRatio(
                     aspectRatio: 16 / 9,
                     child: AppImageView(
-                      imageUrl: widget.news.imageUrl,
+                      imageUrl: widget.news.thumbnailUrl,
                       fit: BoxFit.cover,
                     ),
                   ),
