@@ -249,8 +249,18 @@ class _NewsDetailScreenState extends State<NewsDetailScreen> {
     final directUrl = _extractSourceUrl(rawDescription);
     final hasVideo = videoId != null || (widget.news.videoUrl != null && widget.news.videoUrl!.isNotEmpty);
 
+    final paragraphs = displayDescription
+        .split(RegExp(r'\n\s*\n'))
+        .map((p) => p.trim())
+        .where((p) => p.isNotEmpty)
+        .toList();
+    final firstParagraph = paragraphs.isNotEmpty ? paragraphs.first : displayDescription;
+    final remainingParagraphs = paragraphs.length > 1 ? paragraphs.sublist(1) : <String>[];
+
     return Scaffold(
       backgroundColor: scaffoldBg,
+      extendBody: false,
+      resizeToAvoidBottomInset: true,
       appBar: AppBar(
         backgroundColor: cardDark,
         elevation: 0,
@@ -296,7 +306,12 @@ class _NewsDetailScreenState extends State<NewsDetailScreen> {
       body: SafeArea(
         child: SingleChildScrollView(
           physics: const BouncingScrollPhysics(),
-          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
+          padding: EdgeInsets.only(
+            left: 16,
+            right: 16,
+            top: 16,
+            bottom: MediaQuery.of(context).padding.bottom + 80,
+          ),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
@@ -492,19 +507,59 @@ class _NewsDetailScreenState extends State<NewsDetailScreen> {
                 const SizedBox(height: 16),
               ],
 
-              // 6. News Description Text (Cleaned from raw YouTube URLs)
-              Text(
-                displayDescription,
-                style: const TextStyle(
-                  color: textLightGray,
-                  fontSize: 15,
-                  height: 1.6,
-                  letterSpacing: 0.2,
+              // 6. News Description - First Paragraph
+              if (firstParagraph.isNotEmpty) ...[
+                Text(
+                  firstParagraph,
+                  style: const TextStyle(
+                    color: textLightGray,
+                    fontSize: 15,
+                    height: 1.6,
+                    letterSpacing: 0.2,
+                  ),
                 ),
-              ),
-              const SizedBox(height: 24),
+                const SizedBox(height: 14),
+              ],
 
-              // 7. Source Article Link (Non-YouTube external source only)
+              // 7. Native Ad Inside Scroll Content (After 1st paragraph)
+              ValueListenableBuilder<DateTime?>(
+                valueListenable: AdFreeService.adFreeUntilNotifier,
+                builder: (context, adFreeUntil, _) {
+                  if (AdFreeService().isAdFree) {
+                    return const SizedBox.shrink();
+                  }
+                  return Container(
+                    margin: const EdgeInsets.only(
+                      top: 10,
+                      bottom: 18,
+                    ),
+                    child: const NativeAdWidget(
+                      margin: EdgeInsets.zero,
+                    ),
+                  );
+                },
+              ),
+
+              // 8. Remaining Paragraphs
+              if (remainingParagraphs.isNotEmpty) ...[
+                ...remainingParagraphs.map(
+                  (para) => Padding(
+                    padding: const EdgeInsets.only(bottom: 14),
+                    child: Text(
+                      para,
+                      style: const TextStyle(
+                        color: textLightGray,
+                        fontSize: 15,
+                        height: 1.6,
+                        letterSpacing: 0.2,
+                      ),
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 10),
+              ],
+
+              // 9. Source Article Link (Non-YouTube external source only)
               if (directUrl != null) ...[
                 SizedBox(
                   width: double.infinity,
@@ -528,7 +583,7 @@ class _NewsDetailScreenState extends State<NewsDetailScreen> {
                 const SizedBox(height: 14),
               ],
 
-              // 8. Share Button
+              // 10. Share Button
               SizedBox(
                 width: double.infinity,
                 height: 48,
@@ -551,24 +606,7 @@ class _NewsDetailScreenState extends State<NewsDetailScreen> {
               ),
               const SizedBox(height: 20),
 
-              // 9. AdMob Ad Section
-              ValueListenableBuilder<DateTime?>(
-                valueListenable: AdFreeService.adFreeUntilNotifier,
-                builder: (context, adFreeUntil, _) {
-                  if (AdFreeService().isAdFree) {
-                    return const SizedBox.shrink();
-                  }
-                  return const Column(
-                    children: [
-                      SizedBox(height: 12),
-                      NativeAdWidget(),
-                      SizedBox(height: 12),
-                    ],
-                  );
-                },
-              ),
-
-              // 10. Related News Section
+              // 11. Related News Section
               StreamBuilder<List<NewsModel>>(
                 stream: FirestoreService().getNewsStream(),
                 initialData: FirestoreService().currentNews,

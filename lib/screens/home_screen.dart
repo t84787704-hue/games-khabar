@@ -189,6 +189,8 @@ class _HomeScreenState extends State<HomeScreen> {
       builder: (context, _, __) {
         return Scaffold(
           backgroundColor: bgDark,
+          extendBody: false,
+          resizeToAvoidBottomInset: true,
           bottomNavigationBar: Container(
             decoration: BoxDecoration(
               color: cardDark,

@@ -3,10 +3,14 @@ import 'package:google_mobile_ads/google_mobile_ads.dart';
 
 class NativeAdWidget extends StatefulWidget {
   final String adUnitId;
+  final EdgeInsetsGeometry? margin;
+  final double? height;
 
   const NativeAdWidget({
     super.key,
     this.adUnitId = 'ca-app-pub-3940256099942544/2247696110', // Standard Google Test Ad Unit
+    this.margin,
+    this.height,
   });
 
   @override
@@ -72,9 +76,10 @@ class _NativeAdWidgetState extends State<NativeAdWidget> {
       return const SizedBox.shrink();
     }
 
+    final adHeight = widget.height ?? 380.0;
     return Container(
-      margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-      height: 400,
+      margin: widget.margin ?? const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+      height: adHeight,
       decoration: BoxDecoration(
         color: _cardDark,
         borderRadius: BorderRadius.circular(12),
@@ -84,7 +89,7 @@ class _NativeAdWidgetState extends State<NativeAdWidget> {
       child: _isAdLoaded && _nativeAd != null
           ? AdWidget(ad: _nativeAd!)
           : Container(
-              height: 400,
+              height: adHeight,
               alignment: Alignment.center,
               padding: const EdgeInsets.all(16),
               child: const Row(
