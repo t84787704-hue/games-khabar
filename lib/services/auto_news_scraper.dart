@@ -698,6 +698,41 @@ class AutoNewsScraper {
     } catch (e) {
       debugPrint('Feed parse exception for $feedUrl: $e');
     }
+
+    if (results.isEmpty) {
+      try {
+        final apiUrl = 'https://api.rss2json.com/v1/api.json?rss_url=${Uri.encodeComponent(feedUrl)}';
+        final jsonRes = await http.get(Uri.parse(apiUrl)).timeout(const Duration(seconds: 15));
+        if (jsonRes.statusCode == 200) {
+          final jsonData = json.decode(jsonRes.body);
+          if (jsonData['status'] == 'ok') {
+            final List items = jsonData['items'] ?? [];
+            for (final item in items.take(15)) {
+              final title = (item['title'] ?? '').toString().trim();
+              final link = (item['link'] ?? '').toString().trim();
+              final desc = (item['description'] ?? '').toString().trim();
+              String? img;
+              if (item['enclosure'] != null && item['enclosure'] is Map && item['enclosure']['link'] != null) {
+                img = item['enclosure']['link'].toString();
+              } else if (item['thumbnail'] != null) {
+                img = item['thumbnail'].toString();
+              }
+              if (title.isNotEmpty && link.isNotEmpty) {
+                results.add({
+                  'title': _cleanXmlText(title),
+                  'sourceUrl': link,
+                  'description': _stripHtml(desc),
+                  'imageUrl': img,
+                });
+              }
+            }
+          }
+        }
+      } catch (e2) {
+        debugPrint('rss2json fallback error for $feedUrl in AutoNewsScraper: $e2');
+      }
+    }
+
     return results;
   }
 

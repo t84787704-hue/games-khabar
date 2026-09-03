@@ -1,3 +1,4 @@
+import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 import 'package:xml/xml.dart';
@@ -27,54 +28,181 @@ class _RssScreenState extends State<RssScreen> {
     setState(() => _isSyncing = true);
     int published = 0;
     try {
-      final snap = await FirebaseFirestore.instance.collection('rss_sources').where('isActive', isEqualTo: true).limit(1).get();
+      final snap = await FirebaseFirestore.instance
+          .collection('rss_sources')
+          .where('isActive', isEqualTo: true)
+          .get();
+
       if (snap.docs.isEmpty) {
         if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('No active source')));
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('Koi active source nahi hai'),
+              backgroundColor: Colors.orange,
+            ),
+          );
         }
         return;
       }
+
       for (var doc in snap.docs) {
-        final url = doc['url'] as String;
-        debugPrint('Fetching RSS: $url');
-        final response = await http.get(Uri.parse(url), headers: {'User-Agent': 'Mozilla/5.0'}).timeout(const Duration(seconds: 20));
-        if (response.statusCode != 200) {
-          if (mounted) {
-            ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('HTTP ${response.statusCode} for ${doc['name']}')));
-          }
+        final data = doc.data();
+        final url = (data['url'] ?? '').toString().trim();
+        final name = (data['name'] ?? 'Unknown').toString();
+        final category = (data['category'] ?? 'PUBG').toString();
+
+        if (url.contains('...') || url.length < 20) {
+          try {
+            await doc.reference.delete();
+          } catch (_) {}
           continue;
         }
-        final document = XmlDocument.parse(response.body);
-        final items = document.findAllElements('item');
-        debugPrint('Found ${items.length} items in ${doc['name']}');
-        for (var item in items.take(2)) {
-          final title = item.getElement('title')?.innerText ?? 'No Title';
-          final link = item.getElement('link')?.innerText ?? '';
-          final desc = item.getElement('description')?.innerText ?? '';
-          final uniqueLink = link + '#${DateTime.now().millisecondsSinceEpoch}_$published';
-          await FirebaseFirestore.instance.collection('news').add({
-            'title': title,
-            'content': desc,
-            'imageUrl': '',
-            'link': uniqueLink,
-            'sourceName': doc['name'],
-            'category': doc['category'] ?? 'PUBG',
-            'isAuto': true,
-            'tag': 'AUTO',
-            'createdAt': FieldValue.serverTimestamp(),
-            'views': 0,
-          });
-          published++;
+
+        bool successForThisFeed = false;
+
+        // Try direct XML first
+        try {
+          final response = await http.get(
+            Uri.parse(url),
+            headers: {'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)'},
+          ).timeout(const Duration(seconds: 20));
+
+          if (response.statusCode == 200 && response.body.contains('<item')) {
+            final document = XmlDocument.parse(response.body);
+            final items = document.findAllElements('item');
+            for (var item in items.take(3)) {
+              final title = item.getElement('title')?.innerText.trim() ?? 'No Title';
+              final link = item.getElement('link')?.innerText.trim() ?? '';
+              final desc = item.getElement('description')?.innerText.trim() ?? '';
+              if (title.isEmpty) continue;
+
+              final uniqueLink = '$link#${DateTime.now().millisecondsSinceEpoch}_$published';
+              String imageUrl = '';
+              final enclosure = item.getElement('enclosure');
+              if (enclosure != null && enclosure.getAttribute('url') != null) {
+                imageUrl = enclosure.getAttribute('url')!;
+              }
+
+              try {
+                await FirebaseFirestore.instance.collection('news').add({
+                  'title': title,
+                  'content': desc,
+                  'imageUrl': imageUrl,
+                  'link': uniqueLink,
+                  'sourceName': name,
+                  'category': category,
+                  'isAuto': true,
+                  'tag': 'AUTO',
+                  'createdAt': FieldValue.serverTimestamp(),
+                  'views': 0,
+                });
+                published++;
+                successForThisFeed = true;
+              } on FirebaseException catch (fe) {
+                if (fe.code == 'permission-denied') {
+                  if (mounted) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(
+                        content: Text('Firestore Permission Denied! Update Firestore Rules.'),
+                        backgroundColor: Colors.red,
+                        duration: Duration(seconds: 10),
+                      ),
+                    );
+                  }
+                  return;
+                }
+                rethrow;
+              }
+            }
+          }
+        } catch (e) {
+          debugPrint('Direct XML error: $e');
+        }
+
+        // Fallback to rss2json
+        if (!successForThisFeed) {
+          try {
+            final apiUrl = 'https://api.rss2json.com/v1/api.json?rss_url=${Uri.encodeComponent(url)}';
+            final jsonRes = await http.get(Uri.parse(apiUrl)).timeout(const Duration(seconds: 20));
+            if (jsonRes.statusCode == 200) {
+              final jsonData = json.decode(jsonRes.body);
+              if (jsonData['status'] == 'ok') {
+                final List items = jsonData['items'] ?? [];
+                for (var item in items.take(3)) {
+                  final title = (item['title'] ?? 'No Title').toString().trim();
+                  final link = (item['link'] ?? '').toString().trim();
+                  final desc = (item['description'] ?? '').toString().trim();
+                  if (title.isEmpty) continue;
+
+                  final uniqueLink = '$link#${DateTime.now().millisecondsSinceEpoch}_$published';
+                  String imageUrl = '';
+                  if (item['enclosure'] != null && item['enclosure'] is Map && item['enclosure']['link'] != null) {
+                    imageUrl = item['enclosure']['link'].toString();
+                  } else if (item['thumbnail'] != null) {
+                    imageUrl = item['thumbnail'].toString();
+                  }
+
+                  try {
+                    await FirebaseFirestore.instance.collection('news').add({
+                      'title': title,
+                      'content': desc,
+                      'imageUrl': imageUrl,
+                      'link': uniqueLink,
+                      'sourceName': name,
+                      'category': category,
+                      'isAuto': true,
+                      'tag': 'AUTO',
+                      'createdAt': FieldValue.serverTimestamp(),
+                      'views': 0,
+                    });
+                    published++;
+                    successForThisFeed = true;
+                  } on FirebaseException catch (fe) {
+                    if (fe.code == 'permission-denied') {
+                      if (mounted) {
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          const SnackBar(
+                            content: Text('Firestore Permission Denied! Update Firestore Rules.'),
+                            backgroundColor: Colors.red,
+                            duration: Duration(seconds: 10),
+                          ),
+                        );
+                      }
+                      return;
+                    }
+                    rethrow;
+                  }
+                }
+              }
+            }
+          } catch (e) {
+            debugPrint('rss2json error: $e');
+          }
         }
       }
+
       _publishedCount = published;
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('SUCCESS: $published news published!'), backgroundColor: Colors.green, duration: const Duration(seconds: 5)));
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(published > 0
+                ? 'SUCCESS: $published news published!'
+                : '0 news - Saare feeds up to date hain ya URL galat hai'),
+            backgroundColor: published > 0 ? Colors.green : Colors.orange,
+            duration: const Duration(seconds: 5),
+          ),
+        );
       }
     } catch (e, st) {
       debugPrint('SYNC ERROR $e $st');
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Error: $e'), backgroundColor: Colors.red, duration: const Duration(seconds: 10)));
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Error: $e'),
+            backgroundColor: Colors.red,
+            duration: const Duration(seconds: 10),
+          ),
+        );
       }
     } finally {
       if (mounted) {
