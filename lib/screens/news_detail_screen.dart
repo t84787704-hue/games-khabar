@@ -39,6 +39,7 @@ class NewsDetailScreen extends StatefulWidget {
 
 class _NewsDetailScreenState extends State<NewsDetailScreen> {
   String? youtubeId;
+  String? get videoId => youtubeId;
   YoutubePlayerController? _youtubeController;
   bool _hasVideoError = false;
 
@@ -473,30 +474,9 @@ class _NewsDetailScreenState extends State<NewsDetailScreen> {
                                 ),
                               ),
                             )
-                          : Stack(
-                              alignment: Alignment.center,
-                              children: [
-                                YoutubePlayer(
-                                  controller: _youtubeController!,
-                                  aspectRatio: 16 / 9,
-                                ),
-                                YoutubeValueBuilder(
-                                  controller: _youtubeController!,
-                                  builder: (context, value) {
-                                    if (!value.isReady) {
-                                      return Container(
-                                        color: Colors.black,
-                                        alignment: Alignment.center,
-                                        child: const CircularProgressIndicator(
-                                          color: neonGreen,
-                                          strokeWidth: 2.5,
-                                        ),
-                                      );
-                                    }
-                                    return const SizedBox.shrink();
-                                  },
-                                ),
-                              ],
+                          : YoutubePlayer(
+                              controller: _youtubeController!,
+                              aspectRatio: 16 / 9,
                             ),
                     ),
                   ),
@@ -535,7 +515,7 @@ class _NewsDetailScreenState extends State<NewsDetailScreen> {
                 ],
 
                 // 5. Direct Video Link Button (for non-YouTube direct MP4/stream video links only)
-                if (widget.news.videoUrl != null && widget.news.videoUrl!.isNotEmpty && videoId == null) ...[
+                if (widget.news.videoUrl != null && widget.news.videoUrl!.isNotEmpty && youtubeId == null) ...[
                   SizedBox(
                     width: double.infinity,
                     height: 48,
