@@ -22,37 +22,22 @@ class _ManageNewsScreenState extends State<ManageNewsScreen> {
   int _publishedCount = 0;
 
   Future<void> _syncFeedsClientSide() async {
-    if (_isSyncing) return;
-    setState(() => _isSyncing = true);
+    if(_isSyncing) return;
+    setState(()=> _isSyncing=true);
     int published = 0;
-    try {
-      // Sirf 1 active feed lo test ke liye - PUBG Google
-      final snap = await FirebaseFirestore.instance.collection('rss_sources').where('isActive', isEqualTo: true).limit(1).get();
-      if (snap.docs.isEmpty) {
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('No active source')));
-        }
-        return;
-      }
-      for (var doc in snap.docs) {
+    try{
+      final snap = await FirebaseFirestore.instance.collection('rss_sources').where('isActive', isEqualTo:true).limit(1).get();
+      for(var doc in snap.docs){
         final url = doc['url'] as String;
-        debugPrint('Fetching RSS: $url');
-        final response = await http.get(Uri.parse(url), headers: {'User-Agent': 'Mozilla/5.0'}).timeout(const Duration(seconds: 20));
-        if (response.statusCode != 200) {
-          if (mounted) {
-            ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('HTTP ${response.statusCode} for ${doc['name']}')));
-          }
-          continue;
-        }
+        final response = await http.get(Uri.parse(url), headers: {'User-Agent':'Mozilla/5.0'}).timeout(Duration(seconds:20));
+        if(response.statusCode!=200) continue;
         final document = XmlDocument.parse(response.body);
         final items = document.findAllElements('item');
-        debugPrint('Found ${items.length} items in ${doc['name']}');
-        for (var item in items.take(2)) {
+        for(var item in items.take(2)){
           final title = item.getElement('title')?.innerText ?? 'No Title';
           final link = item.getElement('link')?.innerText ?? '';
           final desc = item.getElement('description')?.innerText ?? '';
-          // Force unique link taake duplicate check rok na sake
-          final uniqueLink = link + '#${DateTime.now().millisecondsSinceEpoch}_$published';
+          final uniqueLink = link + '#${DateTime.now().millisecondsSinceEpoch}_${published}';
           await FirebaseFirestore.instance.collection('news').add({
             'title': title,
             'content': desc,
@@ -70,16 +55,15 @@ class _ManageNewsScreenState extends State<ManageNewsScreen> {
       }
       _publishedCount = published;
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('SUCCESS: $published news published!'), backgroundColor: Colors.green, duration: const Duration(seconds: 5)));
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('SUCCESS: $published news published!'), backgroundColor: Colors.green));
       }
-    } catch (e, st) {
-      debugPrint('SYNC ERROR $e $st');
+    }catch(e){
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Error: $e'), backgroundColor: Colors.red, duration: const Duration(seconds: 10)));
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Error: $e'), backgroundColor: Colors.red, duration: Duration(seconds:10)));
       }
-    } finally {
+    }finally{
       if (mounted) {
-        setState(() => _isSyncing = false);
+        setState(()=> _isSyncing=false);
       }
     }
   }
