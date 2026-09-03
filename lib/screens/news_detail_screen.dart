@@ -5,7 +5,7 @@ import 'package:flutter/gestures.dart';
 import 'package:easy_localization/easy_localization.dart';
 import 'package:share_plus/share_plus.dart';
 import 'package:url_launcher/url_launcher.dart';
-import 'package:youtube_player_flutter/youtube_player_flutter.dart';
+import 'package:youtube_player_iframe/youtube_player_iframe.dart';
 import '../models/news_model.dart';
 import '../widgets/app_image_view.dart';
 import '../widgets/native_ad_widget.dart';
@@ -13,20 +13,20 @@ import '../services/bookmark_service.dart';
 import '../services/firestore_service.dart';
 import '../services/ad_free_service.dart';
 
-/// Robust ID extractor - shorts + share
-String? getYoutubeId(String? url) {
+/// Robust YouTube ID extractor matching standard, embed, shorts, and youtu.be URLs
+String? extractYoutubeId(String? url) {
   if (url == null) return null;
   final cleanUrl = url.trim();
   if (cleanUrl.isEmpty) return null;
-  try {
-    final converted = YoutubePlayer.convertUrlToId(cleanUrl);
-    if (converted != null && converted.isNotEmpty) {
-      return converted;
-    }
-  } catch (_) {}
-  final reg = RegExp(r'(?:youtube\.com\/(?:watch\?v=|embed\/|shorts\/)|youtu\.be\/)([^&?\/\s]+)');
+  if (RegExp(r'^[a-zA-Z0-9_-]{11}$').hasMatch(cleanUrl)) {
+    return cleanUrl;
+  }
+  final reg = RegExp(r'(?:v=|\/embed\/|\/shorts\/|youtu\.be\/)([a-zA-Z0-9_-]{11})');
   return reg.firstMatch(cleanUrl)?.group(1);
 }
+
+/// Backward compatibility alias
+String? getYoutubeId(String? url) => extractYoutubeId(url);
 
 class NewsDetailScreen extends StatefulWidget {
   final NewsModel news;
@@ -38,8 +38,9 @@ class NewsDetailScreen extends StatefulWidget {
 }
 
 class _NewsDetailScreenState extends State<NewsDetailScreen> {
-  String? videoId;
-  YoutubePlayerController? _ytController;
+  String? youtubeId;
+  YoutubePlayerController? _youtubeController;
+  bool _hasVideoError = false;
 
   static const Color neonGreen = Color(0xFF00FF88);
   static const Color scaffoldBg = Color(0xFF121318);
@@ -53,21 +54,43 @@ class _NewsDetailScreenState extends State<NewsDetailScreen> {
   @override
   void initState() {
     super.initState();
-    final String url = widget.news.videoUrl ?? widget.news.sourceUrl ?? widget.news.imageUrl;
-    videoId = widget.news.youtubeId ?? getYoutubeId(url);
+    _initVideoPlayer();
+  }
 
-    if (videoId != null && videoId!.isNotEmpty) {
-      _ytController = YoutubePlayerController(
-        initialVideoId: videoId!,
-        flags: const YoutubePlayerFlags(
-          autoPlay: true,
+  void _initVideoPlayer() {
+    final rawVideoUrl = widget.news.videoUrl;
+    final String? candidateUrl = (rawVideoUrl != null && rawVideoUrl.trim().isNotEmpty)
+        ? rawVideoUrl.trim()
+        : (widget.news.youtubeId?.isNotEmpty == true
+            ? 'https://www.youtube.com/watch?v=${widget.news.youtubeId}'
+            : widget.news.sourceUrl);
+
+    final bool videoDeclared = (rawVideoUrl != null && rawVideoUrl.trim().isNotEmpty) ||
+        (widget.news.youtubeId != null && widget.news.youtubeId!.trim().isNotEmpty);
+
+    final extracted = extractYoutubeId(candidateUrl);
+
+    if (videoDeclared && (extracted == null || extracted.isEmpty)) {
+      _hasVideoError = true;
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              backgroundColor: alertRed,
+              content: Text('Invalid video URL', style: TextStyle(color: textWhite)),
+            ),
+          );
+        }
+      });
+    } else if (extracted != null && extracted.isNotEmpty) {
+      youtubeId = extracted;
+      _youtubeController = YoutubePlayerController.fromVideoId(
+        videoId: youtubeId!,
+        autoPlay: false,
+        params: const YoutubePlayerParams(
+          showFullscreenButton: true,
           mute: false,
-          enableCaption: false,
-          isLive: false,
-          forceHD: false,
-          hideControls: false,
-          controlsVisibleAtStart: true,
-          useHybridComposition: true,
+          showControls: true,
         ),
       );
     }
@@ -75,7 +98,7 @@ class _NewsDetailScreenState extends State<NewsDetailScreen> {
 
   @override
   void dispose() {
-    _ytController?.dispose();
+    _youtubeController?.close();
     super.dispose();
   }
 
@@ -104,7 +127,7 @@ class _NewsDetailScreenState extends State<NewsDetailScreen> {
   }
 
   String _cleanContentText(String text) {
-    if (videoId != null) {
+    if (youtubeId != null) {
       return text
           .replaceAll(
             RegExp(r'https?:\/\/(?:www\.)?(?:youtube\.com\/[^\s]+|youtu\.be\/[^\s]+)'),
@@ -261,7 +284,7 @@ class _NewsDetailScreenState extends State<NewsDetailScreen> {
     final rawDescription = widget.news.getDescription(langCode);
     final displayDescription = _cleanContentText(rawDescription);
     final directUrl = _extractSourceUrl(rawDescription);
-    final hasVideo = videoId != null || (widget.news.videoUrl != null && widget.news.videoUrl!.isNotEmpty);
+    final hasVideo = youtubeId != null || (widget.news.videoUrl != null && widget.news.videoUrl!.isNotEmpty);
 
     final paragraphs = displayDescription
         .split(RegExp(r'\n\s*\n'))
@@ -271,8 +294,7 @@ class _NewsDetailScreenState extends State<NewsDetailScreen> {
     final firstParagraph = paragraphs.isNotEmpty ? paragraphs.first : displayDescription;
     final remainingParagraphs = paragraphs.length > 1 ? paragraphs.sublist(1) : <String>[];
 
-    Widget buildScaffold({Widget? playerWidget}) {
-      return Scaffold(
+    return Scaffold(
         backgroundColor: scaffoldBg,
         extendBody: false,
         resizeToAvoidBottomInset: true,
@@ -423,23 +445,73 @@ class _NewsDetailScreenState extends State<NewsDetailScreen> {
                 const SizedBox(height: 16),
 
                 // 4. Video / Media Area
-                if (playerWidget != null) ...[
+                if (_youtubeController != null || _hasVideoError) ...[
                   ClipRRect(
                     borderRadius: BorderRadius.circular(14),
                     child: SizedBox(
                       height: 220,
                       width: double.infinity,
-                      child: AspectRatio(
-                        aspectRatio: 16 / 9,
-                        child: playerWidget,
-                      ),
+                      child: _hasVideoError
+                          ? Container(
+                              color: cardDark,
+                              padding: const EdgeInsets.symmetric(horizontal: 16),
+                              child: const Center(
+                                child: Row(
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    Icon(Icons.error_outline_rounded, color: alertRed, size: 22),
+                                    SizedBox(width: 8),
+                                    Text(
+                                      'Invalid video URL',
+                                      style: TextStyle(
+                                        color: textWhite,
+                                        fontWeight: FontWeight.bold,
+                                        fontSize: 14,
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            )
+                          : Stack(
+                              alignment: Alignment.center,
+                              children: [
+                                YoutubePlayer(
+                                  controller: _youtubeController!,
+                                  aspectRatio: 16 / 9,
+                                ),
+                                YoutubeValueBuilder(
+                                  controller: _youtubeController!,
+                                  builder: (context, value) {
+                                    if (!value.isReady) {
+                                      return Container(
+                                        color: Colors.black,
+                                        alignment: Alignment.center,
+                                        child: const CircularProgressIndicator(
+                                          color: neonGreen,
+                                          strokeWidth: 2.5,
+                                        ),
+                                      );
+                                    }
+                                    return const SizedBox.shrink();
+                                  },
+                                ),
+                              ],
+                            ),
                     ),
                   ),
                   const SizedBox(height: 8),
                   Align(
                     alignment: Alignment.centerRight,
                     child: TextButton.icon(
-                      onPressed: () => _launchExternalUrl(context, 'https://www.youtube.com/watch?v=$videoId'),
+                      onPressed: () {
+                        final rawUrl = (widget.news.videoUrl != null && widget.news.videoUrl!.trim().isNotEmpty)
+                            ? widget.news.videoUrl!.trim()
+                            : (youtubeId != null ? 'https://www.youtube.com/watch?v=$youtubeId' : '');
+                        if (rawUrl.isNotEmpty) {
+                          _launchExternalUrl(context, rawUrl);
+                        }
+                      },
                       icon: const Icon(Icons.open_in_new, size: 14, color: textGray),
                       label: const Text(
                         'Watch in YouTube App',
@@ -767,27 +839,5 @@ class _NewsDetailScreenState extends State<NewsDetailScreen> {
         ),
       ),
     );
-    }
-
-    if (_ytController != null) {
-      return YoutubePlayerBuilder(
-        player: YoutubePlayer(
-          controller: _ytController!,
-          showVideoProgressIndicator: true,
-          progressIndicatorColor: alertRed,
-          progressColors: const ProgressBarColors(
-            playedColor: alertRed,
-            handleColor: Colors.redAccent,
-            bufferedColor: Colors.white24,
-            backgroundColor: Colors.grey,
-          ),
-        ),
-        builder: (context, player) {
-          return buildScaffold(playerWidget: player);
-        },
-      );
-    }
-
-    return buildScaffold();
   }
 }

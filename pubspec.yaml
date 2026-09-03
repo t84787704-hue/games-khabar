@@ -27,7 +27,8 @@ dependencies:
   google_fonts: ^6.2.1
   translator: ^1.0.3
   webview_flutter: ^4.7.0
-  youtube_player_flutter: ^9.0.1
+  youtube_player_flutter: ^9.0.3
+  youtube_player_iframe: ^5.1.2
   cloud_functions: ^4.7.0
   xml: ^6.5.0
 
