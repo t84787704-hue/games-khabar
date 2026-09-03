@@ -1,0 +1,20 @@
+name: Fetch Steam News Every Hour
+
+on:
+  schedule:
+    - cron: '0 * * * *' # har ghante chalega
+  workflow_dispatch: # manual button bhi
+
+jobs:
+  fetch-news:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+      - uses: actions/setup-node@v3
+        with:
+          node-version: '18'
+      - run: npm install axios firebase-admin
+      - name: Run Script
+        env:
+          FIREBASE_SERVICE_ACCOUNT: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
+        run: node scripts/fetchSteamNews.js
