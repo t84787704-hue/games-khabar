@@ -673,4 +673,371 @@ class _HomeScreenState extends State<HomeScreen> {
                             children: [
                               AppImageView(
                                 imageUrl: featuredNews!.imageUrl,
-                                fit: BoxFit.cover
+                                fit: BoxFit.cover,
+                              ),
+                              // IGN Dramatic Black Gradient Overlay
+                              Container(
+                                decoration: BoxDecoration(
+                                  gradient: LinearGradient(
+                                    begin: Alignment.topCenter,
+                                    end: Alignment.bottomCenter,
+                                    colors: [
+                                      Colors.transparent,
+                                      Colors.black.withOpacity(0.4),
+                                      Colors.black.withOpacity(0.95),
+                                    ],
+                                    stops: const [0.0, 0.4, 1.0],
+                                  ),
+                                ),
+                              ),
+                              // Featured Badge Top Left
+                              Positioned(
+                                top: 12,
+                                left: 12,
+                                child: Row(
+                                  children: [
+                                    Container(
+                                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                                      decoration: BoxDecoration(
+                                        color: neonGreen,
+                                        borderRadius: BorderRadius.circular(4),
+                                      ),
+                                      child: const Text(
+                                        'FEATURED',
+                                        style: TextStyle(
+                                          color: Color(0xFF05080D),
+                                          fontSize: 10,
+                                          fontWeight: FontWeight.w900,
+                                          letterSpacing: 0.5,
+                                        ),
+                                      ),
+                                    ),
+                                    if (featuredNews!.videoUrl != null && featuredNews!.videoUrl!.isNotEmpty) ...[
+                                      const SizedBox(width: 6),
+                                      Container(
+                                        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 4),
+                                        decoration: BoxDecoration(
+                                          color: const Color(0xFFFF4655),
+                                          borderRadius: BorderRadius.circular(4),
+                                        ),
+                                        child: Row(
+                                          mainAxisSize: MainAxisSize.min,
+                                          children: const [
+                                            Icon(Icons.play_arrow_rounded, color: Colors.white, size: 12),
+                                            SizedBox(width: 2),
+                                            Text(
+                                              'VIDEO',
+                                              style: TextStyle(
+                                                color: Colors.white,
+                                                fontSize: 9,
+                                                fontWeight: FontWeight.w900,
+                                              ),
+                                            ),
+                                          ],
+                                        ),
+                                      ),
+                                    ],
+                                  ],
+                                ),
+                              ),
+                              // Bookmark Action Button
+                              Positioned(
+                                top: 10,
+                                right: 10,
+                                child: ValueListenableBuilder<Set<String>>(
+                                  valueListenable: BookmarkService.bookmarkedIdsNotifier,
+                                  builder: (context, ids, _) {
+                                    final isSaved = ids.contains(featuredNews!.id);
+                                    return GestureDetector(
+                                      onTap: () => _toggleBookmark(featuredNews!),
+                                      child: Container(
+                                        padding: const EdgeInsets.all(6),
+                                        decoration: BoxDecoration(
+                                          color: Colors.black.withOpacity(0.65),
+                                          shape: BoxShape.circle,
+                                        ),
+                                        child: Icon(
+                                          isSaved ? Icons.bookmark_rounded : Icons.bookmark_border_rounded,
+                                          color: isSaved ? neonGreen : textWhite,
+                                          size: 18,
+                                        ),
+                                      ),
+                                    );
+                                  },
+                                ),
+                              ),
+                              // Title & Time Overlay
+                              Positioned(
+                                bottom: 12,
+                                left: 12,
+                                right: 12,
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Text(
+                                      featuredNews!.getTitle(langCode),
+                                      maxLines: 2,
+                                      overflow: TextOverflow.ellipsis,
+                                      style: TextStyle(
+                                        color: textWhite,
+                                        fontSize: 16,
+                                        fontWeight: FontWeight.w900,
+                                        height: 1.25,
+                                      ),
+                                    ),
+                                    const SizedBox(height: 6),
+                                    Row(
+                                      children: [
+                                        Text(
+                                          featuredNews!.category.toUpperCase(),
+                                          style: TextStyle(
+                                            color: neonGreen,
+                                            fontSize: 10,
+                                            fontWeight: FontWeight.bold,
+                                          ),
+                                        ),
+                                        const SizedBox(width: 8),
+                                        Text('•', style: TextStyle(color: textGray, fontSize: 11)),
+                                        const SizedBox(width: 8),
+                                        Text(
+                                          featuredNews!.timeAgo,
+                                          style: TextStyle(color: textGray, fontSize: 11),
+                                        ),
+                                      ],
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+
+              // "LATEST NEWS" Heading with Green Line
+              SliverToBoxAdapter(
+                child: Padding(
+                  padding: const EdgeInsets.fromLTRB(16, 4, 16, 12),
+                  child: Row(
+                    children: [
+                      Container(
+                        width: 4,
+                        height: 18,
+                        decoration: BoxDecoration(
+                          color: neonGreen,
+                          borderRadius: BorderRadius.circular(2),
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                      Text(
+                        selectedCategory == 'All' ? 'latest_news'.tr() : selectedCategory.toUpperCase(),
+                        style: TextStyle(
+                          color: textWhite,
+                          fontSize: 16,
+                          fontWeight: FontWeight.w900,
+                          letterSpacing: 1.0,
+                        ),
+                      ),
+                      const Spacer(),
+                      Text(
+                        'articles_count'.tr(args: ['${remainingNews.length}']),
+                        style: TextStyle(color: textGray, fontSize: 12),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+
+              // Latest News List with Native Ad after every 3 articles
+              if (remainingNews.isNotEmpty)
+                SliverPadding(
+                  padding: const EdgeInsets.only(bottom: 90),
+                  sliver: SliverList(
+                    delegate: SliverChildBuilderDelegate(
+                      (context, index) {
+                        final item = remainingNews[index];
+                        return Column(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Padding(
+                              padding: const EdgeInsets.fromLTRB(16, 0, 16, 10),
+                              child: Material(
+                                color: Colors.transparent,
+                                child: InkWell(
+                                  onTap: () => _navigateToDetail(item),
+                                  borderRadius: BorderRadius.circular(12),
+                                  splashColor: neonGreen.withOpacity(0.15),
+                                  highlightColor: neonGreen.withOpacity(0.08),
+                                  child: Container(
+                                    height: 110,
+                                    decoration: BoxDecoration(
+                                      color: cardDark,
+                                      borderRadius: BorderRadius.circular(12),
+                                      border: Border.all(color: borderDark),
+                                    ),
+                                    child: Row(
+                                      children: [
+                                        // Left Image (120px)
+                                        ClipRRect(
+                                          borderRadius: const BorderRadius.horizontal(left: Radius.circular(11)),
+                                          child: SizedBox(
+                                            width: 120,
+                                            height: double.infinity,
+                                            child: Stack(
+                                              fit: StackFit.expand,
+                                              children: [
+                                                AppImageView(
+                                                  imageUrl: item.imageUrl,
+                                                  fit: BoxFit.cover,
+                                                ),
+                                                if (item.videoUrl != null && item.videoUrl!.isNotEmpty)
+                                                  Center(
+                                                    child: Container(
+                                                      padding: const EdgeInsets.all(6),
+                                                      decoration: BoxDecoration(
+                                                        color: Colors.black.withOpacity(0.65),
+                                                        shape: BoxShape.circle,
+                                                        border: Border.all(color: const Color(0xFFFF4655), width: 1.5),
+                                                      ),
+                                                      child: const Icon(
+                                                        Icons.play_arrow_rounded,
+                                                        color: Color(0xFFFF4655),
+                                                        size: 18,
+                                                      ),
+                                                    ),
+                                                  ),
+                                              ],
+                                            ),
+                                          ),
+                                        ),
+                                        // Right Content
+                                        Expanded(
+                                          child: Padding(
+                                            padding: const EdgeInsets.all(10.0),
+                                            child: Column(
+                                              crossAxisAlignment: CrossAxisAlignment.start,
+                                              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                              children: [
+                                                Row(
+                                                  children: [
+                                                    Container(
+                                                      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                                                      decoration: BoxDecoration(
+                                                        color: neonGreen.withOpacity(0.15),
+                                                        borderRadius: BorderRadius.circular(4),
+                                                        border: Border.all(color: neonGreen.withOpacity(0.5)),
+                                                      ),
+                                                      child: Text(
+                                                        item.category.toUpperCase(),
+                                                        style: TextStyle(
+                                                          color: neonGreen,
+                                                          fontSize: 9,
+                                                          fontWeight: FontWeight.w900,
+                                                        ),
+                                                      ),
+                                                    ),
+                                                    const Spacer(),
+                                                    Text(
+                                                      item.timeAgo,
+                                                      style: TextStyle(color: textGray, fontSize: 10),
+                                                    ),
+                                                  ],
+                                                ),
+                                                Text(
+                                                  item.getTitle(langCode),
+                                                  maxLines: 2,
+                                                  overflow: TextOverflow.ellipsis,
+                                                  style: TextStyle(
+                                                    color: textWhite,
+                                                    fontSize: 13,
+                                                    fontWeight: FontWeight.w800,
+                                                    height: 1.25,
+                                                  ),
+                                                ),
+                                                Row(
+                                                  children: [
+                                                    Icon(Icons.visibility_outlined, color: textGray, size: 12),
+                                                    const SizedBox(width: 4),
+                                                    Text(
+                                                      '${item.views}',
+                                                      style: TextStyle(color: textGray, fontSize: 10),
+                                                    ),
+                                                    const Spacer(),
+                                                    ValueListenableBuilder<Set<String>>(
+                                                      valueListenable: BookmarkService.bookmarkedIdsNotifier,
+                                                      builder: (context, ids, _) {
+                                                        final isSaved = ids.contains(item.id);
+                                                        return GestureDetector(
+                                                          onTap: () => _toggleBookmark(item),
+                                                          child: Padding(
+                                                            padding: const EdgeInsets.all(2.0),
+                                                            child: Icon(
+                                                              isSaved ? Icons.bookmark_rounded : Icons.bookmark_border_rounded,
+                                                              color: isSaved ? neonGreen : textGray,
+                                                              size: 17,
+                                                            ),
+                                                          ),
+                                                        );
+                                                      },
+                                                    ),
+                                                  ],
+                                                ),
+                                              ],
+                                            ),
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                  ),
+                                ),
+                              ),
+                            ),
+                            // Show Native Ad after every 3 articles (index % 3 == 2) only when NOT ad-free
+                            ValueListenableBuilder<DateTime?>(
+                              valueListenable: AdFreeService.adFreeUntilNotifier,
+                              builder: (context, adFreeUntil, _) {
+                                final isAdFree = AdFreeService().isAdFree;
+                                if (!isAdFree && index % 3 == 2) {
+                                  return const NativeAdWidget();
+                                }
+                                return const SizedBox.shrink();
+                              },
+                            ),
+                          ],
+                        );
+                      },
+                      childCount: remainingNews.length,
+                    ),
+                  ),
+                ),
+
+              if (filteredList.isEmpty)
+                SliverToBoxAdapter(
+                  child: Padding(
+                    padding: const EdgeInsets.all(40.0),
+                    child: Center(
+                      child: Column(
+                        children: [
+                          Icon(Icons.search_off_rounded, color: textGray, size: 48),
+                          const SizedBox(height: 12),
+                          Text(
+                            'No articles found',
+                            style: TextStyle(color: textWhite, fontWeight: FontWeight.bold),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                ),
+            ],
+          ),
+        );
+      },
+    ),
+  );
+      },
+    );
+  }
+}
