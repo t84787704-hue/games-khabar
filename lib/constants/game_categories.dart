@@ -1,0 +1,20 @@
+const List<String> gameCategories = [
+  "All",
+  "Open World",
+  "Driving Games",
+  "Racing Games",
+  "Simulator Games",
+  "Battle Royale",
+  "FPS / Shooting",
+  "Action Games",
+  "Adventure Games",
+  "Survival Games",
+  "Sports Games",
+  "Strategy Games",
+  "Horror Games",
+  "Multiplayer Games",
+  "Offline Games",
+  "Truck Simulator",
+  "Car Simulator",
+  "Bike Games"
+];

@@ -10,6 +10,7 @@ import '../widgets/app_image_view.dart';
 import '../utils/admin_security.dart';
 import '../services/notification_service.dart';
 import '../services/translation_service.dart';
+import '../constants/game_categories.dart';
 
 /// Helper function to extract 11-char YouTube video ID from various YouTube URL formats or direct ID
 String? extractYoutubeId(String? url) {
@@ -80,14 +81,8 @@ class _AddNewsScreenState extends State<AddNewsScreen> {
   String? _base64ImageUrl;
   Uint8List? _localImageBytes;
 
-  static const List<String> categories = [
-    'BGMI',
-    'Free Fire',
-    'PUBG',
-    'COD',
-    'Valorant',
-    'Gaming News',
-  ];
+  List<String> get availableCategories =>
+      gameCategories.where((cat) => cat != 'All').toList();
 
   static const Color neonGreen = Color(0xFF00FF88);
   static const Color bgDark = Color(0xFF0A0A0F);
@@ -135,10 +130,11 @@ class _AddNewsScreenState extends State<AddNewsScreen> {
       }
     }
 
-    if (item != null && categories.contains(item.category)) {
+    final categoriesList = availableCategories;
+    if (item != null && item.category.isNotEmpty) {
       _selectedCategory = item.category;
     } else {
-      _selectedCategory = 'BGMI';
+      _selectedCategory = categoriesList.isNotEmpty ? categoriesList.first : 'Open World';
     }
     _isFeatured = item?.isFeatured ?? false;
   }
@@ -475,52 +471,78 @@ class _AddNewsScreenState extends State<AddNewsScreen> {
                 style: TextStyle(color: textWhite, fontSize: 13, fontWeight: FontWeight.bold),
               ),
               const SizedBox(height: 8),
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 14),
-                decoration: BoxDecoration(
-                  color: cardDark,
-                  borderRadius: BorderRadius.circular(12),
-                  border: Border.all(color: borderDark),
+              DropdownButtonFormField<String>(
+                value: {
+                  ...gameCategories.where((cat) => cat != 'All'),
+                  if (_selectedCategory.isNotEmpty) _selectedCategory,
+                }.contains(_selectedCategory)
+                    ? _selectedCategory
+                    : (availableCategories.isNotEmpty ? availableCategories.first : 'Open World'),
+                dropdownColor: cardDark,
+                isExpanded: true,
+                icon: Icon(Icons.keyboard_arrow_down, color: neonGreen),
+                style: TextStyle(
+                  color: textWhite,
+                  fontSize: 14,
+                  fontWeight: FontWeight.bold,
                 ),
-                child: DropdownButtonHideUnderline(
-                  child: DropdownButton<String>(
-                    value: _selectedCategory,
-                    dropdownColor: cardDark,
-                    isExpanded: true,
-                    icon: Icon(Icons.keyboard_arrow_down, color: neonGreen),
-                    style: TextStyle(
-                      color: textWhite,
-                      fontSize: 14,
-                      fontWeight: FontWeight.bold,
-                    ),
-                    items: categories.map((cat) {
-                      return DropdownMenuItem<String>(
-                        value: cat,
-                        child: Row(
-                          children: [
-                            Container(
-                              width: 8,
-                              height: 8,
-                              decoration: BoxDecoration(
-                                color: neonGreen,
-                                shape: BoxShape.circle,
-                              ),
-                            ),
-                            const SizedBox(width: 10),
-                            Text(cat),
-                          ],
-                        ),
-                      );
-                    }).toList(),
-                    onChanged: (val) {
-                      if (val != null) {
-                        setState(() {
-                          _selectedCategory = val;
-                        });
-                      }
-                    },
+                decoration: InputDecoration(
+                  filled: true,
+                  fillColor: cardDark,
+                  contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                  border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(12),
+                    borderSide: BorderSide(color: borderDark),
+                  ),
+                  enabledBorder: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(12),
+                    borderSide: BorderSide(color: borderDark),
+                  ),
+                  focusedBorder: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(12),
+                    borderSide: BorderSide(color: neonGreen, width: 1.5),
                   ),
                 ),
+                items: {
+                  ...gameCategories.where((cat) => cat != 'All'),
+                  if (_selectedCategory.isNotEmpty) _selectedCategory,
+                }.map((cat) {
+                  return DropdownMenuItem<String>(
+                    value: cat,
+                    child: Row(
+                      children: [
+                        Container(
+                          width: 8,
+                          height: 8,
+                          decoration: BoxDecoration(
+                            color: neonGreen,
+                            shape: BoxShape.circle,
+                          ),
+                        ),
+                        const SizedBox(width: 10),
+                        Expanded(
+                          child: Text(
+                            cat,
+                            overflow: TextOverflow.ellipsis,
+                            style: TextStyle(color: textWhite, fontSize: 14),
+                          ),
+                        ),
+                      ],
+                    ),
+                  );
+                }).toList(),
+                onChanged: (val) {
+                  if (val != null) {
+                    setState(() {
+                      _selectedCategory = val;
+                    });
+                  }
+                },
+                onSaved: (val) {
+                  if (val != null) {
+                    _selectedCategory = val;
+                  }
+                },
               ),
               const SizedBox(height: 18),
 

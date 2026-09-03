@@ -13,6 +13,7 @@ import '../services/language_service.dart';
 import '../services/ad_free_service.dart';
 import '../widgets/app_image_view.dart';
 import '../widgets/native_ad_widget.dart';
+import '../constants/game_categories.dart';
 import 'news_detail_screen.dart';
 import 'saved_news_screen.dart';
 import 'profile_screen.dart';
@@ -28,7 +29,8 @@ class _HomeScreenState extends State<HomeScreen> {
   int _selectedNavIndex = 0;
   final FirestoreService _firestoreService = FirestoreService();
   final BookmarkService _bookmarkService = BookmarkService();
-  String _selectedCategory = 'All';
+  String selectedCategory = "All";
+  String get _selectedCategory => selectedCategory;
   bool _isSearching = false;
   String _searchQuery = '';
   final TextEditingController _searchController = TextEditingController();
@@ -103,27 +105,11 @@ class _HomeScreenState extends State<HomeScreen> {
     }
   }
 
-  final List<String> _categories = [
-    'All',
-    'BGMI',
-    'Free Fire',
-    'PUBG',
-    'COD',
-    'Valorant',
-    'Gaming News',
-  ];
-
   String _getCategoryDisplayName(String cat) {
-    switch (cat.toLowerCase()) {
-      case 'all':
-        return 'category_all'.tr();
-      case 'gaming news':
-        return 'category_gaming_news'.tr();
-      case 'valorant':
-        return 'category_valorant'.tr();
-      default:
-        return cat;
+    if (cat.toLowerCase() == 'all') {
+      return 'category_all'.tr();
     }
+    return cat;
   }
 
   void _navigateToDetail(NewsModel? news) {
@@ -265,7 +251,7 @@ class _HomeScreenState extends State<HomeScreen> {
       appBar: _selectedNavIndex != 0
           ? null
           : AppBar(
-              backgroundColor: cardDark,
+              backgroundColor: const Color(0xFF0A2A1F),
               elevation: 0,
               centerTitle: false,
               titleSpacing: 12,
@@ -289,14 +275,18 @@ class _HomeScreenState extends State<HomeScreen> {
                       ),
                     ),
                   ),
-                  const SizedBox(width: 6),
-                  Text(
-                    'GAMES KHABAR',
-                    style: TextStyle(
-                      color: textWhite,
-                      fontWeight: FontWeight.w900,
-                      fontSize: 15,
-                      letterSpacing: 0.8,
+                  const SizedBox(width: 8),
+                  Flexible(
+                    child: Text(
+                      'GAMES KHABAR',
+                      overflow: TextOverflow.ellipsis,
+                      maxLines: 1,
+                      style: TextStyle(
+                        color: textWhite,
+                        fontWeight: FontWeight.w900,
+                        fontSize: 15,
+                        letterSpacing: 0.8,
+                      ),
                     ),
                   ),
                 ],
@@ -313,26 +303,29 @@ class _HomeScreenState extends State<HomeScreen> {
                         return ValueListenableBuilder<bool>(
                           valueListenable: AdFreeService.isLoadingAdNotifier,
                           builder: (context, isLoading, _) {
+                            final screenWidth = MediaQuery.of(context).size.width;
+                            final isSmallScreen = screenWidth < 360;
+
                             if (isAdFree) {
                               return Center(
                                 child: Container(
-                                  margin: const EdgeInsets.symmetric(vertical: 8, horizontal: 4),
-                                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 5),
+                                  margin: const EdgeInsets.symmetric(vertical: 10, horizontal: 4),
+                                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
                                   decoration: BoxDecoration(
                                     color: neonGreen.withOpacity(0.12),
-                                    borderRadius: BorderRadius.circular(16),
+                                    borderRadius: BorderRadius.circular(20),
                                     border: Border.all(color: neonGreen, width: 1.2),
                                   ),
                                   child: Row(
                                     mainAxisSize: MainAxisSize.min,
                                     children: [
-                                      Icon(Icons.timer_outlined, color: neonGreen, size: 13),
+                                      Icon(Icons.timer_outlined, color: neonGreen, size: 14),
                                       const SizedBox(width: 4),
                                       Text(
-                                        'Ad-Free: $remainingText',
+                                        isSmallScreen ? remainingText : 'Ad-Free: $remainingText',
                                         style: TextStyle(
                                           color: neonGreen,
-                                          fontWeight: FontWeight.w800,
+                                          fontWeight: FontWeight.bold,
                                           fontSize: 11,
                                         ),
                                       ),
@@ -347,15 +340,15 @@ class _HomeScreenState extends State<HomeScreen> {
                                 color: Colors.transparent,
                                 child: InkWell(
                                   onTap: isLoading ? null : () => AdFreeService().showRewardedAd(context),
-                                  borderRadius: BorderRadius.circular(16),
+                                  borderRadius: BorderRadius.circular(20),
                                   child: Container(
-                                    margin: const EdgeInsets.symmetric(vertical: 8, horizontal: 4),
-                                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 5),
+                                    margin: const EdgeInsets.symmetric(vertical: 10, horizontal: 4),
+                                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
                                     decoration: BoxDecoration(
                                       color: const Color(0xFF2E2200),
-                                      borderRadius: BorderRadius.circular(16),
+                                      borderRadius: BorderRadius.circular(20),
                                       border: Border.all(
-                                        color: const Color(0xFFFFC107),
+                                        color: Colors.amber,
                                         width: 1.2,
                                       ),
                                     ),
@@ -364,26 +357,26 @@ class _HomeScreenState extends State<HomeScreen> {
                                       children: [
                                         if (isLoading)
                                           const SizedBox(
-                                            width: 12,
-                                            height: 12,
+                                            width: 14,
+                                            height: 14,
                                             child: CircularProgressIndicator(
                                               strokeWidth: 2,
-                                              valueColor: AlwaysStoppedAnimation<Color>(Color(0xFFFFC107)),
+                                              valueColor: AlwaysStoppedAnimation<Color>(Colors.amber),
                                             ),
                                           )
                                         else
                                           const Icon(
                                             Icons.timer_outlined,
-                                            color: Color(0xFFFFC107),
-                                            size: 13,
+                                            color: Colors.amber,
+                                            size: 14,
                                           ),
                                         const SizedBox(width: 4),
-                                        const Text(
-                                          '1 Ghante Ad-Free - Ad Dekho',
-                                          style: TextStyle(
-                                            color: Color(0xFFFFD54F),
-                                            fontWeight: FontWeight.w800,
-                                            fontSize: 10.5,
+                                        Text(
+                                          isSmallScreen ? 'Ad-Free' : '1 Ghante Ad-Free - Ad Dekho',
+                                          style: const TextStyle(
+                                            color: Colors.amber,
+                                            fontWeight: FontWeight.bold,
+                                            fontSize: 11,
                                           ),
                                         ),
                                       ],
@@ -416,6 +409,58 @@ class _HomeScreenState extends State<HomeScreen> {
                 ),
                 const SizedBox(width: 4),
               ],
+              bottom: PreferredSize(
+                preferredSize: const Size.fromHeight(48),
+                child: Container(
+                  height: 48,
+                  color: const Color(0xFF0A2A1F),
+                  alignment: Alignment.centerLeft,
+                  child: SingleChildScrollView(
+                    scrollDirection: Axis.horizontal,
+                    clipBehavior: Clip.none,
+                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                    child: Row(
+                      crossAxisAlignment: CrossAxisAlignment.center,
+                      children: gameCategories.map((cat) {
+                        final isSelected = selectedCategory == cat;
+                        return Padding(
+                          padding: const EdgeInsets.only(right: 8),
+                          child: ChoiceChip(
+                            label: Text(
+                              cat,
+                              style: TextStyle(
+                                fontSize: 13,
+                                color: isSelected ? const Color(0xFF05080D) : textWhite,
+                                fontWeight: isSelected ? FontWeight.bold : FontWeight.w500,
+                              ),
+                            ),
+                            selected: isSelected,
+                            onSelected: (val) {
+                              if (val) {
+                                setState(() {
+                                  selectedCategory = cat;
+                                });
+                              }
+                            },
+                            showCheckmark: false,
+                            materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                            visualDensity: VisualDensity.compact,
+                            backgroundColor: cardDark,
+                            selectedColor: const Color(0xFF00FF88),
+                            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                            shape: StadiumBorder(
+                              side: BorderSide(
+                                color: isSelected ? const Color(0xFF00FF88) : borderDark,
+                                width: isSelected ? 1.5 : 1,
+                              ),
+                            ),
+                          ),
+                        );
+                      }).toList(),
+                    ),
+                  ),
+                ),
+              ),
             ),
       body: _selectedNavIndex == 1
           ? SavedNewsScreen(
@@ -514,9 +559,9 @@ class _HomeScreenState extends State<HomeScreen> {
           // Filter by category and search
           final langCode = context.locale.languageCode;
           final filteredList = rawList.where((item) {
-            final matchesCat = _selectedCategory == 'All' ||
-                item.category.toLowerCase().contains(_selectedCategory.toLowerCase()) ||
-                _selectedCategory.toLowerCase().contains(item.category.toLowerCase());
+            final matchesCat = selectedCategory == 'All' ||
+                item.category.trim().toLowerCase() == selectedCategory.trim().toLowerCase() ||
+                item.category.trim() == selectedCategory.trim();
             final matchesSearch = _searchQuery.isEmpty ||
                 item.getTitle(langCode).toLowerCase().contains(_searchQuery.toLowerCase()) ||
                 item.getDescription(langCode).toLowerCase().contains(_searchQuery.toLowerCase()) ||
@@ -614,54 +659,6 @@ class _HomeScreenState extends State<HomeScreen> {
                     ),
                   ),
                 ),
-
-              // Category Filter Chips
-              SliverToBoxAdapter(
-                child: SizedBox(
-                  height: 52,
-                  child: SingleChildScrollView(
-                    scrollDirection: Axis.horizontal,
-                    clipBehavior: Clip.none,
-                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                    child: Row(
-                      crossAxisAlignment: CrossAxisAlignment.center,
-                      children: _categories.map((cat) {
-                        final selected = _selectedCategory == cat;
-                        final displayName = _getCategoryDisplayName(cat);
-                        return Padding(
-                          padding: const EdgeInsets.only(right: 8),
-                          child: ChoiceChip(
-                            label: Text(displayName),
-                            selected: selected,
-                            onSelected: (val) {
-                              setState(() {
-                                _selectedCategory = cat;
-                              });
-                            },
-                            showCheckmark: false,
-                            materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                            visualDensity: VisualDensity.compact,
-                            backgroundColor: cardDark,
-                            selectedColor: neonGreen.withOpacity(0.15),
-                            labelStyle: TextStyle(
-                              fontSize: 14,
-                              color: selected ? neonGreen : textWhite,
-                              fontWeight: selected ? FontWeight.bold : FontWeight.w500,
-                            ),
-                            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-                            shape: StadiumBorder(
-                              side: BorderSide(
-                                color: selected ? neonGreen : borderDark,
-                                width: selected ? 1.5 : 1,
-                              ),
-                            ),
-                          ),
-                        );
-                      }).toList(),
-                    ),
-                  ),
-                ),
-              ),
 
               // Featured News Card (IGN Full-Width Hero)
               if (featuredNews != null && _searchQuery.isEmpty)
@@ -850,7 +847,7 @@ class _HomeScreenState extends State<HomeScreen> {
                       ),
                       const SizedBox(width: 8),
                       Text(
-                        _selectedCategory == 'All' ? 'latest_news'.tr() : _getCategoryDisplayName(_selectedCategory).toUpperCase(),
+                        selectedCategory == 'All' ? 'latest_news'.tr() : selectedCategory.toUpperCase(),
                         style: TextStyle(
                           color: textWhite,
                           fontSize: 16,
