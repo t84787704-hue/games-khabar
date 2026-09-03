@@ -1,8 +1,9 @@
+import 'dart:ui' as ui;
 import 'package:flutter/material.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:cached_network_image/cached_network_image.dart';
-import 'package:easy_localization/easy_localization.dart';
+import 'package:easy_localization/easy_localization.dart' hide TextDirection;
 import '../firebase_options.dart';
 import '../models/news_model.dart';
 import '../services/firestore_service.dart';
@@ -782,7 +783,7 @@ class _HomeScreenState extends State<HomeScreen> {
                                       maxLines: 2,
                                       overflow: TextOverflow.ellipsis,
                                       textAlign: isRtl ? TextAlign.right : TextAlign.left,
-                                      textDirection: isRtl ? TextDirection.rtl : TextDirection.ltr,
+                                      textDirection: isRtl ? ui.TextDirection.rtl : ui.TextDirection.ltr,
                                       style: TextStyle(
                                         color: textWhite,
                                         fontSize: 16,
@@ -956,7 +957,7 @@ class _HomeScreenState extends State<HomeScreen> {
                                                   maxLines: 2,
                                                   overflow: TextOverflow.ellipsis,
                                                   textAlign: isRtl ? TextAlign.right : TextAlign.left,
-                                                  textDirection: isRtl ? TextDirection.rtl : TextDirection.ltr,
+                                                  textDirection: isRtl ? ui.TextDirection.rtl : ui.TextDirection.ltr,
                                                   style: TextStyle(
                                                     color: textWhite,
                                                     fontSize: 13,

@@ -1,5 +1,6 @@
+import 'dart:ui' as ui;
 import 'package:flutter/material.dart';
-import 'package:easy_localization/easy_localization.dart';
+import 'package:easy_localization/easy_localization.dart' hide TextDirection;
 import '../models/news_model.dart';
 import '../services/bookmark_service.dart';
 import '../services/theme_service.dart';
@@ -487,7 +488,7 @@ class _SavedNewsScreenState extends State<SavedNewsScreen> {
                         maxLines: 2,
                         overflow: TextOverflow.ellipsis,
                         textAlign: LanguageService.isRtlLocale(context.locale) ? TextAlign.right : TextAlign.left,
-                        textDirection: LanguageService.isRtlLocale(context.locale) ? TextDirection.rtl : TextDirection.ltr,
+                        textDirection: LanguageService.isRtlLocale(context.locale) ? ui.TextDirection.rtl : ui.TextDirection.ltr,
                         style: TextStyle(
                           color: textWhite,
                           fontSize: 13,
