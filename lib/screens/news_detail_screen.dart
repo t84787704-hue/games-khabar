@@ -93,24 +93,33 @@ class _NewsDetailScreenState extends State<NewsDetailScreen> {
       return;
     }
 
-    // Set fallback immediately while translating
+    // Set fallback title, but keep description pending if not in target language
     setState(() {
       _translatedTitle = baseTitle;
-      _translatedDescription = baseDesc;
+      _translatedDescription = descOk ? baseDesc : null;
       _isTranslating = true;
     });
 
     try {
-      final titleSrc = widget.news.titleMap['en'] ?? baseTitle;
-      final descSrc = widget.news.descriptionMap['en'] ?? baseDesc;
+      final titleSrc = widget.news.titleMap['en']?.isNotEmpty == true
+          ? widget.news.titleMap['en']!
+          : baseTitle;
+      final descSrc = widget.news.descriptionMap['en']?.isNotEmpty == true
+          ? widget.news.descriptionMap['en']!
+          : (widget.news.descriptionMap['ro']?.isNotEmpty == true
+              ? widget.news.descriptionMap['ro']!
+              : baseDesc);
+
+      final cleanTitleSrc = TranslationService.cleanBbCodeAndHtml(titleSrc);
+      final cleanDescSrc = TranslationService.cleanBbCodeAndHtml(descSrc);
 
       final tFuture = titleOk
           ? Future.value(baseTitle)
-          : TranslationService.translateSingle(titleSrc, langCode);
+          : TranslationService.translateSingle(cleanTitleSrc, langCode);
 
       final dFuture = descOk
           ? Future.value(baseDesc)
-          : TranslationService.translateArticle(descSrc, langCode);
+          : TranslationService.translateArticle(cleanDescSrc, langCode);
 
       final results = await Future.wait([tFuture, dFuture]);
       final newTitle = results[0];
@@ -122,9 +131,11 @@ class _NewsDetailScreenState extends State<NewsDetailScreen> {
             _translatedTitle = newTitle;
             widget.news.titleMap[langCode] = newTitle;
           }
-          if (newDesc.isNotEmpty && (isTargetLatin || TranslationService.isTextInLanguage(newDesc, langCode))) {
+          if (newDesc.isNotEmpty) {
             _translatedDescription = newDesc;
             widget.news.descriptionMap[langCode] = newDesc;
+          } else if (_translatedDescription == null) {
+            _translatedDescription = baseDesc;
           }
           _isTranslating = false;
         });
@@ -142,6 +153,9 @@ class _NewsDetailScreenState extends State<NewsDetailScreen> {
     } catch (_) {
       if (mounted && _currentLoadedLang == langCode) {
         setState(() {
+          if (_translatedDescription == null) {
+            _translatedDescription = baseDesc;
+          }
           _isTranslating = false;
         });
       }
@@ -703,7 +717,51 @@ class _NewsDetailScreenState extends State<NewsDetailScreen> {
                   const SizedBox(height: 16),
                 ],
 
-                // 6. News Description - First Paragraph
+                // 6. News Description
+                if (_isTranslating && (firstParagraph.isEmpty || (langCode != 'en' && langCode != 'ro' && !langCode.contains('roman') && !TranslationService.isTextInLanguage(firstParagraph, langCode)))) ...[
+                  Container(
+                    width: double.infinity,
+                    margin: const EdgeInsets.only(bottom: 16),
+                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+                    decoration: BoxDecoration(
+                      color: neonGreen.withOpacity(0.08),
+                      borderRadius: BorderRadius.circular(12),
+                      border: Border.all(color: neonGreen.withOpacity(0.25)),
+                    ),
+                    child: Row(
+                      mainAxisAlignment: isRtl ? MainAxisAlignment.end : MainAxisAlignment.start,
+                      children: [
+                        if (!isRtl) ...[
+                          const SizedBox(
+                            width: 16,
+                            height: 16,
+                            child: CircularProgressIndicator(strokeWidth: 2, color: neonGreen),
+                          ),
+                          const SizedBox(width: 10),
+                        ],
+                        Text(
+                          isRtl ? 'اردو میں ترجمہ کیا جا رہا ہے...' : 'Translating content...',
+                          textDirection: isRtl ? ui.TextDirection.rtl : ui.TextDirection.ltr,
+                          style: const TextStyle(
+                            color: neonGreen,
+                            fontSize: 13,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                        if (isRtl) ...[
+                          const SizedBox(width: 10),
+                          const SizedBox(
+                            width: 16,
+                            height: 16,
+                            child: CircularProgressIndicator(strokeWidth: 2, color: neonGreen),
+                          ),
+                        ],
+                      ],
+                    ),
+                  ),
+                ],
+
+                // First Paragraph
                 if (firstParagraph.isNotEmpty) ...[
                   Text(
                     firstParagraph,

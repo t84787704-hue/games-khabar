@@ -122,6 +122,23 @@ class _HomeScreenState extends State<HomeScreen> {
     }
     print("Clicked news: ${news.id}");
     _firestoreService.incrementView(news.id);
+
+    // Warm up description translation immediately if needed
+    final langCode = context.locale.languageCode;
+    if (langCode != 'en' && langCode != 'ro' && !langCode.contains('roman')) {
+      final currentDesc = news.getDescription(langCode);
+      if (!TranslationService.isTextInLanguage(currentDesc, langCode)) {
+        final baseDesc = news.descriptionMap['en']?.isNotEmpty == true
+            ? news.descriptionMap['en']!
+            : currentDesc;
+        TranslationService.translateArticle(baseDesc, langCode).then((d) {
+          if (d.isNotEmpty && TranslationService.isTextInLanguage(d, langCode)) {
+            news.descriptionMap[langCode] = d;
+          }
+        });
+      }
+    }
+
     Navigator.push(
       context,
       MaterialPageRoute(

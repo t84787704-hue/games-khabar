@@ -123,13 +123,34 @@ class TranslationService {
 
     final String googleCode = targetCode == 'zh-cn' ? 'zh-CN' : targetCode;
 
-    // 1. GoogleTranslator package
+    // 1. Google Translate Direct API (client=dict-chrome-ex, fast, no 429 captcha)
     try {
-      final t = await _translator.translate(clean, to: googleCode).timeout(const Duration(seconds: 6));
-      final translated = t.text.trim();
-      if (translated.isNotEmpty && isTextInLanguage(translated, targetCode)) {
-        _cache[key] = translated;
-        return translated;
+      final uri = Uri.parse(
+        'https://translate.googleapis.com/translate_a/single?client=dict-chrome-ex&sl=auto&tl=$googleCode&dt=t&q=${Uri.encodeComponent(clean)}',
+      );
+      final res = await http.get(
+        uri,
+        headers: {
+          'User-Agent':
+              'Mozilla/5.0 (Linux; Android 10; Mobile) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Mobile Safari/537.36',
+        },
+      ).timeout(const Duration(seconds: 4));
+
+      if (res.statusCode == 200) {
+        final parsed = jsonDecode(res.body);
+        if (parsed is List && parsed.isNotEmpty && parsed[0] is List) {
+          final buffer = StringBuffer();
+          for (final item in parsed[0]) {
+            if (item is List && item.isNotEmpty && item[0] != null) {
+              buffer.write(item[0].toString());
+            }
+          }
+          final translated = buffer.toString().trim();
+          if (translated.isNotEmpty && isTextInLanguage(translated, targetCode)) {
+            _cache[key] = translated;
+            return translated;
+          }
+        }
       }
     } catch (_) {}
 
@@ -144,13 +165,13 @@ class TranslationService {
           'User-Agent':
               'Mozilla/5.0 (Linux; Android 10; K) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Mobile Safari/537.36',
         },
-      ).timeout(const Duration(seconds: 6));
+      ).timeout(const Duration(seconds: 4));
 
       if (res.statusCode == 200) {
-        final match = RegExp(r'class="result-container">([^<]+)<').firstMatch(res.body);
+        final match = RegExp(r'class="result-container">([\s\S]*?)<\/div>', caseSensitive: false).firstMatch(res.body);
         if (match != null && match.group(1) != null) {
           final translated = cleanBbCodeAndHtml(match.group(1)!);
-          if (translated.isNotEmpty) {
+          if (translated.isNotEmpty && isTextInLanguage(translated, targetCode)) {
             _cache[key] = translated;
             return translated;
           }
@@ -164,7 +185,7 @@ class TranslationService {
       final myMemoryUri = Uri.parse(
         'https://api.mymemory.translated.net/get?q=${Uri.encodeComponent(queryText)}&langpair=auto|$googleCode',
       );
-      final res = await http.get(myMemoryUri).timeout(const Duration(seconds: 6));
+      final res = await http.get(myMemoryUri).timeout(const Duration(seconds: 4));
       if (res.statusCode == 200) {
         final json = jsonDecode(res.body);
         final translated = json['responseData']?['translatedText'] as String?;
@@ -172,16 +193,28 @@ class TranslationService {
             translated.trim().isNotEmpty &&
             !translated.startsWith('MYMEMORY WARNING')) {
           final decoded = cleanBbCodeAndHtml(translated);
-          _cache[key] = decoded;
-          return decoded;
+          if (decoded.isNotEmpty && isTextInLanguage(decoded, targetCode)) {
+            _cache[key] = decoded;
+            return decoded;
+          }
         }
+      }
+    } catch (_) {}
+
+    // 4. GoogleTranslator package fallback
+    try {
+      final t = await _translator.translate(clean, to: googleCode).timeout(const Duration(seconds: 4));
+      final translated = t.text.trim();
+      if (translated.isNotEmpty && isTextInLanguage(translated, targetCode)) {
+        _cache[key] = translated;
+        return translated;
       }
     } catch (_) {}
 
     return clean;
   }
 
-  /// Translate full multi-paragraph articles chunk by chunk preserving structure
+  /// Translate full multi-paragraph articles chunk by chunk in parallel preserving structure
   static Future<String> translateArticle(String fullText, String targetAppLang) async {
     final clean = cleanBbCodeAndHtml(fullText);
     if (clean.isEmpty) return clean;
@@ -209,38 +242,40 @@ class TranslationService {
 
     if (paragraphs.isEmpty) return clean;
 
-    final translatedParagraphs = <String>[];
-
-    for (final p in paragraphs) {
-      if (p.length <= 1000) {
-        final trans = await translateSingle(p, targetCode);
-        translatedParagraphs.add(trans);
-      } else {
-        // Sub-chunk long paragraph by sentences
-        final sentences = p.split(RegExp(r'(?<=[.!?\n])\s+'));
-        String currentChunk = '';
-        final chunkTranslations = <String>[];
-        for (final s in sentences) {
-          if ((currentChunk.length + s.length) < 800) {
-            currentChunk += (currentChunk.isEmpty ? '' : ' ') + s;
-          } else {
-            if (currentChunk.isNotEmpty) {
-              final ct = await translateSingle(currentChunk, targetCode);
-              chunkTranslations.add(ct);
+    // Translate all paragraphs in parallel for instant loading
+    final translatedParagraphs = await Future.wait(
+      paragraphs.map((p) async {
+        if (p.length <= 1500) {
+          return await translateSingle(p, targetCode);
+        } else {
+          // Sub-chunk long paragraph by sentences
+          final sentences = p.split(RegExp(r'(?<=[.!?\n])\s+'));
+          String currentChunk = '';
+          final chunkTranslations = <String>[];
+          for (final s in sentences) {
+            if ((currentChunk.length + s.length) < 800) {
+              currentChunk += (currentChunk.isEmpty ? '' : ' ') + s;
+            } else {
+              if (currentChunk.isNotEmpty) {
+                final ct = await translateSingle(currentChunk, targetCode);
+                chunkTranslations.add(ct);
+              }
+              currentChunk = s;
             }
-            currentChunk = s;
           }
+          if (currentChunk.isNotEmpty) {
+            final ct = await translateSingle(currentChunk, targetCode);
+            chunkTranslations.add(ct);
+          }
+          return chunkTranslations.join(' ');
         }
-        if (currentChunk.isNotEmpty) {
-          final ct = await translateSingle(currentChunk, targetCode);
-          chunkTranslations.add(ct);
-        }
-        translatedParagraphs.add(chunkTranslations.join(' '));
-      }
-    }
+      }),
+    );
 
     final result = translatedParagraphs.join('\n\n');
-    _cache[key] = result;
+    if (result.isNotEmpty && isTextInLanguage(result, targetCode)) {
+      _cache[key] = result;
+    }
     return result;
   }
 

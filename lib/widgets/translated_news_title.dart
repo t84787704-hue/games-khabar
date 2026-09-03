@@ -63,6 +63,21 @@ class _TranslatedNewsTitleState extends State<TranslatedNewsTitle> {
         });
       }
     });
+
+    // Pre-cache article description so when user opens the news, it is already in Urdu
+    if (!isLatin) {
+      final currentDesc = widget.news.getDescription(lang);
+      if (!TranslationService.isTextInLanguage(currentDesc, lang)) {
+        final baseDesc = widget.news.descriptionMap['en']?.isNotEmpty == true
+            ? widget.news.descriptionMap['en']!
+            : currentDesc;
+        TranslationService.translateArticle(baseDesc, lang).then((d) {
+          if (d.isNotEmpty && TranslationService.isTextInLanguage(d, lang)) {
+            widget.news.descriptionMap[lang] = d;
+          }
+        });
+      }
+    }
   }
 
   @override
