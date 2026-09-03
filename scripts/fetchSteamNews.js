@@ -29,7 +29,6 @@ const allGamesAppIds = {
   'Call of Duty': 2519060,
   'Cities Skylines': 255710,
   'Palworld': 1623730,
-  // yahan baki 80 games add kar sakte ho jo tumne dart me banaye hain
 };
 
 function detectCategory(text) {
@@ -51,7 +50,7 @@ async function fetchAll() {
       const items = res.data?.appnews?.newsitems || [];
       
       for (const item of items) {
-        // Duplicate check
+        // Duplicate check - pehle se hai to skip
         const existing = await db.collection('news').where('sourceUrl', '==', item.url).limit(1).get();
         if (!existing.empty) continue;
 
@@ -65,6 +64,7 @@ async function fetchAll() {
           source: 'Steam',
           appId: appId,
           isVideo: false,
+          imageUrl: `https://cdn.akamai.steamstatic.com/steam/apps/${appId}/header.jpg`,
         });
         total++;
         console.log(`Saved: ${gameName} - ${item.title}`);
@@ -72,7 +72,7 @@ async function fetchAll() {
     } catch (e) {
       console.log(`Skip ${gameName}: ${e.message}`);
     }
-    // 2 sec delay
+    // 2 sec delay taake Steam block na kare
     await new Promise(r => setTimeout(r, 2000));
   }
   console.log(`Done! Total ${total} news saved`);
