@@ -24,8 +24,10 @@ class NewsModel {
 
   NewsModel({
     required this.id,
-    required this.titleMap,
-    required this.descriptionMap,
+    String? title,
+    Map<String, String>? titleMap,
+    String? description,
+    Map<String, String>? descriptionMap,
     required this.category,
     required this.imageUrl,
     this.videoUrl,
@@ -43,7 +45,22 @@ class NewsModel {
     this.isAuto = false,
     this.timestamp,
     this.appId,
-  });
+  }) : titleMap = titleMap?? _createDefaultMap(title?? ''),
+        descriptionMap = descriptionMap?? _createDefaultMap(description?? '');
+
+  static Map<String, String> _createDefaultMap(String text) {
+    return {
+      'roman': text,
+      'ro': text,
+      'en': text,
+      'hi': text,
+      'ur': text,
+      'bn': text,
+      'ar': text,
+      'zh': text,
+      'zh-cn': text,
+    };
+  }
 
   String get title => getTitle();
   String get description => getDescription();
@@ -52,75 +69,77 @@ class NewsModel {
 
   String getTitle([String? langCode]) {
     if (langCode!= null && langCode.isNotEmpty) {
-      String code = langCode.toLowerCase();
+      final code = langCode.toLowerCase();
       if (titleMap.containsKey(code)) {
-        String v = titleMap[code]!;
-        if (v.trim().isNotEmpty) return v;
+        final v = titleMap[code];
+        if (v!= null && v.trim().isNotEmpty) return v;
+      }
+      if (code == 'ro' && titleMap.containsKey('roman')) {
+        final v = titleMap['roman'];
+        if (v!= null && v.trim().isNotEmpty) return v;
+      }
+      if (code == 'roman' && titleMap.containsKey('ro')) {
+        final v = titleMap['ro'];
+        if (v!= null && v.trim().isNotEmpty) return v;
       }
     }
-    if (titleMap.containsKey('roman')) return titleMap['roman']!;
-    if (titleMap.containsKey('en')) return titleMap['en']!;
-    if (titleMap.isNotEmpty) return titleMap.values.first;
+    if (titleMap['roman']!= null && titleMap['roman']!.trim().isNotEmpty) return titleMap['roman']!;
+    if (titleMap['ro']!= null && titleMap['ro']!.trim().isNotEmpty) return titleMap['ro']!;
+    if (titleMap['en']!= null && titleMap['en']!.trim().isNotEmpty) return titleMap['en']!;
+    if (titleMap.values.isNotEmpty) return titleMap.values.first;
     return '';
   }
 
   String getDescription([String? langCode]) {
     if (langCode!= null && langCode.isNotEmpty) {
-      String code = langCode.toLowerCase();
+      final code = langCode.toLowerCase();
       if (descriptionMap.containsKey(code)) {
-        String v = descriptionMap[code]!;
-        if (v.trim().isNotEmpty) return v;
+        final v = descriptionMap[code];
+        if (v!= null && v.trim().isNotEmpty) return v;
       }
     }
-    if (descriptionMap.containsKey('roman')) return descriptionMap['roman']!;
-    if (descriptionMap.containsKey('en')) return descriptionMap['en']!;
-    if (descriptionMap.isNotEmpty) return descriptionMap.values.first;
+    if (descriptionMap['roman']!= null && descriptionMap['roman']!.trim().isNotEmpty) return descriptionMap['roman']!;
+    if (descriptionMap['ro']!= null && descriptionMap['ro']!.trim().isNotEmpty) return descriptionMap['ro']!;
+    if (descriptionMap['en']!= null && descriptionMap['en']!.trim().isNotEmpty) return descriptionMap['en']!;
+    if (descriptionMap.values.isNotEmpty) return descriptionMap.values.first;
     return '';
   }
 
-  String getContent([String? langCode]) {
-    return getDescription(langCode);
-  }
+  String getContent([String? langCode]) => getDescription(langCode);
 
   factory NewsModel.fromFirestore(DocumentSnapshot doc) {
-    Map<String, dynamic> data = {};
-    if (doc.data()!= null) {
-      data = doc.data() as Map<String, dynamic>;
-    }
+    final rawData = doc.data() as Map<String, dynamic>?;
+    final data = rawData!= null? rawData : <String, dynamic>{};
 
-    String timeAgo = 'Abhi abhi';
+    String formattedTime = 'Abhi abhi';
     if (data['timeAgo'] is String) {
-      timeAgo = data['timeAgo'] as String;
+      formattedTime = data['timeAgo'] as String;
     }
-
-    Timestamp? ts;
-    if (data['timestamp'] is Timestamp) {
-      ts = data['timestamp'] as Timestamp;
-      Duration diff = DateTime.now().difference(ts.toDate());
+    final ts = data['timestamp'] is Timestamp? data['timestamp'] as Timestamp : null;
+    if (ts!= null) {
+      final diff = DateTime.now().difference(ts.toDate());
       if (diff.inMinutes < 60) {
-        int m = diff.inMinutes <= 0? 1 : diff.inMinutes;
-        timeAgo = '$m m ago';
+        formattedTime = '${diff.inMinutes <= 0? 1 : diff.inMinutes}m ago';
       } else if (diff.inHours < 24) {
-        timeAgo = '${diff.inHours}h ago';
+        formattedTime = '${diff.inHours}h ago';
       } else {
-        timeAgo = '${diff.inDays}d ago';
+        formattedTime = '${diff.inDays}d ago';
       }
     }
 
-    Map<String, String> parseMap(dynamic val) {
-      Map<String, String> res = {};
+    Map<String, String> parseTextMap(dynamic val, String fallback) {
       if (val is Map) {
+        final res = <String, String>{};
         val.forEach((k, v) {
           if (v!= null) res[k.toString()] = v.toString();
         });
+        if (res.containsKey('roman') &&!res.containsKey('ro')) res['ro'] = res['roman']!;
+        if (res.containsKey('ro') &&!res.containsKey('roman')) res['roman'] = res['ro']!;
+        return res;
       } else if (val is String && val.isNotEmpty) {
-        res['roman'] = val;
-        res['en'] = val;
+        return _createDefaultMap(val);
       }
-      if (res.isEmpty) {
-        res['roman'] = '';
-      }
-      return res;
+      return _createDefaultMap(fallback);
     }
 
     String img = '';
@@ -132,45 +151,165 @@ class NewsModel {
       img = 'https://picsum.photos/seed/${doc.id}/800/600';
     }
 
-    String cat = 'Gaming News';
-    if (data['category'] is String) cat = data['category'] as String;
+    int views = 0;
+    if (data['views'] is num) views = (data['views'] as num).toInt();
 
-    int v = 0;
-    if (data['views'] is num) v = (data['views'] as num).toInt();
+    double? rating;
+    if (data['rating'] is num) rating = (data['rating'] as num).toDouble();
 
-    bool free = false;
-    if (data['isFree'] is bool) free = data['isFree'] as bool;
+    bool isFree = false;
+    if (data['isFree'] is bool) isFree = data['isFree'] as bool;
 
-    bool featured = false;
-    if (data['isFeatured'] is bool) featured = data['isFeatured'] as bool;
+    bool isFeatured = false;
+    if (data['isFeatured'] is bool) isFeatured = data['isFeatured'] as bool;
 
-    bool auto = false;
-    if (data['isAuto'] is bool) auto = data['isAuto'] as bool;
+    bool isAuto = false;
+    if (data['isAuto'] is bool) isAuto = data['isAuto'] as bool;
 
-    int? aId;
-    if (data['appId'] is num) aId = (data['appId'] as num).toInt();
+    int? appId;
+    if (data['appId'] is num) appId = (data['appId'] as num).toInt();
 
     return NewsModel(
       id: doc.id,
-      titleMap: parseMap(data['title']),
-      descriptionMap: parseMap(data['content']!= null? data['content'] : data['description']),
-      category: cat,
+      titleMap: parseTextMap(data['title'], ''),
+      descriptionMap: parseTextMap(data['content']!= null? data['content'] : data['description'], ''),
+      category: data['category'] is String? data['category'] as String : 'Gaming News',
       imageUrl: img,
       videoUrl: data['videoUrl'] is String? data['videoUrl'] as String : null,
       youtubeId: data['youtubeId'] is String? data['youtubeId'] as String : null,
-      timeAgo: timeAgo,
-      views: v,
-      rating: data['rating'] is num? (data['rating'] as num).toDouble() : null,
+      timeAgo: formattedTime,
+      views: views,
+      rating: rating,
       originalPrice: data['originalPrice'] is String? data['originalPrice'] as String : null,
-      isFree: free,
-      isFeatured: featured,
+      isFree: isFree,
+      isFeatured: isFeatured,
       timeLeft: data['timeLeft'] is String? data['timeLeft'] as String : null,
       storeName: data['storeName'] is String? data['storeName'] as String : null,
       downloadSize: data['downloadSize'] is String? data['downloadSize'] as String : null,
       sourceUrl: data['sourceUrl'] is String? data['sourceUrl'] as String : null,
-      isAuto: auto,
+      isAuto: isAuto,
       timestamp: ts,
-      appId: aId,
+      appId: appId,
+    );
+  }
+
+  NewsModel copyWith({
+    String? id,
+    String? title,
+    Map<String, String>? titleMap,
+    String? description,
+    Map<String, String>? descriptionMap,
+    String? category,
+    String? imageUrl,
+    String? videoUrl,
+    String? youtubeId,
+    String? timeAgo,
+    int? views,
+    double? rating,
+    String? originalPrice,
+    bool? isFree,
+    bool? isFeatured,
+    String? timeLeft,
+    String? storeName,
+    String? downloadSize,
+    String? sourceUrl,
+    bool? isAuto,
+    Timestamp? timestamp,
+    int? appId,
+  }) {
+    return NewsModel(
+      id: id?? this.id,
+      titleMap: titleMap?? (title!= null? _createDefaultMap(title) : this.titleMap),
+      descriptionMap: descriptionMap?? (description!= null? _createDefaultMap(description) : this.descriptionMap),
+      category: category?? this.category,
+      imageUrl: imageUrl?? this.imageUrl,
+      videoUrl: videoUrl?? this.videoUrl,
+      youtubeId: youtubeId?? this.youtubeId,
+      timeAgo: timeAgo?? this.timeAgo,
+      views: views?? this.views,
+      rating: rating?? this.rating,
+      originalPrice: originalPrice?? this.originalPrice,
+      isFree: isFree?? this.isFree,
+      isFeatured: isFeatured?? this.isFeatured,
+      timeLeft: timeLeft?? this.timeLeft,
+      storeName: storeName?? this.storeName,
+      downloadSize: downloadSize?? this.downloadSize,
+      sourceUrl: sourceUrl?? this.sourceUrl,
+      isAuto: isAuto?? this.isAuto,
+      timestamp: timestamp?? this.timestamp,
+      appId: appId?? this.appId,
+    );
+  }
+
+  Map<String, dynamic> toJson() {
+    return {
+      'id': id,
+      'title': titleMap,
+      'content': descriptionMap,
+      'description': descriptionMap,
+      'category': category,
+      'imageUrl': imageUrl,
+      'videoUrl': videoUrl,
+      'youtubeId': youtubeId,
+      'timeAgo': timeAgo,
+      'views': views,
+      'rating': rating,
+      'originalPrice': originalPrice,
+      'isFree': isFree,
+      'isFeatured': isFeatured,
+      'timeLeft': timeLeft,
+      'storeName': storeName,
+      'downloadSize': downloadSize,
+      'sourceUrl': sourceUrl,
+      'isAuto': isAuto,
+      'appId': appId,
+      'timestampMillis': timestamp?.millisecondsSinceEpoch,
+    };
+  }
+
+  factory NewsModel.fromJson(Map<String, dynamic> json) {
+    Timestamp? ts;
+    if (json['timestampMillis'] is int) {
+      ts = Timestamp.fromMillisecondsSinceEpoch(json['timestampMillis'] as int);
+    }
+
+    Map<String, String> parseTextMap(dynamic val, String fallback) {
+      if (val is Map) {
+        final res = <String, String>{};
+        val.forEach((k, v) {
+          if (v!= null) res[k.toString()] = v.toString();
+        });
+        return res;
+      } else if (val is String && val.isNotEmpty) {
+        return _createDefaultMap(val);
+      }
+      return _createDefaultMap(fallback);
+    }
+
+    String img = '';
+    if (json['imageUrl'] is String) img = json['imageUrl'] as String;
+    if (img.isEmpty && json['appId']!= null) {
+      img = 'https://cdn.akamai.steamstatic.com/steam/apps/${json['appId']}/header.jpg';
+    }
+    if (img.isEmpty) {
+      img = 'https://picsum.photos/seed/${json['id']}/800/600';
+    }
+
+    int views = 0;
+    if (json['views'] is num) views = (json['views'] as num).toInt();
+
+    return NewsModel(
+      id: json['id'] is String? json['id'] as String : '',
+      titleMap: parseTextMap(json['title'], ''),
+      descriptionMap: parseTextMap(json['content']!= null? json['content'] : json['description'], ''),
+      category: json['category'] is String? json['category'] as String : 'Gaming News',
+      imageUrl: img,
+      videoUrl: json['videoUrl'] is String? json['videoUrl'] as String : null,
+      youtubeId: json['youtubeId'] is String? json['youtubeId'] as String : null,
+      timeAgo: json['timeAgo'] is String? json['timeAgo'] as String : 'Recently',
+      views: views,
+      appId: json['appId'] is num? (json['appId'] as num).toInt() : null,
+      timestamp: ts,
     );
   }
 }
