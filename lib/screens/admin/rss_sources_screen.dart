@@ -27,53 +27,63 @@ class _RssSourcesScreenState extends State<RssSourcesScreen> {
   Future<void> _syncFeedsClientSide() async {
     if (_isSyncing) return;
     setState(() => _isSyncing = true);
-    int count = 0;
+    int published = 0;
     try {
-      final snap = await FirebaseFirestore.instance.collection('rss_sources').where('isActive', isEqualTo: true).get();
-      for (var doc in snap.docs) {
-        try {
-          final rssUrl = doc['url'];
-          final res = await http.get(
-            Uri.parse(rssUrl),
-            headers: {'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64)'},
-          ).timeout(const Duration(seconds: 15));
-          if (res.statusCode != 200) continue;
-          final xmlDoc = XmlDocument.parse(res.body);
-          final items = xmlDoc.findAllElements('item').take(2); // sirf 2 news per source for test
-          for (var item in items) {
-            final title = item.findElements('title').first.text;
-            final linkRaw = item.findElements('link').first.text;
-            final uniqueLink = linkRaw + '?t=${DateTime.now().millisecondsSinceEpoch}_$count';
-            final desc = item.findElements('description').isNotEmpty ? item.findElements('description').first.text : '';
-            await FirebaseFirestore.instance.collection('news').add({
-              'title': title,
-              'content': desc,
-              'imageUrl': '',
-              'link': uniqueLink,
-              'sourceName': doc['name'],
-              'category': doc['category'] ?? 'PUBG',
-              'isAuto': true,
-              'tag': 'AUTO',
-              'createdAt': FieldValue.serverTimestamp(),
-              'views': 0,
-            });
-            count++;
-          }
-        } catch (e) {
-          debugPrint('Feed error ${doc['name']} $e');
+      // Sirf 1 active feed lo test ke liye - PUBG Google
+      final snap = await FirebaseFirestore.instance.collection('rss_sources').where('isActive', isEqualTo: true).limit(1).get();
+      if (snap.docs.isEmpty) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('No active source')));
         }
-        await Future.delayed(const Duration(seconds: 1)); // rate limit se bachne ke liye
+        return;
       }
-      _publishedCount = count;
+      for (var doc in snap.docs) {
+        final url = doc['url'] as String;
+        debugPrint('Fetching RSS: $url');
+        final response = await http.get(Uri.parse(url), headers: {'User-Agent': 'Mozilla/5.0'}).timeout(const Duration(seconds: 20));
+        if (response.statusCode != 200) {
+          if (mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('HTTP ${response.statusCode} for ${doc['name']}')));
+          }
+          continue;
+        }
+        final document = XmlDocument.parse(response.body);
+        final items = document.findAllElements('item');
+        debugPrint('Found ${items.length} items in ${doc['name']}');
+        for (var item in items.take(2)) {
+          final title = item.getElement('title')?.innerText ?? 'No Title';
+          final link = item.getElement('link')?.innerText ?? '';
+          final desc = item.getElement('description')?.innerText ?? '';
+          // Force unique link taake duplicate check rok na sake
+          final uniqueLink = link + '#${DateTime.now().millisecondsSinceEpoch}_$published';
+          await FirebaseFirestore.instance.collection('news').add({
+            'title': title,
+            'content': desc,
+            'imageUrl': '',
+            'link': uniqueLink,
+            'sourceName': doc['name'],
+            'category': doc['category'] ?? 'PUBG',
+            'isAuto': true,
+            'tag': 'AUTO',
+            'createdAt': FieldValue.serverTimestamp(),
+            'views': 0,
+          });
+          published++;
+        }
+      }
+      _publishedCount = published;
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('SUCCESS: $count news published!'), backgroundColor: Colors.green));
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('SUCCESS: $published news published!'), backgroundColor: Colors.green, duration: const Duration(seconds: 5)));
       }
-    } catch (e) {
+    } catch (e, st) {
+      debugPrint('SYNC ERROR $e $st');
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Error: $e'), backgroundColor: Colors.red, duration: const Duration(seconds: 10)));
       }
     } finally {
-      if (mounted) setState(() => _isSyncing = false);
+      if (mounted) {
+        setState(() => _isSyncing = false);
+      }
     }
   }
 

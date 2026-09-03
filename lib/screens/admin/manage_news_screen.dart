@@ -2,16 +2,15 @@ import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 import 'package:xml/xml.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
-import '../services/auto_news_scraper.dart';
 
-class RssScreen extends StatefulWidget {
-  const RssScreen({super.key});
+class ManageNewsScreen extends StatefulWidget {
+  const ManageNewsScreen({super.key});
 
   @override
-  State<RssScreen> createState() => _RssScreenState();
+  State<ManageNewsScreen> createState() => _ManageNewsScreenState();
 }
 
-class _RssScreenState extends State<RssScreen> {
+class _ManageNewsScreenState extends State<ManageNewsScreen> {
   static const Color neonGreen = Color(0xFF00FF88);
   static const Color bgDark = Color(0xFF0A0A0F);
   static const Color cardDark = Color(0xFF1E1E24);
@@ -27,6 +26,7 @@ class _RssScreenState extends State<RssScreen> {
     setState(() => _isSyncing = true);
     int published = 0;
     try {
+      // Sirf 1 active feed lo test ke liye - PUBG Google
       final snap = await FirebaseFirestore.instance.collection('rss_sources').where('isActive', isEqualTo: true).limit(1).get();
       if (snap.docs.isEmpty) {
         if (mounted) {
@@ -51,6 +51,7 @@ class _RssScreenState extends State<RssScreen> {
           final title = item.getElement('title')?.innerText ?? 'No Title';
           final link = item.getElement('link')?.innerText ?? '';
           final desc = item.getElement('description')?.innerText ?? '';
+          // Force unique link taake duplicate check rok na sake
           final uniqueLink = link + '#${DateTime.now().millisecondsSinceEpoch}_$published';
           await FirebaseFirestore.instance.collection('news').add({
             'title': title,
@@ -91,7 +92,7 @@ class _RssScreenState extends State<RssScreen> {
         backgroundColor: cardDark,
         elevation: 0,
         title: const Text(
-          'Active RSS Sources',
+          'Manage News & Feeds',
           style: TextStyle(color: textWhite, fontWeight: FontWeight.bold, fontSize: 18),
         ),
       ),
@@ -142,27 +143,16 @@ class _RssScreenState extends State<RssScreen> {
                 ),
               ),
               Expanded(
-                child: docs.isEmpty
-                    ? Center(
-                        child: ElevatedButton(
-                          style: ElevatedButton.styleFrom(
-                            backgroundColor: neonGreen,
-                            foregroundColor: Colors.black,
-                          ),
-                          onPressed: () async => await AutoNewsScraper.seedDefaultSourcesIfEmpty(),
-                          child: const Text('Seed Default RSS Sources'),
-                        ),
-                      )
-                    : ListView.builder(
-                        itemCount: docs.length,
-                        itemBuilder: (context, idx) {
-                          final data = docs[idx].data();
-                          return ListTile(
-                            title: Text(data['name'] ?? 'Feed', style: const TextStyle(color: textWhite)),
-                            subtitle: Text(data['url'] ?? '', style: const TextStyle(color: textGray, fontSize: 12)),
-                          );
-                        },
-                      ),
+                child: ListView.builder(
+                  itemCount: docs.length,
+                  itemBuilder: (context, idx) {
+                    final data = docs[idx].data();
+                    return ListTile(
+                      title: Text(data['name'] ?? 'Feed', style: const TextStyle(color: textWhite)),
+                      subtitle: Text(data['url'] ?? '', style: const TextStyle(color: textGray, fontSize: 12)),
+                    );
+                  },
+                ),
               ),
             ],
           );
