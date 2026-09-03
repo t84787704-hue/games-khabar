@@ -125,6 +125,36 @@ class FirestoreService {
     } catch (_) {}
   }
 
+  // Update localized title & description translations in memory & Firestore
+  Future<void> updateNewsTranslation(
+    String id,
+    String langCode,
+    String translatedTitle,
+    String translatedDesc,
+  ) async {
+    final cleanId = id.trim();
+    if (cleanId.isEmpty || cleanId.startsWith('local-')) return;
+
+    final idx = _currentNewsList.indexWhere((item) => item.id == cleanId);
+    if (idx != -1) {
+      final old = _currentNewsList[idx];
+      old.titleMap[langCode] = translatedTitle;
+      old.descriptionMap[langCode] = translatedDesc;
+      _streamController.add(List.from(_currentNewsList));
+    }
+
+    try {
+      final db = _db;
+      if (db != null) {
+        await db.collection('news').doc(cleanId).set({
+          'title': {langCode: translatedTitle},
+          'description': {langCode: translatedDesc},
+          'content': {langCode: translatedDesc},
+        }, SetOptions(merge: true)).timeout(const Duration(seconds: 3));
+      }
+    } catch (_) {}
+  }
+
   // Get single news article by ID (checks memory first, then Firestore)
   Future<NewsModel?> getNewsById(String id) async {
     final cleanId = id.trim();

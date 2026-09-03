@@ -15,6 +15,7 @@ import '../services/translation_service.dart';
 import '../widgets/app_image_view.dart';
 import '../widgets/native_ad_widget.dart';
 import '../constants/game_categories.dart';
+import '../widgets/translated_news_title.dart';
 import 'news_detail_screen.dart';
 import 'saved_news_screen.dart';
 import 'profile_screen.dart';
@@ -70,7 +71,7 @@ class _HomeScreenState extends State<HomeScreen> {
     try {
       if (Firebase.apps.isEmpty) {
         if (DefaultFirebaseOptions.currentPlatform.apiKey.isNotEmpty &&
-           !DefaultFirebaseOptions.currentPlatform.apiKey.contains('Dummy')) {
+            !DefaultFirebaseOptions.currentPlatform.apiKey.contains('Dummy')) {
           await Firebase.initializeApp(
             options: DefaultFirebaseOptions.currentPlatform,
           ).timeout(const Duration(seconds: 3));
@@ -138,20 +139,20 @@ class _HomeScreenState extends State<HomeScreen> {
           behavior: SnackBarBehavior.floating,
           shape: RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(10),
-            side: BorderSide(color: isSaved? neonGreen : borderDark, width: 1.2),
+            side: BorderSide(color: isSaved ? neonGreen : borderDark, width: 1.2),
           ),
           content: Row(
             children: [
               Icon(
-                isSaved? Icons.bookmark_rounded : Icons.bookmark_border_rounded,
-                color: isSaved? neonGreen : textGray,
+                isSaved ? Icons.bookmark_rounded : Icons.bookmark_border_rounded,
+                color: isSaved ? neonGreen : textGray,
                 size: 20,
               ),
               const SizedBox(width: 10),
               Expanded(
                 child: Text(
                   isSaved
-                     ? 'Saved to Bookmarks! 🔖 (Available in Saved)'
+                      ? 'Saved to Bookmarks! 🔖 (Available in Saved)'
                       : 'Removed from Bookmarks',
                   style: TextStyle(color: textWhite, fontWeight: FontWeight.bold, fontSize: 12),
                 ),
@@ -210,7 +211,7 @@ class _HomeScreenState extends State<HomeScreen> {
                 ),
                 BottomNavigationBarItem(
                   icon: savedCount > 0
-                     ? Badge(
+                      ? Badge(
                           label: Text(
                             '$savedCount',
                             style: const TextStyle(
@@ -224,7 +225,7 @@ class _HomeScreenState extends State<HomeScreen> {
                         )
                       : const Icon(Icons.bookmark_border_rounded),
                   activeIcon: savedCount > 0
-                     ? Badge(
+                      ? Badge(
                           label: Text(
                             '$savedCount',
                             style: const TextStyle(
@@ -249,8 +250,8 @@ class _HomeScreenState extends State<HomeScreen> {
           },
         ),
       ),
-      appBar: _selectedNavIndex!= 0
-         ? null
+      appBar: _selectedNavIndex != 0
+          ? null
           : AppBar(
               backgroundColor: const Color(0xFF0A2A1F),
               elevation: 0,
@@ -321,7 +322,7 @@ class _HomeScreenState extends State<HomeScreen> {
                                       Icon(Icons.timer_outlined, color: neonGreen, size: 14),
                                       const SizedBox(width: 4),
                                       Text(
-                                        isSmallScreen? remainingText : 'Ad-Free: $remainingText',
+                                        isSmallScreen ? remainingText : 'Ad-Free: $remainingText',
                                         style: TextStyle(
                                           color: neonGreen,
                                           fontWeight: FontWeight.bold,
@@ -338,7 +339,7 @@ class _HomeScreenState extends State<HomeScreen> {
                               child: Material(
                                 color: Colors.transparent,
                                 child: InkWell(
-                                  onTap: isLoading? null : () => AdFreeService().showRewardedAd(context),
+                                  onTap: isLoading ? null : () => AdFreeService().showRewardedAd(context),
                                   borderRadius: BorderRadius.circular(20),
                                   child: Container(
                                     margin: const EdgeInsets.symmetric(vertical: 10, horizontal: 4),
@@ -371,7 +372,7 @@ class _HomeScreenState extends State<HomeScreen> {
                                           ),
                                         const SizedBox(width: 4),
                                         Text(
-                                          isSmallScreen? 'Ad-Free' : '1 Ghante Ad-Free - Ad Dekho',
+                                          isSmallScreen ? 'Ad-Free' : '1 Ghante Ad-Free - Ad Dekho',
                                           style: const TextStyle(
                                             color: Colors.amber,
                                             fontWeight: FontWeight.bold,
@@ -392,13 +393,13 @@ class _HomeScreenState extends State<HomeScreen> {
                 ),
                 IconButton(
                   icon: Icon(
-                    _isSearching? Icons.close : Icons.search_rounded,
+                    _isSearching ? Icons.close : Icons.search_rounded,
                     color: neonGreen,
                     size: 22,
                   ),
                   onPressed: () {
                     setState(() {
-                      _isSearching =!_isSearching;
+                      _isSearching = !_isSearching;
                       if (!_isSearching) {
                         _searchQuery = '';
                         _searchController.clear();
@@ -429,8 +430,8 @@ class _HomeScreenState extends State<HomeScreen> {
                               cat,
                               style: TextStyle(
                                 fontSize: 13,
-                                color: isSelected? const Color(0xFF05080D) : textWhite,
-                                fontWeight: isSelected? FontWeight.bold : FontWeight.w500,
+                                color: isSelected ? const Color(0xFF05080D) : textWhite,
+                                fontWeight: isSelected ? FontWeight.bold : FontWeight.w500,
                               ),
                             ),
                             selected: isSelected,
@@ -449,8 +450,8 @@ class _HomeScreenState extends State<HomeScreen> {
                             padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
                             shape: StadiumBorder(
                               side: BorderSide(
-                                color: isSelected? const Color(0xFF00FF88) : borderDark,
-                                width: isSelected? 1.5 : 1,
+                                color: isSelected ? const Color(0xFF00FF88) : borderDark,
+                                width: isSelected ? 1.5 : 1,
                               ),
                             ),
                           ),
@@ -462,7 +463,7 @@ class _HomeScreenState extends State<HomeScreen> {
               ),
             ),
       body: _selectedNavIndex == 1
-         ? SavedNewsScreen(
+          ? SavedNewsScreen(
               onExploreTap: () {
                 setState(() {
                   _selectedNavIndex = 0;
@@ -470,7 +471,7 @@ class _HomeScreenState extends State<HomeScreen> {
               },
             )
           : _selectedNavIndex == 2
-             ? const ProfileScreen()
+              ? const ProfileScreen()
               : StreamBuilder<List<NewsModel>>(
         initialData: _firestoreService.currentNews,
         stream: _firestoreService.getNewsStream(),
@@ -533,7 +534,7 @@ class _HomeScreenState extends State<HomeScreen> {
             );
           }
 
-          final List<NewsModel> rawList = snapshot.data?? [];
+          final List<NewsModel> rawList = snapshot.data ?? [];
 
           if (rawList.isEmpty) {
             return Center(
@@ -556,6 +557,7 @@ class _HomeScreenState extends State<HomeScreen> {
           }
 
           final langCode = context.locale.languageCode;
+          final isRtl = LanguageService.isRtlLocale(context.locale);
           final filteredList = rawList.where((item) {
             final matchesCat = selectedCategory == 'All' ||
                 item.category.trim().toLowerCase() == selectedCategory.trim().toLowerCase() ||
@@ -583,10 +585,10 @@ class _HomeScreenState extends State<HomeScreen> {
             remainingNews = filteredList;
           } else {
             remainingNews = filteredList.where((item) {
-              if (featuredNews!= null && item.id == featuredNews!.id) {
+              if (featuredNews != null && item.id == featuredNews!.id) {
                 return false;
               }
-              return item.isFeatured!= true;
+              return item.isFeatured != true;
             }).toList();
           }
 
@@ -628,7 +630,7 @@ class _HomeScreenState extends State<HomeScreen> {
                           hintStyle: TextStyle(color: textGray, fontSize: 13),
                           prefixIcon: Icon(Icons.search, color: neonGreen, size: 20),
                           suffixIcon: _searchQuery.isNotEmpty
-                             ? IconButton(
+                              ? IconButton(
                                   icon: Icon(Icons.clear, color: textGray, size: 18),
                                   onPressed: () {
                                     _searchController.clear();
@@ -646,7 +648,7 @@ class _HomeScreenState extends State<HomeScreen> {
                   ),
                 ),
 
-              if (featuredNews!= null && _searchQuery.isEmpty)
+              if (featuredNews != null && _searchQuery.isEmpty)
                 SliverToBoxAdapter(
                   child: Padding(
                     padding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
@@ -675,6 +677,7 @@ class _HomeScreenState extends State<HomeScreen> {
                                 imageUrl: featuredNews!.imageUrl,
                                 fit: BoxFit.cover,
                               ),
+                              // IGN Dramatic Black Gradient Overlay
                               Container(
                                 decoration: BoxDecoration(
                                   gradient: LinearGradient(
@@ -689,6 +692,7 @@ class _HomeScreenState extends State<HomeScreen> {
                                   ),
                                 ),
                               ),
+                              // Featured Badge Top Left
                               Positioned(
                                 top: 12,
                                 left: 12,
@@ -710,7 +714,7 @@ class _HomeScreenState extends State<HomeScreen> {
                                         ),
                                       ),
                                     ),
-                                    if (featuredNews!.videoUrl!= null && featuredNews!.videoUrl!.isNotEmpty)...[
+                                    if (featuredNews!.videoUrl != null && featuredNews!.videoUrl!.isNotEmpty) ...[
                                       const SizedBox(width: 6),
                                       Container(
                                         padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 4),
@@ -738,6 +742,7 @@ class _HomeScreenState extends State<HomeScreen> {
                                   ],
                                 ),
                               ),
+                              // Bookmark Action Button
                               Positioned(
                                 top: 10,
                                 right: 10,
@@ -754,8 +759,8 @@ class _HomeScreenState extends State<HomeScreen> {
                                           shape: BoxShape.circle,
                                         ),
                                         child: Icon(
-                                          isSaved? Icons.bookmark_rounded : Icons.bookmark_border_rounded,
-                                          color: isSaved? neonGreen : textWhite,
+                                          isSaved ? Icons.bookmark_rounded : Icons.bookmark_border_rounded,
+                                          color: isSaved ? neonGreen : textWhite,
                                           size: 18,
                                         ),
                                       ),
@@ -763,6 +768,7 @@ class _HomeScreenState extends State<HomeScreen> {
                                   },
                                 ),
                               ),
+                              // Title & Time Overlay
                               Positioned(
                                 bottom: 12,
                                 left: 12,
@@ -770,10 +776,13 @@ class _HomeScreenState extends State<HomeScreen> {
                                 child: Column(
                                   crossAxisAlignment: CrossAxisAlignment.start,
                                   children: [
-                                    _AutoTranslateText(
-                                      original: featuredNews!.getTitle('en'),
+                                    TranslatedNewsTitle(
+                                      news: featuredNews!,
                                       langCode: langCode,
                                       maxLines: 2,
+                                      overflow: TextOverflow.ellipsis,
+                                      textAlign: isRtl ? TextAlign.right : TextAlign.left,
+                                      textDirection: isRtl ? TextDirection.rtl : TextDirection.ltr,
                                       style: TextStyle(
                                         color: textWhite,
                                         fontSize: 16,
@@ -812,6 +821,7 @@ class _HomeScreenState extends State<HomeScreen> {
                   ),
                 ),
 
+              // "LATEST NEWS" Heading with Green Line
               SliverToBoxAdapter(
                 child: Padding(
                   padding: const EdgeInsets.fromLTRB(16, 4, 16, 12),
@@ -827,7 +837,7 @@ class _HomeScreenState extends State<HomeScreen> {
                       ),
                       const SizedBox(width: 8),
                       Text(
-                        selectedCategory == 'All'? 'latest_news'.tr() : selectedCategory.toUpperCase(),
+                        selectedCategory == 'All' ? 'latest_news'.tr() : selectedCategory.toUpperCase(),
                         style: TextStyle(
                           color: textWhite,
                           fontSize: 16,
@@ -845,6 +855,7 @@ class _HomeScreenState extends State<HomeScreen> {
                 ),
               ),
 
+              // Latest News List with Native Ad after every 3 articles
               if (remainingNews.isNotEmpty)
                 SliverPadding(
                   padding: const EdgeInsets.only(bottom: 90),
@@ -873,6 +884,7 @@ class _HomeScreenState extends State<HomeScreen> {
                                     ),
                                     child: Row(
                                       children: [
+                                        // Left Image (120px)
                                         ClipRRect(
                                           borderRadius: const BorderRadius.horizontal(left: Radius.circular(11)),
                                           child: SizedBox(
@@ -885,7 +897,7 @@ class _HomeScreenState extends State<HomeScreen> {
                                                   imageUrl: item.imageUrl,
                                                   fit: BoxFit.cover,
                                                 ),
-                                                if (item.videoUrl!= null && item.videoUrl!.isNotEmpty)
+                                                if (item.videoUrl != null && item.videoUrl!.isNotEmpty)
                                                   Center(
                                                     child: Container(
                                                       padding: const EdgeInsets.all(6),
@@ -905,6 +917,7 @@ class _HomeScreenState extends State<HomeScreen> {
                                             ),
                                           ),
                                         ),
+                                        // Right Content
                                         Expanded(
                                           child: Padding(
                                             padding: const EdgeInsets.all(10.0),
@@ -937,10 +950,13 @@ class _HomeScreenState extends State<HomeScreen> {
                                                     ),
                                                   ],
                                                 ),
-                                                _AutoTranslateText(
-                                                  original: item.getTitle('en'),
+                                                TranslatedNewsTitle(
+                                                  news: item,
                                                   langCode: langCode,
                                                   maxLines: 2,
+                                                  overflow: TextOverflow.ellipsis,
+                                                  textAlign: isRtl ? TextAlign.right : TextAlign.left,
+                                                  textDirection: isRtl ? TextDirection.rtl : TextDirection.ltr,
                                                   style: TextStyle(
                                                     color: textWhite,
                                                     fontSize: 13,
@@ -966,8 +982,8 @@ class _HomeScreenState extends State<HomeScreen> {
                                                           child: Padding(
                                                             padding: const EdgeInsets.all(2.0),
                                                             child: Icon(
-                                                              isSaved? Icons.bookmark_rounded : Icons.bookmark_border_rounded,
-                                                              color: isSaved? neonGreen : textGray,
+                                                              isSaved ? Icons.bookmark_rounded : Icons.bookmark_border_rounded,
+                                                              color: isSaved ? neonGreen : textGray,
                                                               size: 17,
                                                             ),
                                                           ),
@@ -986,6 +1002,7 @@ class _HomeScreenState extends State<HomeScreen> {
                                 ),
                               ),
                             ),
+                            // Show Native Ad after every 3 articles (index % 3 == 2) only when NOT ad-free
                             ValueListenableBuilder<DateTime?>(
                               valueListenable: AdFreeService.adFreeUntilNotifier,
                               builder: (context, adFreeUntil, _) {
@@ -1028,30 +1045,6 @@ class _HomeScreenState extends State<HomeScreen> {
       },
     ),
   );
-      },
-    );
-  }
-}
-
-class _AutoTranslateText extends StatelessWidget {
-  final String original;
-  final String langCode;
-  final TextStyle? style;
-  final int? maxLines;
-  const _AutoTranslateText({required this.original, required this.langCode, this.style, this.maxLines});
-  @override
-  Widget build(BuildContext context) {
-    if (original.trim().isEmpty) return const SizedBox.shrink();
-    if (langCode == 'en' || langCode == 'ro' || langCode.toLowerCase().contains('roman')) {
-      return Text(original, style: style, maxLines: maxLines, overflow: TextOverflow.ellipsis);
-    }
-    return FutureBuilder<String>(
-      future: TranslationService.translateSingle(original, langCode),
-      builder: (context, snap) {
-        if (snap.connectionState == ConnectionState.waiting) {
-          return Text(original, style: style, maxLines: maxLines, overflow: TextOverflow.ellipsis);
-        }
-        return Text(snap.data?? original, style: style, maxLines: maxLines, overflow: TextOverflow.ellipsis);
       },
     );
   }

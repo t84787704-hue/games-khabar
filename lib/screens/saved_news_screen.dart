@@ -3,7 +3,9 @@ import 'package:easy_localization/easy_localization.dart';
 import '../models/news_model.dart';
 import '../services/bookmark_service.dart';
 import '../services/theme_service.dart';
+import '../services/language_service.dart';
 import '../widgets/app_image_view.dart';
+import '../widgets/translated_news_title.dart';
 import 'news_detail_screen.dart';
 
 class SavedNewsScreen extends StatefulWidget {
@@ -479,10 +481,13 @@ class _SavedNewsScreenState extends State<SavedNewsScreen> {
                       const SizedBox(height: 6),
 
                       // Title
-                      Text(
-                        item.getTitle(context.locale.languageCode),
+                      TranslatedNewsTitle(
+                        news: item,
+                        langCode: context.locale.languageCode,
                         maxLines: 2,
                         overflow: TextOverflow.ellipsis,
+                        textAlign: LanguageService.isRtlLocale(context.locale) ? TextAlign.right : TextAlign.left,
+                        textDirection: LanguageService.isRtlLocale(context.locale) ? TextDirection.rtl : TextDirection.ltr,
                         style: TextStyle(
                           color: textWhite,
                           fontSize: 13,

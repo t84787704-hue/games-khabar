@@ -1,4 +1,5 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
+import '../services/translation_service.dart';
 
 class NewsModel {
   final String id;
@@ -66,6 +67,21 @@ class NewsModel {
   String get description => getDescription();
   String get content => getDescription();
   String get thumbnailUrl => imageUrl;
+  String get cleanDescription => TranslationService.cleanBbCodeAndHtml(getDescription());
+
+  String getCleanDescription([String? langCode]) =>
+      TranslationService.cleanBbCodeAndHtml(getDescription(langCode));
+
+  /// Check if this news item is actually translated into the target language script
+  bool isTranslatedFor(String langCode) {
+    final code = langCode.toLowerCase();
+    if (code == 'en' || code == 'ro' || code == 'roman') return true;
+    final t = titleMap[code];
+    final d = descriptionMap[code];
+    if (t == null || t.trim().isEmpty || d == null || d.trim().isEmpty) return false;
+    return TranslationService.isTextInLanguage(t, code) &&
+        TranslationService.isTextInLanguage(d, code);
+  }
 
   String getTitle([String? langCode]) {
     if (langCode!= null && langCode.isNotEmpty) {

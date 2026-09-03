@@ -12,6 +12,8 @@ import '../widgets/native_ad_widget.dart';
 import '../services/bookmark_service.dart';
 import '../services/firestore_service.dart';
 import '../services/ad_free_service.dart';
+import '../services/translation_service.dart';
+import '../services/language_service.dart';
 
 /// Robust YouTube ID extractor matching standard, embed, shorts, and youtu.be URLs
 String? extractYoutubeId(String? url) {
@@ -43,6 +45,11 @@ class _NewsDetailScreenState extends State<NewsDetailScreen> {
   YoutubePlayerController? _youtubeController;
   bool _hasVideoError = false;
 
+  String? _translatedTitle;
+  String? _translatedDescription;
+  bool _isTranslating = false;
+  String? _currentLoadedLang;
+
   static const Color neonGreen = Color(0xFF00FF88);
   static const Color scaffoldBg = Color(0xFF121318);
   static const Color cardDark = Color(0xFF1E1F28);
@@ -56,6 +63,88 @@ class _NewsDetailScreenState extends State<NewsDetailScreen> {
   void initState() {
     super.initState();
     _initVideoPlayer();
+  }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    final langCode = context.locale.languageCode;
+    if (_currentLoadedLang != langCode) {
+      _currentLoadedLang = langCode;
+      _triggerTranslationIfNeeded(langCode);
+    }
+  }
+
+  Future<void> _triggerTranslationIfNeeded(String langCode) async {
+    final baseTitle = TranslationService.cleanBbCodeAndHtml(widget.news.getTitle(langCode));
+    final baseDesc = TranslationService.cleanBbCodeAndHtml(widget.news.getDescription(langCode));
+
+    final isTargetLatin = (langCode == 'en' || langCode == 'ro' || langCode == 'roman');
+    final titleOk = isTargetLatin || TranslationService.isTextInLanguage(baseTitle, langCode);
+    final descOk = isTargetLatin || TranslationService.isTextInLanguage(baseDesc, langCode);
+
+    if (titleOk && descOk) {
+      setState(() {
+        _translatedTitle = baseTitle;
+        _translatedDescription = baseDesc;
+        _isTranslating = false;
+      });
+      return;
+    }
+
+    // Set fallback immediately while translating
+    setState(() {
+      _translatedTitle = baseTitle;
+      _translatedDescription = baseDesc;
+      _isTranslating = true;
+    });
+
+    try {
+      final titleSrc = widget.news.titleMap['en'] ?? baseTitle;
+      final descSrc = widget.news.descriptionMap['en'] ?? baseDesc;
+
+      final tFuture = titleOk
+          ? Future.value(baseTitle)
+          : TranslationService.translateSingle(titleSrc, langCode);
+
+      final dFuture = descOk
+          ? Future.value(baseDesc)
+          : TranslationService.translateArticle(descSrc, langCode);
+
+      final results = await Future.wait([tFuture, dFuture]);
+      final newTitle = results[0];
+      final newDesc = results[1];
+
+      if (mounted && _currentLoadedLang == langCode) {
+        setState(() {
+          if (newTitle.isNotEmpty && (isTargetLatin || TranslationService.isTextInLanguage(newTitle, langCode))) {
+            _translatedTitle = newTitle;
+            widget.news.titleMap[langCode] = newTitle;
+          }
+          if (newDesc.isNotEmpty && (isTargetLatin || TranslationService.isTextInLanguage(newDesc, langCode))) {
+            _translatedDescription = newDesc;
+            widget.news.descriptionMap[langCode] = newDesc;
+          }
+          _isTranslating = false;
+        });
+
+        // Persist to Firestore in background
+        if (widget.news.id.isNotEmpty && !widget.news.id.startsWith('local-')) {
+          FirestoreService().updateNewsTranslation(
+            widget.news.id,
+            langCode,
+            _translatedTitle ?? baseTitle,
+            _translatedDescription ?? baseDesc,
+          );
+        }
+      }
+    } catch (_) {
+      if (mounted && _currentLoadedLang == langCode) {
+        setState(() {
+          _isTranslating = false;
+        });
+      }
+    }
   }
 
   void _initVideoPlayer() {
@@ -128,8 +217,9 @@ class _NewsDetailScreenState extends State<NewsDetailScreen> {
   }
 
   String _cleanContentText(String text) {
+    String cleaned = TranslationService.cleanBbCodeAndHtml(text);
     if (youtubeId != null) {
-      return text
+      cleaned = cleaned
           .replaceAll(
             RegExp(r'https?:\/\/(?:www\.)?(?:youtube\.com\/[^\s]+|youtu\.be\/[^\s]+)'),
             '',
@@ -137,7 +227,7 @@ class _NewsDetailScreenState extends State<NewsDetailScreen> {
           .replaceAll(RegExp(r'\n{3,}'), '\n\n')
           .trim();
     }
-    return text.trim();
+    return cleaned.trim();
   }
 
   Future<void> _launchExternalUrl(BuildContext context, String url) async {
@@ -162,8 +252,10 @@ class _NewsDetailScreenState extends State<NewsDetailScreen> {
         'https://play.google.com/store/apps/details?id=$packageName';
 
     final langCode = context.locale.languageCode;
-    final displayTitle = widget.news.getTitle(langCode);
-    final displayDescription = widget.news.getDescription(langCode);
+    final displayTitle = _translatedTitle ??
+        TranslationService.cleanBbCodeAndHtml(widget.news.getTitle(langCode));
+    final displayDescription = _translatedDescription ??
+        TranslationService.cleanBbCodeAndHtml(widget.news.getDescription(langCode));
 
     final String shareMessage =
         '🔥 $displayTitle\n\n'
@@ -281,8 +373,11 @@ class _NewsDetailScreenState extends State<NewsDetailScreen> {
   @override
   Widget build(BuildContext context) {
     final langCode = context.locale.languageCode;
-    final displayTitle = widget.news.getTitle(langCode);
-    final rawDescription = widget.news.getDescription(langCode);
+    final isRtl = LanguageService.isRtlLocale(context.locale);
+    final displayTitle = _translatedTitle ??
+        TranslationService.cleanBbCodeAndHtml(widget.news.getTitle(langCode));
+    final rawDescription = _translatedDescription ??
+        TranslationService.cleanBbCodeAndHtml(widget.news.getDescription(langCode));
     final displayDescription = _cleanContentText(rawDescription);
     final directUrl = _extractSourceUrl(rawDescription);
     final hasVideo = youtubeId != null || (widget.news.videoUrl != null && widget.news.videoUrl!.isNotEmpty);
@@ -316,6 +411,12 @@ class _NewsDetailScreenState extends State<NewsDetailScreen> {
           ),
           centerTitle: false,
           actions: [
+            // Language Switcher Button
+            IconButton(
+              icon: const Icon(Icons.language_rounded, color: textWhite, size: 22),
+              tooltip: 'Change Language',
+              onPressed: () => LanguageService.showLanguageBottomSheet(context),
+            ),
             // Bookmark Icon Button
             ValueListenableBuilder<Set<String>>(
               valueListenable: BookmarkService.bookmarkedIdsNotifier,
@@ -424,6 +525,8 @@ class _NewsDetailScreenState extends State<NewsDetailScreen> {
                 // 2. News Title
                 Text(
                   displayTitle,
+                  textAlign: isRtl ? TextAlign.right : TextAlign.left,
+                  textDirection: isRtl ? TextDirection.rtl : TextDirection.ltr,
                   style: const TextStyle(
                     color: textWhite,
                     fontSize: 22,
@@ -434,14 +537,74 @@ class _NewsDetailScreenState extends State<NewsDetailScreen> {
                 ),
                 const SizedBox(height: 12),
 
-                // 3. Accent Divider
-                Container(
-                  height: 3,
-                  width: 44,
-                  decoration: BoxDecoration(
-                    color: neonGreen,
-                    borderRadius: BorderRadius.circular(2),
-                  ),
+                // 3. Accent Divider & Translation Status
+                Row(
+                  children: [
+                    Container(
+                      height: 3,
+                      width: 44,
+                      decoration: BoxDecoration(
+                        color: neonGreen,
+                        borderRadius: BorderRadius.circular(2),
+                      ),
+                    ),
+                    const SizedBox(width: 12),
+                    if (_isTranslating)
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                        decoration: BoxDecoration(
+                          color: neonGreen.withOpacity(0.12),
+                          borderRadius: BorderRadius.circular(20),
+                          border: Border.all(color: neonGreen.withOpacity(0.3), width: 1),
+                        ),
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            const SizedBox(
+                              width: 10,
+                              height: 10,
+                              child: CircularProgressIndicator(
+                                strokeWidth: 2,
+                                color: neonGreen,
+                              ),
+                            ),
+                            const SizedBox(width: 6),
+                            Text(
+                              'Translating (${LanguageService.getLanguageModel(langCode).nativeName})...',
+                              style: const TextStyle(
+                                color: neonGreen,
+                                fontSize: 11,
+                                fontWeight: FontWeight.bold,
+                              ),
+                            ),
+                          ],
+                        ),
+                      )
+                    else if (langCode != 'en' && langCode != 'ro' && langCode != 'roman')
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                        decoration: BoxDecoration(
+                          color: cardDark,
+                          borderRadius: BorderRadius.circular(12),
+                          border: Border.all(color: borderDark, width: 1),
+                        ),
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            const Icon(Icons.translate_rounded, color: neonGreen, size: 12),
+                            const SizedBox(width: 4),
+                            Text(
+                              LanguageService.getLanguageModel(langCode).nativeName,
+                              style: const TextStyle(
+                                color: textLightGray,
+                                fontSize: 11,
+                                fontWeight: FontWeight.w600,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                  ],
                 ),
                 const SizedBox(height: 16),
 
@@ -543,6 +706,8 @@ class _NewsDetailScreenState extends State<NewsDetailScreen> {
                 if (firstParagraph.isNotEmpty) ...[
                   Text(
                     firstParagraph,
+                    textAlign: isRtl ? TextAlign.right : TextAlign.left,
+                    textDirection: isRtl ? TextDirection.rtl : TextDirection.ltr,
                     style: const TextStyle(
                       color: textLightGray,
                       fontSize: 15,
@@ -583,6 +748,8 @@ class _NewsDetailScreenState extends State<NewsDetailScreen> {
                       padding: const EdgeInsets.only(bottom: 14),
                       child: Text(
                         para,
+                        textAlign: isRtl ? TextAlign.right : TextAlign.left,
+                        textDirection: isRtl ? TextDirection.rtl : TextDirection.ltr,
                         style: const TextStyle(
                           color: textLightGray,
                           fontSize: 15,
