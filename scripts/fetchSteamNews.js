@@ -14,6 +14,12 @@ const db = admin.firestore();
 const APP_CATEGORIES = ['Racing Games','Driving Games','Simulator Games','Bike Games','Car Simulator','Truck Simulator','Battle Royale','FPS / Shooting','Action Games','Adventure Games','Survival Games','Sports Games','Strategy Games','Horror Games','Multiplayer Games','Offline Games'];
 let fbIndex = 0;
 
+// RUSSIAN FILTER - ye naya hai
+function isRussian(text){
+  if(!text) return false;
+  return /[а-яА-ЯёЁ]/.test(text);
+}
+
 // 1. STEAM GAMES
 const allGamesAppIds = {
   'Forza Horizon 5': 1551360, 'Euro Truck Simulator 2': 227300, 'American Truck Simulator': 270880,
@@ -94,16 +100,36 @@ function detectCat(title){
 
 async function run(){
   console.log('START FETCH - LATEST NEWS');
+
+  // STEP 0 - PURANI RUSSIAN DELETE KARO
+  try{
+    const snap = await db.collection('news').get();
+    let del = 0;
+    for(const doc of snap.docs){
+      const title = doc.data().title || doc.data().titleMap?.en || "";
+      if(isRussian(title)){
+        await doc.ref.delete();
+        del++;
+      }
+    }
+    console.log(`Cleaned ${del} Russian old docs`);
+  }catch(e){ console.log("Clean fail", e.message); }
+
   // STEAM - Latest 20 per game
   for(const [gameName, appId] of Object.entries(allGamesAppIds)){
     try{
       const res = await axios.get(`https://api.steampowered.com/ISteamNews/GetNewsForApp/v2/?appid=${appId}&count=20&maxlength=0`);
       for(const item of res.data?.appnews?.newsitems||[]){
-        let desc = cleanText(item.contents||""); if(desc.length<40) continue;
+        const rawTitle = he.decode(item.title||"").substring(0,200);
+        if(isRussian(rawTitle)) continue; // RUSSIAN SKIP
+        let desc = cleanText(item.contents||"");
+        if(desc.length<40) continue;
+        if(isRussian(desc)) continue;
+
         let cat = GAME_CATEGORY_MAP[gameName] || APP_CATEGORIES[fbIndex % APP_CATEGORIES.length]; fbIndex++;
         await db.collection('news').doc(`${appId}_${item.gid}`).set({
-          id:`${appId}_${item.gid}`, title: he.decode(item.title||"").substring(0,200), description: desc,
-          titleMap:{en: he.decode(item.title||"").substring(0,200), ur: he.decode(item.title||"").substring(0,200), ro: he.decode(item.title||"").substring(0,200)},
+          id:`${appId}_${item.gid}`, title: rawTitle, description: desc,
+          titleMap:{en: rawTitle, ur: rawTitle, ro: rawTitle},
           descriptionMap:{en: desc, ur: desc, ro: desc},
           imageUrl:`https://cdn.akamai.steamstatic.com/steam/apps/${appId}/header.jpg`,
           appId, appid: appId, url: item.url||"", sourceUrl: item.url||"", gameName, category: cat,
@@ -118,13 +144,17 @@ async function run(){
     try{
       const feed = await parser.parseURL(src.url);
       for(const item of feed.items.slice(0,20)){
+        const rawTitle = he.decode(item.title||"").substring(0,200);
+        if(isRussian(rawTitle)) continue; // RUSSIAN SKIP
         let full = cleanText(item.contentSnippet||item.content||"");
         if(full.length<60) continue;
+        if(isRussian(full)) continue;
+
         let cat = src.fixedCat || detectCat(item.title||"") || APP_CATEGORIES[fbIndex % APP_CATEGORIES.length]; fbIndex++;
         const safeId = Buffer.from(item.link||"").toString('base64').replace(/[/+=]/g,'').substring(0,20);
         await db.collection('news').doc(`${src.name}_${safeId}`).set({
-          id:`${src.name}_${safeId}`, title: he.decode(item.title||"").substring(0,200), description: full,
-          titleMap:{en: he.decode(item.title||"").substring(0,200), ur: he.decode(item.title||"").substring(0,200), ro: he.decode(item.title||"").substring(0,200)},
+          id:`${src.name}_${safeId}`, title: rawTitle, description: full,
+          titleMap:{en: rawTitle, ur: rawTitle, ro: rawTitle},
           descriptionMap:{en: full, ur: full, ro: full},
           imageUrl: getImage(item), url: item.link||"", sourceUrl: item.link||"", gameName: src.name, category: cat,
           timestamp: Math.floor(Date.now()/1000), timeAgo: new Date().toISOString(),
