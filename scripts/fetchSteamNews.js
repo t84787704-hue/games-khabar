@@ -142,10 +142,61 @@ function makeAbsoluteUrl(imgUrl, baseLink) {
   return url;
 }
 
-function getRealImage($, item, baseLink) {
+const FALLBACK_IMAGES = {
+  valorant: 'https://images.unsplash.com/photo-1542751371-adc38448a05e?auto=format&fit=crop&w=1000&q=80',
+  fortnite: 'https://images.unsplash.com/photo-1538481199705-c710c4e965fc?auto=format&fit=crop&w=1000&q=80',
+  bgmi: 'https://images.unsplash.com/photo-1579373903781-fd5c0c30c4cd?auto=format&fit=crop&w=1000&q=80',
+  pubg: 'https://images.unsplash.com/photo-1579373903781-fd5c0c30c4cd?auto=format&fit=crop&w=1000&q=80',
+  freefire: 'https://images.unsplash.com/photo-1511512578047-dfb367046420?auto=format&fit=crop&w=1000&q=80',
+  cod: 'https://images.unsplash.com/photo-1550745165-9bc0b252726f?auto=format&fit=crop&w=1000&q=80',
+  gta: 'https://images.unsplash.com/photo-1518709268805-4e9042af9f23?auto=format&fit=crop&w=1000&q=80',
+  sports: 'https://images.unsplash.com/photo-1511886929837-354d827aae26?auto=format&fit=crop&w=1000&q=80',
+  bike: 'https://images.unsplash.com/photo-1558981403-c5f9899a28bc?auto=format&fit=crop&w=1000&q=80',
+  racing: 'https://images.unsplash.com/photo-1568605117036-5fe5e7bab0b7?auto=format&fit=crop&w=1000&q=80',
+  truck: 'https://images.unsplash.com/photo-1601584115197-04ecc0da31d7?auto=format&fit=crop&w=1000&q=80',
+  minecraft: 'https://images.unsplash.com/photo-1627856013091-fed6e4e30025?auto=format&fit=crop&w=1000&q=80',
+  general: 'https://images.unsplash.com/photo-1493711662062-fa541adb3fc8?auto=format&fit=crop&w=1000&q=80'
+};
+
+function getCategoryFallback(title = '', category = '') {
+  const text = `${title} ${category}`.toLowerCase();
+  if (text.includes('valorant')) return { key: 'valorant', url: FALLBACK_IMAGES.valorant };
+  if (text.includes('fortnite')) return { key: 'fortnite', url: FALLBACK_IMAGES.fortnite };
+  if (text.includes('bgmi') || text.includes('battlegrounds mobile')) return { key: 'bgmi', url: FALLBACK_IMAGES.bgmi };
+  if (text.includes('pubg')) return { key: 'pubg', url: FALLBACK_IMAGES.pubg };
+  if (text.includes('free fire')) return { key: 'freefire', url: FALLBACK_IMAGES.freefire };
+  if (text.includes('call of duty') || text.includes('warzone') || text.includes('fps')) return { key: 'cod', url: FALLBACK_IMAGES.cod };
+  if (text.includes('gta') || text.includes('grand theft auto')) return { key: 'gta', url: FALLBACK_IMAGES.gta };
+  if (text.includes('wcc') || text.includes('cricket') || text.includes('fifa') || text.includes('fc 24') || text.includes('sports')) return { key: 'sports', url: FALLBACK_IMAGES.sports };
+  if (text.includes('bike') || text.includes('motogp') || text.includes('ride 5')) return { key: 'bike', url: FALLBACK_IMAGES.bike };
+  if (text.includes('forza') || text.includes('f1') || text.includes('drift') || text.includes('racing')) return { key: 'racing', url: FALLBACK_IMAGES.racing };
+  if (text.includes('truck') || text.includes('simulator')) return { key: 'truck', url: FALLBACK_IMAGES.truck };
+  if (text.includes('minecraft')) return { key: 'minecraft', url: FALLBACK_IMAGES.minecraft };
+  return { key: 'general', url: FALLBACK_IMAGES.general };
+}
+
+const USER_AGENT = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36';
+
+async function getImage(articleUrl, item, rawTitle = '', category = '', existing$ = null) {
+  let $ = existing$;
+
+  // 1. Fetch HTML with axios if not already provided
+  if (!$ && articleUrl && articleUrl.startsWith('http')) {
+    try {
+      const res = await axios.get(articleUrl, {
+        headers: { 'User-Agent': USER_AGENT },
+        timeout: 10000,
+        maxRedirects: 5
+      });
+      if (res.data && typeof res.data === 'string') {
+        $ = cheerio.load(res.data);
+      }
+    } catch (_) {}
+  }
+
   let found = "";
 
-  // 1. From HTML: og:image FIRST priority
+  // 2. From HTML: og:image FIRST priority, then twitter:image
   if ($) {
     found = $('meta[property="og:image"]').attr('content') ||
             $('meta[property="og:image:url"]').attr('content') ||
@@ -153,7 +204,7 @@ function getRealImage($, item, baseLink) {
             $('meta[name="twitter:image:src"]').attr('content');
   }
 
-  // 2. RSS tags fallback if HTML didn't have og:image
+  // 3. Fallback to RSS enclosure or media tags
   if (!found && item) {
     if (item.enclosure?.url) found = item.enclosure.url;
     else if (item['media:content']?.['$']?.url) found = item['media:content']['$'].url;
@@ -162,38 +213,29 @@ function getRealImage($, item, baseLink) {
     else if (item.image?.url) found = item.image.url;
   }
 
-  // 3. First <img> inside article
+  // 4. First <img> inside article body
   if (!found && $) {
     const firstImg = $('article img, [data-component="article-body"] img, .article-content img').first().attr('src');
     if (firstImg) found = firstImg;
   }
 
-  if (!found) return null;
-
-  const abs = makeAbsoluteUrl(found, baseLink);
-  if (!abs || !abs.startsWith('http')) return null;
-
-  const lower = abs.toLowerCase();
-  // Filter tracking pixels, gifs, or invalid images
-  if (lower.includes('1x1') || lower.endsWith('.gif') || lower.includes('feedburner.com/~r/')) {
-    return null;
-  }
-  // NEVER allow hardcoded Elden Ring fallback image
-  if (lower.includes('1245620')) {
-    return null;
+  // 5. If found, make absolute URL and validate
+  if (found) {
+    const abs = makeAbsoluteUrl(found, articleUrl);
+    if (abs && abs.startsWith('http')) {
+      const lower = abs.toLowerCase();
+      if (!lower.includes('1x1') && !lower.endsWith('.gif') && !lower.includes('feedburner.com/~r/') && !lower.includes('1245620')) {
+        console.log(`[Image Success] Real image found for "${rawTitle.substring(0, 45)}": ${abs}`);
+        return abs;
+      }
+    }
   }
 
-  // Validate standard image extensions or CDN image paths
-  const isImageExt = /\.(jpg|jpeg|png|webp|avif)($|\?)/i.test(abs);
-  const isImageCdn = /(images|media|cdn|uploads|static|photos|img)/i.test(abs);
-  if (!isImageExt && !isImageCdn) {
-    return null;
-  }
-
-  return abs;
+  // 6. Agar phir bhi na mile tab hi fallback use karo
+  const fallback = getCategoryFallback(rawTitle, category);
+  console.log(`[Image Fallback] "${rawTitle.substring(0, 45)}" used [${fallback.key}] fallback: ${fallback.url}`);
+  return fallback.url;
 }
-
-const USER_AGENT = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36';
 
 async function fetchFullArticle(url) {
   if (!url || !url.startsWith('http')) return null;
@@ -352,11 +394,11 @@ async function run(){
 
         let cat = src.fixedCat || detectCat(rawTitle) || APP_CATEGORIES[fbIndex % APP_CATEGORIES.length]; fbIndex++;
 
-        // Get genuine article image (never fallback to wrong image)
-        const img = getRealImage(fullArticle.$, item, articleUrl);
+        // Get genuine article image via og:image with axios + cheerio, or category fallback
+        const img = await getImage(articleUrl, item, rawTitle, cat, fullArticle.$);
         if (!img) {
-          console.log(`[Image Missing] Skipping "${rawTitle.substring(0, 40)}" (no verified image)`);
-          continue; // SKIP if no verified article image
+          console.log(`[Image Missing] Skipping "${rawTitle.substring(0, 40)}" (no image found)`);
+          continue;
         }
 
         const paras = fullArticle.fullText.split('\n\n').filter(p => p.trim().length > 20);
