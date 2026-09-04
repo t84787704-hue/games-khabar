@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:easy_localization/easy_localization.dart' hide TextDirection;
 import 'dart:ui' as ui;
+import 'package:flutter_linkify/flutter_linkify.dart';
+import 'package:url_launcher/url_launcher.dart';
 import '../models/news_model.dart';
 import '../services/bookmark_service.dart';
 import '../services/theme_service.dart';
@@ -38,11 +40,39 @@ class _NewsDetailScreenState extends State<NewsDetailScreen> {
     return text.replaceAll(RegExp(r'<[^>]*>'), ' ').replaceAll(RegExp(r'\s+'), ' ').trim();
   }
 
+  String _fixLinks(String text) {
+    if (text.isEmpty) return text;
+    String cleaned = text;
+
+    // 1. Replace duplicate schemes like 'https:// https://' or regex 'https:\s*//\s*https:\s*//' -> 'https://'
+    cleaned = cleaned.replaceAll(RegExp(r'(?:https?:\s*//\s*)+https?:\s*//', caseSensitive: false), 'https://');
+
+    // 2. Replace 'https:// ' and 'http:// ' spaces after scheme -> 'https://'
+    cleaned = cleaned.replaceAll(RegExp(r'(https?://)\s+', caseSensitive: false), r'$1');
+
+    // 3. Fix spaces before domain or in domain: 'https:// www.ea.com' -> 'https://www.ea.com'
+    cleaned = cleaned.replaceAll(RegExp(r'https?://\s+', caseSensitive: false), 'https://');
+
+    // 4. Fix double slash before ID: '/app//2488620' -> '/app/2488620' (while keeping 'https://')
+    cleaned = cleaned.replaceAllMapped(RegExp(r'(https?://[^\s]+)', caseSensitive: false), (match) {
+      final fullUrl = match.group(1)!;
+      final parts = fullUrl.split('://');
+      if (parts.length == 2) {
+        final scheme = parts[0];
+        final path = parts[1].replaceAll(RegExp(r'/+'), '/');
+        return '$scheme://$path';
+      }
+      return fullUrl;
+    });
+
+    return cleaned;
+  }
+
   String _getDescSafe(String langCode) {
     String d = widget.news.getDescription(langCode);
     if (d.trim().isEmpty) d = widget.news.getDescription('en');
     if (d.trim().isEmpty) d = widget.news.description;
-    return _cleanHtml(d);
+    return _fixLinks(_cleanHtml(d));
   }
 
   String _getReadMoreText(String langCode) {
@@ -149,8 +179,18 @@ class _NewsDetailScreenState extends State<NewsDetailScreen> {
               child: Column(
                 crossAxisAlignment: isRtl ? CrossAxisAlignment.end : CrossAxisAlignment.start,
                 children: [
-                  Text(
-                    _isExpanded
+                  Linkify(
+                    onOpen: (link) async {
+                      final uri = Uri.tryParse(link.url);
+                      if (uri != null) {
+                        try {
+                          await launchUrl(uri, mode: LaunchMode.externalApplication);
+                        } catch (_) {
+                          await launchUrl(uri);
+                        }
+                      }
+                    },
+                    text: _isExpanded
                         ? descSafe
                         : descSafe.length > 400
                             ? '${descSafe.substring(0, 400)}...'
@@ -158,6 +198,12 @@ class _NewsDetailScreenState extends State<NewsDetailScreen> {
                     textAlign: isRtl ? TextAlign.right : TextAlign.left,
                     textDirection: isRtl ? ui.TextDirection.rtl : ui.TextDirection.ltr,
                     style: TextStyle(color: textWhite, fontSize: 14, height: 1.8),
+                    linkStyle: TextStyle(
+                      color: neonGreen,
+                      fontSize: 14,
+                      height: 1.8,
+                      decoration: TextDecoration.underline,
+                    ),
                   ),
                   const SizedBox(height: 12),
                   if (descSafe.length > 400)
