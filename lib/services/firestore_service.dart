@@ -3,29 +3,6 @@ import 'package:flutter/foundation.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import '../models/news_model.dart';
 
-// =========================================================================
-// RECOMMENDED FIRESTORE SECURITY RULES FOR GAMES KHABAR:
-//
-// Paste these in Firebase Console > Firestore Database > Rules:
-//
-// rules_version = '2';
-// service cloud.firestore {
-// match /databases/{database}/documents {
-// match /news/{newsId} {
-// // 1. Anyone (public) can read gaming news
-// allow read: if true;
-//
-// // 2. Only authenticated Admin can create or delete
-// allow create, delete: if request.auth!= null;
-//
-// // 3. Admin can update full document, OR public can increment view counter
-// allow update: if request.auth!= null
-// || request.resource.data.diff(resource.data).affectedKeys().hasOnly(['views']);
-// }
-// }
-// }
-// =========================================================================
-
 class FirestoreService {
   static final FirestoreService _instance = FirestoreService._internal();
   factory FirestoreService() => _instance;
@@ -41,7 +18,6 @@ class FirestoreService {
   final StreamController<List<NewsModel>> _streamController =
       StreamController<List<NewsModel>>.broadcast();
 
-  // In-memory master list (starts empty, populated strictly from Firestore)
   List<NewsModel> _currentNewsList = [];
 
   FirestoreService._internal() {
@@ -61,7 +37,6 @@ class FirestoreService {
         (snapshot) {
           final firestoreItems =
               snapshot.docs.map((doc) => NewsModel.fromFirestore(doc)).toList();
-
           _currentNewsList = firestoreItems;
           _streamController.add(List.from(_currentNewsList));
         },
@@ -69,20 +44,16 @@ class FirestoreService {
           _streamController.add(List.from(_currentNewsList));
         },
       );
-    } catch (_) {
-      // Ignore initial Firestore listener setup failure
-    }
+    } catch (_) {}
   }
 
   List<NewsModel> get currentNews => List.from(_currentNewsList);
 
-  // Reactive stream of all news sorted by newest
   Stream<List<NewsModel>> getNewsStream() async* {
     yield List.from(_currentNewsList);
     yield* _streamController.stream;
   }
 
-  // Force refresh news from Firestore (pull-to-refresh)
   Future<void> refreshNews() async {
     try {
       final db = _db;
@@ -96,17 +67,14 @@ class FirestoreService {
 
         final firestoreItems =
             snapshot.docs.map((doc) => NewsModel.fromFirestore(doc)).toList();
-
         _currentNewsList = firestoreItems;
         _streamController.add(List.from(_currentNewsList));
         return;
       }
     } catch (_) {}
-    // Re-emit existing list on error or timeout
     _streamController.add(List.from(_currentNewsList));
   }
 
-  // Increment views
   Future<void> incrementView(String id) async {
     final idx = _currentNewsList.indexWhere((item) => item.id == id);
     if (idx!= -1) {
@@ -114,7 +82,6 @@ class FirestoreService {
       _currentNewsList[idx] = old.copyWith(views: old.views + 1);
       _streamController.add(List.from(_currentNewsList));
     }
-
     try {
       final db = _db;
       if (db!= null &&!id.startsWith('local-')) {
@@ -127,7 +94,6 @@ class FirestoreService {
     } catch (_) {}
   }
 
-  // Update localized title & description translations in memory & Firestore
   Future<void> updateNewsTranslation(
     String id,
     String langCode,
@@ -136,7 +102,6 @@ class FirestoreService {
   ) async {
     final cleanId = id.trim();
     if (cleanId.isEmpty || cleanId.startsWith('local-')) return;
-
     final idx = _currentNewsList.indexWhere((item) => item.id == cleanId);
     if (idx!= -1) {
       final old = _currentNewsList[idx];
@@ -144,7 +109,6 @@ class FirestoreService {
       old.descriptionMap[langCode] = translatedDesc;
       _streamController.add(List.from(_currentNewsList));
     }
-
     try {
       final db = _db;
       if (db!= null) {
@@ -157,16 +121,13 @@ class FirestoreService {
     } catch (_) {}
   }
 
-  // Get single news article by ID (checks memory first, then Firestore)
   Future<NewsModel?> getNewsById(String id) async {
     final cleanId = id.trim();
     if (cleanId.isEmpty) return null;
-
     final inMemory = _currentNewsList.where((item) => item.id == cleanId).toList();
     if (inMemory.isNotEmpty) {
       return inMemory.first;
     }
-
     try {
       final db = _db;
       if (db!= null) {
@@ -194,31 +155,14 @@ class FirestoreService {
       return res;
     } else if (val is String && val.isNotEmpty) {
       return {
-        'roman': val,
-        'ro': val,
-        'en': val,
-        'hi': val,
-        'ur': val,
-        'bn': val,
-        'ar': val,
-        'zh': val,
-        'zh-cn': val,
+        'roman': val, 'ro': val, 'en': val, 'hi': val, 'ur': val, 'bn': val, 'ar': val, 'zh': val, 'zh-cn': val,
       };
     }
     return {
-      'roman': fallback,
-      'ro': fallback,
-      'en': fallback,
-      'hi': fallback,
-      'ur': fallback,
-      'bn': fallback,
-      'ar': fallback,
-      'zh': fallback,
-      'zh-cn': fallback,
+      'roman': fallback, 'ro': fallback, 'en': fallback, 'hi': fallback, 'ur': fallback, 'bn': fallback, 'ar': fallback, 'zh': fallback, 'zh-cn': fallback,
     };
   }
 
-  // Add new article - instant UI update + background Firestore sync (returns created newsId)
   Future<String> addNews(Map<String, dynamic> data) async {
     final localId = 'local-${DateTime.now().millisecondsSinceEpoch}';
     final videoUrl = data['videoUrl'] as String??? '';
@@ -241,13 +185,9 @@ class FirestoreService {
       sourceUrl: data['sourceUrl'] as String?,
     );
 
-    // Insert at index 0 immediately so user sees it instantly
     _currentNewsList.insert(0, newModel);
     _streamController.add(List.from(_currentNewsList));
-
     String createdId = localId;
-
-    // Try to sync with Firestore in background with 4-second timeout
     try {
       final db = _db;
       if (db!= null) {
@@ -268,31 +208,21 @@ class FirestoreService {
         }).timeout(const Duration(seconds: 4));
         createdId = docRef.id;
       }
-    } catch (_) {
-      // If Firestore write times out or fails (e.g. offline/permission), local store already has it
-    }
-
+    } catch (_) {}
     return createdId;
   }
 
-  // Delete article
   Future<void> deleteNews(String id) async {
     _currentNewsList.removeWhere((item) => item.id == id);
     _streamController.add(List.from(_currentNewsList));
-
     try {
       final db = _db;
       if (db!= null &&!id.startsWith('local-')) {
-        await db
-           .collection('news')
-           .doc(id)
-           .delete()
-           .timeout(const Duration(seconds: 3));
+        await db.collection('news').doc(id).delete().timeout(const Duration(seconds: 3));
       }
     } catch (_) {}
   }
 
-  // Update existing article - instant UI update + background Firestore sync
   Future<void> updateNews(String id, Map<String, dynamic> data) async {
     final idx = _currentNewsList.indexWhere((item) => item.id == id);
     final titleMap = _parseTextMap(data['title'], 'Untitled');
@@ -323,7 +253,6 @@ class FirestoreService {
       );
       _streamController.add(List.from(_currentNewsList));
     }
-
     try {
       final db = _db;
       if (db!= null &&!id.startsWith('local-')) {
@@ -343,9 +272,7 @@ class FirestoreService {
     } catch (_) {}
   }
 
-  // Set an article as featured and demote previous featured articles without deleting them
   Future<void> makeFeatured(String newDocId) async {
-    // 1. Update in-memory state for immediate UI reactivity
     for (int i = 0; i < _currentNewsList.length; i++) {
       final item = _currentNewsList[i];
       if (item.id == newDocId) {
@@ -355,30 +282,18 @@ class FirestoreService {
       }
     }
     _streamController.add(List.from(_currentNewsList));
-
-    // 2. Perform atomic batch update on Firestore
     try {
       final db = _db;
       if (db!= null) {
         final batch = db.batch();
-
-        // Find all currently featured documents
-        final querySnapshot = await db
-           .collection('news')
-           .where('isFeatured', isEqualTo: true)
-           .get();
-
+        final querySnapshot = await db.collection('news').where('isFeatured', isEqualTo: true).get();
         for (var doc in querySnapshot.docs) {
           if (doc.id!= newDocId) {
-            // Demote old featured document to regular news (do NOT delete)
             batch.update(doc.reference, {'isFeatured': false});
           }
         }
-
-        // Promote new document to featured
         final newDocRef = db.collection('news').doc(newDocId);
         batch.update(newDocRef, {'isFeatured': true});
-
         await batch.commit();
       }
     } catch (e) {
