@@ -1,75 +1,79 @@
+import 'package:cloud_firestore/cloud_firestore.dart';
+
 class NewsModel {
   final String id;
   final String title;
   final String description;
+  final Map<String, String> titleMap;
+  final Map<String, String> descriptionMap;
+  final bool isFeatured;
+  final String? videoUrl;
   final String imageUrl;
   final String category;
+  final int appid;
   final String url;
-  final int timestamp;
   final int views;
-  final Map<String, dynamic>? titleTranslations;
-  final Map<String, dynamic>? descTranslations;
+  final int timestamp;
+  final String timeAgo;
 
   NewsModel({
     required this.id,
     required this.title,
     required this.description,
+    required this.titleMap,
+    required this.descriptionMap,
+    required this.isFeatured,
+    this.videoUrl,
     required this.imageUrl,
     required this.category,
+    required this.appid,
     required this.url,
-    required this.timestamp,
     required this.views,
-    this.titleTranslations,
-    this.descTranslations,
+    required this.timestamp,
+    required this.timeAgo,
   });
 
-  factory NewsModel.fromJson(Map<String, dynamic> json) {
+  factory NewsModel.fromFirestore(DocumentSnapshot doc) {
+    final data = doc.data() as Map<String, dynamic>? ?? {};
+
+    // Purani half news aur nayi full news dono ko support karega
+    Map<String, String> buildDescMap() {
+      if (data['descriptionMap'] != null) {
+        return Map<String, String>.from(data['descriptionMap']);
+      }
+      return {
+        'en': (data['description_en'] ?? data['description'] ?? '').toString(),
+        'ur': (data['description_ur'] ?? data['description'] ?? '').toString(),
+        'ro': (data['description_ro'] ?? data['description'] ?? '').toString(),
+      };
+    }
+
+    Map<String, String> buildTitleMap() {
+      if (data['titleMap'] != null) {
+        return Map<String, String>.from(data['titleMap']);
+      }
+      return {
+        'en': (data['title_en'] ?? data['title'] ?? '').toString(),
+        'ur': (data['title_ur'] ?? data['title'] ?? '').toString(),
+        'ro': (data['title_ro'] ?? data['title'] ?? '').toString(),
+      };
+    }
+
     return NewsModel(
-      id: json['id'] ?? '',
-      title: json['title'] ?? json['title_en'] ?? '',
-      description: json['description'] ?? json['description_en'] ?? '',
-      imageUrl: json['imageUrl'] ?? '',
-      category: json['category'] ?? 'Action Games',
-      url: json['url'] ?? '',
-      timestamp: json['timestamp'] ?? 0,
-      views: json['views'] ?? 0,
-      titleTranslations: {
-        'en': json['title_en'] ?? json['title'] ?? '',
-        'ur': json['title_ur'] ?? json['title'] ?? '',
-        'ro': json['title_ro'] ?? json['title'] ?? '',
-      },
-      descTranslations: {
-        'en': json['description_en'] ?? json['description'] ?? '',
-        'ur': json['description_ur'] ?? json['description'] ?? '',
-        'ro': json['description_ro'] ?? json['description'] ?? '',
-      },
+      id: data['id'] ?? doc.id,
+      title: data['title'] ?? '',
+      description: data['description'] ?? data['description_en'] ?? '',
+      titleMap: buildTitleMap(),
+      descriptionMap: buildDescMap(),
+      isFeatured: data['isFeatured'] ?? false,
+      videoUrl: data['videoUrl'],
+      imageUrl: data['imageUrl'] ?? '',
+      category: data['category'] ?? 'Action Games',
+      appid: (data['appid'] is int) ? data['appid'] : int.tryParse(data['appid'].toString()) ?? 0,
+      url: data['url'] ?? '',
+      views: (data['views'] is int) ? data['views'] : int.tryParse(data['views'].toString()) ?? 0,
+      timestamp: (data['timestamp'] is int) ? data['timestamp'] : 0,
+      timeAgo: data['timeAgo'] ?? '',
     );
   }
-
-  String getTitle(String langCode) {
-    if (langCode == 'ur') return descTranslations?['ur'] != '' ? titleTranslations?['ur'] ?? title : title;
-    if (langCode == 'ro') return titleTranslations?['ro'] ?? title;
-    return titleTranslations?['en'] ?? title;
-  }
-
-  String getDescription(String langCode) {
-    if (langCode == 'ur') return descTranslations?['ur'] ?? description;
-    if (langCode == 'ro') return descTranslations?['ro'] ?? description;
-    return descTranslations?['en'] ?? description;
-  }
-
-  String get timeAgo {
-    final date = DateTime.fromMillisecondsSinceEpoch(timestamp * 1000);
-    final diff = DateTime.now().difference(date);
-    if (diff.inHours < 24) return '${diff.inHours}h ago';
-    return '${diff.inDays}d ago';
-  }
-
-  Map<String, dynamic> toJson() => {
-    'id': id,
-    'title': title,
-    'description': description,
-    'imageUrl': imageUrl,
-    'category': category,
-  };
 }
