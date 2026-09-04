@@ -1,7 +1,6 @@
 const admin = require('firebase-admin');
 const axios = require('axios');
 
-// Firebase Admin init - GitHub Secret se
 const serviceAccount = JSON.parse(process.env.FIREBASE_SERVICE_ACCOUNT);
 admin.initializeApp({
   credential: admin.credential.cert(serviceAccount)
@@ -45,34 +44,44 @@ async function fetchAll() {
   
   for (const [gameName, appId] of Object.entries(allGamesAppIds)) {
     try {
-      const url = `https://api.steampowered.com/ISteamNews/GetNewsForApp/v2/?appid=${appId}&count=3`;
+      // YAHAN maxlength=0 ADD KIYA HAI TAKE PURI NEWS AAYE
+      const url = `https://api.steampowered.com/ISteamNews/GetNewsForApp/v2/?appid=${appId}&count=3&maxlength=0`;
       const res = await axios.get(url);
       const items = res.data?.appnews?.newsitems || [];
       
       for (const item of items) {
-        // Duplicate check - pehle se hai to skip
-        const existing = await db.collection('news').where('sourceUrl', '==', item.url).limit(1).get();
-        if (!existing.empty) continue;
+        const fullDesc = item.contents || "";
+        const title = item.title || "";
+        const docId = `${appId}_${item.gid}`;
 
-        await db.collection('news').add({
-          title: item.title,
-          content: item.contents,
-          sourceUrl: item.url,
-          gameName: gameName,
-          category: detectCategory(item.title + ' ' + item.contents),
-          timestamp: admin.firestore.FieldValue.serverTimestamp(),
-          source: 'Steam',
-          appId: appId,
-          isVideo: false,
+        await db.collection('news').doc(docId).set({
+          id: docId,
+          title: title,
+          description: fullDesc,
+          titleMap: { en: title, ur: title, ro: title },
+          descriptionMap: { en: fullDesc, ur: fullDesc, ro: fullDesc },
           imageUrl: `https://cdn.akamai.steamstatic.com/steam/apps/${appId}/header.jpg`,
-        });
+          appid: appId,
+          appId: appId,
+          url: item.url || "",
+          sourceUrl: item.url || "",
+          gameName: gameName,
+          category: detectCategory(title + ' ' + fullDesc),
+          timestamp: item.date || Math.floor(Date.now()/1000),
+          timeAgo: new Date().toISOString(),
+          views: 0,
+          isFeatured: false,
+          isAuto: true,
+          isFree: false,
+          videoUrl: null,
+        }, { merge: true });
+        
         total++;
-        console.log(`Saved: ${gameName} - ${item.title}`);
+        console.log(`Saved: ${gameName} - ${title}`);
       }
     } catch (e) {
       console.log(`Skip ${gameName}: ${e.message}`);
     }
-    // 2 sec delay taake Steam block na kare
     await new Promise(r => setTimeout(r, 2000));
   }
   console.log(`Done! Total ${total} news saved`);
