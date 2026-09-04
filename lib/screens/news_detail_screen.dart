@@ -34,11 +34,27 @@ class _NewsDetailScreenState extends State<NewsDetailScreen> {
     return t;
   }
 
+  String _cleanHtml(String text) {
+    return text.replaceAll(RegExp(r'<[^>]*>'), ' ').replaceAll(RegExp(r'\s+'), ' ').trim();
+  }
+
   String _getDescSafe(String langCode) {
     String d = widget.news.getDescription(langCode);
     if (d.trim().isEmpty) d = widget.news.getDescription('en');
     if (d.trim().isEmpty) d = widget.news.description;
-    return d;
+    return _cleanHtml(d);
+  }
+
+  String _getReadMoreText(String langCode) {
+    if (langCode == 'ur') return 'مزید پڑھیں';
+    if (langCode == 'ro') return 'Citește mai mult';
+    return 'Read more';
+  }
+
+  String _getShowLessText(String langCode) {
+    if (langCode == 'ur') return 'کم دکھائیں';
+    if (langCode == 'ro') return 'Arată mai puțin';
+    return 'Show less';
   }
 
   @override
@@ -157,7 +173,7 @@ class _NewsDetailScreenState extends State<NewsDetailScreen> {
                         child: Padding(
                           padding: const EdgeInsets.symmetric(vertical: 6, horizontal: 4),
                           child: Text(
-                            _isExpanded ? 'کم دکھائیں' : 'مزید پڑھیں',
+                            _isExpanded ? _getShowLessText(langCode) : _getReadMoreText(langCode),
                             style: TextStyle(color: neonGreen, fontWeight: FontWeight.bold, fontSize: 14),
                           ),
                         ),
