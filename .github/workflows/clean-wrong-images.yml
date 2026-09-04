@@ -1,0 +1,37 @@
+name: Clean Wrong Images
+on: workflow_dispatch
+jobs:
+  clean:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+      - run: npm install firebase-admin
+      - name: Delete Docs With Wrong Elden Ring Images
+        run: |
+          node << 'EOF'
+          const admin = require('firebase-admin');
+          const serviceAccount = JSON.parse(process.env.FIREBASE_SERVICE_ACCOUNT);
+          admin.initializeApp({ credential: admin.credential.cert(serviceAccount) });
+          const db = admin.firestore();
+          (async () => {
+            const snap = await db.collection('news').get();
+            console.log('Total docs checked:', snap.size);
+            let del = 0;
+            for (const doc of snap.docs) {
+              const d = doc.data();
+              const img = d.imageUrl || '';
+              const game = (d.gameName || '').toLowerCase();
+              // Delete if has Elden Ring app ID (1245620) but article is NOT Elden Ring
+              if (img.includes('1245620') && !game.includes('elden ring')) {
+                await doc.ref.delete();
+                del++;
+              }
+            }
+            console.log('Done, deleted docs with wrong images:', del);
+          })();
+          EOF
+        env:
+          FIREBASE_SERVICE_ACCOUNT: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}

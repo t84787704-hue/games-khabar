@@ -80,11 +80,83 @@ function cleanText(dirty){
   t = t.replace(/\[img\][\s\S]*?\[\/img\]/gi, '').replace(/<img[^>]*>/gi, '').replace(/<[^>]*>/g,' ');
   return t.replace(/\s+/g,' ').trim().substring(0,7000);
 }
-function getImage(item){
-  if(item.enclosure?.url) return item.enclosure.url;
-  if(item['media:content']?.['$']?.url) return item['media:content']['$'].url;
-  const m = item.content?.match(/<img[^>]+src="([^">]+)"/); if(m) return m[1];
-  return `https://cdn.akamai.steamstatic.com/steam/apps/1245620/header.jpg`;
+function makeAbsoluteUrl(imgUrl, baseLink) {
+  if (!imgUrl) return "";
+  let url = imgUrl.trim();
+  if (url.startsWith('//')) {
+    return `https:${url}`;
+  }
+  if (url.startsWith('/') && baseLink) {
+    try {
+      const u = new URL(baseLink);
+      return `${u.origin}${url}`;
+    } catch (_) {
+      return url;
+    }
+  }
+  return url;
+}
+
+const FALLBACK_IMAGES = {
+  valorant: 'https://images.unsplash.com/photo-1542751371-adc38448a05e?auto=format&fit=crop&w=1000&q=80',
+  fortnite: 'https://images.unsplash.com/photo-1538481199705-c710c4e965fc?auto=format&fit=crop&w=1000&q=80',
+  bgmi: 'https://images.unsplash.com/photo-1579373903781-fd5c0c30c4cd?auto=format&fit=crop&w=1000&q=80',
+  pubg: 'https://images.unsplash.com/photo-1579373903781-fd5c0c30c4cd?auto=format&fit=crop&w=1000&q=80',
+  freefire: 'https://images.unsplash.com/photo-1511512578047-dfb367046420?auto=format&fit=crop&w=1000&q=80',
+  cod: 'https://images.unsplash.com/photo-1550745165-9bc0b252726f?auto=format&fit=crop&w=1000&q=80',
+  gta: 'https://images.unsplash.com/photo-1518709268805-4e9042af9f23?auto=format&fit=crop&w=1000&q=80',
+  sports: 'https://images.unsplash.com/photo-1511886929837-354d827aae26?auto=format&fit=crop&w=1000&q=80',
+  racing: 'https://images.unsplash.com/photo-1568605117036-5fe5e7bab0b7?auto=format&fit=crop&w=1000&q=80',
+  truck: 'https://images.unsplash.com/photo-1601584115197-04ecc0da31d7?auto=format&fit=crop&w=1000&q=80',
+  minecraft: 'https://images.unsplash.com/photo-1627856013091-fed6e4e30025?auto=format&fit=crop&w=1000&q=80',
+  general: 'https://images.unsplash.com/photo-1493711662062-fa541adb3fc8?auto=format&fit=crop&w=1000&q=80'
+};
+
+function getCategoryFallback(title = '', category = '') {
+  const text = `${title} ${category}`.toLowerCase();
+  if (text.includes('valorant')) return { key: 'valorant', url: FALLBACK_IMAGES.valorant };
+  if (text.includes('fortnite')) return { key: 'fortnite', url: FALLBACK_IMAGES.fortnite };
+  if (text.includes('bgmi') || text.includes('battlegrounds mobile')) return { key: 'bgmi', url: FALLBACK_IMAGES.bgmi };
+  if (text.includes('pubg')) return { key: 'pubg', url: FALLBACK_IMAGES.pubg };
+  if (text.includes('free fire')) return { key: 'freefire', url: FALLBACK_IMAGES.freefire };
+  if (text.includes('call of duty') || text.includes('warzone') || text.includes('fps')) return { key: 'cod', url: FALLBACK_IMAGES.cod };
+  if (text.includes('gta') || text.includes('grand theft auto')) return { key: 'gta', url: FALLBACK_IMAGES.gta };
+  if (text.includes('wcc') || text.includes('cricket') || text.includes('fifa') || text.includes('fc 24') || text.includes('sports')) return { key: 'sports', url: FALLBACK_IMAGES.sports };
+  if (text.includes('forza') || text.includes('f1') || text.includes('drift') || text.includes('racing')) return { key: 'racing', url: FALLBACK_IMAGES.racing };
+  if (text.includes('truck') || text.includes('simulator')) return { key: 'truck', url: FALLBACK_IMAGES.truck };
+  if (text.includes('minecraft')) return { key: 'minecraft', url: FALLBACK_IMAGES.minecraft };
+  return { key: 'general', url: FALLBACK_IMAGES.general };
+}
+
+function getImage(item, title = '', category = '') {
+  let found = "";
+
+  // 1. Enclosure / Media tag from RSS
+  if (item.enclosure?.url) found = item.enclosure.url;
+  else if (item['media:content']?.['$']?.url) found = item['media:content']['$'].url;
+  else if (item['media:thumbnail']?.['$']?.url) found = item['media:thumbnail']['$'].url;
+  else if (item['media:group']?.['media:content']?.[0]?.['$']?.url) found = item['media:group']['media:content'][0]['$'].url;
+
+  // 2. Look for <img> tags inside content / content:encoded / description
+  if (!found) {
+    const rawContent = item['content:encoded'] || item.content || item.description || item.contentSnippet || '';
+    const m = rawContent.match(/<img[^>]+src=["']([^"'>]+)["']/i);
+    if (m && m[1]) found = m[1];
+  }
+
+  // 3. Make URL absolute
+  if (found) {
+    const abs = makeAbsoluteUrl(found, item.link);
+    // Ignore tracking 1x1 pixels or tiny icons
+    if (!abs.includes('feedburner.com/~r/') && !abs.includes('1x1') && !abs.endsWith('.gif')) {
+      return abs;
+    }
+  }
+
+  // 4. Category-based fallback (Never single Elden Ring)
+  const fallback = getCategoryFallback(title, category);
+  console.log(`[Image Fallback] "${title.substring(0, 45)}" used [${fallback.key}] fallback: ${fallback.url}`);
+  return fallback.url;
 }
 function detectCat(title){
   const t=title.toLowerCase();
@@ -156,7 +228,7 @@ async function run(){
           id:`${src.name}_${safeId}`, title: rawTitle, description: full,
           titleMap:{en: rawTitle, ur: rawTitle, ro: rawTitle},
           descriptionMap:{en: full, ur: full, ro: full},
-          imageUrl: getImage(item), url: item.link||"", sourceUrl: item.link||"", gameName: src.name, category: cat,
+          imageUrl: getImage(item, rawTitle, cat), url: item.link||"", sourceUrl: item.link||"", gameName: src.name, category: cat,
           timestamp: Math.floor(Date.now()/1000), timeAgo: new Date().toISOString(),
           views: 0, isFeatured: false, isAuto: true, isFree: false, source: src.name, appId: 0, appid: 0
         },{merge:true});
