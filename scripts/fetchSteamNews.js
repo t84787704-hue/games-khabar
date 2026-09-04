@@ -1,12 +1,9 @@
 const admin = require('firebase-admin');
 const axios = require('axios');
 const Parser = require('rss-parser');
-const cheerio = require('cheerio');
 const he = require('he');
-
 const parser = new Parser({ customFields: { item: ['media:content', 'enclosure'] } });
 
-// Firebase
 const serviceAccount = JSON.parse(process.env.FIREBASE_SERVICE_ACCOUNT);
 admin.initializeApp({ credential: admin.credential.cert(serviceAccount) });
 const db = admin.firestore();
@@ -15,13 +12,13 @@ const APP_CATEGORIES = ['Racing Games','Driving Games','Simulator Games','Bike G
 let fbIndex = 0;
 let saved = 0;
 
-// RUSSIAN FILTER - IMPROVED
 function isRussian(text){
   if(!text) return false;
-  return /[а-яА-ЯёЁ\u0400-\u04FF]/.test(text);
+  const cyr = (text.match(/[а-яА-ЯёЁ]/g) || []).length;
+  const total = text.replace(/\s/g,'').length || 1;
+  return (cyr/total) > 0.3; // 30% se zyada Russian ho to hi delete
 }
 
-// 1. STEAM GAMES
 const allGamesAppIds = {
   'Forza Horizon 5': 1551360, 'Euro Truck Simulator 2': 227300, 'American Truck Simulator': 270880,
   'BeamNG.drive': 284160, 'Assetto Corsa': 244210, 'CarX Drift': 635260, 'GTA 5': 271590,
@@ -30,7 +27,6 @@ const allGamesAppIds = {
   'Apex Legends': 1172470, 'Call of Duty': 2519060, 'Palworld': 1623730, 'Phasmophobia': 739630,
   'Star Wars Jedi Survivor': 1774580, 'FC 24': 2195250, 'Forza Motorsport': 2440510, 'F1 23': 2108330
 };
-
 const GAME_CATEGORY_MAP = {
   'Forza Horizon 5': 'Racing Games', 'CarX Drift': 'Racing Games', 'Forza Motorsport': 'Racing Games', 'F1 23': 'Racing Games',
   'BeamNG.drive': 'Driving Games', 'Assetto Corsa': 'Driving Games',
@@ -42,8 +38,6 @@ const GAME_CATEGORY_MAP = {
   'Rust': 'Survival Games', 'Palworld': 'Survival Games',
   'Phasmophobia': 'Horror Games', 'FC 24': 'Sports Games'
 };
-
-// 2. TOP 50 WEBSITES
 const TOP_50_SITES = [
   { name: 'IGN', url: 'https://feeds.feedburner.com/ign/games-all' },
   { name: 'GameSpot', url: 'https://www.gamespot.com/feeds/mashup/' },
@@ -68,110 +62,62 @@ const TOP_50_SITES = [
   { name: 'Fortnite', url: 'https://news.google.com/rss/search?q=Fortnite+Epic+Games&hl=en-US&gl=US&ceid=US:en', fixedCat: 'Battle Royale' },
   { name: 'Valorant', url: 'https://news.google.com/rss/search?q=Valorant+Riot+Games&hl=en-US&gl=US&ceid=US:en', fixedCat: 'FPS / Shooting' },
   { name: 'GTA 6', url: 'https://news.google.com/rss/search?q=GTA+6+Grand+Theft+Auto+6&hl=en-US&gl=US&ceid=US:en', fixedCat: 'Action Games' },
-  { name: 'WCC3', url: 'https://news.google.com/rss/search?q=WCC3+World+Cricket+Championship+game&hl=en-US&gl=US&ceid=US:en', fixedCat: 'Sports Games' },
-  { name: 'FIFA FC24', url: 'https://news.google.com/rss/search?q=EA+FC+24+game&hl=en-US&gl=US&ceid=US:en', fixedCat: 'Sports Games' },
-  { name: 'Jedi Survivor', url: 'https://news.google.com/rss/search?q=Star+Wars+Jedi+Survivor&hl=en-US&gl=US&ceid=US:en', fixedCat: 'Adventure Games' },
-  { name: 'Minecraft', url: 'https://news.google.com/rss/search?q=Minecraft+game+update&hl=en-US&gl=US&ceid=US:en', fixedCat: 'Survival Games' },
-  { name: 'Bike Racing', url: 'https://news.google.com/rss/search?q=MotoGP+Ride+5+bike+game&hl=en-US&gl=US&ceid=US:en', fixedCat: 'Bike Games' },
 ];
 
-function cleanText(dirty){
-  if(!dirty) return "";
-  let t = he.decode(dirty);
-  t = t.replace(/\[img\][\s\S]*?\[\/img\]/gi, '').replace(/<img[^>]*>/gi, '').replace(/<[^>]*>/g,' ');
-  return t.replace(/\s+/g,' ').trim().substring(0,7000);
-}
-function getImage(item){
-  if(item.enclosure?.url) return item.enclosure.url;
-  if(item['media:content']?.['$']?.url) return item['media:content']['$'].url;
-  const m = item.content?.match(/<img[^>]+src="([^">]+)"/); if(m) return m[1];
-  return `https://cdn.akamai.steamstatic.com/steam/apps/1245620/header.jpg`;
-}
-function detectCat(title){
-  const t=title.toLowerCase();
-  if(t.includes('free fire')||t.includes('pubg')||t.includes('fortnite')) return 'Battle Royale';
-  if(t.includes('wcc')||t.includes('cricket')||t.includes('fifa')||t.includes('fc 24')) return 'Sports Games';
-  if(t.includes('jedi')||t.includes('gta')) return 'Adventure Games';
-  if(t.includes('bike')||t.includes('motogp')) return 'Bike Games';
-  if(t.includes('truck')) return 'Truck Simulator';
-  if(t.includes('valorant')||t.includes('call of duty')) return 'FPS / Shooting';
-  if(t.includes('racing')||t.includes('forza')||t.includes('f1')) return 'Racing Games';
-  return null;
-}
+function cleanText(d){ if(!d) return ""; let t=he.decode(d); t=t.replace(/\[img\][\s\S]*?\[\/img\]/gi,'').replace(/<img[^>]*>/gi,'').replace(/<[^>]*>/g,' '); return t.replace(/\s+/g,' ').trim().substring(0,7000); }
+function getImage(item){ if(item.enclosure?.url) return item.enclosure.url; if(item['media:content']?.['$']?.url) return item['media:content']['$'].url; const m=item.content?.match(/<img[^>]+src="([^">]+)"/); if(m) return m[1]; return `https://cdn.akamai.steamstatic.com/steam/apps/1245620/header.jpg`; }
+function detectCat(title){ const t=title.toLowerCase(); if(t.includes('free fire')||t.includes('pubg')||t.includes('fortnite')) return 'Battle Royale'; if(t.includes('cricket')||t.includes('fifa')||t.includes('fc 24')) return 'Sports Games'; if(t.includes('jedi')||t.includes('gta')) return 'Adventure Games'; if(t.includes('bike')||t.includes('motogp')) return 'Bike Games'; if(t.includes('truck')) return 'Truck Simulator'; if(t.includes('valorant')) return 'FPS / Shooting'; if(t.includes('racing')||t.includes('forza')||t.includes('f1')) return 'Racing Games'; return null; }
+async function parseFeedWithAgent(url){ try{ const res=await axios.get(url,{headers:{'User-Agent':'Mozilla/5.0'}, timeout:15000}); return await parser.parseString(res.data); }catch(e){ console.log(`FAIL ${url} ${e.message}`); return null; } }
 
 async function run(){
   console.log('START FETCH - LATEST NEWS');
-  saved = 0;
+  saved=0;
+  console.log('Skipping old Russian delete - only skipping new Russian');
 
-  // STEP 0 - PURANI RUSSIAN DELETE KARO
-  try{
-    const snap = await db.collection('news').get();
-    let del = 0;
-    for(const doc of snap.docs){
-      const data = doc.data();
-      const title = data.title || data.titleMap?.en || "";
-      const desc = data.description || data.descriptionMap?.en || "";
-      if(isRussian(title) || isRussian(desc)){
-        await doc.ref.delete();
-        del++;
-      }
-    }
-    console.log(`Cleaned ${del} Russian old docs`);
-  }catch(e){ console.log("Clean fail", e.message); }
-
-  // STEAM - Latest 20 per game
   for(const [gameName, appId] of Object.entries(allGamesAppIds)){
     try{
-      const res = await axios.get(`https://api.steampowered.com/ISteamNews/GetNewsForApp/v2/?appid=${appId}&count=20&maxlength=0`);
+      const res=await axios.get(`https://api.steampowered.com/ISteamNews/GetNewsForApp/v2/?appid=${appId}&count=20&maxlength=0`);
       for(const item of res.data?.appnews?.newsitems||[]){
-        const rawTitle = he.decode(item.title||"").substring(0,200);
+        const rawTitle=he.decode(item.title||"").substring(0,200);
         if(isRussian(rawTitle)) continue;
-        let desc = cleanText(item.contents||"");
-        if(desc.length<40) continue;
-        if(isRussian(desc)) continue;
-
-        let cat = GAME_CATEGORY_MAP[gameName] || APP_CATEGORIES[fbIndex % APP_CATEGORIES.length]; fbIndex++;
+        let desc=cleanText(item.contents||"");
+        if(desc.length<40 || isRussian(desc)) continue;
+        let cat=GAME_CATEGORY_MAP[gameName]||APP_CATEGORIES[fbIndex%APP_CATEGORIES.length]; fbIndex++;
         await db.collection('news').doc(`${appId}_${item.gid}`).set({
           id:`${appId}_${item.gid}`, title: rawTitle, description: desc,
-          titleMap:{en: rawTitle, ur: rawTitle, ro: rawTitle, roman: rawTitle},
-          descriptionMap:{en: desc, ur: desc, ro: desc, roman: desc},
+          titleMap:{en:rawTitle, ur:rawTitle, ro:rawTitle, roman:rawTitle},
+          descriptionMap:{en:desc, ur:desc, ro:desc, roman:desc},
           imageUrl:`https://cdn.akamai.steamstatic.com/steam/apps/${appId}/header.jpg`,
-          appId, appid: appId, url: item.url||"", sourceUrl: item.url||"", gameName, category: cat,
+          appId, appid:appId, url:item.url||"", sourceUrl:item.url||"", gameName, category:cat,
           timestamp: admin.firestore.FieldValue.serverTimestamp(),
-          timeAgo: new Date().toISOString(),
-          views: 0, isFeatured: true, isAuto: true, isFree: false, source: 'Steam'
+          timeAgo: new Date().toISOString(), views:0, isFeatured:true, isAuto:true, isFree:false, source:'Steam'
         },{merge:true});
         saved++;
       }
     }catch(e){}
   }
-  // 50 WEBSITES - Latest 20 per website
   for(const src of TOP_50_SITES){
-    try{
-      const feed = await parser.parseURL(src.url);
-      for(const item of feed.items.slice(0,20)){
-        const rawTitle = he.decode(item.title||"").substring(0,200);
-        if(isRussian(rawTitle)) continue;
-        let full = cleanText(item.contentSnippet||item.content||"");
-        if(full.length<60) continue;
-        if(isRussian(full)) continue;
-
-        let cat = src.fixedCat || detectCat(item.title||"") || APP_CATEGORIES[fbIndex % APP_CATEGORIES.length]; fbIndex++;
-        const safeId = Buffer.from(item.link||"").toString('base64').replace(/[/+=]/g,'').substring(0,20);
-        await db.collection('news').doc(`${src.name}_${safeId}`).set({
-          id:`${src.name}_${safeId}`, title: rawTitle, description: full,
-          titleMap:{en: rawTitle, ur: rawTitle, ro: rawTitle, roman: rawTitle},
-          descriptionMap:{en: full, ur: full, ro: full, roman: full},
-          imageUrl: getImage(item), url: item.link||"", sourceUrl: item.link||"", gameName: src.name, category: cat,
-          timestamp: admin.firestore.FieldValue.serverTimestamp(),
-          timeAgo: new Date().toISOString(),
-          views: 0, isFeatured: true, isAuto: true, isFree: false, source: src.name, appId: 0, appid: 0
-        },{merge:true});
-        saved++;
-      }
-    }catch(e){}
+    const feed=await parseFeedWithAgent(src.url);
+    if(!feed) continue;
+    for(const item of feed.items.slice(0,20)){
+      const rawTitle=he.decode(item.title||"").substring(0,200);
+      if(isRussian(rawTitle)) continue;
+      let full=cleanText(item.contentSnippet||item.content||"");
+      if(full.length<60 || isRussian(full)) continue;
+      let cat=src.fixedCat||detectCat(item.title||"")||APP_CATEGORIES[fbIndex%APP_CATEGORIES.length]; fbIndex++;
+      const safeId=Buffer.from(item.link||"").toString('base64').replace(/[/+=]/g,'').substring(0,20);
+      await db.collection('news').doc(`${src.name}_${safeId}`).set({
+        id:`${src.name}_${safeId}`, title:rawTitle, description:full,
+        titleMap:{en:rawTitle, ur:rawTitle, ro:rawTitle, roman:rawTitle},
+        descriptionMap:{en:full, ur:full, ro:full, roman:full},
+        imageUrl:getImage(item), url:item.link||"", sourceUrl:item.link||"", gameName:src.name, category:cat,
+        timestamp: admin.firestore.FieldValue.serverTimestamp(),
+        timeAgo: new Date().toISOString(), views:0, isFeatured:true, isAuto:true, isFree:false, source:src.name, appId:0, appid:0
+      },{merge:true});
+      saved++;
+    }
   }
-  console.log(`DONE - LATEST NEWS FETCHED - SAVED ${saved} DOCS`);
+  console.log(`DONE - SAVED ${saved} DOCS`);
   await admin.app().delete();
   process.exit(0);
 }
