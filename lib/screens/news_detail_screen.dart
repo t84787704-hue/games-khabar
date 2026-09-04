@@ -156,16 +156,23 @@ class _NewsDetailScreenState extends State<NewsDetailScreen> {
                   const SizedBox(width: 4),
                   Icon(Icons.access_time, color: textGray, size: 14),
                   const SizedBox(width: 8),
-                  Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                    decoration: BoxDecoration(
-                      border: Border.all(color: neonGreen, width: 1),
-                      borderRadius: BorderRadius.circular(6),
-                      color: neonGreen.withOpacity(0.1),
-                    ),
-                    child: Text(
-                      widget.news.category.toUpperCase(),
-                      style: TextStyle(color: neonGreen, fontSize: 11, fontWeight: FontWeight.w900),
+                  Flexible(
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                      decoration: BoxDecoration(
+                        border: Border.all(color: neonGreen, width: 1),
+                        borderRadius: BorderRadius.circular(6),
+                        color: neonGreen.withOpacity(0.1),
+                      ),
+                      child: Text(
+                        (widget.news.gameName != null && widget.news.gameName!.trim().isNotEmpty
+                                ? widget.news.gameName!
+                                : widget.news.category)
+                            .toUpperCase(),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: TextStyle(color: neonGreen, fontSize: 11, fontWeight: FontWeight.w900),
+                      ),
                     ),
                   ),
                 ],

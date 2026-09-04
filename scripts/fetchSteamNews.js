@@ -322,6 +322,53 @@ function detectCat(title){
   return null;
 }
 
+function extractGameName(title, fallback = '') {
+  if (!title || typeof title !== 'string') return fallback;
+  const cleanTitle = title.trim();
+
+  // 1. High-priority known gaming franchises and patterns
+  const franchisePatterns = [
+    /\bEA Sports\s+[A-Za-z0-9]+(?:\s+[A-Za-z0-9]+){0,3}\b/i,
+    /\bCall of Duty(?::\s*[A-Za-z0-9]+|\s+[A-Za-z0-9]+){1,3}\b/i,
+    /\b(?:Grand Theft Auto|GTA)\s*(?:VI|V|IV|\d+)?\b/i,
+    /\bFIFA\s*\d+\b/i,
+    /\b(?:Fall Guys|Valorant|Fortnite|Minecraft|BGMI|PUBG(?::\s*BATTLEGROUNDS)?|Apex Legends|Cyberpunk 2077|Elden Ring|Helldivers\s*2|Palworld|Genshin Impact|Rocket League|Counter-Strike\s*2|Roblox|Free Fire|Starfield|Baldur's Gate\s*3|Tekken\s*8|Street Fighter\s*6|Forza Horizon\s*\d?|Forza Motorsport|Overwatch\s*2?|God of War|The Last of Us|Resident Evil\s*\w+|Assassin's Creed\s*\w+|World of Warcraft|League of Legends|Dota\s*2|Star Wars\s+[A-Za-z0-9]+)\b/i
+  ];
+
+  for (const pattern of franchisePatterns) {
+    const match = cleanTitle.match(pattern);
+    if (match) {
+      return match[0].trim();
+    }
+  }
+
+  // 2. Cut before common headline separators (comma, colon, dash, pipe)
+  // e.g. "EA Sports College Football 27, The Survivalists..." -> "EA Sports College Football 27"
+  let segment = cleanTitle.split(/[:|\-–—,]/)[0].trim();
+
+  // Strip trailing platform or action words: PS5, PS4, Xbox, PC, Switch, Review, Update, etc.
+  segment = segment.replace(/\s+(?:PS[45]|PlayStation(?:\s*[45])?|Xbox(?:\s*(?:Series\s*[XS]|One))?|Nintendo\s*Switch|Switch|PC|Steam|iOS|Android|Update|Patch|Review|Trailer|DLC|Free|Release\s*Date).*$/i, '').trim();
+
+  // 3. Extract first 3-4 capitalized English words from start
+  const startCapitalized = segment.match(/^([A-Z0-9][a-zA-Z0-9'’\.\-&]*(?:\s+[A-Z0-9][a-zA-Z0-9'’\.\-&]*){0,3})/);
+  if (startCapitalized && startCapitalized[1]) {
+    const candidate = startCapitalized[1].trim();
+    const words = candidate.split(/\s+/);
+    const stopWords = ['How', 'Why', 'What', 'Where', 'When', 'Who', 'New', 'Every', 'Top', 'Best', 'Here', 'All', 'The', 'A', 'An', 'Is', 'Are', 'Will', 'Could'];
+    if (words.length > 1 || (!stopWords.includes(words[0]) && candidate.length > 3)) {
+      return candidate;
+    }
+  }
+
+  // 4. Regex fallback: match capitalized multi-word sequence anywhere
+  const regexMatch = cleanTitle.match(/([A-Z][a-z0-9]+(?:\s+[A-Z0-9][a-z0-9]+)+|\bEA Sports[^\n,:]+|\bGTA\s?VI?\b|\bFIFA\s?\d+|\bCall of Duty[^\n,:]*)/);
+  if (regexMatch && regexMatch[1]) {
+    return regexMatch[1].trim();
+  }
+
+  return (segment.length >= 3 && segment.length <= 40) ? segment : fallback;
+}
+
 async function run(){
   console.log('START FETCH - LATEST NEWS');
 
@@ -405,6 +452,7 @@ async function run(){
         const shortDesc = paras.slice(0, 2).join('\n\n') || fullArticle.fullText.substring(0, 300);
 
         const safeId = Buffer.from(articleUrl).toString('base64').replace(/[/+=]/g,'').substring(0,20);
+        const detectedGame = extractGameName(rawTitle, src.name);
         await db.collection('news').doc(`${src.name}_${safeId}`).set({
           id:`${src.name}_${safeId}`,
           title: rawTitle,
@@ -413,7 +461,7 @@ async function run(){
           shortDescription: shortDesc,
           titleMap:{en: rawTitle, ur: rawTitle, ro: rawTitle},
           descriptionMap:{en: fullArticle.fullText, ur: fullArticle.fullText, ro: fullArticle.fullText},
-          imageUrl: img, url: articleUrl, sourceUrl: articleUrl, gameName: src.name, category: cat,
+          imageUrl: img, url: articleUrl, sourceUrl: articleUrl, gameName: detectedGame, category: cat,
           timestamp: Math.floor(Date.now()/1000), timeAgo: new Date().toISOString(),
           views: 0, isFeatured: false, isAuto: true, isFree: false, source: src.name, appId: 0, appid: 0
         },{merge:true});

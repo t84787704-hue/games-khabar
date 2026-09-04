@@ -811,12 +811,19 @@ class _HomeScreenState extends State<HomeScreen> {
                                     const SizedBox(height: 6),
                                     Row(
                                       children: [
-                                        Text(
-                                          featuredNews!.category.toUpperCase(),
-                                          style: TextStyle(
-                                            color: neonGreen,
-                                            fontSize: 10,
-                                            fontWeight: FontWeight.bold,
+                                        Flexible(
+                                          child: Text(
+                                            (featuredNews!.gameName != null && featuredNews!.gameName!.trim().isNotEmpty
+                                                    ? featuredNews!.gameName!
+                                                    : featuredNews!.category)
+                                                .toUpperCase(),
+                                            maxLines: 1,
+                                            overflow: TextOverflow.ellipsis,
+                                            style: TextStyle(
+                                              color: neonGreen,
+                                              fontSize: 10,
+                                              fontWeight: FontWeight.bold,
+                                            ),
                                           ),
                                         ),
                                         const SizedBox(width: 8),
@@ -945,23 +952,33 @@ class _HomeScreenState extends State<HomeScreen> {
                                               children: [
                                                 Row(
                                                   children: [
-                                                    Container(
-                                                      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                                                      decoration: BoxDecoration(
-                                                        color: neonGreen.withOpacity(0.15),
-                                                        borderRadius: BorderRadius.circular(4),
-                                                        border: Border.all(color: neonGreen.withOpacity(0.5)),
-                                                      ),
-                                                      child: Text(
-                                                        item.category.toUpperCase(),
-                                                        style: TextStyle(
-                                                          color: neonGreen,
-                                                          fontSize: 9,
-                                                          fontWeight: FontWeight.w900,
+                                                    Expanded(
+                                                      child: Align(
+                                                        alignment: Alignment.centerLeft,
+                                                        child: Container(
+                                                          padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                                                          decoration: BoxDecoration(
+                                                            color: neonGreen.withOpacity(0.15),
+                                                            borderRadius: BorderRadius.circular(4),
+                                                            border: Border.all(color: neonGreen.withOpacity(0.5)),
+                                                          ),
+                                                          child: Text(
+                                                            (item.gameName != null && item.gameName!.trim().isNotEmpty
+                                                                    ? item.gameName!
+                                                                    : item.category)
+                                                                .toUpperCase(),
+                                                            maxLines: 1,
+                                                            overflow: TextOverflow.ellipsis,
+                                                            style: TextStyle(
+                                                              color: neonGreen,
+                                                              fontSize: 9,
+                                                              fontWeight: FontWeight.w900,
+                                                            ),
+                                                          ),
                                                         ),
                                                       ),
                                                     ),
-                                                    const Spacer(),
+                                                    const SizedBox(width: 8),
                                                     Text(
                                                       item.timeAgo,
                                                       style: TextStyle(color: textGray, fontSize: 10),

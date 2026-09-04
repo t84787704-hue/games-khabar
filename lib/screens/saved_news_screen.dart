@@ -462,24 +462,34 @@ class _SavedNewsScreenState extends State<SavedNewsScreen> {
                     children: [
                       Row(
                         children: [
-                          Container(
-                            padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                            decoration: BoxDecoration(
-                              color: neonGreen.withOpacity(0.12),
-                              borderRadius: BorderRadius.circular(4),
-                              border: Border.all(color: neonGreen.withOpacity(0.3), width: 0.8),
-                            ),
-                            child: Text(
-                              item.category.toUpperCase(),
-                              style: TextStyle(
-                                color: neonGreen,
-                                fontSize: 9,
-                                fontWeight: FontWeight.w900,
-                                letterSpacing: 0.4,
+                          Expanded(
+                            child: Align(
+                              alignment: Alignment.centerLeft,
+                              child: Container(
+                                padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                                decoration: BoxDecoration(
+                                  color: neonGreen.withOpacity(0.12),
+                                  borderRadius: BorderRadius.circular(4),
+                                  border: Border.all(color: neonGreen.withOpacity(0.3), width: 0.8),
+                                ),
+                                child: Text(
+                                  (item.gameName != null && item.gameName!.trim().isNotEmpty
+                                          ? item.gameName!
+                                          : item.category)
+                                      .toUpperCase(),
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                  style: TextStyle(
+                                    color: neonGreen,
+                                    fontSize: 9,
+                                    fontWeight: FontWeight.w900,
+                                    letterSpacing: 0.4,
+                                  ),
+                                ),
                               ),
                             ),
                           ),
-                          const Spacer(),
+                          const SizedBox(width: 8),
                           Text(
                             item.timeAgo,
                             style: TextStyle(color: textGray, fontSize: 10),

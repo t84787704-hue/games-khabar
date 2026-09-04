@@ -6,6 +6,7 @@ class NewsModel {
   final Map<String, String> titleMap;
   final Map<String, String> descriptionMap;
   final String category;
+  final String? gameName;
   final String imageUrl;
   final String? videoUrl;
   final String? youtubeId;
@@ -30,6 +31,7 @@ class NewsModel {
     String? description,
     Map<String, String>? descriptionMap,
     required this.category,
+    this.gameName,
     required this.imageUrl,
     this.videoUrl,
     this.youtubeId,
@@ -74,6 +76,7 @@ class NewsModel {
   String get description => getDescription();
   String get content => getDescription();
   String get thumbnailUrl => imageUrl;
+  String get displayGameOrCategory => (gameName != null && gameName!.trim().isNotEmpty) ? gameName!.trim() : category;
   String get cleanDescription => TranslationService.cleanBbCodeAndHtml(getDescription());
 
   String getCleanDescription([String? langCode]) =>
@@ -197,6 +200,7 @@ class NewsModel {
       titleMap: parseTextMap(data['title'], ''),
       descriptionMap: parseTextMap(data['content']!= null? data['content'] : data['description'], ''),
       category: data['category'] is String? data['category'] as String : 'Gaming News',
+      gameName: data['gameName'] is String? data['gameName'] as String : null,
       imageUrl: img,
       videoUrl: data['videoUrl'] is String? data['videoUrl'] as String : null,
       youtubeId: data['youtubeId'] is String? data['youtubeId'] as String : null,
@@ -223,6 +227,7 @@ class NewsModel {
     String? description,
     Map<String, String>? descriptionMap,
     String? category,
+    String? gameName,
     String? imageUrl,
     String? videoUrl,
     String? youtubeId,
@@ -245,6 +250,7 @@ class NewsModel {
       titleMap: titleMap?? (title!= null? _createDefaultMap(title) : this.titleMap),
       descriptionMap: descriptionMap?? (description!= null? _createDefaultMap(description) : this.descriptionMap),
       category: category?? this.category,
+      gameName: gameName?? this.gameName,
       imageUrl: imageUrl?? this.imageUrl,
       videoUrl: videoUrl?? this.videoUrl,
       youtubeId: youtubeId?? this.youtubeId,
@@ -271,6 +277,7 @@ class NewsModel {
       'content': descriptionMap,
       'description': descriptionMap,
       'category': category,
+      'gameName': gameName,
       'imageUrl': imageUrl,
       'videoUrl': videoUrl,
       'youtubeId': youtubeId,
@@ -326,6 +333,7 @@ class NewsModel {
       titleMap: parseTextMap(json['title'], ''),
       descriptionMap: parseTextMap(json['content']!= null? json['content'] : json['description'], ''),
       category: json['category'] is String? json['category'] as String : 'Gaming News',
+      gameName: json['gameName'] is String? json['gameName'] as String : null,
       imageUrl: img,
       videoUrl: json['videoUrl'] is String? json['videoUrl'] as String : null,
       youtubeId: json['youtubeId'] is String? json['youtubeId'] as String : null,
