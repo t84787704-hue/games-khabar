@@ -40,11 +40,11 @@ class _NewsDetailScreenState extends State<NewsDetailScreen> {
     if (text.isEmpty) return text;
     String t = text;
     // Strip BBCode tags like [p], [/p], [b], [url], {STEAM_CLAN_IMAGE}
-    t = t.replaceAll(RegExp(r'\[\/?p\]', caseInsensitive: true), '\n\n');
-    t = t.replaceAll(RegExp(r'\[img[^\]]*\][\s\S]*?\[\/img\]', caseInsensitive: true), '');
-    t = t.replaceAll(RegExp(r'\{STEAM_CLAN_IMAGE\}[^\s"\'<>]+', caseInsensitive: true), '');
-    t = t.replaceAll(RegExp(r'\[url=["\']?(?:https?:\/\/|discord\.gg\/)[^"\'\]]+["\']?\][\s\S]*?\[\/url\]', caseInsensitive: true), '');
-    t = t.replaceAll(RegExp(r'\[\/?(b|i|u|h[1-6]|strong|em|url|strike|sub|sup)[^\]]*\]', caseInsensitive: true), '');
+    t = t.replaceAll(RegExp(r'\[\/?p\]', caseSensitive: false), '\n\n');
+    t = t.replaceAll(RegExp(r'\[img[^\]]*\][\s\S]*?\[\/img\]', caseSensitive: false), '');
+    t = t.replaceAll(RegExp(r'\{STEAM_CLAN_IMAGE\}[^\s"<>]+', caseSensitive: false), '');
+    t = t.replaceAll(RegExp(r'\[url=[^\]]+\][\s\S]*?\[\/url\]', caseSensitive: false), '');
+    t = t.replaceAll(RegExp(r'\[\/?(b|i|u|h[1-6]|strong|em|url|strike|sub|sup)[^\]]*\]', caseSensitive: false), '');
     t = t.replaceAll(RegExp(r'\[[^\]]+\]'), ' ');
     t = t.replaceAll(RegExp(r'<[^>]*>'), ' ');
     t = t.replaceAll(RegExp(r'[ \t]+'), ' ');
