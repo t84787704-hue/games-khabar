@@ -1,0 +1,36 @@
+name: Clean Russian News
+on: workflow_dispatch
+jobs:
+  clean:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+      - run: npm install firebase-admin
+      - name: Delete Russian Docs
+        run: |
+          node << 'EOF'
+          const admin = require('firebase-admin');
+          const serviceAccount = JSON.parse(process.env.FIREBASE_SERVICE_ACCOUNT);
+          admin.initializeApp({ credential: admin.credential.cert(serviceAccount) });
+          const db = admin.firestore();
+          (async () => {
+            const snap = await db.collection('news').get();
+            console.log('Total docs:', snap.size);
+            let del = 0;
+            for (const doc of snap.docs) {
+              const d = doc.data();
+              const title = d.title || d.titleMap?.en || '';
+              if (/[а-яА-ЯёЁ]/.test(title)) {
+                await doc.ref.delete();
+                del++;
+                console.log('Deleted:', title.substring(0,50));
+              }
+            }
+            console.log('Done, deleted:', del);
+          })();
+          EOF
+        env:
+          FIREBASE_SERVICE_ACCOUNT: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
