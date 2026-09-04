@@ -74,12 +74,59 @@ const TOP_50_SITES = [
   { name: 'Bike Racing', url: 'https://news.google.com/rss/search?q=MotoGP+Ride+5+bike+game&hl=en-US&gl=US&ceid=US:en', fixedCat: 'Bike Games' },
 ];
 
-function cleanText(dirty){
-  if(!dirty) return "";
-  let t = he.decode(dirty);
-  t = t.replace(/\[img\][\s\S]*?\[\/img\]/gi, '').replace(/<img[^>]*>/gi, '').replace(/<[^>]*>/g,' ');
-  return t.replace(/\s+/g,' ').trim().substring(0,7000);
+function cleanDescription(text) {
+  if (!text) return null;
+  let t = he.decode(text);
+
+  // 1. Replace [p][/p] with double newline, remove [b][/b][i][/i][u][/u]
+  t = t.replace(/\[\/?p\]/gi, '\n\n');
+  t = t.replace(/\[\/?(b|i|u|h[1-6]|strong|em|strike|sub|sup)\]/gi, '');
+
+  // 2. Remove [img]...[/img] and {STEAM_CLAN_IMAGE}...jpg completely
+  t = t.replace(/\[img[^\]]*\][\s\S]*?\[\/img\]/gi, '');
+  t = t.replace(/<img[^>]*>/gi, '');
+  t = t.replace(/\{STEAM_CLAN_IMAGE\}[^\s"'<>]+/gi, '');
+
+  // 3. [url="LINK"]TEXT[/url] and [url]LINK[/url]:
+  // remove completely if contains discord.gg, otherwise keep only LINK
+  t = t.replace(/\[url=["']?(https?:\/\/[^"'\]]+|discord\.gg\/[^"'\]]+)["']?\]([\s\S]*?)\[\/url\]/gi, (match, link, body) => {
+    if (link.toLowerCase().includes('discord.gg') || body.toLowerCase().includes('discord.gg')) {
+      return '';
+    }
+    return link || body;
+  });
+  t = t.replace(/\[url\]([\s\S]*?)\[\/url\]/gi, (match, body) => {
+    if (body.toLowerCase().includes('discord.gg')) {
+      return '';
+    }
+    return body;
+  });
+  // Also strip raw discord.gg links or invites
+  t = t.replace(/https?:\/\/(?:www\.)?discord\.gg\/[a-zA-Z0-9_-]+/gi, '');
+  t = t.replace(/(?:^|\s)discord\.gg\/[a-zA-Z0-9_-]+/gi, '');
+
+  // 4. Remove broken link garbage like https:// https:// www.ea.com or space issues
+  t = t.replace(/(?:https?:\s*\/\/\s*)+https?:\s*\/\/\s*/gi, 'https://');
+  t = t.replace(/https?:\/\/\s+/gi, 'https://');
+  t = t.replace(/\s+https?:\/\//gi, ' https://');
+
+  // 5. Strip all remaining HTML tags and BBCode tags
+  t = t.replace(/<[^>]+>/g, ' ');
+  t = t.replace(/\[[^\]]+\]/g, ' ');
+
+  // 6. Decode common entities
+  t = t.replace(/&amp;/g, '&').replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&quot;/g, '"').replace(/&#39;/g, "'");
+
+  // 7. Normalize whitespace, keep max 2 consecutive newlines
+  t = t.replace(/[ \t]+/g, ' ');
+  t = t.replace(/\n{3,}/g, '\n\n');
+  t = t.trim();
+
+  // If final text < 100 characters then discard article
+  if (t.length < 100) return null;
+  return t.substring(0, 7000);
 }
+
 function makeAbsoluteUrl(imgUrl, baseLink) {
   if (!imgUrl) return "";
   let url = imgUrl.trim();
@@ -128,7 +175,7 @@ function getCategoryFallback(title = '', category = '') {
   return { key: 'general', url: FALLBACK_IMAGES.general };
 }
 
-function getImage(item, title = '', category = '') {
+function getImage(item, rawTitle = '', category = '') {
   let found = "";
 
   // 1. Enclosure / Media tag from RSS
@@ -136,6 +183,7 @@ function getImage(item, title = '', category = '') {
   else if (item['media:content']?.['$']?.url) found = item['media:content']['$'].url;
   else if (item['media:thumbnail']?.['$']?.url) found = item['media:thumbnail']['$'].url;
   else if (item['media:group']?.['media:content']?.[0]?.['$']?.url) found = item['media:group']['media:content'][0]['$'].url;
+  else if (item.image?.url) found = item.image.url;
 
   // 2. Look for <img> tags inside content / content:encoded / description
   if (!found) {
@@ -144,18 +192,23 @@ function getImage(item, title = '', category = '') {
     if (m && m[1]) found = m[1];
   }
 
-  // 3. Make URL absolute
+  // 3. Make URL absolute & validate
   if (found) {
     const abs = makeAbsoluteUrl(found, item.link);
-    // Ignore tracking 1x1 pixels or tiny icons
-    if (!abs.includes('feedburner.com/~r/') && !abs.includes('1x1') && !abs.endsWith('.gif')) {
+    const isValid = abs.startsWith('http') &&
+      !abs.includes('feedburner.com/~r/') &&
+      !abs.includes('1x1') &&
+      !abs.endsWith('.gif') &&
+      !abs.includes('1245620'); // Never allow single Elden Ring fallback image
+
+    if (isValid) {
       return abs;
     }
   }
 
   // 4. Category-based fallback (Never single Elden Ring)
-  const fallback = getCategoryFallback(title, category);
-  console.log(`[Image Fallback] "${title.substring(0, 45)}" used [${fallback.key}] fallback: ${fallback.url}`);
+  const fallback = getCategoryFallback(rawTitle, category);
+  console.log(`[Image Fallback] "${rawTitle.substring(0, 45)}" used [${fallback.key}] fallback: ${fallback.url}`);
   return fallback.url;
 }
 function detectCat(title){
@@ -194,16 +247,20 @@ async function run(){
       for(const item of res.data?.appnews?.newsitems||[]){
         const rawTitle = he.decode(item.title||"").substring(0,200);
         if(isRussian(rawTitle)) continue; // RUSSIAN SKIP
-        let desc = cleanText(item.contents||"");
-        if(desc.length<40) continue;
+
+        const desc = cleanDescription(item.contents || "");
+        if(!desc) continue; // Skip if empty or < 100 characters
         if(isRussian(desc)) continue;
 
         let cat = GAME_CATEGORY_MAP[gameName] || APP_CATEGORIES[fbIndex % APP_CATEGORIES.length]; fbIndex++;
+        const img = `https://cdn.akamai.steamstatic.com/steam/apps/${appId}/header.jpg`;
+        if(!img) continue;
+
         await db.collection('news').doc(`${appId}_${item.gid}`).set({
           id:`${appId}_${item.gid}`, title: rawTitle, description: desc,
           titleMap:{en: rawTitle, ur: rawTitle, ro: rawTitle},
           descriptionMap:{en: desc, ur: desc, ro: desc},
-          imageUrl:`https://cdn.akamai.steamstatic.com/steam/apps/${appId}/header.jpg`,
+          imageUrl: img,
           appId, appid: appId, url: item.url||"", sourceUrl: item.url||"", gameName, category: cat,
           timestamp: Math.floor(Date.now()/1000), timeAgo: new Date().toISOString(),
           views: 0, isFeatured: false, isAuto: true, isFree: false, source: 'Steam'
@@ -218,17 +275,21 @@ async function run(){
       for(const item of feed.items.slice(0,20)){
         const rawTitle = he.decode(item.title||"").substring(0,200);
         if(isRussian(rawTitle)) continue; // RUSSIAN SKIP
-        let full = cleanText(item.contentSnippet||item.content||"");
-        if(full.length<60) continue;
+
+        const full = cleanDescription(item['content:encoded'] || item.content || item.contentSnippet || item.description || "");
+        if(!full) continue; // Skip if null / < 100 chars
         if(isRussian(full)) continue;
 
         let cat = src.fixedCat || detectCat(item.title||"") || APP_CATEGORIES[fbIndex % APP_CATEGORIES.length]; fbIndex++;
+        const img = getImage(item, rawTitle, cat);
+        if(!img) continue;
+
         const safeId = Buffer.from(item.link||"").toString('base64').replace(/[/+=]/g,'').substring(0,20);
         await db.collection('news').doc(`${src.name}_${safeId}`).set({
           id:`${src.name}_${safeId}`, title: rawTitle, description: full,
           titleMap:{en: rawTitle, ur: rawTitle, ro: rawTitle},
           descriptionMap:{en: full, ur: full, ro: full},
-          imageUrl: getImage(item, rawTitle, cat), url: item.link||"", sourceUrl: item.link||"", gameName: src.name, category: cat,
+          imageUrl: img, url: item.link||"", sourceUrl: item.link||"", gameName: src.name, category: cat,
           timestamp: Math.floor(Date.now()/1000), timeAgo: new Date().toISOString(),
           views: 0, isFeatured: false, isAuto: true, isFree: false, source: src.name, appId: 0, appid: 0
         },{merge:true});
