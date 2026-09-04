@@ -12,8 +12,8 @@ jobs:
       - uses: actions/checkout@v3
       - uses: actions/setup-node@v3
         with:
-          node-version: '18'
-      - run: npm install axios firebase-admin rss-parser he cheerio
+          node-version: '20'
+      - run: npm install axios@1.6.7 firebase-admin rss-parser he cheerio
       - name: Run Script
         env:
           FIREBASE_SERVICE_ACCOUNT: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
