@@ -122,9 +122,7 @@ function cleanDescription(text) {
   t = t.replace(/\n{3,}/g, '\n\n');
   t = t.trim();
 
-  // If final text < 100 characters then discard article
-  if (t.length < 100) return null;
-  return t.substring(0, 7000);
+  return t;
 }
 
 function makeAbsoluteUrl(imgUrl, baseLink) {
@@ -144,72 +142,131 @@ function makeAbsoluteUrl(imgUrl, baseLink) {
   return url;
 }
 
-const FALLBACK_IMAGES = {
-  valorant: 'https://images.unsplash.com/photo-1542751371-adc38448a05e?auto=format&fit=crop&w=1000&q=80',
-  fortnite: 'https://images.unsplash.com/photo-1538481199705-c710c4e965fc?auto=format&fit=crop&w=1000&q=80',
-  bgmi: 'https://images.unsplash.com/photo-1579373903781-fd5c0c30c4cd?auto=format&fit=crop&w=1000&q=80',
-  pubg: 'https://images.unsplash.com/photo-1579373903781-fd5c0c30c4cd?auto=format&fit=crop&w=1000&q=80',
-  freefire: 'https://images.unsplash.com/photo-1511512578047-dfb367046420?auto=format&fit=crop&w=1000&q=80',
-  cod: 'https://images.unsplash.com/photo-1550745165-9bc0b252726f?auto=format&fit=crop&w=1000&q=80',
-  gta: 'https://images.unsplash.com/photo-1518709268805-4e9042af9f23?auto=format&fit=crop&w=1000&q=80',
-  sports: 'https://images.unsplash.com/photo-1511886929837-354d827aae26?auto=format&fit=crop&w=1000&q=80',
-  racing: 'https://images.unsplash.com/photo-1568605117036-5fe5e7bab0b7?auto=format&fit=crop&w=1000&q=80',
-  truck: 'https://images.unsplash.com/photo-1601584115197-04ecc0da31d7?auto=format&fit=crop&w=1000&q=80',
-  minecraft: 'https://images.unsplash.com/photo-1627856013091-fed6e4e30025?auto=format&fit=crop&w=1000&q=80',
-  general: 'https://images.unsplash.com/photo-1493711662062-fa541adb3fc8?auto=format&fit=crop&w=1000&q=80'
-};
-
-function getCategoryFallback(title = '', category = '') {
-  const text = `${title} ${category}`.toLowerCase();
-  if (text.includes('valorant')) return { key: 'valorant', url: FALLBACK_IMAGES.valorant };
-  if (text.includes('fortnite')) return { key: 'fortnite', url: FALLBACK_IMAGES.fortnite };
-  if (text.includes('bgmi') || text.includes('battlegrounds mobile')) return { key: 'bgmi', url: FALLBACK_IMAGES.bgmi };
-  if (text.includes('pubg')) return { key: 'pubg', url: FALLBACK_IMAGES.pubg };
-  if (text.includes('free fire')) return { key: 'freefire', url: FALLBACK_IMAGES.freefire };
-  if (text.includes('call of duty') || text.includes('warzone') || text.includes('fps')) return { key: 'cod', url: FALLBACK_IMAGES.cod };
-  if (text.includes('gta') || text.includes('grand theft auto')) return { key: 'gta', url: FALLBACK_IMAGES.gta };
-  if (text.includes('wcc') || text.includes('cricket') || text.includes('fifa') || text.includes('fc 24') || text.includes('sports')) return { key: 'sports', url: FALLBACK_IMAGES.sports };
-  if (text.includes('forza') || text.includes('f1') || text.includes('drift') || text.includes('racing')) return { key: 'racing', url: FALLBACK_IMAGES.racing };
-  if (text.includes('truck') || text.includes('simulator')) return { key: 'truck', url: FALLBACK_IMAGES.truck };
-  if (text.includes('minecraft')) return { key: 'minecraft', url: FALLBACK_IMAGES.minecraft };
-  return { key: 'general', url: FALLBACK_IMAGES.general };
-}
-
-function getImage(item, rawTitle = '', category = '') {
+function getRealImage($, item, baseLink) {
   let found = "";
 
-  // 1. Enclosure / Media tag from RSS
-  if (item.enclosure?.url) found = item.enclosure.url;
-  else if (item['media:content']?.['$']?.url) found = item['media:content']['$'].url;
-  else if (item['media:thumbnail']?.['$']?.url) found = item['media:thumbnail']['$'].url;
-  else if (item['media:group']?.['media:content']?.[0]?.['$']?.url) found = item['media:group']['media:content'][0]['$'].url;
-  else if (item.image?.url) found = item.image.url;
-
-  // 2. Look for <img> tags inside content / content:encoded / description
-  if (!found) {
-    const rawContent = item['content:encoded'] || item.content || item.description || item.contentSnippet || '';
-    const m = rawContent.match(/<img[^>]+src=["']([^"'>]+)["']/i);
-    if (m && m[1]) found = m[1];
+  // 1. From HTML: og:image FIRST priority
+  if ($) {
+    found = $('meta[property="og:image"]').attr('content') ||
+            $('meta[property="og:image:url"]').attr('content') ||
+            $('meta[name="twitter:image"]').attr('content') ||
+            $('meta[name="twitter:image:src"]').attr('content');
   }
 
-  // 3. Make URL absolute & validate
-  if (found) {
-    const abs = makeAbsoluteUrl(found, item.link);
-    const isValid = abs.startsWith('http') &&
-      !abs.includes('feedburner.com/~r/') &&
-      !abs.includes('1x1') &&
-      !abs.endsWith('.gif') &&
-      !abs.includes('1245620'); // Never allow single Elden Ring fallback image
+  // 2. RSS tags fallback if HTML didn't have og:image
+  if (!found && item) {
+    if (item.enclosure?.url) found = item.enclosure.url;
+    else if (item['media:content']?.['$']?.url) found = item['media:content']['$'].url;
+    else if (item['media:thumbnail']?.['$']?.url) found = item['media:thumbnail']['$'].url;
+    else if (item['media:group']?.['media:content']?.[0]?.['$']?.url) found = item['media:group']['media:content'][0]['$'].url;
+    else if (item.image?.url) found = item.image.url;
+  }
 
-    if (isValid) {
-      return abs;
+  // 3. First <img> inside article
+  if (!found && $) {
+    const firstImg = $('article img, [data-component="article-body"] img, .article-content img').first().attr('src');
+    if (firstImg) found = firstImg;
+  }
+
+  if (!found) return null;
+
+  const abs = makeAbsoluteUrl(found, baseLink);
+  if (!abs || !abs.startsWith('http')) return null;
+
+  const lower = abs.toLowerCase();
+  // Filter tracking pixels, gifs, or invalid images
+  if (lower.includes('1x1') || lower.endsWith('.gif') || lower.includes('feedburner.com/~r/')) {
+    return null;
+  }
+  // NEVER allow hardcoded Elden Ring fallback image
+  if (lower.includes('1245620')) {
+    return null;
+  }
+
+  // Validate standard image extensions or CDN image paths
+  const isImageExt = /\.(jpg|jpeg|png|webp|avif)($|\?)/i.test(abs);
+  const isImageCdn = /(images|media|cdn|uploads|static|photos|img)/i.test(abs);
+  if (!isImageExt && !isImageCdn) {
+    return null;
+  }
+
+  return abs;
+}
+
+const USER_AGENT = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36';
+
+async function fetchFullArticle(url) {
+  if (!url || !url.startsWith('http')) return null;
+  try {
+    const res = await axios.get(url, {
+      headers: {
+        'User-Agent': USER_AGENT,
+        'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+        'Accept-Language': 'en-US,en;q=0.9'
+      },
+      timeout: 10000,
+      maxRedirects: 5
+    });
+
+    if (!res.data || typeof res.data !== 'string') return null;
+    const $ = cheerio.load(res.data);
+
+    // Remove unwanted tags, navigation, ads, social, subscribe
+    $('script, style, noscript, nav, header, footer, aside, iframe, .advertisement, .ad, .ad-container, [data-ad], .social-share, .comments, .related-posts, .subscribe, .newsletter-signup').remove();
+
+    let paragraphs = [];
+    const selectors = [
+      'article p',
+      '[data-component="article-body"] p',
+      '.article-content p',
+      '.entry-content p',
+      '.article__body p',
+      '.story-body p',
+      '.post-content p',
+      'main p'
+    ];
+
+    for (const selector of selectors) {
+      const pElements = $(selector);
+      if (pElements.length >= 2) {
+        pElements.each((_, el) => {
+          const text = $(el).text().trim();
+          if (text.length > 30 && !text.toLowerCase().includes('subscribe') && !text.toLowerCase().includes('sign up for')) {
+            paragraphs.push(text);
+          }
+        });
+        if (paragraphs.length >= 2) break;
+        paragraphs = [];
+      }
     }
-  }
 
-  // 4. Category-based fallback (Never single Elden Ring)
-  const fallback = getCategoryFallback(rawTitle, category);
-  console.log(`[Image Fallback] "${rawTitle.substring(0, 45)}" used [${fallback.key}] fallback: ${fallback.url}`);
-  return fallback.url;
+    // Try JSON-LD if paragraphs are still empty or too short
+    if (paragraphs.length < 2) {
+      $('script[type="application/ld+json"]').each((_, el) => {
+        try {
+          const json = JSON.parse($(el).html() || '{}');
+          const body = json.articleBody || (Array.isArray(json['@graph']) && json['@graph'].find(g => g.articleBody)?.articleBody);
+          if (body && typeof body === 'string' && body.length >= 200) {
+            paragraphs = body.split(/\n+/).map(p => p.trim()).filter(p => p.length > 30);
+          }
+        } catch (_) {}
+      });
+    }
+
+    let rawText = paragraphs.join('\n\n');
+    if (!rawText || rawText.length < 200) {
+      rawText = $('article').text() || $('main').text() || '';
+    }
+
+    const clean = cleanDescription(rawText);
+    if (!clean || clean.length < 500) {
+      return null;
+    }
+
+    return { fullText: clean, $ };
+  } catch (err) {
+    return null;
+  }
 }
 function detectCat(title){
   const t=title.toLowerCase();
@@ -248,18 +305,25 @@ async function run(){
         const rawTitle = he.decode(item.title||"").substring(0,200);
         if(isRussian(rawTitle)) continue; // RUSSIAN SKIP
 
-        const desc = cleanDescription(item.contents || "");
-        if(!desc) continue; // Skip if empty or < 100 characters
-        if(isRussian(desc)) continue;
+        const fullText = cleanDescription(item.contents || "");
+        if(!fullText || fullText.length < 500) continue; // Skip if < 500 characters
+        if(isRussian(fullText)) continue;
 
         let cat = GAME_CATEGORY_MAP[gameName] || APP_CATEGORIES[fbIndex % APP_CATEGORIES.length]; fbIndex++;
         const img = `https://cdn.akamai.steamstatic.com/steam/apps/${appId}/header.jpg`;
         if(!img) continue;
 
+        const paras = fullText.split('\n\n').filter(p => p.trim().length > 20);
+        const shortDesc = paras.slice(0, 2).join('\n\n') || fullText.substring(0, 300);
+
         await db.collection('news').doc(`${appId}_${item.gid}`).set({
-          id:`${appId}_${item.gid}`, title: rawTitle, description: desc,
+          id:`${appId}_${item.gid}`,
+          title: rawTitle,
+          description: fullText,
+          content: fullText,
+          shortDescription: shortDesc,
           titleMap:{en: rawTitle, ur: rawTitle, ro: rawTitle},
-          descriptionMap:{en: desc, ur: desc, ro: desc},
+          descriptionMap:{en: fullText, ur: fullText, ro: fullText},
           imageUrl: img,
           appId, appid: appId, url: item.url||"", sourceUrl: item.url||"", gameName, category: cat,
           timestamp: Math.floor(Date.now()/1000), timeAgo: new Date().toISOString(),
@@ -273,23 +337,41 @@ async function run(){
     try{
       const feed = await parser.parseURL(src.url);
       for(const item of feed.items.slice(0,20)){
+        const articleUrl = item.link || item.guid || "";
+        if (!articleUrl || !articleUrl.startsWith('http')) continue;
+
         const rawTitle = he.decode(item.title||"").substring(0,200);
         if(isRussian(rawTitle)) continue; // RUSSIAN SKIP
 
-        const full = cleanDescription(item['content:encoded'] || item.content || item.contentSnippet || item.description || "");
-        if(!full) continue; // Skip if null / < 100 chars
-        if(isRussian(full)) continue;
+        // Fetch full article text (>= 500 chars) from web page
+        const fullArticle = await fetchFullArticle(articleUrl);
+        if (!fullArticle || !fullArticle.fullText || fullArticle.fullText.length < 500) {
+          continue; // SKIP if article is short or fetch failed
+        }
+        if (isRussian(fullArticle.fullText)) continue;
 
-        let cat = src.fixedCat || detectCat(item.title||"") || APP_CATEGORIES[fbIndex % APP_CATEGORIES.length]; fbIndex++;
-        const img = getImage(item, rawTitle, cat);
-        if(!img) continue;
+        let cat = src.fixedCat || detectCat(rawTitle) || APP_CATEGORIES[fbIndex % APP_CATEGORIES.length]; fbIndex++;
 
-        const safeId = Buffer.from(item.link||"").toString('base64').replace(/[/+=]/g,'').substring(0,20);
+        // Get genuine article image (never fallback to wrong image)
+        const img = getRealImage(fullArticle.$, item, articleUrl);
+        if (!img) {
+          console.log(`[Image Missing] Skipping "${rawTitle.substring(0, 40)}" (no verified image)`);
+          continue; // SKIP if no verified article image
+        }
+
+        const paras = fullArticle.fullText.split('\n\n').filter(p => p.trim().length > 20);
+        const shortDesc = paras.slice(0, 2).join('\n\n') || fullArticle.fullText.substring(0, 300);
+
+        const safeId = Buffer.from(articleUrl).toString('base64').replace(/[/+=]/g,'').substring(0,20);
         await db.collection('news').doc(`${src.name}_${safeId}`).set({
-          id:`${src.name}_${safeId}`, title: rawTitle, description: full,
+          id:`${src.name}_${safeId}`,
+          title: rawTitle,
+          description: fullArticle.fullText,
+          content: fullArticle.fullText,
+          shortDescription: shortDesc,
           titleMap:{en: rawTitle, ur: rawTitle, ro: rawTitle},
-          descriptionMap:{en: full, ur: full, ro: full},
-          imageUrl: img, url: item.link||"", sourceUrl: item.link||"", gameName: src.name, category: cat,
+          descriptionMap:{en: fullArticle.fullText, ur: fullArticle.fullText, ro: fullArticle.fullText},
+          imageUrl: img, url: articleUrl, sourceUrl: articleUrl, gameName: src.name, category: cat,
           timestamp: Math.floor(Date.now()/1000), timeAgo: new Date().toISOString(),
           views: 0, isFeatured: false, isAuto: true, isFree: false, source: src.name, appId: 0, appid: 0
         },{merge:true});
