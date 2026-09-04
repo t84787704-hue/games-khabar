@@ -10,19 +10,19 @@ import '../models/news_model.dart';
 //
 // rules_version = '2';
 // service cloud.firestore {
-//   match /databases/{database}/documents {
-//     match /news/{newsId} {
-//       // 1. Anyone (public) can read gaming news
-//       allow read: if true;
+// match /databases/{database}/documents {
+// match /news/{newsId} {
+// // 1. Anyone (public) can read gaming news
+// allow read: if true;
 //
-//       // 2. Only authenticated Admin can create or delete
-//       allow create, delete: if request.auth != null;
+// // 2. Only authenticated Admin can create or delete
+// allow create, delete: if request.auth!= null;
 //
-//       // 3. Admin can update full document, OR public can increment view counter
-//       allow update: if request.auth != null
-//                     || request.resource.data.diff(resource.data).affectedKeys().hasOnly(['views']);
-//     }
-//   }
+// // 3. Admin can update full document, OR public can increment view counter
+// allow update: if request.auth!= null
+// || request.resource.data.diff(resource.data).affectedKeys().hasOnly(['views']);
+// }
+// }
 // }
 // =========================================================================
 
@@ -53,10 +53,11 @@ class FirestoreService {
       final db = _db;
       if (db == null) return;
       db
-          .collection('news')
-          .orderBy('timestamp', descending: true)
-          .snapshots()
-          .listen(
+         .collection('news')
+         .orderBy('timestamp', descending: true)
+         .limit(500)
+         .snapshots()
+         .listen(
         (snapshot) {
           final firestoreItems =
               snapshot.docs.map((doc) => NewsModel.fromFirestore(doc)).toList();
@@ -85,12 +86,13 @@ class FirestoreService {
   Future<void> refreshNews() async {
     try {
       final db = _db;
-      if (db != null) {
+      if (db!= null) {
         final snapshot = await db
-            .collection('news')
-            .orderBy('timestamp', descending: true)
-            .get(const GetOptions(source: Source.serverAndCache))
-            .timeout(const Duration(seconds: 4));
+           .collection('news')
+           .orderBy('timestamp', descending: true)
+           .limit(500)
+           .get(const GetOptions(source: Source.serverAndCache))
+           .timeout(const Duration(seconds: 10));
 
         final firestoreItems =
             snapshot.docs.map((doc) => NewsModel.fromFirestore(doc)).toList();
@@ -107,7 +109,7 @@ class FirestoreService {
   // Increment views
   Future<void> incrementView(String id) async {
     final idx = _currentNewsList.indexWhere((item) => item.id == id);
-    if (idx != -1) {
+    if (idx!= -1) {
       final old = _currentNewsList[idx];
       _currentNewsList[idx] = old.copyWith(views: old.views + 1);
       _streamController.add(List.from(_currentNewsList));
@@ -115,12 +117,12 @@ class FirestoreService {
 
     try {
       final db = _db;
-      if (db != null && !id.startsWith('local-')) {
+      if (db!= null &&!id.startsWith('local-')) {
         await db
-            .collection('news')
-            .doc(id)
-            .update({'views': FieldValue.increment(1)})
-            .timeout(const Duration(seconds: 2));
+           .collection('news')
+           .doc(id)
+           .update({'views': FieldValue.increment(1)})
+           .timeout(const Duration(seconds: 2));
       }
     } catch (_) {}
   }
@@ -136,7 +138,7 @@ class FirestoreService {
     if (cleanId.isEmpty || cleanId.startsWith('local-')) return;
 
     final idx = _currentNewsList.indexWhere((item) => item.id == cleanId);
-    if (idx != -1) {
+    if (idx!= -1) {
       final old = _currentNewsList[idx];
       old.titleMap[langCode] = translatedTitle;
       old.descriptionMap[langCode] = translatedDesc;
@@ -145,7 +147,7 @@ class FirestoreService {
 
     try {
       final db = _db;
-      if (db != null) {
+      if (db!= null) {
         await db.collection('news').doc(cleanId).set({
           'title': {langCode: translatedTitle},
           'description': {langCode: translatedDesc},
@@ -167,9 +169,9 @@ class FirestoreService {
 
     try {
       final db = _db;
-      if (db != null) {
+      if (db!= null) {
         final doc = await db.collection('news').doc(cleanId).get().timeout(const Duration(seconds: 4));
-        if (doc.exists && doc.data() != null) {
+        if (doc.exists && doc.data()!= null) {
           return NewsModel.fromFirestore(doc);
         }
       }
@@ -181,12 +183,12 @@ class FirestoreService {
     if (val is Map) {
       final res = <String, String>{};
       val.forEach((k, v) {
-        if (v != null) res[k.toString()] = v.toString();
+        if (v!= null) res[k.toString()] = v.toString();
       });
-      if (res.containsKey('roman') && !res.containsKey('ro')) {
+      if (res.containsKey('roman') &&!res.containsKey('ro')) {
         res['ro'] = res['roman']!;
       }
-      if (res.containsKey('ro') && !res.containsKey('roman')) {
+      if (res.containsKey('ro') &&!res.containsKey('roman')) {
         res['roman'] = res['ro']!;
       }
       return res;
@@ -219,23 +221,23 @@ class FirestoreService {
   // Add new article - instant UI update + background Firestore sync (returns created newsId)
   Future<String> addNews(Map<String, dynamic> data) async {
     final localId = 'local-${DateTime.now().millisecondsSinceEpoch}';
-    final videoUrl = data['videoUrl'] as String? ?? '';
+    final videoUrl = data['videoUrl'] as String??? '';
     final titleMap = _parseTextMap(data['title'], 'Untitled');
-    final descriptionMap = _parseTextMap(data['content'] ?? data['description'], '');
+    final descriptionMap = _parseTextMap(data['content']?? data['description'], '');
 
     final newModel = NewsModel(
       id: localId,
       titleMap: titleMap,
       descriptionMap: descriptionMap,
-      category: data['category'] as String? ?? 'Gaming News',
-      imageUrl: (data['imageUrl'] as String? ?? '').isNotEmpty
-          ? data['imageUrl'] as String
+      category: data['category'] as String??? 'Gaming News',
+      imageUrl: (data['imageUrl'] as String??? '').isNotEmpty
+         ? data['imageUrl'] as String
           : 'https://images.unsplash.com/photo-1542751371-adc38448a05e?auto=format&fit=crop&w=1000&q=80',
       videoUrl: videoUrl,
       timeAgo: 'Just now',
       views: 0,
-      isFree: data['isFree'] as bool? ?? false,
-      isFeatured: data['isFeatured'] as bool? ?? false,
+      isFree: data['isFree'] as bool??? false,
+      isFeatured: data['isFeatured'] as bool??? false,
       sourceUrl: data['sourceUrl'] as String?,
     );
 
@@ -248,7 +250,7 @@ class FirestoreService {
     // Try to sync with Firestore in background with 4-second timeout
     try {
       final db = _db;
-      if (db != null) {
+      if (db!= null) {
         final docRef = await db.collection('news').add({
           'title': titleMap,
           'content': descriptionMap,
@@ -262,7 +264,7 @@ class FirestoreService {
           'isFree': newModel.isFree,
           'isFeatured': newModel.isFeatured,
           'timeAgo': 'Just now',
-          if (newModel.sourceUrl != null) 'sourceUrl': newModel.sourceUrl,
+          if (newModel.sourceUrl!= null) 'sourceUrl': newModel.sourceUrl,
         }).timeout(const Duration(seconds: 4));
         createdId = docRef.id;
       }
@@ -280,12 +282,12 @@ class FirestoreService {
 
     try {
       final db = _db;
-      if (db != null && !id.startsWith('local-')) {
+      if (db!= null &&!id.startsWith('local-')) {
         await db
-            .collection('news')
-            .doc(id)
-            .delete()
-            .timeout(const Duration(seconds: 3));
+           .collection('news')
+           .doc(id)
+           .delete()
+           .timeout(const Duration(seconds: 3));
       }
     } catch (_) {}
   }
@@ -294,16 +296,16 @@ class FirestoreService {
   Future<void> updateNews(String id, Map<String, dynamic> data) async {
     final idx = _currentNewsList.indexWhere((item) => item.id == id);
     final titleMap = _parseTextMap(data['title'], 'Untitled');
-    final descriptionMap = _parseTextMap(data['content'] ?? data['description'], '');
-    final category = data['category'] as String? ?? 'Gaming News';
-    final imageUrl = (data['imageUrl'] as String? ?? '').isNotEmpty
-        ? data['imageUrl'] as String
+    final descriptionMap = _parseTextMap(data['content']?? data['description'], '');
+    final category = data['category'] as String??? 'Gaming News';
+    final imageUrl = (data['imageUrl'] as String??? '').isNotEmpty
+       ? data['imageUrl'] as String
         : 'https://images.unsplash.com/photo-1542751371-adc38448a05e?auto=format&fit=crop&w=1000&q=80';
-    final videoUrl = data['videoUrl'] as String? ?? '';
-    final isFree = data['isFree'] as bool? ?? category.toLowerCase().contains('free');
-    final isFeatured = data['isFeatured'] as bool? ?? false;
+    final videoUrl = data['videoUrl'] as String??? '';
+    final isFree = data['isFree'] as bool??? category.toLowerCase().contains('free');
+    final isFeatured = data['isFeatured'] as bool??? false;
 
-    if (idx != -1) {
+    if (idx!= -1) {
       final old = _currentNewsList[idx];
       _currentNewsList[idx] = NewsModel(
         id: old.id,
@@ -316,7 +318,7 @@ class FirestoreService {
         views: old.views,
         isFree: isFree,
         isFeatured: isFeatured,
-        sourceUrl: data['sourceUrl'] as String? ?? old.sourceUrl,
+        sourceUrl: data['sourceUrl'] as String??? old.sourceUrl,
         timestamp: old.timestamp,
       );
       _streamController.add(List.from(_currentNewsList));
@@ -324,7 +326,7 @@ class FirestoreService {
 
     try {
       final db = _db;
-      if (db != null && !id.startsWith('local-')) {
+      if (db!= null &&!id.startsWith('local-')) {
         final updateData = <String, dynamic>{
           'title': titleMap,
           'content': descriptionMap,
@@ -334,7 +336,7 @@ class FirestoreService {
           'videoUrl': videoUrl,
           'isFree': isFree,
           'isFeatured': isFeatured,
-          if (data['sourceUrl'] != null) 'sourceUrl': data['sourceUrl'],
+          if (data['sourceUrl']!= null) 'sourceUrl': data['sourceUrl'],
         };
         await db.collection('news').doc(id).update(updateData).timeout(const Duration(seconds: 3));
       }
@@ -357,17 +359,17 @@ class FirestoreService {
     // 2. Perform atomic batch update on Firestore
     try {
       final db = _db;
-      if (db != null) {
+      if (db!= null) {
         final batch = db.batch();
 
         // Find all currently featured documents
         final querySnapshot = await db
-            .collection('news')
-            .where('isFeatured', isEqualTo: true)
-            .get();
+           .collection('news')
+           .where('isFeatured', isEqualTo: true)
+           .get();
 
         for (var doc in querySnapshot.docs) {
-          if (doc.id != newDocId) {
+          if (doc.id!= newDocId) {
             // Demote old featured document to regular news (do NOT delete)
             batch.update(doc.reference, {'isFeatured': false});
           }
