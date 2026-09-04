@@ -7,6 +7,8 @@ class NewsModel {
   final Map<String, String> titleMap;
   final Map<String, String> descriptionMap;
   final bool isFeatured;
+  final bool isAuto;
+  final bool isFree;
   final String? videoUrl;
   final String imageUrl;
   final String category;
@@ -18,62 +20,123 @@ class NewsModel {
 
   NewsModel({
     required this.id,
-    required this.title,
-    required this.description,
-    required this.titleMap,
-    required this.descriptionMap,
-    required this.isFeatured,
+    this.title = '',
+    this.description = '',
+    Map<String, String>? titleMap,
+    Map<String, String>? descriptionMap,
+    this.isFeatured = false,
+    this.isAuto = false,
+    this.isFree = false,
     this.videoUrl,
-    required this.imageUrl,
-    required this.category,
-    required this.appid,
-    required this.url,
-    required this.views,
-    required this.timestamp,
-    required this.timeAgo,
-  });
+    this.imageUrl = '',
+    this.category = 'Action Games',
+    this.appid = 0,
+    this.url = '',
+    this.views = 0,
+    this.timestamp = 0,
+    this.timeAgo = '',
+  }) : titleMap = titleMap?? {'en': title, 'ur': title, 'ro': title},
+        descriptionMap = descriptionMap?? {'en': description, 'ur': description, 'ro': description};
+
+  // Screens yehi 2 method dhoond rahi hain
+  String getTitle(String langCode) {
+    return titleMap[langCode]?? titleMap['en']?? title;
+  }
+
+  String getDescription(String langCode) {
+    return descriptionMap[langCode]?? descriptionMap['en']?? description;
+  }
+
+  NewsModel copyWith({
+    String? id,
+    String? title,
+    String? description,
+    Map<String, String>? titleMap,
+    Map<String, String>? descriptionMap,
+    bool? isFeatured,
+    bool? isAuto,
+    bool? isFree,
+    String? videoUrl,
+    String? imageUrl,
+    String? category,
+    int? appid,
+    String? url,
+    int? views,
+    int? timestamp,
+    String? timeAgo,
+  }) {
+    return NewsModel(
+      id: id?? this.id,
+      title: title?? this.title,
+      description: description?? this.description,
+      titleMap: titleMap?? this.titleMap,
+      descriptionMap: descriptionMap?? this.descriptionMap,
+      isFeatured: isFeatured?? this.isFeatured,
+      isAuto: isAuto?? this.isAuto,
+      isFree: isFree?? this.isFree,
+      videoUrl: videoUrl?? this.videoUrl,
+      imageUrl: imageUrl?? this.imageUrl,
+      category: category?? this.category,
+      appid: appid?? this.appid,
+      url: url?? this.url,
+      views: views?? this.views,
+      timestamp: timestamp?? this.timestamp,
+      timeAgo: timeAgo?? this.timeAgo,
+    );
+  }
 
   factory NewsModel.fromFirestore(DocumentSnapshot doc) {
-    final data = doc.data() as Map<String, dynamic>? ?? {};
+    final data = doc.data() as Map<String, dynamic>??? {};
 
-    // Purani half news aur nayi full news dono ko support karega
-    Map<String, String> buildDescMap() {
-      if (data['descriptionMap'] != null) {
-        return Map<String, String>.from(data['descriptionMap']);
+    Map<String, String> buildMap(String enKey, String urKey, String roKey, String fallbackKey, String mapKey) {
+      if (data[mapKey]!= null) {
+        return Map<String, String>.from((data[mapKey] as Map).map((k, v) => MapEntry(k.toString(), v.toString())));
       }
       return {
-        'en': (data['description_en'] ?? data['description'] ?? '').toString(),
-        'ur': (data['description_ur'] ?? data['description'] ?? '').toString(),
-        'ro': (data['description_ro'] ?? data['description'] ?? '').toString(),
-      };
-    }
-
-    Map<String, String> buildTitleMap() {
-      if (data['titleMap'] != null) {
-        return Map<String, String>.from(data['titleMap']);
-      }
-      return {
-        'en': (data['title_en'] ?? data['title'] ?? '').toString(),
-        'ur': (data['title_ur'] ?? data['title'] ?? '').toString(),
-        'ro': (data['title_ro'] ?? data['title'] ?? '').toString(),
+        'en': (data[enKey]?? data[fallbackKey]?? '').toString(),
+        'ur': (data[urKey]?? data[fallbackKey]?? '').toString(),
+        'ro': (data[roKey]?? data[fallbackKey]?? '').toString(),
       };
     }
 
     return NewsModel(
-      id: data['id'] ?? doc.id,
-      title: data['title'] ?? '',
-      description: data['description'] ?? data['description_en'] ?? '',
-      titleMap: buildTitleMap(),
-      descriptionMap: buildDescMap(),
-      isFeatured: data['isFeatured'] ?? false,
-      videoUrl: data['videoUrl'],
-      imageUrl: data['imageUrl'] ?? '',
-      category: data['category'] ?? 'Action Games',
-      appid: (data['appid'] is int) ? data['appid'] : int.tryParse(data['appid'].toString()) ?? 0,
-      url: data['url'] ?? '',
-      views: (data['views'] is int) ? data['views'] : int.tryParse(data['views'].toString()) ?? 0,
-      timestamp: (data['timestamp'] is int) ? data['timestamp'] : 0,
-      timeAgo: data['timeAgo'] ?? '',
+      id: data['id']?.toString()?? doc.id,
+      title: (data['title']?? '').toString(),
+      description: (data['description']?? data['description_en']?? '').toString(),
+      titleMap: buildMap('title_en', 'title_ur', 'title_ro', 'title', 'titleMap'),
+      descriptionMap: buildMap('description_en', 'description_ur', 'description_ro', 'description', 'descriptionMap'),
+      isFeatured: data['isFeatured']?? false,
+      isAuto: data['isAuto']?? false,
+      isFree: data['isFree']?? false,
+      videoUrl: data['videoUrl']?.toString(),
+      imageUrl: (data['imageUrl']?? '').toString(),
+      category: (data['category']?? 'Action Games').toString(),
+      appid: data['appid'] is int? data['appid'] : int.tryParse(data['appid'].toString())?? 0,
+      url: (data['url']?? '').toString(),
+      views: data['views'] is int? data['views'] : int.tryParse(data['views'].toString())?? 0,
+      timestamp: data['timestamp'] is int? data['timestamp'] : 0,
+      timeAgo: (data['timeAgo']?? '').toString(),
     );
+  }
+
+  Map<String, dynamic> toMap() {
+    return {
+      'id': id,
+      'title': title,
+      'description': description,
+      'titleMap': titleMap,
+      'descriptionMap': descriptionMap,
+      'isFeatured': isFeatured,
+      'isAuto': isAuto,
+      'isFree': isFree,
+      'videoUrl': videoUrl,
+      'imageUrl': imageUrl,
+      'category': category,
+      'appid': appid,
+      'url': url,
+      'views': views,
+      'timestamp': timestamp,
+      'timeAgo': timeAgo,
+    };
   }
 }
