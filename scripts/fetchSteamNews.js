@@ -1,6 +1,9 @@
 const admin = require('firebase-admin');
 const axios = require('axios');
 const Parser = require('rss-parser');
+const cheerio = require('cheerio');
+const he = require('he');
+
 const parser = new Parser({
   customFields: { item: ['media:content', 'media:thumbnail', 'enclosure'] }
 });
@@ -9,7 +12,6 @@ const serviceAccount = JSON.parse(process.env.FIREBASE_SERVICE_ACCOUNT);
 admin.initializeApp({ credential: admin.credential.cert(serviceAccount) });
 const db = admin.firestore();
 
-// Steam Games (tumhari purani list)
 const allGamesAppIds = {
   'Forza Horizon 5': 1551360, 'Euro Truck Simulator 2': 227300,
   'American Truck Simulator': 270880, 'Assetto Corsa': 244210,
@@ -23,7 +25,6 @@ const allGamesAppIds = {
   'Cities Skylines': 255710, 'Palworld': 1623730,
 };
 
-// Top Authentic Websites ke RSS
 const RSS_SOURCES = [
   { name: 'IGN', url: 'https://feeds.feedburner.com/ign/games-all', category: 'Gaming News' },
   { name: 'GameSpot', url: 'https://www.gamespot.com/feeds/mashup/', category: 'Gaming News' },
@@ -40,28 +41,34 @@ const RSS_SOURCES = [
 
 function cleanHtml(text) {
   if (!text) return "";
-  return text.replace(/<[^>]*>/g, ' ').replace(/\s+/g, ' ').trim();
+  let decoded = he.decode(text);
+  return decoded.replace(/<[^>]*>/g, ' ').replace(/\s+/g, ' ').trim();
 }
-function detectCategory(text) {
-  text = text.toLowerCase();
-  if (text.includes('truck') || text.includes('simulator')) return 'Simulator Games';
-  if (text.includes('forza') || text.includes('racing')) return 'Driving Games';
-  if (text.includes('gta') || text.includes('red dead')) return 'Open World';
-  if (text.includes('playstation') || text.includes('ps5')) return 'PlayStation';
-  if (text.includes('xbox')) return 'Xbox';
-  return 'Gaming News';
-}
+
 function getImage(item) {
   if (item.enclosure && item.enclosure.url) return item.enclosure.url;
-  if (item['media:content'] && item['media:content']['$'] && item['media:content']['$'].url) return item['media:content']['$'].url;
-  if (item['media:thumbnail'] && item['media:thumbnail']['$']) return item['media:thumbnail']['$'].url;
-  const match = item.content ? item.content.match(/<img[^>]+src="([^">]+)"/) : null;
+  if (item['media:content'] && item['media:content']['$']?.url) return item['media:content']['$'].url;
+  const match = item.content? item.content.match(/<img[^>]+src="([^">]+)"/) : null;
   if (match) return match[1];
   return `https://cdn.akamai.steamstatic.com/steam/apps/1245620/header.jpg`;
 }
 
+// PURI KHABAR LANAY WALA FUNCTION
+async function getFullArticle(url) {
+  try {
+    const { data } = await axios.get(url, { headers: { 'User-Agent': 'Mozilla/5.0' }, timeout: 15000 });
+    const $ = cheerio.load(data);
+    let text = "";
+    $('article p,.article-body p,.entry-content p,.post-content p,.story p').each((i, el) => {
+      let p = $(el).text().trim();
+      if (p.length > 40) text += p + "\n\n";
+    });
+    if (text.length > 300) return text.substring(0, 5000);
+    return null;
+  } catch (e) { return null; }
+}
+
 async function fetchSteam() {
-  console.log('Fetching Steam...');
   for (const [gameName, appId] of Object.entries(allGamesAppIds)) {
     try {
       const url = `https://api.steampowered.com/ISteamNews/GetNewsForApp/v2/?appid=${appId}&count=2&maxlength=0`;
@@ -69,57 +76,45 @@ async function fetchSteam() {
       const items = res.data?.appnews?.newsitems || [];
       for (const item of items) {
         const fullDesc = cleanHtml(item.contents || "");
-        const title = item.title || "";
         const docId = `${appId}_${item.gid}`;
         await db.collection('news').doc(docId).set({
-          id: docId, title: title, description: fullDesc,
-          titleMap: { en: title, ur: title, ro: title },
+          id: docId, title: he.decode(item.title || ""), description: fullDesc,
+          titleMap: { en: he.decode(item.title||""), ur: he.decode(item.title||""), ro: he.decode(item.title||"") },
           descriptionMap: { en: fullDesc, ur: fullDesc, ro: fullDesc },
           imageUrl: `https://cdn.akamai.steamstatic.com/steam/apps/${appId}/header.jpg`,
           appid: appId, appId: appId, url: item.url || "", sourceUrl: item.url || "",
-          gameName: gameName, category: detectCategory(title + ' ' + fullDesc),
+          gameName: gameName, category: 'Gaming News',
           timestamp: item.date || Math.floor(Date.now()/1000),
-          timeAgo: new Date().toISOString(), views: 0,
-          isFeatured: false, isAuto: true, isFree: false, videoUrl: null, source: 'Steam'
+          timeAgo: new Date().toISOString(), views: 0, isFeatured: false, isAuto: true, source: 'Steam'
         }, { merge: true });
-        console.log(`Saved Steam: ${gameName}`);
       }
-    } catch (e) { console.log(`Skip Steam ${gameName}`); }
-    await new Promise(r => setTimeout(r, 1500));
+    } catch (e) {}
+    await new Promise(r => setTimeout(r, 1000));
   }
 }
 
 async function fetchRSS() {
-  console.log('Fetching Top Websites...');
   for (const src of RSS_SOURCES) {
     try {
       const feed = await parser.parseURL(src.url);
-      const items = feed.items.slice(0, 4);
-      for (const item of items) {
-        const title = item.title || "";
-        const desc = cleanHtml(item.contentSnippet || item.content || "");
+      for (const item of feed.items.slice(0, 3)) {
+        let fullText = await getFullArticle(item.link);
+        if (!fullText) fullText = cleanHtml(item.contentSnippet || item.content || "");
         const safeId = Buffer.from(item.link).toString('base64').replace(/[/+=]/g, '').substring(0, 20);
         const docId = `${src.name}_${safeId}`;
         await db.collection('news').doc(docId).set({
-          id: docId, title: title, description: desc,
-          titleMap: { en: title, ur: title, ro: title },
-          descriptionMap: { en: desc, ur: desc, ro: desc },
-          imageUrl: getImage(item),
-          url: item.link || "", sourceUrl: item.link || "",
+          id: docId, title: he.decode(item.title||""), description: fullText,
+          titleMap: { en: he.decode(item.title||""), ur: he.decode(item.title||""), ro: he.decode(item.title||"") },
+          descriptionMap: { en: fullText, ur: fullText, ro: fullText },
+          imageUrl: getImage(item), url: item.link || "", sourceUrl: item.link || "",
           gameName: src.name, category: src.category,
           timestamp: Math.floor(new Date(item.pubDate || Date.now()).getTime() / 1000),
-          timeAgo: new Date(item.pubDate || Date.now()).toISOString(),
-          views: 0, isFeatured: true, isAuto: true, isFree: false, videoUrl: null, source: src.name
+          timeAgo: new Date().toISOString(), views: 0, isFeatured: true, isAuto: true, source: src.name
         }, { merge: true });
-        console.log(`Saved ${src.name}: ${title.substring(0,30)}`);
       }
-    } catch (e) { console.log(`Skip ${src.name}: ${e.message}`); }
-    await new Promise(r => setTimeout(r, 1500));
+    } catch (e) {}
+    await new Promise(r => setTimeout(r, 1000));
   }
 }
 
-(async () => {
-  await fetchSteam();
-  await fetchRSS();
-  console.log('DONE - All sources fetched');
-})();
+(async () => { await fetchSteam(); await fetchRSS(); console.log('DONE FULL NEWS'); })();
