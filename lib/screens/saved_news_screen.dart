@@ -11,9 +11,7 @@ import 'news_detail_screen.dart';
 
 class SavedNewsScreen extends StatefulWidget {
   final VoidCallback? onExploreTap;
-
   const SavedNewsScreen({super.key, this.onExploreTap});
-
   @override
   State<SavedNewsScreen> createState() => _SavedNewsScreenState();
 }
@@ -111,6 +109,28 @@ class _SavedNewsScreenState extends State<SavedNewsScreen> {
     );
   }
 
+  String _getTitleSafe(NewsModel item, String langCode) {
+    String t = item.getTitle(langCode);
+    if (t.trim().isEmpty) {
+      t = item.getTitle('en');
+    }
+    if (t.trim().isEmpty) {
+      t = item.title;
+    }
+    return t;
+  }
+
+  String _getDescSafe(NewsModel item, String langCode) {
+    String d = item.getDescription(langCode);
+    if (d.trim().isEmpty) {
+      d = item.getDescription('en');
+    }
+    if (d.trim().isEmpty) {
+      d = item.description;
+    }
+    return d;
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -151,13 +171,13 @@ class _SavedNewsScreenState extends State<SavedNewsScreen> {
                 children: [
                   IconButton(
                     icon: Icon(
-                      _isSearching ? Icons.close : Icons.search_rounded,
+                      _isSearching? Icons.close : Icons.search_rounded,
                       color: neonGreen,
                       size: 22,
                     ),
                     onPressed: () {
                       setState(() {
-                        _isSearching = !_isSearching;
+                        _isSearching =!_isSearching;
                         if (!_isSearching) {
                           _searchQuery = '';
                           _searchController.clear();
@@ -182,18 +202,16 @@ class _SavedNewsScreenState extends State<SavedNewsScreen> {
           if (savedList.isEmpty) {
             return _buildEmptyState();
           }
-
-          // Extract unique categories in saved list
-          final categories = ['All', ...savedList.map((e) => e.category).toSet()];
-
-          // Filter by category & search query
+          final categories = ['All',...savedList.map((e) => e.category).toSet()];
           final langCode = context.locale.languageCode;
           final filtered = savedList.where((item) {
             final matchesCat = _selectedCategory == 'All' ||
                 item.category.toLowerCase() == _selectedCategory.toLowerCase();
+            final titleSafe = _getTitleSafe(item, langCode).toLowerCase();
+            final descSafe = _getDescSafe(item, langCode).toLowerCase();
             final matchesSearch = _searchQuery.isEmpty ||
-                item.getTitle(langCode).toLowerCase().contains(_searchQuery.toLowerCase()) ||
-                item.getDescription(langCode).toLowerCase().contains(_searchQuery.toLowerCase()) ||
+                titleSafe.contains(_searchQuery.toLowerCase()) ||
+                descSafe.contains(_searchQuery.toLowerCase()) ||
                 item.title.toLowerCase().contains(_searchQuery.toLowerCase()) ||
                 item.description.toLowerCase().contains(_searchQuery.toLowerCase());
             return matchesCat && matchesSearch;
@@ -201,7 +219,6 @@ class _SavedNewsScreenState extends State<SavedNewsScreen> {
 
           return Column(
             children: [
-              // Search field (if active)
               if (_isSearching)
                 Padding(
                   padding: const EdgeInsets.fromLTRB(16, 12, 16, 4),
@@ -219,7 +236,7 @@ class _SavedNewsScreenState extends State<SavedNewsScreen> {
                       hintStyle: TextStyle(color: textGray, fontSize: 13),
                       prefixIcon: Icon(Icons.search_rounded, color: neonGreen, size: 20),
                       suffixIcon: _searchQuery.isNotEmpty
-                          ? IconButton(
+                         ? IconButton(
                               icon: Icon(Icons.clear, color: textGray, size: 18),
                               onPressed: () {
                                 _searchController.clear();
@@ -247,8 +264,6 @@ class _SavedNewsScreenState extends State<SavedNewsScreen> {
                     ),
                   ),
                 ),
-
-              // Categories Horizontal List (if more than 1 category)
               if (categories.length > 2)
                 Container(
                   height: 48,
@@ -261,19 +276,19 @@ class _SavedNewsScreenState extends State<SavedNewsScreen> {
                     itemBuilder: (context, index) {
                       final cat = categories[index];
                       final isSelected = cat == _selectedCategory;
-                      final label = cat == 'All' ? 'category_all'.tr() : cat;
+                      final label = cat == 'All'? 'category_all'.tr() : cat;
                       return ChoiceChip(
                         label: Text(label),
                         selected: isSelected,
                         selectedColor: neonGreen,
                         backgroundColor: cardDark,
                         side: BorderSide(
-                          color: isSelected ? neonGreen : borderDark,
+                          color: isSelected? neonGreen : borderDark,
                           width: 1,
                         ),
                         labelStyle: TextStyle(
-                          color: isSelected ? const Color(0xFF0A0A0F) : textWhite,
-                          fontWeight: isSelected ? FontWeight.w900 : FontWeight.normal,
+                          color: isSelected? const Color(0xFF0A0A0F) : textWhite,
+                          fontWeight: isSelected? FontWeight.w900 : FontWeight.normal,
                           fontSize: 12,
                         ),
                         onSelected: (val) {
@@ -285,8 +300,6 @@ class _SavedNewsScreenState extends State<SavedNewsScreen> {
                     },
                   ),
                 ),
-
-              // Header summary
               Padding(
                 padding: const EdgeInsets.fromLTRB(16, 8, 16, 8),
                 child: Row(
@@ -313,11 +326,9 @@ class _SavedNewsScreenState extends State<SavedNewsScreen> {
                   ],
                 ),
               ),
-
-              // Articles List
               Expanded(
                 child: filtered.isEmpty
-                    ? Center(
+                   ? Center(
                         child: Column(
                           mainAxisAlignment: MainAxisAlignment.center,
                           children: [
@@ -382,7 +393,7 @@ class _SavedNewsScreenState extends State<SavedNewsScreen> {
               side: BorderSide(color: borderDark),
             ),
             content: Text(
-              'Removed "${item.title.length > 25 ? '${item.title.substring(0, 22)}...' : item.title}"',
+              'Removed "${item.title.length > 25? '${item.title.substring(0, 22)}...' : item.title}"',
               style: TextStyle(color: textWhite, fontSize: 12),
             ),
             action: SnackBarAction(
@@ -413,7 +424,6 @@ class _SavedNewsScreenState extends State<SavedNewsScreen> {
           child: Row(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              // Thumbnail
               ClipRRect(
                 borderRadius: const BorderRadius.only(
                   topLeft: Radius.circular(13),
@@ -429,7 +439,7 @@ class _SavedNewsScreenState extends State<SavedNewsScreen> {
                         imageUrl: item.imageUrl,
                         fit: BoxFit.cover,
                       ),
-                      if (item.videoUrl != null && item.videoUrl!.isNotEmpty)
+                      if (item.videoUrl!= null && item.videoUrl!.isNotEmpty)
                         Container(
                           color: Colors.black.withOpacity(0.3),
                           child: Center(
@@ -444,15 +454,12 @@ class _SavedNewsScreenState extends State<SavedNewsScreen> {
                   ),
                 ),
               ),
-
-              // Article Details
               Expanded(
                 child: Padding(
                   padding: const EdgeInsets.all(12),
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      // Category & Time
                       Row(
                         children: [
                           Container(
@@ -480,15 +487,13 @@ class _SavedNewsScreenState extends State<SavedNewsScreen> {
                         ],
                       ),
                       const SizedBox(height: 6),
-
-                      // Title
                       TranslatedNewsTitle(
                         news: item,
                         langCode: context.locale.languageCode,
                         maxLines: 2,
                         overflow: TextOverflow.ellipsis,
-                        textAlign: LanguageService.isRtlLocale(context.locale) ? TextAlign.right : TextAlign.left,
-                        textDirection: LanguageService.isRtlLocale(context.locale) ? ui.TextDirection.rtl : ui.TextDirection.ltr,
+                        textAlign: LanguageService.isRtlLocale(context.locale)? TextAlign.right : TextAlign.left,
+                        textDirection: LanguageService.isRtlLocale(context.locale)? ui.TextDirection.rtl : ui.TextDirection.ltr,
                         style: TextStyle(
                           color: textWhite,
                           fontSize: 13,
@@ -497,8 +502,6 @@ class _SavedNewsScreenState extends State<SavedNewsScreen> {
                         ),
                       ),
                       const SizedBox(height: 6),
-
-                      // Action bar: View details & Remove
                       Row(
                         children: [
                           Icon(Icons.touch_app_outlined, color: textGray, size: 12),
@@ -570,7 +573,6 @@ class _SavedNewsScreenState extends State<SavedNewsScreen> {
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            // Glowing bookmark illustration container
             Container(
               width: 90,
               height: 90,
@@ -615,8 +617,6 @@ class _SavedNewsScreenState extends State<SavedNewsScreen> {
               ),
             ),
             const SizedBox(height: 28),
-
-            // Explore News Button
             ElevatedButton.icon(
               style: ElevatedButton.styleFrom(
                 backgroundColor: neonGreen,
