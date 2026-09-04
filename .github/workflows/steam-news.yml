@@ -1,18 +1,17 @@
 name: Fetch Top 50 Gaming News
 on:
   schedule:
-    - cron: '0 * * * *'
+    - cron: '*/15 * * * *'
   workflow_dispatch:
 jobs:
-  fetch-news:
+  fetch:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v3
       - uses: actions/setup-node@v3
         with:
-          node-version: '20'
-      - run: npm install axios@1.6.7 firebase-admin rss-parser he cheerio
-      - name: Run Script
+          node-version: '18'
+      - run: npm install firebase-admin axios rss-parser cheerio he
+      - run: node scripts/fetchSteamNews.js
         env:
           FIREBASE_SERVICE_ACCOUNT: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
-        run: node scripts/fetchSteamNews.js
