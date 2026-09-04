@@ -7,25 +7,29 @@ const axios = require("axios");
 initializeApp();
 
 const GAMES = [
+  {appid: 1245620, name: "ELDEN RING", category: "Action Games"},
   {appid: 1938090, name: "Call of Duty MW3", category: "Action Games"},
   {appid: 1623730, name: "Palworld", category: "Simulator Games"},
   {appid: 1172470, name: "Apex Legends", category: "Action Games"},
   {appid: 570, name: "Dota 2", category: "Action Games"},
   {appid: 578080, name: "PUBG", category: "Action Games"},
+  {appid: 730, name: "Counter Strike 2", category: "Action Games"},
 ];
 
 async function fetchAndSaveFullNews() {
   const db = getFirestore();
-  console.log("Fetching FULL news start...");
+  console.log("Fetching FULL news for all games...");
 
   for (const game of GAMES) {
     try {
+      // Yahan &maxlength=0 ka matlab hai PURI NEWS DO, aadhi nahi
       const apiUrl = `https://api.steampowered.com/ISteamNews/GetNewsForApp/v2/?appid=${game.appid}&count=10&maxlength=0&format=json`;
       const response = await axios.get(apiUrl);
       const newsItems = response.data?.appnews?.newsitems || [];
 
       for (const item of newsItems) {
         let fullContent = item.contents || "";
+        // [b] jaise tags saaf karo, content ko kaato mat
         fullContent = fullContent.replace(/\[.*?\]/g, "").trim();
         if (fullContent.length < 30) continue;
 
@@ -50,11 +54,12 @@ async function fetchAndSaveFullNews() {
           updatedAt: FieldValue.serverTimestamp(),
         }, {merge: true});
       }
+      console.log(`Full news saved for ${game.name}`);
     } catch (err) {
-      console.error(`Error ${game.name}`, err.message);
+      console.error(`Error ${game.name}:`, err.message);
     }
   }
-  return "Full News Updated";
+  return "All Full News Updated Successfully";
 }
 
 exports.fetchGamingNews = onSchedule("every 6 hours", async () => {
