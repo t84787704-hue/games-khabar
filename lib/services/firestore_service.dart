@@ -32,7 +32,7 @@ class FirestoreService {
       db
           .collection('news')
           .orderBy('timestamp', descending: true)
-          .limit(500)
+          .limit(1000)
           .snapshots()
           .listen(
         (snapshot) {
@@ -67,7 +67,7 @@ class FirestoreService {
         final snapshot = await db
             .collection('news')
             .orderBy('timestamp', descending: true)
-            .limit(500)
+            .limit(1000)
             .get(const GetOptions(source: Source.serverAndCache))
             .timeout(const Duration(seconds: 10));
 
