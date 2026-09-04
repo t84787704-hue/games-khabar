@@ -237,7 +237,6 @@ class FirestoreService {
       isFree: data['isFree'] as bool? ?? false,
       isFeatured: data['isFeatured'] as bool? ?? false,
       sourceUrl: data['sourceUrl'] as String?,
-      timestamp: Timestamp.now(),
     );
 
     // Insert at index 0 immediately so user sees it instantly
