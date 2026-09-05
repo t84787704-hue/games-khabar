@@ -21,6 +21,7 @@ import 'news_detail_screen.dart';
 import 'saved_news_screen.dart';
 import 'profile_screen.dart';
 import 'following_screen.dart';
+import 'community_wall_screen.dart';
 import '../widgets/news_card.dart';
 import '../widgets/streak_banner_widget.dart';
 import '../services/streak_service.dart';
@@ -243,6 +244,11 @@ class _HomeScreenState extends State<HomeScreen> {
                   icon: const Icon(Icons.favorite_outline_rounded),
                   activeIcon: const Icon(Icons.favorite_rounded),
                   label: 'Following',
+                ),
+                BottomNavigationBarItem(
+                  icon: const Icon(Icons.forum_outlined),
+                  activeIcon: const Icon(Icons.forum_rounded),
+                  label: 'Community',
                 ),
                 BottomNavigationBarItem(
                   icon: savedCount > 0
@@ -550,16 +556,18 @@ class _HomeScreenState extends State<HomeScreen> {
       body: _selectedNavIndex == 1
           ? const FollowingScreen()
           : _selectedNavIndex == 2
-              ? SavedNewsScreen(
-                  onExploreTap: () {
-                    setState(() {
-                      _selectedNavIndex = 0;
-                    });
-                  },
-                )
+              ? const CommunityWallScreen()
               : _selectedNavIndex == 3
-                  ? const ProfileScreen()
-                  : StreamBuilder<List<NewsModel>>(
+                  ? SavedNewsScreen(
+                      onExploreTap: () {
+                        setState(() {
+                          _selectedNavIndex = 0;
+                        });
+                      },
+                    )
+                  : _selectedNavIndex == 4
+                      ? const ProfileScreen()
+                      : StreamBuilder<List<NewsModel>>(
         initialData: _firestoreService.currentNews,
         stream: _firestoreService.getNewsStream(),
         builder: (context, snapshot) {

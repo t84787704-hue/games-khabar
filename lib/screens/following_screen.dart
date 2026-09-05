@@ -9,7 +9,6 @@ import '../services/theme_service.dart';
 import '../services/language_service.dart';
 import '../widgets/news_card.dart';
 import '../widgets/price_tracker_card.dart';
-import '../widgets/community_wall_widget.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'news_detail_screen.dart';
 
@@ -528,11 +527,6 @@ class _FollowingScreenState extends State<FollowingScreen> {
                     ),
                   );
                 },
-              ),
-
-              // Community Wall (Squad, Tips & Friends)
-              const SliverToBoxAdapter(
-                child: CommunityWallWidget(),
               ),
 
               const SliverToBoxAdapter(
