@@ -19,7 +19,7 @@ class GamingNewsModel {
     required this.id,
     required this.titleEn,
     required this.titleUr,
-    this.contentEn = '',
+    String contentEn = '',
     this.contentUr = '',
     required this.summary,
     this.source = '',
@@ -30,7 +30,7 @@ class GamingNewsModel {
     required this.timestamp,
     this.views = 0,
     String? fullContent,
-  });
+  }) : contentEn = contentEn.isNotEmpty ? contentEn : (fullContent ?? '');
 
   Map<String, dynamic> toMap() {
     final effectiveEn = contentEn.isNotEmpty ? contentEn : summary;
@@ -172,6 +172,9 @@ class GamingNewsModel {
     return 'Detailed gaming article will appear here shortly.';
   }
 
+  /// Backward compatible getter for full content
+  String get fullContent => contentEn.isNotEmpty ? contentEn : summary;
+
   String get timeAgo {
     final diff = DateTime.now().difference(timestamp);
     if (diff.inSeconds < 60) return 'Just now';
@@ -199,12 +202,13 @@ class GamingNewsModel {
     String? imageUrl,
     DateTime? timestamp,
     int? views,
+    String? fullContent,
   }) {
     return GamingNewsModel(
       id: id ?? this.id,
       titleEn: titleEn ?? this.titleEn,
       titleUr: titleUr ?? this.titleUr,
-      contentEn: contentEn ?? this.contentEn,
+      contentEn: contentEn ?? fullContent ?? this.contentEn,
       contentUr: contentUr ?? this.contentUr,
       summary: summary ?? this.summary,
       source: source ?? this.source,
