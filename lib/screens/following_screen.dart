@@ -4,9 +4,12 @@ import 'package:easy_localization/easy_localization.dart' hide TextDirection;
 import '../models/news_model.dart';
 import '../services/firestore_service.dart';
 import '../services/following_service.dart';
+import '../services/price_service.dart';
 import '../services/theme_service.dart';
 import '../services/language_service.dart';
 import '../widgets/news_card.dart';
+import '../widgets/price_tracker_card.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
 import 'news_detail_screen.dart';
 
 class FollowingScreen extends StatefulWidget {
@@ -19,6 +22,7 @@ class FollowingScreen extends StatefulWidget {
 class _FollowingScreenState extends State<FollowingScreen> {
   final FollowingService _followingService = FollowingService();
   final FirestoreService _firestoreService = FirestoreService();
+  final PriceService _priceService = PriceService();
   final TextEditingController _customGameController = TextEditingController();
   bool _isAddingCustom = false;
 
@@ -420,13 +424,151 @@ class _FollowingScreenState extends State<FollowingScreen> {
                   );
                 },
               ),
+
+              // Price Tracker Section for Followed Paid Games
+              Builder(
+                builder: (context) {
+                  final followedPaidGames =
+                      followedGames.where((g) => _priceService.isPaidGame(g)).toList();
+                  if (followedPaidGames.isEmpty) {
+                    return const SliverToBoxAdapter(child: SizedBox(height: 16));
+                  }
+
+                  return SliverToBoxAdapter(
+                    child: Padding(
+                      padding: const EdgeInsets.fromLTRB(16, 28, 16, 8),
+                      child: Row(
+                        children: [
+                          Container(
+                            width: 3,
+                            height: 15,
+                            decoration: BoxDecoration(
+                              color: neonGreen,
+                              borderRadius: BorderRadius.circular(2),
+                            ),
+                          ),
+                          const SizedBox(width: 8),
+                          Text(
+                            'Price Tracker - Sasta Hua Alert',
+                            style: TextStyle(
+                              color: textWhite,
+                              fontWeight: FontWeight.w900,
+                              fontSize: 15,
+                              letterSpacing: 0.5,
+                            ),
+                          ),
+                          const Spacer(),
+                          Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
+                            decoration: BoxDecoration(
+                              color: neonGreen.withOpacity(0.15),
+                              borderRadius: BorderRadius.circular(6),
+                            ),
+                            child: Text(
+                              '${followedPaidGames.length} Tracked',
+                              style: TextStyle(
+                                color: neonGreen,
+                                fontWeight: FontWeight.bold,
+                                fontSize: 10,
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  );
+                },
+              ),
+
+              // PriceTrackerCard for each followed paid game
+              Builder(
+                builder: (context) {
+                  final followedPaidGames =
+                      followedGames.where((g) => _priceService.isPaidGame(g)).toList();
+                  if (followedPaidGames.isEmpty) {
+                    return const SliverToBoxAdapter(child: SizedBox.shrink());
+                  }
+
+                  return SliverList(
+                    delegate: SliverChildBuilderDelegate(
+                      (context, index) {
+                        final game = followedPaidGames[index];
+                        return StreamBuilder<DocumentSnapshot<Map<String, dynamic>>>(
+                          stream: _priceService.streamGamePrice(game),
+                          builder: (context, priceSnap) {
+                            final data = priceSnap.data?.data();
+                            final currentPrice = (data?['currentPrice'] as num?)?.toDouble() ??
+                                _getDefaultCurrentPrice(game);
+                            final originalPrice = (data?['originalPrice'] as num?)?.toDouble() ??
+                                _getDefaultOriginalPrice(game);
+                            final lowestPrice = (data?['lowestPrice'] as num?)?.toDouble() ??
+                                _getDefaultLowestPrice(game);
+                            final priceHistory =
+                                (data?['priceHistory'] as List<dynamic>?) ?? [];
+                            final store = data?['store'] as String? ?? 'Steam';
+                            final dealUrl = data?['dealUrl'] as String?;
+                            final discountPercent =
+                                (data?['discountPercent'] as num?)?.toInt();
+
+                            return PriceTrackerCard(
+                              gameName: game,
+                              currentPrice: currentPrice,
+                              originalPrice: originalPrice,
+                              lowestPrice: lowestPrice,
+                              priceHistory: priceHistory,
+                              store: store,
+                              dealUrl: dealUrl,
+                              discountPercent: discountPercent,
+                            );
+                          },
+                        );
+                      },
+                      childCount: followedPaidGames.length,
+                    ),
+                  );
+                },
+              ),
+
               const SliverToBoxAdapter(
-                child: SizedBox(height: 24),
+                child: SizedBox(height: 32),
               ),
             ],
           );
         },
       ),
     );
+  }
+
+  double _getDefaultCurrentPrice(String game) {
+    final lower = game.toLowerCase();
+    if (lower.contains('gta')) return 69.99;
+    if (lower.contains('elden')) return 59.99;
+    if (lower.contains('cyberpunk')) return 29.99;
+    if (lower.contains('god of war')) return 24.99;
+    if (lower.contains('fc') || lower.contains('fifa')) return 69.99;
+    if (lower.contains('call of duty') || lower.contains('cod')) return 69.99;
+    if (lower.contains('tekken')) return 49.99;
+    if (lower.contains('counter-strike') || lower.contains('cs')) return 14.99;
+    if (lower.contains('palworld')) return 29.99;
+    if (lower.contains('helldivers')) return 39.99;
+    if (lower.contains('minecraft')) return 29.99;
+    return 49.99;
+  }
+
+  double _getDefaultOriginalPrice(String game) {
+    final lower = game.toLowerCase();
+    if (lower.contains('cyberpunk') || lower.contains('god of war')) return 59.99;
+    if (lower.contains('tekken')) return 69.99;
+    final curr = _getDefaultCurrentPrice(game);
+    return (curr * 1.3).roundToDouble();
+  }
+
+  double _getDefaultLowestPrice(String game) {
+    final lower = game.toLowerCase();
+    if (lower.contains('cyberpunk')) return 19.99;
+    if (lower.contains('god of war')) return 19.99;
+    if (lower.contains('elden')) return 35.99;
+    final curr = _getDefaultCurrentPrice(game);
+    return (curr * 0.65).roundToDouble();
   }
 }

@@ -1,0 +1,31 @@
+name: Fetch Gaming News and Prices
+on:
+  schedule:
+    - cron: '0 */6 * * *'
+  workflow_dispatch:
+
+jobs:
+  fetch_news_and_prices:
+    name: Fetch Top 50 Gaming News & Game Deals
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Install dependencies
+        run: npm install firebase-admin axios rss-parser cheerio he
+
+      - name: Fetch Gaming News
+        run: node scripts/fetchSteamNews.js
+        env:
+          FIREBASE_SERVICE_ACCOUNT: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
+
+      - name: Fetch Game Prices & Trigger Sasta Hua Alerts
+        run: node scripts/fetchGamePrices.js
+        env:
+          FIREBASE_SERVICE_ACCOUNT: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
