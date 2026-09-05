@@ -429,7 +429,7 @@ class _NewsPostCardState extends State<NewsPostCard> {
 
                 // Read More Button
                 ElevatedButton.icon(
-                  onTap: _onOpenDetail,
+                  onPressed: _onOpenDetail,
                   style: ElevatedButton.styleFrom(
                     backgroundColor: const Color(0xFF00FF88),
                     foregroundColor: Colors.black,
