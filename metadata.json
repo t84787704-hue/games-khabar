@@ -1,6 +1,6 @@
 {
-  "name": "Games Khabar",
-  "description": "Games Khabar - Free Games & Gaming News in Roman Urdu for Pakistan, Saudi, UAE audience",
+  "name": "Gamers ID",
+  "description": "Gamers ID - Mini Facebook for Gamers. Create your unique Gamer ID, share gaming status, follow players, and connect.",
   "requestFramePermissions": [],
   "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
 }
