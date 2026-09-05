@@ -52,7 +52,7 @@ class CommunityService {
         await prefs.setString(_prefsUserNameKey, _userName);
       }
 
-      _likedPostIds = (prefs.getStringList(_prefsLikedPostsKey) ?? {}).toSet();
+      _likedPostIds = prefs.getStringList(_prefsLikedPostsKey)?.toSet() ?? <String>{};
       _initialized = true;
     } catch (_) {
       if (_userId.isEmpty) _userId = 'gamer_guest_${DateTime.now().millisecondsSinceEpoch}';
