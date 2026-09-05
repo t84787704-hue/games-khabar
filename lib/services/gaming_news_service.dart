@@ -23,9 +23,21 @@ class GamingNewsService {
   bool get isSyncing => _isSyncing;
 
   final List<String> _rssFeedUrls = [
+    // A) GOOGLE NEWS MEGA RSS (Covers PUBG, BGMI, Free Fire, COD, Valorant, GTA 6, GTA 5, Fortnite, Minecraft, LOL, MLBB, Genshin, Apex, CS2, Dota 2, Overwatch, Elden Ring, God of War, Spider-Man, Zelda, EA FC 25, FIFA, Forza Horizon, Clash of Clans, Roblox, Cyberpunk, The Last of Us)
+    'https://news.google.com/rss/search?q=PUBG+OR+BGMI+OR+Free+Fire+OR+Call+of+Duty+OR+COD+OR+Valorant+OR+GTA+6+OR+GTA+5+OR+Fortnite+OR+Minecraft+OR+League+of+Legends+OR+Mobile+Legends+OR+Genshin+Impact+OR+Apex+Legends+OR+Counter-Strike+2+OR+CS2+OR+Dota+2+OR+Overwatch+OR+Elden+Ring+OR+God+of+War+OR+Spider-Man+OR+Zelda+OR+EA+FC+25+OR+FIFA+OR+Forza+Horizon+OR+Clash+of+Clans+OR+Roblox+OR+Cyberpunk+OR+The+Last+of+Us&hl=en-US&gl=US&ceid=US:en',
+
+    // B) TOP GAMING SITES (All platforms - Console, PC & Mobile)
     'https://feeds.feedburner.com/ign/games-all',
+    'https://feeds.feedburner.com/ign/news',
     'https://www.gamespot.com/feeds/mashup/',
-    'https://www.epicgames.com/blog/en-US/feed',
+    'https://kotaku.com/rss',
+    'https://www.polygon.com/rss/index.xml',
+    'https://www.dexerto.com/feed/',
+    'https://www.charlieintel.com/feed/',
+    'https://www.eurogamer.net/feed',
+    'https://www.pocketgamer.biz/rss/',
+    'https://toucharcade.com/feed/',
+    'https://www.sportskeeda.com/esports/feed',
   ];
 
   /// Stream of all gaming news from Firestore, sorted by timestamp descending
@@ -33,7 +45,7 @@ class GamingNewsService {
     return _firestore
         .collection(collectionName)
         .orderBy('timestamp', descending: true)
-        .limit(100)
+        .limit(200)
         .snapshots()
         .map((snapshot) {
       if (snapshot.docs.isEmpty) {
@@ -491,58 +503,136 @@ class GamingNewsService {
     return results;
   }
 
-  /// Infer gaming category from title and content
+  /// Auto Category Detection:
+  /// PUBG, BGMI, Free Fire, COD, GTA, Valorant, Fortnite, Minecraft, MLBB, Genshin, Apex, CS2, LOL, Dota 2, FIFA, Forza, God of War, Zelda, Spider-Man, Last of Us, Roblox, Clash of Clans etc.
+  /// If unknown game -> "TRENDING"
   String _categorizeNews(String title, String content) {
     final combined = '$title $content'.toUpperCase();
-    if (combined.contains('GTA') || combined.contains('GRAND THEFT AUTO')) {
-      return 'GRAND THEFT AUTO';
+
+    // Specific famous games
+    if (combined.contains('BGMI') || combined.contains('BATTLEGROUNDS MOBILE INDIA')) {
+      return 'BGMI';
     }
-    if (combined.contains('FIFA') || combined.contains('EA SPORTS') || combined.contains('FC 24') || combined.contains('FC 25')) {
-      return 'EA SPORTS';
+    if (combined.contains('PUBG') || combined.contains('PLAYERUNKNOWN')) {
+      return 'PUBG';
     }
-    if (combined.contains('FALLOUT') || combined.contains('FALL GUYS')) {
-      return 'FALL UP';
+    if (combined.contains('FREE FIRE') || combined.contains('FREEFIRE') || combined.contains('GARENA')) {
+      return 'Free Fire';
     }
-    if (combined.contains('CALL OF DUTY') || combined.contains('COD') || combined.contains('BATTLEFIELD') || combined.contains('VALORANT') || combined.contains('FPS')) {
-      return 'FPS/SHOOTING';
+    if (combined.contains('CALL OF DUTY') || combined.contains('COD MOBILE') || combined.contains('WARZONE') || combined.contains('BLACK OPS') || combined.contains('MODERN WARFARE') || combined.contains('COD')) {
+      return 'COD';
     }
-    if (combined.contains('BATTLE ROYALE') || combined.contains('PUBG') || combined.contains('BGMI') || combined.contains('FREE FIRE') || combined.contains('WARZONE')) {
-      return 'BATTLE ROYALE';
+    if (combined.contains('GTA') || combined.contains('GRAND THEFT AUTO') || combined.contains('VICE CITY') || combined.contains('ROCKSTAR GAMES')) {
+      return 'GTA';
     }
-    if (combined.contains('FORZA') || combined.contains('NEED FOR SPEED') || combined.contains('NFS') || combined.contains('RACING') || combined.contains('GT7') || combined.contains('GRAN TURISMO')) {
-      return 'RACING GAMES';
+    if (combined.contains('VALORANT') || combined.contains('RIOT GAMES')) {
+      return 'Valorant';
     }
-    if (combined.contains('OPEN WORLD') || combined.contains('CYBERPUNK') || combined.contains('ELDER SCROLLS') || combined.contains('WITCHER')) {
-      return 'OPEN WORLD';
+    if (combined.contains('FORTNITE') || combined.contains('EPIC GAMES BATTLE ROYALE')) {
+      return 'Fortnite';
     }
-    if (combined.contains('EPIC GAMES') || combined.contains('STEAM') || combined.contains('FREE GAME')) {
-      return 'FREE GAMES';
+    if (combined.contains('MINECRAFT') || combined.contains('MOJANG')) {
+      return 'Minecraft';
     }
-    return 'FEATURED';
+    if (combined.contains('MOBILE LEGENDS') || combined.contains('MLBB') || combined.contains('BANG BANG')) {
+      return 'MLBB';
+    }
+    if (combined.contains('GENSHIN') || combined.contains('HOYOVERSE') || combined.contains('HONKAI')) {
+      return 'Genshin';
+    }
+    if (combined.contains('APEX LEGENDS') || combined.contains('APEX')) {
+      return 'Apex';
+    }
+    if (combined.contains('COUNTER-STRIKE') || combined.contains('COUNTER STRIKE') || combined.contains('CS2') || combined.contains('CS:GO')) {
+      return 'CS2';
+    }
+    if (combined.contains('LEAGUE OF LEGENDS') || combined.contains('LOL') || combined.contains('WILD RIFT')) {
+      return 'LOL';
+    }
+    if (combined.contains('DOTA') || combined.contains('DEFENSE OF THE ANCIENTS')) {
+      return 'Dota 2';
+    }
+    if (combined.contains('EA FC') || combined.contains('FC 25') || combined.contains('FC 24') || combined.contains('FIFA') || combined.contains('EA SPORTS FC')) {
+      return 'FIFA';
+    }
+    if (combined.contains('FORZA') || combined.contains('HORIZON') || combined.contains('MOTORSPORT') || combined.contains('NEED FOR SPEED') || combined.contains('NFS') || combined.contains('GRAN TURISMO')) {
+      return 'Forza';
+    }
+    if (combined.contains('GOD OF WAR') || combined.contains('RAGNAROK') || combined.contains('KRATOS')) {
+      return 'God of War';
+    }
+    if (combined.contains('ZELDA') || combined.contains('TEARS OF THE KINGDOM') || combined.contains('BREATH OF THE WILD')) {
+      return 'Zelda';
+    }
+    if (combined.contains('SPIDER-MAN') || combined.contains('SPIDERMAN') || combined.contains('PETER PARKER') || combined.contains('MILES MORALES')) {
+      return 'Spider-Man';
+    }
+    if (combined.contains('THE LAST OF US') || combined.contains('LAST OF US') || combined.contains('NAUGHTY DOG') || combined.contains('ELLIE') || combined.contains('JOEL')) {
+      return 'Last of Us';
+    }
+    if (combined.contains('ROBLOX')) {
+      return 'Roblox';
+    }
+    if (combined.contains('CLASH OF CLANS') || combined.contains('CLASH ROYALE') || combined.contains('SUPERCELL')) {
+      return 'Clash of Clans';
+    }
+    if (combined.contains('ELDEN RING') || combined.contains('DARK SOULS') || combined.contains('FROMSOFTWARE')) {
+      return 'Elden Ring';
+    }
+    if (combined.contains('OVERWATCH')) {
+      return 'Overwatch';
+    }
+    if (combined.contains('CYBERPUNK')) {
+      return 'Cyberpunk';
+    }
+
+    // Fallback category for any other gaming news
+    return 'TRENDING';
   }
 
-  /// Detect platform tag
+  /// Detect platform tag: Mobile, PC, Console (PS5, Xbox, Switch)
   String _detectPlatform(String title, String content) {
     final combined = '$title $content'.toUpperCase();
-    if (combined.contains('PS5') || combined.contains('PLAYSTATION 5') || combined.contains('PS4')) {
-      return 'PS5';
+
+    // Mobile check
+    if (combined.contains('MOBILE') ||
+        combined.contains('ANDROID') ||
+        combined.contains('IOS') ||
+        combined.contains('BGMI') ||
+        combined.contains('FREE FIRE') ||
+        combined.contains('MLBB') ||
+        combined.contains('POCKET GAMER') ||
+        combined.contains('TOUCH ARCADE') ||
+        combined.contains('CLASH OF CLANS')) {
+      return 'Mobile';
     }
-    if (combined.contains('XBOX') || combined.contains('SERIES X') || combined.contains('GAME PASS')) {
-      return 'Xbox';
+
+    // Console check
+    if (combined.contains('PS5') ||
+        combined.contains('PLAYSTATION') ||
+        combined.contains('PS4') ||
+        combined.contains('XBOX') ||
+        combined.contains('SERIES X') ||
+        combined.contains('SWITCH') ||
+        combined.contains('NINTENDO')) {
+      return 'Console';
     }
-    if (combined.contains('SWITCH') || combined.contains('NINTENDO')) {
-      return 'Switch';
-    }
-    if (combined.contains('PC') || combined.contains('STEAM') || combined.contains('RTX') || combined.contains('NVIDIA')) {
+
+    // PC check
+    if (combined.contains('PC') ||
+        combined.contains('STEAM') ||
+        combined.contains('VALORANT') ||
+        combined.contains('CS2') ||
+        combined.contains('COUNTER-STRIKE') ||
+        combined.contains('DOTA') ||
+        combined.contains('LEAGUE OF LEGENDS') ||
+        combined.contains('RTX') ||
+        combined.contains('NVIDIA') ||
+        combined.contains('EPIC GAMES STORE')) {
       return 'PC';
     }
-    if (combined.contains('DRIVING') || combined.contains('RACING')) {
-      return 'Driving Games';
-    }
-    if (combined.contains('OPEN WORLD')) {
-      return 'Open World';
-    }
-    return 'Multiplatform';
+
+    return 'All Platforms';
   }
 
   String _cleanHtmlText(String html) {
@@ -640,7 +730,7 @@ class GamingNewsService {
             'گرینڈ تھیفٹ آٹو 6 پلے اسٹیشن 5 اور ایکس بکس سیریز ایکس/ایس کے لیے 2025 میں ریلیز کے لیے تیار ہے جبکہ بعد میں پی سی ورژن بھی جاری کیا جائے گا۔ تجزیہ کاروں کے مطابق یہ گیم تفریحی دنیا کے تمام سابقہ ریکارڈ توڑ دے گی۔',
         source: 'IGN',
         sourceUrl: 'https://www.ign.com/games/grand-theft-auto-vi',
-        category: 'GRAND THEFT AUTO',
+        category: 'GTA',
         platform: 'PS5',
         imageUrl: 'https://images.unsplash.com/photo-1542751371-adc38448a05e?auto=format&fit=crop&w=800&q=80',
         timestamp: DateTime.now().subtract(const Duration(minutes: 25)),
@@ -665,7 +755,7 @@ class GamingNewsService {
             'گیم پلے اسٹیشن 5، ایکس بکس سیریز، پی سی اور نینٹینڈو سوئچ پر ریلیز کیا جا رہا ہے۔ جدید ہائپرموشن V ٹیکنالوجی کی بدولت کھلاڑیوں کی دوڑ، شوٹنگ اور ککس کے متحرک اینیمیشنز انتہائی حقیقت پسندانہ انداز میں پیش کیے گئے ہیں۔',
         source: 'GameSpot',
         sourceUrl: 'https://www.gamespot.com/articles/ea-sports-fc-25/',
-        category: 'EA SPORTS',
+        category: 'FIFA',
         platform: 'PS5',
         imageUrl: 'https://images.unsplash.com/photo-1511512578047-dfb367046420?auto=format&fit=crop&w=800&q=80',
         timestamp: DateTime.now().subtract(const Duration(minutes: 48)),
@@ -690,7 +780,7 @@ class GamingNewsService {
             'بلیک آپس 6 ریلیز کے پہلے دن سے ایکس بکس گیم پاس (Xbox Game Pass) پر پی سی اور کنسول کے لیے دستیاب ہوگا، جبکہ پلے اسٹیشن 5 پر بھی مکمل کراس پلے سپورٹ موجود ہوگی۔ ہیکرز کی روک تھام کے لیے ریکوشے اینٹی چیٹ سسٹم کو بھی اپ گریڈ کر دیا گیا ہے۔',
         source: 'IGN',
         sourceUrl: 'https://www.ign.com/games/call-of-duty-black-ops-6',
-        category: 'FPS/SHOOTING',
+        category: 'COD',
         platform: 'PC',
         imageUrl: 'https://images.unsplash.com/photo-1538481199705-c710c4e965fc?auto=format&fit=crop&w=800&q=80',
         timestamp: DateTime.now().subtract(const Duration(hours: 1, minutes: 12)),
@@ -740,7 +830,7 @@ class GamingNewsService {
             'پلے گراؤنڈ گیمز اور مائیکروسافٹ اس گیم کو 2026 کے آخر تک ریلیز کرنے کی منصوبہ بندی کر رہے ہیں۔ تمام مائیکروسافٹ فرسٹ پارٹی ٹائٹلز کی طرح فورزا ہورائزن 6 بھی ریلیز کے پہلے دن سے ایکس بکس گیم پاس (Xbox Game Pass) پر ایکس بکس سیریز اور پی سی کے لیے دستیاب ہوگا جس میں کراس پلے کی مکمل سہولت موجود ہوگی۔',
         source: 'IGN',
         sourceUrl: 'https://www.ign.com/articles/forza-horizon-next-news',
-        category: 'RACING GAMES',
+        category: 'Forza',
         platform: 'Xbox',
         imageUrl: 'https://images.unsplash.com/photo-1518709268805-4e9042af9f23?auto=format&fit=crop&w=800&q=80',
         timestamp: DateTime.now().subtract(const Duration(hours: 3)),
@@ -765,7 +855,7 @@ class GamingNewsService {
             'نینٹینڈو کے صدر نے تصدیق کی ہے کہ کنسول کا باضابطہ اعلان جلد متوقع ہے۔ لانچ کے ساتھ ایک بالکل نیا 3D ماریو گیم اور ماریو کارٹ کا نیا ورژن پیش کیے جانے کا امکان ہے جس کا شائقین بے صبری سے انتظار کر رہے ہیں۔',
         source: 'Nintendo Life',
         sourceUrl: 'https://www.gamespot.com/articles/switch-successor-spec-leaks/',
-        category: 'FEATURED',
+        category: 'Console',
         platform: 'Switch',
         imageUrl: 'https://images.unsplash.com/photo-1578301978693-85fa9c0320b9?auto=format&fit=crop&w=800&q=80',
         timestamp: DateTime.now().subtract(const Duration(hours: 4, minutes: 30)),
@@ -790,7 +880,7 @@ class GamingNewsService {
             'فال آؤٹ 5 ریلیز کے وقت ایکس بکس سیریز ایکس/ایس اور پی سی پر گیم پاس کے ساتھ پہلے دن سے دستیاب ہوگا جس میں کھلاڑیوں کو کھلی دنیا کی بقا کا لاجواب تجربہ حاصل ہوگا۔',
         source: 'IGN',
         sourceUrl: 'https://www.ign.com/articles/fallout-franchise-future',
-        category: 'FALL UP',
+        category: 'PC Games',
         platform: 'Xbox',
         imageUrl: 'https://images.unsplash.com/photo-1563089145-599997674d42?auto=format&fit=crop&w=800&q=80',
         timestamp: DateTime.now().subtract(const Duration(hours: 6)),
@@ -815,7 +905,7 @@ class GamingNewsService {
             'پروجیکٹ اورین جدید کنسولز اور پی سی کے لیے تیار کیا جا رہا ہے جو گیمرز کو مستقبل کی تاریک اور جدید دنیا کا ایسا تجربہ فراہم کرے گا جو انہوں نے پہلے کبھی نہیں دیکھا ہوگا۔',
         source: 'GameSpot',
         sourceUrl: 'https://www.gamespot.com/articles/cyberpunk-sequel-update/',
-        category: 'OPEN WORLD',
+        category: 'Cyberpunk',
         platform: 'PC',
         imageUrl: 'https://images.unsplash.com/photo-1579373903781-fd5c0c30c4cd?auto=format&fit=crop&w=800&q=80',
         timestamp: DateTime.now().subtract(const Duration(hours: 8)),

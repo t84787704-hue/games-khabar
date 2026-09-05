@@ -49,12 +49,21 @@ class _GamerFeedScreenState extends State<GamerFeedScreen> {
 
   final List<String> _gameFilters = [
     'All',
-    'News',
-    'BGMI',
     'PUBG',
     'Free Fire',
-    'COD Mobile',
+    'COD',
+    'BGMI',
+    'GTA',
     'Valorant',
+    'Fortnite',
+    'Minecraft',
+    'MLBB',
+    'FIFA',
+    'Racing',
+    'PC Games',
+    'Mobile Games',
+    'Trending',
+    'News',
   ];
 
   List<_FeedItem> _buildMergedList({
@@ -65,7 +74,7 @@ class _GamerFeedScreenState extends State<GamerFeedScreen> {
     required List<String> followingIds,
     required String currentUid,
   }) {
-    // 1. If 'News' filter chip is selected: show ONLY TYPE B news posts
+    // 1. If 'News' filter chip is selected: show ONLY news posts
     if (selectedFilter == 'News') {
       return newsList.map((n) => _FeedItem.news(n)).toList();
     }
@@ -78,11 +87,81 @@ class _GamerFeedScreenState extends State<GamerFeedScreen> {
           .toList();
     }
 
-    // 3. Filter if a specific game is selected (e.g. 'BGMI', 'PUBG')
+    // 3. Filter if a specific game or group is selected
     if (selectedFilter != 'All') {
       final q = selectedFilter.toLowerCase();
+
+      // Check for 'Mobile Games' group chip
+      if (selectedFilter == 'Mobile Games') {
+        const mobileKeywords = ['pubg', 'bgmi', 'free fire', 'freefire', 'mlbb', 'mobile legends', 'cod mobile', 'clash of clans', 'genshin', 'roblox'];
+        filteredUserPosts = filteredUserPosts.where((p) {
+          final tag = p.gameTag.toLowerCase();
+          return mobileKeywords.any((k) => tag.contains(k));
+        }).toList();
+
+        final matchingNews = newsList.where((n) {
+          final cat = n.category.toLowerCase();
+          final plat = n.platform.toLowerCase();
+          final title = n.titleEn.toLowerCase();
+          final summary = n.summary.toLowerCase();
+          final combined = '$cat $plat $title $summary';
+          return plat == 'mobile' || mobileKeywords.any((k) => combined.contains(k));
+        }).toList();
+
+        if (matchingNews.isNotEmpty) {
+          return _weaveItems(filteredUserPosts, matchingNews);
+        }
+        return filteredUserPosts.map((p) => _FeedItem.user(p)).toList();
+      }
+
+      // Check for 'PC Games' group chip
+      if (selectedFilter == 'PC Games') {
+        const pcKeywords = ['valorant', 'cs2', 'counter-strike', 'gta', 'minecraft', 'dota', 'lol', 'league of legends', 'steam', 'apex', 'cyberpunk', 'elden ring'];
+        filteredUserPosts = filteredUserPosts.where((p) {
+          final tag = p.gameTag.toLowerCase();
+          return pcKeywords.any((k) => tag.contains(k));
+        }).toList();
+
+        final matchingNews = newsList.where((n) {
+          final cat = n.category.toLowerCase();
+          final plat = n.platform.toLowerCase();
+          final title = n.titleEn.toLowerCase();
+          final summary = n.summary.toLowerCase();
+          final combined = '$cat $plat $title $summary';
+          return plat == 'pc' || pcKeywords.any((k) => combined.contains(k));
+        }).toList();
+
+        if (matchingNews.isNotEmpty) {
+          return _weaveItems(filteredUserPosts, matchingNews);
+        }
+        return filteredUserPosts.map((p) => _FeedItem.user(p)).toList();
+      }
+
+      // Check for 'Racing' chip
+      if (selectedFilter == 'Racing') {
+        const racingKeywords = ['racing', 'forza', 'need for speed', 'nfs', 'gran turismo', 'gt7'];
+        filteredUserPosts = filteredUserPosts.where((p) {
+          final tag = p.gameTag.toLowerCase();
+          return racingKeywords.any((k) => tag.contains(k));
+        }).toList();
+
+        final matchingNews = newsList.where((n) {
+          final cat = n.category.toLowerCase();
+          final title = n.titleEn.toLowerCase();
+          final summary = n.summary.toLowerCase();
+          final combined = '$cat $title $summary';
+          return racingKeywords.any((k) => combined.contains(k));
+        }).toList();
+
+        if (matchingNews.isNotEmpty) {
+          return _weaveItems(filteredUserPosts, matchingNews);
+        }
+        return filteredUserPosts.map((p) => _FeedItem.user(p)).toList();
+      }
+
+      // Specific game tag (e.g. 'PUBG', 'Free Fire', 'GTA', 'Valorant', 'COD', etc.)
       filteredUserPosts = filteredUserPosts
-          .where((p) => p.gameTag.toLowerCase() == q)
+          .where((p) => p.gameTag.toLowerCase().contains(q) || q.contains(p.gameTag.toLowerCase()))
           .toList();
 
       final matchingNews = newsList.where((n) {
@@ -457,7 +536,9 @@ class _GamerFeedScreenState extends State<GamerFeedScreen> {
                         emoji = GamerTheme.gameEmojis[game] ?? '🎮';
                       }
 
-                      final activeColor = isNews ? const Color(0xFF00FF88) : GamerTheme.accentBlue;
+                      final activeColor = isNews
+                          ? const Color(0xFF00FF88)
+                          : (GamerTheme.gameColors[game] ?? GamerTheme.accentBlue);
 
                       return Padding(
                         padding: const EdgeInsets.only(right: 8),
@@ -501,7 +582,12 @@ class _GamerFeedScreenState extends State<GamerFeedScreen> {
               // Combined Stream List: Collection "posts" + Collection "gaming_news"
               StreamBuilder<List<GamerPost>>(
                 stream: _socialService.getAllPostsStream(
-                  gameTag: _selectedGameTag == 'All' || _selectedGameTag == 'News'
+                  gameTag: (_selectedGameTag == 'All' ||
+                          _selectedGameTag == 'News' ||
+                          _selectedGameTag == 'Mobile Games' ||
+                          _selectedGameTag == 'PC Games' ||
+                          _selectedGameTag == 'Racing' ||
+                          _selectedGameTag == 'Trending')
                       ? null
                       : _selectedGameTag,
                 ),
