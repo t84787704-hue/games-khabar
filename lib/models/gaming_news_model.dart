@@ -4,6 +4,8 @@ class GamingNewsModel {
   final String id;
   final String titleEn;
   final String titleUr;
+  final String contentEn;
+  final String contentUr;
   final String category;
   final String platform;
   final String imageUrl;
@@ -17,6 +19,8 @@ class GamingNewsModel {
     required this.id,
     required this.titleEn,
     required this.titleUr,
+    this.contentEn = '',
+    this.contentUr = '',
     required this.category,
     required this.platform,
     required this.imageUrl,
@@ -28,15 +32,18 @@ class GamingNewsModel {
   });
 
   Map<String, dynamic> toMap() {
+    final effectiveEn = contentEn.isNotEmpty ? contentEn : (fullContent.isNotEmpty ? fullContent : summary);
     return {
       'id': id,
       'title_en': titleEn,
       'title_ur': titleUr,
+      'content_en': effectiveEn,
+      'content_ur': contentUr,
       'category': category,
       'platform': platform,
       'imageUrl': imageUrl,
-      'summary': summary,
-      'fullContent': fullContent.isNotEmpty ? fullContent : summary,
+      'summary': summary.isNotEmpty ? summary : effectiveEn,
+      'fullContent': fullContent.isNotEmpty ? fullContent : effectiveEn,
       'sourceUrl': sourceUrl,
       'timestamp': Timestamp.fromDate(timestamp),
       'views': views,
@@ -61,23 +68,60 @@ class GamingNewsModel {
       parsedTime = DateTime.now();
     }
 
+    final rawEn = (map['content_en'] ?? map['fullContent'] ?? map['content'] ?? map['description'] ?? map['summary'] ?? '').toString();
+    final rawUr = (map['content_ur'] ?? '').toString();
+    final rawSummary = (map['summary'] ?? map['description'] ?? rawEn).toString();
+
     return GamingNewsModel(
       id: docId ?? map['id'] ?? '',
       titleEn: map['title_en'] ?? map['title'] ?? '',
       titleUr: map['title_ur'] ?? '',
+      contentEn: rawEn,
+      contentUr: rawUr,
       category: map['category'] ?? 'FEATURED',
       platform: map['platform'] ?? 'Multiplatform',
       imageUrl: map['imageUrl'] ?? map['image'] ?? '',
-      summary: map['summary'] ?? map['description'] ?? '',
-      fullContent: (map['fullContent'] ?? map['content'] ?? map['description'] ?? map['summary'] ?? '').toString(),
+      summary: rawSummary,
+      fullContent: rawEn,
       sourceUrl: map['sourceUrl'] ?? map['url'] ?? '',
       timestamp: parsedTime,
       views: (map['views'] is num) ? (map['views'] as num).toInt() : 0,
     );
   }
 
+  /// Returns title for the requested language ('en' or 'ur')
+  String getTitle(String langCode) {
+    if (langCode == 'ur' && titleUr.trim().isNotEmpty) {
+      return titleUr.trim();
+    }
+    if (titleEn.trim().isNotEmpty) {
+      return titleEn.trim();
+    }
+    return titleUr.trim();
+  }
+
+  /// Returns content for the requested language ('en' or 'ur')
+  String getContent(String langCode) {
+    if (langCode == 'ur' && contentUr.trim().isNotEmpty) {
+      return contentUr.trim();
+    }
+    if (contentEn.trim().isNotEmpty) {
+      return contentEn.trim();
+    }
+    if (fullContent.trim().isNotEmpty) {
+      return fullContent.trim();
+    }
+    if (summary.trim().isNotEmpty) {
+      return summary.trim();
+    }
+    return langCode == 'ur'
+        ? 'مضمون کی تفصیلات جلد دستیاب ہوں گی۔'
+        : 'Detailed gaming article will appear here shortly.';
+  }
+
   /// Returns fullContent if available, otherwise summary, or a default text
   String get displayContent {
+    if (contentEn.trim().isNotEmpty) return contentEn.trim();
     if (fullContent.trim().isNotEmpty) return fullContent.trim();
     if (summary.trim().isNotEmpty) return summary.trim();
     return 'Detailed gaming article will appear here shortly.';
@@ -100,6 +144,8 @@ class GamingNewsModel {
     String? id,
     String? titleEn,
     String? titleUr,
+    String? contentEn,
+    String? contentUr,
     String? category,
     String? platform,
     String? imageUrl,
@@ -109,15 +155,18 @@ class GamingNewsModel {
     DateTime? timestamp,
     int? views,
   }) {
+    final newContentEn = contentEn ?? this.contentEn;
     return GamingNewsModel(
       id: id ?? this.id,
       titleEn: titleEn ?? this.titleEn,
       titleUr: titleUr ?? this.titleUr,
+      contentEn: newContentEn,
+      contentUr: contentUr ?? this.contentUr,
       category: category ?? this.category,
       platform: platform ?? this.platform,
       imageUrl: imageUrl ?? this.imageUrl,
       summary: summary ?? this.summary,
-      fullContent: fullContent ?? this.fullContent,
+      fullContent: fullContent ?? (contentEn ?? this.fullContent),
       sourceUrl: sourceUrl ?? this.sourceUrl,
       timestamp: timestamp ?? this.timestamp,
       views: views ?? this.views,

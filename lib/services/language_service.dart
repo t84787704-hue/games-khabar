@@ -22,7 +22,48 @@ class LanguageModel {
 
 class LanguageService {
   static const String keySelectedLanguage = 'selected_language_code';
+  static const String keySelectedLang = 'selectedLang';
   static const String keyHasChosenLanguage = 'has_selected_language_first_launch';
+
+  /// Reactive notifier for the currently selected language ('en' or 'ur')
+  static final ValueNotifier<String> currentLanguage = ValueNotifier<String>('en');
+
+  static String get selectedLang => currentLanguage.value;
+  static bool get isUrdu => currentLanguage.value == 'ur';
+
+  /// Initialize and load saved language preference
+  static Future<void> init() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      // First check selectedLang as requested
+      final savedLang = prefs.getString(keySelectedLang) ?? prefs.getString(keySelectedLanguage);
+      if (savedLang != null && savedLang.isNotEmpty) {
+        currentLanguage.value = savedLang == 'ur' ? 'ur' : 'en';
+      } else {
+        currentLanguage.value = 'en';
+      }
+    } catch (_) {
+      currentLanguage.value = 'en';
+    }
+  }
+
+  /// Change active language and persist in SharedPreferences
+  static Future<void> setLanguage(String code) async {
+    final cleanCode = code.toLowerCase() == 'ur' ? 'ur' : 'en';
+    currentLanguage.value = cleanCode;
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setString(keySelectedLang, cleanCode);
+      await prefs.setString(keySelectedLanguage, cleanCode);
+      await prefs.setBool(keyHasChosenLanguage, true);
+    } catch (_) {}
+  }
+
+  /// Quick toggle between 'en' and 'ur'
+  static Future<void> toggleLanguage() async {
+    final next = currentLanguage.value == 'ur' ? 'en' : 'ur';
+    await setLanguage(next);
+  }
 
   static const List<Locale> supportedLocales = [
     Locale('ro'),
@@ -93,7 +134,9 @@ class LanguageService {
   static Future<void> saveLanguagePreference(String code) async {
     final prefs = await SharedPreferences.getInstance();
     await prefs.setString(keySelectedLanguage, code);
+    await prefs.setString(keySelectedLang, code == 'ur' ? 'ur' : 'en');
     await prefs.setBool(keyHasChosenLanguage, true);
+    currentLanguage.value = code == 'ur' ? 'ur' : 'en';
   }
 
   /// Shows the 7-language bottom sheet

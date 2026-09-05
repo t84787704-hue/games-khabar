@@ -5,6 +5,7 @@ import '../models/gaming_news_model.dart';
 import '../services/gamer_auth_service.dart';
 import '../services/gamer_social_service.dart';
 import '../services/gaming_news_service.dart';
+import '../services/language_service.dart';
 import '../widgets/gamer_avatar.dart';
 import '../widgets/post_card.dart';
 import '../widgets/news_post_card.dart';
@@ -185,6 +186,65 @@ class _GamerFeedScreenState extends State<GamerFeedScreen> {
           ],
         ),
         actions: [
+          // Language Toggle: EN | اردو
+          ValueListenableBuilder<String>(
+            valueListenable: LanguageService.currentLanguage,
+            builder: (context, currentLang, _) {
+              final isUrdu = currentLang == 'ur';
+              return Container(
+                margin: const EdgeInsets.symmetric(vertical: 10, horizontal: 2),
+                decoration: BoxDecoration(
+                  color: isUrdu ? const Color(0xFF00FF88).withOpacity(0.12) : const Color(0xFF1E293B),
+                  borderRadius: BorderRadius.circular(18),
+                  border: Border.all(
+                    color: isUrdu ? const Color(0xFF00FF88) : const Color(0xFF334155),
+                    width: 1.2,
+                  ),
+                ),
+                child: InkWell(
+                  borderRadius: BorderRadius.circular(18),
+                  onTap: () {
+                    LanguageService.toggleLanguage();
+                  },
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Text(
+                          'EN',
+                          style: TextStyle(
+                            fontSize: 11,
+                            fontWeight: FontWeight.w900,
+                            color: !isUrdu ? const Color(0xFF00FF88) : const Color(0xFF94A3B8),
+                          ),
+                        ),
+                        const Padding(
+                          padding: EdgeInsets.symmetric(horizontal: 3),
+                          child: Text(
+                            '|',
+                            style: TextStyle(
+                              fontSize: 11,
+                              color: Color(0xFF64748B),
+                              fontWeight: FontWeight.w700,
+                            ),
+                          ),
+                        ),
+                        Text(
+                          'اردو',
+                          style: TextStyle(
+                            fontSize: 11.5,
+                            fontWeight: FontWeight.w900,
+                            color: isUrdu ? const Color(0xFF00FF88) : const Color(0xFF94A3B8),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              );
+            },
+          ),
           IconButton(
             icon: const Icon(Icons.search_rounded, color: GamerTheme.textWhite, size: 22),
             onPressed: () {

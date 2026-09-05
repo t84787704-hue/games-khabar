@@ -6,6 +6,8 @@ import '../constants/gamer_theme.dart';
 import '../models/gaming_news_model.dart';
 import '../services/gamer_auth_service.dart';
 import '../services/gaming_news_service.dart';
+import '../services/language_service.dart';
+import '../services/translation_service.dart';
 
 class NewsPostCard extends StatefulWidget {
   final GamingNewsModel news;
@@ -22,10 +24,41 @@ class _NewsPostCardState extends State<NewsPostCard> {
   late int _likeCount;
   bool _isExpanded = false;
 
+  String? _cachedUrduTitle;
+  String? _cachedUrduContent;
+  bool _translating = false;
+
   @override
   void initState() {
     super.initState();
     _likeCount = widget.news.views >= 100 ? widget.news.views : 1840;
+  }
+
+  void _ensureUrduContent(GamingNewsModel news) {
+    if (LanguageService.isUrdu) {
+      final needsTitle = news.titleUr.isEmpty && _cachedUrduTitle == null && news.titleEn.isNotEmpty;
+      final needsContent = news.contentUr.isEmpty && _cachedUrduContent == null;
+
+      if ((needsTitle || needsContent) && !_translating) {
+        _translating = true;
+        Future.wait([
+          if (needsTitle)
+            TranslationService.translateSingle(news.titleEn, 'ur').then((res) {
+              if (mounted && res.isNotEmpty) {
+                setState(() => _cachedUrduTitle = res);
+              }
+            }).catchError((_) {}),
+          if (needsContent)
+            TranslationService.translateArticle(news.contentEn.isNotEmpty ? news.contentEn : news.summary, 'ur').then((res) {
+              if (mounted && res.isNotEmpty) {
+                setState(() => _cachedUrduContent = res);
+              }
+            }).catchError((_) {}),
+        ]).whenComplete(() {
+          _translating = false;
+        });
+      }
+    }
   }
 
   void _toggleExpand() {
@@ -65,11 +98,10 @@ class _NewsPostCardState extends State<NewsPostCard> {
     return category;
   }
 
-  void _onShare() {
-    final text = '🎮 ${widget.news.titleEn}\n\n'
-        '${widget.news.titleUr.isNotEmpty ? "${widget.news.titleUr}\n\n" : ""}'
-        '${widget.news.displayContent}\n\n'
-        'Source: ${widget.news.sourceUrl.isNotEmpty ? widget.news.sourceUrl : "https://gameskhabar.pk"}';
+  void _onShare(String title, String content, String sourceUrl) {
+    final text = '🎮 $title\n\n'
+        '$content\n\n'
+        'Source: ${sourceUrl.isNotEmpty ? sourceUrl : "https://gameskhabar.pk"}';
     Share.share(text);
   }
 
@@ -89,8 +121,22 @@ class _NewsPostCardState extends State<NewsPostCard> {
     final currentUid = GamerAuthService().currentUid ?? '';
     final news = widget.news;
 
-    return Container(
-      margin: const EdgeInsets.symmetric(horizontal: 14, vertical: 7),
+    return ValueListenableBuilder<String>(
+      valueListenable: LanguageService.currentLanguage,
+      builder: (context, langCode, _) {
+        final isUrdu = langCode == 'ur';
+        _ensureUrduContent(news);
+
+        final displayTitle = isUrdu
+            ? (_cachedUrduTitle ?? (news.titleUr.isNotEmpty ? news.titleUr : news.titleEn))
+            : (news.titleEn.isNotEmpty ? news.titleEn : (_cachedUrduTitle ?? news.titleUr));
+
+        final displayContent = isUrdu
+            ? (_cachedUrduContent ?? (news.contentUr.isNotEmpty ? news.contentUr : news.getContent('ur')))
+            : (news.contentEn.isNotEmpty ? news.contentEn : news.getContent('en'));
+
+        return Container(
+          margin: const EdgeInsets.symmetric(horizontal: 14, vertical: 7),
       decoration: BoxDecoration(
         color: GamerTheme.cardDark,
         borderRadius: BorderRadius.circular(16),
@@ -241,7 +287,7 @@ class _NewsPostCardState extends State<NewsPostCard> {
 
                 const SizedBox(width: 6),
 
-                // Top right label: "Trending News"
+                // Top right label: "Trending" / "ٹرینڈنگ"
                 Container(
                   padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
                   decoration: BoxDecoration(
@@ -252,18 +298,18 @@ class _NewsPostCardState extends State<NewsPostCard> {
                       width: 0.8,
                     ),
                   ),
-                  child: const Row(
+                  child: Row(
                     mainAxisSize: MainAxisSize.min,
                     children: [
-                      Icon(
+                      const Icon(
                         Icons.local_fire_department_rounded,
                         size: 12,
                         color: Color(0xFFFFB703),
                       ),
-                      SizedBox(width: 3),
+                      const SizedBox(width: 3),
                       Text(
-                        'Trending',
-                        style: TextStyle(
+                        isUrdu ? 'ٹرینڈنگ' : 'Trending',
+                        style: const TextStyle(
                           color: Color(0xFFFFB703),
                           fontSize: 10,
                           fontWeight: FontWeight.w900,
@@ -277,41 +323,24 @@ class _NewsPostCardState extends State<NewsPostCard> {
             ),
           ),
 
-          // English Title
+          // Main Title: ONLY single selected language in big white text (NO green Urdu box)
           GestureDetector(
             onTap: _toggleExpand,
             child: Padding(
               padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 4),
               child: Text(
-                news.titleEn,
-                style: const TextStyle(
+                displayTitle,
+                textDirection: isUrdu ? TextDirection.rtl : TextDirection.ltr,
+                textAlign: isUrdu ? TextAlign.right : TextAlign.left,
+                style: TextStyle(
                   color: Colors.white,
                   fontWeight: FontWeight.w800,
-                  fontSize: 14.5,
-                  height: 1.35,
+                  fontSize: isUrdu ? 15.5 : 14.5,
+                  height: 1.4,
                 ),
               ),
             ),
           ),
-
-          // Urdu translated Title in Green #00FF88 below
-          if (news.titleUr.isNotEmpty)
-            GestureDetector(
-              onTap: _toggleExpand,
-              child: Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 3),
-                child: Text(
-                  news.titleUr,
-                  textDirection: TextDirection.rtl,
-                  style: const TextStyle(
-                    color: Color(0xFF00FF88),
-                    fontWeight: FontWeight.w700,
-                    fontSize: 13,
-                    height: 1.35,
-                  ),
-                ),
-              ),
-            ),
 
           const SizedBox(height: 8),
 
@@ -358,7 +387,7 @@ class _NewsPostCardState extends State<NewsPostCard> {
           // INLINE EXPANDED CONTENT
           AnimatedCrossFade(
             firstChild: const SizedBox.shrink(),
-            secondChild: _buildExpandedContent(news),
+            secondChild: _buildExpandedContent(news, displayContent, isUrdu),
             crossFadeState: _isExpanded ? CrossFadeState.showSecond : CrossFadeState.showFirst,
             duration: const Duration(milliseconds: 280),
           ),
@@ -403,22 +432,22 @@ class _NewsPostCardState extends State<NewsPostCard> {
 
                 // Share Button
                 InkWell(
-                  onTap: _onShare,
+                  onTap: () => _onShare(displayTitle, displayContent, news.sourceUrl),
                   borderRadius: BorderRadius.circular(8),
-                  child: const Padding(
-                    padding: EdgeInsets.symmetric(horizontal: 6, vertical: 4),
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 4),
                     child: Row(
                       mainAxisSize: MainAxisSize.min,
                       children: [
-                        Icon(
+                        const Icon(
                           Icons.share_outlined,
                           size: 17,
                           color: Color(0xFF8B9BB4),
                         ),
-                        SizedBox(width: 4),
+                        const SizedBox(width: 4),
                         Text(
-                          'Share',
-                          style: TextStyle(
+                          isUrdu ? 'شیئر' : 'Share',
+                          style: const TextStyle(
                             color: Color(0xFF8B9BB4),
                             fontSize: 12,
                             fontWeight: FontWeight.w600,
@@ -492,7 +521,9 @@ class _NewsPostCardState extends State<NewsPostCard> {
                     size: 16,
                   ),
                   label: Text(
-                    _isExpanded ? 'Show Less' : 'Read More',
+                    _isExpanded
+                        ? (isUrdu ? 'کم دکھائیں' : 'Show Less')
+                        : (isUrdu ? 'مزید پڑھیں' : 'Read More'),
                     style: const TextStyle(
                       fontSize: 11.5,
                       fontWeight: FontWeight.w900,
@@ -505,10 +536,11 @@ class _NewsPostCardState extends State<NewsPostCard> {
         ],
       ),
     );
+      },
+    );
   }
 
-  Widget _buildExpandedContent(GamingNewsModel news) {
-    final content = news.displayContent;
+  Widget _buildExpandedContent(GamingNewsModel news, String content, bool isUrdu) {
     final sourceName = _getSourceName(news.sourceUrl, news.category);
 
     return Container(
@@ -516,15 +548,17 @@ class _NewsPostCardState extends State<NewsPostCard> {
       padding: const EdgeInsets.fromLTRB(14, 12, 14, 12),
       color: const Color(0xFF131924),
       child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
+        crossAxisAlignment: isUrdu ? CrossAxisAlignment.end : CrossAxisAlignment.start,
         children: [
-          // Full News Content
+          // Full News Content in selected language
           SelectableText(
             content,
-            style: const TextStyle(
+            textDirection: isUrdu ? TextDirection.rtl : TextDirection.ltr,
+            textAlign: isUrdu ? TextAlign.right : TextAlign.left,
+            style: TextStyle(
               color: Colors.white,
-              fontSize: 14,
-              height: 1.55,
+              fontSize: isUrdu ? 14.5 : 14,
+              height: 1.6,
               letterSpacing: 0.2,
             ),
           ),
@@ -533,7 +567,7 @@ class _NewsPostCardState extends State<NewsPostCard> {
           // Secondary button: "Source: [Source Name]"
           if (news.sourceUrl.isNotEmpty)
             Align(
-              alignment: Alignment.centerLeft,
+              alignment: isUrdu ? Alignment.centerRight : Alignment.centerLeft,
               child: OutlinedButton.icon(
                 onPressed: () => _openSourceUrl(news.sourceUrl),
                 style: OutlinedButton.styleFrom(
@@ -553,7 +587,7 @@ class _NewsPostCardState extends State<NewsPostCard> {
                   color: Color(0xFF00D2FF),
                 ),
                 label: Text(
-                  'Source: $sourceName',
+                  isUrdu ? 'ذریعہ: $sourceName' : 'Source: $sourceName',
                   style: const TextStyle(
                     fontSize: 11.5,
                     fontWeight: FontWeight.w700,
