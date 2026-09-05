@@ -8,6 +8,7 @@ class GamingNewsModel {
   final String platform;
   final String imageUrl;
   final String summary;
+  final String fullContent;
   final String sourceUrl;
   final DateTime timestamp;
   final int views;
@@ -20,6 +21,7 @@ class GamingNewsModel {
     required this.platform,
     required this.imageUrl,
     required this.summary,
+    this.fullContent = '',
     required this.sourceUrl,
     required this.timestamp,
     this.views = 0,
@@ -34,6 +36,7 @@ class GamingNewsModel {
       'platform': platform,
       'imageUrl': imageUrl,
       'summary': summary,
+      'fullContent': fullContent.isNotEmpty ? fullContent : summary,
       'sourceUrl': sourceUrl,
       'timestamp': Timestamp.fromDate(timestamp),
       'views': views,
@@ -66,10 +69,18 @@ class GamingNewsModel {
       platform: map['platform'] ?? 'Multiplatform',
       imageUrl: map['imageUrl'] ?? map['image'] ?? '',
       summary: map['summary'] ?? map['description'] ?? '',
+      fullContent: (map['fullContent'] ?? map['content'] ?? map['description'] ?? map['summary'] ?? '').toString(),
       sourceUrl: map['sourceUrl'] ?? map['url'] ?? '',
       timestamp: parsedTime,
       views: (map['views'] is num) ? (map['views'] as num).toInt() : 0,
     );
+  }
+
+  /// Returns fullContent if available, otherwise summary, or a default text
+  String get displayContent {
+    if (fullContent.trim().isNotEmpty) return fullContent.trim();
+    if (summary.trim().isNotEmpty) return summary.trim();
+    return 'Detailed gaming article will appear here shortly.';
   }
 
   String get timeAgo {
@@ -93,6 +104,7 @@ class GamingNewsModel {
     String? platform,
     String? imageUrl,
     String? summary,
+    String? fullContent,
     String? sourceUrl,
     DateTime? timestamp,
     int? views,
@@ -105,6 +117,7 @@ class GamingNewsModel {
       platform: platform ?? this.platform,
       imageUrl: imageUrl ?? this.imageUrl,
       summary: summary ?? this.summary,
+      fullContent: fullContent ?? this.fullContent,
       sourceUrl: sourceUrl ?? this.sourceUrl,
       timestamp: timestamp ?? this.timestamp,
       views: views ?? this.views,

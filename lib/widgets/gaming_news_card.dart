@@ -4,7 +4,7 @@ import 'package:share_plus/share_plus.dart';
 import '../models/gaming_news_model.dart';
 import '../services/gamer_auth_service.dart';
 import '../services/gaming_news_service.dart';
-import '../screens/news_detail_screen.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 class GamingNewsCard extends StatelessWidget {
   final GamingNewsModel news;
@@ -18,13 +18,18 @@ class GamingNewsCard extends StatelessWidget {
     Share.share(text);
   }
 
-  void _onOpenDetail(BuildContext context) {
+  Future<void> _onOpenDetail(BuildContext context) async {
     GamingNewsService().incrementViews(news.id);
-    Navigator.of(context).push(
-      MaterialPageRoute(
-        builder: (_) => NewsDetailScreen(news: news),
-      ),
-    );
+    if (news.sourceUrl.isNotEmpty) {
+      try {
+        final uri = Uri.parse(news.sourceUrl);
+        if (await canLaunchUrl(uri)) {
+          await launchUrl(uri, mode: LaunchMode.externalApplication);
+        }
+      } catch (e) {
+        debugPrint('Error launching URL: $e');
+      }
+    }
   }
 
   @override

@@ -88,6 +88,7 @@ class _GamerFeedScreenState extends State<GamerFeedScreen> {
         return n.category.toLowerCase().contains(q) ||
             n.titleEn.toLowerCase().contains(q) ||
             n.summary.toLowerCase().contains(q) ||
+            n.fullContent.toLowerCase().contains(q) ||
             n.platform.toLowerCase().contains(q);
       }).toList();
 

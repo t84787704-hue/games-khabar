@@ -10,7 +10,6 @@ import '../services/language_service.dart';
 import '../widgets/news_card.dart';
 import '../widgets/price_tracker_card.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
-import 'news_detail_screen.dart';
 
 class FollowingScreen extends StatefulWidget {
   const FollowingScreen({super.key});
@@ -48,12 +47,6 @@ class _FollowingScreenState extends State<FollowingScreen> {
 
   void _navigateToDetail(NewsModel news) {
     _firestoreService.incrementView(news.id);
-    Navigator.push(
-      context,
-      MaterialPageRoute(
-        builder: (_) => NewsDetailScreen(news: news),
-      ),
-    );
   }
 
   void _addCustomGame() {

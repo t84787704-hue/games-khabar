@@ -175,6 +175,7 @@ class GamingNewsService {
             final id = _generateDocId(link.isNotEmpty ? link : title);
             final description = (item['description'] ?? item['content'] ?? '').toString();
             final cleanSummary = _cleanHtmlText(description);
+            final fullText = _cleanHtmlFullText((item['content'] ?? item['description'] ?? '').toString());
 
             // Extract image
             String imageUrl = (item['thumbnail'] ?? '').toString();
@@ -201,6 +202,7 @@ class GamingNewsService {
               platform: platform,
               imageUrl: imageUrl,
               summary: cleanSummary,
+              fullContent: fullText.isNotEmpty ? fullText : cleanSummary,
               sourceUrl: link,
               timestamp: pubDate,
               views: 120 + (title.hashCode.abs() % 1450),
@@ -258,6 +260,8 @@ class GamingNewsService {
 
           final category = _categorizeNews(title, desc);
           final platform = _detectPlatform(title, desc);
+          final contentEncoded = item.findElements('content:encoded').firstOrNull?.innerText.trim() ?? '';
+          final fullText = _cleanHtmlFullText(contentEncoded.isNotEmpty ? contentEncoded : desc);
 
           results.add(GamingNewsModel(
             id: id,
@@ -267,6 +271,7 @@ class GamingNewsService {
             platform: platform,
             imageUrl: imageUrl,
             summary: cleanSummary,
+            fullContent: fullText.isNotEmpty ? fullText : cleanSummary,
             sourceUrl: link,
             timestamp: pubDate,
             views: 90 + (title.hashCode.abs() % 1300),
@@ -343,6 +348,11 @@ class GamingNewsService {
     return text;
   }
 
+  String _cleanHtmlFullText(String html) {
+    String text = html.replaceAll(RegExp(r'<[^>]*>|&[^;]+;'), ' ');
+    return text.replaceAll(RegExp(r'\s+'), ' ').trim();
+  }
+
   String _extractImageFromHtml(String html) {
     final match = RegExp(r'<img[^>]+src="([^">]+)"', caseSensitive: false).firstMatch(html);
     if (match != null && match.groupCount >= 1) {
@@ -388,6 +398,7 @@ class GamingNewsService {
         platform: 'PS5',
         imageUrl: 'https://images.unsplash.com/photo-1542751371-adc38448a05e?auto=format&fit=crop&w=800&q=80',
         summary: 'Rockstar Games insider details the expanded Vice City state of Leonida with unprecedented graphical fidelity and realistic physics engine upgrades.',
+        fullContent: 'Rockstar Games insider details the expanded Vice City state of Leonida with unprecedented graphical fidelity and realistic physics engine upgrades. The upcoming Grand Theft Auto VI is set in the fictional state of Leonida, which is inspired by Florida, and features the neon-soaked streets of Vice City and surrounding bayous, wetlands, and small towns. Leaks indicate dynamic weather systems, volumetric clouds, AI-driven pedestrian routines, advanced water physics, and unprecedented vehicular customization. Both protagonists, Lucia and Jason, bring a cinematic storyline focused on heist planning, illicit syndicates, and high-stakes criminal warfare.',
         sourceUrl: 'https://www.ign.com/games/grand-theft-auto-vi',
         timestamp: DateTime.now().subtract(const Duration(minutes: 25)),
         views: 1840,
@@ -400,6 +411,7 @@ class GamingNewsService {
         platform: 'PS5',
         imageUrl: 'https://images.unsplash.com/photo-1511512578047-dfb367046420?auto=format&fit=crop&w=800&q=80',
         summary: 'Electronic Arts has revealed revolutionary FC IQ tactical systems with 50+ new player roles and revamped manager career mode.',
+        fullContent: 'Electronic Arts has revealed revolutionary FC IQ tactical systems with 50+ new player roles and revamped manager career mode. Powered by real-world data from top football matches, FC IQ fundamentally overhauls how players position themselves on the pitch. New 5v5 Rush mode replaces Volta, bringing fast-paced competitive gameplay with friends. Career mode adds Live Start Points that reflect real-season points tables, injuries, and manager sackings in real time.',
         sourceUrl: 'https://www.gamespot.com/articles/ea-sports-fc-25/',
         timestamp: DateTime.now().subtract(const Duration(minutes: 48)),
         views: 932,
@@ -412,6 +424,7 @@ class GamingNewsService {
         platform: 'PC',
         imageUrl: 'https://images.unsplash.com/photo-1538481199705-c710c4e965fc?auto=format&fit=crop&w=800&q=80',
         summary: 'Treyarch introduces omnimovement mechanics allowing players to sprint, slide, and dive in any direction seamlessly in combat.',
+        fullContent: 'Treyarch introduces omnimovement mechanics allowing players to sprint, slide, and dive in any direction seamlessly in combat. Black Ops 6 brings a gripping spy thriller campaign set in the early 1990s, round-based Zombies on two brand-new maps at launch, and 16 multiplayer maps including 12 core 6v6 maps and 4 Strike maps. Dedicated servers and refreshed perk systems guarantee competitive integrity across all platforms.',
         sourceUrl: 'https://www.gamespot.com/games/call-of-duty-black-ops-6/',
         timestamp: DateTime.now().subtract(const Duration(hours: 1, minutes: 12)),
         views: 1250,
@@ -424,6 +437,7 @@ class GamingNewsService {
         platform: 'PC',
         imageUrl: 'https://images.unsplash.com/photo-1550745165-9bc0b252726f?auto=format&fit=crop&w=800&q=80',
         summary: 'Claim top rated AAA and indie titles completely free on Epic Games Store this weekend with lifetime library ownership.',
+        fullContent: 'Claim top rated AAA and indie titles completely free on Epic Games Store this weekend with lifetime library ownership. PC gamers can log in to their Epic Games account to claim rotating weekly giveaways with zero subscription fees. Once claimed during the promotional window, the titles remain permanently in the player’s personal library with cloud saves and achievement tracking enabled.',
         sourceUrl: 'https://www.epicgames.com/store/free-games',
         timestamp: DateTime.now().subtract(const Duration(hours: 2, minutes: 5)),
         views: 890,
@@ -436,6 +450,7 @@ class GamingNewsService {
         platform: 'Xbox',
         imageUrl: 'https://images.unsplash.com/photo-1518709268805-4e9042af9f23?auto=format&fit=crop&w=800&q=80',
         summary: 'Next generation open world driving with dynamic weather, neon Tokyo cityscapes, and mountain drift passes announced for Xbox Series X.',
+        fullContent: 'Next generation open world driving with dynamic weather, neon Tokyo cityscapes, and mountain drift passes announced for Xbox Series X and PC. Playground Games developers have teased the most requested fan location featuring authentic Japanese touge passes, cherry blossom highways, urban expressway loops like the Shuto Expressway, and photorealistic ray tracing in both gameplay and Photo Mode.',
         sourceUrl: 'https://www.ign.com/articles/forza-horizon-next-news',
         timestamp: DateTime.now().subtract(const Duration(hours: 3)),
         views: 2150,
@@ -448,6 +463,7 @@ class GamingNewsService {
         platform: 'Switch',
         imageUrl: 'https://images.unsplash.com/photo-1578301978693-85fa9c0320b9?auto=format&fit=crop&w=800&q=80',
         summary: 'Custom Nvidia silicon promises ray tracing and enhanced handheld efficiency for the highly anticipated Nintendo next generation console.',
+        fullContent: 'Custom Nvidia silicon promises ray tracing and enhanced handheld efficiency for the highly anticipated Nintendo next generation console. Developers briefing notes suggest NVIDIA custom DLSS upscaling to output crisp 4K visual resolution when docked to modern televisions, while maintaining exceptional battery life and thermal stability during portable play.',
         sourceUrl: 'https://www.gamespot.com/articles/switch-successor-spec-leaks/',
         timestamp: DateTime.now().subtract(const Duration(hours: 4, minutes: 30)),
         views: 1420,
@@ -460,6 +476,7 @@ class GamingNewsService {
         platform: 'Xbox',
         imageUrl: 'https://images.unsplash.com/photo-1563089145-599997674d42?auto=format&fit=crop&w=800&q=80',
         summary: 'Following the smash hit television series, Bethesda confirms full pre-production ramp-up for the next mainline post-apocalyptic RPG.',
+        fullContent: 'Following the smash hit television series, Bethesda confirms full pre-production ramp-up for the next mainline post-apocalyptic RPG. Todd Howard shared insights into the studio roadmap, highlighting next-generation Creation Engine 2 enhancements, expanded faction dialogues, modular base engineering, and immersive wasteland survival mechanics.',
         sourceUrl: 'https://www.ign.com/articles/fallout-franchise-future',
         timestamp: DateTime.now().subtract(const Duration(hours: 6)),
         views: 1675,
@@ -472,6 +489,7 @@ class GamingNewsService {
         platform: 'PC',
         imageUrl: 'https://images.unsplash.com/photo-1579373903781-fd5c0c30c4cd?auto=format&fit=crop&w=800&q=80',
         summary: 'CD Projekt Red expands its North American studio to create an even deeper, more reactive open world dystopian Night City.',
+        fullContent: 'CD Projekt Red expands its North American studio to create an even deeper, more reactive open world dystopian Night City. Built on Unreal Engine 5, Project Orion brings next-generation crowds, vertical multi-tiered megastructures, deeper branching cyberware abilities, and expanded underground black-market syndicates.',
         sourceUrl: 'https://www.gamespot.com/articles/cyberpunk-sequel-update/',
         timestamp: DateTime.now().subtract(const Duration(hours: 8)),
         views: 1105,

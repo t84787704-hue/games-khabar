@@ -1,11 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:share_plus/share_plus.dart';
+import 'package:url_launcher/url_launcher.dart';
 import '../constants/gamer_theme.dart';
 import '../models/gaming_news_model.dart';
 import '../services/gamer_auth_service.dart';
 import '../services/gaming_news_service.dart';
-import '../screens/news_detail_screen.dart';
 
 class NewsPostCard extends StatefulWidget {
   final GamingNewsModel news;
@@ -20,6 +20,7 @@ class _NewsPostCardState extends State<NewsPostCard> {
   final GamingNewsService _newsService = GamingNewsService();
   bool _isLiked = false;
   late int _likeCount;
+  bool _isExpanded = false;
 
   @override
   void initState() {
@@ -27,19 +28,48 @@ class _NewsPostCardState extends State<NewsPostCard> {
     _likeCount = widget.news.views >= 100 ? widget.news.views : 1840;
   }
 
-  void _onOpenDetail() {
-    _newsService.incrementViews(widget.news.id);
-    Navigator.of(context).push(
-      MaterialPageRoute(
-        builder: (_) => NewsDetailScreen(news: widget.news),
-      ),
-    );
+  void _toggleExpand() {
+    setState(() {
+      _isExpanded = !_isExpanded;
+      if (_isExpanded) {
+        _newsService.incrementViews(widget.news.id);
+      }
+    });
+  }
+
+  Future<void> _openSourceUrl(String url) async {
+    if (url.isEmpty) return;
+    try {
+      final uri = Uri.parse(url);
+      if (await canLaunchUrl(uri)) {
+        await launchUrl(uri, mode: LaunchMode.externalApplication);
+      }
+    } catch (e) {
+      debugPrint('Could not launch URL $url: $e');
+    }
+  }
+
+  String _getSourceName(String url, String category) {
+    if (url.isEmpty) return category;
+    try {
+      final uri = Uri.parse(url);
+      final host = uri.host.replaceFirst('www.', '').toLowerCase();
+      if (host.contains('epicgames')) return 'Epic Games Store';
+      if (host.contains('ign')) return 'IGN';
+      if (host.contains('gamespot')) return 'GameSpot';
+      if (host.contains('polygon')) return 'Polygon';
+      if (host.contains('kotaku')) return 'Kotaku';
+      if (host.contains('pcgamer')) return 'PC Gamer';
+      if (host.isNotEmpty) return host;
+    } catch (_) {}
+    return category;
   }
 
   void _onShare() {
     final text = '🎮 ${widget.news.titleEn}\n\n'
         '${widget.news.titleUr.isNotEmpty ? "${widget.news.titleUr}\n\n" : ""}'
-        'Read more on Games Khabar: ${widget.news.sourceUrl.isNotEmpty ? widget.news.sourceUrl : "https://gameskhabar.pk"}';
+        '${widget.news.displayContent}\n\n'
+        'Source: ${widget.news.sourceUrl.isNotEmpty ? widget.news.sourceUrl : "https://gameskhabar.pk"}';
     Share.share(text);
   }
 
@@ -64,7 +94,9 @@ class _NewsPostCardState extends State<NewsPostCard> {
       decoration: BoxDecoration(
         color: GamerTheme.cardDark,
         borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: const Color(0xFF262E3D)),
+        border: Border.all(
+          color: _isExpanded ? const Color(0xFF00FF88).withOpacity(0.4) : const Color(0xFF262E3D),
+        ),
         boxShadow: [
           BoxShadow(
             color: Colors.black.withOpacity(0.35),
@@ -84,7 +116,7 @@ class _NewsPostCardState extends State<NewsPostCard> {
               children: [
                 // GK Avatar
                 GestureDetector(
-                  onTap: _onOpenDetail,
+                  onTap: _toggleExpand,
                   child: Container(
                     width: 40,
                     height: 40,
@@ -246,31 +278,37 @@ class _NewsPostCardState extends State<NewsPostCard> {
           ),
 
           // English Title
-          Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 4),
-            child: Text(
-              news.titleEn,
-              style: const TextStyle(
-                color: Colors.white,
-                fontWeight: FontWeight.w800,
-                fontSize: 14.5,
-                height: 1.35,
+          GestureDetector(
+            onTap: _toggleExpand,
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 4),
+              child: Text(
+                news.titleEn,
+                style: const TextStyle(
+                  color: Colors.white,
+                  fontWeight: FontWeight.w800,
+                  fontSize: 14.5,
+                  height: 1.35,
+                ),
               ),
             ),
           ),
 
           // Urdu translated Title in Green #00FF88 below
           if (news.titleUr.isNotEmpty)
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 3),
-              child: Text(
-                news.titleUr,
-                textDirection: TextDirection.rtl,
-                style: const TextStyle(
-                  color: Color(0xFF00FF88),
-                  fontWeight: FontWeight.w700,
-                  fontSize: 13,
-                  height: 1.35,
+            GestureDetector(
+              onTap: _toggleExpand,
+              child: Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 3),
+                child: Text(
+                  news.titleUr,
+                  textDirection: TextDirection.rtl,
+                  style: const TextStyle(
+                    color: Color(0xFF00FF88),
+                    fontWeight: FontWeight.w700,
+                    fontSize: 13,
+                    height: 1.35,
+                  ),
                 ),
               ),
             ),
@@ -280,7 +318,7 @@ class _NewsPostCardState extends State<NewsPostCard> {
           // Body Image: Full width like Facebook post
           if (news.imageUrl.isNotEmpty)
             GestureDetector(
-              onTap: _onOpenDetail,
+              onTap: _toggleExpand,
               child: AspectRatio(
                 aspectRatio: 16 / 9,
                 child: Container(
@@ -317,10 +355,18 @@ class _NewsPostCardState extends State<NewsPostCard> {
               ),
             ),
 
+          // INLINE EXPANDED CONTENT
+          AnimatedCrossFade(
+            firstChild: const SizedBox.shrink(),
+            secondChild: _buildExpandedContent(news),
+            crossFadeState: _isExpanded ? CrossFadeState.showSecond : CrossFadeState.showFirst,
+            duration: const Duration(milliseconds: 280),
+          ),
+
           // Divider before footer
           const Divider(color: Color(0xFF262E3D), height: 1),
 
-          // Footer: Like (views) + Share + Bookmark + Read More
+          // Footer: Like (views) + Share + Bookmark + Read More / Show Less
           Padding(
             padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
             child: Row(
@@ -427,9 +473,9 @@ class _NewsPostCardState extends State<NewsPostCard> {
 
                 const Spacer(),
 
-                // Read More Button
+                // Expand / Collapse Action Button
                 ElevatedButton.icon(
-                  onPressed: _onOpenDetail,
+                  onPressed: _toggleExpand,
                   style: ElevatedButton.styleFrom(
                     backgroundColor: const Color(0xFF00FF88),
                     foregroundColor: Colors.black,
@@ -441,10 +487,13 @@ class _NewsPostCardState extends State<NewsPostCard> {
                     ),
                     elevation: 0,
                   ),
-                  icon: const Icon(Icons.arrow_forward_rounded, size: 14),
-                  label: const Text(
-                    'Read More',
-                    style: TextStyle(
+                  icon: Icon(
+                    _isExpanded ? Icons.keyboard_arrow_up_rounded : Icons.keyboard_arrow_down_rounded,
+                    size: 16,
+                  ),
+                  label: Text(
+                    _isExpanded ? 'Show Less' : 'Read More',
+                    style: const TextStyle(
                       fontSize: 11.5,
                       fontWeight: FontWeight.w900,
                     ),
@@ -453,6 +502,66 @@ class _NewsPostCardState extends State<NewsPostCard> {
               ],
             ),
           ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildExpandedContent(GamingNewsModel news) {
+    final content = news.displayContent;
+    final sourceName = _getSourceName(news.sourceUrl, news.category);
+
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.fromLTRB(14, 12, 14, 12),
+      color: const Color(0xFF131924),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          // Full News Content
+          SelectableText(
+            content,
+            style: const TextStyle(
+              color: Colors.white,
+              fontSize: 14,
+              height: 1.55,
+              letterSpacing: 0.2,
+            ),
+          ),
+          const SizedBox(height: 12),
+
+          // Secondary button: "Source: [Source Name]"
+          if (news.sourceUrl.isNotEmpty)
+            Align(
+              alignment: Alignment.centerLeft,
+              child: OutlinedButton.icon(
+                onPressed: () => _openSourceUrl(news.sourceUrl),
+                style: OutlinedButton.styleFrom(
+                  backgroundColor: const Color(0xFF1B2433),
+                  foregroundColor: const Color(0xFF8B9BB4),
+                  side: const BorderSide(color: Color(0xFF2B3A50), width: 1),
+                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
+                  minimumSize: Size.zero,
+                  tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                ),
+                icon: const Icon(
+                  Icons.open_in_new_rounded,
+                  size: 13,
+                  color: Color(0xFF00D2FF),
+                ),
+                label: Text(
+                  'Source: $sourceName',
+                  style: const TextStyle(
+                    fontSize: 11.5,
+                    fontWeight: FontWeight.w700,
+                    color: Color(0xFFD6E2F0),
+                  ),
+                ),
+              ),
+            ),
         ],
       ),
     );

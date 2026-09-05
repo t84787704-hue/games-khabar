@@ -6,7 +6,6 @@ import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:http/http.dart' as http;
 import '../models/news_model.dart';
-import '../screens/news_detail_screen.dart';
 import 'firestore_service.dart';
 
 /// Top-level background message handler for FCM
@@ -349,11 +348,8 @@ class NotificationService {
       views: 1,
     );
 
-    Navigator.of(context).push(
-      MaterialPageRoute(
-        builder: (_) => NewsDetailScreen(news: news!),
-      ),
-    );
+    // Notification handled; detail screen removed in favor of Super Feed
+    debugPrint('Notification tapped for news: $newsId');
   }
 
   /// Admin Action: Send Push Notification to Topic 'all_news' when new news is published

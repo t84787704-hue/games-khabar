@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import '../models/gaming_news_model.dart';
 import '../services/gamer_auth_service.dart';
 import '../services/gaming_news_service.dart';
-import '../widgets/gaming_news_card.dart';
+import '../widgets/news_post_card.dart';
 
 class SavedNewsTabScreen extends StatelessWidget {
   final VoidCallback? onExploreTap;
@@ -67,7 +67,7 @@ class SavedNewsTabScreen extends StatelessWidget {
                   padding: const EdgeInsets.symmetric(vertical: 8),
                   itemCount: savedList.length,
                   itemBuilder: (context, index) {
-                    return GamingNewsCard(news: savedList[index]);
+                    return NewsPostCard(news: savedList[index]);
                   },
                 );
               },

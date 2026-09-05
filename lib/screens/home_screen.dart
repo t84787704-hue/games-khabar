@@ -17,7 +17,6 @@ import '../widgets/app_image_view.dart';
 import '../widgets/native_ad_widget.dart';
 import '../constants/game_categories.dart';
 import '../widgets/translated_news_title.dart';
-import 'news_detail_screen.dart';
 import 'saved_news_screen.dart';
 import 'profile_screen.dart';
 import 'following_screen.dart';
@@ -154,13 +153,6 @@ class _HomeScreenState extends State<HomeScreen> {
     }
 
     StreakService().recordArticleRead(news.id);
-
-    Navigator.push(
-      context,
-      MaterialPageRoute(
-        builder: (_) => NewsDetailScreen(news: news),
-      ),
-    );
   }
 
   void _toggleBookmark(NewsModel news) async {
