@@ -70,34 +70,6 @@ class _NewsPostCardState extends State<NewsPostCard> {
     });
   }
 
-  Future<void> _openSourceUrl(String url) async {
-    if (url.isEmpty) return;
-    try {
-      final uri = Uri.parse(url);
-      if (await canLaunchUrl(uri)) {
-        await launchUrl(uri, mode: LaunchMode.externalApplication);
-      }
-    } catch (e) {
-      debugPrint('Could not launch URL $url: $e');
-    }
-  }
-
-  String _getSourceName(String url, String category) {
-    if (url.isEmpty) return category;
-    try {
-      final uri = Uri.parse(url);
-      final host = uri.host.replaceFirst('www.', '').toLowerCase();
-      if (host.contains('epicgames')) return 'Epic Games Store';
-      if (host.contains('ign')) return 'IGN';
-      if (host.contains('gamespot')) return 'GameSpot';
-      if (host.contains('polygon')) return 'Polygon';
-      if (host.contains('kotaku')) return 'Kotaku';
-      if (host.contains('pcgamer')) return 'PC Gamer';
-      if (host.isNotEmpty) return host;
-    } catch (_) {}
-    return category;
-  }
-
   void _onShare(String title, String content, String sourceUrl) {
     final text = '🎮 $title\n\n'
         '$content\n\n'
@@ -541,61 +513,96 @@ class _NewsPostCardState extends State<NewsPostCard> {
   }
 
   Widget _buildExpandedContent(GamingNewsModel news, String content, bool isUrdu) {
-    final sourceName = _getSourceName(news.sourceUrl, news.category);
+    final sourceName = news.displaySource;
+
+    // Split paragraphs to render a comfortable, editorial reading experience
+    final rawParagraphs = content.split(RegExp(r'\n{2,}|\n'));
+    final paragraphs = rawParagraphs
+        .map((p) => p.trim())
+        .where((p) => p.isNotEmpty)
+        .toList();
 
     return Container(
       width: double.infinity,
-      padding: const EdgeInsets.fromLTRB(14, 12, 14, 12),
+      padding: const EdgeInsets.fromLTRB(14, 14, 14, 14),
       color: const Color(0xFF131924),
       child: Column(
         crossAxisAlignment: isUrdu ? CrossAxisAlignment.end : CrossAxisAlignment.start,
         children: [
-          // Full News Content in selected language
-          SelectableText(
-            content,
-            textDirection: isUrdu ? TextDirection.rtl : TextDirection.ltr,
-            textAlign: isUrdu ? TextAlign.right : TextAlign.left,
-            style: TextStyle(
-              color: Colors.white,
-              fontSize: isUrdu ? 14.5 : 14,
-              height: 1.6,
-              letterSpacing: 0.2,
-            ),
-          ),
-          const SizedBox(height: 12),
-
-          // Secondary button: "Source: [Source Name]"
-          if (news.sourceUrl.isNotEmpty)
-            Align(
-              alignment: isUrdu ? Alignment.centerRight : Alignment.centerLeft,
-              child: OutlinedButton.icon(
-                onPressed: () => _openSourceUrl(news.sourceUrl),
-                style: OutlinedButton.styleFrom(
-                  backgroundColor: const Color(0xFF1B2433),
-                  foregroundColor: const Color(0xFF8B9BB4),
-                  side: const BorderSide(color: Color(0xFF2B3A50), width: 1),
-                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
-                  minimumSize: Size.zero,
-                  tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(8),
-                  ),
-                ),
-                icon: const Icon(
-                  Icons.open_in_new_rounded,
-                  size: 13,
-                  color: Color(0xFF00D2FF),
-                ),
-                label: Text(
-                  isUrdu ? 'ذریعہ: $sourceName' : 'Source: $sourceName',
-                  style: const TextStyle(
-                    fontSize: 11.5,
-                    fontWeight: FontWeight.w700,
-                    color: Color(0xFFD6E2F0),
+          // Full News Content in selected language - 4-5 paragraphs, white text, line height 1.6
+          if (paragraphs.isNotEmpty)
+            ...paragraphs.map(
+              (p) => Padding(
+                padding: const EdgeInsets.only(bottom: 12),
+                child: SelectableText(
+                  p,
+                  textDirection: isUrdu ? TextDirection.rtl : TextDirection.ltr,
+                  textAlign: isUrdu ? TextAlign.right : TextAlign.left,
+                  style: TextStyle(
+                    color: const Color(0xFFE2E8F0),
+                    fontSize: isUrdu ? 14.5 : 14,
+                    height: 1.65,
+                    letterSpacing: 0.2,
+                    fontWeight: FontWeight.w400,
                   ),
                 ),
               ),
+            )
+          else
+            SelectableText(
+              content,
+              textDirection: isUrdu ? TextDirection.rtl : TextDirection.ltr,
+              textAlign: isUrdu ? TextAlign.right : TextAlign.left,
+              style: TextStyle(
+                color: const Color(0xFFE2E8F0),
+                fontSize: isUrdu ? 14.5 : 14,
+                height: 1.65,
+                letterSpacing: 0.2,
+              ),
             ),
+
+          // Divider line before source label
+          const Divider(
+            color: Color(0xFF263244),
+            height: 20,
+            thickness: 1,
+          ),
+
+          // Small pill label: "ذریعہ: IGN" - Non-clickable, just text credit
+          Align(
+            alignment: isUrdu ? Alignment.centerRight : Alignment.centerLeft,
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+              decoration: BoxDecoration(
+                color: const Color(0xFF1E2838),
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(
+                  color: const Color(0xFF2E3E56),
+                  width: 0.8,
+                ),
+              ),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  const Icon(
+                    Icons.newspaper_rounded,
+                    size: 13,
+                    color: Color(0xFF00FF88),
+                  ),
+                  const SizedBox(width: 5),
+                  Text(
+                    isUrdu ? 'ذریعہ: $sourceName' : 'Source: $sourceName',
+                    style: const TextStyle(
+                      fontSize: 11,
+                      fontWeight: FontWeight.w700,
+                      color: Color(0xFF94A3B8),
+                      letterSpacing: 0.2,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
         ],
       ),
     );

@@ -6,12 +6,12 @@ class GamingNewsModel {
   final String titleUr;
   final String contentEn;
   final String contentUr;
+  final String summary;
+  final String source;
+  final String sourceUrl;
   final String category;
   final String platform;
   final String imageUrl;
-  final String summary;
-  final String fullContent;
-  final String sourceUrl;
   final DateTime timestamp;
   final int views;
 
@@ -21,30 +21,38 @@ class GamingNewsModel {
     required this.titleUr,
     this.contentEn = '',
     this.contentUr = '',
+    required this.summary,
+    this.source = '',
+    required this.sourceUrl,
     required this.category,
     required this.platform,
     required this.imageUrl,
-    required this.summary,
-    this.fullContent = '',
-    required this.sourceUrl,
     required this.timestamp,
     this.views = 0,
+    String? fullContent,
   });
 
   Map<String, dynamic> toMap() {
-    final effectiveEn = contentEn.isNotEmpty ? contentEn : (fullContent.isNotEmpty ? fullContent : summary);
+    final effectiveEn = contentEn.isNotEmpty ? contentEn : summary;
+    final effectiveUr = contentUr;
+    final inferredSource = source.isNotEmpty ? source : inferSourceName(sourceUrl, category);
+
     return {
       'id': id,
       'title_en': titleEn,
       'title_ur': titleUr,
+      'summary_en': summary,
+      'summary': summary,
       'content_en': effectiveEn,
-      'content_ur': contentUr,
+      'fullContent_en': effectiveEn,
+      'fullContent': effectiveEn,
+      'content_ur': effectiveUr,
+      'fullContent_ur': effectiveUr,
+      'source': inferredSource,
+      'sourceUrl': sourceUrl,
       'category': category,
       'platform': platform,
       'imageUrl': imageUrl,
-      'summary': summary.isNotEmpty ? summary : effectiveEn,
-      'fullContent': fullContent.isNotEmpty ? fullContent : effectiveEn,
-      'sourceUrl': sourceUrl,
       'timestamp': Timestamp.fromDate(timestamp),
       'views': views,
     };
@@ -68,25 +76,67 @@ class GamingNewsModel {
       parsedTime = DateTime.now();
     }
 
-    final rawEn = (map['content_en'] ?? map['fullContent'] ?? map['content'] ?? map['description'] ?? map['summary'] ?? '').toString();
-    final rawUr = (map['content_ur'] ?? '').toString();
-    final rawSummary = (map['summary'] ?? map['description'] ?? rawEn).toString();
+    final rawEn = (map['fullContent_en'] ??
+            map['content_en'] ??
+            map['fullContent'] ??
+            map['content'] ??
+            map['description'] ??
+            map['summary'] ??
+            '')
+        .toString();
+
+    final rawUr = (map['fullContent_ur'] ??
+            map['content_ur'] ??
+            '')
+        .toString();
+
+    final rawSummary = (map['summary_en'] ??
+            map['summary'] ??
+            map['description'] ??
+            (rawEn.length > 220 ? '${rawEn.substring(0, 220)}...' : rawEn))
+        .toString();
+
+    final rawSource = (map['source'] ?? map['source_name'] ?? '').toString();
+    final rawUrl = (map['sourceUrl'] ?? map['url'] ?? '').toString();
+    final rawCategory = (map['category'] ?? 'FEATURED').toString();
 
     return GamingNewsModel(
       id: docId ?? map['id'] ?? '',
-      titleEn: map['title_en'] ?? map['title'] ?? '',
-      titleUr: map['title_ur'] ?? '',
+      titleEn: (map['title_en'] ?? map['title'] ?? '').toString(),
+      titleUr: (map['title_ur'] ?? '').toString(),
       contentEn: rawEn,
       contentUr: rawUr,
-      category: map['category'] ?? 'FEATURED',
-      platform: map['platform'] ?? 'Multiplatform',
-      imageUrl: map['imageUrl'] ?? map['image'] ?? '',
       summary: rawSummary,
-      fullContent: rawEn,
-      sourceUrl: map['sourceUrl'] ?? map['url'] ?? '',
+      source: rawSource.isNotEmpty ? rawSource : inferSourceName(rawUrl, rawCategory),
+      sourceUrl: rawUrl,
+      category: rawCategory,
+      platform: (map['platform'] ?? 'Multiplatform').toString(),
+      imageUrl: (map['imageUrl'] ?? map['image'] ?? '').toString(),
       timestamp: parsedTime,
       views: (map['views'] is num) ? (map['views'] as num).toInt() : 0,
     );
+  }
+
+  /// Helper to infer readable source name like "IGN", "GameSpot", etc.
+  static String inferSourceName(String url, String category) {
+    final lower = url.toLowerCase();
+    if (lower.contains('ign.com')) return 'IGN';
+    if (lower.contains('gamespot.com')) return 'GameSpot';
+    if (lower.contains('kotaku.com')) return 'Kotaku';
+    if (lower.contains('polygon.com')) return 'Polygon';
+    if (lower.contains('epicgames.com')) return 'Epic Games';
+    if (lower.contains('rockstargames.com')) return 'Rockstar Games';
+    if (lower.contains('pcgamer.com')) return 'PC Gamer';
+    if (lower.contains('eurogamer.net')) return 'Eurogamer';
+    if (lower.contains('nintendolife.com')) return 'Nintendo Life';
+    if (lower.contains('gematsu.com')) return 'Gematsu';
+    if (category.trim().isNotEmpty && category != 'FEATURED') return category;
+    return 'Gaming News';
+  }
+
+  String get displaySource {
+    if (source.trim().isNotEmpty) return source.trim();
+    return inferSourceName(sourceUrl, category);
   }
 
   /// Returns title for the requested language ('en' or 'ur')
@@ -100,16 +150,13 @@ class GamingNewsModel {
     return titleUr.trim();
   }
 
-  /// Returns content for the requested language ('en' or 'ur')
+  /// Returns full content for the requested language ('en' or 'ur')
   String getContent(String langCode) {
     if (langCode == 'ur' && contentUr.trim().isNotEmpty) {
       return contentUr.trim();
     }
     if (contentEn.trim().isNotEmpty) {
       return contentEn.trim();
-    }
-    if (fullContent.trim().isNotEmpty) {
-      return fullContent.trim();
     }
     if (summary.trim().isNotEmpty) {
       return summary.trim();
@@ -119,10 +166,8 @@ class GamingNewsModel {
         : 'Detailed gaming article will appear here shortly.';
   }
 
-  /// Returns fullContent if available, otherwise summary, or a default text
   String get displayContent {
     if (contentEn.trim().isNotEmpty) return contentEn.trim();
-    if (fullContent.trim().isNotEmpty) return fullContent.trim();
     if (summary.trim().isNotEmpty) return summary.trim();
     return 'Detailed gaming article will appear here shortly.';
   }
@@ -146,28 +191,27 @@ class GamingNewsModel {
     String? titleUr,
     String? contentEn,
     String? contentUr,
+    String? summary,
+    String? source,
+    String? sourceUrl,
     String? category,
     String? platform,
     String? imageUrl,
-    String? summary,
-    String? fullContent,
-    String? sourceUrl,
     DateTime? timestamp,
     int? views,
   }) {
-    final newContentEn = contentEn ?? this.contentEn;
     return GamingNewsModel(
       id: id ?? this.id,
       titleEn: titleEn ?? this.titleEn,
       titleUr: titleUr ?? this.titleUr,
-      contentEn: newContentEn,
+      contentEn: contentEn ?? this.contentEn,
       contentUr: contentUr ?? this.contentUr,
+      summary: summary ?? this.summary,
+      source: source ?? this.source,
+      sourceUrl: sourceUrl ?? this.sourceUrl,
       category: category ?? this.category,
       platform: platform ?? this.platform,
       imageUrl: imageUrl ?? this.imageUrl,
-      summary: summary ?? this.summary,
-      fullContent: fullContent ?? (contentEn ?? this.fullContent),
-      sourceUrl: sourceUrl ?? this.sourceUrl,
       timestamp: timestamp ?? this.timestamp,
       views: views ?? this.views,
     );
