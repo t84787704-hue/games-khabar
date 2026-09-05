@@ -66,26 +66,15 @@ class GamingNewsCard extends StatelessWidget {
                   flex: 35,
                   child: ClipRRect(
                     borderRadius: const BorderRadius.horizontal(left: Radius.circular(16)),
-                    child: news.imageUrl.isNotEmpty
-                        ? CachedNetworkImage(
-                            imageUrl: news.imageUrl,
-                            fit: BoxFit.cover,
-                            placeholder: (context, url) => Container(
-                              color: const Color(0xFF10141D),
-                              child: const Center(
-                                child: SizedBox(
-                                  width: 20,
-                                  height: 20,
-                                  child: CircularProgressIndicator(
-                                    strokeWidth: 2,
-                                    color: Color(0xFF00FF88),
-                                  ),
-                                ),
-                              ),
-                            ),
-                            errorWidget: (context, url, error) => _build4DotsPlaceholder(),
-                          )
-                        : _build4DotsPlaceholder(),
+                    child: Image.network(
+                      news.effectiveImageUrl,
+                      fit: BoxFit.cover,
+                      errorBuilder: (context, error, stackTrace) => Image.network(
+                        GamingNewsModel.getCategoryFallbackImage(news.category),
+                        fit: BoxFit.cover,
+                        errorBuilder: (c, e, s) => _build4DotsPlaceholder(),
+                      ),
+                    ),
                   ),
                 ),
 
@@ -98,42 +87,54 @@ class GamingNewsCard extends StatelessWidget {
                       crossAxisAlignment: CrossAxisAlignment.start,
                       mainAxisAlignment: MainAxisAlignment.spaceBetween,
                       children: [
-                        // Top row: Green Category Badge + Timestamp
+                        // Top row: Bot Name + Grey BOT Badge + Timestamp
                         Row(
                           crossAxisAlignment: CrossAxisAlignment.center,
                           children: [
-                            // Green category badge e.g. "FALL UP", "EA SPORTS", "GRAND THEFT A...", "FPS/SHOOTING"
                             Flexible(
-                              child: Container(
-                                padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                                decoration: BoxDecoration(
-                                  color: const Color(0xFF00FF88).withOpacity(0.12),
-                                  borderRadius: BorderRadius.circular(4),
-                                  border: Border.all(
-                                    color: const Color(0xFF00FF88).withOpacity(0.35),
-                                    width: 0.8,
-                                  ),
-                                ),
-                                child: Text(
-                                  news.category.toUpperCase(),
-                                  maxLines: 1,
-                                  overflow: TextOverflow.ellipsis,
-                                  style: const TextStyle(
-                                    color: Color(0xFF00FF88), // Neon Green #00FF88
-                                    fontWeight: FontWeight.w900,
-                                    fontSize: 10,
-                                    letterSpacing: 0.5,
-                                  ),
+                              child: Text(
+                                news.effectiveBotName,
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: const TextStyle(
+                                  color: Colors.white,
+                                  fontWeight: FontWeight.w800,
+                                  fontSize: 11,
                                 ),
                               ),
                             ),
-                            const SizedBox(width: 6),
+                            const SizedBox(width: 4),
+                            Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 1),
+                              decoration: BoxDecoration(
+                                color: const Color(0xFF242C38),
+                                borderRadius: BorderRadius.circular(3),
+                                border: Border.all(
+                                  color: const Color(0xFF475569),
+                                  width: 0.6,
+                                ),
+                              ),
+                              child: Text(
+                                news.effectiveBotBadge,
+                                style: const TextStyle(
+                                  color: Color(0xFFCBD5E1),
+                                  fontWeight: FontWeight.w800,
+                                  fontSize: 8.5,
+                                ),
+                              ),
+                            ),
+                            const SizedBox(width: 5),
+                            Text(
+                              '•',
+                              style: TextStyle(color: Colors.white.withOpacity(0.3), fontSize: 10),
+                            ),
+                            const SizedBox(width: 5),
                             // Timestamp
                             Text(
                               news.timeAgo,
                               style: TextStyle(
                                 color: Colors.white.withOpacity(0.45),
-                                fontSize: 10.5,
+                                fontSize: 10,
                                 fontWeight: FontWeight.w500,
                               ),
                             ),

@@ -7,6 +7,7 @@ import 'package:translator/translator.dart';
 import 'package:xml/xml.dart' as xml;
 import 'package:html/parser.dart' as html_parser;
 import '../models/gaming_news_model.dart';
+import '../data/game_bots_100.dart';
 import 'translation_service.dart';
 
 class GamingNewsService {
@@ -188,7 +189,20 @@ class GamingNewsService {
                 final existingContentUr = (data['content_ur'] ?? data['fullContent_ur'] ?? '').toString();
                 final existingContentEn = (data['content_en'] ?? data['fullContent_en'] ?? '').toString();
 
-                if (existingContentUr.length < 300 || existingContentEn.length < 300 || data['fullContent_en'] == null) {
+                final existingImg = (data['imageUrl'] ?? data['image'] ?? '').toString();
+                final bool needsImg = existingImg.isEmpty;
+                final resolvedImg = needsImg
+                    ? extractImage('', existingContentEn, item.category)
+                    : existingImg;
+
+                final existingBotName = (data['botName'] ?? data['bot_name'] ?? '').toString();
+                final existingBotAvatar = (data['botAvatar'] ?? data['bot_avatar'] ?? '').toString();
+                final bool needsBot = existingBotName.isEmpty || existingBotAvatar.isEmpty;
+                final bot = needsBot
+                    ? findGameBot(title: item.titleEn, category: item.category, content: existingContentEn)
+                    : null;
+
+                if (existingContentUr.length < 300 || existingContentEn.length < 300 || data['fullContent_en'] == null || needsImg || needsBot) {
                   final fullContentEn = await scrapeFullArticle(
                     item.sourceUrl,
                     fallbackTitle: item.titleEn,
@@ -219,6 +233,13 @@ class GamingNewsService {
                     if (contentUr.isNotEmpty) 'fullContent_ur': contentUr,
                     'source': item.displaySource,
                     'sourceUrl': item.sourceUrl,
+                    if (needsImg) 'imageUrl': resolvedImg,
+                    if (needsBot && bot != null) ...{
+                      'botName': bot['name'],
+                      'botAvatar': bot['avatar'],
+                      'botBadge': bot['badge'] ?? 'BOT',
+                      'botId': bot['id'] ?? 'trending_bot',
+                    },
                   });
                 }
               }
@@ -395,22 +416,22 @@ class GamingNewsService {
             final cleanSummary = _cleanHtmlText(description);
             final fullText = _cleanHtmlFullText((item['content'] ?? item['description'] ?? '').toString());
 
-            // Extract image
+            final category = _categorizeNews(title, description);
+            final platform = _detectPlatform(title, description);
+
+            // Extract image with game fallback
             String imageUrl = (item['thumbnail'] ?? '').toString();
             if (imageUrl.isEmpty && item['enclosure'] is Map) {
               imageUrl = (item['enclosure']['link'] ?? '').toString();
             }
             if (imageUrl.isEmpty) {
-              imageUrl = _extractImageFromHtml(description);
+              imageUrl = extractImage(jsonEncode(item), description, category);
             }
 
             DateTime pubDate = DateTime.now();
             if (item['pubDate'] != null) {
               pubDate = DateTime.tryParse(item['pubDate'].toString()) ?? DateTime.now();
             }
-
-            final category = _categorizeNews(title, description);
-            final platform = _detectPlatform(title, description);
 
             results.add(GamingNewsModel(
               id: id,
@@ -449,26 +470,10 @@ class GamingNewsService {
           final desc = item.findElements('description').firstOrNull?.innerText.trim() ?? '';
           final cleanSummary = _cleanHtmlText(desc);
 
-          String imageUrl = '';
-          final enclosure = item.findElements('enclosure').firstOrNull;
-          if (enclosure != null) {
-            imageUrl = enclosure.getAttribute('url') ?? '';
-          }
-          if (imageUrl.isEmpty) {
-            final mediaContent = item.findElements('media:content').firstOrNull;
-            if (mediaContent != null) {
-              imageUrl = mediaContent.getAttribute('url') ?? '';
-            }
-          }
-          if (imageUrl.isEmpty) {
-            final mediaThumbnail = item.findElements('media:thumbnail').firstOrNull;
-            if (mediaThumbnail != null) {
-              imageUrl = mediaThumbnail.getAttribute('url') ?? '';
-            }
-          }
-          if (imageUrl.isEmpty) {
-            imageUrl = _extractImageFromHtml(desc);
-          }
+          final category = _categorizeNews(title, desc);
+          final platform = _detectPlatform(title, desc);
+          final itemXml = item.toXmlString();
+          final imageUrl = extractImage(itemXml, desc, category);
 
           final pubDateStr = item.findElements('pubDate').firstOrNull?.innerText.trim();
           DateTime pubDate = DateTime.now();
@@ -476,8 +481,6 @@ class GamingNewsService {
             pubDate = DateTime.tryParse(pubDateStr) ?? DateTime.now();
           }
 
-          final category = _categorizeNews(title, desc);
-          final platform = _detectPlatform(title, desc);
           final contentEncoded = item.findElements('content:encoded').firstOrNull?.innerText.trim() ?? '';
           final fullText = _cleanHtmlFullText(contentEncoded.isNotEmpty ? contentEncoded : desc);
 
@@ -649,12 +652,48 @@ class GamingNewsService {
     return text.replaceAll(RegExp(r'\s+'), ' ').trim();
   }
 
-  String _extractImageFromHtml(String html) {
-    final match = RegExp(r'<img[^>]+src="([^">]+)"', caseSensitive: false).firstMatch(html);
-    if (match != null && match.groupCount >= 1) {
-      return match.group(1) ?? '';
+  /// Extract news image from RSS item XML, enclosures, or HTML description with game fallback
+  static String extractImage(String itemXml, String description, String category) {
+    String imageUrl = "";
+
+    // A) Try media:content
+    if (itemXml.contains('media:content')) {
+      RegExp reg = RegExp(r'media:content[^>]*url="([^"]+)"', caseSensitive: false);
+      var match = reg.firstMatch(itemXml);
+      if (match != null) imageUrl = match.group(1)!;
     }
-    return '';
+    // B) Try enclosure
+    if (imageUrl.isEmpty && itemXml.contains('<enclosure')) {
+      RegExp reg = RegExp(r'<enclosure[^>]*url="([^"]+)"', caseSensitive: false);
+      var match = reg.firstMatch(itemXml);
+      if (match != null) imageUrl = match.group(1)!;
+    }
+    // C) Try img tag in description
+    if (imageUrl.isEmpty) {
+      RegExp reg = RegExp(r'<img[^>]+src="([^">]+)"', caseSensitive: false);
+      var match = reg.firstMatch(description);
+      if (match != null) imageUrl = match.group(1)!;
+    }
+
+    // D) FALLBACK - If still empty, use category based image (This will ALWAYS show pic)
+    if (imageUrl.isEmpty) {
+      Map<String, String> fallback = {
+        'FORTNITE': 'https://cdn2.unrealengine.com/fortnite/home-v2.jpg',
+        'PUBG / BGMI': 'https://wstatic-prod-boc.krafton.com/common/banner.jpg',
+        'PUBG': 'https://wstatic-prod-boc.krafton.com/common/banner.jpg',
+        'BGMI': 'https://wstatic-prod-boc.krafton.com/common/banner.jpg',
+        'FREE FIRE': 'https://dl.dir.freefiremobile.com/common/web_event/official2.ff.garena.com/common/banner.jpg',
+        'COD': 'https://www.callofduty.com/content/dam/atvi/callofduty/cod-touchui/blog/hero/codm/CODM-S10-Hero.jpg',
+        'MLBB': 'https://akmweb.youngjoygame.com/web/sa_www/announce/MLBB_Banner.jpg',
+        'GTA': 'https://cdn.akamai.steamstatic.com/steam/apps/271590/header.jpg',
+        'VALORANT': 'https://images.contentstack.io/v3/assets/bltb6530b271fddd0b1/blt778d8212d33d4e6e/5e8d15c1f4a5e2.jpg',
+        'MINECRAFT': 'https://www.minecraft.net/content/dam/games/minecraft/key-art/Games_Subnav_Icon_Minecraft_300x300.png',
+        'TRENDING': 'https://images.unsplash.com/photo-1511512578047-dfb367046420?auto=format&fit=crop&w=800&q=80',
+      };
+      final cat = category.toUpperCase().trim();
+      imageUrl = fallback[cat] ?? GamingNewsModel.getCategoryFallbackImage(category);
+    }
+    return imageUrl;
   }
 
   String _generateDocId(String input) {
@@ -690,7 +729,10 @@ class GamingNewsService {
             final curUr = (data['content_ur'] ?? data['fullContent_ur'] ?? '').toString();
             final curEn = (data['content_en'] ?? data['fullContent_en'] ?? '').toString();
 
-            if (curUr.length < 300 || curEn.length < 300 || data['fullContent_en'] == null) {
+            final curImg = (data['imageUrl'] ?? data['image'] ?? '').toString();
+            final curBot = (data['botName'] ?? data['bot_name'] ?? '').toString();
+
+            if (curUr.length < 300 || curEn.length < 300 || data['fullContent_en'] == null || curImg.isEmpty || curBot.isEmpty) {
               batch.set(existingDoc.reference, article.toMap(), SetOptions(merge: true));
               needsUpdate = true;
             }
