@@ -66,7 +66,9 @@ class NewsCard extends StatelessWidget {
   }
 
   void _shareArticle() {
-    final shareUrl = news.sourceUrl ?? news.url ?? 'https://gameskhabar.pk';
+    final shareUrl = (news.sourceUrl != null && news.sourceUrl!.trim().isNotEmpty)
+        ? news.sourceUrl!.trim()
+        : 'https://gameskhabar.pk';
     final shareText = '🎮 ${news.title}\n\nRead more on Games Khabar:\n$shareUrl';
     Share.share(shareText, subject: news.title);
   }

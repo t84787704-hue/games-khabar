@@ -76,6 +76,7 @@ class NewsModel {
   String get description => getDescription();
   String get content => getDescription();
   String get thumbnailUrl => imageUrl;
+  String? get url => sourceUrl;
   String get displayGameOrCategory => (gameName != null && gameName!.trim().isNotEmpty) ? gameName!.trim() : category;
   String get cleanDescription => TranslationService.cleanBbCodeAndHtml(getDescription());
 
