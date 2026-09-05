@@ -8,6 +8,17 @@ service cloud.firestore {
       allow create: if request.auth != null && request.auth.uid == uid;
       allow update: if request.auth != null && (request.auth.uid == uid || request.resource.data.diff(resource.data).affectedKeys().hasOnly(['followersCount', 'followingCount', 'postsCount']));
       allow delete: if request.auth != null && request.auth.uid == uid;
+
+      // Saved News subcollection
+      match /saved_news/{newsId} {
+        allow read, write: if request.auth != null && request.auth.uid == uid;
+      }
+    }
+
+    // Gaming News
+    match /gaming_news/{newsId} {
+      allow read: if true;
+      allow write: if true;
     }
 
     // Posts: anyone can read, only owner can delete own post

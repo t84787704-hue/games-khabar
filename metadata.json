@@ -1,6 +1,6 @@
 {
   "name": "Gamers ID",
-  "description": "Gamers ID - Mini Facebook for Gamers. Create your unique Gamer ID, share gaming status, follow players, and connect.",
+  "description": "Gamers ID - Mini Facebook for Gamers with Games Khabar real-time gaming news, unique Gamer IDs, feeds, and profiles.",
   "requestFramePermissions": [],
   "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
 }

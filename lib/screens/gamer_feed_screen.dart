@@ -60,8 +60,24 @@ class _GamerFeedScreenState extends State<GamerFeedScreen> {
           ],
         ),
         actions: [
+          IconButton(
+            icon: const Icon(Icons.search_rounded, color: GamerTheme.textWhite, size: 22),
+            onPressed: () {
+              Navigator.of(context).push(
+                MaterialPageRoute(builder: (_) => const GamerSearchScreen()),
+              );
+            },
+          ),
+          IconButton(
+            icon: const Icon(Icons.notifications_rounded, color: GamerTheme.textWhite, size: 22),
+            onPressed: () {
+              Navigator.of(context).push(
+                MaterialPageRoute(builder: (_) => const NotificationsScreen()),
+              );
+            },
+          ),
           Padding(
-            padding: const EdgeInsets.only(right: 14),
+            padding: const EdgeInsets.only(right: 14, left: 4),
             child: GamerAvatar(
               photoUrl: gamer?.photoUrl ?? '',
               displayName: gamer?.displayName ?? 'Gamer',

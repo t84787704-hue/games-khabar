@@ -1,10 +1,10 @@
 import 'package:flutter/material.dart';
 import '../constants/gamer_theme.dart';
 import '../services/gamer_auth_service.dart';
+import 'news_screen.dart';
 import 'gamer_feed_screen.dart';
-import 'gamer_search_screen.dart';
 import 'create_post_screen.dart';
-import 'notifications_screen.dart';
+import 'saved_news_tab_screen.dart';
 import 'gamer_profile_screen.dart';
 import 'create_gamer_id_screen.dart';
 
@@ -41,25 +41,28 @@ class _GamerMainNavigationScreenState extends State<GamerMainNavigationScreen> {
 
   @override
   Widget build(BuildContext context) {
+    // 5 Tabs: News, Feed, + (Center), Saved, Profile
     final screens = [
-      const GamerFeedScreen(),
-      const GamerSearchScreen(),
-      const SizedBox.shrink(), // Center placeholder
-      const NotificationsScreen(),
-      const GamerProfileScreen(),
+      const NewsScreen(), // Tab 1: News (game controller)
+      const GamerFeedScreen(), // Tab 2: Feed (home)
+      const SizedBox.shrink(), // Tab 3: Placeholder for center + button
+      SavedNewsTabScreen(
+        onExploreTap: () => setState(() => _currentIndex = 0),
+      ), // Tab 4: Saved (bookmark)
+      const GamerProfileScreen(), // Tab 5: Profile (person)
     ];
 
     return Scaffold(
-      backgroundColor: GamerTheme.bgDark,
+      backgroundColor: const Color(0xFF0B0F14),
       body: IndexedStack(
         index: _currentIndex == 2 ? 0 : _currentIndex,
         children: screens,
       ),
       bottomNavigationBar: Container(
         decoration: const BoxDecoration(
-          color: GamerTheme.cardDark,
+          color: Color(0xFF10141D),
           border: Border(
-            top: BorderSide(color: GamerTheme.borderDark, width: 1),
+            top: BorderSide(color: Color(0xFF1F2B3E), width: 1),
           ),
         ),
         child: SafeArea(
@@ -68,23 +71,23 @@ class _GamerMainNavigationScreenState extends State<GamerMainNavigationScreen> {
             child: Row(
               mainAxisAlignment: MainAxisAlignment.spaceAround,
               children: [
-                // 1. Home (Feed)
+                // Tab 1: News (icon: game controller) - NEW
                 _buildNavItem(
                   index: 0,
-                  icon: Icons.home_rounded,
-                  label: 'Feed',
+                  icon: Icons.sports_esports_rounded,
+                  label: 'News',
                   isSelected: _currentIndex == 0,
                 ),
 
-                // 2. Search
+                // Tab 2: Feed (home icon) - EXISTING
                 _buildNavItem(
                   index: 1,
-                  icon: Icons.search_rounded,
-                  label: 'Search',
+                  icon: Icons.home_rounded,
+                  label: 'Feed',
                   isSelected: _currentIndex == 1,
                 ),
 
-                // 3. Center Create Post (+)
+                // Tab 3: + (center create post) - EXISTING
                 GestureDetector(
                   onTap: () {
                     Navigator.of(context).push(
@@ -95,13 +98,17 @@ class _GamerMainNavigationScreenState extends State<GamerMainNavigationScreen> {
                     width: 48,
                     height: 48,
                     decoration: BoxDecoration(
-                      gradient: GamerTheme.blueOrangeGradient,
+                      gradient: const LinearGradient(
+                        colors: [Color(0xFF00E5FF), Color(0xFFFF6B00)],
+                        begin: Alignment.topLeft,
+                        end: Alignment.bottomRight,
+                      ),
                       shape: BoxShape.circle,
                       boxShadow: [
                         BoxShadow(
-                          color: GamerTheme.accentBlue.withOpacity(0.4),
+                          color: const Color(0xFFFF6B00).withOpacity(0.4),
                           blurRadius: 10,
-                          spreadRadius: 2,
+                          spreadRadius: 1,
                         ),
                       ],
                     ),
@@ -113,15 +120,15 @@ class _GamerMainNavigationScreenState extends State<GamerMainNavigationScreen> {
                   ),
                 ),
 
-                // 4. Notifications
+                // Tab 4: Saved (bookmark icon) - NEW for saved news
                 _buildNavItem(
                   index: 3,
-                  icon: Icons.notifications_rounded,
-                  label: 'Activity',
+                  icon: Icons.bookmark_rounded,
+                  label: 'Saved',
                   isSelected: _currentIndex == 3,
                 ),
 
-                // 5. Profile
+                // Tab 5: Profile (person icon) - EXISTING Gamer ID Profile
                 _buildNavItem(
                   index: 4,
                   icon: Icons.person_rounded,
@@ -153,13 +160,13 @@ class _GamerMainNavigationScreenState extends State<GamerMainNavigationScreen> {
             Icon(
               icon,
               size: 22,
-              color: isSelected ? GamerTheme.accentBlue : GamerTheme.textMuted,
+              color: isSelected ? const Color(0xFF00E5FF) : GamerTheme.textMuted,
             ),
             const SizedBox(height: 3),
             Text(
               label,
               style: TextStyle(
-                color: isSelected ? GamerTheme.accentBlue : GamerTheme.textMuted,
+                color: isSelected ? const Color(0xFF00E5FF) : GamerTheme.textMuted,
                 fontSize: 11,
                 fontWeight: isSelected ? FontWeight.w800 : FontWeight.w500,
               ),
