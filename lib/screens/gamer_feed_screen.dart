@@ -7,6 +7,8 @@ import '../widgets/gamer_avatar.dart';
 import '../widgets/post_card.dart';
 import 'create_post_screen.dart';
 import 'gamer_profile_screen.dart';
+import 'gamer_search_screen.dart';
+import 'notifications_screen.dart';
 
 class GamerFeedScreen extends StatefulWidget {
   const GamerFeedScreen({super.key});
