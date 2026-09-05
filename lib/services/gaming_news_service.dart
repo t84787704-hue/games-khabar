@@ -8,6 +8,7 @@ import 'package:xml/xml.dart' as xml;
 import 'package:html/parser.dart' as html_parser;
 import '../models/gaming_news_model.dart';
 import '../data/game_bots_100.dart';
+import '../data/fallback_images.dart';
 import 'translation_service.dart';
 
 class GamingNewsService {
@@ -192,7 +193,7 @@ class GamingNewsService {
                 final existingImg = (data['imageUrl'] ?? data['image'] ?? '').toString();
                 final bool needsImg = existingImg.isEmpty;
                 final resolvedImg = needsImg
-                    ? extractImage('', existingContentEn, item.category)
+                    ? extractImage('', existingContentEn, item.category, title: item.titleEn)
                     : existingImg;
 
                 final existingBotName = (data['botName'] ?? data['bot_name'] ?? '').toString();
@@ -425,7 +426,7 @@ class GamingNewsService {
               imageUrl = (item['enclosure']['link'] ?? '').toString();
             }
             if (imageUrl.isEmpty) {
-              imageUrl = extractImage(jsonEncode(item), description, category);
+              imageUrl = extractImage(jsonEncode(item), description, category, title: title);
             }
 
             DateTime pubDate = DateTime.now();
@@ -473,7 +474,7 @@ class GamingNewsService {
           final category = _categorizeNews(title, desc);
           final platform = _detectPlatform(title, desc);
           final itemXml = item.toXmlString();
-          final imageUrl = extractImage(itemXml, desc, category);
+          final imageUrl = extractImage(itemXml, desc, category, title: title);
 
           final pubDateStr = item.findElements('pubDate').firstOrNull?.innerText.trim();
           DateTime pubDate = DateTime.now();
@@ -653,7 +654,7 @@ class GamingNewsService {
   }
 
   /// Extract news image from RSS item XML, enclosures, or HTML description with game fallback
-  static String extractImage(String itemXml, String description, String category) {
+  static String extractImage(String itemXml, String description, String category, {String? title}) {
     String imageUrl = "";
 
     // A) Try media:content
@@ -675,23 +676,9 @@ class GamingNewsService {
       if (match != null) imageUrl = match.group(1)!;
     }
 
-    // D) FALLBACK - If still empty, use category based image (This will ALWAYS show pic)
-    if (imageUrl.isEmpty) {
-      Map<String, String> fallback = {
-        'FORTNITE': 'https://cdn2.unrealengine.com/fortnite/home-v2.jpg',
-        'PUBG / BGMI': 'https://wstatic-prod-boc.krafton.com/common/banner.jpg',
-        'PUBG': 'https://wstatic-prod-boc.krafton.com/common/banner.jpg',
-        'BGMI': 'https://wstatic-prod-boc.krafton.com/common/banner.jpg',
-        'FREE FIRE': 'https://dl.dir.freefiremobile.com/common/web_event/official2.ff.garena.com/common/banner.jpg',
-        'COD': 'https://www.callofduty.com/content/dam/atvi/callofduty/cod-touchui/blog/hero/codm/CODM-S10-Hero.jpg',
-        'MLBB': 'https://akmweb.youngjoygame.com/web/sa_www/announce/MLBB_Banner.jpg',
-        'GTA': 'https://cdn.akamai.steamstatic.com/steam/apps/271590/header.jpg',
-        'VALORANT': 'https://images.contentstack.io/v3/assets/bltb6530b271fddd0b1/blt778d8212d33d4e6e/5e8d15c1f4a5e2.jpg',
-        'MINECRAFT': 'https://www.minecraft.net/content/dam/games/minecraft/key-art/Games_Subnav_Icon_Minecraft_300x300.png',
-        'TRENDING': 'https://images.unsplash.com/photo-1511512578047-dfb367046420?auto=format&fit=crop&w=800&q=80',
-      };
-      final cat = category.toUpperCase().trim();
-      imageUrl = fallback[cat] ?? GamingNewsModel.getCategoryFallbackImage(category);
+    // D) FALLBACK - If still empty or invalid, use 100% working game pic from fallback_images.dart
+    if (imageUrl.isEmpty || !imageUrl.startsWith('http')) {
+      imageUrl = getGameFallbackImage(category: category, title: title, content: description);
     }
     return imageUrl;
   }

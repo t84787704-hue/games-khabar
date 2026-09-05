@@ -1,5 +1,6 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import '../data/game_bots_100.dart';
+import '../data/fallback_images.dart';
 
 class GamingNewsModel {
   final String id;
@@ -21,61 +22,18 @@ class GamingNewsModel {
   final String botId;
 
   /// Universal category-based fallback game image map (Guarantees every game card always has high quality pic)
-  static String getCategoryFallbackImage(String category) {
-    final cat = category.toUpperCase().trim();
-    final Map<String, String> fallback = {
-      'FORTNITE': 'https://cdn2.unrealengine.com/fortnite/home-v2.jpg',
-      'PUBG / BGMI': 'https://wstatic-prod-boc.krafton.com/common/banner.jpg',
-      'PUBG': 'https://wstatic-prod-boc.krafton.com/common/banner.jpg',
-      'BGMI': 'https://wstatic-prod-boc.krafton.com/common/banner.jpg',
-      'FREE FIRE': 'https://dl.dir.freefiremobile.com/common/web_event/official2.ff.garena.com/common/banner.jpg',
-      'FREEFIRE': 'https://dl.dir.freefiremobile.com/common/web_event/official2.ff.garena.com/common/banner.jpg',
-      'COD': 'https://www.callofduty.com/content/dam/atvi/callofduty/cod-touchui/blog/hero/codm/CODM-S10-Hero.jpg',
-      'CALL OF DUTY': 'https://www.callofduty.com/content/dam/atvi/callofduty/cod-touchui/blog/hero/codm/CODM-S10-Hero.jpg',
-      'MLBB': 'https://akmweb.youngjoygame.com/web/sa_www/announce/MLBB_Banner.jpg',
-      'MOBILE LEGENDS': 'https://akmweb.youngjoygame.com/web/sa_www/announce/MLBB_Banner.jpg',
-      'GTA': 'https://cdn.akamai.steamstatic.com/steam/apps/271590/header.jpg',
-      'GRAND THEFT AUTO': 'https://cdn.akamai.steamstatic.com/steam/apps/271590/header.jpg',
-      'VALORANT': 'https://images.contentstack.io/v3/assets/bltb6530b271fddd0b1/blt778d8212d33d4e6e/5e8d15c1f4a5e2.jpg',
-      'MINECRAFT': 'https://www.minecraft.net/content/dam/games/minecraft/key-art/Games_Subnav_Icon_Minecraft_300x300.png',
-      'FIFA': 'https://images.unsplash.com/photo-1511512578047-dfb367046420?auto=format&fit=crop&w=800&q=80',
-      'EA SPORTS': 'https://images.unsplash.com/photo-1511512578047-dfb367046420?auto=format&fit=crop&w=800&q=80',
-      'FORZA': 'https://images.unsplash.com/photo-1518709268805-4e9042af9f23?auto=format&fit=crop&w=800&q=80',
-      'RACING': 'https://images.unsplash.com/photo-1518709268805-4e9042af9f23?auto=format&fit=crop&w=800&q=80',
-      'CS2': 'https://images.unsplash.com/photo-1538481199705-c710c4e965fc?auto=format&fit=crop&w=800&q=80',
-      'APEX': 'https://images.unsplash.com/photo-1542751371-adc38448a05e?auto=format&fit=crop&w=800&q=80',
-      'GENSHIN': 'https://images.unsplash.com/photo-1578301978693-85fa9c0320b9?auto=format&fit=crop&w=800&q=80',
-      'DOTA 2': 'https://images.unsplash.com/photo-1550745165-9bc0b252726f?auto=format&fit=crop&w=800&q=80',
-      'LOL': 'https://images.unsplash.com/photo-1550745165-9bc0b252726f?auto=format&fit=crop&w=800&q=80',
-      'ROBLOX': 'https://images.unsplash.com/photo-1550745165-9bc0b252726f?auto=format&fit=crop&w=800&q=80',
-      'CLASH OF CLANS': 'https://images.unsplash.com/photo-1563089145-599997674d42?auto=format&fit=crop&w=800&q=80',
-      'SPIDER-MAN': 'https://images.unsplash.com/photo-1579373903781-fd5c0c30c4cd?auto=format&fit=crop&w=800&q=80',
-      'LAST OF US': 'https://images.unsplash.com/photo-1563089145-599997674d42?auto=format&fit=crop&w=800&q=80',
-      'GOD OF WAR': 'https://images.unsplash.com/photo-1538481199705-c710c4e965fc?auto=format&fit=crop&w=800&q=80',
-      'ZELDA': 'https://images.unsplash.com/photo-1578301978693-85fa9c0320b9?auto=format&fit=crop&w=800&q=80',
-      'ELDEN RING': 'https://images.unsplash.com/photo-1518709268805-4e9042af9f23?auto=format&fit=crop&w=800&q=80',
-      'CYBERPUNK': 'https://images.unsplash.com/photo-1579373903781-fd5c0c30c4cd?auto=format&fit=crop&w=800&q=80',
-      'PC GAMES': 'https://images.unsplash.com/photo-1550745165-9bc0b252726f?auto=format&fit=crop&w=800&q=80',
-      'MOBILE GAMES': 'https://images.unsplash.com/photo-1511512578047-dfb367046420?auto=format&fit=crop&w=800&q=80',
-      'CONSOLE': 'https://images.unsplash.com/photo-1578301978693-85fa9c0320b9?auto=format&fit=crop&w=800&q=80',
-      'TRENDING': 'https://images.unsplash.com/photo-1511512578047-dfb367046420?auto=format&fit=crop&w=800&q=80',
-    };
-
-    for (final entry in fallback.entries) {
-      if (cat.contains(entry.key)) {
-        return entry.value;
-      }
-    }
-    return fallback[cat] ?? fallback['TRENDING']!;
+  static String getCategoryFallbackImage(String category, {String? title, String? content}) {
+    return getGameFallbackImage(category: category, title: title, content: content);
   }
 
   /// Guaranteed non-empty, working image URL for the card
   String get effectiveImageUrl {
     if (imageUrl.trim().isNotEmpty &&
-        (imageUrl.startsWith('http://') || imageUrl.startsWith('https://'))) {
+        (imageUrl.startsWith('http://') || imageUrl.startsWith('https://')) &&
+        !imageUrl.contains('example.com')) {
       return imageUrl.trim();
     }
-    return getCategoryFallbackImage(category);
+    return getGameFallbackImage(category: category, title: titleEn, content: contentEn);
   }
 
   /// Returns active bot name with automatic detection fallback

@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:share_plus/share_plus.dart';
+import '../data/fallback_images.dart';
 import '../models/gaming_news_model.dart';
 import '../services/gamer_auth_service.dart';
 import '../services/gaming_news_service.dart';
@@ -70,9 +71,17 @@ class GamingNewsCard extends StatelessWidget {
                       news.effectiveImageUrl,
                       fit: BoxFit.cover,
                       errorBuilder: (context, error, stackTrace) => Image.network(
-                        GamingNewsModel.getCategoryFallbackImage(news.category),
+                        GamingNewsModel.getCategoryFallbackImage(
+                          news.category,
+                          title: news.titleEn,
+                          content: news.contentEn,
+                        ),
                         fit: BoxFit.cover,
-                        errorBuilder: (c, e, s) => _build4DotsPlaceholder(),
+                        errorBuilder: (c, e, s) => Image.network(
+                          gameFallbackImages['DEFAULT']!,
+                          fit: BoxFit.cover,
+                          errorBuilder: (c2, e2, s2) => _buildGamePosterPlaceholder(news),
+                        ),
                       ),
                     ),
                   ),
@@ -266,49 +275,61 @@ class GamingNewsCard extends StatelessWidget {
     );
   }
 
-  Widget _build4DotsPlaceholder() {
+  Widget _buildGamePosterPlaceholder(GamingNewsModel news) {
     return Container(
-      color: const Color(0xFF10141D),
-      child: Center(
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Row(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                _dot(),
-                const SizedBox(width: 4),
-                _dot(),
-              ],
-            ),
-            const SizedBox(height: 4),
-            Row(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                _dot(),
-                const SizedBox(width: 4),
-                _dot(),
-              ],
-            ),
-            const SizedBox(height: 6),
-            Icon(
-              Icons.sports_esports_rounded,
-              size: 16,
-              color: Colors.white.withOpacity(0.2),
-            ),
+      decoration: BoxDecoration(
+        gradient: LinearGradient(
+          colors: [
+            const Color(0xFF141923),
+            const Color(0xFF0F131A),
           ],
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
         ),
       ),
-    );
-  }
-
-  Widget _dot() {
-    return Container(
-      width: 6,
-      height: 6,
-      decoration: BoxDecoration(
-        color: const Color(0xFF00FF88).withOpacity(0.4),
-        shape: BoxShape.circle,
+      child: Center(
+        child: Padding(
+          padding: const EdgeInsets.all(6),
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                decoration: BoxDecoration(
+                  color: const Color(0xFF00FF88).withOpacity(0.12),
+                  borderRadius: BorderRadius.circular(4),
+                  border: Border.all(
+                    color: const Color(0xFF00FF88).withOpacity(0.4),
+                    width: 0.8,
+                  ),
+                ),
+                child: Text(
+                  news.category.toUpperCase(),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(
+                    color: Color(0xFF00FF88),
+                    fontSize: 9,
+                    fontWeight: FontWeight.w900,
+                    letterSpacing: 0.4,
+                  ),
+                ),
+              ),
+              const SizedBox(height: 4),
+              Text(
+                news.effectiveBotName,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                textAlign: TextAlign.center,
+                style: const TextStyle(
+                  color: Colors.white,
+                  fontSize: 9.5,
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+            ],
+          ),
+        ),
       ),
     );
   }

@@ -3,6 +3,7 @@ import 'package:cached_network_image/cached_network_image.dart';
 import 'package:share_plus/share_plus.dart';
 import 'package:url_launcher/url_launcher.dart';
 import '../constants/gamer_theme.dart';
+import '../data/fallback_images.dart';
 import '../models/gaming_news_model.dart';
 import '../services/gamer_auth_service.dart';
 import '../services/gaming_news_service.dart';
@@ -344,21 +345,20 @@ class _NewsPostCardState extends State<NewsPostCard> {
                     );
                   },
                   errorBuilder: (context, error, stackTrace) => Image.network(
-                    GamingNewsModel.getCategoryFallbackImage(news.category),
+                    GamingNewsModel.getCategoryFallbackImage(
+                      news.category,
+                      title: news.titleEn,
+                      content: news.contentEn,
+                    ),
                     height: 200,
                     width: double.infinity,
                     fit: BoxFit.cover,
-                    errorBuilder: (c, e, s) => Container(
+                    errorBuilder: (c, e, s) => Image.network(
+                      gameFallbackImages['DEFAULT']!,
                       height: 200,
                       width: double.infinity,
-                      color: const Color(0xFF141923),
-                      child: Center(
-                        child: Icon(
-                          Icons.sports_esports_rounded,
-                          size: 48,
-                          color: Colors.white.withOpacity(0.3),
-                        ),
-                      ),
+                      fit: BoxFit.cover,
+                      errorBuilder: (c2, e2, s2) => _buildHeroFallbackBanner(news),
                     ),
                   ),
                 ),
@@ -688,6 +688,109 @@ class _NewsPostCardState extends State<NewsPostCard> {
             ),
           ),
         ),
+      ),
+    );
+  }
+
+  Widget _buildHeroFallbackBanner(GamingNewsModel news) {
+    return Container(
+      height: 200,
+      width: double.infinity,
+      decoration: const BoxDecoration(
+        gradient: LinearGradient(
+          colors: [
+            Color(0xFF0D121B),
+            Color(0xFF182232),
+            Color(0xFF0B0F15),
+          ],
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+        ),
+      ),
+      child: Stack(
+        children: [
+          // Cyber grid background pattern
+          Positioned.fill(
+            child: Opacity(
+              opacity: 0.08,
+              child: Container(
+                decoration: BoxDecoration(
+                  border: Border.all(color: const Color(0xFF00FF88), width: 1.5),
+                ),
+              ),
+            ),
+          ),
+          Center(
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFF00FF88).withOpacity(0.15),
+                      borderRadius: BorderRadius.circular(6),
+                      border: Border.all(
+                        color: const Color(0xFF00FF88).withOpacity(0.5),
+                        width: 1,
+                      ),
+                    ),
+                    child: Text(
+                      news.category.toUpperCase(),
+                      style: const TextStyle(
+                        color: Color(0xFF00FF88),
+                        fontWeight: FontWeight.w900,
+                        fontSize: 11,
+                        letterSpacing: 0.8,
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 10),
+                  Text(
+                    news.titleEn,
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                    textAlign: TextAlign.center,
+                    style: const TextStyle(
+                      color: Colors.white,
+                      fontWeight: FontWeight.w800,
+                      fontSize: 14,
+                      height: 1.3,
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      Text(
+                        news.effectiveBotName,
+                        style: const TextStyle(
+                          color: Color(0xFF8B9BB4),
+                          fontWeight: FontWeight.w600,
+                          fontSize: 11,
+                        ),
+                      ),
+                      if (news.platform.isNotEmpty) ...[
+                        const SizedBox(width: 6),
+                        const Text('•', style: TextStyle(color: Color(0xFF8B9BB4), fontSize: 10)),
+                        const SizedBox(width: 6),
+                        Text(
+                          news.platform,
+                          style: const TextStyle(
+                            color: Color(0xFF00D2FF),
+                            fontWeight: FontWeight.w700,
+                            fontSize: 11,
+                          ),
+                        ),
+                      ],
+                    ],
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ],
       ),
     );
   }
