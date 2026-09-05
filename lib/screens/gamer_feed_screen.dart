@@ -98,8 +98,8 @@ class _GamerFeedScreenState extends State<GamerFeedScreen> {
     }
 
     // 4. In 'All' filter mode:
-    // Weave: every 2 user posts ke baad 1 news post!
-    // When user posts something, it appears instantly at top (index 0).
+    // Weave pattern: After every 1 user post, show 2 news posts so feed is never empty!
+    // When a user posts something, it appears instantly at top (index 0).
     return _weaveItems(filteredUserPosts, newsList);
   }
 
@@ -117,17 +117,19 @@ class _GamerFeedScreenState extends State<GamerFeedScreen> {
     }
 
     while (userIdx < userPosts.length || newsIdx < newsList.length) {
-      // Up to 2 user posts
+      // 1 User post
       if (userIdx < userPosts.length) {
         result.add(_FeedItem.user(userPosts[userIdx++]));
       }
-      if (userIdx < userPosts.length) {
-        result.add(_FeedItem.user(userPosts[userIdx++]));
-      }
-      // Then 1 news post
+
+      // 2 News posts
       if (newsIdx < newsList.length) {
         result.add(_FeedItem.news(newsList[newsIdx++]));
       }
+      if (newsIdx < newsList.length) {
+        result.add(_FeedItem.news(newsList[newsIdx++]));
+      }
+
       // If user posts exhausted, append all remaining news
       if (userIdx >= userPosts.length) {
         while (newsIdx < newsList.length) {
@@ -135,6 +137,7 @@ class _GamerFeedScreenState extends State<GamerFeedScreen> {
         }
         break;
       }
+
       // If news exhausted, append all remaining user posts
       if (newsIdx >= newsList.length) {
         while (userIdx < userPosts.length) {

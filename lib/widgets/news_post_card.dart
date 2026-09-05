@@ -24,7 +24,7 @@ class _NewsPostCardState extends State<NewsPostCard> {
   @override
   void initState() {
     super.initState();
-    _likeCount = widget.news.views > 0 ? widget.news.views : 124;
+    _likeCount = widget.news.views >= 100 ? widget.news.views : 1840;
   }
 
   void _onOpenDetail() {

@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 import '../constants/gamer_theme.dart';
 import '../services/gamer_auth_service.dart';
-import 'news_screen.dart';
 import 'gamer_feed_screen.dart';
 import 'create_post_screen.dart';
 import 'saved_news_tab_screen.dart';
@@ -41,21 +40,20 @@ class _GamerMainNavigationScreenState extends State<GamerMainNavigationScreen> {
 
   @override
   Widget build(BuildContext context) {
-    // 5 Tabs: News, Feed, + (Center), Saved, Profile
+    // 4 Tabs: Feed (Home), + (Center Create Post), Saved (Bookmark), Profile (Person)
     final screens = [
-      const NewsScreen(), // Tab 1: News (game controller)
-      const GamerFeedScreen(), // Tab 2: Feed (home)
-      const SizedBox.shrink(), // Tab 3: Placeholder for center + button
+      const GamerFeedScreen(), // Tab 1: Feed (home) - SUPER FEED
+      const SizedBox.shrink(), // Tab 2: Placeholder for center + button
       SavedNewsTabScreen(
         onExploreTap: () => setState(() => _currentIndex = 0),
-      ), // Tab 4: Saved (bookmark)
-      const GamerProfileScreen(), // Tab 5: Profile (person)
+      ), // Tab 3: Saved (bookmark)
+      const GamerProfileScreen(), // Tab 4: Profile (person)
     ];
 
     return Scaffold(
       backgroundColor: const Color(0xFF0B0F14),
       body: IndexedStack(
-        index: _currentIndex == 2 ? 0 : _currentIndex,
+        index: _currentIndex == 1 ? 0 : _currentIndex,
         children: screens,
       ),
       bottomNavigationBar: Container(
@@ -71,23 +69,15 @@ class _GamerMainNavigationScreenState extends State<GamerMainNavigationScreen> {
             child: Row(
               mainAxisAlignment: MainAxisAlignment.spaceAround,
               children: [
-                // Tab 1: News (icon: game controller) - NEW
+                // Tab 1: Feed (home icon) - SUPER FEED
                 _buildNavItem(
                   index: 0,
-                  icon: Icons.sports_esports_rounded,
-                  label: 'News',
+                  icon: Icons.home_rounded,
+                  label: 'Feed',
                   isSelected: _currentIndex == 0,
                 ),
 
-                // Tab 2: Feed (home icon) - EXISTING
-                _buildNavItem(
-                  index: 1,
-                  icon: Icons.home_rounded,
-                  label: 'Feed',
-                  isSelected: _currentIndex == 1,
-                ),
-
-                // Tab 3: + (center create post) - EXISTING
+                // Tab 2: + (center create post)
                 GestureDetector(
                   onTap: () {
                     Navigator.of(context).push(
@@ -120,20 +110,20 @@ class _GamerMainNavigationScreenState extends State<GamerMainNavigationScreen> {
                   ),
                 ),
 
-                // Tab 4: Saved (bookmark icon) - NEW for saved news
+                // Tab 3: Saved (bookmark icon)
                 _buildNavItem(
-                  index: 3,
+                  index: 2,
                   icon: Icons.bookmark_rounded,
                   label: 'Saved',
-                  isSelected: _currentIndex == 3,
+                  isSelected: _currentIndex == 2,
                 ),
 
-                // Tab 5: Profile (person icon) - EXISTING Gamer ID Profile
+                // Tab 4: Profile (person icon)
                 _buildNavItem(
-                  index: 4,
+                  index: 3,
                   icon: Icons.person_rounded,
                   label: 'Profile',
-                  isSelected: _currentIndex == 4,
+                  isSelected: _currentIndex == 3,
                 ),
               ],
             ),
@@ -153,13 +143,13 @@ class _GamerMainNavigationScreenState extends State<GamerMainNavigationScreen> {
       onTap: () => setState(() => _currentIndex = index),
       borderRadius: BorderRadius.circular(12),
       child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
+        padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 6),
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
             Icon(
               icon,
-              size: 22,
+              size: 24,
               color: isSelected ? const Color(0xFF00E5FF) : GamerTheme.textMuted,
             ),
             const SizedBox(height: 3),
