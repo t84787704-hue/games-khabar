@@ -10,6 +10,7 @@ class CommunityPostModel {
   final String? imageUrl;
   final int likes;
   final int commentCount;
+  final int helpfulCount;
   final int reportCount;
   final bool isApproved;
   final DateTime createdAt;
@@ -24,6 +25,7 @@ class CommunityPostModel {
     this.imageUrl,
     this.likes = 0,
     this.commentCount = 0,
+    this.helpfulCount = 0,
     this.reportCount = 0,
     this.isApproved = true,
     required this.createdAt,
@@ -51,6 +53,7 @@ class CommunityPostModel {
       imageUrl: data['imageUrl'] as String?,
       likes: (data['likes'] as num?)?.toInt() ?? 0,
       commentCount: (data['commentCount'] as num?)?.toInt() ?? 0,
+      helpfulCount: (data['helpfulCount'] as num?)?.toInt() ?? 0,
       reportCount: (data['reportCount'] as num?)?.toInt() ?? 0,
       isApproved: data['isApproved'] as bool? ?? true,
       createdAt: parsedDate,
@@ -67,6 +70,7 @@ class CommunityPostModel {
       if (imageUrl != null && imageUrl!.isNotEmpty) 'imageUrl': imageUrl,
       'likes': likes,
       'commentCount': commentCount,
+      'helpfulCount': helpfulCount,
       'reportCount': reportCount,
       'isApproved': isApproved,
       'createdAt': FieldValue.serverTimestamp(),

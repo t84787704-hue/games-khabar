@@ -5,6 +5,8 @@ import '../services/bookmark_service.dart';
 import '../services/theme_service.dart';
 import '../services/language_service.dart';
 import '../services/ad_free_service.dart';
+import '../services/coin_reward_service.dart';
+import 'earn_screen.dart';
 import 'admin_login_screen.dart';
 import 'saved_news_screen.dart';
 import 'about_us_screen.dart';
@@ -383,84 +385,53 @@ class _ProfileScreenState extends State<ProfileScreen> {
                       ),
                       Divider(color: borderDark, height: 1),
 
-                      // 1-Hour Ad-Free Rewarded Feature
-                      ValueListenableBuilder<DateTime?>(
-                        valueListenable: AdFreeService.adFreeUntilNotifier,
-                        builder: (context, _, __) {
-                          return ValueListenableBuilder<String>(
-                            valueListenable: AdFreeService.remainingTimeNotifier,
-                            builder: (context, remainingText, ___) {
-                              final isAdFree = AdFreeService().isAdFree;
-                              return ListTile(
-                                leading: Container(
-                                  padding: const EdgeInsets.all(6),
+                      // GK Coins & Earn Screen Entry
+                      ValueListenableBuilder<int>(
+                        valueListenable: CoinRewardService().coinsNotifier,
+                        builder: (context, coins, _) {
+                          return ListTile(
+                            leading: Container(
+                              padding: const EdgeInsets.all(6),
+                              decoration: BoxDecoration(
+                                color: const Color(0xFFFFD700).withOpacity(0.12),
+                                borderRadius: BorderRadius.circular(8),
+                              ),
+                              child: const Text('🪙', style: TextStyle(fontSize: 20)),
+                            ),
+                            title: Row(
+                              children: [
+                                Text(
+                                  'GK Coins',
+                                  style: TextStyle(color: textWhite, fontSize: 14, fontWeight: FontWeight.bold),
+                                ),
+                                const SizedBox(width: 8),
+                                Container(
+                                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
                                   decoration: BoxDecoration(
-                                    color: (isAdFree ? neonGreen : const Color(0xFFFFC107)).withOpacity(0.12),
-                                    borderRadius: BorderRadius.circular(8),
+                                    color: neonGreen.withOpacity(0.15),
+                                    borderRadius: BorderRadius.circular(4),
+                                    border: Border.all(color: neonGreen.withOpacity(0.6)),
                                   ),
-                                  child: Icon(
-                                    Icons.bolt_rounded,
-                                    color: isAdFree ? neonGreen : const Color(0xFFFFC107),
-                                    size: 20,
-                                  ),
-                                ),
-                                title: Row(
-                                  children: [
-                                    Text(
-                                      '1 Hour Ad-Free',
-                                      style: TextStyle(color: textWhite, fontSize: 14, fontWeight: FontWeight.bold),
+                                  child: Text(
+                                    '$coins COINS',
+                                    style: TextStyle(
+                                      color: neonGreen,
+                                      fontSize: 10,
+                                      fontWeight: FontWeight.w900,
                                     ),
-                                    const SizedBox(width: 8),
-                                    Container(
-                                      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                                      decoration: BoxDecoration(
-                                        color: (isAdFree ? neonGreen : const Color(0xFFFFC107)).withOpacity(0.15),
-                                        borderRadius: BorderRadius.circular(4),
-                                        border: Border.all(
-                                          color: (isAdFree ? neonGreen : const Color(0xFFFFC107)).withOpacity(0.6),
-                                        ),
-                                      ),
-                                      child: Text(
-                                        isAdFree ? 'ACTIVE' : 'REWARD',
-                                        style: TextStyle(
-                                          color: isAdFree ? neonGreen : const Color(0xFFFFC107),
-                                          fontSize: 9,
-                                          fontWeight: FontWeight.w900,
-                                        ),
-                                      ),
-                                    ),
-                                  ],
-                                ),
-                                subtitle: Text(
-                                  isAdFree
-                                      ? 'Ad-Free active ($remainingText)'
-                                      : 'Watch a short video for 1 hour ad-free feed',
-                                  style: TextStyle(
-                                    color: isAdFree ? neonGreen : textGray,
-                                    fontSize: 12,
                                   ),
                                 ),
-                                trailing: isAdFree
-                                    ? Icon(Icons.check_circle_rounded, color: neonGreen, size: 20)
-                                    : ElevatedButton(
-                                        style: ElevatedButton.styleFrom(
-                                          backgroundColor: const Color(0xFFFFC107),
-                                          foregroundColor: const Color(0xFF1E1F28),
-                                          elevation: 0,
-                                          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-                                          minimumSize: Size.zero,
-                                          tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                                          shape: RoundedRectangleBorder(
-                                            borderRadius: BorderRadius.circular(8),
-                                          ),
-                                        ),
-                                        onPressed: () => AdFreeService().showRewardedAd(context),
-                                        child: const Text(
-                                          'Watch Ad',
-                                          style: TextStyle(fontWeight: FontWeight.w900, fontSize: 11),
-                                        ),
-                                      ),
-                                onTap: isAdFree ? null : () => AdFreeService().showRewardedAd(context),
+                              ],
+                            ),
+                            subtitle: Text(
+                              'Daily tasks & free giveaways ke liye coins kamayein',
+                              style: TextStyle(color: textGray, fontSize: 12),
+                            ),
+                            trailing: Icon(Icons.arrow_forward_ios_rounded, color: textGray, size: 14),
+                            onTap: () {
+                              Navigator.push(
+                                context,
+                                MaterialPageRoute(builder: (_) => const EarnScreen()),
                               );
                             },
                           );

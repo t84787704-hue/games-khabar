@@ -8,6 +8,7 @@ import '../services/auto_news_scraper.dart';
 import '../widgets/app_image_view.dart';
 import '../utils/admin_security.dart';
 import 'add_news_screen.dart';
+import 'admin/admin_bonus_screen.dart';
 
 class AdminDashboardScreen extends StatefulWidget {
   const AdminDashboardScreen({super.key});
@@ -798,6 +799,16 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
           ],
         ),
         actions: [
+          IconButton(
+            tooltip: 'Ad Revenue & Bonus Share',
+            icon: const Icon(Icons.monetization_on_rounded, color: Colors.amber, size: 23),
+            onPressed: () {
+              Navigator.push(
+                context,
+                MaterialPageRoute(builder: (_) => const AdminBonusScreen()),
+              );
+            },
+          ),
           IconButton(
             tooltip: 'Auto RSS Scraper',
             icon: Icon(Icons.rss_feed_rounded, color: neonGreen, size: 22),

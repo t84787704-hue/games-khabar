@@ -8,6 +8,7 @@ import '../services/bookmark_service.dart';
 import '../services/theme_service.dart';
 import '../services/language_service.dart';
 import '../services/streak_service.dart';
+import '../services/coin_reward_service.dart';
 import '../widgets/app_image_view.dart';
 import '../widgets/translated_news_title.dart';
 import '../widgets/price_graph_widget.dart';
@@ -30,6 +31,9 @@ class _NewsDetailScreenState extends State<NewsDetailScreen> {
     super.initState();
     // Daily task: reading articles contributes to streak
     StreakService().recordArticleRead(widget.news.id);
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      CoinRewardService().onNewsRead(context);
+    });
   }
 
   Color get bgDark => ThemeService.bg;

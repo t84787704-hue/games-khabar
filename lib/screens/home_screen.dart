@@ -27,6 +27,8 @@ import '../widgets/streak_banner_widget.dart';
 import '../services/streak_service.dart';
 import '../services/price_alert_service.dart';
 import '../services/countdown_service.dart';
+import '../services/coin_reward_service.dart';
+import 'earn_screen.dart';
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
@@ -58,9 +60,11 @@ class _HomeScreenState extends State<HomeScreen> {
     super.initState();
     _initFirebaseAndServices();
     StreakService().init();
+    CoinRewardService().init();
     PriceAlertService().init();
     CountdownService().init();
     WidgetsBinding.instance.addPostFrameCallback((_) {
+      CoinRewardService().checkDailyLogin(context);
       _checkFirstLaunchLanguage();
     });
   }
@@ -334,101 +338,55 @@ class _HomeScreenState extends State<HomeScreen> {
                 ],
               ),
               actions: [
-                ValueListenableBuilder<DateTime?>(
-                  valueListenable: AdFreeService.adFreeUntilNotifier,
-                  builder: (context, adFreeUntil, _) {
-                    final isAdFree = AdFreeService().isAdFree;
-                    return ValueListenableBuilder<String>(
-                      valueListenable: AdFreeService.remainingTimeNotifier,
-                      builder: (context, remainingText, _) {
-                        return ValueListenableBuilder<bool>(
-                          valueListenable: AdFreeService.isLoadingAdNotifier,
-                          builder: (context, isLoading, _) {
-                            final screenWidth = MediaQuery.of(context).size.width;
-                            final isSmallScreen = screenWidth < 360;
-
-                            if (isAdFree) {
-                              return Center(
-                                child: Container(
-                                  margin: const EdgeInsets.symmetric(vertical: 10, horizontal: 4),
-                                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                                  decoration: BoxDecoration(
-                                    color: neonGreen.withOpacity(0.12),
-                                    borderRadius: BorderRadius.circular(20),
-                                    border: Border.all(color: neonGreen, width: 1.2),
-                                  ),
-                                  child: Row(
-                                    mainAxisSize: MainAxisSize.min,
-                                    children: [
-                                      Icon(Icons.timer_outlined, color: neonGreen, size: 14),
-                                      const SizedBox(width: 4),
-                                      Text(
-                                        isSmallScreen ? remainingText : 'Ad-Free: $remainingText',
-                                        style: TextStyle(
-                                          color: neonGreen,
-                                          fontWeight: FontWeight.bold,
-                                          fontSize: 11,
-                                        ),
-                                      ),
-                                    ],
-                                  ),
-                                ),
-                              );
-                            }
-
-                            return Center(
-                              child: Material(
-                                color: Colors.transparent,
-                                child: InkWell(
-                                  onTap: isLoading ? null : () => AdFreeService().showRewardedAd(context),
-                                  borderRadius: BorderRadius.circular(20),
-                                  child: Container(
-                                    margin: const EdgeInsets.symmetric(vertical: 10, horizontal: 4),
-                                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                                    decoration: BoxDecoration(
-                                      color: const Color(0xFF2E2200),
-                                      borderRadius: BorderRadius.circular(20),
-                                      border: Border.all(
-                                        color: Colors.amber,
-                                        width: 1.2,
-                                      ),
-                                    ),
-                                    child: Row(
-                                      mainAxisSize: MainAxisSize.min,
-                                      children: [
-                                        if (isLoading)
-                                          const SizedBox(
-                                            width: 14,
-                                            height: 14,
-                                            child: CircularProgressIndicator(
-                                              strokeWidth: 2,
-                                              valueColor: AlwaysStoppedAnimation<Color>(Colors.amber),
-                                            ),
-                                          )
-                                        else
-                                          const Icon(
-                                            Icons.timer_outlined,
-                                            color: Colors.amber,
-                                            size: 14,
-                                          ),
-                                        const SizedBox(width: 4),
-                                        Text(
-                                          isSmallScreen ? 'Ad-Free' : '1 Ghante Ad-Free - Ad Dekho',
-                                          style: const TextStyle(
-                                            color: Colors.amber,
-                                            fontWeight: FontWeight.bold,
-                                            fontSize: 11,
-                                          ),
-                                        ),
-                                      ],
-                                    ),
-                                  ),
-                                ),
-                              ),
+                ValueListenableBuilder<int>(
+                  valueListenable: CoinRewardService().coinsNotifier,
+                  builder: (context, coins, _) {
+                    return Center(
+                      child: Material(
+                        color: Colors.transparent,
+                        child: InkWell(
+                          onTap: () {
+                            Navigator.push(
+                              context,
+                              MaterialPageRoute(builder: (_) => const EarnScreen()),
                             );
                           },
-                        );
-                      },
+                          borderRadius: BorderRadius.circular(20),
+                          child: Container(
+                            margin: const EdgeInsets.symmetric(vertical: 10, horizontal: 4),
+                            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+                            decoration: BoxDecoration(
+                              color: const Color(0xFF131A15),
+                              borderRadius: BorderRadius.circular(20),
+                              border: Border.all(
+                                color: neonGreen,
+                                width: 1.2,
+                              ),
+                              boxShadow: [
+                                BoxShadow(
+                                  color: neonGreen.withOpacity(0.15),
+                                  blurRadius: 8,
+                                ),
+                              ],
+                            ),
+                            child: Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                const Text('🪙', style: TextStyle(fontSize: 13)),
+                                const SizedBox(width: 4),
+                                Text(
+                                  '$coins',
+                                  style: TextStyle(
+                                    color: neonGreen,
+                                    fontWeight: FontWeight.w900,
+                                    fontSize: 12.5,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ),
+                      ),
                     );
                   },
                 ),

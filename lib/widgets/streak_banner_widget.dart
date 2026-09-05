@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import '../services/streak_service.dart';
 import '../services/theme_service.dart';
+import '../services/coin_reward_service.dart';
+import '../screens/earn_screen.dart';
 
 class StreakBannerWidget extends StatelessWidget {
   const StreakBannerWidget({super.key});
@@ -77,18 +79,23 @@ class StreakBannerWidget extends StatelessWidget {
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
                   Text('Your Coin Balance:', style: TextStyle(color: textGray, fontSize: 12)),
-                  Row(
-                    children: [
-                      const Text('🪙 ', style: TextStyle(fontSize: 14)),
-                      Text(
-                        '${data.coins} Coins',
-                        style: const TextStyle(
-                          color: Colors.amber,
-                          fontWeight: FontWeight.w900,
-                          fontSize: 14,
-                        ),
-                      ),
-                    ],
+                  ValueListenableBuilder<int>(
+                    valueListenable: CoinRewardService().coinsNotifier,
+                    builder: (context, coins, _) {
+                      return Row(
+                        children: [
+                          const Text('🪙 ', style: TextStyle(fontSize: 14)),
+                          Text(
+                            '$coins Coins',
+                            style: const TextStyle(
+                              color: Colors.amber,
+                              fontWeight: FontWeight.w900,
+                              fontSize: 14,
+                            ),
+                          ),
+                        ],
+                      );
+                    },
                   ),
                 ],
               ),
@@ -185,28 +192,42 @@ class StreakBannerWidget extends StatelessWidget {
                         ),
                       ),
                       const SizedBox(width: 6),
-                      // Coins badge
-                      Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-                        decoration: BoxDecoration(
-                          color: Colors.amber.withOpacity(0.12),
-                          borderRadius: BorderRadius.circular(12),
-                          border: Border.all(color: Colors.amber.withOpacity(0.3)),
-                        ),
-                        child: Row(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            const Text('🪙', style: TextStyle(fontSize: 11)),
-                            const SizedBox(width: 4),
-                            Text(
-                              '${data.coins}',
-                              style: const TextStyle(
-                                color: Colors.amber,
-                                fontWeight: FontWeight.w900,
-                                fontSize: 11,
-                              ),
-                            ),
-                          ],
+                      // Coins badge (opens EarnScreen)
+                      InkWell(
+                        onTap: () {
+                          Navigator.push(
+                            context,
+                            MaterialPageRoute(builder: (_) => const EarnScreen()),
+                          );
+                        },
+                        borderRadius: BorderRadius.circular(12),
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                          decoration: BoxDecoration(
+                            color: Colors.amber.withOpacity(0.12),
+                            borderRadius: BorderRadius.circular(12),
+                            border: Border.all(color: Colors.amber.withOpacity(0.3)),
+                          ),
+                          child: ValueListenableBuilder<int>(
+                            valueListenable: CoinRewardService().coinsNotifier,
+                            builder: (context, coins, _) {
+                              return Row(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  const Text('🪙', style: TextStyle(fontSize: 11)),
+                                  const SizedBox(width: 4),
+                                  Text(
+                                    '$coins',
+                                    style: const TextStyle(
+                                      color: Colors.amber,
+                                      fontWeight: FontWeight.w900,
+                                      fontSize: 11,
+                                    ),
+                                  ),
+                                ],
+                              );
+                            },
+                          ),
                         ),
                       ),
                     ],

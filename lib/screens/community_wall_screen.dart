@@ -3,6 +3,7 @@ import 'package:intl/intl.dart';
 import '../models/community_post_model.dart';
 import '../services/community_service.dart';
 import '../services/theme_service.dart';
+import '../services/coin_reward_service.dart';
 
 class CommunityWallScreen extends StatefulWidget {
   const CommunityWallScreen({super.key});
@@ -117,6 +118,7 @@ class _CommunityWallScreenState extends State<CommunityWallScreen> {
       );
       _postController.clear();
       _showSnackBar('Post community wall par share ho gaya! 🎉');
+      CoinRewardService().onPostCreated(context, text.length);
     } catch (e) {
       final msg = e.toString().replaceAll('Exception:', '').trim();
       _showSnackBar(msg.isNotEmpty ? msg : 'Post karne mein masla aya.', isError: true);
@@ -1108,6 +1110,41 @@ class _CommunityWallScreenState extends State<CommunityWallScreen> {
                                               fontWeight: FontWeight.bold,
                                               fontSize: 12,
                                             ),
+                                          ),
+                                        ],
+                                      ),
+                                    ),
+                                  ),
+
+                                  const SizedBox(width: 10),
+
+                                  // Helpful Button
+                                  InkWell(
+                                    onTap: () async {
+                                      if (post.userId == CoinRewardService().userId) {
+                                        _showSnackBar('Aap apne post ko helpful mark nahi kar sakte');
+                                        return;
+                                      }
+                                      final rewarded = await CoinRewardService().rewardHelpfulReceived(
+                                        postAuthorId: post.userId,
+                                        postId: post.id,
+                                      );
+                                      if (rewarded) {
+                                        _showSnackBar('Marked as helpful! Post creator ko +5 GK Coins mile 💡');
+                                      } else {
+                                        _showSnackBar('Shukriya!');
+                                      }
+                                    },
+                                    borderRadius: BorderRadius.circular(8),
+                                    child: Padding(
+                                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                                      child: Row(
+                                        children: [
+                                          const Icon(Icons.lightbulb_outline_rounded, size: 16, color: Colors.amber),
+                                          const SizedBox(width: 4),
+                                          Text(
+                                            post.helpfulCount > 0 ? '${post.helpfulCount}' : 'Helpful',
+                                            style: const TextStyle(color: Colors.amber, fontWeight: FontWeight.bold, fontSize: 12),
                                           ),
                                         ],
                                       ),
