@@ -1,14 +1,34 @@
 import 'package:flutter/material.dart';
 import '../constants/gamer_theme.dart';
 import '../models/gamer_post_model.dart';
+import '../models/gaming_news_model.dart';
 import '../services/gamer_auth_service.dart';
 import '../services/gamer_social_service.dart';
+import '../services/gaming_news_service.dart';
 import '../widgets/gamer_avatar.dart';
 import '../widgets/post_card.dart';
+import '../widgets/news_post_card.dart';
 import 'create_post_screen.dart';
 import 'gamer_profile_screen.dart';
 import 'gamer_search_screen.dart';
 import 'notifications_screen.dart';
+
+class _FeedItem {
+  final String postType; // 'user' or 'news'
+  final GamerPost? userPost;
+  final GamingNewsModel? newsPost;
+  final DateTime timestamp;
+
+  _FeedItem.user(this.userPost)
+      : postType = 'user',
+        newsPost = null,
+        timestamp = userPost?.createdAt ?? DateTime.now();
+
+  _FeedItem.news(this.newsPost)
+      : postType = 'news',
+        userPost = null,
+        timestamp = newsPost?.timestamp ?? DateTime.now();
+}
 
 class GamerFeedScreen extends StatefulWidget {
   const GamerFeedScreen({super.key});
@@ -20,12 +40,111 @@ class GamerFeedScreen extends StatefulWidget {
 class _GamerFeedScreenState extends State<GamerFeedScreen> {
   final GamerAuthService _authService = GamerAuthService();
   final GamerSocialService _socialService = GamerSocialService();
+  final GamingNewsService _newsService = GamingNewsService();
 
   // Feed Filter: 'all' or 'following'
   String _feedMode = 'all';
   String _selectedGameTag = 'All';
 
-  final List<String> _gameFilters = ['All', 'BGMI', 'PUBG', 'Free Fire', 'COD Mobile', 'Valorant'];
+  final List<String> _gameFilters = [
+    'All',
+    'News',
+    'BGMI',
+    'PUBG',
+    'Free Fire',
+    'COD Mobile',
+    'Valorant',
+  ];
+
+  List<_FeedItem> _buildMergedList({
+    required List<GamerPost> userPosts,
+    required List<GamingNewsModel> newsList,
+    required String selectedFilter,
+    required String feedMode,
+    required List<String> followingIds,
+    required String currentUid,
+  }) {
+    // 1. If 'News' filter chip is selected: show ONLY TYPE B news posts
+    if (selectedFilter == 'News') {
+      return newsList.map((n) => _FeedItem.news(n)).toList();
+    }
+
+    // 2. Filter user posts if Following mode is active
+    List<GamerPost> filteredUserPosts = userPosts;
+    if (feedMode == 'following') {
+      filteredUserPosts = userPosts
+          .where((p) => followingIds.contains(p.userId) || p.userId == currentUid)
+          .toList();
+    }
+
+    // 3. Filter if a specific game is selected (e.g. 'BGMI', 'PUBG')
+    if (selectedFilter != 'All') {
+      final q = selectedFilter.toLowerCase();
+      filteredUserPosts = filteredUserPosts
+          .where((p) => p.gameTag.toLowerCase() == q)
+          .toList();
+
+      final matchingNews = newsList.where((n) {
+        return n.category.toLowerCase().contains(q) ||
+            n.titleEn.toLowerCase().contains(q) ||
+            n.summary.toLowerCase().contains(q) ||
+            n.platform.toLowerCase().contains(q);
+      }).toList();
+
+      if (matchingNews.isNotEmpty) {
+        return _weaveItems(filteredUserPosts, matchingNews);
+      }
+      return filteredUserPosts.map((p) => _FeedItem.user(p)).toList();
+    }
+
+    // 4. In 'All' filter mode:
+    // Weave: every 2 user posts ke baad 1 news post!
+    // When user posts something, it appears instantly at top (index 0).
+    return _weaveItems(filteredUserPosts, newsList);
+  }
+
+  List<_FeedItem> _weaveItems(
+    List<GamerPost> userPosts,
+    List<GamingNewsModel> newsList,
+  ) {
+    final List<_FeedItem> result = [];
+    int userIdx = 0;
+    int newsIdx = 0;
+
+    // If there are no user posts, show all news articles
+    if (userPosts.isEmpty) {
+      return newsList.map((n) => _FeedItem.news(n)).toList();
+    }
+
+    while (userIdx < userPosts.length || newsIdx < newsList.length) {
+      // Up to 2 user posts
+      if (userIdx < userPosts.length) {
+        result.add(_FeedItem.user(userPosts[userIdx++]));
+      }
+      if (userIdx < userPosts.length) {
+        result.add(_FeedItem.user(userPosts[userIdx++]));
+      }
+      // Then 1 news post
+      if (newsIdx < newsList.length) {
+        result.add(_FeedItem.news(newsList[newsIdx++]));
+      }
+      // If user posts exhausted, append all remaining news
+      if (userIdx >= userPosts.length) {
+        while (newsIdx < newsList.length) {
+          result.add(_FeedItem.news(newsList[newsIdx++]));
+        }
+        break;
+      }
+      // If news exhausted, append all remaining user posts
+      if (newsIdx >= newsList.length) {
+        while (userIdx < userPosts.length) {
+          result.add(_FeedItem.user(userPosts[userIdx++]));
+        }
+        break;
+      }
+    }
+    return result;
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -98,7 +217,8 @@ class _GamerFeedScreenState extends State<GamerFeedScreen> {
           color: GamerTheme.accentBlue,
           backgroundColor: GamerTheme.cardDark,
           onRefresh: () async {
-            setState(() {});
+            await _newsService.syncRssNews();
+            if (mounted) setState(() {});
           },
           child: CustomScrollView(
             slivers: [
@@ -148,7 +268,11 @@ class _GamerFeedScreenState extends State<GamerFeedScreen> {
                               SizedBox(width: 4),
                               Text(
                                 'Post',
-                                style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 12),
+                                style: TextStyle(
+                                  color: Colors.white,
+                                  fontWeight: FontWeight.bold,
+                                  fontSize: 12,
+                                ),
                               ),
                             ],
                           ),
@@ -247,7 +371,7 @@ class _GamerFeedScreenState extends State<GamerFeedScreen> {
                 ),
               ),
 
-              // Horizontal Game Filter Chips
+              // Horizontal Game Filter Chips (including 'News')
               SliverToBoxAdapter(
                 child: SizedBox(
                   height: 48,
@@ -258,26 +382,47 @@ class _GamerFeedScreenState extends State<GamerFeedScreen> {
                     itemBuilder: (context, index) {
                       final game = _gameFilters[index];
                       final isSelected = _selectedGameTag == game;
-                      final emoji = GamerTheme.gameEmojis[game] ?? '🎮';
+                      final isNews = game == 'News';
+
+                      String? emoji;
+                      if (game == 'All') {
+                        emoji = null;
+                      } else if (isNews) {
+                        emoji = '📰';
+                      } else {
+                        emoji = GamerTheme.gameEmojis[game] ?? '🎮';
+                      }
+
+                      final activeColor = isNews ? const Color(0xFF00FF88) : GamerTheme.accentBlue;
 
                       return Padding(
                         padding: const EdgeInsets.only(right: 8),
                         child: FilterChip(
                           selected: isSelected,
                           showCheckmark: false,
-                          avatar: game == 'All' ? null : Text(emoji, style: const TextStyle(fontSize: 12)),
+                          avatar: emoji == null
+                              ? null
+                              : Text(emoji, style: const TextStyle(fontSize: 12)),
                           label: Text(
                             game,
                             style: TextStyle(
-                              color: isSelected ? GamerTheme.bgDark : GamerTheme.textWhite,
-                              fontWeight: isSelected ? FontWeight.w900 : FontWeight.w600,
+                              color: isSelected
+                                  ? (isNews ? Colors.black : GamerTheme.bgDark)
+                                  : (isNews ? const Color(0xFF00FF88) : GamerTheme.textWhite),
+                              fontWeight: isSelected ? FontWeight.w900 : FontWeight.w700,
                               fontSize: 12,
                             ),
                           ),
-                          backgroundColor: GamerTheme.cardDark,
-                          selectedColor: GamerTheme.accentBlue,
+                          backgroundColor: isNews
+                              ? const Color(0xFF00FF88).withOpacity(0.08)
+                              : GamerTheme.cardDark,
+                          selectedColor: activeColor,
                           side: BorderSide(
-                            color: isSelected ? GamerTheme.accentBlue : GamerTheme.borderDark,
+                            color: isSelected
+                                ? activeColor
+                                : (isNews
+                                    ? const Color(0xFF00FF88).withOpacity(0.3)
+                                    : GamerTheme.borderDark),
                           ),
                           onSelected: (_) {
                             setState(() => _selectedGameTag = game);
@@ -289,57 +434,113 @@ class _GamerFeedScreenState extends State<GamerFeedScreen> {
                 ),
               ),
 
-              // Posts Stream List
+              // Combined Stream List: Collection "posts" + Collection "gaming_news"
               StreamBuilder<List<GamerPost>>(
                 stream: _socialService.getAllPostsStream(
-                  gameTag: _selectedGameTag == 'All' ? null : _selectedGameTag,
+                  gameTag: _selectedGameTag == 'All' || _selectedGameTag == 'News'
+                      ? null
+                      : _selectedGameTag,
                 ),
-                builder: (context, snapshot) {
-                  if (snapshot.connectionState == ConnectionState.waiting) {
-                    return const SliverFillRemaining(
-                      child: Center(child: CircularProgressIndicator(color: GamerTheme.accentBlue)),
-                    );
-                  }
-
-                  var posts = snapshot.data ?? [];
-
-                  if (_feedMode == 'following') {
-                    // Filter by followed users stream
-                    return StreamBuilder<List<String>>(
-                      stream: _socialService.getFollowingUserIdsStream(currentUid),
-                      builder: (context, followingSnap) {
-                        final followingIds = followingSnap.data ?? [];
-                        final filteredPosts = posts.where((p) => followingIds.contains(p.userId) || p.userId == currentUid).toList();
-
-                        if (filteredPosts.isEmpty) {
-                          return SliverFillRemaining(
-                            hasScrollBody: false,
-                            child: _buildEmptyFollowingState(),
-                          );
-                        }
-
-                        return SliverList(
-                          delegate: SliverChildBuilderDelegate(
-                            (context, index) => PostCard(post: filteredPosts[index]),
-                            childCount: filteredPosts.length,
+                builder: (context, postsSnapshot) {
+                  return StreamBuilder<List<GamingNewsModel>>(
+                    stream: _newsService.getGamingNewsStream(),
+                    builder: (context, newsSnapshot) {
+                      if (postsSnapshot.connectionState == ConnectionState.waiting &&
+                          newsSnapshot.connectionState == ConnectionState.waiting) {
+                        return const SliverFillRemaining(
+                          child: Center(
+                            child: CircularProgressIndicator(color: GamerTheme.accentBlue),
                           ),
                         );
-                      },
-                    );
-                  }
+                      }
 
-                  if (posts.isEmpty) {
-                    return SliverFillRemaining(
-                      hasScrollBody: false,
-                      child: _buildEmptyAllState(),
-                    );
-                  }
+                      final userPosts = postsSnapshot.data ?? [];
+                      final newsList = newsSnapshot.data ?? [];
 
-                  return SliverList(
-                    delegate: SliverChildBuilderDelegate(
-                      (context, index) => PostCard(post: posts[index]),
-                      childCount: posts.length,
-                    ),
+                      if (_feedMode == 'following') {
+                        // Following filter stream
+                        return StreamBuilder<List<String>>(
+                          stream: _socialService.getFollowingUserIdsStream(currentUid),
+                          builder: (context, followingSnap) {
+                            final followingIds = followingSnap.data ?? [];
+                            final mergedItems = _buildMergedList(
+                              userPosts: userPosts,
+                              newsList: newsList,
+                              selectedFilter: _selectedGameTag,
+                              feedMode: _feedMode,
+                              followingIds: followingIds,
+                              currentUid: currentUid,
+                            );
+
+                            if (mergedItems.isEmpty) {
+                              return SliverFillRemaining(
+                                hasScrollBody: false,
+                                child: _buildEmptyFollowingState(),
+                              );
+                            }
+
+                            return SliverList(
+                              delegate: SliverChildBuilderDelegate(
+                                (context, index) {
+                                  final item = mergedItems[index];
+                                  if (item.postType == 'news' && item.newsPost != null) {
+                                    return NewsPostCard(
+                                      key: ValueKey('news_${item.newsPost!.id}'),
+                                      news: item.newsPost!,
+                                    );
+                                  } else if (item.userPost != null) {
+                                    return PostCard(
+                                      key: ValueKey('post_${item.userPost!.postId}'),
+                                      post: item.userPost!,
+                                    );
+                                  }
+                                  return const SizedBox.shrink();
+                                },
+                                childCount: mergedItems.length,
+                              ),
+                            );
+                          },
+                        );
+                      }
+
+                      // All Feed Mode
+                      final mergedItems = _buildMergedList(
+                        userPosts: userPosts,
+                        newsList: newsList,
+                        selectedFilter: _selectedGameTag,
+                        feedMode: _feedMode,
+                        followingIds: const [],
+                        currentUid: currentUid,
+                      );
+
+                      if (mergedItems.isEmpty) {
+                        return SliverFillRemaining(
+                          hasScrollBody: false,
+                          child: _buildEmptyAllState(),
+                        );
+                      }
+
+                      return SliverList(
+                        delegate: SliverChildBuilderDelegate(
+                          (context, index) {
+                            final item = mergedItems[index];
+                            if (item.postType == 'news' && item.newsPost != null) {
+                              return NewsPostCard(
+                                key: ValueKey('news_${item.newsPost!.id}'),
+                                news: item.newsPost!,
+                              );
+                            } else if (item.userPost != null) {
+                              return PostCard(
+                                key: ValueKey('post_${item.userPost!.postId}'),
+                                post: item.userPost!,
+                              );
+                            }
+                            return const SizedBox.shrink();
+                          },
+                          childCount: mergedItems.length,
+                        ),
+                      );
+                    },
                   );
                 },
               ),
@@ -436,3 +637,4 @@ class _GamerFeedScreenState extends State<GamerFeedScreen> {
     );
   }
 }
+
