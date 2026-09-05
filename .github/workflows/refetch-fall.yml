@@ -1,0 +1,181 @@
+name: Refetch Fall Guys Test
+on: workflow_dispatch
+jobs:
+  refetch:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+      - run: npm install firebase-admin axios rss-parser cheerio he
+      - name: Refetch Fall Guys / Fall Up News Document
+        run: |
+          node << 'EOF'
+          const admin = require('firebase-admin');
+          const axios = require('axios');
+          const Parser = require('rss-parser');
+          const cheerio = require('cheerio');
+          const he = require('he');
+
+          const serviceAccount = JSON.parse(process.env.FIREBASE_SERVICE_ACCOUNT);
+          admin.initializeApp({ credential: admin.credential.cert(serviceAccount) });
+          const db = admin.firestore();
+          const parser = new Parser({ customFields: { item: ['media:content', 'enclosure'] } });
+
+          const USER_AGENT = 'Mozilla/5.0';
+
+          function makeAbsoluteUrl(imgUrl, baseLink) {
+            if (!imgUrl) return "";
+            let url = imgUrl.trim();
+            if (url.startsWith('//')) return `https:${url}`;
+            if (url.startsWith('/') && baseLink) {
+              try {
+                const u = new URL(baseLink);
+                return `${u.origin}${url}`;
+              } catch (_) {
+                return url;
+              }
+            }
+            return url;
+          }
+
+          async function getRealImage(articleUrl, item, rawTitle = '', category = '', existing$ = null) {
+            let $ = existing$;
+            if (!$ && articleUrl && articleUrl.startsWith('http')) {
+              try {
+                let referer = '';
+                try { referer = new URL(articleUrl).origin; } catch (_) {}
+                const res = await axios.get(articleUrl, {
+                  headers: { 'User-Agent': USER_AGENT, ...(referer ? { 'Referer': referer } : {}) },
+                  timeout: 10000,
+                  maxRedirects: 5
+                });
+                if (res.data && typeof res.data === 'string') {
+                  $ = cheerio.load(res.data);
+                }
+              } catch (_) {}
+            }
+
+            let image = "";
+            if ($) {
+              image = $('meta[property="og:image"]').attr('content')
+                   || $('meta[name="twitter:image"]').attr('content')
+                   || $('meta[property="og:image:secure_url"]').attr('content')
+                   || $('article img').first().attr('src');
+            }
+
+            if (!image && item) {
+              image = item.enclosure?.url
+                   || item['media:content']?.$?.url
+                   || item['media:content']?.['$']?.url
+                   || item['media:thumbnail']?.['$']?.url
+                   || item['media:group']?.['media:content']?.[0]?.['$']?.url
+                   || item.image?.url;
+            }
+
+            if (image) {
+              const abs = makeAbsoluteUrl(image, articleUrl);
+              if (abs && abs.startsWith('http')) {
+                const lower = abs.toLowerCase();
+                if (!lower.includes('1x1') && !lower.endsWith('.gif') && !lower.includes('feedburner.com/~r/') && !lower.includes('1245620')) {
+                  console.log(`[Image Success] Real image found for "${rawTitle}": ${abs}`);
+                  return abs;
+                }
+              }
+            }
+
+            if (articleUrl) {
+              try {
+                const parsed = new URL(articleUrl);
+                const faviconUrl = `https://www.google.com/s2/favicons?domain=${parsed.hostname}&sz=128`;
+                console.log(`[Image Favicon] Fallback to favicon for "${rawTitle}": ${faviconUrl}`);
+                return faviconUrl;
+              } catch (_) {}
+            }
+
+            return 'https://www.google.com/s2/favicons?domain=steampowered.com&sz=128';
+          }
+
+          async function refetchFallDoc() {
+            console.log('Searching for Fall Up / Fall Guys document in Firestore...');
+            const snap = await db.collection('news').get();
+            let targetDoc = null;
+
+            for (const doc of snap.docs) {
+              const d = doc.data();
+              const title = (d.title || d.titleMap?.en || '').toLowerCase();
+              const game = (d.gameName || '').toLowerCase();
+              if (title.includes('fall up') || title.includes('fall guys') || game.includes('fall guys') || game.includes('fall up') || doc.id.toLowerCase().includes('fall')) {
+                targetDoc = doc;
+                break;
+              }
+            }
+
+            if (targetDoc) {
+              console.log(`Found target document: ID=${targetDoc.id}, Title="${targetDoc.data().title}"`);
+              const d = targetDoc.data();
+              const articleUrl = d.url || d.sourceUrl;
+              console.log(`Fetching new real image for article URL: ${articleUrl}`);
+              const newImg = await getRealImage(articleUrl, null, d.title || 'Fall Guys', d.category || 'Battle Royale');
+              console.log(`Updating document with new image: ${newImg}`);
+              await targetDoc.ref.update({
+                imageUrl: newImg,
+                gameName: d.gameName || 'Fall Guys',
+              });
+              console.log('Successfully updated document!');
+            } else {
+              console.log('No existing Fall document found in Firestore. Fetching latest Push Square/IGN news for Fall Guys...');
+              const feed = await parser.parseURL('https://www.pushsquare.com/feeds/latest');
+              let foundItem = null;
+              for (const item of feed.items) {
+                if (item.title.toLowerCase().includes('fall') || item.title.toLowerCase().includes('guys')) {
+                  foundItem = item;
+                  break;
+                }
+              }
+              if (!foundItem && feed.items.length > 0) {
+                foundItem = feed.items[0];
+              }
+
+              if (foundItem) {
+                const articleUrl = foundItem.link || foundItem.guid;
+                const rawTitle = he.decode(foundItem.title || 'Fall Guys News');
+                const newImg = await getRealImage(articleUrl, foundItem, rawTitle, 'Battle Royale');
+                const safeId = Buffer.from(articleUrl).toString('base64').replace(/[/+=]/g,'').substring(0,20);
+                const docId = `Push Square_${safeId}`;
+                await db.collection('news').doc(docId).set({
+                  id: docId,
+                  title: rawTitle,
+                  titleMap: { en: rawTitle, ur: rawTitle, ro: rawTitle },
+                  description: rawTitle,
+                  descriptionMap: { en: rawTitle, ur: rawTitle, ro: rawTitle },
+                  imageUrl: newImg,
+                  url: articleUrl,
+                  sourceUrl: articleUrl,
+                  gameName: 'Fall Guys',
+                  category: 'Battle Royale',
+                  timestamp: Math.floor(Date.now() / 1000),
+                  timeAgo: new Date().toISOString(),
+                  views: 0,
+                  isFeatured: false,
+                  isAuto: true,
+                  isFree: false,
+                  source: 'Push Square',
+                  appId: 0,
+                  appid: 0
+                }, { merge: true });
+                console.log(`Created Fall test document: ${docId} with image: ${newImg}`);
+              }
+            }
+            await admin.app().delete();
+            process.exit(0);
+          }
+
+          refetchFallDoc().catch(err => {
+            console.error(err);
+            process.exit(1);
+          });
+          EOF
+        env:
+          FIREBASE_SERVICE_ACCOUNT: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}

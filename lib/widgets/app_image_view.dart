@@ -99,7 +99,7 @@ class AppImageView extends StatelessWidget {
       height: height,
       color: const Color(0xFF1E1E24),
       child: const Center(
-        child: Icon(Icons.videogame_asset, color: Color(0xFF9E9EA7), size: 28),
+        child: Icon(Icons.games, color: Color(0xFF9E9EA7), size: 28),
       ),
     );
   }

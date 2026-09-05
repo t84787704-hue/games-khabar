@@ -1,8 +1,8 @@
 import 'dart:ui' as ui;
 import 'package:flutter/material.dart';
+import 'package:cached_network_image/cached_network_image.dart';
 import '../models/news_model.dart';
 import '../services/theme_service.dart';
-import 'app_image_view.dart';
 import 'translated_news_title.dart';
 
 class NewsCard extends StatelessWidget {
@@ -58,9 +58,28 @@ class NewsCard extends StatelessWidget {
                     child: Stack(
                       fit: StackFit.expand,
                       children: [
-                        AppImageView(
+                        CachedNetworkImage(
                           imageUrl: news.imageUrl,
                           fit: BoxFit.cover,
+                          placeholder: (context, url) => Container(
+                            color: const Color(0xFF1E1E24),
+                            child: const Center(
+                              child: SizedBox(
+                                width: 20,
+                                height: 20,
+                                child: CircularProgressIndicator(
+                                  strokeWidth: 2,
+                                  valueColor: AlwaysStoppedAnimation<Color>(Color(0xFF00FF88)),
+                                ),
+                              ),
+                            ),
+                          ),
+                          errorWidget: (context, url, error) => Container(
+                            color: const Color(0xFF1E1E24),
+                            child: const Center(
+                              child: Icon(Icons.games, color: Color(0xFF9E9EA7), size: 28),
+                            ),
+                          ),
                         ),
                         if (news.videoUrl != null && news.videoUrl!.isNotEmpty)
                           Center(

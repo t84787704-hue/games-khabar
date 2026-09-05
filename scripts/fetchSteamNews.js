@@ -175,16 +175,24 @@ function getCategoryFallback(title = '', category = '') {
   return { key: 'general', url: FALLBACK_IMAGES.general };
 }
 
-const USER_AGENT = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36';
+const USER_AGENT = 'Mozilla/5.0';
 
-async function getImage(articleUrl, item, rawTitle = '', category = '', existing$ = null) {
+async function getRealImage(articleUrl, item, rawTitle = '', category = '', existing$ = null) {
   let $ = existing$;
 
   // 1. Fetch HTML with axios if not already provided
   if (!$ && articleUrl && articleUrl.startsWith('http')) {
     try {
+      let referer = '';
+      try {
+        referer = new URL(articleUrl).origin;
+      } catch (_) {}
+
       const res = await axios.get(articleUrl, {
-        headers: { 'User-Agent': USER_AGENT },
+        headers: {
+          'User-Agent': USER_AGENT,
+          ...(referer ? { 'Referer': referer } : {})
+        },
         timeout: 10000,
         maxRedirects: 5
       });
@@ -194,34 +202,33 @@ async function getImage(articleUrl, item, rawTitle = '', category = '', existing
     } catch (_) {}
   }
 
-  let found = "";
-
-  // 2. From HTML: og:image FIRST priority, then twitter:image
+  // 2. Exact user requested hierarchy:
+  // let image = $('meta[property="og:image"]').attr('content') 
+  //          || $('meta[name="twitter:image"]').attr('content')
+  //          || $('meta[property="og:image:secure_url"]').attr('content')
+  //          || $('article img').first().attr('src')
+  //          || item.enclosure?.url
+  //          || item['media:content']?.$?.url
+  let image = "";
   if ($) {
-    found = $('meta[property="og:image"]').attr('content') ||
-            $('meta[property="og:image:url"]').attr('content') ||
-            $('meta[name="twitter:image"]').attr('content') ||
-            $('meta[name="twitter:image:src"]').attr('content');
+    image = $('meta[property="og:image"]').attr('content')
+         || $('meta[name="twitter:image"]').attr('content')
+         || $('meta[property="og:image:secure_url"]').attr('content')
+         || $('article img').first().attr('src');
   }
 
-  // 3. Fallback to RSS enclosure or media tags
-  if (!found && item) {
-    if (item.enclosure?.url) found = item.enclosure.url;
-    else if (item['media:content']?.['$']?.url) found = item['media:content']['$'].url;
-    else if (item['media:thumbnail']?.['$']?.url) found = item['media:thumbnail']['$'].url;
-    else if (item['media:group']?.['media:content']?.[0]?.['$']?.url) found = item['media:group']['media:content'][0]['$'].url;
-    else if (item.image?.url) found = item.image.url;
+  if (!image && item) {
+    image = item.enclosure?.url
+         || item['media:content']?.$?.url
+         || item['media:content']?.['$']?.url
+         || item['media:thumbnail']?.['$']?.url
+         || item['media:group']?.['media:content']?.[0]?.['$']?.url
+         || item.image?.url;
   }
 
-  // 4. First <img> inside article body
-  if (!found && $) {
-    const firstImg = $('article img, [data-component="article-body"] img, .article-content img').first().attr('src');
-    if (firstImg) found = firstImg;
-  }
-
-  // 5. If found, make absolute URL and validate
-  if (found) {
-    const abs = makeAbsoluteUrl(found, articleUrl);
+  // 3. Make absolute URL and validate if found
+  if (image) {
+    const abs = makeAbsoluteUrl(image, articleUrl);
     if (abs && abs.startsWith('http')) {
       const lower = abs.toLowerCase();
       if (!lower.includes('1x1') && !lower.endsWith('.gif') && !lower.includes('feedburner.com/~r/') && !lower.includes('1245620')) {
@@ -231,11 +238,26 @@ async function getImage(articleUrl, item, rawTitle = '', category = '', existing
     }
   }
 
-  // 6. Agar phir bhi na mile tab hi fallback use karo
+  // 4. If category fallback exists
   const fallback = getCategoryFallback(rawTitle, category);
-  console.log(`[Image Fallback] "${rawTitle.substring(0, 45)}" used [${fallback.key}] fallback: ${fallback.url}`);
-  return fallback.url;
+  if (fallback && fallback.url) {
+    return fallback.url;
+  }
+
+  // 5. If after all still no image, do NOT leave null, try to fetch google favicon
+  if (articleUrl) {
+    try {
+      const parsed = new URL(articleUrl);
+      const faviconUrl = `https://www.google.com/s2/favicons?domain=${parsed.hostname}&sz=128`;
+      console.log(`[Image Favicon] Fallback to favicon for "${rawTitle.substring(0, 45)}": ${faviconUrl}`);
+      return faviconUrl;
+    } catch (_) {}
+  }
+
+  return 'https://www.google.com/s2/favicons?domain=steampowered.com&sz=128';
 }
+
+const getImage = getRealImage;
 
 async function fetchFullArticle(url) {
   if (!url || !url.startsWith('http')) return null;
