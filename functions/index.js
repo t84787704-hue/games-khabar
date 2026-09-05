@@ -1,7 +1,9 @@
 const {onSchedule} = require("firebase-functions/v2/scheduler");
 const {onRequest} = require("firebase-functions/v2/https");
+const {onDocumentCreated} = require("firebase-functions/v2/firestore");
 const {initializeApp} = require("firebase-admin/app");
 const {getFirestore, FieldValue} = require("firebase-admin/firestore");
+const {getMessaging} = require("firebase-admin/messaging");
 const axios = require("axios");
 
 initializeApp();
@@ -69,4 +71,36 @@ exports.fetchGamingNews = onSchedule("every 6 hours", async () => {
 exports.fetchNewsManual = onRequest(async (req, res) => {
   const msg = await fetchAndSaveFullNews();
   res.send(msg);
+});
+
+// Trigger FCM push notification on new Firestore doc added: "New: {gameName}"
+exports.onNewsCreated = onDocumentCreated("news/{newsId}", async (event) => {
+  const data = event.data?.data();
+  if (!data) return;
+
+  const gameName = data.gameName || data.category || "Gaming News";
+  const title = `New: ${gameName}`;
+  const body = data.title || "Check out the latest gaming update!";
+
+  const message = {
+    topic: "all_news",
+    notification: {
+      title: title,
+      body: body,
+    },
+    data: {
+      newsId: event.params.newsId,
+      gameName: gameName,
+      title: data.title || "",
+      category: data.category || "",
+      imageUrl: data.imageUrl || "",
+    },
+  };
+
+  try {
+    await getMessaging().send(message);
+    console.log(`FCM notification sent: ${title}`);
+  } catch (err) {
+    console.error("Error sending FCM message:", err.message);
+  }
 });

@@ -83,6 +83,107 @@ class NotificationService {
 
     // 6. Terminated State Notification Tap Handler (App launched from notification)
     _checkInitialMessage();
+
+    // 7. Listen for newly added Firestore docs in real-time and notify "New: {gameName}"
+    _listenForNewNewsDocuments();
+  }
+
+  /// Real-time Firestore listener: when a new doc is added, trigger notification "New: {gameName}"
+  void _listenForNewNewsDocuments() {
+    bool isFirstSnapshot = true;
+    try {
+      FirebaseFirestore.instance
+          .collection('news')
+          .orderBy('timestamp', descending: true)
+          .limit(10)
+          .snapshots()
+          .listen((snapshot) {
+        if (isFirstSnapshot) {
+          isFirstSnapshot = false;
+          return; // Skip initial batch on launch
+        }
+
+        for (final change in snapshot.docChanges) {
+          if (change.type == DocumentChangeType.added) {
+            final data = change.doc.data();
+            if (data != null) {
+              final gameName = (data['gameName'] as String?)?.trim().isNotEmpty == true
+                  ? (data['gameName'] as String).trim()
+                  : ((data['category'] as String?)?.trim().isNotEmpty == true
+                      ? (data['category'] as String).trim()
+                      : 'Gaming News');
+              final title = data['title'] ?? 'Check out the latest gaming update!';
+              final newsId = change.doc.id;
+              final imageUrl = data['imageUrl'] as String?;
+              final category = data['category'] as String? ?? 'Gaming';
+
+              _showLocalNotification(
+                title: 'New: $gameName',
+                body: title,
+                newsId: newsId,
+                imageUrl: imageUrl,
+                category: category,
+              );
+            }
+          }
+        }
+      }, onError: (_) {});
+    } catch (_) {}
+  }
+
+  /// Show direct local notification for new article
+  Future<void> _showLocalNotification({
+    required String title,
+    required String body,
+    required String newsId,
+    String? imageUrl,
+    String? category,
+  }) async {
+    final payloadData = {
+      'newsId': newsId,
+      'title': title,
+      'body': body,
+      'category': category ?? 'Gaming News',
+      if (imageUrl != null && imageUrl.isNotEmpty) 'imageUrl': imageUrl,
+      'click_action': 'FLUTTER_NOTIFICATION_CLICK',
+    };
+
+    final androidDetails = AndroidNotificationDetails(
+      _androidChannel.id,
+      _androidChannel.name,
+      channelDescription: _androidChannel.description,
+      importance: Importance.max,
+      priority: Priority.high,
+      playSound: true,
+      enableVibration: true,
+      icon: '@mipmap/ic_launcher',
+      color: const Color(0xFF00FF88),
+      styleInformation: BigTextStyleInformation(
+        body,
+        contentTitle: title,
+        summaryText: category ?? 'Games Khabar',
+      ),
+    );
+
+    const iosDetails = DarwinNotificationDetails(
+      presentAlert: true,
+      presentBadge: true,
+      presentSound: true,
+    );
+
+    final notificationDetails = NotificationDetails(
+      android: androidDetails,
+      iOS: iosDetails,
+    );
+
+    final notificationId = DateTime.now().millisecondsSinceEpoch ~/ 1000;
+    await _localNotifications.show(
+      notificationId,
+      title,
+      body,
+      notificationDetails,
+      payload: jsonEncode(payloadData),
+    );
   }
 
   /// Request permissions for iOS and Android 13+ (POST_NOTIFICATIONS)
@@ -261,15 +362,20 @@ class NotificationService {
     required String title,
     required String description,
     required String category,
+    String? gameName,
     String? imageUrl,
   }) async {
-    // 1. Prepare clean Notification Title & Body
-    final notifTitle = '🔥 $title';
-    final notifBody = '[$category] ${description.length > 100 ? '${description.substring(0, 97)}...' : description}';
+    // 1. Prepare clean Notification Title & Body: "New: {gameName}"
+    final effectiveGame = (gameName != null && gameName.trim().isNotEmpty)
+        ? gameName.trim()
+        : category;
+    final notifTitle = 'New: $effectiveGame';
+    final notifBody = title;
 
     final payloadData = {
       'newsId': newsId,
       'category': category,
+      'gameName': effectiveGame,
       'title': title,
       'description': description,
       if (imageUrl != null && imageUrl.isNotEmpty) 'imageUrl': imageUrl,

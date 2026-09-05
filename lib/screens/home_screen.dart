@@ -20,6 +20,8 @@ import '../widgets/translated_news_title.dart';
 import 'news_detail_screen.dart';
 import 'saved_news_screen.dart';
 import 'profile_screen.dart';
+import 'following_screen.dart';
+import '../widgets/news_card.dart';
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
@@ -210,6 +212,7 @@ class _HomeScreenState extends State<HomeScreen> {
             final savedCount = bookmarkedIds.length;
             return BottomNavigationBar(
               currentIndex: _selectedNavIndex,
+              type: BottomNavigationBarType.fixed,
               onTap: (index) {
                 setState(() {
                   _selectedNavIndex = index;
@@ -218,14 +221,19 @@ class _HomeScreenState extends State<HomeScreen> {
               backgroundColor: cardDark,
               selectedItemColor: neonGreen,
               unselectedItemColor: textGray,
-              selectedLabelStyle: const TextStyle(fontWeight: FontWeight.bold, fontSize: 12),
-              unselectedLabelStyle: const TextStyle(fontWeight: FontWeight.normal, fontSize: 12),
+              selectedLabelStyle: const TextStyle(fontWeight: FontWeight.bold, fontSize: 11),
+              unselectedLabelStyle: const TextStyle(fontWeight: FontWeight.normal, fontSize: 11),
               elevation: 0,
               items: [
                 BottomNavigationBarItem(
                   icon: const Icon(Icons.sports_esports_outlined),
                   activeIcon: const Icon(Icons.sports_esports_rounded),
                   label: 'nav_khabar'.tr(),
+                ),
+                BottomNavigationBarItem(
+                  icon: const Icon(Icons.favorite_outline_rounded),
+                  activeIcon: const Icon(Icons.favorite_rounded),
+                  label: 'Following',
                 ),
                 BottomNavigationBarItem(
                   icon: savedCount > 0
@@ -428,69 +436,121 @@ class _HomeScreenState extends State<HomeScreen> {
                 const SizedBox(width: 4),
               ],
               bottom: PreferredSize(
-                preferredSize: const Size.fromHeight(48),
+                preferredSize: const Size.fromHeight(98),
                 child: Container(
-                  height: 48,
                   color: const Color(0xFF0A2A1F),
-                  alignment: Alignment.centerLeft,
-                  child: SingleChildScrollView(
-                    scrollDirection: Axis.horizontal,
-                    clipBehavior: Clip.none,
-                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                    child: Row(
-                      crossAxisAlignment: CrossAxisAlignment.center,
-                      children: gameCategories.map((cat) {
-                        final isSelected = selectedCategory == cat;
-                        return Padding(
-                          padding: const EdgeInsets.only(right: 8),
-                          child: ChoiceChip(
-                            label: Text(
-                              cat,
-                              style: TextStyle(
-                                fontSize: 13,
-                                color: isSelected ? const Color(0xFF05080D) : textWhite,
-                                fontWeight: isSelected ? FontWeight.bold : FontWeight.w500,
-                              ),
-                            ),
-                            selected: isSelected,
-                            onSelected: (val) {
-                              if (val) {
-                                setState(() {
-                                  selectedCategory = cat;
-                                });
-                              }
-                            },
-                            showCheckmark: false,
-                            materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                            visualDensity: VisualDensity.compact,
-                            backgroundColor: cardDark,
-                            selectedColor: const Color(0xFF00FF88),
-                            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                            shape: StadiumBorder(
-                              side: BorderSide(
-                                color: isSelected ? const Color(0xFF00FF88) : borderDark,
-                                width: isSelected ? 1.5 : 1,
-                              ),
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      // Top Search Bar
+                      Padding(
+                        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 3),
+                        child: Container(
+                          height: 38,
+                          decoration: BoxDecoration(
+                            color: cardDark,
+                            borderRadius: BorderRadius.circular(10),
+                            border: Border.all(
+                              color: _searchQuery.isNotEmpty ? neonGreen : borderDark,
+                              width: 1,
                             ),
                           ),
-                        );
-                      }).toList(),
-                    ),
+                          child: TextField(
+                            controller: _searchController,
+                            style: TextStyle(color: textWhite, fontSize: 13),
+                            onChanged: (val) {
+                              setState(() {
+                                _searchQuery = val;
+                              });
+                            },
+                            decoration: InputDecoration(
+                              hintText: 'Search gaming news, updates, games...',
+                              hintStyle: TextStyle(color: textGray, fontSize: 12),
+                              prefixIcon: Icon(Icons.search_rounded, color: neonGreen, size: 18),
+                              suffixIcon: _searchQuery.isNotEmpty
+                                  ? IconButton(
+                                      icon: Icon(Icons.clear_rounded, color: textGray, size: 16),
+                                      onPressed: () {
+                                        _searchController.clear();
+                                        setState(() {
+                                          _searchQuery = '';
+                                        });
+                                      },
+                                    )
+                                  : null,
+                              border: InputBorder.none,
+                              contentPadding: const EdgeInsets.symmetric(vertical: 8),
+                            ),
+                          ),
+                        ),
+                      ),
+                      // FilterRow [All, PS5, Xbox, PC, Switch]
+                      Container(
+                        height: 44,
+                        alignment: Alignment.centerLeft,
+                        child: SingleChildScrollView(
+                          scrollDirection: Axis.horizontal,
+                          clipBehavior: Clip.none,
+                          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 3),
+                          child: Row(
+                            crossAxisAlignment: CrossAxisAlignment.center,
+                            children: const ['All', 'PS5', 'Xbox', 'PC', 'Switch'].map((cat) {
+                              final isSelected = selectedCategory.toLowerCase() == cat.toLowerCase();
+                              return Padding(
+                                padding: const EdgeInsets.only(right: 8),
+                                child: ChoiceChip(
+                                  label: Text(
+                                    cat,
+                                    style: TextStyle(
+                                      fontSize: 12,
+                                      color: isSelected ? const Color(0xFF05080D) : textWhite,
+                                      fontWeight: isSelected ? FontWeight.bold : FontWeight.w600,
+                                    ),
+                                  ),
+                                  selected: isSelected,
+                                  onSelected: (val) {
+                                    if (val) {
+                                      setState(() {
+                                        selectedCategory = cat;
+                                      });
+                                    }
+                                  },
+                                  showCheckmark: false,
+                                  materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                                  visualDensity: VisualDensity.compact,
+                                  backgroundColor: cardDark,
+                                  selectedColor: const Color(0xFF00FF88),
+                                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                                  shape: StadiumBorder(
+                                    side: BorderSide(
+                                      color: isSelected ? const Color(0xFF00FF88) : borderDark,
+                                      width: isSelected ? 1.5 : 1,
+                                    ),
+                                  ),
+                                ),
+                              );
+                            }).toList(),
+                          ),
+                        ),
+                      ),
+                    ],
                   ),
                 ),
               ),
             ),
       body: _selectedNavIndex == 1
-          ? SavedNewsScreen(
-              onExploreTap: () {
-                setState(() {
-                  _selectedNavIndex = 0;
-                });
-              },
-            )
+          ? const FollowingScreen()
           : _selectedNavIndex == 2
-              ? const ProfileScreen()
-              : StreamBuilder<List<NewsModel>>(
+              ? SavedNewsScreen(
+                  onExploreTap: () {
+                    setState(() {
+                      _selectedNavIndex = 0;
+                    });
+                  },
+                )
+              : _selectedNavIndex == 3
+                  ? const ProfileScreen()
+                  : StreamBuilder<List<NewsModel>>(
         initialData: _firestoreService.currentNews,
         stream: _firestoreService.getNewsStream(),
         builder: (context, snapshot) {
@@ -577,15 +637,58 @@ class _HomeScreenState extends State<HomeScreen> {
           final langCode = context.locale.languageCode;
           final isRtl = LanguageService.isRtlLocale(context.locale);
           final filteredList = rawList.where((item) {
-            final matchesCat = selectedCategory == 'All' ||
-                item.category.trim().toLowerCase() == selectedCategory.trim().toLowerCase() ||
-                item.category.trim() == selectedCategory.trim();
+            bool matchesPlatform = true;
+            final platform = selectedCategory.trim().toLowerCase();
+            if (platform != 'all') {
+              final cat = item.category.toLowerCase();
+              final title = item.title.toLowerCase();
+              final game = (item.gameName ?? '').toLowerCase();
+              final desc = item.description.toLowerCase();
+
+              if (platform == 'ps5') {
+                matchesPlatform = cat.contains('ps5') ||
+                    cat.contains('playstation') ||
+                    title.contains('ps5') ||
+                    title.contains('playstation') ||
+                    title.contains('ps4') ||
+                    game.contains('ps5') ||
+                    desc.contains('ps5') ||
+                    desc.contains('playstation');
+              } else if (platform == 'xbox') {
+                matchesPlatform = cat.contains('xbox') ||
+                    title.contains('xbox') ||
+                    title.contains('game pass') ||
+                    game.contains('xbox') ||
+                    desc.contains('xbox');
+              } else if (platform == 'pc') {
+                matchesPlatform = cat.contains('pc') ||
+                    cat.contains('steam') ||
+                    title.contains('pc') ||
+                    title.contains('steam') ||
+                    game.contains('pc') ||
+                    desc.contains('steam') ||
+                    desc.contains(' pc ');
+              } else if (platform == 'switch') {
+                matchesPlatform = cat.contains('switch') ||
+                    cat.contains('nintendo') ||
+                    title.contains('switch') ||
+                    title.contains('nintendo') ||
+                    game.contains('switch') ||
+                    desc.contains('nintendo') ||
+                    desc.contains('switch');
+              } else {
+                matchesPlatform = cat == platform || cat.contains(platform);
+              }
+            }
+
             final matchesSearch = _searchQuery.isEmpty ||
                 item.getTitle(langCode).toLowerCase().contains(_searchQuery.toLowerCase()) ||
                 item.getDescription(langCode).toLowerCase().contains(_searchQuery.toLowerCase()) ||
                 item.title.toLowerCase().contains(_searchQuery.toLowerCase()) ||
-                item.description.toLowerCase().contains(_searchQuery.toLowerCase());
-            return matchesCat && matchesSearch;
+                item.description.toLowerCase().contains(_searchQuery.toLowerCase()) ||
+                (item.gameName?.toLowerCase().contains(_searchQuery.toLowerCase()) == true);
+
+            return matchesPlatform && matchesSearch;
           }).toList();
 
           NewsModel? featuredNews;
@@ -624,48 +727,6 @@ class _HomeScreenState extends State<HomeScreen> {
                 parent: BouncingScrollPhysics(),
               ),
               slivers: [
-              if (_isSearching)
-                SliverToBoxAdapter(
-                  child: Padding(
-                    padding: const EdgeInsets.fromLTRB(16, 12, 16, 4),
-                    child: Container(
-                      decoration: BoxDecoration(
-                        color: cardDark,
-                        borderRadius: BorderRadius.circular(10),
-                        border: Border.all(color: neonGreen, width: 1),
-                      ),
-                      child: TextField(
-                        controller: _searchController,
-                        autofocus: true,
-                        style: TextStyle(color: textWhite, fontSize: 14),
-                        onChanged: (val) {
-                          setState(() {
-                            _searchQuery = val;
-                          });
-                        },
-                        decoration: InputDecoration(
-                          hintText: 'search_hint'.tr(),
-                          hintStyle: TextStyle(color: textGray, fontSize: 13),
-                          prefixIcon: Icon(Icons.search, color: neonGreen, size: 20),
-                          suffixIcon: _searchQuery.isNotEmpty
-                              ? IconButton(
-                                  icon: Icon(Icons.clear, color: textGray, size: 18),
-                                  onPressed: () {
-                                    _searchController.clear();
-                                    setState(() {
-                                      _searchQuery = '';
-                                    });
-                                  },
-                                  )
-                              : null,
-                          border: InputBorder.none,
-                          contentPadding: const EdgeInsets.symmetric(vertical: 12),
-                        ),
-                      ),
-                    ),
-                  ),
-                ),
-
               if (featuredNews != null && _searchQuery.isEmpty)
                 SliverToBoxAdapter(
                   child: Padding(
@@ -891,151 +952,11 @@ class _HomeScreenState extends State<HomeScreen> {
                         return Column(
                           mainAxisSize: MainAxisSize.min,
                           children: [
-                            Padding(
-                              padding: const EdgeInsets.fromLTRB(16, 0, 16, 10),
-                              child: Material(
-                                color: Colors.transparent,
-                                child: InkWell(
-                                  onTap: () => _navigateToDetail(item),
-                                  borderRadius: BorderRadius.circular(12),
-                                  splashColor: neonGreen.withOpacity(0.15),
-                                  highlightColor: neonGreen.withOpacity(0.08),
-                                  child: Container(
-                                    height: 110,
-                                    decoration: BoxDecoration(
-                                      color: cardDark,
-                                      borderRadius: BorderRadius.circular(12),
-                                      border: Border.all(color: borderDark),
-                                    ),
-                                    child: Row(
-                                      children: [
-                                        // Left Image (120px)
-                                        ClipRRect(
-                                          borderRadius: const BorderRadius.horizontal(left: Radius.circular(11)),
-                                          child: SizedBox(
-                                            width: 120,
-                                            height: double.infinity,
-                                            child: Stack(
-                                              fit: StackFit.expand,
-                                              children: [
-                                                AppImageView(
-                                                  imageUrl: item.imageUrl,
-                                                  fit: BoxFit.cover,
-                                                ),
-                                                if (item.videoUrl != null && item.videoUrl!.isNotEmpty)
-                                                  Center(
-                                                    child: Container(
-                                                      padding: const EdgeInsets.all(6),
-                                                      decoration: BoxDecoration(
-                                                        color: Colors.black.withOpacity(0.65),
-                                                        shape: BoxShape.circle,
-                                                        border: Border.all(color: const Color(0xFFFF4655), width: 1.5),
-                                                      ),
-                                                      child: const Icon(
-                                                        Icons.play_arrow_rounded,
-                                                        color: Color(0xFFFF4655),
-                                                        size: 18,
-                                                      ),
-                                                    ),
-                                                  ),
-                                              ],
-                                            ),
-                                          ),
-                                        ),
-                                        // Right Content
-                                        Expanded(
-                                          child: Padding(
-                                            padding: const EdgeInsets.all(10.0),
-                                            child: Column(
-                                              crossAxisAlignment: CrossAxisAlignment.start,
-                                              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                                              children: [
-                                                Row(
-                                                  children: [
-                                                    Expanded(
-                                                      child: Align(
-                                                        alignment: Alignment.centerLeft,
-                                                        child: Container(
-                                                          padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                                                          decoration: BoxDecoration(
-                                                            color: neonGreen.withOpacity(0.15),
-                                                            borderRadius: BorderRadius.circular(4),
-                                                            border: Border.all(color: neonGreen.withOpacity(0.5)),
-                                                          ),
-                                                          child: Text(
-                                                            (item.gameName != null && item.gameName!.trim().isNotEmpty
-                                                                    ? item.gameName!
-                                                                    : item.category)
-                                                                .toUpperCase(),
-                                                            maxLines: 1,
-                                                            overflow: TextOverflow.ellipsis,
-                                                            style: TextStyle(
-                                                              color: neonGreen,
-                                                              fontSize: 9,
-                                                              fontWeight: FontWeight.w900,
-                                                            ),
-                                                          ),
-                                                        ),
-                                                      ),
-                                                    ),
-                                                    const SizedBox(width: 8),
-                                                    Text(
-                                                      item.timeAgo,
-                                                      style: TextStyle(color: textGray, fontSize: 10),
-                                                    ),
-                                                  ],
-                                                ),
-                                                TranslatedNewsTitle(
-                                                  news: item,
-                                                  langCode: langCode,
-                                                  maxLines: 2,
-                                                  overflow: TextOverflow.ellipsis,
-                                                  textAlign: isRtl ? TextAlign.right : TextAlign.left,
-                                                  textDirection: isRtl ? ui.TextDirection.rtl : ui.TextDirection.ltr,
-                                                  style: TextStyle(
-                                                    color: textWhite,
-                                                    fontSize: 13,
-                                                    fontWeight: FontWeight.w800,
-                                                    height: 1.25,
-                                                  ),
-                                                ),
-                                                Row(
-                                                  children: [
-                                                    Icon(Icons.visibility_outlined, color: textGray, size: 12),
-                                                    const SizedBox(width: 4),
-                                                    Text(
-                                                      '${item.views}',
-                                                      style: TextStyle(color: textGray, fontSize: 10),
-                                                    ),
-                                                    const Spacer(),
-                                                    ValueListenableBuilder<Set<String>>(
-                                                      valueListenable: BookmarkService.bookmarkedIdsNotifier,
-                                                      builder: (context, ids, _) {
-                                                        final isSaved = ids.contains(item.id);
-                                                        return GestureDetector(
-                                                          onTap: () => _toggleBookmark(item),
-                                                          child: Padding(
-                                                            padding: const EdgeInsets.all(2.0),
-                                                            child: Icon(
-                                                              isSaved ? Icons.bookmark_rounded : Icons.bookmark_border_rounded,
-                                                              color: isSaved ? neonGreen : textGray,
-                                                              size: 17,
-                                                            ),
-                                                          ),
-                                                        );
-                                                      },
-                                                    ),
-                                                  ],
-                                                ),
-                                              ],
-                                            ),
-                                          ),
-                                        ),
-                                      ],
-                                    ),
-                                  ),
-                                ),
-                              ),
+                            NewsCard(
+                              news: item,
+                              langCode: langCode,
+                              isRtl: isRtl,
+                              onTap: () => _navigateToDetail(item),
                             ),
                             // Show Native Ad after every 3 articles (index % 3 == 2) only when NOT ad-free
                             ValueListenableBuilder<DateTime?>(
