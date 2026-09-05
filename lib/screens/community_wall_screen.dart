@@ -83,6 +83,18 @@ class _CommunityWallScreenState extends State<CommunityWallScreen> {
       return;
     }
 
+    final lower = text.toLowerCase();
+    final spamPhrases = [
+      'hi', 'hii', 'hiii', 'hello', 'helo', 'hey', 'hy', 'hlo',
+      'how are you', 'how r u', 'hru', 'kya hal', 'kya haal',
+      'salam', 'assalam', 'yo', 'sup', 'test', 'a', 'ok', 'okay'
+    ];
+
+    if (text.length < 5 || spamPhrases.contains(lower)) {
+      _showSnackBar('Thora detail se likho - Squad ID ya Tip share karo taake sab ko faida ho', isError: true);
+      return;
+    }
+
     if (text.length > 200) {
       _showSnackBar('Text 200 characters se zyada nahi ho sakta.', isError: true);
       return;
@@ -233,12 +245,301 @@ class _CommunityWallScreenState extends State<CommunityWallScreen> {
     );
   }
 
+  void _applyTemplate(String template) {
+    _postController.text = template;
+    _postController.selection = TextSelection.fromPosition(
+      TextPosition(offset: _postController.text.length),
+    );
+    setState(() {});
+  }
+
+  Widget _buildTemplateChip({required String label, required VoidCallback onTap}) {
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(20),
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+        decoration: BoxDecoration(
+          color: cardDark2,
+          borderRadius: BorderRadius.circular(20),
+          border: Border.all(color: neonGreen.withOpacity(0.3), width: 1),
+        ),
+        child: Text(
+          label,
+          style: TextStyle(
+            color: neonGreen,
+            fontSize: 11,
+            fontWeight: FontWeight.w700,
+          ),
+        ),
+      ),
+    );
+  }
+
+  void _openCommentSheet(CommunityPostModel post) {
+    final commentController = TextEditingController();
+    bool isSubmitting = false;
+
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: cardDark,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      builder: (ctx) {
+        return StatefulBuilder(
+          builder: (modalContext, setModalState) {
+            return Padding(
+              padding: EdgeInsets.only(
+                bottom: MediaQuery.of(modalContext).viewInsets.bottom,
+              ),
+              child: SafeArea(
+                child: Container(
+                  constraints: BoxConstraints(
+                    maxHeight: MediaQuery.of(context).size.height * 0.75,
+                  ),
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      const SizedBox(height: 10),
+                      Container(
+                        width: 36,
+                        height: 4,
+                        decoration: BoxDecoration(
+                          color: textGray.withOpacity(0.4),
+                          borderRadius: BorderRadius.circular(2),
+                        ),
+                      ),
+                      const SizedBox(height: 12),
+                      Padding(
+                        padding: const EdgeInsets.symmetric(horizontal: 16),
+                        child: Row(
+                          children: [
+                            Icon(Icons.chat_bubble_outline_rounded, color: neonGreen, size: 18),
+                            const SizedBox(width: 8),
+                            Expanded(
+                              child: Text(
+                                'Comments on ${post.userName}\'s post',
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: TextStyle(
+                                  color: textWhite,
+                                  fontWeight: FontWeight.bold,
+                                  fontSize: 14,
+                                ),
+                              ),
+                            ),
+                            IconButton(
+                              icon: Icon(Icons.close, color: textGray, size: 20),
+                              onPressed: () => Navigator.pop(ctx),
+                              padding: EdgeInsets.zero,
+                              constraints: const BoxConstraints(),
+                            ),
+                          ],
+                        ),
+                      ),
+                      const SizedBox(height: 8),
+                      Padding(
+                        padding: const EdgeInsets.symmetric(horizontal: 16),
+                        child: Container(
+                          width: double.infinity,
+                          padding: const EdgeInsets.all(10),
+                          decoration: BoxDecoration(
+                            color: cardDark2,
+                            borderRadius: BorderRadius.circular(8),
+                            border: Border.all(color: borderDark),
+                          ),
+                          child: Text(
+                            post.text,
+                            maxLines: 2,
+                            overflow: TextOverflow.ellipsis,
+                            style: TextStyle(
+                              color: textGray,
+                              fontSize: 12,
+                              fontStyle: FontStyle.italic,
+                            ),
+                          ),
+                        ),
+                      ),
+                      const SizedBox(height: 10),
+                      Divider(color: borderDark, height: 1),
+                      Expanded(
+                        child: StreamBuilder<List<CommunityCommentModel>>(
+                          stream: _communityService.streamComments(post.id),
+                          builder: (context, snapshot) {
+                            if (snapshot.connectionState == ConnectionState.waiting && !snapshot.hasData) {
+                              return Center(
+                                child: SizedBox(
+                                  width: 24,
+                                  height: 24,
+                                  child: CircularProgressIndicator(
+                                    strokeWidth: 2,
+                                    color: neonGreen,
+                                  ),
+                                ),
+                              );
+                            }
+
+                            final comments = snapshot.data ?? [];
+                            if (comments.isEmpty) {
+                              return Center(
+                                child: Padding(
+                                  padding: const EdgeInsets.all(24),
+                                  child: Column(
+                                    mainAxisSize: MainAxisSize.min,
+                                    children: [
+                                      Icon(Icons.forum_outlined, size: 32, color: textGray.withOpacity(0.5)),
+                                      const SizedBox(height: 8),
+                                      Text(
+                                        'Koi comments nahi hain abhi.\nPehla comment karein!',
+                                        textAlign: TextAlign.center,
+                                        style: TextStyle(color: textGray, fontSize: 13),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                              );
+                            }
+
+                            return ListView.separated(
+                              padding: const EdgeInsets.all(16),
+                              itemCount: comments.length,
+                              separatorBuilder: (_, __) => const SizedBox(height: 10),
+                              itemBuilder: (context, index) {
+                                final comment = comments[index];
+                                return Container(
+                                  padding: const EdgeInsets.all(10),
+                                  decoration: BoxDecoration(
+                                    color: cardDark2,
+                                    borderRadius: BorderRadius.circular(10),
+                                    border: Border.all(color: borderDark.withOpacity(0.6)),
+                                  ),
+                                  child: Column(
+                                    crossAxisAlignment: CrossAxisAlignment.start,
+                                    children: [
+                                      Row(
+                                        children: [
+                                          Text(
+                                            comment.userName,
+                                            style: TextStyle(
+                                              color: comment.isVIP ? const Color(0xFFFFD700) : textWhite,
+                                              fontWeight: FontWeight.bold,
+                                              fontSize: 12,
+                                            ),
+                                          ),
+                                          if (comment.isVIP) ...[
+                                            const SizedBox(width: 4),
+                                            const Text('👑', style: TextStyle(fontSize: 11)),
+                                          ],
+                                          const Spacer(),
+                                          Text(
+                                            _formatTime(comment.createdAt),
+                                            style: TextStyle(color: textGray, fontSize: 10),
+                                          ),
+                                        ],
+                                      ),
+                                      const SizedBox(height: 4),
+                                      Text(
+                                        comment.text,
+                                        style: TextStyle(color: textWhite, fontSize: 13, height: 1.3),
+                                      ),
+                                    ],
+                                  ),
+                                );
+                              },
+                            );
+                          },
+                        ),
+                      ),
+                      Divider(color: borderDark, height: 1),
+                      Padding(
+                        padding: const EdgeInsets.all(12),
+                        child: Row(
+                          children: [
+                            Expanded(
+                              child: TextField(
+                                controller: commentController,
+                                maxLength: 150,
+                                style: TextStyle(color: textWhite, fontSize: 13),
+                                decoration: InputDecoration(
+                                  hintText: 'Apna comment likhein...',
+                                  hintStyle: TextStyle(color: textGray, fontSize: 13),
+                                  filled: true,
+                                  fillColor: cardDark2,
+                                  counterText: '',
+                                  contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                                  border: OutlineInputBorder(
+                                    borderRadius: BorderRadius.circular(20),
+                                    borderSide: BorderSide(color: borderDark),
+                                  ),
+                                  focusedBorder: OutlineInputBorder(
+                                    borderRadius: BorderRadius.circular(20),
+                                    borderSide: BorderSide(color: neonGreen, width: 1.2),
+                                  ),
+                                ),
+                              ),
+                            ),
+                            const SizedBox(width: 8),
+                            IconButton(
+                              style: IconButton.styleFrom(
+                                backgroundColor: neonGreen,
+                                foregroundColor: const Color(0xFF05080D),
+                              ),
+                              onPressed: isSubmitting
+                                  ? null
+                                  : () async {
+                                      final cText = commentController.text.trim();
+                                      if (cText.isEmpty) return;
+                                      if (_communityService.hasBadWords(cText)) {
+                                        _showSnackBar('Tehzeeb se likho', isError: true);
+                                        return;
+                                      }
+                                      setModalState(() {
+                                        isSubmitting = true;
+                                      });
+                                      try {
+                                        await _communityService.addComment(post.id, cText);
+                                        commentController.clear();
+                                      } catch (e) {
+                                        _showSnackBar(e.toString(), isError: true);
+                                      } finally {
+                                        setModalState(() {
+                                          isSubmitting = false;
+                                        });
+                                      }
+                                    },
+                              icon: isSubmitting
+                                  ? const SizedBox(
+                                      width: 16,
+                                      height: 16,
+                                      child: CircularProgressIndicator(
+                                        strokeWidth: 2,
+                                        color: Color(0xFF05080D),
+                                      ),
+                                    )
+                                  : const Icon(Icons.send_rounded, size: 18),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            );
+          },
+        );
+      },
+    );
+  }
+
   String _formatTime(DateTime dt) {
     final diff = DateTime.now().difference(dt);
-    if (diff.inMinutes < 1) return 'Abhi';
-    if (diff.inMinutes < 60) return '${diff.inMinutes}m pehle';
-    if (diff.inHours < 24) return '${diff.inHours}h pehle';
-    if (diff.inDays < 7) return '${diff.inDays}d pehle';
+    if (diff.inSeconds < 45) return 'Just now';
+    if (diff.inMinutes < 60) return '${diff.inMinutes}m ago';
+    if (diff.inHours < 24) return '${diff.inHours}h ago';
+    if (diff.inDays < 7) return '${diff.inDays}d ago';
     return DateFormat('dd MMM').format(dt);
   }
 
@@ -263,28 +564,14 @@ class _CommunityWallScreenState extends State<CommunityWallScreen> {
               child: Icon(Icons.forum_rounded, color: neonGreen, size: 20),
             ),
             const SizedBox(width: 10),
-            Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Text(
-                  'Community Wall',
-                  style: TextStyle(
-                    color: textWhite,
-                    fontWeight: FontWeight.w900,
-                    fontSize: 16,
-                    letterSpacing: 0.5,
-                  ),
-                ),
-                Text(
-                  'Squad & Tips',
-                  style: TextStyle(
-                    color: neonGreen,
-                    fontWeight: FontWeight.w700,
-                    fontSize: 11,
-                  ),
-                ),
-              ],
+            Text(
+              'Community Wall',
+              style: TextStyle(
+                color: textWhite,
+                fontWeight: FontWeight.w900,
+                fontSize: 16,
+                letterSpacing: 0.5,
+              ),
             ),
           ],
         ),
@@ -340,40 +627,12 @@ class _CommunityWallScreenState extends State<CommunityWallScreen> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            // Header: "Community Wall - Squad & Tips" + Subtitle
+            // Subtitle
             Padding(
-              padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Row(
-                    children: [
-                      Container(
-                        width: 3.5,
-                        height: 18,
-                        decoration: BoxDecoration(
-                          color: neonGreen,
-                          borderRadius: BorderRadius.circular(2),
-                        ),
-                      ),
-                      const SizedBox(width: 8),
-                      Text(
-                        'Community Wall - Squad & Tips',
-                        style: TextStyle(
-                          color: textWhite,
-                          fontWeight: FontWeight.w900,
-                          fontSize: 16,
-                          letterSpacing: 0.5,
-                        ),
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 5),
-                  Text(
-                    'Apna squad banayein, gameplay tips share karein',
-                    style: TextStyle(color: textGray, fontSize: 12.5),
-                  ),
-                ],
+              padding: const EdgeInsets.fromLTRB(16, 14, 16, 8),
+              child: Text(
+                'Apna squad banayein, gameplay tips share karein',
+                style: TextStyle(color: textGray, fontSize: 12.5),
               ),
             ),
 
@@ -504,6 +763,38 @@ class _CommunityWallScreenState extends State<CommunityWallScreen> {
                     ),
                     const SizedBox(height: 10),
 
+                    // 3 Quick Template Buttons
+                    SingleChildScrollView(
+                      scrollDirection: Axis.horizontal,
+                      physics: const BouncingScrollPhysics(),
+                      child: Row(
+                        children: [
+                          _buildTemplateChip(
+                            label: '👥 Squad Chahiye',
+                            onTap: () {
+                              final game = _selectedFilter == 'All' ? _selectedGameForPost : _selectedFilter;
+                              _applyTemplate('$game Squad - ID: , Rank: , Mic: ');
+                            },
+                          ),
+                          const SizedBox(width: 8),
+                          _buildTemplateChip(
+                            label: '💡 Tip Do',
+                            onTap: () {
+                              _applyTemplate('💡 Pro Tip: ');
+                            },
+                          ),
+                          const SizedBox(width: 8),
+                          _buildTemplateChip(
+                            label: '😂 Meme',
+                            onTap: () {
+                              _applyTemplate('😂 Gamers be like: ');
+                            },
+                          ),
+                        ],
+                      ),
+                    ),
+                    const SizedBox(height: 10),
+
                     // Post Input Field (Max 200 chars)
                     TextField(
                       controller: _postController,
@@ -512,8 +803,8 @@ class _CommunityWallScreenState extends State<CommunityWallScreen> {
                       minLines: 2,
                       style: TextStyle(color: textWhite, fontSize: 13, height: 1.3),
                       decoration: InputDecoration(
-                        hintText: 'Apna squad ya tip share karo...',
-                        hintStyle: TextStyle(color: textGray.withOpacity(0.7), fontSize: 13),
+                        hintText: 'BGMI Squad Chahiye? ID: 51... | Ya koi Tip? | Meme share karo...',
+                        hintStyle: TextStyle(color: textGray.withOpacity(0.7), fontSize: 12),
                         filled: true,
                         fillColor: cardDark2,
                         counterStyle: TextStyle(
@@ -758,39 +1049,74 @@ class _CommunityWallScreenState extends State<CommunityWallScreen> {
                           Divider(color: borderDark.withOpacity(0.5), height: 1),
                           const SizedBox(height: 6),
 
-                          // Action Buttons: Like & Report
+                          // Action Buttons: Like, Comment & Report
                           Row(
                             mainAxisAlignment: MainAxisAlignment.spaceBetween,
                             children: [
-                              InkWell(
-                                onTap: () async {
-                                  await _communityService.likePost(post.id);
-                                  if (mounted) setState(() {});
-                                },
-                                borderRadius: BorderRadius.circular(8),
-                                child: Padding(
-                                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                                  child: Row(
-                                    children: [
-                                      Icon(
-                                        isLiked ? Icons.favorite_rounded : Icons.favorite_border_rounded,
-                                        size: 17,
-                                        color: isLiked ? const Color(0xFFFF4655) : textGray,
+                              Row(
+                                children: [
+                                  // Like Button (Green when liked)
+                                  InkWell(
+                                    onTap: () async {
+                                      await _communityService.likePost(post.id);
+                                      if (mounted) setState(() {});
+                                    },
+                                    borderRadius: BorderRadius.circular(8),
+                                    child: Padding(
+                                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                                      child: Row(
+                                        children: [
+                                          Icon(
+                                            isLiked ? Icons.favorite_rounded : Icons.favorite_border_rounded,
+                                            size: 17,
+                                            color: isLiked ? neonGreen : textGray,
+                                          ),
+                                          const SizedBox(width: 5),
+                                          Text(
+                                            '${post.likes}',
+                                            style: TextStyle(
+                                              color: isLiked ? neonGreen : textGray,
+                                              fontWeight: FontWeight.bold,
+                                              fontSize: 12,
+                                            ),
+                                          ),
+                                        ],
                                       ),
-                                      const SizedBox(width: 5),
-                                      Text(
-                                        '${post.likes}',
-                                        style: TextStyle(
-                                          color: isLiked ? const Color(0xFFFF4655) : textGray,
-                                          fontWeight: FontWeight.bold,
-                                          fontSize: 12,
-                                        ),
-                                      ),
-                                    ],
+                                    ),
                                   ),
-                                ),
+
+                                  const SizedBox(width: 12),
+
+                                  // Comment Button (opens comment sheet)
+                                  InkWell(
+                                    onTap: () => _openCommentSheet(post),
+                                    borderRadius: BorderRadius.circular(8),
+                                    child: Padding(
+                                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                                      child: Row(
+                                        children: [
+                                          Icon(
+                                            Icons.chat_bubble_outline_rounded,
+                                            size: 16,
+                                            color: textGray,
+                                          ),
+                                          const SizedBox(width: 5),
+                                          Text(
+                                            post.commentCount > 0 ? '${post.commentCount}' : 'Comment',
+                                            style: TextStyle(
+                                              color: textGray,
+                                              fontWeight: FontWeight.bold,
+                                              fontSize: 12,
+                                            ),
+                                          ),
+                                        ],
+                                      ),
+                                    ),
+                                  ),
+                                ],
                               ),
 
+                              // Report Button
                               InkWell(
                                 onTap: () => _confirmReport(post),
                                 borderRadius: BorderRadius.circular(8),

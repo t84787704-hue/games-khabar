@@ -187,4 +187,48 @@ class CommunityService {
       return false;
     }
   }
+
+  /// Real-time stream of comments for a post
+  Stream<List<CommunityCommentModel>> streamComments(String postId) {
+    return FirebaseFirestore.instance
+        .collection(_collectionName)
+        .doc(postId)
+        .collection('comments')
+        .snapshots()
+        .map((snapshot) {
+      final comments = snapshot.docs
+          .map((doc) => CommunityCommentModel.fromFirestore(doc))
+          .toList();
+      comments.sort((a, b) => a.createdAt.compareTo(b.createdAt));
+      return comments;
+    });
+  }
+
+  /// Add a comment to a post
+  Future<void> addComment(String postId, String text) async {
+    final trimmed = text.trim();
+    if (trimmed.isEmpty) return;
+    if (hasBadWords(trimmed)) {
+      throw 'Tehzeeb se likho';
+    }
+
+    await init();
+
+    final comment = CommunityCommentModel(
+      id: '',
+      userId: _userId,
+      userName: _userName,
+      isVIP: isUserVIP,
+      text: trimmed,
+      createdAt: DateTime.now(),
+    );
+
+    final postRef = FirebaseFirestore.instance.collection(_collectionName).doc(postId);
+    await postRef.collection('comments').add(comment.toMap());
+    try {
+      await postRef.update({
+        'commentCount': FieldValue.increment(1),
+      });
+    } catch (_) {}
+  }
 }
