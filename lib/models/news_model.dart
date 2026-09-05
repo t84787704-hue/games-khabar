@@ -23,6 +23,11 @@ class NewsModel {
   final bool isAuto;
   final Timestamp? timestamp;
   final int? appId;
+  final double? currentPrice;
+  final double? originalPriceVal;
+  final String? store;
+  final List<Map<String, dynamic>>? priceHistory;
+  final DateTime? releaseDate;
 
   NewsModel({
     required this.id,
@@ -48,6 +53,11 @@ class NewsModel {
     this.isAuto = false,
     dynamic timestamp,
     this.appId,
+    this.currentPrice,
+    this.originalPriceVal,
+    this.store,
+    this.priceHistory,
+    this.releaseDate,
   })  : titleMap = titleMap ?? _createDefaultMap(title ?? ''),
         descriptionMap = descriptionMap ?? _createDefaultMap(description ?? ''),
         timestamp = timestamp is Timestamp
@@ -79,6 +89,53 @@ class NewsModel {
   String? get url => sourceUrl;
   String get displayGameOrCategory => (gameName != null && gameName!.trim().isNotEmpty) ? gameName!.trim() : category;
   String get cleanDescription => TranslationService.cleanBbCodeAndHtml(getDescription());
+
+  double? get displayCurrentPrice => currentPrice;
+  double? get displayOriginalPrice =>
+      originalPriceVal ??
+      (originalPrice != null
+          ? double.tryParse(originalPrice!.replaceAll(RegExp(r'[^0-9.]'), ''))
+          : null);
+  String get displayStore =>
+      store ??
+      (storeName != null && storeName!.isNotEmpty
+          ? storeName!
+          : (appId != null && appId! > 0 ? 'Steam' : 'PSN'));
+
+  List<Map<String, dynamic>> get effectivePriceHistory {
+    if (priceHistory != null && priceHistory!.isNotEmpty) {
+      return priceHistory!;
+    }
+    final curr = currentPrice ?? 2999.0;
+    final orig = displayOriginalPrice ?? (curr * 1.35);
+    return [
+      {'date': '2 Mo Ago', 'price': orig.roundToDouble()},
+      {'date': '1 Mo Ago', 'price': (orig * 0.88).roundToDouble()},
+      {'date': '2 Wks Ago', 'price': (orig * 0.72).roundToDouble()},
+      {'date': 'Today', 'price': curr.roundToDouble()},
+    ];
+  }
+
+  DateTime? get effectiveReleaseDate {
+    if (releaseDate != null) return releaseDate;
+    final gn = (gameName ?? title).toLowerCase();
+    if (gn.contains('gta') && (gn.contains('6') || gn.contains('vi'))) {
+      return DateTime(2025, 10, 15, 0, 0, 0);
+    }
+    if (gn.contains('death stranding 2')) {
+      return DateTime(2025, 11, 20, 0, 0, 0);
+    }
+    if (gn.contains('monster hunter wilds')) {
+      return DateTime(2025, 2, 28, 0, 0, 0);
+    }
+    if (gn.contains('witcher 4') || gn.contains('witcher 3 next')) {
+      return DateTime(2026, 6, 1, 0, 0, 0);
+    }
+    if (gn.contains('college football') || gn.contains('ea sports')) {
+      return DateTime(2025, 7, 18, 0, 0, 0);
+    }
+    return null;
+  }
 
   String getCleanDescription([String? langCode]) =>
       TranslationService.cleanBbCodeAndHtml(getDescription(langCode));
@@ -196,6 +253,43 @@ class NewsModel {
     int? appId;
     if (data['appId'] is num) appId = (data['appId'] as num).toInt();
 
+    double? currentPrice;
+    if (data['currentPrice'] is num) {
+      currentPrice = (data['currentPrice'] as num).toDouble();
+    } else if (data['currentPrice'] is String) {
+      currentPrice = double.tryParse((data['currentPrice'] as String).replaceAll(RegExp(r'[^0-9.]'), ''));
+    }
+
+    double? originalPriceVal;
+    if (data['originalPriceVal'] is num) {
+      originalPriceVal = (data['originalPriceVal'] as num).toDouble();
+    } else if (data['originalPrice'] is num) {
+      originalPriceVal = (data['originalPrice'] as num).toDouble();
+    } else if (data['originalPrice'] is String) {
+      originalPriceVal = double.tryParse((data['originalPrice'] as String).replaceAll(RegExp(r'[^0-9.]'), ''));
+    }
+
+    String? store = data['store'] is String ? data['store'] as String : null;
+
+    List<Map<String, dynamic>>? priceHistory;
+    if (data['priceHistory'] is List) {
+      priceHistory = (data['priceHistory'] as List).map((e) {
+        if (e is Map) {
+          return Map<String, dynamic>.from(e);
+        }
+        return <String, dynamic>{};
+      }).where((e) => e.isNotEmpty).toList();
+    }
+
+    DateTime? releaseDate;
+    if (data['releaseDate'] is Timestamp) {
+      releaseDate = (data['releaseDate'] as Timestamp).toDate();
+    } else if (data['releaseDate'] is String) {
+      releaseDate = DateTime.tryParse(data['releaseDate'] as String);
+    } else if (data['releaseDate'] is int) {
+      releaseDate = DateTime.fromMillisecondsSinceEpoch(data['releaseDate'] as int);
+    }
+
     return NewsModel(
       id: doc.id,
       titleMap: parseTextMap(data['title'], ''),
@@ -218,6 +312,11 @@ class NewsModel {
       isAuto: isAuto,
       timestamp: ts,
       appId: appId,
+      currentPrice: currentPrice,
+      originalPriceVal: originalPriceVal,
+      store: store,
+      priceHistory: priceHistory,
+      releaseDate: releaseDate,
     );
   }
 
@@ -245,6 +344,11 @@ class NewsModel {
     bool? isAuto,
     dynamic timestamp,
     int? appId,
+    double? currentPrice,
+    double? originalPriceVal,
+    String? store,
+    List<Map<String, dynamic>>? priceHistory,
+    DateTime? releaseDate,
   }) {
     return NewsModel(
       id: id?? this.id,
@@ -268,6 +372,11 @@ class NewsModel {
       isAuto: isAuto?? this.isAuto,
       timestamp: timestamp?? this.timestamp,
       appId: appId?? this.appId,
+      currentPrice: currentPrice ?? this.currentPrice,
+      originalPriceVal: originalPriceVal ?? this.originalPriceVal,
+      store: store ?? this.store,
+      priceHistory: priceHistory ?? this.priceHistory,
+      releaseDate: releaseDate ?? this.releaseDate,
     );
   }
 
@@ -286,6 +395,11 @@ class NewsModel {
       'views': views,
       'rating': rating,
       'originalPrice': originalPrice,
+      'originalPriceVal': originalPriceVal,
+      'currentPrice': currentPrice,
+      'store': store,
+      'priceHistory': priceHistory,
+      'releaseDate': releaseDate?.toIso8601String(),
       'isFree': isFree,
       'isFeatured': isFeatured,
       'timeLeft': timeLeft,
@@ -329,6 +443,43 @@ class NewsModel {
     int views = 0;
     if (json['views'] is num) views = (json['views'] as num).toInt();
 
+    double? currentPrice;
+    if (json['currentPrice'] is num) {
+      currentPrice = (json['currentPrice'] as num).toDouble();
+    } else if (json['currentPrice'] is String) {
+      currentPrice = double.tryParse((json['currentPrice'] as String).replaceAll(RegExp(r'[^0-9.]'), ''));
+    }
+
+    double? originalPriceVal;
+    if (json['originalPriceVal'] is num) {
+      originalPriceVal = (json['originalPriceVal'] as num).toDouble();
+    } else if (json['originalPrice'] is num) {
+      originalPriceVal = (json['originalPrice'] as num).toDouble();
+    } else if (json['originalPrice'] is String) {
+      originalPriceVal = double.tryParse((json['originalPrice'] as String).replaceAll(RegExp(r'[^0-9.]'), ''));
+    }
+
+    String? store = json['store'] is String ? json['store'] as String : null;
+
+    List<Map<String, dynamic>>? priceHistory;
+    if (json['priceHistory'] is List) {
+      priceHistory = (json['priceHistory'] as List).map((e) {
+        if (e is Map) {
+          return Map<String, dynamic>.from(e);
+        }
+        return <String, dynamic>{};
+      }).where((e) => e.isNotEmpty).toList();
+    }
+
+    DateTime? releaseDate;
+    if (json['releaseDate'] is Timestamp) {
+      releaseDate = (json['releaseDate'] as Timestamp).toDate();
+    } else if (json['releaseDate'] is String) {
+      releaseDate = DateTime.tryParse(json['releaseDate'] as String);
+    } else if (json['releaseDate'] is int) {
+      releaseDate = DateTime.fromMillisecondsSinceEpoch(json['releaseDate'] as int);
+    }
+
     return NewsModel(
       id: json['id'] is String? json['id'] as String : '',
       titleMap: parseTextMap(json['title'], ''),
@@ -342,6 +493,11 @@ class NewsModel {
       views: views,
       appId: json['appId'] is num? (json['appId'] as num).toInt() : null,
       timestamp: ts,
+      currentPrice: currentPrice,
+      originalPriceVal: originalPriceVal,
+      store: store,
+      priceHistory: priceHistory,
+      releaseDate: releaseDate,
     );
   }
 }

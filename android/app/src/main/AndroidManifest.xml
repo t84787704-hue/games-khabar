@@ -43,5 +43,18 @@
                 <category android:name="android.intent.category.LAUNCHER"/>
             </intent-filter>
         </activity>
+
+        <!-- Android Home Widget for Game Countdown -->
+        <receiver
+            android:name=".CountdownWidgetProvider"
+            android:exported="true"
+            android:label="GK Game Countdown">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+            </intent-filter>
+            <meta-data
+                android:name="android.appwidget.provider"
+                android:resource="@xml/countdown_widget_info" />
+        </receiver>
     </application>
 </manifest>

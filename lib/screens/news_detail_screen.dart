@@ -7,8 +7,11 @@ import '../models/news_model.dart';
 import '../services/bookmark_service.dart';
 import '../services/theme_service.dart';
 import '../services/language_service.dart';
+import '../services/streak_service.dart';
 import '../widgets/app_image_view.dart';
 import '../widgets/translated_news_title.dart';
+import '../widgets/price_graph_widget.dart';
+import '../widgets/game_countdown_widget.dart';
 
 class NewsDetailScreen extends StatefulWidget {
   final NewsModel news;
@@ -21,6 +24,13 @@ class NewsDetailScreen extends StatefulWidget {
 class _NewsDetailScreenState extends State<NewsDetailScreen> {
   bool _isExpanded = false;
   final BookmarkService _bookmarkService = BookmarkService();
+
+  @override
+  void initState() {
+    super.initState();
+    // Daily task: reading articles contributes to streak
+    StreakService().recordArticleRead(widget.news.id);
+  }
 
   Color get bgDark => ThemeService.bg;
   Color get cardDark => ThemeService.card;
@@ -193,6 +203,15 @@ class _NewsDetailScreenState extends State<NewsDetailScreen> {
               decoration: BoxDecoration(borderRadius: BorderRadius.circular(16), border: Border.all(color: borderDark)),
               child: AppImageView(imageUrl: widget.news.imageUrl, fit: BoxFit.cover),
             ),
+            // Live Countdown Module (if upcoming game with release date)
+            if (widget.news.effectiveReleaseDate != null)
+              GameCountdownWidget(
+                targetDate: widget.news.effectiveReleaseDate!,
+                gameName: widget.news.gameName ?? widget.news.category,
+                subtitle: widget.news.category,
+              ),
+            // Price Tracker Module (Price Graph + Set Alert button)
+            PriceGraphWidget(news: widget.news),
             Padding(
               padding: const EdgeInsets.fromLTRB(16, 8, 16, 24),
               child: Column(

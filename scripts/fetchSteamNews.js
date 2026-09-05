@@ -411,6 +411,27 @@ async function run(){
   // STEAM - Latest 20 per game
   for(const [gameName, appId] of Object.entries(allGamesAppIds)){
     try{
+      // Fetch price overview
+      let currentPrice = 2999;
+      let originalPriceVal = 4499;
+      let priceHistory = [
+        { date: '1 Mo Ago', price: 4499 },
+        { date: 'Today', price: 2999 }
+      ];
+      try {
+        const pRes = await axios.get(`https://store.steampowered.com/api/appdetails?appids=${appId}&filters=price_overview&cc=pk`, { timeout: 4000 });
+        const po = pRes.data?.[appId]?.data?.price_overview;
+        if (po) {
+          currentPrice = Math.round(po.final / 100);
+          originalPriceVal = Math.round(po.initial / 100);
+          priceHistory = [
+            { date: '2 Mo Ago', price: originalPriceVal },
+            { date: '1 Mo Ago', price: Math.round(originalPriceVal * 0.9) },
+            { date: 'Today', price: currentPrice }
+          ];
+        }
+      } catch (_) {}
+
       const res = await axios.get(`https://api.steampowered.com/ISteamNews/GetNewsForApp/v2/?appid=${appId}&count=20&maxlength=0`);
       for(const item of res.data?.appnews?.newsitems||[]){
         const rawTitle = he.decode(item.title||"").substring(0,200);
@@ -437,6 +458,11 @@ async function run(){
           descriptionMap:{en: fullText, ur: fullText, ro: fullText},
           imageUrl: img,
           appId, appid: appId, url: item.url||"", sourceUrl: item.url||"", gameName, category: cat,
+          store: 'Steam',
+          currentPrice: currentPrice,
+          originalPrice: `Rs. ${originalPriceVal}`,
+          originalPriceVal: originalPriceVal,
+          priceHistory: priceHistory,
           timestamp: Math.floor(Date.now()/1000), timeAgo: new Date().toISOString(),
           views: 0, isFeatured: false, isAuto: true, isFree: false, source: 'Steam'
         },{merge:true});

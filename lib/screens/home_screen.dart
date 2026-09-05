@@ -22,6 +22,10 @@ import 'saved_news_screen.dart';
 import 'profile_screen.dart';
 import 'following_screen.dart';
 import '../widgets/news_card.dart';
+import '../widgets/streak_banner_widget.dart';
+import '../services/streak_service.dart';
+import '../services/price_alert_service.dart';
+import '../services/countdown_service.dart';
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
@@ -52,6 +56,9 @@ class _HomeScreenState extends State<HomeScreen> {
   void initState() {
     super.initState();
     _initFirebaseAndServices();
+    StreakService().init();
+    PriceAlertService().init();
+    CountdownService().init();
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _checkFirstLaunchLanguage();
     });
@@ -140,6 +147,8 @@ class _HomeScreenState extends State<HomeScreen> {
         });
       }
     }
+
+    StreakService().recordArticleRead(news.id);
 
     Navigator.push(
       context,
@@ -727,7 +736,11 @@ class _HomeScreenState extends State<HomeScreen> {
                 parent: BouncingScrollPhysics(),
               ),
               slivers: [
-              if (featuredNews != null && _searchQuery.isEmpty)
+                if (_searchQuery.isEmpty)
+                  const SliverToBoxAdapter(
+                    child: StreakBannerWidget(),
+                  ),
+                if (featuredNews != null && _searchQuery.isEmpty)
                 SliverToBoxAdapter(
                   child: Padding(
                     padding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
