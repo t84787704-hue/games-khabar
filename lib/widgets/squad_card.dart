@@ -36,7 +36,7 @@ class _SquadCardState extends State<SquadCard> {
     final squad = widget.squad;
     final currentGamer = GamerAuthService().currentGamer;
     final currentUid = currentGamer?.uid ?? '';
-    final isOwnPost = currentUid == squad.userId;
+    final isOwnPost = currentUid.isNotEmpty && (currentUid == squad.userId || (currentGamer?.username.isNotEmpty == true && currentGamer?.username == squad.username));
     final hasRequested = squad.joinRequests.contains(currentUid);
 
     // Rank badge for squad leader
@@ -61,7 +61,10 @@ class _SquadCardState extends State<SquadCard> {
       decoration: BoxDecoration(
         color: GamerTheme.cardDark,
         borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: GamerTheme.borderDark, width: 1.2),
+        border: Border.all(
+          color: isOwnPost ? GamerTheme.accentOrange.withOpacity(0.7) : GamerTheme.borderDark,
+          width: isOwnPost ? 1.5 : 1.2,
+        ),
         boxShadow: [
           BoxShadow(
             color: Colors.black.withOpacity(0.4),
@@ -111,6 +114,26 @@ class _SquadCardState extends State<SquadCard> {
                             ),
                           ),
                           RankBadgeWidget(badge: leaderBadge, size: 12),
+                          if (isOwnPost) ...[
+                            const SizedBox(width: 6),
+                            Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                              decoration: BoxDecoration(
+                                color: GamerTheme.accentOrange.withOpacity(0.2),
+                                borderRadius: BorderRadius.circular(6),
+                                border: Border.all(color: GamerTheme.accentOrange, width: 1.2),
+                              ),
+                              child: const Text(
+                                'Your Post',
+                                style: TextStyle(
+                                  color: GamerTheme.accentOrange,
+                                  fontSize: 10,
+                                  fontWeight: FontWeight.w900,
+                                  letterSpacing: 0.3,
+                                ),
+                              ),
+                            ),
+                          ],
                         ],
                       ),
                       const SizedBox(height: 2),
@@ -287,6 +310,26 @@ class _SquadCardState extends State<SquadCard> {
                 ),
                 const Spacer(),
                 if (isOwnPost) ...[
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                    decoration: BoxDecoration(
+                      color: GamerTheme.accentOrange.withOpacity(0.15),
+                      borderRadius: BorderRadius.circular(6),
+                      border: Border.all(color: GamerTheme.accentOrange.withOpacity(0.5)),
+                    ),
+                    child: const Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Icon(Icons.person_rounded, color: GamerTheme.accentOrange, size: 12),
+                        SizedBox(width: 4),
+                        Text(
+                          'Your Post',
+                          style: TextStyle(color: GamerTheme.accentOrange, fontSize: 11, fontWeight: FontWeight.bold),
+                        ),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(width: 8),
                   TextButton.icon(
                     style: TextButton.styleFrom(
                       foregroundColor: GamerTheme.textMuted,

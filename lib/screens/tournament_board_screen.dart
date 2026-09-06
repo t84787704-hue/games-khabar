@@ -1,4 +1,5 @@
 import 'dart:io';
+import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:intl/intl.dart';
@@ -1240,60 +1241,45 @@ class _TournamentBoardScreenState extends State<TournamentBoardScreen> with Sing
 
     showDialog(
       context: context,
-      builder: (ctx) => AlertDialog(
-        backgroundColor: GamerTheme.cardDark,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-        title: Row(
-          children: [
-            Icon(
-              result.isVictory ? Icons.verified_rounded : Icons.info_outline_rounded,
-              color: result.isVictory ? GamerTheme.neonGreen : GamerTheme.accentOrange,
-            ),
-            const SizedBox(width: 8),
-            Text(
-              result.isVictory ? 'VICTORY DETECTED! 🏆' : 'RESULT SUBMITTED',
-              style: TextStyle(
-                color: result.isVictory ? GamerTheme.neonGreen : Colors.white,
-                fontWeight: FontWeight.w900,
-                fontSize: 16,
+      barrierColor: Colors.black.withOpacity(0.65),
+      builder: (ctx) => BackdropFilter(
+        filter: ImageFilter.blur(sigmaX: 5, sigmaY: 5),
+        child: AlertDialog(
+          backgroundColor: GamerTheme.cardDark,
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+          title: const Row(
+            children: [
+              Icon(
+                Icons.info_outline_rounded,
+                color: GamerTheme.accentOrange,
               ),
-            ),
-          ],
-        ),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            if (result.localPath.isNotEmpty && File(result.localPath).existsSync()) ...[
-              ClipRRect(
-                borderRadius: BorderRadius.circular(10),
-                child: Image.file(
-                  File(result.localPath),
-                  height: 120,
-                  width: double.infinity,
-                  fit: BoxFit.cover,
+              SizedBox(width: 8),
+              Text(
+                'RESULT SUBMITTED',
+                style: TextStyle(
+                  color: Colors.white,
+                  fontWeight: FontWeight.w900,
+                  fontSize: 16,
                 ),
               ),
-              const SizedBox(height: 10),
             ],
-            Text(
-              result.isVictory
-                  ? 'Awesome! Victory keywords verified from your screenshot. Host will confirm and transfer ${room.escrowCoins} Coins!'
-                  : 'Screenshot uploaded for host verification. Host will review the match result.',
-              style: const TextStyle(color: Colors.white, fontSize: 13),
+          ),
+          content: const Text(
+            'Screenshot uploaded for host verification. Host will review the match result.',
+            style: TextStyle(color: Colors.white, fontSize: 13, height: 1.4),
+          ),
+          actions: [
+            ElevatedButton(
+              style: ElevatedButton.styleFrom(
+                backgroundColor: GamerTheme.accentBlue,
+                foregroundColor: GamerTheme.bgDark,
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+              ),
+              onPressed: () => Navigator.pop(ctx),
+              child: const Text('OK', style: TextStyle(fontWeight: FontWeight.bold)),
             ),
           ],
         ),
-        actions: [
-          ElevatedButton(
-            style: ElevatedButton.styleFrom(
-              backgroundColor: GamerTheme.accentBlue,
-              foregroundColor: GamerTheme.bgDark,
-            ),
-            onPressed: () => Navigator.pop(ctx),
-            child: const Text('OK', style: TextStyle(fontWeight: FontWeight.bold)),
-          ),
-        ],
       ),
     );
   }
@@ -1320,8 +1306,11 @@ class _TournamentBoardScreenState extends State<TournamentBoardScreen> with Sing
 
     showDialog(
       context: context,
-      builder: (ctx) => StatefulBuilder(
-        builder: (ctx, setDialogState) => AlertDialog(
+      barrierColor: Colors.black.withOpacity(0.65),
+      builder: (ctx) => BackdropFilter(
+        filter: ImageFilter.blur(sigmaX: 5, sigmaY: 5),
+        child: StatefulBuilder(
+          builder: (ctx, setDialogState) => AlertDialog(
           backgroundColor: GamerTheme.cardDark,
           shape: RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(20),
@@ -1479,7 +1468,8 @@ class _TournamentBoardScreenState extends State<TournamentBoardScreen> with Sing
           ],
         ),
       ),
-    );
+    ),
+  );
   }
 
   @override

@@ -48,6 +48,7 @@ class SquadPost {
     } else if (raw is String) {
       created = DateTime.tryParse(raw);
     }
+    created ??= DateTime.now();
 
     return SquadPost(
       id: data['id'] ?? doc.id,
