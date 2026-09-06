@@ -776,7 +776,7 @@ class _VerificationScreenState extends State<VerificationScreen> {
                 decoration: BoxDecoration(
                   color: (item.isMet ? GamerTheme.neonGreen : GamerTheme.redAccent).withOpacity(0.12),
                   borderRadius: BorderRadius.circular(10),
-                ],
+                ),
                 child: Icon(
                   item.icon,
                   color: item.isMet ? GamerTheme.neonGreen : GamerTheme.redAccent,

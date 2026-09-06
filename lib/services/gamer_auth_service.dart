@@ -180,6 +180,40 @@ class GamerAuthService {
     }
   }
 
+  /// Alias for getUserProfile
+  Future<GamerUser?> fetchUserProfile(String uid) => getUserProfile(uid);
+
+  /// Updates profile fields for current user
+  Future<void> updateProfile({
+    String? rank,
+    double? kdRatio,
+    String? gameId,
+    String? bio,
+    String? displayName,
+    String? photoUrl,
+    String? verificationStatus,
+  }) async {
+    final uid = currentUid;
+    if (uid == null) return;
+    final Map<String, dynamic> updates = {};
+    if (rank != null) updates['rank'] = rank;
+    if (kdRatio != null) updates['kdRatio'] = kdRatio;
+    if (gameId != null) updates['gameId'] = gameId;
+    if (bio != null) updates['bio'] = bio;
+    if (displayName != null) updates['displayName'] = displayName;
+    if (photoUrl != null) updates['photoUrl'] = photoUrl;
+    if (verificationStatus != null) updates['verificationStatus'] = verificationStatus;
+
+    if (updates.isNotEmpty) {
+      try {
+        await _firestore.collection('users').doc(uid).update(updates);
+        await refreshCurrentGamer();
+      } catch (e) {
+        debugPrint('Error updating user profile $uid: $e');
+      }
+    }
+  }
+
   Stream<GamerUser?> userProfileStream(String uid) {
     return _firestore.collection('users').doc(uid).snapshots().map((doc) {
       if (doc.exists && doc.data() != null) {

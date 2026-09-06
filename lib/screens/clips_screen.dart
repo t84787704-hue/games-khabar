@@ -1,5 +1,8 @@
+import 'dart:convert';
+import 'dart:io';
 import 'dart:math';
 import 'package:flutter/material.dart';
+import 'package:image_picker/image_picker.dart';
 import 'package:share_plus/share_plus.dart';
 import '../constants/gamer_theme.dart';
 import '../models/clip_model.dart';
@@ -90,107 +93,535 @@ class _ClipsScreenState extends State<ClipsScreen> with SingleTickerProviderStat
     }
 
     final titleController = TextEditingController();
-    final urlController = TextEditingController();
     String selectedTag = 'BGMI';
+    File? pickedFile;
+    String? fileName;
+    bool isVideo = false;
+    int? fileSizeBytes;
+    bool isUploading = false;
+    String uploadStatus = '';
 
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
       backgroundColor: GamerTheme.cardDark,
       shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(24))),
-      builder: (ctx) => Padding(
-        padding: EdgeInsets.only(
-          bottom: MediaQuery.of(ctx).viewInsets.bottom + 20,
-          left: 20,
-          right: 20,
-          top: 20,
-        ),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Center(
-              child: Container(width: 40, height: 4, decoration: BoxDecoration(color: GamerTheme.borderLight, borderRadius: BorderRadius.circular(2))),
-            ),
-            const SizedBox(height: 16),
-            const Row(
-              children: [
-                Text('🎬', style: TextStyle(fontSize: 22)),
-                SizedBox(width: 8),
-                Text(
-                  'POST GAMING CLIP / MEME',
-                  style: TextStyle(color: GamerTheme.textWhite, fontSize: 16, fontWeight: FontWeight.w900, letterSpacing: 0.5),
+      builder: (ctx) => StatefulBuilder(
+        builder: (context, setModalState) {
+          Future<void> pickMediaFromGallery({required bool videoOnly}) async {
+            try {
+              final picker = ImagePicker();
+              XFile? picked;
+              if (videoOnly) {
+                picked = await picker.pickVideo(source: ImageSource.gallery);
+              } else {
+                picked = await picker.pickImage(source: ImageSource.gallery, imageQuality: 85);
+              }
+
+              if (picked != null) {
+                final file = File(picked.path);
+                final size = await file.length();
+                final name = picked.name.isNotEmpty ? picked.name : file.path.split('/').last;
+                final lower = picked.path.toLowerCase();
+                final isVid = videoOnly ||
+                    lower.endsWith('.mp4') ||
+                    lower.endsWith('.mov') ||
+                    lower.endsWith('.mkv') ||
+                    lower.endsWith('.webm') ||
+                    lower.endsWith('.3gp');
+
+                setModalState(() {
+                  pickedFile = file;
+                  fileName = name;
+                  isVideo = isVid;
+                  fileSizeBytes = size;
+                });
+              }
+            } catch (e) {
+              debugPrint('Error picking media: $e');
+              if (mounted) {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  SnackBar(content: Text('Could not open gallery: $e'), backgroundColor: GamerTheme.redAccent),
+                );
+              }
+            }
+          }
+
+          void showPickerChoice() {
+            showModalBottomSheet(
+              context: context,
+              backgroundColor: GamerTheme.cardElevated,
+              shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(20))),
+              builder: (choiceCtx) => SafeArea(
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(vertical: 20, horizontal: 16),
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Container(
+                        width: 40,
+                        height: 4,
+                        decoration: BoxDecoration(color: GamerTheme.borderLight, borderRadius: BorderRadius.circular(2)),
+                      ),
+                      const SizedBox(height: 16),
+                      const Text(
+                        'SELECT CLIP FROM GALLERY',
+                        style: TextStyle(color: GamerTheme.textWhite, fontSize: 16, fontWeight: FontWeight.w900),
+                      ),
+                      const SizedBox(height: 16),
+                      ListTile(
+                        leading: Container(
+                          padding: const EdgeInsets.all(10),
+                          decoration: BoxDecoration(color: GamerTheme.accentOrange.withOpacity(0.2), shape: BoxShape.circle),
+                          child: const Icon(Icons.videocam_rounded, color: GamerTheme.accentOrange),
+                        ),
+                        title: const Text('Screen Recording (Video)', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+                        subtitle: const Text('Pick MP4, MOV game screen recordings', style: TextStyle(color: GamerTheme.textMuted, fontSize: 12)),
+                        onTap: () {
+                          Navigator.pop(choiceCtx);
+                          pickMediaFromGallery(videoOnly: true);
+                        },
+                      ),
+                      const Divider(color: GamerTheme.borderDark),
+                      ListTile(
+                        leading: Container(
+                          padding: const EdgeInsets.all(10),
+                          decoration: BoxDecoration(color: GamerTheme.accentBlue.withOpacity(0.2), shape: BoxShape.circle),
+                          child: const Icon(Icons.photo_library_rounded, color: GamerTheme.accentBlue),
+                        ),
+                        title: const Text('Gameplay Screenshot / Meme', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+                        subtitle: const Text('Pick JPG, PNG game clutches & memes', style: TextStyle(color: GamerTheme.textMuted, fontSize: 12)),
+                        onTap: () {
+                          Navigator.pop(choiceCtx);
+                          pickMediaFromGallery(videoOnly: false);
+                        },
+                      ),
+                    ],
+                  ),
                 ),
-              ],
+              ),
+            );
+          }
+
+          return Padding(
+            padding: EdgeInsets.only(
+              bottom: MediaQuery.of(ctx).viewInsets.bottom + 20,
+              left: 20,
+              right: 20,
+              top: 20,
             ),
-            const SizedBox(height: 16),
-            const Text('CLIP CAPTION / TITLE', style: TextStyle(color: GamerTheme.textMuted, fontSize: 11, fontWeight: FontWeight.w800)),
-            const SizedBox(height: 6),
-            TextField(
-              controller: titleController,
-              style: const TextStyle(color: Colors.white, fontSize: 13),
-              decoration: InputDecoration(
-                hintText: 'e.g. Crazy 1v4 clutch in Bootcamp! 🔥 #BGMI',
-                hintStyle: const TextStyle(color: GamerTheme.textMuted),
-                filled: true,
-                fillColor: GamerTheme.bgDark,
-                border: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: const BorderSide(color: GamerTheme.borderDark)),
-                contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+            child: SingleChildScrollView(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Center(
+                    child: Container(width: 40, height: 4, decoration: BoxDecoration(color: GamerTheme.borderLight, borderRadius: BorderRadius.circular(2))),
+                  ),
+                  const SizedBox(height: 16),
+                  const Row(
+                    children: [
+                      Text('🎬', style: TextStyle(fontSize: 22)),
+                      SizedBox(width: 8),
+                      Text(
+                        'POST GAMING CLIP / MEME',
+                        style: TextStyle(color: GamerTheme.textWhite, fontSize: 16, fontWeight: FontWeight.w900, letterSpacing: 0.5),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 16),
+                  const Text('CLIP CAPTION / TITLE', style: TextStyle(color: GamerTheme.textMuted, fontSize: 11, fontWeight: FontWeight.w800)),
+                  const SizedBox(height: 6),
+                  TextField(
+                    controller: titleController,
+                    enabled: !isUploading,
+                    style: const TextStyle(color: Colors.white, fontSize: 13),
+                    decoration: InputDecoration(
+                      hintText: 'e.g. Crazy 1v4 clutch in Bootcamp! 🔥 #BGMI',
+                      hintStyle: const TextStyle(color: GamerTheme.textMuted),
+                      filled: true,
+                      fillColor: GamerTheme.bgDark,
+                      border: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: const BorderSide(color: GamerTheme.borderDark)),
+                      contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                    ),
+                  ),
+                  const SizedBox(height: 14),
+
+                  // Tag selection
+                  Row(
+                    children: [
+                      const Text('GAME TAG: ', style: TextStyle(color: GamerTheme.textMuted, fontSize: 11, fontWeight: FontWeight.w800)),
+                      const SizedBox(width: 8),
+                      Wrap(
+                        spacing: 6,
+                        children: ['BGMI', 'Free Fire', 'COD', 'Valorant'].map((tag) {
+                          final isSel = selectedTag == tag;
+                          return GestureDetector(
+                            onTap: isUploading ? null : () => setModalState(() => selectedTag = tag),
+                            child: Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                              decoration: BoxDecoration(
+                                color: isSel ? GamerTheme.accentOrange : GamerTheme.bgDark,
+                                borderRadius: BorderRadius.circular(12),
+                                border: Border.all(color: isSel ? GamerTheme.accentOrange : GamerTheme.borderDark),
+                              ),
+                              child: Text(
+                                tag,
+                                style: TextStyle(
+                                  color: isSel ? GamerTheme.bgDark : Colors.white70,
+                                  fontSize: 11,
+                                  fontWeight: FontWeight.bold,
+                                ),
+                              ),
+                            ),
+                          );
+                        }).toList(),
+                      ),
+                    ],
+                  ),
+
+                  const SizedBox(height: 16),
+
+                  // Upload from gallery / Video Preview section
+                  const Text('SELECT CLIP FROM PHONE (GALLERY)', style: TextStyle(color: GamerTheme.textMuted, fontSize: 11, fontWeight: FontWeight.w800)),
+                  const SizedBox(height: 8),
+
+                  if (pickedFile == null) ...[
+                    // Button: SELECT CLIP FROM PHONE 📱
+                    InkWell(
+                      onTap: isUploading ? null : showPickerChoice,
+                      borderRadius: BorderRadius.circular(14),
+                      child: Container(
+                        width: double.infinity,
+                        padding: const EdgeInsets.symmetric(vertical: 24, horizontal: 16),
+                        decoration: BoxDecoration(
+                          color: GamerTheme.bgDark,
+                          borderRadius: BorderRadius.circular(14),
+                          border: Border.all(color: GamerTheme.accentOrange.withOpacity(0.6), width: 1.5),
+                          boxShadow: [
+                            BoxShadow(
+                              color: GamerTheme.accentOrange.withOpacity(0.08),
+                              blurRadius: 10,
+                              offset: const Offset(0, 4),
+                            ),
+                          ],
+                        ),
+                        child: Column(
+                          children: [
+                            Container(
+                              padding: const EdgeInsets.all(12),
+                              decoration: BoxDecoration(
+                                color: GamerTheme.accentOrange.withOpacity(0.15),
+                                shape: BoxShape.circle,
+                              ),
+                              child: const Icon(Icons.video_library_rounded, color: GamerTheme.accentOrange, size: 28),
+                            ),
+                            const SizedBox(height: 12),
+                            const Text(
+                              'SELECT CLIP FROM PHONE 📱',
+                              style: TextStyle(
+                                color: GamerTheme.accentOrange,
+                                fontWeight: FontWeight.w900,
+                                fontSize: 14,
+                                letterSpacing: 0.5,
+                              ),
+                            ),
+                            const SizedBox(height: 4),
+                            const Text(
+                              'Pick your screen recording video or screenshot from gallery',
+                              textAlign: TextAlign.center,
+                              style: TextStyle(color: GamerTheme.textMuted, fontSize: 11),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ] else ...[
+                    // Video/image thumbnail preview with file name after selection
+                    Container(
+                      width: double.infinity,
+                      decoration: BoxDecoration(
+                        color: GamerTheme.bgDark,
+                        borderRadius: BorderRadius.circular(14),
+                        border: Border.all(color: GamerTheme.accentOrange, width: 1.5),
+                      ),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          ClipRRect(
+                            borderRadius: const BorderRadius.vertical(top: Radius.circular(12)),
+                            child: SizedBox(
+                              height: 140,
+                              width: double.infinity,
+                              child: Stack(
+                                fit: StackFit.expand,
+                                children: [
+                                  if (!isVideo)
+                                    Image.file(pickedFile!, fit: BoxFit.cover)
+                                  else
+                                    Container(
+                                      decoration: const BoxDecoration(
+                                        gradient: LinearGradient(
+                                          begin: Alignment.topLeft,
+                                          end: Alignment.bottomRight,
+                                          colors: [Color(0xFF1E1430), Color(0xFF0F0818)],
+                                        ),
+                                      ),
+                                      child: const Center(
+                                        child: Column(
+                                          mainAxisSize: MainAxisSize.min,
+                                          children: [
+                                            Icon(Icons.play_circle_fill_rounded, size: 54, color: GamerTheme.accentOrange),
+                                            SizedBox(height: 6),
+                                            Text(
+                                              'VIDEO SCREEN RECORDING',
+                                              style: TextStyle(
+                                                color: Colors.white70,
+                                                fontSize: 11,
+                                                fontWeight: FontWeight.w800,
+                                                letterSpacing: 1,
+                                              ),
+                                            ),
+                                          ],
+                                        ),
+                                      ),
+                                    ),
+                                  // Gradient overlay
+                                  Container(
+                                    decoration: const BoxDecoration(
+                                      gradient: LinearGradient(
+                                        begin: Alignment.topCenter,
+                                        end: Alignment.bottomCenter,
+                                        colors: [Colors.black45, Colors.transparent, Colors.black87],
+                                      ),
+                                    ),
+                                  ),
+                                  // Tag badge
+                                  Positioned(
+                                    top: 10,
+                                    left: 10,
+                                    child: Container(
+                                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                                      decoration: BoxDecoration(
+                                        color: isVideo ? Colors.redAccent : GamerTheme.accentBlue,
+                                        borderRadius: BorderRadius.circular(6),
+                                      ),
+                                      child: Row(
+                                        mainAxisSize: MainAxisSize.min,
+                                        children: [
+                                          Icon(isVideo ? Icons.videocam_rounded : Icons.image_rounded, color: Colors.white, size: 12),
+                                          const SizedBox(width: 4),
+                                          Text(
+                                            isVideo ? 'VIDEO' : 'IMAGE',
+                                            style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w900, fontSize: 10),
+                                          ),
+                                        ],
+                                      ),
+                                    ),
+                                  ),
+                                  // Ready checkmark
+                                  Positioned(
+                                    top: 10,
+                                    right: 10,
+                                    child: Container(
+                                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                                      decoration: BoxDecoration(
+                                        color: Colors.green.withOpacity(0.85),
+                                        borderRadius: BorderRadius.circular(6),
+                                      ),
+                                      child: const Text(
+                                        '✓ Selected',
+                                        style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 10),
+                                      ),
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ),
+                          Padding(
+                            padding: const EdgeInsets.all(12),
+                            child: Row(
+                              children: [
+                                Expanded(
+                                  child: Column(
+                                    crossAxisAlignment: CrossAxisAlignment.start,
+                                    children: [
+                                      Text(
+                                        fileName ?? 'Selected File',
+                                        maxLines: 1,
+                                        overflow: TextOverflow.ellipsis,
+                                        style: const TextStyle(
+                                          color: Colors.white,
+                                          fontWeight: FontWeight.bold,
+                                          fontSize: 13,
+                                        ),
+                                      ),
+                                      const SizedBox(height: 2),
+                                      Text(
+                                        fileSizeBytes != null
+                                            ? '${(fileSizeBytes! / (1024 * 1024)).toStringAsFixed(2)} MB • Ready to upload'
+                                            : 'Ready to upload',
+                                        style: const TextStyle(color: GamerTheme.textMuted, fontSize: 11),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                                const SizedBox(width: 8),
+                                // CHANGE VIDEO option
+                                TextButton.icon(
+                                  style: TextButton.styleFrom(
+                                    foregroundColor: GamerTheme.accentOrange,
+                                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                                    shape: RoundedRectangleBorder(
+                                      borderRadius: BorderRadius.circular(8),
+                                      side: const BorderSide(color: GamerTheme.accentOrange),
+                                    ),
+                                  ),
+                                  onPressed: isUploading ? null : showPickerChoice,
+                                  icon: const Icon(Icons.sync_rounded, size: 16),
+                                  label: const Text(
+                                    'CHANGE VIDEO',
+                                    style: TextStyle(fontWeight: FontWeight.w900, fontSize: 11),
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+
+                  if (isUploading) ...[
+                    const SizedBox(height: 12),
+                    Row(
+                      children: [
+                        const SizedBox(
+                          width: 14,
+                          height: 14,
+                          child: CircularProgressIndicator(strokeWidth: 2, color: GamerTheme.accentOrange),
+                        ),
+                        const SizedBox(width: 8),
+                        Text(
+                          uploadStatus.isNotEmpty ? uploadStatus : 'Uploading clip to cloud... ⏳',
+                          style: const TextStyle(color: GamerTheme.accentOrange, fontSize: 12, fontWeight: FontWeight.bold),
+                        ),
+                      ],
+                    ),
+                  ],
+
+                  const SizedBox(height: 20),
+                  SizedBox(
+                    width: double.infinity,
+                    child: ElevatedButton(
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: GamerTheme.accentOrange,
+                        foregroundColor: GamerTheme.bgDark,
+                        padding: const EdgeInsets.symmetric(vertical: 14),
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                      ),
+                      onPressed: isUploading
+                          ? null
+                          : () async {
+                              if (titleController.text.trim().isEmpty) {
+                                ScaffoldMessenger.of(context).showSnackBar(
+                                  const SnackBar(content: Text('Please enter a caption or title for your clip!')),
+                                );
+                                return;
+                              }
+                              if (pickedFile == null) {
+                                ScaffoldMessenger.of(context).showSnackBar(
+                                  const SnackBar(content: Text('Please select a clip or screen recording from your phone first!')),
+                                );
+                                return;
+                              }
+
+                              setModalState(() {
+                                isUploading = true;
+                                uploadStatus = 'Uploading clip to Firebase Storage... ⏳';
+                              });
+
+                              String mediaUrl = '';
+                              try {
+                                mediaUrl = await _clipService.uploadClipMedia(
+                                  file: pickedFile!,
+                                  userId: currentGamer.uid,
+                                  customFileName: fileName,
+                                  isVideo: isVideo,
+                                );
+                              } catch (e) {
+                                debugPrint('Firebase Storage error: $e');
+                                if (!isVideo) {
+                                  // Fallback base64 for image
+                                  final bytes = await pickedFile!.readAsBytes();
+                                  mediaUrl = 'data:image/jpeg;base64,${base64Encode(bytes)}';
+                                } else {
+                                  setModalState(() => isUploading = false);
+                                  if (mounted) {
+                                    ScaffoldMessenger.of(context).showSnackBar(
+                                      SnackBar(
+                                        content: Text('Upload to cloud failed: $e. Please check connection and try again.'),
+                                        backgroundColor: GamerTheme.redAccent,
+                                      ),
+                                    );
+                                  }
+                                  return;
+                                }
+                              }
+
+                              setModalState(() {
+                                uploadStatus = 'Publishing clip to feed... 🚀';
+                              });
+
+                              final clip = GamerClip(
+                                id: '',
+                                userId: currentGamer.uid,
+                                username: currentGamer.username,
+                                displayName: currentGamer.displayName,
+                                userAvatar: currentGamer.photoUrl,
+                                title: titleController.text.trim(),
+                                mediaUrl: mediaUrl,
+                                thumbnail: isVideo ? '' : mediaUrl,
+                                gameTag: selectedTag,
+                                songTitle: 'Original Audio - ${currentGamer.displayName}',
+                                createdAt: DateTime.now(),
+                              );
+                              await _clipService.uploadClip(clip);
+
+                              if (ctx.mounted) {
+                                Navigator.pop(ctx);
+                              }
+                              if (mounted) {
+                                ScaffoldMessenger.of(context).showSnackBar(
+                                  const SnackBar(
+                                    content: Text('🔥 Gaming clip posted to Reels feed!'),
+                                    backgroundColor: GamerTheme.accentOrange,
+                                  ),
+                                );
+                              }
+                            },
+                      child: isUploading
+                          ? const Row(
+                              mainAxisAlignment: MainAxisAlignment.center,
+                              children: [
+                                SizedBox(
+                                  width: 18,
+                                  height: 18,
+                                  child: CircularProgressIndicator(strokeWidth: 2, color: GamerTheme.bgDark),
+                                ),
+                                SizedBox(width: 10),
+                                Text('UPLOADING TO STORAGE... ⏳', style: TextStyle(fontWeight: FontWeight.w900, fontSize: 14)),
+                              ],
+                            )
+                          : const Text('SHARE TO CLIPS FEED 🚀', style: TextStyle(fontWeight: FontWeight.w900, fontSize: 14)),
+                    ),
+                  ),
+                ],
               ),
             ),
-            const SizedBox(height: 14),
-            const Text('IMAGE / CLIP URL', style: TextStyle(color: GamerTheme.textMuted, fontSize: 11, fontWeight: FontWeight.w800)),
-            const SizedBox(height: 6),
-            TextField(
-              controller: urlController,
-              style: const TextStyle(color: Colors.white, fontSize: 13),
-              decoration: InputDecoration(
-                hintText: 'https://images.unsplash.com/... or video link',
-                hintStyle: const TextStyle(color: GamerTheme.textMuted),
-                filled: true,
-                fillColor: GamerTheme.bgDark,
-                border: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: const BorderSide(color: GamerTheme.borderDark)),
-                contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-              ),
-            ),
-            const SizedBox(height: 20),
-            SizedBox(
-              width: double.infinity,
-              child: ElevatedButton(
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: GamerTheme.accentOrange,
-                  foregroundColor: GamerTheme.bgDark,
-                  padding: const EdgeInsets.symmetric(vertical: 14),
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                ),
-                onPressed: () async {
-                  if (titleController.text.trim().isEmpty) return;
-                  Navigator.pop(ctx);
-                  final clip = GamerClip(
-                    id: '',
-                    userId: currentGamer.uid,
-                    username: currentGamer.username,
-                    displayName: currentGamer.displayName,
-                    userAvatar: currentGamer.photoUrl,
-                    title: titleController.text.trim(),
-                    mediaUrl: urlController.text.trim().isNotEmpty
-                        ? urlController.text.trim()
-                        : 'https://images.unsplash.com/photo-1542751371-adc38448a05e?q=80&w=1200&auto=format&fit=crop',
-                    gameTag: selectedTag,
-                    songTitle: 'Original Audio - ${currentGamer.displayName}',
-                  );
-                  await _clipService.uploadClip(clip);
-                  if (mounted) {
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      const SnackBar(content: Text('🔥 Gaming clip posted to Reels feed!'), backgroundColor: GamerTheme.accentOrange),
-                    );
-                  }
-                },
-                child: const Text('SHARE TO CLIPS FEED 🚀', style: TextStyle(fontWeight: FontWeight.w900, fontSize: 14)),
-              ),
-            ),
-          ],
-        ),
+          );
+        },
       ),
     );
   }
@@ -348,14 +779,68 @@ class _ClipsScreenState extends State<ClipsScreen> with SingleTickerProviderStat
       children: [
         // Simulated Video / Image Canvas
         Image.network(
-          clip.mediaUrl,
+          clip.thumbnail.isNotEmpty ? clip.thumbnail : clip.mediaUrl,
           fit: BoxFit.cover,
-          errorBuilder: (_, __, ___) => Container(
-            color: const Color(0xFF140D24),
-            child: const Center(
-              child: Icon(Icons.sports_esports_rounded, size: 80, color: GamerTheme.accentOrange),
-            ),
-          ),
+          errorBuilder: (_, __, ___) {
+            final isVideo = clip.mediaUrl.toLowerCase().contains('.mp4') ||
+                clip.mediaUrl.toLowerCase().contains('.mov') ||
+                clip.mediaUrl.toLowerCase().contains('.webm') ||
+                clip.mediaUrl.toLowerCase().contains('video');
+            return Container(
+              decoration: const BoxDecoration(
+                gradient: LinearGradient(
+                  begin: Alignment.topLeft,
+                  end: Alignment.bottomRight,
+                  colors: [Color(0xFF1E1430), Color(0xFF0F0818), Color(0xFF160D25)],
+                ),
+              ),
+              child: Center(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Container(
+                      padding: const EdgeInsets.all(20),
+                      decoration: BoxDecoration(
+                        shape: BoxShape.circle,
+                        color: GamerTheme.accentOrange.withOpacity(0.2),
+                        border: Border.all(color: GamerTheme.accentOrange.withOpacity(0.6), width: 2),
+                        boxShadow: [
+                          BoxShadow(
+                            color: GamerTheme.accentOrange.withOpacity(0.3),
+                            blurRadius: 20,
+                            spreadRadius: 2,
+                          ),
+                        ],
+                      ),
+                      child: Icon(
+                        isVideo ? Icons.play_arrow_rounded : Icons.sports_esports_rounded,
+                        size: 56,
+                        color: GamerTheme.accentOrange,
+                      ),
+                    ),
+                    const SizedBox(height: 16),
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
+                      decoration: BoxDecoration(
+                        color: Colors.black54,
+                        borderRadius: BorderRadius.circular(16),
+                        border: Border.all(color: GamerTheme.borderDark),
+                      ),
+                      child: Text(
+                        isVideo ? '▶ ${clip.gameTag} SCREEN RECORDING' : '🎮 ${clip.gameTag} CLUTCH',
+                        style: const TextStyle(
+                          color: Colors.white,
+                          fontSize: 12,
+                          fontWeight: FontWeight.w900,
+                          letterSpacing: 1,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            );
+          },
         ),
 
         // Gradient Dark Overlays (Top & Bottom)
