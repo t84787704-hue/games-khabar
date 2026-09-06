@@ -215,7 +215,7 @@ class _TournamentBoardScreenState extends State<TournamentBoardScreen> with Sing
 
           return Padding(
             padding: EdgeInsets.only(
-              bottom: MediaQuery.of(ctx).viewInsets.bottom + 20,
+              bottom: MediaQuery.of(ctx).padding.bottom + MediaQuery.of(ctx).viewInsets.bottom + 20,
               left: 20,
               right: 20,
               top: 20,
@@ -1162,7 +1162,12 @@ class _TournamentBoardScreenState extends State<TournamentBoardScreen> with Sing
       backgroundColor: GamerTheme.cardDark,
       shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(20))),
       builder: (ctx) => Padding(
-        padding: const EdgeInsets.all(20),
+        padding: EdgeInsets.only(
+          left: 20,
+          right: 20,
+          top: 20,
+          bottom: MediaQuery.of(ctx).padding.bottom + 20,
+        ),
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
@@ -1478,7 +1483,12 @@ class _TournamentBoardScreenState extends State<TournamentBoardScreen> with Sing
 
     return Scaffold(
       backgroundColor: GamerTheme.bgDark,
-      body: NestedScrollView(
+      extendBody: false,
+      extendBodyBehindAppBar: false,
+      body: SafeArea(
+        top: true,
+        bottom: true,
+        child: NestedScrollView(
         headerSliverBuilder: (context, innerBoxIsScrolled) => [
           // Top Coin Balance Bar & Rule Banner
           SliverToBoxAdapter(
@@ -1620,6 +1630,7 @@ class _TournamentBoardScreenState extends State<TournamentBoardScreen> with Sing
           ),
         ],
         body: _buildRoomsList(category: _selectedCategory),
+      ),
       ),
       floatingActionButton: FloatingActionButton.extended(
         backgroundColor: GamerTheme.accentBlue,

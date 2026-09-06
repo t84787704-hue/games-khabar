@@ -238,6 +238,8 @@ class _GamerFeedScreenState extends State<GamerFeedScreen> {
 
     return Scaffold(
       backgroundColor: GamerTheme.bgDark,
+      extendBody: false,
+      extendBodyBehindAppBar: false,
       appBar: AppBar(
         titleSpacing: 16,
         title: Row(
@@ -366,6 +368,8 @@ class _GamerFeedScreenState extends State<GamerFeedScreen> {
         ],
       ),
       body: SafeArea(
+        top: true,
+        bottom: true,
         child: RefreshIndicator(
           color: GamerTheme.accentBlue,
           backgroundColor: GamerTheme.cardDark,

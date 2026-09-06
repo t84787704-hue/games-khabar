@@ -205,7 +205,7 @@ class _ClipsScreenState extends State<ClipsScreen> with SingleTickerProviderStat
 
           return Padding(
             padding: EdgeInsets.only(
-              bottom: MediaQuery.of(ctx).viewInsets.bottom + 20,
+              bottom: MediaQuery.of(ctx).padding.bottom + MediaQuery.of(ctx).viewInsets.bottom + 20,
               left: 20,
               right: 20,
               top: 20,
@@ -636,7 +636,7 @@ class _ClipsScreenState extends State<ClipsScreen> with SingleTickerProviderStat
       backgroundColor: GamerTheme.cardDark,
       shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(20))),
       builder: (ctx) => Padding(
-        padding: EdgeInsets.only(bottom: MediaQuery.of(ctx).viewInsets.bottom),
+        padding: EdgeInsets.only(bottom: MediaQuery.of(ctx).padding.bottom + MediaQuery.of(ctx).viewInsets.bottom),
         child: Container(
           height: MediaQuery.of(ctx).size.height * 0.55,
           padding: const EdgeInsets.all(16),
@@ -716,6 +716,8 @@ class _ClipsScreenState extends State<ClipsScreen> with SingleTickerProviderStat
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: Colors.black,
+      extendBody: false,
+      extendBodyBehindAppBar: false,
       body: Stack(
         children: [
           StreamBuilder<List<GamerClip>>(

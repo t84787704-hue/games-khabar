@@ -702,6 +702,8 @@ class _GamerProfileScreenState extends State<GamerProfileScreen> with SingleTick
 
         return Scaffold(
           backgroundColor: GamerTheme.bgDark,
+          extendBody: false,
+          extendBodyBehindAppBar: false,
           body: NestedScrollView(
             headerSliverBuilder: (context, innerBoxIsScrolled) {
               return [

@@ -75,12 +75,12 @@ class _SquadFinderScreenState extends State<SquadFinderScreen> {
       ),
       builder: (ctx) => StatefulBuilder(
         builder: (ctx, setSheetState) => Padding(
-          padding: EdgeInsets.only(
-            bottom: MediaQuery.of(ctx).viewInsets.bottom + 20,
-            left: 20,
-            right: 20,
-            top: 20,
-          ),
+            padding: EdgeInsets.only(
+              bottom: MediaQuery.of(ctx).padding.bottom + MediaQuery.of(ctx).viewInsets.bottom + 20,
+              left: 20,
+              right: 20,
+              top: 20,
+            ),
           child: SingleChildScrollView(
             child: Column(
               mainAxisSize: MainAxisSize.min,
@@ -343,7 +343,12 @@ class _SquadFinderScreenState extends State<SquadFinderScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: GamerTheme.bgDark,
-      body: RefreshIndicator(
+      extendBody: false,
+      extendBodyBehindAppBar: false,
+      body: SafeArea(
+        top: true,
+        bottom: true,
+        child: RefreshIndicator(
         color: GamerTheme.accentOrange,
         backgroundColor: GamerTheme.cardDark,
         onRefresh: () async {
@@ -608,6 +613,7 @@ class _SquadFinderScreenState extends State<SquadFinderScreen> {
             const SliverToBoxAdapter(child: SizedBox(height: 80)),
           ],
         ),
+      ),
       ),
       floatingActionButton: FloatingActionButton.extended(
         backgroundColor: GamerTheme.accentOrange,

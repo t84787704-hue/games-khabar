@@ -57,9 +57,15 @@ class _GamerMainNavigationScreenState extends State<GamerMainNavigationScreen> {
 
     return Scaffold(
       backgroundColor: const Color(0xFF0B0F14),
-      body: IndexedStack(
-        index: _currentIndex,
-        children: screens,
+      extendBody: false,
+      extendBodyBehindAppBar: false,
+      body: SafeArea(
+        top: true,
+        bottom: true,
+        child: IndexedStack(
+          index: _currentIndex,
+          children: screens,
+        ),
       ),
       bottomNavigationBar: Container(
         decoration: const BoxDecoration(
@@ -69,6 +75,8 @@ class _GamerMainNavigationScreenState extends State<GamerMainNavigationScreen> {
           ),
         ),
         child: SafeArea(
+          top: false,
+          bottom: true,
           child: SizedBox(
             height: 62,
             child: Row(

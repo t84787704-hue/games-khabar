@@ -13,6 +13,11 @@ import 'screens/gamer_auth_screen.dart';
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
   
+  SystemChrome.setEnabledSystemUIMode(
+    SystemUiMode.manual,
+    overlays: [SystemUiOverlay.top, SystemUiOverlay.bottom],
+  );
+
   SystemChrome.setSystemUIOverlayStyle(
     const SystemUiOverlayStyle(
       statusBarColor: Colors.transparent,
@@ -41,17 +46,28 @@ class GamersIdApp extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return MaterialApp(
-      title: 'Gamers ID',
-      debugShowCheckedModeBanner: false,
-      theme: GamerTheme.themeData,
-      home: const GamerAppRoot(),
-      routes: {
-        '/auth': (context) => const GamerAuthScreen(),
-        '/create-id': (context) => const CreateGamerIdScreen(),
-        '/create-post': (context) => const CreatePostScreen(),
-        '/search': (context) => const GamerSearchScreen(),
-      },
+    return SafeArea(
+      top: true,
+      bottom: true,
+      child: MaterialApp(
+        title: 'Gamers ID',
+        debugShowCheckedModeBanner: false,
+        theme: GamerTheme.themeData,
+        builder: (context, child) {
+          return SafeArea(
+            top: true,
+            bottom: true,
+            child: child ?? const SizedBox.shrink(),
+          );
+        },
+        home: const GamerAppRoot(),
+        routes: {
+          '/auth': (context) => const GamerAuthScreen(),
+          '/create-id': (context) => const CreateGamerIdScreen(),
+          '/create-post': (context) => const CreatePostScreen(),
+          '/search': (context) => const GamerSearchScreen(),
+        },
+      ),
     );
   }
 }
