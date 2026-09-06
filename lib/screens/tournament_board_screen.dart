@@ -343,7 +343,8 @@ class _TournamentBoardScreenState extends State<TournamentBoardScreen> with Sing
                       );
 
                       print('TournamentBoardScreen: Publishing custom room: "${room.title}"...');
-                      await _tournamentService.publishRoom(room);
+                      final published = await _tournamentService.publishRoom(room);
+                      print('TournamentBoardScreen: publishRoom() completed for room ID: ${published.id}');
 
                       print('TournamentBoardScreen: Calling setState() and popping the form...');
                       setState(() {});
@@ -351,7 +352,10 @@ class _TournamentBoardScreenState extends State<TournamentBoardScreen> with Sing
                         Navigator.pop(ctx);
                       }
 
-                      print('TournamentBoardScreen: Calling fetchRooms() so that new room card shows instantly...');
+                      // Switch to 'All Rooms' tab so new room card shows instantly
+                      _tabController.animateTo(0);
+
+                      print('TournamentBoardScreen: Calling fetchRooms() so that new room card shows instantly in All Rooms list instead of No Active Custom Rooms...');
                       await _tournamentService.fetchRooms();
 
                       if (mounted) {
@@ -445,6 +449,11 @@ class _TournamentBoardScreenState extends State<TournamentBoardScreen> with Sing
         }
 
         final rooms = roomMap.values.toList();
+        rooms.sort((a, b) {
+          final aTime = a.createdAt ?? a.startTime;
+          final bTime = b.createdAt ?? b.startTime;
+          return bTime.compareTo(aTime);
+        });
 
         if (snapshot.connectionState == ConnectionState.waiting && rooms.isEmpty) {
           return const Center(child: CircularProgressIndicator(color: GamerTheme.accentBlue));

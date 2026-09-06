@@ -47,6 +47,10 @@ class GamerUser {
   final int likesReceived;
   final int reportsCount;
   final bool isVerified;
+  final String verificationStatus; // 'none', 'pending', 'verified', 'rejected'
+  final int clipsCount;
+  final int squadRoomsCount;
+  final DateTime? verificationAppliedAt;
   final String gameId;
   final Map<String, dynamic>? verificationProgress;
   final DateTime? createdAt;
@@ -68,10 +72,18 @@ class GamerUser {
     this.likesReceived = 0,
     this.reportsCount = 0,
     this.isVerified = false,
+    this.verificationStatus = 'none',
+    this.clipsCount = 0,
+    this.squadRoomsCount = 0,
+    this.verificationAppliedAt,
     this.gameId = '',
     this.verificationProgress,
     this.createdAt,
   });
+
+  bool get isPendingVerification => verificationStatus == 'pending';
+  bool get isRejectedVerification => verificationStatus == 'rejected';
+  bool get isVerifiedBadge => isVerified || verificationStatus == 'verified';
 
   GamerRankBadge getRankBadge() {
     final lowerRank = rank.toLowerCase().trim();
@@ -165,6 +177,20 @@ class GamerUser {
       created = DateTime.tryParse(rawCreated);
     }
 
+    DateTime? appliedAt;
+    final rawApplied = data['verificationAppliedAt'];
+    if (rawApplied is Timestamp) {
+      appliedAt = rawApplied.toDate();
+    } else if (rawApplied is String) {
+      appliedAt = DateTime.tryParse(rawApplied);
+    }
+
+    final rawStatus = data['verificationStatus']?.toString().toLowerCase().trim();
+    final bool rawVerified = data['isVerified'] == true || rawStatus == 'verified';
+    final String status = rawStatus != null && rawStatus.isNotEmpty
+        ? rawStatus
+        : (rawVerified ? 'verified' : 'none');
+
     return GamerUser(
       uid: data['uid'] ?? doc.id,
       username: data['username'] ?? '',
@@ -181,7 +207,11 @@ class GamerUser {
       postsCount: (data['postsCount'] as num?)?.toInt() ?? 0,
       likesReceived: (data['likesReceived'] as num?)?.toInt() ?? 0,
       reportsCount: (data['reportsCount'] as num?)?.toInt() ?? 0,
-      isVerified: data['isVerified'] == true,
+      isVerified: rawVerified,
+      verificationStatus: status,
+      clipsCount: (data['clipsCount'] as num?)?.toInt() ?? 0,
+      squadRoomsCount: (data['squadRoomsCount'] as num?)?.toInt() ?? 0,
+      verificationAppliedAt: appliedAt,
       gameId: (data['gameId'] ?? data['inGameId'] ?? '').toString(),
       verificationProgress: data['verificationProgress'] is Map
           ? Map<String, dynamic>.from(data['verificationProgress'])
@@ -208,6 +238,10 @@ class GamerUser {
       'likesReceived': likesReceived,
       'reportsCount': reportsCount,
       'isVerified': isVerified,
+      'verificationStatus': verificationStatus,
+      'clipsCount': clipsCount,
+      'squadRoomsCount': squadRoomsCount,
+      'verificationAppliedAt': verificationAppliedAt != null ? Timestamp.fromDate(verificationAppliedAt!) : null,
       'gameId': gameId.trim(),
       'verificationProgress': {
         'postsCount': postsCount,
@@ -217,6 +251,9 @@ class GamerUser {
         'hasGameIdLinked': hasGameIdLinked,
         'hasAvatar': hasAvatar,
         'noReports': noReports,
+        'clipsCount': clipsCount,
+        'squadRoomsCount': squadRoomsCount,
+        'verificationStatus': verificationStatus,
       },
       'createdAt': createdAt != null ? Timestamp.fromDate(createdAt!) : FieldValue.serverTimestamp(),
       'updatedAt': FieldValue.serverTimestamp(),
@@ -240,6 +277,10 @@ class GamerUser {
     int? likesReceived,
     int? reportsCount,
     bool? isVerified,
+    String? verificationStatus,
+    int? clipsCount,
+    int? squadRoomsCount,
+    DateTime? verificationAppliedAt,
     String? gameId,
     Map<String, dynamic>? verificationProgress,
     DateTime? createdAt,
@@ -261,6 +302,10 @@ class GamerUser {
       likesReceived: likesReceived ?? this.likesReceived,
       reportsCount: reportsCount ?? this.reportsCount,
       isVerified: isVerified ?? this.isVerified,
+      verificationStatus: verificationStatus ?? this.verificationStatus,
+      clipsCount: clipsCount ?? this.clipsCount,
+      squadRoomsCount: squadRoomsCount ?? this.squadRoomsCount,
+      verificationAppliedAt: verificationAppliedAt ?? this.verificationAppliedAt,
       gameId: gameId ?? this.gameId,
       verificationProgress: verificationProgress ?? this.verificationProgress,
       createdAt: createdAt ?? this.createdAt,

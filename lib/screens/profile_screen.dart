@@ -12,6 +12,9 @@ import 'saved_news_screen.dart';
 import 'about_us_screen.dart';
 import 'contact_us_screen.dart';
 import 'privacy_policy_screen.dart';
+import '../services/gamer_auth_service.dart';
+import '../models/gamer_user_model.dart';
+import 'verification_screen.dart';
 
 class ProfileScreen extends StatefulWidget {
   const ProfileScreen({super.key});
@@ -248,7 +251,130 @@ class _ProfileScreenState extends State<ProfileScreen> {
                     ],
                   ),
                 ),
-                const SizedBox(height: 28),
+                const SizedBox(height: 20),
+
+                // Official Blue Tick Verification Card & Apply Button
+                ValueListenableBuilder<GamerUser?>(
+                  valueListenable: GamerAuthService().currentGamerNotifier,
+                  builder: (context, gamer, _) {
+                    final bool isVerified = gamer?.isVerifiedBadge ?? false;
+                    final bool isPending = gamer?.isPendingVerification ?? false;
+
+                    return Container(
+                      margin: const EdgeInsets.only(bottom: 20),
+                      decoration: BoxDecoration(
+                        color: cardDark,
+                        borderRadius: BorderRadius.circular(16),
+                        border: Border.all(
+                          color: isVerified
+                              ? Colors.blue
+                              : (isPending ? const Color(0xFFFF8A00) : Colors.blue.withOpacity(0.5)),
+                          width: 1.5,
+                        ),
+                        boxShadow: [
+                          BoxShadow(
+                            color: (isVerified ? Colors.blue : (isPending ? const Color(0xFFFF8A00) : Colors.blue)).withOpacity(0.12),
+                            blurRadius: 12,
+                            spreadRadius: 1,
+                          ),
+                        ],
+                      ),
+                      child: Material(
+                        color: Colors.transparent,
+                        child: InkWell(
+                          borderRadius: BorderRadius.circular(16),
+                          onTap: () {
+                            Navigator.push(
+                              context,
+                              MaterialPageRoute(builder: (_) => VerificationScreen(user: gamer)),
+                            );
+                          },
+                          child: Padding(
+                            padding: const EdgeInsets.all(16),
+                            child: Row(
+                              children: [
+                                Container(
+                                  padding: const EdgeInsets.all(10),
+                                  decoration: BoxDecoration(
+                                    color: (isVerified ? Colors.blue : (isPending ? const Color(0xFFFF8A00) : Colors.blue)).withOpacity(0.15),
+                                    borderRadius: BorderRadius.circular(12),
+                                  ),
+                                  child: Icon(
+                                    isVerified
+                                        ? Icons.verified_rounded
+                                        : (isPending ? Icons.hourglass_top_rounded : Icons.verified_outlined),
+                                    color: isVerified ? Colors.blue : (isPending ? const Color(0xFFFF8A00) : Colors.blue),
+                                    size: 26,
+                                  ),
+                                ),
+                                const SizedBox(width: 14),
+                                Expanded(
+                                  child: Column(
+                                    crossAxisAlignment: CrossAxisAlignment.start,
+                                    children: [
+                                      Row(
+                                        children: [
+                                          Text(
+                                            isVerified
+                                                ? 'Official Verified Gamer'
+                                                : (isPending ? 'Under Review 24h' : 'Apply for Verification'),
+                                            style: TextStyle(
+                                              color: textWhite,
+                                              fontWeight: FontWeight.w900,
+                                              fontSize: 15,
+                                            ),
+                                          ),
+                                          const SizedBox(width: 6),
+                                          if (isVerified)
+                                            const Icon(Icons.verified, color: Colors.blue, size: 16)
+                                          else if (isPending)
+                                            Container(
+                                              padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                                              decoration: BoxDecoration(
+                                                color: const Color(0xFFFF8A00).withOpacity(0.15),
+                                                borderRadius: BorderRadius.circular(4),
+                                              ),
+                                              child: const Text('24H REVIEW', style: TextStyle(color: Color(0xFFFF8A00), fontSize: 9, fontWeight: FontWeight.w900)),
+                                            ),
+                                        ],
+                                      ),
+                                      const SizedBox(height: 3),
+                                      Text(
+                                        isVerified
+                                            ? 'Blue Tick ✓ active on your Gamer ID & all posts.'
+                                            : (isPending
+                                                ? 'Application under review • 24h validation.'
+                                                : 'Get Blue Tick ✓ (Crown/Ace, K/D 3.0+, 5k Likes)'),
+                                        style: TextStyle(color: textGray, fontSize: 12),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                                const SizedBox(width: 8),
+                                Container(
+                                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                                  decoration: BoxDecoration(
+                                    color: (isVerified ? Colors.blue : (isPending ? const Color(0xFFFF8A00) : Colors.blue)).withOpacity(0.15),
+                                    borderRadius: BorderRadius.circular(8),
+                                  ),
+                                  child: Text(
+                                    isVerified ? 'VERIFIED' : (isPending ? 'PENDING' : 'APPLY'),
+                                    style: TextStyle(
+                                      color: isVerified ? Colors.blue : (isPending ? const Color(0xFFFF8A00) : Colors.blue),
+                                      fontSize: 11,
+                                      fontWeight: FontWeight.w900,
+                                    ),
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ),
+                      ),
+                    );
+                  },
+                ),
+                const SizedBox(height: 8),
 
                 // HIDDEN ADMIN PANEL ENTRY (Revealed for verified admin)
                 if (isCurrentAdmin || _adminOptionUnlocked) ...[

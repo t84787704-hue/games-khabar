@@ -16,6 +16,7 @@ import 'create_gamer_id_screen.dart';
 import 'followers_following_screen.dart';
 import 'gamer_auth_screen.dart';
 import 'saved_news_tab_screen.dart';
+import 'verification_screen.dart';
 
 class GamerProfileScreen extends StatefulWidget {
   final String? userId; // If null, displays currently logged in user's profile
@@ -846,9 +847,54 @@ class _GamerProfileScreenState extends State<GamerProfileScreen> with SingleTick
                               size: 16,
                               showLabel: true,
                             ),
-                            if (user.isVerified) ...[
+                            if (user.isVerifiedBadge) ...[
                               const SizedBox(width: 4),
                               const Icon(Icons.verified, color: Colors.blue, size: 20),
+                            ] else if (user.isPendingVerification) ...[
+                              const SizedBox(width: 6),
+                              Container(
+                                padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                                decoration: BoxDecoration(
+                                  color: const Color(0xFFFF8A00).withOpacity(0.18),
+                                  borderRadius: BorderRadius.circular(6),
+                                  border: Border.all(color: const Color(0xFFFF8A00)),
+                                ),
+                                child: const Row(
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    Icon(Icons.hourglass_top_rounded, color: Color(0xFFFF8A00), size: 12),
+                                    SizedBox(width: 3),
+                                    Text('24H REVIEW', style: TextStyle(color: Color(0xFFFF8A00), fontSize: 9, fontWeight: FontWeight.w900)),
+                                  ],
+                                ),
+                              ),
+                            ] else if (isOwnProfile) ...[
+                              const SizedBox(width: 6),
+                              InkWell(
+                                onTap: () {
+                                  Navigator.push(
+                                    context,
+                                    MaterialPageRoute(builder: (_) => VerificationScreen(user: user)),
+                                  );
+                                },
+                                borderRadius: BorderRadius.circular(6),
+                                child: Container(
+                                  padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                                  decoration: BoxDecoration(
+                                    color: Colors.blue.withOpacity(0.15),
+                                    borderRadius: BorderRadius.circular(6),
+                                    border: Border.all(color: Colors.blue.withOpacity(0.6)),
+                                  ),
+                                  child: const Row(
+                                    mainAxisSize: MainAxisSize.min,
+                                    children: [
+                                      Icon(Icons.verified_outlined, color: Colors.blue, size: 12),
+                                      SizedBox(width: 3),
+                                      Text('VERIFY', style: TextStyle(color: Colors.blue, fontSize: 9, fontWeight: FontWeight.w900)),
+                                    ],
+                                  ),
+                                ),
+                              ),
                             ],
                           ],
                         ),
@@ -1213,45 +1259,97 @@ class _GamerProfileScreenState extends State<GamerProfileScreen> with SingleTick
                         color: GamerTheme.accentBlue,
                       ),
                       const SizedBox(height: 24),
-                      Container(
-                        padding: const EdgeInsets.all(16),
-                        decoration: BoxDecoration(
-                          gradient: GamerTheme.cardGradient,
+                      Material(
+                        color: Colors.transparent,
+                        child: InkWell(
                           borderRadius: BorderRadius.circular(16),
-                          border: Border.all(color: GamerTheme.borderDark),
-                        ),
-                        child: Row(
-                          children: [
-                            Container(
-                              padding: const EdgeInsets.all(12),
-                              decoration: BoxDecoration(
-                                color: GamerTheme.accentBlue.withOpacity(0.12),
-                                shape: BoxShape.circle,
-                              ),
-                              child: const Icon(Icons.verified_user_outlined, color: GamerTheme.accentBlue, size: 24),
-                            ),
-                            const SizedBox(width: 14),
-                            const Expanded(
-                              child: Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  Text(
-                                    'Verified Gamer ID',
-                                    style: TextStyle(
-                                      color: GamerTheme.textWhite,
-                                      fontWeight: FontWeight.w900,
-                                      fontSize: 14,
-                                    ),
-                                  ),
-                                  SizedBox(height: 2),
-                                  Text(
-                                    'This Gamer ID is uniquely registered on the Firebase network.',
-                                    style: TextStyle(color: GamerTheme.textMuted, fontSize: 11),
-                                  ),
-                                ],
+                          onTap: () {
+                            Navigator.push(
+                              context,
+                              MaterialPageRoute(builder: (_) => VerificationScreen(user: user)),
+                            );
+                          },
+                          child: Container(
+                            padding: const EdgeInsets.all(16),
+                            decoration: BoxDecoration(
+                              gradient: GamerTheme.cardGradient,
+                              borderRadius: BorderRadius.circular(16),
+                              border: Border.all(
+                                color: user.isVerifiedBadge
+                                    ? Colors.blue
+                                    : (user.isPendingVerification ? const Color(0xFFFF8A00) : GamerTheme.borderDark),
+                                width: 1.5,
                               ),
                             ),
-                          ],
+                            child: Row(
+                              children: [
+                                Container(
+                                  padding: const EdgeInsets.all(12),
+                                  decoration: BoxDecoration(
+                                    color: (user.isVerifiedBadge
+                                            ? Colors.blue
+                                            : (user.isPendingVerification ? const Color(0xFFFF8A00) : GamerTheme.accentBlue))
+                                        .withOpacity(0.15),
+                                    shape: BoxShape.circle,
+                                  ),
+                                  child: Icon(
+                                    user.isVerifiedBadge
+                                        ? Icons.verified_rounded
+                                        : (user.isPendingVerification ? Icons.hourglass_top_rounded : Icons.verified_user_outlined),
+                                    color: user.isVerifiedBadge
+                                        ? Colors.blue
+                                        : (user.isPendingVerification ? const Color(0xFFFF8A00) : GamerTheme.accentBlue),
+                                    size: 24,
+                                  ),
+                                ),
+                                const SizedBox(width: 14),
+                                Expanded(
+                                  child: Column(
+                                    crossAxisAlignment: CrossAxisAlignment.start,
+                                    children: [
+                                      Row(
+                                        children: [
+                                          Text(
+                                            user.isVerifiedBadge
+                                                ? 'Official Verified Gamer ID'
+                                                : (user.isPendingVerification ? 'Verification Under Review 24h' : 'Blue Tick Verification'),
+                                            style: const TextStyle(
+                                              color: GamerTheme.textWhite,
+                                              fontWeight: FontWeight.w900,
+                                              fontSize: 14,
+                                            ),
+                                          ),
+                                          const SizedBox(width: 6),
+                                          if (user.isVerifiedBadge)
+                                            const Icon(Icons.verified, color: Colors.blue, size: 16)
+                                          else if (user.isPendingVerification)
+                                            Container(
+                                              padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1),
+                                              decoration: BoxDecoration(
+                                                color: const Color(0xFFFF8A00).withOpacity(0.15),
+                                                borderRadius: BorderRadius.circular(4),
+                                              ),
+                                              child: const Text('24H REVIEW', style: TextStyle(color: Color(0xFFFF8A00), fontSize: 8.5, fontWeight: FontWeight.w900)),
+                                            ),
+                                        ],
+                                      ),
+                                      const SizedBox(height: 2),
+                                      Text(
+                                        user.isVerifiedBadge
+                                            ? 'Blue Tick active • All 6 BGMI integrity requirements verified.'
+                                            : (user.isPendingVerification
+                                                ? 'Application submitted • Verifying requirements in 24h.'
+                                                : 'View 6 requirements checklist & apply for Blue Tick ✓'),
+                                        style: const TextStyle(color: GamerTheme.textMuted, fontSize: 11),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                                const SizedBox(width: 8),
+                                const Icon(Icons.arrow_forward_ios_rounded, color: GamerTheme.textMuted, size: 14),
+                              ],
+                            ),
+                          ),
                         ),
                       ),
                     ],
