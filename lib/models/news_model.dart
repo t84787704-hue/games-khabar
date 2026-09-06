@@ -1,5 +1,6 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import '../services/translation_service.dart';
+import '../data/fallback_images.dart';
 
 class NewsModel {
   final String id;
@@ -85,7 +86,21 @@ class NewsModel {
   String get title => getTitle();
   String get description => getDescription();
   String get content => getDescription();
-  String get thumbnailUrl => imageUrl;
+  String get thumbnailUrl => effectiveImageUrl;
+  String get effectiveImageUrl {
+    if (imageUrl.trim().isNotEmpty &&
+        (imageUrl.startsWith('http://') || imageUrl.startsWith('https://')) &&
+        !imageUrl.contains('picsum.photos') &&
+        !imageUrl.contains('example.com')) {
+      return imageUrl.trim();
+    }
+    return getGameFallbackImage(
+      category: category,
+      title: getTitle('en'),
+      content: getDescription('en'),
+      docId: id,
+    );
+  }
   String? get url => sourceUrl;
   String get displayGameOrCategory => (gameName != null && gameName!.trim().isNotEmpty) ? gameName!.trim() : category;
   String get cleanDescription => TranslationService.cleanBbCodeAndHtml(getDescription());
@@ -226,13 +241,18 @@ class NewsModel {
       return _createDefaultMap(fallback);
     }
 
+    final cat = (data['category'] ?? 'Gaming').toString();
     String img = '';
-    if (data['imageUrl'] is String) img = data['imageUrl'] as String;
+    if (data['imageUrl'] is String) img = (data['imageUrl'] as String).trim();
     if (img.isEmpty && data['appId']!= null) {
       img = 'https://cdn.akamai.steamstatic.com/steam/apps/${data['appId']}/header.jpg';
     }
-    if (img.isEmpty) {
-      img = 'https://picsum.photos/seed/${doc.id}/800/600';
+    if (img.isEmpty || img.contains('picsum.photos')) {
+      img = getGameFallbackImage(
+        category: cat,
+        title: (data['title'] is Map ? (data['title']['en'] ?? data['title']['roman']) : data['title'])?.toString(),
+        docId: doc.id,
+      );
     }
 
     int views = 0;
@@ -431,13 +451,18 @@ class NewsModel {
       return _createDefaultMap(fallback);
     }
 
+    final cat = (json['category'] ?? 'Gaming').toString();
     String img = '';
-    if (json['imageUrl'] is String) img = json['imageUrl'] as String;
+    if (json['imageUrl'] is String) img = (json['imageUrl'] as String).trim();
     if (img.isEmpty && json['appId']!= null) {
       img = 'https://cdn.akamai.steamstatic.com/steam/apps/${json['appId']}/header.jpg';
     }
-    if (img.isEmpty) {
-      img = 'https://picsum.photos/seed/${json['id']}/800/600';
+    if (img.isEmpty || img.contains('picsum.photos')) {
+      img = getGameFallbackImage(
+        category: cat,
+        title: (json['title'] is Map ? (json['title']['en'] ?? json['title']['roman']) : json['title'])?.toString(),
+        docId: (json['id'] ?? '').toString(),
+      );
     }
 
     int views = 0;

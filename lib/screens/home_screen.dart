@@ -724,7 +724,7 @@ class _HomeScreenState extends State<HomeScreen> {
                             fit: StackFit.expand,
                             children: [
                               AppImageView(
-                                imageUrl: featuredNews!.imageUrl,
+                                imageUrl: featuredNews!.effectiveImageUrl,
                                 fit: BoxFit.cover,
                               ),
                               // IGN Dramatic Black Gradient Overlay

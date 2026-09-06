@@ -349,6 +349,7 @@ class _NewsPostCardState extends State<NewsPostCard> {
                       news.category,
                       title: news.titleEn,
                       content: news.contentEn,
+                      docId: news.id,
                     ),
                     height: 200,
                     width: double.infinity,

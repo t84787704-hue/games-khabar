@@ -481,7 +481,7 @@ class _SquadFinderScreenState extends State<SquadFinderScreen> {
                     child: Padding(
                       padding: const EdgeInsets.all(32),
                       child: Column(
-                        mainAxisAlignment: MainChildScrollView.center,
+                        mainAxisAlignment: MainAxisAlignment.center,
                         children: [
                           Container(
                             padding: const EdgeInsets.all(20),

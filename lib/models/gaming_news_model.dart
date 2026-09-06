@@ -22,18 +22,19 @@ class GamingNewsModel {
   final String botId;
 
   /// Universal category-based fallback game image map (Guarantees every game card always has high quality pic)
-  static String getCategoryFallbackImage(String category, {String? title, String? content}) {
-    return getGameFallbackImage(category: category, title: title, content: content);
+  static String getCategoryFallbackImage(String category, {String? title, String? content, String? docId}) {
+    return getGameFallbackImage(category: category, title: title, content: content, docId: docId);
   }
 
-  /// Guaranteed non-empty, working image URL for the card
+  /// Guaranteed non-empty, working unique image URL for the card
   String get effectiveImageUrl {
     if (imageUrl.trim().isNotEmpty &&
         (imageUrl.startsWith('http://') || imageUrl.startsWith('https://')) &&
-        !imageUrl.contains('example.com')) {
+        !imageUrl.contains('example.com') &&
+        !imageUrl.contains('picsum.photos')) {
       return imageUrl.trim();
     }
-    return getGameFallbackImage(category: category, title: titleEn, content: contentEn);
+    return getGameFallbackImage(category: category, title: titleEn, content: contentEn, docId: id);
   }
 
   /// Returns active bot name with automatic detection fallback
@@ -81,7 +82,10 @@ class GamingNewsModel {
     final effectiveEn = contentEn.isNotEmpty ? contentEn : summary;
     final effectiveUr = contentUr;
     final inferredSource = source.isNotEmpty ? source : inferSourceName(sourceUrl, category);
-    final finalImg = imageUrl.isNotEmpty ? imageUrl : getCategoryFallbackImage(category);
+    final effectiveTitle = titleEn.isNotEmpty ? titleEn : summary;
+    final finalImg = imageUrl.trim().isNotEmpty
+        ? imageUrl.trim()
+        : getCategoryFallbackImage(category, title: effectiveTitle, content: effectiveEn, docId: id);
     final finalBot = findGameBot(title: titleEn, category: category, content: effectiveEn);
 
     return {
@@ -151,7 +155,14 @@ class GamingNewsModel {
     final rawUrl = (map['sourceUrl'] ?? map['url'] ?? '').toString();
     final rawCategory = (map['category'] ?? 'FEATURED').toString();
     final rawImg = (map['imageUrl'] ?? map['image'] ?? '').toString().trim();
-    final resolvedImg = rawImg.isNotEmpty ? rawImg : getCategoryFallbackImage(rawCategory);
+    final resolvedImg = rawImg.isNotEmpty
+        ? rawImg
+        : getCategoryFallbackImage(
+            rawCategory,
+            title: (map['title_en'] ?? map['title'] ?? '').toString(),
+            content: rawEn,
+            docId: docId ?? map['id']?.toString(),
+          );
 
     final rawBotName = (map['botName'] ?? map['bot_name'] ?? '').toString().trim();
     final rawBotAvatar = (map['botAvatar'] ?? map['bot_avatar'] ?? '').toString().trim();

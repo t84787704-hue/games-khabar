@@ -2,8 +2,10 @@ import 'dart:async';
 import 'dart:convert';
 import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
+import 'package:html/parser.dart' as html_parser;
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import '../data/fallback_images.dart';
 import '../services/translation_service.dart';
 import '../services/firestore_service.dart';
 
@@ -383,10 +385,13 @@ class AutoNewsScraper {
             final titleMap = await _createTranslatedTitleMap(rawTitle);
             final descMap = await TranslationService.translateTo7Languages(rawContent);
 
-            // 5. Image & Video resolution
-            final imageUrl = _resolveImageUrl(
+            // 5. Image & Video resolution (OG image extraction + per-article unique fallback)
+            final imageUrl = await _resolveImageUrl(
               item['imageUrl'] as String?,
               category,
+              title: rawTitle,
+              content: rawContent,
+              sourceUrl: sourceUrl,
             );
 
             // 6. Save to Firestore with isAuto: true
@@ -587,30 +592,125 @@ class AutoNewsScraper {
     }
   }
 
-  /// Resolve High Quality Category Fallback Images
-  String _resolveImageUrl(String? extractedUrl, String category) {
+  /// Fetch OG Image from article link: Use http.get(articleLink) and parse meta property="og:image"
+  static Future<String?> fetchOgImage(String articleLink) async {
+    if (articleLink.trim().isEmpty || !articleLink.startsWith('http')) return null;
+    try {
+      final res = await http.get(
+        Uri.parse(articleLink),
+        headers: {
+          'User-Agent': 'Mozilla/5.0 (compatible; Googlebot/2.1; +http://www.google.com/bot.html)',
+          'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+        },
+      ).timeout(const Duration(seconds: 4));
+
+      if (res.statusCode == 200 && res.body.isNotEmpty) {
+        final doc = html_parser.parse(res.body);
+        final metaTags = doc.getElementsByTagName('meta');
+        for (final meta in metaTags) {
+          final prop = meta.attributes['property']?.toLowerCase() ?? '';
+          final name = meta.attributes['name']?.toLowerCase() ?? '';
+          final content = meta.attributes['content']?.trim() ?? '';
+
+          if ((prop == 'og:image' ||
+                  prop == 'og:image:url' ||
+                  name == 'twitter:image' ||
+                  name == 'twitter:image:src') &&
+              content.isNotEmpty &&
+              content.startsWith('http') &&
+              !content.contains('icon') &&
+              !content.contains('pixel') &&
+              !content.contains('1x1')) {
+            return content;
+          }
+        }
+      }
+    } catch (_) {}
+    return null;
+  }
+
+  /// Resolve High Quality Category Fallback Images with Uniqueness
+  Future<String> _resolveImageUrl(
+    String? extractedUrl,
+    String category, {
+    String? title,
+    String? content,
+    String? sourceUrl,
+    String? docId,
+  }) async {
+    // 1st-3rd tries: If valid unique image already found
     if (extractedUrl != null &&
         extractedUrl.trim().isNotEmpty &&
         !extractedUrl.contains('picsum.photos') &&
+        !isCategoryDefaultImage(extractedUrl) &&
         (extractedUrl.startsWith('http://') || extractedUrl.startsWith('https://'))) {
       return extractedUrl.trim();
     }
 
-    switch (category) {
-      case 'Free Fire':
-        return 'https://images.unsplash.com/photo-1542751371-adc38448a05e?auto=format&fit=crop&w=1200&q=80';
-      case 'BGMI':
-      case 'PUBG':
-        return 'https://images.unsplash.com/photo-1538481199705-c710c4e965fc?auto=format&fit=crop&w=1200&q=80';
-      case 'GTA':
-        return 'https://images.unsplash.com/photo-1511512578047-dfb367046420?auto=format&fit=crop&w=1200&q=80';
-      case 'MINECRAFT':
-        return 'https://images.unsplash.com/photo-1627856014754-2907e2055704?auto=format&fit=crop&w=1200&q=80';
-      case 'ESPORTS':
-        return 'https://images.unsplash.com/photo-1542751110-97427bbecf20?auto=format&fit=crop&w=1200&q=80';
-      default:
-        return 'https://images.unsplash.com/photo-1550745165-9bc0b252726f?auto=format&fit=crop&w=1200&q=80';
+    // 4th try: Fetch OG Image from article link (meta property="og:image")
+    if (sourceUrl != null && sourceUrl.trim().isNotEmpty && sourceUrl.startsWith('http')) {
+      final og = await fetchOgImage(sourceUrl.trim());
+      if (og != null && og.isNotEmpty) {
+        return og;
+      }
     }
+
+    // 5th fallback only if all fail: Diverse per-category pool (deterministic by docId / title)
+    return getGameFallbackImage(
+      category: category,
+      title: title,
+      content: content,
+      docId: docId ?? sourceUrl ?? title,
+    );
+  }
+
+  /// One-time migration function that updates existing Firestore news documents
+  /// where imageUrl is empty or matches category default image.
+  Future<int> fixOldNewsImages() async {
+    int updatedCount = 0;
+    try {
+      final db = FirebaseFirestore.instance;
+      final snap = await db.collection('news').get();
+      for (final doc in snap.docs) {
+        final data = doc.data();
+        final rawImg = (data['imageUrl'] ?? '').toString().trim();
+        final sourceUrl = (data['sourceUrl'] ?? '').toString().trim();
+        final category = (data['category'] ?? 'Gaming News').toString();
+        final title = (data['title'] is Map ? data['title']['en'] ?? data['title']['hi'] : data['title'])?.toString() ?? '';
+        final content = (data['content'] is Map ? data['content']['en'] : data['content'])?.toString() ?? '';
+
+        if (isCategoryDefaultImage(rawImg) || rawImg.isEmpty || rawImg.contains('picsum.photos')) {
+          String newImg = '';
+
+          // 1. Try OG image
+          if (sourceUrl.isNotEmpty && sourceUrl.startsWith('http')) {
+            final og = await fetchOgImage(sourceUrl);
+            if (og != null && og.isNotEmpty) {
+              newImg = og;
+            }
+          }
+
+          // 2. Fallback to unique pool image
+          if (newImg.isEmpty || isCategoryDefaultImage(newImg)) {
+            newImg = getGameFallbackImage(
+              category: category,
+              title: title,
+              content: content,
+              docId: doc.id,
+            );
+          }
+
+          if (newImg.isNotEmpty && newImg != rawImg) {
+            await doc.reference.update({'imageUrl': newImg});
+            updatedCount++;
+            debugPrint('AutoNewsScraper: Fixed image for news doc ${doc.id} ($category): $newImg');
+          }
+        }
+      }
+    } catch (e) {
+      debugPrint('AutoNewsScraper fixOldNewsImages error: $e');
+    }
+    return updatedCount;
   }
 
   /// Parse XML RSS & Atom feed items
@@ -662,27 +762,34 @@ class AutoNewsScraper {
         // Clean HTML tags from description
         description = _stripHtml(description);
 
-        // Extract image
+        // Extract image according to priority order:
+        // 1. rssItem.enclosure?.url
+        // 2. rssItem.media?.thumbnails?.first?.url
+        // 3. <img> tag in content/description
         String? imageUrl;
-        final mediaMatch = RegExp(r'''<media:(?:content|thumbnail)[^>]+url=["']([^"']+)["']''', caseSensitive: false)
+        final enclosureMatch = RegExp(r'''<enclosure[^>]+url=["']([^"']+)["']''', caseSensitive: false)
             .firstMatch(itemBlock);
-        if (mediaMatch != null) {
-          imageUrl = mediaMatch.group(1);
+        if (enclosureMatch != null) {
+          imageUrl = enclosureMatch.group(1);
         }
 
         if (imageUrl == null) {
-          final enclosureMatch = RegExp(r'''<enclosure[^>]+url=["']([^"']+)["']''', caseSensitive: false)
+          final mediaMatch = RegExp(r'''<media:(?:content|thumbnail)[^>]+url=["']([^"']+)["']''', caseSensitive: false)
               .firstMatch(itemBlock);
-          if (enclosureMatch != null) {
-            imageUrl = enclosureMatch.group(1);
+          if (mediaMatch != null) {
+            imageUrl = mediaMatch.group(1);
           }
         }
 
         if (imageUrl == null) {
-          final imgMatch = RegExp(r'''<img[^>]+src=["']([^"']+)["']''', caseSensitive: false)
-              .firstMatch(itemBlock);
+          final rawContent = _extractXmlTag(itemBlock, 'content:encoded') + ' ' + _extractXmlTag(itemBlock, 'description');
+          final imgMatch = RegExp(r'''<img[^>]+src=["'](https?://[^"']+)["']''', caseSensitive: false)
+              .firstMatch(rawContent.isNotEmpty ? rawContent : itemBlock);
           if (imgMatch != null) {
-            imageUrl = imgMatch.group(1);
+            final src = imgMatch.group(1)?.trim();
+            if (src != null && !src.contains('icon') && !src.contains('pixel')) {
+              imageUrl = src;
+            }
           }
         }
 

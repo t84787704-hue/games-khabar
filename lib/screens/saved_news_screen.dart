@@ -430,7 +430,7 @@ class _SavedNewsScreenState extends State<SavedNewsScreen> {
                     fit: StackFit.expand,
                     children: [
                       AppImageView(
-                        imageUrl: item.imageUrl,
+                        imageUrl: item.effectiveImageUrl,
                         fit: BoxFit.cover,
                       ),
                       if (item.videoUrl!= null && item.videoUrl!.isNotEmpty)

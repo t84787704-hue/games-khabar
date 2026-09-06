@@ -11,6 +11,7 @@ import '../utils/admin_security.dart';
 import '../services/notification_service.dart';
 import '../services/translation_service.dart';
 import '../constants/game_categories.dart';
+import '../data/fallback_images.dart';
 
 /// Helper function to extract 11-char YouTube video ID from various YouTube URL formats or direct ID
 String? extractYoutubeId(String? url) {
@@ -219,7 +220,11 @@ class _AddNewsScreenState extends State<AddNewsScreen> {
     // Default image if none uploaded
     final finalImageUrl = (_base64ImageUrl != null && _base64ImageUrl!.isNotEmpty)
         ? _base64ImageUrl!
-        : 'https://images.unsplash.com/photo-1542751371-adc38448a05e?auto=format&fit=crop&w=600&q=80';
+        : getGameFallbackImage(
+            category: _selectedCategory,
+            title: _titleController.text.trim(),
+            content: _descController.text.trim(),
+          );
 
     final rawVideoUrl = _videoUrlController.text.trim();
     String videoUrl = '';

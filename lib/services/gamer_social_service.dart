@@ -3,6 +3,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import '../models/gamer_user_model.dart';
 import '../models/gamer_post_model.dart';
 import '../models/post_comment_model.dart';
+import 'gaming_news_service.dart';
 
 class GamerSocialService {
   static final GamerSocialService _instance = GamerSocialService._internal();
@@ -403,5 +404,10 @@ class GamerSocialService {
         .limit(limit)
         .snapshots()
         .map((snap) => snap.docs.map((d) => GamerUser.fromFirestore(d)).toList());
+  }
+
+  /// Fix old news images where imageUrl matches category default image
+  Future<int> fixOldNewsImages() async {
+    return await GamingNewsService().fixOldNewsImages();
   }
 }

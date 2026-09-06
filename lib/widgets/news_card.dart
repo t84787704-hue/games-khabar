@@ -114,7 +114,7 @@ class NewsCard extends StatelessWidget {
                         fit: StackFit.expand,
                         children: [
                           CachedNetworkImage(
-                            imageUrl: news.imageUrl,
+                            imageUrl: news.effectiveImageUrl,
                             fit: BoxFit.cover,
                             placeholder: (context, url) => Container(
                               color: const Color(0xFF1E1E24),
@@ -129,10 +129,14 @@ class NewsCard extends StatelessWidget {
                                 ),
                               ),
                             ),
-                            errorWidget: (context, url, error) => Container(
-                              color: const Color(0xFF1E1E24),
-                              child: const Center(
-                                child: Icon(Icons.games, color: Color(0xFF9E9EA7), size: 28),
+                            errorWidget: (context, url, error) => Image.network(
+                              news.effectiveImageUrl,
+                              fit: BoxFit.cover,
+                              errorBuilder: (c, e, s) => Container(
+                                color: const Color(0xFF1E1E24),
+                                child: const Center(
+                                  child: Icon(Icons.sports_esports, color: Color(0xFF00FF88), size: 28),
+                                ),
                               ),
                             ),
                           ),

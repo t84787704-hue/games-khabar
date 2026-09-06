@@ -174,12 +174,23 @@ class GamingNewsService {
                   }
                 }
 
+                String finalImage = item.imageUrl;
+                if (finalImage.isEmpty || isCategoryDefaultImage(finalImage)) {
+                  final og = await fetchOgImage(item.sourceUrl);
+                  if (og != null && og.isNotEmpty) {
+                    finalImage = og;
+                  } else {
+                    finalImage = getGameFallbackImage(category: item.category, title: item.titleEn, docId: item.id);
+                  }
+                }
+
                 final completeItem = item.copyWith(
                   titleUr: titleUr,
                   summary: item.summary,
                   contentEn: fullContentEn,
                   contentUr: contentUr,
                   source: item.displaySource,
+                  imageUrl: finalImage,
                 );
 
                 await docRef.set(completeItem.toMap());
@@ -191,10 +202,14 @@ class GamingNewsService {
                 final existingContentEn = (data['content_en'] ?? data['fullContent_en'] ?? '').toString();
 
                 final existingImg = (data['imageUrl'] ?? data['image'] ?? '').toString();
-                final bool needsImg = existingImg.isEmpty;
-                final resolvedImg = needsImg
-                    ? extractImage('', existingContentEn, item.category, title: item.titleEn)
-                    : existingImg;
+                final bool needsImg = existingImg.isEmpty || isCategoryDefaultImage(existingImg);
+                String resolvedImg = existingImg;
+                if (needsImg) {
+                  final og = await fetchOgImage(item.sourceUrl);
+                  resolvedImg = (og != null && og.isNotEmpty)
+                      ? og
+                      : getGameFallbackImage(category: item.category, title: item.titleEn, docId: doc.id);
+                }
 
                 final existingBotName = (data['botName'] ?? data['bot_name'] ?? '').toString();
                 final existingBotAvatar = (data['botAvatar'] ?? data['bot_avatar'] ?? '').toString();
@@ -420,14 +435,21 @@ class GamingNewsService {
             final category = _categorizeNews(title, description);
             final platform = _detectPlatform(title, description);
 
-            // Extract image with game fallback
-            String imageUrl = (item['thumbnail'] ?? '').toString();
-            if (imageUrl.isEmpty && item['enclosure'] is Map) {
-              imageUrl = (item['enclosure']['link'] ?? '').toString();
+            // Extract image with unique game fallback
+            String? encLink;
+            if (item['enclosure'] is Map) {
+              encLink = (item['enclosure']['link'] ?? item['enclosure']['url'])?.toString();
             }
-            if (imageUrl.isEmpty) {
-              imageUrl = extractImage(jsonEncode(item), description, category, title: title);
-            }
+            final thumbLink = (item['thumbnail'] ?? item['image'])?.toString();
+            final imageUrl = extractImage(
+              jsonEncode(item),
+              description,
+              category,
+              title: title,
+              docId: id,
+              enclosureUrl: encLink,
+              thumbnailUrl: thumbLink,
+            );
 
             DateTime pubDate = DateTime.now();
             if (item['pubDate'] != null) {
@@ -474,7 +496,18 @@ class GamingNewsService {
           final category = _categorizeNews(title, desc);
           final platform = _detectPlatform(title, desc);
           final itemXml = item.toXmlString();
-          final imageUrl = extractImage(itemXml, desc, category, title: title);
+          final encUrl = item.findElements('enclosure').firstOrNull?.getAttribute('url');
+          final mediaContentUrl = item.findElements('media:content').firstOrNull?.getAttribute('url') ??
+              item.findElements('media:thumbnail').firstOrNull?.getAttribute('url');
+          final imageUrl = extractImage(
+            itemXml,
+            desc,
+            category,
+            title: title,
+            docId: id,
+            enclosureUrl: encUrl,
+            thumbnailUrl: mediaContentUrl,
+          );
 
           final pubDateStr = item.findElements('pubDate').firstOrNull?.innerText.trim();
           DateTime pubDate = DateTime.now();
@@ -653,34 +686,244 @@ class GamingNewsService {
     return text.replaceAll(RegExp(r'\s+'), ' ').trim();
   }
 
-  /// Extract news image from RSS item XML, enclosures, or HTML description with game fallback
-  static String extractImage(String itemXml, String description, String category, {String? title}) {
-    String imageUrl = "";
+  /// Fetch OG Image from article link: Use http.get(articleLink) and parse meta property="og:image"
+  static Future<String?> fetchOgImage(String articleLink) async {
+    if (articleLink.trim().isEmpty || !articleLink.startsWith('http')) return null;
+    try {
+      final res = await http.get(
+        Uri.parse(articleLink),
+        headers: {
+          'User-Agent': 'Mozilla/5.0 (compatible; Googlebot/2.1; +http://www.google.com/bot.html)',
+          'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+        },
+      ).timeout(const Duration(seconds: 5));
 
-    // A) Try media:content
-    if (itemXml.contains('media:content')) {
-      RegExp reg = RegExp(r'media:content[^>]*url="([^"]+)"', caseSensitive: false);
-      var match = reg.firstMatch(itemXml);
-      if (match != null) imageUrl = match.group(1)!;
+      if (res.statusCode == 200 && res.body.isNotEmpty) {
+        final doc = html_parser.parse(res.body);
+        final metaTags = doc.getElementsByTagName('meta');
+        for (final meta in metaTags) {
+          final prop = meta.attributes['property']?.toLowerCase() ?? '';
+          final name = meta.attributes['name']?.toLowerCase() ?? '';
+          final content = meta.attributes['content']?.trim() ?? '';
+
+          if ((prop == 'og:image' ||
+                  prop == 'og:image:url' ||
+                  prop == 'og:image:secure_url' ||
+                  name == 'twitter:image' ||
+                  name == 'twitter:image:src') &&
+              content.isNotEmpty &&
+              content.startsWith('http') &&
+              !content.contains('icon') &&
+              !content.contains('pixel') &&
+              !content.contains('1x1')) {
+            return content;
+          }
+        }
+
+        // Link tag fallback
+        final linkTags = doc.getElementsByTagName('link');
+        for (final link in linkTags) {
+          final rel = link.attributes['rel']?.toLowerCase() ?? '';
+          final href = link.attributes['href']?.trim() ?? '';
+          if ((rel == 'image_src' || rel == 'apple-touch-icon-precomposed') && href.startsWith('http')) {
+            return href;
+          }
+        }
+      }
+    } catch (_) {}
+    return null;
+  }
+
+  /// Synchronous image extraction respecting priority order:
+  /// 1. enclosure URL
+  /// 2. media:content / media:thumbnail
+  /// 3. img tag in description or content
+  /// 4. Category default image fallback (deterministic per article)
+  static String extractImage(
+    String itemXml,
+    String description,
+    String category, {
+    String? title,
+    String? docId,
+    String? enclosureUrl,
+    String? thumbnailUrl,
+  }) {
+    // 1. First try: rssItem.enclosure?.url (RSS image)
+    if (enclosureUrl != null && enclosureUrl.trim().isNotEmpty && enclosureUrl.startsWith('http')) {
+      return enclosureUrl.trim();
     }
-    // B) Try enclosure
-    if (imageUrl.isEmpty && itemXml.contains('<enclosure')) {
-      RegExp reg = RegExp(r'<enclosure[^>]*url="([^"]+)"', caseSensitive: false);
-      var match = reg.firstMatch(itemXml);
-      if (match != null) imageUrl = match.group(1)!;
-    }
-    // C) Try img tag in description
-    if (imageUrl.isEmpty) {
-      RegExp reg = RegExp(r'<img[^>]+src="([^">]+)"', caseSensitive: false);
-      var match = reg.firstMatch(description);
-      if (match != null) imageUrl = match.group(1)!;
+    if (itemXml.contains('<enclosure')) {
+      final encReg = RegExp(r'''<enclosure[^>]+url=["']([^"']+)["']''', caseSensitive: false);
+      final m = encReg.firstMatch(itemXml);
+      if (m != null && m.group(1) != null && m.group(1)!.startsWith('http')) {
+        return m.group(1)!.trim();
+      }
     }
 
-    // D) FALLBACK - If still empty or invalid, use 100% working game pic from fallback_images.dart
-    if (imageUrl.isEmpty || !imageUrl.startsWith('http')) {
-      imageUrl = getGameFallbackImage(category: category, title: title, content: description);
+    // 2. Second try: rssItem.media?.thumbnails?.first?.url (media:content / thumbnail)
+    if (thumbnailUrl != null && thumbnailUrl.trim().isNotEmpty && thumbnailUrl.startsWith('http')) {
+      return thumbnailUrl.trim();
     }
-    return imageUrl;
+    if (itemXml.contains('media:content') || itemXml.contains('media:thumbnail')) {
+      final mediaReg = RegExp(r'''<media:(?:content|thumbnail)[^>]+url=["']([^"']+)["']''', caseSensitive: false);
+      final m = mediaReg.firstMatch(itemXml);
+      if (m != null && m.group(1) != null && m.group(1)!.startsWith('http')) {
+        return m.group(1)!.trim();
+      }
+    }
+
+    // 3. Third try: rssItem.content / description contains <img> tag -> extract first <img src>
+    final imgReg = RegExp(r'''<img[^>]+src=["'](https?://[^"']+)["']''', caseSensitive: false);
+    final match = imgReg.firstMatch(description);
+    if (match != null && match.group(1) != null) {
+      final src = match.group(1)!.trim();
+      if (!src.contains('icon') && !src.contains('pixel') && !src.contains('1x1')) {
+        return src;
+      }
+    }
+
+    // 5. Last fallback only if all fail: category.defaultImage (unique deterministic per article)
+    return getGameFallbackImage(
+      category: category,
+      title: title,
+      content: description,
+      docId: docId,
+    );
+  }
+
+  /// Full 5-step async image extraction pipeline:
+  /// 1. rssItem.enclosure?.url
+  /// 2. rssItem.media?.thumbnails?.first?.url
+  /// 3. rssItem.content contains <img> tag
+  /// 4. Fetch OG Image from article link (meta property="og:image")
+  /// 5. Category default image fallback (deterministic per article from pool)
+  static Future<String> extractImageAsync({
+    String? enclosureUrl,
+    String? thumbnailUrl,
+    String? itemXml,
+    String? content,
+    String? description,
+    required String category,
+    String? articleLink,
+    String? title,
+    String? docId,
+  }) async {
+    // 1. First try: rssItem.enclosure?.url
+    if (enclosureUrl != null && enclosureUrl.trim().isNotEmpty && enclosureUrl.startsWith('http')) {
+      return enclosureUrl.trim();
+    }
+    if (itemXml != null && itemXml.contains('<enclosure')) {
+      final encReg = RegExp(r'''<enclosure[^>]+url=["']([^"']+)["']''', caseSensitive: false);
+      final m = encReg.firstMatch(itemXml);
+      if (m != null && m.group(1) != null && m.group(1)!.startsWith('http')) {
+        return m.group(1)!.trim();
+      }
+    }
+
+    // 2. Second try: rssItem.media?.thumbnails?.first?.url
+    if (thumbnailUrl != null && thumbnailUrl.trim().isNotEmpty && thumbnailUrl.startsWith('http')) {
+      return thumbnailUrl.trim();
+    }
+    if (itemXml != null && (itemXml.contains('media:content') || itemXml.contains('media:thumbnail'))) {
+      final mediaReg = RegExp(r'''<media:(?:content|thumbnail)[^>]+url=["']([^"']+)["']''', caseSensitive: false);
+      final m = mediaReg.firstMatch(itemXml);
+      if (m != null && m.group(1) != null && m.group(1)!.startsWith('http')) {
+        return m.group(1)!.trim();
+      }
+    }
+
+    // 3. Third try: content / description contains <img> tag -> extract first <img src>
+    final fullHtml = '${content ?? ''} ${description ?? ''}';
+    final imgReg = RegExp(r'''<img[^>]+src=["'](https?://[^"']+)["']''', caseSensitive: false);
+    final match = imgReg.firstMatch(fullHtml);
+    if (match != null && match.group(1) != null) {
+      final src = match.group(1)!.trim();
+      if (!src.contains('icon') && !src.contains('pixel') && !src.contains('1x1')) {
+        return src;
+      }
+    }
+
+    // 4. Fourth try: Fetch OG Image from article link: Use http.get(articleLink) and parse meta property="og:image"
+    if (articleLink != null && articleLink.trim().isNotEmpty && articleLink.startsWith('http')) {
+      final og = await fetchOgImage(articleLink.trim());
+      if (og != null && og.isNotEmpty) {
+        return og;
+      }
+    }
+
+    // 5. Last fallback only if all fail: category.defaultImage (unique per-article image from pool)
+    return getGameFallbackImage(
+      category: category,
+      title: title,
+      content: description ?? content,
+      docId: docId,
+    );
+  }
+
+  /// One-time migration function that updates existing Firestore news documents
+  /// where imageUrl is empty or matches category default image.
+  /// Re-fetches OG image from sourceUrl, extracts from content, or assigns a unique pool image.
+  Future<int> fixOldNewsImages() async {
+    int updatedCount = 0;
+    try {
+      debugPrint('Starting fixOldNewsImages migration...');
+      final collections = ['gaming_news', 'news'];
+      for (final colName in collections) {
+        final snap = await _firestore.collection(colName).get();
+        for (final doc in snap.docs) {
+          final data = doc.data();
+          final rawImg = (data['imageUrl'] ?? data['image'] ?? '').toString().trim();
+          final sourceUrl = (data['sourceUrl'] ?? data['url'] ?? '').toString().trim();
+          final category = (data['category'] ?? 'Gaming').toString();
+          final title = (data['title_en'] ?? (data['title'] is Map ? data['title']['en'] : data['title']) ?? '').toString();
+          final content = (data['content_en'] ?? data['content'] ?? data['description'] ?? '').toString();
+
+          if (isCategoryDefaultImage(rawImg) || rawImg.isEmpty || rawImg.contains('picsum.photos')) {
+            String newImg = '';
+
+            // 1. Try OG image from sourceUrl
+            if (sourceUrl.isNotEmpty && sourceUrl.startsWith('http')) {
+              final og = await fetchOgImage(sourceUrl);
+              if (og != null && og.isNotEmpty) {
+                newImg = og;
+              }
+            }
+
+            // 2. Try img tag in content
+            if (newImg.isEmpty) {
+              final imgMatch = RegExp(r'''<img[^>]+src=["'](https?://[^"']+)["']''', caseSensitive: false)
+                  .firstMatch(content);
+              if (imgMatch != null && imgMatch.group(1) != null) {
+                final src = imgMatch.group(1)!.trim();
+                if (!src.contains('icon') && !src.contains('pixel')) {
+                  newImg = src;
+                }
+              }
+            }
+
+            // 3. Diverse unique fallback from category pool
+            if (newImg.isEmpty || isCategoryDefaultImage(newImg)) {
+              newImg = getGameFallbackImage(
+                category: category,
+                title: title,
+                content: content,
+                docId: doc.id,
+              );
+            }
+
+            if (newImg.isNotEmpty && newImg != rawImg) {
+              await doc.reference.update({'imageUrl': newImg});
+              updatedCount++;
+              debugPrint('Fixed image for doc ${doc.id} ($category): $newImg');
+            }
+          }
+        }
+      }
+      debugPrint('fixOldNewsImages complete: $updatedCount documents updated.');
+    } catch (e) {
+      debugPrint('Error in fixOldNewsImages: $e');
+    }
+    return updatedCount;
   }
 
   String _generateDocId(String input) {
@@ -719,7 +962,7 @@ class GamingNewsService {
             final curImg = (data['imageUrl'] ?? data['image'] ?? '').toString();
             final curBot = (data['botName'] ?? data['bot_name'] ?? '').toString();
 
-            if (curUr.length < 300 || curEn.length < 300 || data['fullContent_en'] == null || curImg.isEmpty || curBot.isEmpty) {
+            if (curUr.length < 300 || curEn.length < 300 || data['fullContent_en'] == null || curImg.isEmpty || isCategoryDefaultImage(curImg) || curBot.isEmpty) {
               batch.set(existingDoc.reference, article.toMap(), SetOptions(merge: true));
               needsUpdate = true;
             }
@@ -733,6 +976,9 @@ class GamingNewsService {
           await batch.commit();
         }
       }
+
+      // Automatically migrate old news images in the background
+      unawaited(fixOldNewsImages());
     } catch (e) {
       debugPrint('Error seeding initial gaming news: $e');
     }
