@@ -520,6 +520,313 @@ class _TournamentBoardScreenState extends State<TournamentBoardScreen> with Sing
     );
   }
 
+  void _showRoomDetailsDialog(BuildContext context, TournamentRoom room, String currentUid) {
+    final roomIdText = room.roomId.trim().isNotEmpty ? room.roomId.trim() : 'TBD (Revealed shortly)';
+    final passwordText = room.password.trim().isNotEmpty ? room.password.trim() : 'TBD';
+    final mapName = room.map.trim().isNotEmpty ? room.map.trim() : 'Erangel';
+    final startTimeFormatted = DateFormat('hh:mm a, dd MMM').format(room.startTime);
+
+    showDialog(
+      context: context,
+      builder: (dialogCtx) => AlertDialog(
+        backgroundColor: GamerTheme.cardDark,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(20),
+          side: BorderSide(color: GamerTheme.accentBlue.withOpacity(0.4), width: 1.5),
+        ),
+        titlePadding: const EdgeInsets.fromLTRB(20, 20, 20, 10),
+        contentPadding: const EdgeInsets.symmetric(horizontal: 20),
+        title: Row(
+          children: [
+            Container(
+              padding: const EdgeInsets.all(8),
+              decoration: BoxDecoration(
+                color: GamerTheme.accentBlue.withOpacity(0.15),
+                shape: BoxShape.circle,
+              ),
+              child: const Icon(Icons.vpn_key_rounded, color: GamerTheme.accentBlue, size: 20),
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const Text(
+                    'ROOM CREDENTIALS',
+                    style: TextStyle(
+                      color: GamerTheme.accentBlue,
+                      fontSize: 12,
+                      fontWeight: FontWeight.w900,
+                      letterSpacing: 1,
+                    ),
+                  ),
+                  const SizedBox(height: 2),
+                  Text(
+                    room.title,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(
+                      color: Colors.white,
+                      fontSize: 15,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+        content: SingleChildScrollView(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const SizedBox(height: 10),
+              // Slot booked status badge - slots stay intact (e.g. 2/2)
+              Container(
+                width: double.infinity,
+                padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 12),
+                decoration: BoxDecoration(
+                  color: GamerTheme.neonGreen.withOpacity(0.12),
+                  borderRadius: BorderRadius.circular(8),
+                  border: Border.all(color: GamerTheme.neonGreen.withOpacity(0.4)),
+                ),
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    const Icon(Icons.check_circle_rounded, color: GamerTheme.neonGreen, size: 16),
+                    const SizedBox(width: 6),
+                    Text(
+                      'SLOT BOOKED (${room.joinedPlayers.length}/${room.maxSlots}) • CONFIRMED',
+                      style: const TextStyle(
+                        color: GamerTheme.neonGreen,
+                        fontWeight: FontWeight.w900,
+                        fontSize: 11,
+                        letterSpacing: 0.5,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 16),
+
+              // Room ID box with COPY ID
+              Container(
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: GamerTheme.bgDark,
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(color: GamerTheme.borderDark),
+                ),
+                child: Row(
+                  children: [
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          const Text(
+                            'ROOM ID',
+                            style: TextStyle(color: GamerTheme.textMuted, fontSize: 10, fontWeight: FontWeight.bold, letterSpacing: 0.8),
+                          ),
+                          const SizedBox(height: 4),
+                          SelectableText(
+                            roomIdText,
+                            style: const TextStyle(
+                              color: Colors.white,
+                              fontSize: 15,
+                              fontWeight: FontWeight.w900,
+                              fontFamily: 'monospace',
+                              letterSpacing: 1,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                    ElevatedButton.icon(
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: GamerTheme.accentBlue,
+                        foregroundColor: GamerTheme.bgDark,
+                        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                      ),
+                      onPressed: () {
+                        Clipboard.setData(ClipboardData(text: roomIdText));
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          SnackBar(
+                            content: Text('Room ID "$roomIdText" copied to clipboard! 📋'),
+                            backgroundColor: GamerTheme.accentBlue,
+                            duration: const Duration(seconds: 2),
+                          ),
+                        );
+                      },
+                      icon: const Icon(Icons.copy_rounded, size: 14),
+                      label: const Text('COPY ID', style: TextStyle(fontSize: 11, fontWeight: FontWeight.w900)),
+                    ),
+                  ],
+                ),
+              ),
+
+              const SizedBox(height: 10),
+
+              // Password box with COPY PASSWORD
+              Container(
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: GamerTheme.bgDark,
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(color: GamerTheme.borderDark),
+                ),
+                child: Row(
+                  children: [
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          const Text(
+                            'PASSWORD',
+                            style: TextStyle(color: GamerTheme.textMuted, fontSize: 10, fontWeight: FontWeight.bold, letterSpacing: 0.8),
+                          ),
+                          const SizedBox(height: 4),
+                          SelectableText(
+                            passwordText,
+                            style: const TextStyle(
+                              color: Colors.white,
+                              fontSize: 15,
+                              fontWeight: FontWeight.w900,
+                              fontFamily: 'monospace',
+                              letterSpacing: 1,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                    ElevatedButton.icon(
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: GamerTheme.accentOrange,
+                        foregroundColor: GamerTheme.bgDark,
+                        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                      ),
+                      onPressed: () {
+                        Clipboard.setData(ClipboardData(text: passwordText));
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          SnackBar(
+                            content: Text('Password "$passwordText" copied to clipboard! 🔑'),
+                            backgroundColor: GamerTheme.accentOrange,
+                            duration: const Duration(seconds: 2),
+                          ),
+                        );
+                      },
+                      icon: const Icon(Icons.copy_rounded, size: 14),
+                      label: const Text('COPY PASSWORD', style: TextStyle(fontSize: 11, fontWeight: FontWeight.w900)),
+                    ),
+                  ],
+                ),
+              ),
+
+              const SizedBox(height: 14),
+
+              // Match details: MAP & STARTS TIME
+              Container(
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: GamerTheme.cardElevated,
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(color: GamerTheme.borderDark),
+                ),
+                child: Row(
+                  children: [
+                    Expanded(
+                      child: Row(
+                        children: [
+                          const Icon(Icons.map_rounded, color: GamerTheme.accentBlue, size: 16),
+                          const SizedBox(width: 8),
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                const Text('MAP', style: TextStyle(color: GamerTheme.textMuted, fontSize: 10, fontWeight: FontWeight.bold)),
+                                const SizedBox(height: 2),
+                                Text(mapName, style: const TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.bold)),
+                              ],
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                    Container(height: 28, width: 1, color: GamerTheme.borderDark),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: Row(
+                        children: [
+                          const Icon(Icons.access_time_filled_rounded, color: GamerTheme.accentOrange, size: 16),
+                          const SizedBox(width: 8),
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                const Text('STARTS TIME', style: TextStyle(color: GamerTheme.textMuted, fontSize: 10, fontWeight: FontWeight.bold)),
+                                const SizedBox(height: 2),
+                                Text(startTimeFormatted, style: const TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.bold)),
+                              ],
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+
+              const SizedBox(height: 12),
+              const Center(
+                child: Text(
+                  'Open BGMI > Custom Match > Enter ID & Password to enter!',
+                  textAlign: TextAlign.center,
+                  style: TextStyle(color: GamerTheme.textMuted, fontSize: 11),
+                ),
+              ),
+            ],
+          ),
+        ),
+        actionsPadding: const EdgeInsets.fromLTRB(20, 10, 20, 16),
+        actions: [
+          Row(
+            children: [
+              // Small leave room text inside dialog
+              TextButton(
+                onPressed: () async {
+                  Navigator.pop(dialogCtx);
+                  if (currentUid.isNotEmpty) {
+                    await _tournamentService.leaveRoom(room.id, currentUid);
+                    if (context.mounted) {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        const SnackBar(content: Text('Left tournament slot.')),
+                      );
+                    }
+                  }
+                },
+                child: const Text('Leave Slot', style: TextStyle(color: GamerTheme.redAccent, fontSize: 11)),
+              ),
+              const Spacer(),
+              ElevatedButton(
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: GamerTheme.cardElevated,
+                  foregroundColor: Colors.white,
+                  side: const BorderSide(color: GamerTheme.borderLight),
+                  padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 10),
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                ),
+                onPressed: () => Navigator.pop(dialogCtx),
+                child: const Text('CLOSE', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12)),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
   Widget _buildRoomCard(TournamentRoom room) {
     final currentGamer = _authService.currentGamer;
     final currentUid = currentGamer?.uid ?? '';
@@ -783,22 +1090,80 @@ class _TournamentBoardScreenState extends State<TournamentBoardScreen> with Sing
                     onPressed: () async => await _tournamentService.closeRoom(room.id),
                   ),
                 ] else if (isJoined) ...[
-                  OutlinedButton.icon(
-                    style: OutlinedButton.styleFrom(
-                      side: const BorderSide(color: GamerTheme.accentBlue),
-                      foregroundColor: GamerTheme.accentBlue,
-                      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
-                    ),
-                    icon: const Icon(Icons.check_circle_rounded, size: 16, color: GamerTheme.accentBlue),
-                    label: const Text('SLOT BOOKED', style: TextStyle(fontWeight: FontWeight.w900, fontSize: 12)),
-                    onPressed: () async {
-                      await _tournamentService.leaveRoom(room.id, currentUid);
-                      if (context.mounted) {
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          const SnackBar(content: Text('Left tournament slot.')),
-                        );
-                      }
-                    },
+                  Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      OutlinedButton.icon(
+                        style: OutlinedButton.styleFrom(
+                          side: const BorderSide(color: GamerTheme.accentBlue, width: 1.5),
+                          backgroundColor: GamerTheme.accentBlue.withOpacity(0.12),
+                          foregroundColor: GamerTheme.accentBlue,
+                          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                        ),
+                        icon: const Icon(Icons.check_circle_rounded, size: 16, color: GamerTheme.accentBlue),
+                        label: const Text('SLOT BOOKED', style: TextStyle(fontWeight: FontWeight.w900, fontSize: 12)),
+                        onPressed: () => _showRoomDetailsDialog(context, room, currentUid),
+                      ),
+                      const SizedBox(width: 8),
+                      TextButton(
+                        style: TextButton.styleFrom(
+                          foregroundColor: GamerTheme.redAccent,
+                          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                          minimumSize: Size.zero,
+                          tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                        ),
+                        onPressed: () async {
+                          final confirm = await showDialog<bool>(
+                            context: context,
+                            builder: (c) => AlertDialog(
+                              backgroundColor: GamerTheme.cardDark,
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(16),
+                                side: const BorderSide(color: GamerTheme.borderDark),
+                              ),
+                              title: const Text('Leave Tournament Slot?', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 15)),
+                              content: const Text(
+                                'Are you sure you want to leave your slot? This slot will become open for other players.',
+                                style: TextStyle(color: GamerTheme.textMuted, fontSize: 13),
+                              ),
+                              actions: [
+                                TextButton(
+                                  onPressed: () => Navigator.pop(c, false),
+                                  child: const Text('Cancel', style: TextStyle(color: GamerTheme.textMuted)),
+                                ),
+                                ElevatedButton(
+                                  style: ElevatedButton.styleFrom(
+                                    backgroundColor: GamerTheme.redAccent,
+                                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                                  ),
+                                  onPressed: () => Navigator.pop(c, true),
+                                  child: const Text('LEAVE', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 12)),
+                                ),
+                              ],
+                            ),
+                          );
+                          if (confirm == true && currentUid.isNotEmpty) {
+                            await _tournamentService.leaveRoom(room.id, currentUid);
+                            if (context.mounted) {
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                const SnackBar(content: Text('Left tournament slot.')),
+                              );
+                            }
+                          }
+                        },
+                        child: const Text(
+                          'LEAVE ROOM',
+                          style: TextStyle(
+                            color: GamerTheme.redAccent,
+                            fontWeight: FontWeight.bold,
+                            fontSize: 10,
+                            letterSpacing: 0.5,
+                          ),
+                        ),
+                      ),
+                    ],
                   ),
                 ] else ...[
                   ElevatedButton(
