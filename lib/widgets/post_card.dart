@@ -8,6 +8,7 @@ import '../services/gamer_auth_service.dart';
 import '../services/gamer_social_service.dart';
 import '../widgets/gamer_avatar.dart';
 import '../screens/gamer_profile_screen.dart';
+import '../services/verification_service.dart';
 
 class PostCard extends StatefulWidget {
   final GamerPost post;
@@ -21,6 +22,31 @@ class PostCard extends StatefulWidget {
 class _PostCardState extends State<PostCard> {
   final GamerSocialService _socialService = GamerSocialService();
   final GamerAuthService _authService = GamerAuthService();
+  bool _isAuthorVerified = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _isAuthorVerified = widget.post.isVerified || VerificationService.isVerifiedCached(widget.post.userId);
+    _checkVerification();
+  }
+
+  @override
+  void didUpdateWidget(covariant PostCard oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.post.userId != widget.post.userId || oldWidget.post.isVerified != widget.post.isVerified) {
+      _isAuthorVerified = widget.post.isVerified || VerificationService.isVerifiedCached(widget.post.userId);
+      _checkVerification();
+    }
+  }
+
+  Future<void> _checkVerification() async {
+    if (widget.post.userId.isEmpty) return;
+    final verified = await VerificationService.isUserVerified(widget.post.userId);
+    if (mounted && verified != _isAuthorVerified) {
+      setState(() => _isAuthorVerified = verified);
+    }
+  }
 
   void _openProfile() {
     Navigator.of(context).push(
@@ -142,8 +168,10 @@ class _PostCardState extends State<PostCard> {
                                 overflow: TextOverflow.ellipsis,
                               ),
                             ),
-                            const SizedBox(width: 4),
-                            const Icon(Icons.check_circle_rounded, color: GamerTheme.accentBlue, size: 14),
+                            if (_isAuthorVerified) ...[
+                              const SizedBox(width: 4),
+                              const Icon(Icons.verified, color: Colors.blue, size: 15),
+                            ],
                           ],
                         ),
                         const SizedBox(height: 2),

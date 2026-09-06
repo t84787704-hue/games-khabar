@@ -12,6 +12,11 @@ class GamerUser {
   final int followersCount;
   final int followingCount;
   final int postsCount;
+  final int likesReceived;
+  final int reportsCount;
+  final bool isVerified;
+  final String gameId;
+  final Map<String, dynamic>? verificationProgress;
   final DateTime? createdAt;
 
   const GamerUser({
@@ -26,8 +31,31 @@ class GamerUser {
     this.followersCount = 0,
     this.followingCount = 0,
     this.postsCount = 0,
+    this.likesReceived = 0,
+    this.reportsCount = 0,
+    this.isVerified = false,
+    this.gameId = '',
+    this.verificationProgress,
     this.createdAt,
   });
+
+  int get accountAgeDays {
+    if (createdAt == null) return 0;
+    final diff = DateTime.now().difference(createdAt!).inDays;
+    return diff < 0 ? 0 : diff;
+  }
+
+  bool get hasAvatar {
+    final clean = photoUrl.trim();
+    if (clean.isEmpty) return false;
+    return clean.startsWith('http') || clean.startsWith('data:image');
+  }
+
+  bool get hasBio => bio.trim().isNotEmpty;
+
+  bool get hasGameIdLinked => gameId.trim().isNotEmpty;
+
+  bool get noReports => reportsCount == 0;
 
   factory GamerUser.fromFirestore(DocumentSnapshot doc) {
     final data = doc.data() as Map<String, dynamic>? ?? {};
@@ -51,6 +79,13 @@ class GamerUser {
       followersCount: (data['followersCount'] as num?)?.toInt() ?? 0,
       followingCount: (data['followingCount'] as num?)?.toInt() ?? 0,
       postsCount: (data['postsCount'] as num?)?.toInt() ?? 0,
+      likesReceived: (data['likesReceived'] as num?)?.toInt() ?? 0,
+      reportsCount: (data['reportsCount'] as num?)?.toInt() ?? 0,
+      isVerified: data['isVerified'] == true,
+      gameId: (data['gameId'] ?? data['inGameId'] ?? '').toString(),
+      verificationProgress: data['verificationProgress'] is Map
+          ? Map<String, dynamic>.from(data['verificationProgress'])
+          : null,
       createdAt: created,
     );
   }
@@ -68,6 +103,19 @@ class GamerUser {
       'followersCount': followersCount,
       'followingCount': followingCount,
       'postsCount': postsCount,
+      'likesReceived': likesReceived,
+      'reportsCount': reportsCount,
+      'isVerified': isVerified,
+      'gameId': gameId.trim(),
+      'verificationProgress': {
+        'postsCount': postsCount,
+        'likesReceived': likesReceived,
+        'followersCount': followersCount,
+        'accountAgeDays': accountAgeDays,
+        'hasGameIdLinked': hasGameIdLinked,
+        'hasAvatar': hasAvatar,
+        'noReports': noReports,
+      },
       'createdAt': createdAt != null ? Timestamp.fromDate(createdAt!) : FieldValue.serverTimestamp(),
       'updatedAt': FieldValue.serverTimestamp(),
     };
@@ -85,6 +133,11 @@ class GamerUser {
     int? followersCount,
     int? followingCount,
     int? postsCount,
+    int? likesReceived,
+    int? reportsCount,
+    bool? isVerified,
+    String? gameId,
+    Map<String, dynamic>? verificationProgress,
     DateTime? createdAt,
   }) {
     return GamerUser(
@@ -99,6 +152,11 @@ class GamerUser {
       followersCount: followersCount ?? this.followersCount,
       followingCount: followingCount ?? this.followingCount,
       postsCount: postsCount ?? this.postsCount,
+      likesReceived: likesReceived ?? this.likesReceived,
+      reportsCount: reportsCount ?? this.reportsCount,
+      isVerified: isVerified ?? this.isVerified,
+      gameId: gameId ?? this.gameId,
+      verificationProgress: verificationProgress ?? this.verificationProgress,
       createdAt: createdAt ?? this.createdAt,
     );
   }

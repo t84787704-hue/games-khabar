@@ -115,8 +115,10 @@ class _FollowersFollowingScreenState extends State<FollowersFollowingScreen> wit
                   overflow: TextOverflow.ellipsis,
                 ),
               ),
-              const SizedBox(width: 4),
-              const Icon(Icons.check_circle_rounded, color: GamerTheme.accentBlue, size: 14),
+              if (user.isVerified) ...[
+                const SizedBox(width: 4),
+                const Icon(Icons.verified, color: Colors.blue, size: 14),
+              ],
             ],
           ),
           subtitle: Row(

@@ -8,6 +8,7 @@ import '../services/gamer_auth_service.dart';
 import '../services/gamer_social_service.dart';
 import '../widgets/gamer_avatar.dart';
 import '../widgets/post_card.dart';
+import '../services/verification_service.dart';
 import 'create_gamer_id_screen.dart';
 import 'followers_following_screen.dart';
 import 'gamer_auth_screen.dart';
@@ -26,6 +27,10 @@ class _GamerProfileScreenState extends State<GamerProfileScreen> with SingleTick
   final GamerAuthService _authService = GamerAuthService();
   final GamerSocialService _socialService = GamerSocialService();
 
+  VerificationProgress? _liveProgress;
+  bool _isCheckingVerification = false;
+  String? _lastCheckedUid;
+
   @override
   void initState() {
     super.initState();
@@ -36,6 +41,324 @@ class _GamerProfileScreenState extends State<GamerProfileScreen> with SingleTick
   void dispose() {
     _tabController.dispose();
     super.dispose();
+  }
+
+  void _triggerLiveVerificationCheck(GamerUser user) {
+    if (_lastCheckedUid == user.uid && _liveProgress != null) return;
+    _lastCheckedUid = user.uid;
+    _liveProgress = VerificationService.getProgressFromUser(user);
+    
+    // Asynchronously perform live count check and auto-verify if eligible
+    WidgetsBinding.instance.addPostFrameCallback((_) async {
+      if (!mounted) return;
+      setState(() => _isCheckingVerification = true);
+      final wasVerified = user.isVerified;
+      final progress = await VerificationService.checkAndAutoVerify(user);
+      if (!mounted) return;
+      setState(() {
+        _liveProgress = progress;
+        _isCheckingVerification = false;
+      });
+
+      // If user earned the tick just now, show celebratory animation!
+      if (!wasVerified && progress.isVerified) {
+        _showCelebrationDialog();
+      }
+    });
+  }
+
+  Future<void> _manualRefreshVerification(GamerUser user) async {
+    setState(() => _isCheckingVerification = true);
+    final wasVerified = user.isVerified;
+    final progress = await VerificationService.checkAndAutoVerify(user);
+    if (!mounted) return;
+    setState(() {
+      _liveProgress = progress;
+      _isCheckingVerification = false;
+    });
+
+    if (!wasVerified && progress.isVerified) {
+      _showCelebrationDialog();
+    } else {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(progress.isVerified
+              ? '🎉 You are officially verified!'
+              : '${progress.completedRequirementsCount} of 6 requirements completed. Keep going!'),
+          backgroundColor: progress.isVerified ? GamerTheme.accentBlue : GamerTheme.cardElevated,
+          duration: const Duration(seconds: 2),
+        ),
+      );
+    }
+  }
+
+  void _showCelebrationDialog() {
+    showGeneralDialog(
+      context: context,
+      barrierDismissible: true,
+      barrierLabel: 'Celebration',
+      transitionDuration: const Duration(milliseconds: 400),
+      pageBuilder: (ctx, anim1, anim2) {
+        return const SizedBox.shrink();
+      },
+      transitionBuilder: (ctx, anim1, anim2, child) {
+        final curved = CurvedAnimation(parent: anim1, curve: Curves.easeOutBack);
+        return ScaleTransition(
+          scale: curved,
+          child: AlertDialog(
+            backgroundColor: const Color(0xFF0F172A),
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(24),
+              side: BorderSide(color: Colors.blue.withOpacity(0.6), width: 2),
+            ),
+            content: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                const SizedBox(height: 12),
+                // Glowing blue verified badge
+                Container(
+                  padding: const EdgeInsets.all(20),
+                  decoration: BoxDecoration(
+                    shape: BoxShape.circle,
+                    color: Colors.blue.withOpacity(0.15),
+                    boxShadow: [
+                      BoxShadow(
+                        color: Colors.blue.withOpacity(0.4),
+                        blurRadius: 28,
+                        spreadRadius: 4,
+                      ),
+                    ],
+                  ),
+                  child: const Icon(
+                    Icons.verified_rounded,
+                    color: Colors.blue,
+                    size: 64,
+                  ),
+                ),
+                const SizedBox(height: 20),
+                const Text(
+                  '🎉 CONGRATULATIONS! 🎉',
+                  style: TextStyle(
+                    color: GamerTheme.accentOrange,
+                    fontSize: 16,
+                    fontWeight: FontWeight.w900,
+                    letterSpacing: 1.2,
+                  ),
+                ),
+                const SizedBox(height: 8),
+                const Text(
+                  'You Are Now Verified!',
+                  style: TextStyle(
+                    color: GamerTheme.textWhite,
+                    fontSize: 22,
+                    fontWeight: FontWeight.w900,
+                  ),
+                  textAlign: TextAlign.center,
+                ),
+                const SizedBox(height: 10),
+                const Text(
+                  'You have completed all community requirements! The official Blue Tick ✓ has been permanently added to your Gamer ID and all your posts.',
+                  style: TextStyle(
+                    color: GamerTheme.textGray,
+                    fontSize: 13,
+                    height: 1.4,
+                  ),
+                  textAlign: TextAlign.center,
+                ),
+                const SizedBox(height: 24),
+                SizedBox(
+                  width: double.infinity,
+                  height: 46,
+                  child: ElevatedButton(
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: Colors.blue,
+                      foregroundColor: Colors.white,
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                    ),
+                    onPressed: () => Navigator.pop(ctx),
+                    child: const Text(
+                      'Awesome! Let\'s Flex 🎮',
+                      style: TextStyle(fontWeight: FontWeight.w900, fontSize: 14),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        );
+      },
+    );
+  }
+
+  void _showLinkGameIdDialog(GamerUser user) {
+    final controller = TextEditingController(text: user.gameId);
+    String selectedGame = user.favoriteGame;
+
+    showDialog(
+      context: context,
+      builder: (ctx) => StatefulBuilder(
+        builder: (ctx, setDialogState) => AlertDialog(
+          backgroundColor: GamerTheme.cardElevated,
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
+          title: const Row(
+            children: [
+              Icon(Icons.sports_esports_rounded, color: GamerTheme.accentBlue, size: 22),
+              SizedBox(width: 8),
+              Text('Link Game ID', style: TextStyle(color: GamerTheme.textWhite, fontSize: 18, fontWeight: FontWeight.bold)),
+            ],
+          ),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Text(
+                'Requirement 2: Link your Character UID or in-game nickname (e.g. BGMI: shadow_hunter, FF: 51293847).',
+                style: TextStyle(color: GamerTheme.textGray, fontSize: 12, height: 1.3),
+              ),
+              const SizedBox(height: 16),
+              const Text('GAME', style: TextStyle(color: GamerTheme.textMuted, fontSize: 11, fontWeight: FontWeight.bold)),
+              const SizedBox(height: 6),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 12),
+                decoration: BoxDecoration(
+                  color: GamerTheme.cardDark,
+                  borderRadius: BorderRadius.circular(10),
+                  border: Border.all(color: GamerTheme.borderDark),
+                ),
+                child: DropdownButtonHideUnderline(
+                  child: DropdownButton<String>(
+                    value: GamerTheme.favoriteGames.contains(selectedGame) ? selectedGame : 'BGMI',
+                    isExpanded: true,
+                    dropdownColor: GamerTheme.cardElevated,
+                    items: GamerTheme.favoriteGames.map((g) {
+                      return DropdownMenuItem<String>(
+                        value: g,
+                        child: Text(g, style: const TextStyle(color: GamerTheme.textWhite, fontWeight: FontWeight.bold)),
+                      );
+                    }).toList(),
+                    onChanged: (v) {
+                      if (v != null) setDialogState(() => selectedGame = v);
+                    },
+                  ),
+                ),
+              ),
+              const SizedBox(height: 14),
+              const Text('IN-GAME ID / CHARACTER UID', style: TextStyle(color: GamerTheme.textMuted, fontSize: 11, fontWeight: FontWeight.bold)),
+              const SizedBox(height: 6),
+              TextField(
+                controller: controller,
+                style: const TextStyle(color: GamerTheme.textWhite, fontSize: 14),
+                decoration: InputDecoration(
+                  hintText: 'e.g. shadow_hunter',
+                  hintStyle: const TextStyle(color: GamerTheme.textMuted),
+                  filled: true,
+                  fillColor: GamerTheme.cardDark,
+                  border: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: const BorderSide(color: GamerTheme.borderDark)),
+                ),
+              ),
+            ],
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(ctx),
+              child: const Text('Cancel', style: TextStyle(color: GamerTheme.textMuted)),
+            ),
+            ElevatedButton(
+              style: ElevatedButton.styleFrom(backgroundColor: GamerTheme.accentBlue),
+              onPressed: () async {
+                final text = controller.text.trim();
+                if (text.isEmpty) return;
+                Navigator.pop(ctx);
+                await VerificationService.linkGameId(
+                  userId: user.uid,
+                  gameId: text,
+                  gameName: selectedGame,
+                );
+                _manualRefreshVerification(user);
+              },
+              child: const Text('Save & Verify', style: TextStyle(color: Colors.black, fontWeight: FontWeight.bold)),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  void _showVerificationRequirementsDialog() {
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: const Color(0xFF0F172A),
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(20),
+          side: const BorderSide(color: GamerTheme.borderDark),
+        ),
+        title: const Row(
+          children: [
+            Icon(Icons.verified, color: Colors.blue, size: 22),
+            SizedBox(width: 8),
+            Text('Verification Requirements', style: TextStyle(color: GamerTheme.textWhite, fontSize: 17, fontWeight: FontWeight.bold)),
+          ],
+        ),
+        content: SingleChildScrollView(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const Text(
+                'Gamers ID requires authenticity and community standing before awarding the official Blue Tick ✓:',
+                style: TextStyle(color: GamerTheme.textGray, fontSize: 12.5, height: 1.35),
+              ),
+              const SizedBox(height: 16),
+              _buildRuleItem('1. Complete Profile', 'Must have a real photo avatar (not placeholder letter) and a gaming bio.'),
+              const SizedBox(height: 12),
+              _buildRuleItem('2. Linked Game ID', 'Must link at least 1 verified in-game Character ID / UID (e.g. BGMI: shadow_hunter).'),
+              const SizedBox(height: 12),
+              _buildRuleItem('3. Active Gamer', 'Must publish at least 10 gaming posts and receive 100+ likes from the community.'),
+              const SizedBox(height: 12),
+              _buildRuleItem('4. Community Standing', 'Must have 20+ followers to prove community trust.'),
+              const SizedBox(height: 12),
+              _buildRuleItem('5. Account Age (Trust)', 'Account must be at least 15 days old to prevent bots and spammers.'),
+              const SizedBox(height: 12),
+              _buildRuleItem('6. Clean Record', 'Zero toxic conduct reports or suspensions in the last 30 days.'),
+            ],
+          ),
+        ),
+        actions: [
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(
+              backgroundColor: Colors.blue,
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+            ),
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text('Got It', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildRuleItem(String title, String desc) {
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const Padding(
+          padding: EdgeInsets.only(top: 2),
+          child: Icon(Icons.check_circle, color: Colors.blue, size: 16),
+        ),
+        const SizedBox(width: 8),
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(title, style: const TextStyle(color: GamerTheme.textWhite, fontSize: 13, fontWeight: FontWeight.bold)),
+              const SizedBox(height: 2),
+              Text(desc, style: const TextStyle(color: GamerTheme.textMuted, fontSize: 11.5, height: 1.3)),
+            ],
+          ),
+        ),
+      ],
+    );
   }
 
   void _shareProfile(GamerUser user) {
@@ -269,16 +592,21 @@ class _GamerProfileScreenState extends State<GamerProfileScreen> with SingleTick
                         // Display Name + Verified Badge
                         Row(
                           children: [
-                            Text(
-                              user.displayName,
-                              style: const TextStyle(
-                                color: GamerTheme.textWhite,
-                                fontSize: 22,
-                                fontWeight: FontWeight.w900,
+                            Flexible(
+                              child: Text(
+                                user.displayName,
+                                style: const TextStyle(
+                                  color: GamerTheme.textWhite,
+                                  fontSize: 22,
+                                  fontWeight: FontWeight.w900,
+                                ),
+                                overflow: TextOverflow.ellipsis,
                               ),
                             ),
-                            const SizedBox(width: 6),
-                            const Icon(Icons.verified_rounded, color: GamerTheme.accentBlue, size: 20),
+                            if (user.isVerified) ...[
+                              const SizedBox(width: 6),
+                              const Icon(Icons.verified, color: Colors.blue, size: 20),
+                            ],
                           ],
                         ),
                         const SizedBox(height: 2),

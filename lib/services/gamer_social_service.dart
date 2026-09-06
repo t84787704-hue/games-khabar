@@ -178,6 +178,12 @@ class GamerSocialService {
     final postRef = _firestore.collection('posts').doc();
     final userRef = _firestore.collection('users').doc(userId);
 
+    bool isVerified = false;
+    try {
+      final userSnap = await userRef.get();
+      isVerified = userSnap.data()?['isVerified'] == true;
+    } catch (_) {}
+
     final post = GamerPost(
       postId: postRef.id,
       userId: userId,
@@ -188,6 +194,7 @@ class GamerSocialService {
       gameTag: gameTag,
       likesCount: 0,
       commentsCount: 0,
+      isVerified: isVerified,
       createdAt: DateTime.now(),
     );
 
@@ -241,10 +248,20 @@ class GamerSocialService {
       // Unlike
       await likeRef.delete();
       await postRef.update({'likesCount': FieldValue.increment(-1)});
+      if (postAuthorId.isNotEmpty) {
+        _firestore.collection('users').doc(postAuthorId).update({
+          'likesReceived': FieldValue.increment(-1),
+        }).catchError((_) {});
+      }
     } else {
       // Like
       await likeRef.set({'likedAt': FieldValue.serverTimestamp()});
       await postRef.update({'likesCount': FieldValue.increment(1)});
+      if (postAuthorId.isNotEmpty) {
+        _firestore.collection('users').doc(postAuthorId).update({
+          'likesReceived': FieldValue.increment(1),
+        }).catchError((_) {});
+      }
 
       // Notification
       if (postAuthorId != userId && postAuthorId.isNotEmpty) {

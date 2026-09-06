@@ -28,6 +28,7 @@ class _CreateGamerIdScreenState extends State<CreateGamerIdScreen> {
   final _displayNameController = TextEditingController();
   final _bioController = TextEditingController();
   final _rankController = TextEditingController();
+  final _gameIdController = TextEditingController();
 
   String _selectedGame = 'BGMI';
   String _photoUrl = '';
@@ -69,6 +70,7 @@ class _CreateGamerIdScreenState extends State<CreateGamerIdScreen> {
       _bioController.text = u.bio;
       _selectedGame = GamerTheme.favoriteGames.contains(u.favoriteGame) ? u.favoriteGame : 'BGMI';
       _rankController.text = u.rank;
+      _gameIdController.text = u.gameId;
       _photoUrl = u.photoUrl;
       _isUsernameAvailable = true;
     } else {
@@ -89,6 +91,7 @@ class _CreateGamerIdScreenState extends State<CreateGamerIdScreen> {
     _displayNameController.dispose();
     _bioController.dispose();
     _rankController.dispose();
+    _gameIdController.dispose();
     super.dispose();
   }
 
@@ -214,6 +217,10 @@ class _CreateGamerIdScreenState extends State<CreateGamerIdScreen> {
         followersCount: widget.existingUser?.followersCount ?? 0,
         followingCount: widget.existingUser?.followingCount ?? 0,
         postsCount: widget.existingUser?.postsCount ?? 0,
+        likesReceived: widget.existingUser?.likesReceived ?? 0,
+        reportsCount: widget.existingUser?.reportsCount ?? 0,
+        isVerified: widget.existingUser?.isVerified ?? false,
+        gameId: _gameIdController.text.trim(),
         createdAt: widget.existingUser?.createdAt ?? DateTime.now(),
       );
 
@@ -670,6 +677,49 @@ class _CreateGamerIdScreenState extends State<CreateGamerIdScreen> {
                       child: Icon(Icons.edit_note_rounded, color: GamerTheme.textMuted),
                     ),
                     hintText: 'e.g. BGMI Conqueror | Free Fire Lover | Clan Leader',
+                  ),
+                ),
+
+                const SizedBox(height: 20),
+
+                // 6. In-Game Character ID (Requirement 2 for Blue Tick)
+                Row(
+                  children: [
+                    const Text(
+                      'IN-GAME CHARACTER ID / UID',
+                      style: TextStyle(color: GamerTheme.textGray, fontSize: 12, fontWeight: FontWeight.w800, letterSpacing: 0.8),
+                    ),
+                    const SizedBox(width: 8),
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                      decoration: BoxDecoration(
+                        color: GamerTheme.accentBlue.withOpacity(0.15),
+                        borderRadius: BorderRadius.circular(4),
+                        border: Border.all(color: GamerTheme.accentBlue.withOpacity(0.4)),
+                      ),
+                      child: const Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Icon(Icons.verified, color: GamerTheme.accentBlue, size: 10),
+                          SizedBox(width: 3),
+                          Text(
+                            'BLUE TICK REQUIREMENT',
+                            style: TextStyle(color: GamerTheme.accentBlue, fontSize: 8.5, fontWeight: FontWeight.w900),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 8),
+                TextFormField(
+                  controller: _gameIdController,
+                  style: const TextStyle(color: GamerTheme.textWhite),
+                  decoration: const InputDecoration(
+                    prefixIcon: Icon(Icons.sports_esports_rounded, color: GamerTheme.accentBlue),
+                    hintText: 'e.g. shadow_hunter (BGMI) or 51293847',
+                    helperText: 'Link your game character name/UID to unlock verification',
+                    helperStyle: TextStyle(color: GamerTheme.textMuted, fontSize: 11),
                   ),
                 ),
 

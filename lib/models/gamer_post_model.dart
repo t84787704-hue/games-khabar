@@ -10,6 +10,7 @@ class GamerPost {
   final String gameTag;
   final int likesCount;
   final int commentsCount;
+  final bool isVerified;
   final DateTime? createdAt;
 
   const GamerPost({
@@ -22,6 +23,7 @@ class GamerPost {
     this.gameTag = 'BGMI',
     this.likesCount = 0,
     this.commentsCount = 0,
+    this.isVerified = false,
     this.createdAt,
   });
 
@@ -45,6 +47,7 @@ class GamerPost {
       gameTag: data['gameTag'] ?? 'BGMI',
       likesCount: (data['likesCount'] as num?)?.toInt() ?? 0,
       commentsCount: (data['commentsCount'] as num?)?.toInt() ?? 0,
+      isVerified: data['isVerified'] == true,
       createdAt: created,
     );
   }
@@ -60,6 +63,7 @@ class GamerPost {
       'gameTag': gameTag,
       'likesCount': likesCount,
       'commentsCount': commentsCount,
+      'isVerified': isVerified,
       'createdAt': createdAt != null ? Timestamp.fromDate(createdAt!) : FieldValue.serverTimestamp(),
     };
   }
@@ -74,6 +78,7 @@ class GamerPost {
     String? gameTag,
     int? likesCount,
     int? commentsCount,
+    bool? isVerified,
     DateTime? createdAt,
   }) {
     return GamerPost(
@@ -86,6 +91,7 @@ class GamerPost {
       gameTag: gameTag ?? this.gameTag,
       likesCount: likesCount ?? this.likesCount,
       commentsCount: commentsCount ?? this.commentsCount,
+      isVerified: isVerified ?? this.isVerified,
       createdAt: createdAt ?? this.createdAt,
     );
   }
