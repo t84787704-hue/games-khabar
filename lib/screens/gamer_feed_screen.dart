@@ -13,6 +13,7 @@ import 'create_post_screen.dart';
 import 'gamer_profile_screen.dart';
 import 'gamer_search_screen.dart';
 import 'notifications_screen.dart';
+import 'leaderboard_screen.dart';
 
 class _FeedItem {
   final String postType; // 'user' or 'news'
@@ -321,6 +322,15 @@ class _GamerFeedScreenState extends State<GamerFeedScreen> {
                     ),
                   ),
                 ),
+              );
+            },
+          ),
+          IconButton(
+            tooltip: 'Top 10 Leaderboard',
+            icon: const Icon(Icons.emoji_events_rounded, color: Color(0xFFFFD700), size: 22),
+            onPressed: () {
+              Navigator.of(context).push(
+                MaterialPageRoute(builder: (_) => const LeaderboardScreen()),
               );
             },
           ),
@@ -697,6 +707,17 @@ class _GamerFeedScreenState extends State<GamerFeedScreen> {
             ],
           ),
         ),
+      ),
+      floatingActionButton: FloatingActionButton(
+        backgroundColor: GamerTheme.accentOrange,
+        foregroundColor: Colors.white,
+        elevation: 6,
+        onPressed: () {
+          Navigator.of(context).push(
+            MaterialPageRoute(builder: (_) => const CreatePostScreen()),
+          );
+        },
+        child: const Icon(Icons.add_rounded, size: 30),
       ),
     );
   }

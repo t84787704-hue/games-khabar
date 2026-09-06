@@ -8,10 +8,14 @@ import '../services/gamer_auth_service.dart';
 import '../services/gamer_social_service.dart';
 import '../widgets/gamer_avatar.dart';
 import '../widgets/post_card.dart';
+import '../widgets/rank_badge_widget.dart';
 import '../services/verification_service.dart';
+import '../models/challenge_model.dart';
+import '../services/challenge_service.dart';
 import 'create_gamer_id_screen.dart';
 import 'followers_following_screen.dart';
 import 'gamer_auth_screen.dart';
+import 'saved_news_tab_screen.dart';
 
 class GamerProfileScreen extends StatefulWidget {
   final String? userId; // If null, displays currently logged in user's profile
@@ -361,6 +365,221 @@ class _GamerProfileScreenState extends State<GamerProfileScreen> with SingleTick
     );
   }
 
+  void _show1v1ChallengeDialog(GamerUser targetUser) {
+    final currentGamer = _authService.currentGamer;
+    if (currentGamer == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Please create your Gamer ID to challenge players!')),
+      );
+      return;
+    }
+
+    String selectedGame = targetUser.favoriteGame.isNotEmpty ? targetUser.favoriteGame : 'BGMI';
+    String selectedMode = 'TDM 1v1 Warehouse';
+    String selectedWeapon = 'M416 Only';
+
+    final modes = ['TDM 1v1 Warehouse', 'TDM 1v1 Hangar', 'Room 1v1 Erangel', 'Sniper 1v1 Ruins'];
+    final weapons = ['M416 Only', 'Sniper / AWM Only', 'Shotgun Only', 'All Weapons Allowed'];
+
+    showDialog(
+      context: context,
+      builder: (ctx) => StatefulBuilder(
+        builder: (ctx, setDialogState) => AlertDialog(
+          backgroundColor: const Color(0xFF14101A),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(20),
+            side: const BorderSide(color: Color(0xFFFF2D55), width: 1.5),
+          ),
+          title: Row(
+            children: [
+              Container(
+                padding: const EdgeInsets.all(8),
+                decoration: BoxDecoration(
+                  color: const Color(0xFFFF2D55).withOpacity(0.2),
+                  shape: BoxShape.circle,
+                ),
+                child: const Text('⚔️', style: TextStyle(fontSize: 20)),
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Text(
+                      '1v1 CHALLENGE',
+                      style: TextStyle(
+                        color: Color(0xFFFF2D55),
+                        fontSize: 16,
+                        fontWeight: FontWeight.w900,
+                        letterSpacing: 1.2,
+                      ),
+                    ),
+                    Text(
+                      'vs ${targetUser.displayName}',
+                      style: const TextStyle(
+                        color: GamerTheme.textWhite,
+                        fontSize: 13,
+                        fontWeight: FontWeight.bold,
+                      ),
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+          content: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Container(
+                  padding: const EdgeInsets.all(12),
+                  decoration: BoxDecoration(
+                    color: GamerTheme.cardDark,
+                    borderRadius: BorderRadius.circular(12),
+                    border: Border.all(color: GamerTheme.borderDark),
+                  ),
+                  child: Row(
+                    children: [
+                      GamerAvatar(
+                        photoUrl: targetUser.photoUrl,
+                        displayName: targetUser.displayName,
+                        radius: 18,
+                      ),
+                      const SizedBox(width: 10),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              targetUser.displayName,
+                              style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 13),
+                            ),
+                            Text(
+                              'Rank: ${targetUser.rank} • UID: ${targetUser.gameId.isEmpty ? "Not set" : targetUser.gameId}',
+                              style: const TextStyle(color: GamerTheme.textGray, fontSize: 11),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(height: 16),
+                const Text('SELECT MAP / MODE', style: TextStyle(color: GamerTheme.textMuted, fontSize: 11, fontWeight: FontWeight.w800)),
+                const SizedBox(height: 6),
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 12),
+                  decoration: BoxDecoration(
+                    color: GamerTheme.cardDark,
+                    borderRadius: BorderRadius.circular(10),
+                    border: Border.all(color: GamerTheme.borderDark),
+                  ),
+                  child: DropdownButtonHideUnderline(
+                    child: DropdownButton<String>(
+                      value: selectedMode,
+                      isExpanded: true,
+                      dropdownColor: const Color(0xFF1B1424),
+                      items: modes.map((m) => DropdownMenuItem(value: m, child: Text(m, style: const TextStyle(color: Colors.white, fontSize: 13)))).toList(),
+                      onChanged: (v) => setDialogState(() => selectedMode = v ?? selectedMode),
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 14),
+                const Text('WEAPON RULE', style: TextStyle(color: GamerTheme.textMuted, fontSize: 11, fontWeight: FontWeight.w800)),
+                const SizedBox(height: 6),
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 12),
+                  decoration: BoxDecoration(
+                    color: GamerTheme.cardDark,
+                    borderRadius: BorderRadius.circular(10),
+                    border: Border.all(color: GamerTheme.borderDark),
+                  ),
+                  child: DropdownButtonHideUnderline(
+                    child: DropdownButton<String>(
+                      value: selectedWeapon,
+                      isExpanded: true,
+                      dropdownColor: const Color(0xFF1B1424),
+                      items: weapons.map((w) => DropdownMenuItem(value: w, child: Text(w, style: const TextStyle(color: Colors.white, fontSize: 13)))).toList(),
+                      onChanged: (v) => setDialogState(() => selectedWeapon = v ?? selectedWeapon),
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 16),
+                Container(
+                  padding: const EdgeInsets.all(10),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFFFF2D55).withOpacity(0.08),
+                    borderRadius: BorderRadius.circular(10),
+                    border: Border.all(color: const Color(0xFFFF2D55).withOpacity(0.2)),
+                  ),
+                  child: const Row(
+                    children: [
+                      Icon(Icons.info_outline_rounded, color: Color(0xFFFF2D55), size: 16),
+                      SizedBox(width: 8),
+                      Expanded(
+                        child: Text(
+                          'An instant invite will appear in their notifications to accept or decline.',
+                          style: TextStyle(color: GamerTheme.textGray, fontSize: 11.5, height: 1.3),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(ctx),
+              child: const Text('Cancel', style: TextStyle(color: GamerTheme.textMuted)),
+            ),
+            ElevatedButton(
+              style: ElevatedButton.styleFrom(
+                backgroundColor: const Color(0xFFFF2D55),
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 10),
+              ),
+              onPressed: () async {
+                Navigator.pop(ctx);
+                final challenge = GamerChallenge(
+                  id: '',
+                  challengerId: currentGamer.uid,
+                  challengerName: currentGamer.displayName,
+                  challengerAvatar: currentGamer.photoUrl,
+                  challengedId: targetUser.uid,
+                  challengedName: targetUser.displayName,
+                  challengedAvatar: targetUser.photoUrl,
+                  game: selectedGame,
+                  mode: selectedMode,
+                  weaponRule: selectedWeapon,
+                );
+                await ChallengeService().sendChallenge(challenge);
+                if (!mounted) return;
+                ScaffoldMessenger.of(context).showSnackBar(
+                  SnackBar(
+                    content: Text('⚔️ 1v1 Challenge Sent to ${targetUser.displayName}!'),
+                    backgroundColor: const Color(0xFFFF2D55),
+                    duration: const Duration(seconds: 3),
+                  ),
+                );
+              },
+              child: const Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Icon(Icons.flash_on_rounded, color: Colors.white, size: 16),
+                  SizedBox(width: 4),
+                  Text('SEND 1v1 ⚔️', style: TextStyle(color: Colors.white, fontWeight: FontWeight.w900)),
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
   void _shareProfile(GamerUser user) {
     final text = '🎮 Check out ${user.displayName}\'s Gamer ID on Gamers ID!\n\n'
         'Handle: @${user.username}\n'
@@ -498,11 +717,30 @@ class _GamerProfileScreenState extends State<GamerProfileScreen> with SingleTick
                       icon: const Icon(Icons.share_rounded, color: GamerTheme.accentBlue),
                       onPressed: () => _shareProfile(user),
                     ),
-                    if (isOwnProfile)
+                    if (isOwnProfile) ...[
+                      IconButton(
+                        tooltip: 'Saved Articles & Posts',
+                        icon: const Icon(Icons.bookmark_rounded, color: GamerTheme.accentOrange),
+                        onPressed: () {
+                          Navigator.of(context).push(
+                            MaterialPageRoute(
+                              builder: (_) => Scaffold(
+                                backgroundColor: GamerTheme.bgDark,
+                                appBar: AppBar(
+                                  backgroundColor: GamerTheme.bgDark,
+                                  title: const Text('Saved Posts & News', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
+                                ),
+                                body: const SavedNewsTabScreen(),
+                              ),
+                            ),
+                          );
+                        },
+                      ),
                       IconButton(
                         icon: const Icon(Icons.logout_rounded, color: GamerTheme.redAccent),
                         onPressed: _confirmSignOut,
                       ),
+                    ],
                   ],
                   flexibleSpace: FlexibleSpaceBar(
                     background: Stack(
@@ -589,7 +827,7 @@ class _GamerProfileScreenState extends State<GamerProfileScreen> with SingleTick
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        // Display Name + Verified Badge
+                        // Display Name + Rank Badge + Verified Badge
                         Row(
                           children: [
                             Flexible(
@@ -603,8 +841,13 @@ class _GamerProfileScreenState extends State<GamerProfileScreen> with SingleTick
                                 overflow: TextOverflow.ellipsis,
                               ),
                             ),
+                            RankBadgeWidget(
+                              badge: user.getRankBadge(),
+                              size: 16,
+                              showLabel: true,
+                            ),
                             if (user.isVerified) ...[
-                              const SizedBox(width: 6),
+                              const SizedBox(width: 4),
                               const Icon(Icons.verified, color: Colors.blue, size: 20),
                             ],
                           ],
@@ -777,6 +1020,7 @@ class _GamerProfileScreenState extends State<GamerProfileScreen> with SingleTick
                             ] else ...[
                               // Follow / Unfollow Button
                               Expanded(
+                                flex: 3,
                                 child: StreamBuilder<bool>(
                                   stream: _socialService.isFollowingStream(currentUid, user.uid),
                                   builder: (context, snap) {
@@ -794,14 +1038,14 @@ class _GamerProfileScreenState extends State<GamerProfileScreen> with SingleTick
                                       ),
                                       icon: Icon(
                                         isFollowing ? Icons.check_rounded : Icons.person_add_rounded,
-                                        size: 18,
+                                        size: 16,
                                         color: isFollowing ? GamerTheme.neonGreen : GamerTheme.bgDark,
                                       ),
                                       label: Text(
-                                        isFollowing ? 'Following' : 'Follow Gamer',
+                                        isFollowing ? 'Following' : 'Follow',
                                         style: TextStyle(
                                           fontWeight: FontWeight.w900,
-                                          fontSize: 13,
+                                          fontSize: 12.5,
                                           color: isFollowing ? GamerTheme.textWhite : GamerTheme.bgDark,
                                         ),
                                       ),
@@ -818,15 +1062,44 @@ class _GamerProfileScreenState extends State<GamerProfileScreen> with SingleTick
                                 ),
                               ),
                               const SizedBox(width: 8),
-                              OutlinedButton.icon(
-                                style: OutlinedButton.styleFrom(
-                                  side: const BorderSide(color: GamerTheme.borderLight),
-                                  foregroundColor: GamerTheme.textWhite,
-                                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-                                  padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 14),
+
+                              // Prominent 1v1 Challenge Button (Red Outline)
+                              Expanded(
+                                flex: 3,
+                                child: OutlinedButton.icon(
+                                  style: OutlinedButton.styleFrom(
+                                    side: const BorderSide(color: Color(0xFFFF2D55), width: 1.6),
+                                    backgroundColor: const Color(0xFFFF2D55).withOpacity(0.12),
+                                    foregroundColor: const Color(0xFFFF2D55),
+                                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                                    padding: const EdgeInsets.symmetric(vertical: 12),
+                                  ),
+                                  icon: const Text('⚔️', style: TextStyle(fontSize: 14)),
+                                  label: const Text(
+                                    '1v1 Battle',
+                                    style: TextStyle(
+                                      fontWeight: FontWeight.w900,
+                                      fontSize: 12.5,
+                                      color: Color(0xFFFF2D55),
+                                      letterSpacing: 0.3,
+                                    ),
+                                  ),
+                                  onPressed: () => _show1v1ChallengeDialog(user),
+                                ),
+                              ),
+                              const SizedBox(width: 8),
+
+                              // Share Button
+                              IconButton(
+                                style: IconButton.styleFrom(
+                                  backgroundColor: GamerTheme.cardDark,
+                                  shape: RoundedRectangleBorder(
+                                    borderRadius: BorderRadius.circular(10),
+                                    side: const BorderSide(color: GamerTheme.borderDark),
+                                  ),
+                                  padding: const EdgeInsets.all(10),
                                 ),
                                 icon: const Icon(Icons.share_rounded, size: 18, color: GamerTheme.accentOrange),
-                                label: const Text('Share', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
                                 onPressed: () => _shareProfile(user),
                               ),
                             ],

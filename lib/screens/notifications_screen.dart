@@ -5,6 +5,7 @@ import '../constants/gamer_theme.dart';
 import '../services/gamer_auth_service.dart';
 import '../services/gamer_social_service.dart';
 import '../widgets/gamer_avatar.dart';
+import '../services/challenge_service.dart';
 import 'gamer_profile_screen.dart';
 
 class NotificationsScreen extends StatelessWidget {
@@ -101,7 +102,10 @@ class NotificationsScreen extends StatelessWidget {
 
               IconData iconData;
               Color iconColor;
-              if (type == 'follow') {
+              if (type == 'challenge' || type == 'challenge_accepted') {
+                iconData = Icons.flash_on_rounded;
+                iconColor = const Color(0xFFFF2D55);
+              } else if (type == 'follow') {
                 iconData = Icons.person_add_rounded;
                 iconColor = GamerTheme.accentBlue;
               } else if (type == 'like') {
@@ -164,12 +168,62 @@ class NotificationsScreen extends StatelessWidget {
                         ],
                       ),
                     ),
-                    subtitle: Padding(
-                      padding: const EdgeInsets.only(top: 4),
-                      child: Text(
-                        _formatTime(timestamp),
-                        style: const TextStyle(color: GamerTheme.textMuted, fontSize: 11),
-                      ),
+                    subtitle: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Padding(
+                          padding: const EdgeInsets.only(top: 4),
+                          child: Text(
+                            _formatTime(timestamp),
+                            style: const TextStyle(color: GamerTheme.textMuted, fontSize: 11),
+                          ),
+                        ),
+                        if (type == 'challenge' && data['challengeId'] != null) ...[
+                          const SizedBox(height: 8),
+                          Row(
+                            children: [
+                              ElevatedButton(
+                                style: ElevatedButton.styleFrom(
+                                  backgroundColor: const Color(0xFFFF2D55),
+                                  foregroundColor: Colors.white,
+                                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                                  padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
+                                  minimumSize: Size.zero,
+                                ),
+                                onPressed: () async {
+                                  await ChallengeService().acceptChallenge(
+                                    data['challengeId'],
+                                    challengerUid: senderUid,
+                                    responderName: GamerAuthService().currentGamer?.displayName ?? 'Opponent',
+                                  );
+                                  await docs[index].reference.update({'read': true, 'responded': 'accepted'});
+                                  if (context.mounted) {
+                                    ScaffoldMessenger.of(context).showSnackBar(
+                                      const SnackBar(content: Text('⚔️ 1v1 Challenge Accepted! Room match is ON!')),
+                                    );
+                                  }
+                                },
+                                child: const Text('ACCEPT ⚔️', style: TextStyle(fontWeight: FontWeight.w900, fontSize: 11)),
+                              ),
+                              const SizedBox(width: 8),
+                              OutlinedButton(
+                                style: OutlinedButton.styleFrom(
+                                  side: const BorderSide(color: GamerTheme.borderLight),
+                                  foregroundColor: GamerTheme.textMuted,
+                                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                                  padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
+                                  minimumSize: Size.zero,
+                                ),
+                                onPressed: () async {
+                                  await ChallengeService().declineChallenge(data['challengeId']);
+                                  await docs[index].reference.update({'read': true, 'responded': 'declined'});
+                                },
+                                child: const Text('Decline', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 11)),
+                              ),
+                            ],
+                          ),
+                        ],
+                      ],
                     ),
                     trailing: !isRead
                         ? Container(

@@ -9,6 +9,7 @@ import '../services/gamer_social_service.dart';
 import '../widgets/gamer_avatar.dart';
 import '../screens/gamer_profile_screen.dart';
 import '../services/verification_service.dart';
+import '../widgets/rank_badge_widget.dart';
 
 class PostCard extends StatefulWidget {
   final GamerPost post;
@@ -168,8 +169,13 @@ class _PostCardState extends State<PostCard> {
                                 overflow: TextOverflow.ellipsis,
                               ),
                             ),
+                            RankBadgeWidget(
+                              badge: widget.post.getRankBadge(),
+                              size: 13,
+                              showLabel: false,
+                            ),
                             if (_isAuthorVerified) ...[
-                              const SizedBox(width: 4),
+                              const SizedBox(width: 2),
                               const Icon(Icons.verified, color: Colors.blue, size: 15),
                             ],
                           ],

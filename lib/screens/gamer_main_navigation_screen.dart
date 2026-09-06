@@ -2,8 +2,9 @@ import 'package:flutter/material.dart';
 import '../constants/gamer_theme.dart';
 import '../services/gamer_auth_service.dart';
 import 'gamer_feed_screen.dart';
-import 'create_post_screen.dart';
-import 'saved_news_tab_screen.dart';
+import 'squad_finder_screen.dart';
+import 'clips_screen.dart';
+import 'tournament_board_screen.dart';
 import 'gamer_profile_screen.dart';
 import 'create_gamer_id_screen.dart';
 
@@ -40,20 +41,24 @@ class _GamerMainNavigationScreenState extends State<GamerMainNavigationScreen> {
 
   @override
   Widget build(BuildContext context) {
-    // 4 Tabs: Feed (Home), + (Center Create Post), Saved (Bookmark), Profile (Person)
+    // 5 Viral Gaming Tabs:
+    // Tab 0: Feed (Home)
+    // Tab 1: Squads (Squad Finder LFG System)
+    // Tab 2: Clips (Memes & Clips Zone)
+    // Tab 3: Rooms (Tournament / Custom Room Board)
+    // Tab 4: Profile (Gamer Profile & Badges)
     final screens = [
-      const GamerFeedScreen(), // Tab 1: Feed (home) - SUPER FEED
-      const SizedBox.shrink(), // Tab 2: Placeholder for center + button
-      SavedNewsTabScreen(
-        onExploreTap: () => setState(() => _currentIndex = 0),
-      ), // Tab 3: Saved (bookmark)
-      const GamerProfileScreen(), // Tab 4: Profile (person)
+      const GamerFeedScreen(),
+      const SquadFinderScreen(),
+      const ClipsScreen(),
+      const TournamentBoardScreen(),
+      const GamerProfileScreen(),
     ];
 
     return Scaffold(
       backgroundColor: const Color(0xFF0B0F14),
       body: IndexedStack(
-        index: _currentIndex == 1 ? 0 : _currentIndex,
+        index: _currentIndex,
         children: screens,
       ),
       bottomNavigationBar: Container(
@@ -69,7 +74,7 @@ class _GamerMainNavigationScreenState extends State<GamerMainNavigationScreen> {
             child: Row(
               mainAxisAlignment: MainAxisAlignment.spaceAround,
               children: [
-                // Tab 1: Feed (home icon) - SUPER FEED
+                // Tab 0: Feed
                 _buildNavItem(
                   index: 0,
                   icon: Icons.home_rounded,
@@ -77,53 +82,36 @@ class _GamerMainNavigationScreenState extends State<GamerMainNavigationScreen> {
                   isSelected: _currentIndex == 0,
                 ),
 
-                // Tab 2: + (center create post)
-                GestureDetector(
-                  onTap: () {
-                    Navigator.of(context).push(
-                      MaterialPageRoute(builder: (_) => const CreatePostScreen()),
-                    );
-                  },
-                  child: Container(
-                    width: 48,
-                    height: 48,
-                    decoration: BoxDecoration(
-                      gradient: const LinearGradient(
-                        colors: [Color(0xFF00E5FF), Color(0xFFFF6B00)],
-                        begin: Alignment.topLeft,
-                        end: Alignment.bottomRight,
-                      ),
-                      shape: BoxShape.circle,
-                      boxShadow: [
-                        BoxShadow(
-                          color: const Color(0xFFFF6B00).withOpacity(0.4),
-                          blurRadius: 10,
-                          spreadRadius: 1,
-                        ),
-                      ],
-                    ),
-                    child: const Icon(
-                      Icons.add_rounded,
-                      color: Colors.white,
-                      size: 30,
-                    ),
-                  ),
+                // Tab 1: Squads (LFG System)
+                _buildNavItem(
+                  index: 1,
+                  icon: Icons.group_rounded,
+                  label: 'Squads',
+                  isSelected: _currentIndex == 1,
                 ),
 
-                // Tab 3: Saved (bookmark icon)
+                // Tab 2: Clips (Reels & Memes)
                 _buildNavItem(
                   index: 2,
-                  icon: Icons.bookmark_rounded,
-                  label: 'Saved',
+                  icon: Icons.movie_filter_rounded,
+                  label: 'Clips',
                   isSelected: _currentIndex == 2,
                 ),
 
-                // Tab 4: Profile (person icon)
+                // Tab 3: Rooms (Tournaments / Custom Rooms)
                 _buildNavItem(
                   index: 3,
+                  icon: Icons.military_tech_rounded,
+                  label: 'Rooms',
+                  isSelected: _currentIndex == 3,
+                ),
+
+                // Tab 4: Profile
+                _buildNavItem(
+                  index: 4,
                   icon: Icons.person_rounded,
                   label: 'Profile',
-                  isSelected: _currentIndex == 3,
+                  isSelected: _currentIndex == 4,
                 ),
               ],
             ),
@@ -143,7 +131,7 @@ class _GamerMainNavigationScreenState extends State<GamerMainNavigationScreen> {
       onTap: () => setState(() => _currentIndex = index),
       borderRadius: BorderRadius.circular(12),
       child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 6),
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
