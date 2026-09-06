@@ -104,6 +104,62 @@ class TournamentRoom {
     };
   }
 
+  Map<String, dynamic> toJson() {
+    return {
+      'id': id,
+      'hostId': hostId,
+      'hostName': hostName,
+      'hostAvatar': hostAvatar,
+      'roomType': roomType,
+      'title': title.trim(),
+      'map': map,
+      'entryFee': entryFee.trim(),
+      'prize': prize.trim(),
+      'roomId': roomId.trim(),
+      'password': password.trim(),
+      'startTime': startTime.toIso8601String(),
+      'maxSlots': maxSlots,
+      'joinedPlayers': joinedPlayers,
+      'isLive': isLive,
+      'isRoomRevealed': isRoomRevealed,
+      'createdAt': createdAt?.toIso8601String(),
+    };
+  }
+
+  factory TournamentRoom.fromJson(Map<String, dynamic> json) {
+    DateTime start = DateTime.now().add(const Duration(hours: 1));
+    final rawStart = json['startTime'];
+    if (rawStart != null) {
+      start = DateTime.tryParse(rawStart.toString()) ?? start;
+    }
+
+    DateTime? created;
+    final rawCreated = json['createdAt'];
+    if (rawCreated != null) {
+      created = DateTime.tryParse(rawCreated.toString());
+    }
+
+    return TournamentRoom(
+      id: json['id'] ?? '',
+      hostId: json['hostId'] ?? '',
+      hostName: json['hostName'] ?? 'Host',
+      hostAvatar: json['hostAvatar'] ?? '',
+      roomType: json['roomType'] ?? 'Classic Scrim',
+      title: json['title'] ?? 'BGMI Custom Tournament',
+      map: json['map'] ?? 'Erangel',
+      entryFee: json['entryFee'] ?? 'FREE',
+      prize: json['prize'] ?? '₹500 Cash Prize',
+      roomId: json['roomId'] ?? '',
+      password: json['password'] ?? '',
+      startTime: start,
+      maxSlots: (json['maxSlots'] as num?)?.toInt() ?? 100,
+      joinedPlayers: List<String>.from(json['joinedPlayers'] ?? []),
+      isLive: json['isLive'] ?? true,
+      isRoomRevealed: json['isRoomRevealed'] == true,
+      createdAt: created,
+    );
+  }
+
   TournamentRoom copyWith({
     String? id,
     String? hostId,

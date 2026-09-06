@@ -24,10 +24,20 @@ class _TournamentBoardScreenState extends State<TournamentBoardScreen> with Sing
   void initState() {
     super.initState();
     _tabController = TabController(length: 4, vsync: this);
+    _tournamentService.addListener(_onTournamentServiceChanged);
+    print('TournamentBoardScreen: Initializing and calling fetchRooms()...');
+    _tournamentService.fetchRooms();
+  }
+
+  void _onTournamentServiceChanged() {
+    if (mounted) {
+      setState(() {});
+    }
   }
 
   @override
   void dispose() {
+    _tournamentService.removeListener(_onTournamentServiceChanged);
     _tabController.dispose();
     super.dispose();
   }
@@ -309,7 +319,7 @@ class _TournamentBoardScreenState extends State<TournamentBoardScreen> with Sing
                       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                     ),
                     onPressed: () async {
-                      Navigator.pop(ctx);
+                      print('TournamentBoardScreen: PUBLISH CUSTOM ROOM button pressed');
                       final now = DateTime.now();
                       final start = DateTime(now.year, now.month, now.day, selectedTime.hour, selectedTime.minute)
                           .add(const Duration(minutes: 30));
@@ -332,8 +342,21 @@ class _TournamentBoardScreenState extends State<TournamentBoardScreen> with Sing
                         isRoomRevealed: roomIdController.text.trim().isNotEmpty,
                       );
 
-                      await _tournamentService.createRoom(room);
+                      print('TournamentBoardScreen: Publishing custom room: "${room.title}"...');
+                      await _tournamentService.publishRoom(room);
+
+                      print('TournamentBoardScreen: Calling setState() and popping the form...');
+                      setState(() {});
+                      if (ctx.mounted) {
+                        Navigator.pop(ctx);
+                      }
+
+                      print('TournamentBoardScreen: Calling fetchRooms() so that new room card shows instantly...');
+                      await _tournamentService.fetchRooms();
+
                       if (mounted) {
+                        setState(() {});
+                        print('TournamentBoardScreen: setState called after fetchRooms() - Total rooms: ${_tournamentService.rooms.length}');
                         ScaffoldMessenger.of(context).showSnackBar(
                           const SnackBar(
                             content: Text('🎉 Tournament Room is LIVE! Gamers can now join slots.'),
@@ -404,14 +427,29 @@ class _TournamentBoardScreenState extends State<TournamentBoardScreen> with Sing
   }
 
   Widget _buildRoomsList({required String filter}) {
+    final localRooms = _tournamentService.rooms;
+
     return StreamBuilder<List<TournamentRoom>>(
       stream: _tournamentService.getLiveRoomsStream(),
+      initialData: localRooms.isNotEmpty ? localRooms : null,
       builder: (context, snapshot) {
-        if (snapshot.connectionState == ConnectionState.waiting) {
+        final streamRooms = snapshot.data ?? [];
+
+        // Combine local instant rooms with stream rooms
+        final Map<String, TournamentRoom> roomMap = {};
+        for (final r in _tournamentService.rooms) {
+          if (r.isLive) roomMap[r.id] = r;
+        }
+        for (final r in streamRooms) {
+          if (r.isLive) roomMap[r.id] = r;
+        }
+
+        final rooms = roomMap.values.toList();
+
+        if (snapshot.connectionState == ConnectionState.waiting && rooms.isEmpty) {
           return const Center(child: CircularProgressIndicator(color: GamerTheme.accentBlue));
         }
 
-        final rooms = snapshot.data ?? [];
         final filtered = rooms.where((r) {
           if (filter == 'tdm') return r.roomType.toLowerCase().contains('tdm');
           if (filter == 'classic') return r.roomType.toLowerCase().contains('classic');
