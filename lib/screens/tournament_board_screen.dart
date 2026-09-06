@@ -27,6 +27,28 @@ class _TournamentBoardScreenState extends State<TournamentBoardScreen> with Sing
   final CoinWalletService _walletService = CoinWalletService();
   final ScreenshotOcrService _ocrService = ScreenshotOcrService();
 
+  String _selectedCategory = 'All Games';
+
+  static const List<Map<String, String>> _gameCategories = [
+    {'name': 'All Games', 'icon': '🎮'},
+    {'name': 'BGMI', 'icon': '🪖'},
+    {'name': 'PUBG Mobile', 'icon': '🪂'},
+    {'name': 'Free Fire', 'icon': '🔥'},
+    {'name': 'Free Fire MAX', 'icon': '⚡'},
+    {'name': 'COD Mobile', 'icon': '🎖️'},
+    {'name': 'Valorant', 'icon': '⚔️'},
+    {'name': 'Ludo King', 'icon': '🎲'},
+    {'name': '8 Ball Pool', 'icon': '🎱'},
+    {'name': 'Free Entry', 'icon': '🆓'},
+  ];
+
+  String _getCategoryIcon(String category) {
+    for (final cat in _gameCategories) {
+      if (cat['name'] == category) return cat['icon']!;
+    }
+    return '🎮';
+  }
+
   @override
   void initState() {
     super.initState();
@@ -122,7 +144,7 @@ class _TournamentBoardScreenState extends State<TournamentBoardScreen> with Sing
     );
   }
 
-  void _openHostRoomSheet() {
+  void _openHostRoomSheet({String? preselectedGame}) {
     final currentGamer = _authService.currentGamer;
     if (currentGamer == null) {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -133,14 +155,50 @@ class _TournamentBoardScreenState extends State<TournamentBoardScreen> with Sing
 
     final wallet = _walletService.currentWallet ?? const CoinWallet(userId: '', coins: 1000);
 
-    String selectedType = 'TDM 1v1';
-    String selectedMap = 'Warehouse';
-    final titleController = TextEditingController(text: 'BGMI TDM 1v1 - Winner Takes All');
+    const availableGames = [
+      'BGMI',
+      'PUBG Mobile',
+      'Free Fire',
+      'Free Fire MAX',
+      'COD Mobile',
+      'Valorant',
+      'Ludo King',
+      '8 Ball Pool',
+    ];
+
+    const Map<String, List<String>> gameModes = {
+      'BGMI': ['TDM 1v1', 'TDM 4v4', 'Classic Scrim', 'Erangel', 'Warehouse'],
+      'PUBG Mobile': ['TDM 1v1', 'TDM 4v4', 'Classic Scrim', 'Erangel', 'Warehouse'],
+      'Free Fire': ['Clash Squad 1v1', '4v4', 'Bermuda', 'Kalahari'],
+      'Free Fire MAX': ['Clash Squad 1v1', '4v4', 'Bermuda', 'Kalahari'],
+      'COD Mobile': ['TDM', 'Search & Destroy', 'Battle Royale'],
+      'Valorant': ['Custom 1v1', 'Custom 5v5', 'Deathmatch'],
+      'Ludo King': ['1v1', 'Tournament'],
+      '8 Ball Pool': ['1v1', 'Tournament'],
+    };
+
+    const Map<String, List<String>> gameMaps = {
+      'BGMI': ['Warehouse', 'Erangel', 'Miramar', 'Sanhok', 'Livik'],
+      'PUBG Mobile': ['Warehouse', 'Erangel', 'Miramar', 'Sanhok', 'Livik'],
+      'Free Fire': ['Bermuda', 'Kalahari', 'Purgatory', 'Alpine'],
+      'Free Fire MAX': ['Bermuda', 'Kalahari', 'Purgatory', 'Alpine'],
+      'COD Mobile': ['Crash', 'Nuketown', 'Standoff', 'Crossfire', 'Isolated'],
+      'Valorant': ['Ascent', 'Bind', 'Haven', 'Split', 'Icebox', 'Lotus'],
+      'Ludo King': ['Classic Board', 'Quick Ludo', 'Master Board'],
+      '8 Ball Pool': ['London Pub', 'Tokyo Warrior', 'Downtown 8 Ball', 'Sydney Marina'],
+    };
+
+    String selectedGame = (preselectedGame != null && availableGames.contains(preselectedGame))
+        ? preselectedGame
+        : 'BGMI';
+    String selectedMode = (gameModes[selectedGame] ?? ['1v1']).first;
+    String selectedMap = (gameMaps[selectedGame] ?? ['Erangel']).first;
+    final titleController = TextEditingController(text: '$selectedGame $selectedMode Match');
     int prizePoolCoins = 500;
     int entryFeeCoins = 0;
     final roomIdController = TextEditingController();
     final passController = TextEditingController();
-    int maxSlots = 2;
+    int maxSlots = selectedMode.contains('1v1') ? 2 : (selectedMode.contains('4v4') ? 8 : (selectedMode.contains('5v5') ? 10 : 2));
     TimeOfDay selectedTime = TimeOfDay.now();
 
     showModalBottomSheet(
@@ -151,351 +209,446 @@ class _TournamentBoardScreenState extends State<TournamentBoardScreen> with Sing
         borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
       ),
       builder: (ctx) => StatefulBuilder(
-        builder: (ctx, setSheetState) => Padding(
-          padding: EdgeInsets.only(
-            bottom: MediaQuery.of(ctx).viewInsets.bottom + 20,
-            left: 20,
-            right: 20,
-            top: 20,
-          ),
-          child: SingleChildScrollView(
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Center(
-                  child: Container(
-                    width: 40,
-                    height: 4,
-                    decoration: BoxDecoration(
-                      color: GamerTheme.borderLight,
-                      borderRadius: BorderRadius.circular(2),
+        builder: (ctx, setSheetState) {
+          final isLinkOnly = selectedGame == 'Ludo King' || selectedGame == '8 Ball Pool';
+
+          return Padding(
+            padding: EdgeInsets.only(
+              bottom: MediaQuery.of(ctx).viewInsets.bottom + 20,
+              left: 20,
+              right: 20,
+              top: 20,
+            ),
+            child: SingleChildScrollView(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Center(
+                    child: Container(
+                      width: 40,
+                      height: 4,
+                      decoration: BoxDecoration(
+                        color: GamerTheme.borderLight,
+                        borderRadius: BorderRadius.circular(2),
+                      ),
                     ),
                   ),
-                ),
-                const SizedBox(height: 16),
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  children: [
-                    const Row(
+                  const SizedBox(height: 16),
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      const Row(
+                        children: [
+                          Text('🏆', style: TextStyle(fontSize: 22)),
+                          SizedBox(width: 8),
+                          Text(
+                            'HOST TOURNAMENT (COINS)',
+                            style: TextStyle(
+                              color: GamerTheme.textWhite,
+                              fontSize: 15,
+                              fontWeight: FontWeight.w900,
+                              letterSpacing: 0.5,
+                            ),
+                          ),
+                        ],
+                      ),
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                        decoration: BoxDecoration(
+                          color: GamerTheme.accentBlue.withOpacity(0.15),
+                          borderRadius: BorderRadius.circular(12),
+                          border: Border.all(color: GamerTheme.accentBlue.withOpacity(0.4)),
+                        ),
+                        child: Text(
+                          '💰 ${wallet.coins} Coins',
+                          style: const TextStyle(color: GamerTheme.accentBlue, fontWeight: FontWeight.bold, fontSize: 11),
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 16),
+
+                  // FIELD 1: SELECT GAME (Dropdown with Icons)
+                  const Text('1. SELECT GAME', style: TextStyle(color: GamerTheme.textMuted, fontSize: 11, fontWeight: FontWeight.w800)),
+                  const SizedBox(height: 6),
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 12),
+                    decoration: BoxDecoration(
+                      color: GamerTheme.bgDark,
+                      borderRadius: BorderRadius.circular(10),
+                      border: Border.all(color: GamerTheme.borderDark),
+                    ),
+                    child: DropdownButtonHideUnderline(
+                      child: DropdownButton<String>(
+                        value: selectedGame,
+                        isExpanded: true,
+                        dropdownColor: GamerTheme.cardDark,
+                        items: availableGames.map((g) {
+                          final dummy = TournamentRoom(id: '', hostId: '', hostName: '', title: '', startTime: DateTime.now(), gameType: g);
+                          return DropdownMenuItem(
+                            value: g,
+                            child: Row(
+                              children: [
+                                Text(dummy.gameIcon, style: const TextStyle(fontSize: 16)),
+                                const SizedBox(width: 10),
+                                Text(g, style: const TextStyle(color: Colors.white, fontSize: 13, fontWeight: FontWeight.bold)),
+                              ],
+                            ),
+                          );
+                        }).toList(),
+                        onChanged: (val) {
+                          if (val == null) return;
+                          setSheetState(() {
+                            selectedGame = val;
+                            final modes = gameModes[selectedGame] ?? ['1v1'];
+                            selectedMode = modes.first;
+                            final maps = gameMaps[selectedGame] ?? ['Default'];
+                            selectedMap = maps.first;
+                            titleController.text = '$selectedGame $selectedMode Match';
+                            if (selectedMode.contains('1v1')) {
+                              maxSlots = 2;
+                            } else if (selectedMode.contains('4v4')) {
+                              maxSlots = 8;
+                            } else if (selectedMode.contains('5v5') || selectedMode.contains('Search & Destroy')) {
+                              maxSlots = 10;
+                            } else if (selectedMode.contains('Tournament')) {
+                              maxSlots = 4;
+                            } else if (selectedMode.contains('Classic') || selectedMode.contains('Battle Royale')) {
+                              maxSlots = 100;
+                            } else {
+                              maxSlots = 2;
+                            }
+                          });
+                        },
+                      ),
+                    ),
+                  ),
+
+                  const SizedBox(height: 14),
+
+                  // FIELD 2: SELECT MODE (Dynamically based on game) & MAP
+                  Row(
+                    children: [
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            const Text('2. SELECT MODE', style: TextStyle(color: GamerTheme.textMuted, fontSize: 11, fontWeight: FontWeight.w800)),
+                            const SizedBox(height: 6),
+                            Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 10),
+                              decoration: BoxDecoration(
+                                color: GamerTheme.bgDark,
+                                borderRadius: BorderRadius.circular(10),
+                                border: Border.all(color: GamerTheme.borderDark),
+                              ),
+                              child: DropdownButtonHideUnderline(
+                                child: DropdownButton<String>(
+                                  value: (gameModes[selectedGame] ?? []).contains(selectedMode)
+                                      ? selectedMode
+                                      : (gameModes[selectedGame]?.first ?? '1v1'),
+                                  isExpanded: true,
+                                  dropdownColor: GamerTheme.cardDark,
+                                  items: (gameModes[selectedGame] ?? ['1v1'])
+                                      .map((m) => DropdownMenuItem(value: m, child: Text(m, style: const TextStyle(color: Colors.white, fontSize: 12))))
+                                      .toList(),
+                                  onChanged: (v) {
+                                    if (v == null) return;
+                                    setSheetState(() {
+                                      selectedMode = v;
+                                      titleController.text = '$selectedGame $selectedMode Match';
+                                      if (selectedMode.contains('1v1')) {
+                                        maxSlots = 2;
+                                      } else if (selectedMode.contains('4v4')) {
+                                        maxSlots = 8;
+                                      } else if (selectedMode.contains('5v5') || selectedMode.contains('Search & Destroy')) {
+                                        maxSlots = 10;
+                                      } else if (selectedMode.contains('Tournament')) {
+                                        maxSlots = 4;
+                                      } else if (selectedMode.contains('Classic') || selectedMode.contains('Battle Royale')) {
+                                        maxSlots = 100;
+                                      } else {
+                                        maxSlots = 2;
+                                      }
+                                    });
+                                  },
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                      const SizedBox(width: 10),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            const Text('MAP / TABLE', style: TextStyle(color: GamerTheme.textMuted, fontSize: 11, fontWeight: FontWeight.w800)),
+                            const SizedBox(height: 6),
+                            Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 10),
+                              decoration: BoxDecoration(
+                                color: GamerTheme.bgDark,
+                                borderRadius: BorderRadius.circular(10),
+                                border: Border.all(color: GamerTheme.borderDark),
+                              ),
+                              child: DropdownButtonHideUnderline(
+                                child: DropdownButton<String>(
+                                  value: (gameMaps[selectedGame] ?? []).contains(selectedMap)
+                                      ? selectedMap
+                                      : (gameMaps[selectedGame]?.first ?? 'Default'),
+                                  isExpanded: true,
+                                  dropdownColor: GamerTheme.cardDark,
+                                  items: (gameMaps[selectedGame] ?? ['Default'])
+                                      .map((m) => DropdownMenuItem(value: m, child: Text(m, style: const TextStyle(color: Colors.white, fontSize: 12))))
+                                      .toList(),
+                                  onChanged: (v) => setSheetState(() => selectedMap = v ?? selectedMap),
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ),
+
+                  const SizedBox(height: 14),
+
+                  // Title
+                  const Text('TOURNAMENT TITLE', style: TextStyle(color: GamerTheme.textMuted, fontSize: 11, fontWeight: FontWeight.w800)),
+                  const SizedBox(height: 6),
+                  TextField(
+                    controller: titleController,
+                    style: const TextStyle(color: Colors.white, fontSize: 13),
+                    decoration: InputDecoration(
+                      hintText: 'e.g. $selectedGame $selectedMode Match',
+                      hintStyle: const TextStyle(color: GamerTheme.textMuted),
+                      filled: true,
+                      fillColor: GamerTheme.bgDark,
+                      border: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: const BorderSide(color: GamerTheme.borderDark)),
+                      contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                    ),
+                  ),
+
+                  const SizedBox(height: 14),
+
+                  // FIELD 3: PRIZE POOL IN COINS (Remove ₹ symbol)
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      const Text('3. PRIZE POOL (ESCROW HOLD)', style: TextStyle(color: GamerTheme.textMuted, fontSize: 11, fontWeight: FontWeight.w800)),
+                      Text('💰 $prizePoolCoins Coins', style: const TextStyle(color: GamerTheme.accentBlue, fontWeight: FontWeight.bold, fontSize: 12)),
+                    ],
+                  ),
+                  const SizedBox(height: 6),
+                  Wrap(
+                    spacing: 8,
+                    children: [100, 200, 500, 1000].map((amount) {
+                      final isSelected = prizePoolCoins == amount;
+                      return ChoiceChip(
+                        label: Text('💰 $amount Coins', style: TextStyle(fontSize: 12, color: isSelected ? Colors.black : Colors.white, fontWeight: FontWeight.bold)),
+                        selected: isSelected,
+                        selectedColor: GamerTheme.accentBlue,
+                        backgroundColor: GamerTheme.bgDark,
+                        onSelected: (val) => setSheetState(() => prizePoolCoins = amount),
+                      );
+                    }).toList(),
+                  ),
+
+                  const SizedBox(height: 14),
+
+                  // FIELD 4: ENTRY FEE IN COINS (FREE = 0 Coins)
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      const Text('4. ENTRY FEE (PER PLAYER)', style: TextStyle(color: GamerTheme.textMuted, fontSize: 11, fontWeight: FontWeight.w800)),
+                      Text(entryFeeCoins == 0 ? 'FREE (0 Coins)' : '💰 $entryFeeCoins Coins', style: const TextStyle(color: GamerTheme.neonGreen, fontWeight: FontWeight.bold, fontSize: 12)),
+                    ],
+                  ),
+                  const SizedBox(height: 6),
+                  Wrap(
+                    spacing: 8,
+                    children: [0, 20, 50, 100].map((fee) {
+                      final isSelected = entryFeeCoins == fee;
+                      return ChoiceChip(
+                        label: Text(fee == 0 ? 'FREE (0 Coins)' : '💰 $fee Coins', style: TextStyle(fontSize: 12, color: isSelected ? Colors.black : Colors.white, fontWeight: FontWeight.bold)),
+                        selected: isSelected,
+                        selectedColor: GamerTheme.neonGreen,
+                        backgroundColor: GamerTheme.bgDark,
+                        onSelected: (val) => setSheetState(() => entryFeeCoins = fee),
+                      );
+                    }).toList(),
+                  ),
+
+                  const SizedBox(height: 14),
+
+                  // FIELD 5 & 6: ROOM ID / INVITE LINK & OPTIONAL PASSWORD
+                  if (isLinkOnly) ...[
+                    const Text('5. INVITE LINK / ROOM CODE (OPTIONAL)', style: TextStyle(color: GamerTheme.textMuted, fontSize: 11, fontWeight: FontWeight.w800)),
+                    const SizedBox(height: 6),
+                    TextField(
+                      controller: roomIdController,
+                      style: const TextStyle(color: Colors.white, fontFamily: 'monospace', fontSize: 13),
+                      decoration: InputDecoration(
+                        hintText: 'e.g. https://ludoking.app/room/1234 or Code (or leave TBD)',
+                        hintStyle: const TextStyle(color: GamerTheme.textMuted, fontSize: 12),
+                        filled: true,
+                        fillColor: GamerTheme.bgDark,
+                        border: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: const BorderSide(color: GamerTheme.borderDark)),
+                        contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                      ),
+                    ),
+                    const SizedBox(height: 4),
+                    const Text('ℹ️ No password needed for Ludo King / 8 Ball Pool. Invite link or code is shared directly.', style: TextStyle(color: GamerTheme.textMuted, fontSize: 11)),
+                  ] else ...[
+                    Row(
                       children: [
-                        Text('🏆', style: TextStyle(fontSize: 22)),
-                        SizedBox(width: 8),
-                        Text(
-                          'HOST TOURNAMENT (COINS)',
-                          style: TextStyle(
-                            color: GamerTheme.textWhite,
-                            fontSize: 15,
-                            fontWeight: FontWeight.w900,
-                            letterSpacing: 0.5,
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              const Text('5. IN-GAME ROOM ID', style: TextStyle(color: GamerTheme.textMuted, fontSize: 11, fontWeight: FontWeight.w800)),
+                              const SizedBox(height: 6),
+                              TextField(
+                                controller: roomIdController,
+                                style: const TextStyle(color: Colors.white, fontFamily: 'monospace', fontSize: 13),
+                                decoration: InputDecoration(
+                                  hintText: 'e.g. 582910 (or leave TBD)',
+                                  hintStyle: const TextStyle(color: GamerTheme.textMuted, fontSize: 12),
+                                  filled: true,
+                                  fillColor: GamerTheme.bgDark,
+                                  border: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: const BorderSide(color: GamerTheme.borderDark)),
+                                  contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                        const SizedBox(width: 12),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              const Text('6. ROOM PASSWORD', style: TextStyle(color: GamerTheme.textMuted, fontSize: 11, fontWeight: FontWeight.w800)),
+                              const SizedBox(height: 6),
+                              TextField(
+                                controller: passController,
+                                style: const TextStyle(color: Colors.white, fontFamily: 'monospace', fontSize: 13),
+                                decoration: InputDecoration(
+                                  hintText: 'e.g. 1234',
+                                  hintStyle: const TextStyle(color: GamerTheme.textMuted, fontSize: 12),
+                                  filled: true,
+                                  fillColor: GamerTheme.bgDark,
+                                  border: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: const BorderSide(color: GamerTheme.borderDark)),
+                                  contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                                ),
+                              ),
+                            ],
                           ),
                         ),
                       ],
                     ),
-                    Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                      decoration: BoxDecoration(
-                        color: GamerTheme.accentBlue.withOpacity(0.15),
-                        borderRadius: BorderRadius.circular(12),
-                        border: Border.all(color: GamerTheme.accentBlue.withOpacity(0.4)),
-                      ),
-                      child: Text(
-                        '💰 ${wallet.coins} Coins',
-                        style: const TextStyle(color: GamerTheme.accentBlue, fontWeight: FontWeight.bold, fontSize: 11),
-                      ),
-                    ),
                   ],
-                ),
-                const SizedBox(height: 14),
 
-                // Title
-                const Text('TOURNAMENT TITLE', style: TextStyle(color: GamerTheme.textMuted, fontSize: 11, fontWeight: FontWeight.w800)),
-                const SizedBox(height: 6),
-                TextField(
-                  controller: titleController,
-                  style: const TextStyle(color: Colors.white, fontSize: 13),
-                  decoration: InputDecoration(
-                    hintText: 'e.g. Conqueror TDM 1v1 #10',
-                    hintStyle: const TextStyle(color: GamerTheme.textMuted),
-                    filled: true,
-                    fillColor: GamerTheme.bgDark,
-                    border: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: const BorderSide(color: GamerTheme.borderDark)),
-                    contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-                  ),
-                ),
+                  const SizedBox(height: 20),
 
-                const SizedBox(height: 14),
-
-                // Match Type & Map
-                Row(
-                  children: [
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          const Text('ROOM TYPE', style: TextStyle(color: GamerTheme.textMuted, fontSize: 11, fontWeight: FontWeight.w800)),
-                          const SizedBox(height: 6),
-                          Container(
-                            padding: const EdgeInsets.symmetric(horizontal: 10),
-                            decoration: BoxDecoration(
-                              color: GamerTheme.bgDark,
-                              borderRadius: BorderRadius.circular(10),
-                              border: Border.all(color: GamerTheme.borderDark),
-                            ),
-                            child: DropdownButtonHideUnderline(
-                              child: DropdownButton<String>(
-                                value: selectedType,
-                                isExpanded: true,
-                                dropdownColor: GamerTheme.cardDark,
-                                items: ['TDM 1v1', 'TDM 4v4', 'Classic Scrim', 'Payload']
-                                    .map((t) => DropdownMenuItem(value: t, child: Text(t, style: const TextStyle(color: Colors.white, fontSize: 13))))
-                                    .toList(),
-                                onChanged: (v) {
-                                  setSheetState(() {
-                                    selectedType = v ?? selectedType;
-                                    if (selectedType == 'TDM 1v1') {
-                                      maxSlots = 2;
-                                      selectedMap = 'Warehouse';
-                                    } else if (selectedType == 'TDM 4v4') {
-                                      maxSlots = 8;
-                                      selectedMap = 'Warehouse';
-                                    } else {
-                                      maxSlots = 100;
-                                      selectedMap = 'Erangel';
-                                    }
-                                  });
-                                },
-                              ),
-                            ),
-                          ),
-                        ],
+                  // Submit Button
+                  SizedBox(
+                    width: double.infinity,
+                    child: ElevatedButton(
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: GamerTheme.accentBlue,
+                        foregroundColor: GamerTheme.bgDark,
+                        padding: const EdgeInsets.symmetric(vertical: 14),
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                       ),
-                    ),
-                    const SizedBox(width: 12),
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          const Text('MAP', style: TextStyle(color: GamerTheme.textMuted, fontSize: 11, fontWeight: FontWeight.w800)),
-                          const SizedBox(height: 6),
-                          Container(
-                            padding: const EdgeInsets.symmetric(horizontal: 10),
-                            decoration: BoxDecoration(
-                              color: GamerTheme.bgDark,
-                              borderRadius: BorderRadius.circular(10),
-                              border: Border.all(color: GamerTheme.borderDark),
-                            ),
-                            child: DropdownButtonHideUnderline(
-                              child: DropdownButton<String>(
-                                value: selectedMap,
-                                isExpanded: true,
-                                dropdownColor: GamerTheme.cardDark,
-                                items: ['Warehouse', 'Erangel', 'Miramar', 'Sanhok', 'Hangar']
-                                    .map((m) => DropdownMenuItem(value: m, child: Text(m, style: const TextStyle(color: Colors.white, fontSize: 13))))
-                                    .toList(),
-                                onChanged: (v) => setSheetState(() => selectedMap = v ?? selectedMap),
-                              ),
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                  ],
-                ),
+                      onPressed: () async {
+                        // Check wallet coins for prize pool escrow
+                        if (wallet.coins < prizePoolCoins) {
+                          Navigator.pop(ctx);
+                          _showNotEnoughCoinsDialog(prizePoolCoins, wallet.coins);
+                          return;
+                        }
 
-                const SizedBox(height: 14),
+                        final now = DateTime.now();
+                        final start = DateTime(now.year, now.month, now.day, selectedTime.hour, selectedTime.minute)
+                            .add(const Duration(minutes: 30));
 
-                // Prize Pool Selection (Coins Escrow)
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  children: [
-                    const Text('PRIZE POOL (ESCROW HOLD)', style: TextStyle(color: GamerTheme.textMuted, fontSize: 11, fontWeight: FontWeight.w800)),
-                    Text('💰 $prizePoolCoins Coins', style: const TextStyle(color: GamerTheme.accentBlue, fontWeight: FontWeight.bold, fontSize: 12)),
-                  ],
-                ),
-                const SizedBox(height: 6),
-                Wrap(
-                  spacing: 8,
-                  children: [100, 200, 500, 1000].map((amount) {
-                    final isSelected = prizePoolCoins == amount;
-                    return ChoiceChip(
-                      label: Text('💰 $amount', style: TextStyle(fontSize: 12, color: isSelected ? Colors.black : Colors.white, fontWeight: FontWeight.bold)),
-                      selected: isSelected,
-                      selectedColor: GamerTheme.accentBlue,
-                      backgroundColor: GamerTheme.bgDark,
-                      onSelected: (val) => setSheetState(() => prizePoolCoins = amount),
-                    );
-                  }).toList(),
-                ),
+                        final roomTitle = titleController.text.trim().isNotEmpty
+                            ? titleController.text.trim()
+                            : '$selectedGame $selectedMode Match';
 
-                const SizedBox(height: 14),
-
-                // Entry Fee Selection
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  children: [
-                    const Text('ENTRY FEE (PER PLAYER)', style: TextStyle(color: GamerTheme.textMuted, fontSize: 11, fontWeight: FontWeight.w800)),
-                    Text(entryFeeCoins == 0 ? 'FREE' : '💰 $entryFeeCoins Coins', style: const TextStyle(color: GamerTheme.neonGreen, fontWeight: FontWeight.bold, fontSize: 12)),
-                  ],
-                ),
-                const SizedBox(height: 6),
-                Wrap(
-                  spacing: 8,
-                  children: [0, 20, 50, 100].map((fee) {
-                    final isSelected = entryFeeCoins == fee;
-                    return ChoiceChip(
-                      label: Text(fee == 0 ? 'FREE' : '💰 $fee', style: TextStyle(fontSize: 12, color: isSelected ? Colors.black : Colors.white, fontWeight: FontWeight.bold)),
-                      selected: isSelected,
-                      selectedColor: GamerTheme.neonGreen,
-                      backgroundColor: GamerTheme.bgDark,
-                      onSelected: (val) => setSheetState(() => entryFeeCoins = fee),
-                    );
-                  }).toList(),
-                ),
-
-                const SizedBox(height: 14),
-
-                // Room ID & Password
-                Row(
-                  children: [
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          const Text('IN-GAME ROOM ID', style: TextStyle(color: GamerTheme.textMuted, fontSize: 11, fontWeight: FontWeight.w800)),
-                          const SizedBox(height: 6),
-                          TextField(
-                            controller: roomIdController,
-                            style: const TextStyle(color: Colors.white, fontFamily: 'monospace'),
-                            decoration: InputDecoration(
-                              hintText: 'e.g. 582910',
-                              hintStyle: const TextStyle(color: GamerTheme.textMuted),
-                              filled: true,
-                              fillColor: GamerTheme.bgDark,
-                              border: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: const BorderSide(color: GamerTheme.borderDark)),
-                              contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                    const SizedBox(width: 12),
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          const Text('ROOM PASSWORD', style: TextStyle(color: GamerTheme.textMuted, fontSize: 11, fontWeight: FontWeight.w800)),
-                          const SizedBox(height: 6),
-                          TextField(
-                            controller: passController,
-                            style: const TextStyle(color: Colors.white, fontFamily: 'monospace'),
-                            decoration: InputDecoration(
-                              hintText: 'e.g. 1234',
-                              hintStyle: const TextStyle(color: GamerTheme.textMuted),
-                              filled: true,
-                              fillColor: GamerTheme.bgDark,
-                              border: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: const BorderSide(color: GamerTheme.borderDark)),
-                              contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                  ],
-                ),
-
-                const SizedBox(height: 20),
-
-                // Submit Button
-                SizedBox(
-                  width: double.infinity,
-                  child: ElevatedButton(
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: GamerTheme.accentBlue,
-                      foregroundColor: GamerTheme.bgDark,
-                      padding: const EdgeInsets.symmetric(vertical: 14),
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                    ),
-                    onPressed: () async {
-                      // Check wallet coins for prize pool escrow
-                      if (wallet.coins < prizePoolCoins) {
-                        Navigator.pop(ctx);
-                        _showNotEnoughCoinsDialog(prizePoolCoins, wallet.coins);
-                        return;
-                      }
-
-                      final now = DateTime.now();
-                      final start = DateTime(now.year, now.month, now.day, selectedTime.hour, selectedTime.minute)
-                          .add(const Duration(minutes: 30));
-
-                      final roomTitle = titleController.text.trim().isNotEmpty
-                          ? titleController.text.trim()
-                          : 'BGMI $selectedType Match';
-
-                      final room = TournamentRoom(
-                        id: '',
-                        hostId: currentGamer.uid,
-                        hostName: currentGamer.displayName,
-                        hostAvatar: currentGamer.photoUrl,
-                        roomType: selectedType,
-                        title: roomTitle,
-                        map: selectedMap,
-                        entryFee: entryFeeCoins == 0 ? 'FREE' : '$entryFeeCoins Coins',
-                        prize: '💰 $prizePoolCoins Coins Prize',
-                        prizePoolCoins: prizePoolCoins,
-                        entryFeeCoins: entryFeeCoins,
-                        escrowCoins: prizePoolCoins,
-                        status: 'OPEN',
-                        roomId: roomIdController.text.trim(),
-                        password: passController.text.trim(),
-                        startTime: start,
-                        maxSlots: maxSlots,
-                        joinedPlayers: [currentGamer.uid],
-                        isRoomRevealed: roomIdController.text.trim().isNotEmpty,
-                      );
-
-                      final published = await _tournamentService.publishRoom(room);
-
-                      // Hold host coins in escrow
-                      await _walletService.holdRoomHostCoins(
-                        userId: currentGamer.uid,
-                        prizePoolCoins: prizePoolCoins,
-                        roomId: published.id,
-                        roomTitle: roomTitle,
-                      );
-
-                      if (ctx.mounted) Navigator.pop(ctx);
-                      _tabController.animateTo(0);
-                      await _tournamentService.fetchRooms();
-
-                      if (mounted) {
-                        setState(() {});
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          SnackBar(
-                            content: Text('🎉 Tournament is LIVE! $prizePoolCoins Coins held in Escrow.'),
-                            backgroundColor: GamerTheme.accentBlue,
-                          ),
+                        final room = TournamentRoom(
+                          id: '',
+                          hostId: currentGamer.uid,
+                          hostName: currentGamer.displayName,
+                          hostAvatar: currentGamer.photoUrl,
+                          gameType: selectedGame,
+                          gameMode: selectedMode,
+                          roomType: selectedMode,
+                          title: roomTitle,
+                          map: selectedMap,
+                          entryFee: entryFeeCoins == 0 ? 'FREE' : '$entryFeeCoins Coins',
+                          prize: '💰 $prizePoolCoins Coins Prize',
+                          prizePoolCoins: prizePoolCoins,
+                          entryFeeCoins: entryFeeCoins,
+                          escrowCoins: prizePoolCoins,
+                          status: 'OPEN',
+                          roomId: roomIdController.text.trim(),
+                          password: isLinkOnly ? '' : passController.text.trim(),
+                          startTime: start,
+                          maxSlots: maxSlots,
+                          joinedPlayers: [currentGamer.uid],
+                          isRoomRevealed: roomIdController.text.trim().isNotEmpty,
                         );
-                      }
-                    },
-                    child: Text(
-                      'HOST & LOCK 💰 $prizePoolCoins COINS 🔒',
-                      style: const TextStyle(fontWeight: FontWeight.w900, fontSize: 13, letterSpacing: 0.8),
+
+                        final published = await _tournamentService.publishRoom(room);
+
+                        // Hold host coins in escrow
+                        await _walletService.holdRoomHostCoins(
+                          userId: currentGamer.uid,
+                          prizePoolCoins: prizePoolCoins,
+                          roomId: published.id,
+                          roomTitle: roomTitle,
+                        );
+
+                        if (ctx.mounted) Navigator.pop(ctx);
+                        setState(() {
+                          _selectedCategory = 'All Games';
+                        });
+                        await _tournamentService.fetchRooms();
+
+                        if (mounted) {
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            SnackBar(
+                              content: Text('🎉 $selectedGame Tournament is LIVE! $prizePoolCoins Coins held in Escrow.'),
+                              backgroundColor: GamerTheme.accentBlue,
+                            ),
+                          );
+                        }
+                      },
+                      child: Text(
+                        'HOST & LOCK 💰 $prizePoolCoins COINS 🔒',
+                        style: const TextStyle(fontWeight: FontWeight.w900, fontSize: 13, letterSpacing: 0.8),
+                      ),
                     ),
                   ),
-                ),
-              ],
+                ],
+              ),
             ),
-          ),
-        ),
+          );
+        },
       ),
     );
   }
 
   void _showRoomDetailsDialog(BuildContext context, TournamentRoom room, String currentUid) {
-    final roomIdText = room.roomId.trim().isNotEmpty ? room.roomId.trim() : 'TBD (Host revealing soon)';
-    final passwordText = room.password.trim().isNotEmpty ? room.password.trim() : 'TBD';
-    final mapName = room.map.trim().isNotEmpty ? room.map.trim() : 'Erangel';
+    final hasRoomId = room.roomId.trim().isNotEmpty && room.roomId.trim().toUpperCase() != 'TBD';
+    final hasPassword = room.password.trim().isNotEmpty && room.password.trim().toUpperCase() != 'TBD';
+    final isLinkOnly = room.isLinkOnlyGame;
+    final isHost = room.hostId == currentUid;
+    final mapName = room.map.trim().isNotEmpty ? room.map.trim() : 'Default';
     final startTimeFormatted = DateFormat('hh:mm a, dd MMM').format(room.startTime);
 
     showDialog(
@@ -516,21 +669,38 @@ class _TournamentBoardScreenState extends State<TournamentBoardScreen> with Sing
                 color: GamerTheme.accentBlue.withOpacity(0.15),
                 shape: BoxShape.circle,
               ),
-              child: const Icon(Icons.vpn_key_rounded, color: GamerTheme.accentBlue, size: 20),
+              child: Text(room.gameIcon, style: const TextStyle(fontSize: 20)),
             ),
             const SizedBox(width: 12),
             Expanded(
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  const Text(
-                    'ROOM CREDENTIALS',
-                    style: TextStyle(
-                      color: GamerTheme.accentBlue,
-                      fontSize: 12,
-                      fontWeight: FontWeight.w900,
-                      letterSpacing: 1,
-                    ),
+                  Row(
+                    children: [
+                      const Text(
+                        'ROOM CREDENTIALS',
+                        style: TextStyle(
+                          color: GamerTheme.accentBlue,
+                          fontSize: 12,
+                          fontWeight: FontWeight.w900,
+                          letterSpacing: 1,
+                        ),
+                      ),
+                      const SizedBox(width: 6),
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                        decoration: BoxDecoration(
+                          color: GamerTheme.cardElevated,
+                          borderRadius: BorderRadius.circular(4),
+                          border: Border.all(color: GamerTheme.borderLight.withOpacity(0.3)),
+                        ),
+                        child: Text(
+                          room.gameType,
+                          style: const TextStyle(color: Colors.white, fontSize: 10, fontWeight: FontWeight.bold),
+                        ),
+                      ),
+                    ],
                   ),
                   const SizedBox(height: 2),
                   Text(
@@ -546,6 +716,16 @@ class _TournamentBoardScreenState extends State<TournamentBoardScreen> with Sing
                 ],
               ),
             ),
+            if (isHost) ...[
+              IconButton(
+                tooltip: 'Edit Credentials',
+                icon: const Icon(Icons.edit_note_rounded, color: GamerTheme.accentBlue, size: 22),
+                onPressed: () {
+                  Navigator.pop(dialogCtx);
+                  _showEditCredentialsDialog(context, room);
+                },
+              ),
+            ],
           ],
         ),
         content: SingleChildScrollView(
@@ -554,7 +734,8 @@ class _TournamentBoardScreenState extends State<TournamentBoardScreen> with Sing
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               const SizedBox(height: 10),
-              // Slot booked badge - slots preserved at 2/2
+
+              // Slot booked badge - slots preserved at 2/2 or actual
               Container(
                 width: double.infinity,
                 padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 12),
@@ -580,15 +761,42 @@ class _TournamentBoardScreenState extends State<TournamentBoardScreen> with Sing
                   ],
                 ),
               ),
-              const SizedBox(height: 16),
 
-              // Room ID box with COPY ID
+              // Orange Warning if ID is TBD
+              if (!hasRoomId) ...[
+                const SizedBox(height: 10),
+                Container(
+                  width: double.infinity,
+                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+                  decoration: BoxDecoration(
+                    color: GamerTheme.accentOrange.withOpacity(0.12),
+                    borderRadius: BorderRadius.circular(8),
+                    border: Border.all(color: GamerTheme.accentOrange.withOpacity(0.4)),
+                  ),
+                  child: const Row(
+                    children: [
+                      Icon(Icons.warning_amber_rounded, color: GamerTheme.accentOrange, size: 16),
+                      SizedBox(width: 8),
+                      Expanded(
+                        child: Text(
+                          'TBD (Revealed shortly) - Host will update 15 mins before start',
+                          style: TextStyle(color: GamerTheme.accentOrange, fontSize: 11, fontWeight: FontWeight.bold),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+
+              const SizedBox(height: 14),
+
+              // Room ID or Invite Link box with COPY
               Container(
                 padding: const EdgeInsets.all(12),
                 decoration: BoxDecoration(
                   color: GamerTheme.bgDark,
                   borderRadius: BorderRadius.circular(12),
-                  border: Border.all(color: GamerTheme.borderDark),
+                  border: Border.all(color: !hasRoomId ? GamerTheme.accentOrange.withOpacity(0.4) : GamerTheme.borderDark),
                 ),
                 child: Row(
                   children: [
@@ -596,19 +804,19 @@ class _TournamentBoardScreenState extends State<TournamentBoardScreen> with Sing
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          const Text(
-                            'ROOM ID',
-                            style: TextStyle(color: GamerTheme.textMuted, fontSize: 10, fontWeight: FontWeight.bold, letterSpacing: 0.8),
+                          Text(
+                            isLinkOnly ? 'INVITE LINK' : 'ROOM ID',
+                            style: const TextStyle(color: GamerTheme.textMuted, fontSize: 10, fontWeight: FontWeight.bold, letterSpacing: 0.8),
                           ),
                           const SizedBox(height: 4),
                           SelectableText(
-                            roomIdText,
-                            style: const TextStyle(
-                              color: Colors.white,
-                              fontSize: 15,
+                            hasRoomId ? room.roomId : 'TBD (Revealed shortly)',
+                            style: TextStyle(
+                              color: hasRoomId ? Colors.white : GamerTheme.accentOrange,
+                              fontSize: hasRoomId ? 15 : 13,
                               fontWeight: FontWeight.w900,
-                              fontFamily: 'monospace',
-                              letterSpacing: 1,
+                              fontFamily: hasRoomId ? 'monospace' : null,
+                              letterSpacing: hasRoomId ? 1 : 0,
                             ),
                           ),
                         ],
@@ -616,85 +824,90 @@ class _TournamentBoardScreenState extends State<TournamentBoardScreen> with Sing
                     ),
                     ElevatedButton.icon(
                       style: ElevatedButton.styleFrom(
-                        backgroundColor: GamerTheme.accentBlue,
-                        foregroundColor: GamerTheme.bgDark,
+                        backgroundColor: hasRoomId ? GamerTheme.accentBlue : GamerTheme.cardElevated,
+                        foregroundColor: hasRoomId ? GamerTheme.bgDark : GamerTheme.textMuted,
                         padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
                         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
                       ),
-                      onPressed: () {
-                        Clipboard.setData(ClipboardData(text: roomIdText));
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          SnackBar(
-                            content: Text('Room ID "$roomIdText" copied to clipboard! 📋'),
-                            backgroundColor: GamerTheme.accentBlue,
-                            duration: const Duration(seconds: 2),
-                          ),
-                        );
-                      },
+                      onPressed: hasRoomId
+                          ? () {
+                              Clipboard.setData(ClipboardData(text: room.roomId));
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                SnackBar(
+                                  content: Text('${isLinkOnly ? "Invite link" : "Room ID"} "${room.roomId}" copied to clipboard! 📋'),
+                                  backgroundColor: GamerTheme.accentBlue,
+                                  duration: const Duration(seconds: 2),
+                                ),
+                              );
+                            }
+                          : null,
                       icon: const Icon(Icons.copy_rounded, size: 14),
-                      label: const Text('COPY ID', style: TextStyle(fontSize: 11, fontWeight: FontWeight.w900)),
+                      label: Text(isLinkOnly ? 'COPY LINK' : 'COPY ID', style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w900)),
                     ),
                   ],
                 ),
               ),
 
-              const SizedBox(height: 10),
-
-              // Password box with COPY PASSWORD
-              Container(
-                padding: const EdgeInsets.all(12),
-                decoration: BoxDecoration(
-                  color: GamerTheme.bgDark,
-                  borderRadius: BorderRadius.circular(12),
-                  border: Border.all(color: GamerTheme.borderDark),
-                ),
-                child: Row(
-                  children: [
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          const Text(
-                            'PASSWORD',
-                            style: TextStyle(color: GamerTheme.textMuted, fontSize: 10, fontWeight: FontWeight.bold, letterSpacing: 0.8),
-                          ),
-                          const SizedBox(height: 4),
-                          SelectableText(
-                            passwordText,
-                            style: const TextStyle(
-                              color: Colors.white,
-                              fontSize: 15,
-                              fontWeight: FontWeight.w900,
-                              fontFamily: 'monospace',
-                              letterSpacing: 1,
+              // Password box with COPY PASSWORD (Hidden for Ludo / 8 Ball Pool)
+              if (!isLinkOnly) ...[
+                const SizedBox(height: 10),
+                Container(
+                  padding: const EdgeInsets.all(12),
+                  decoration: BoxDecoration(
+                    color: GamerTheme.bgDark,
+                    borderRadius: BorderRadius.circular(12),
+                    border: Border.all(color: GamerTheme.borderDark),
+                  ),
+                  child: Row(
+                    children: [
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            const Text(
+                              'PASSWORD',
+                              style: TextStyle(color: GamerTheme.textMuted, fontSize: 10, fontWeight: FontWeight.bold, letterSpacing: 0.8),
                             ),
-                          ),
-                        ],
+                            const SizedBox(height: 4),
+                            SelectableText(
+                              hasPassword ? room.password : 'TBD',
+                              style: TextStyle(
+                                color: hasPassword ? Colors.white : GamerTheme.accentOrange,
+                                fontSize: 15,
+                                fontWeight: FontWeight.w900,
+                                fontFamily: 'monospace',
+                                letterSpacing: 1,
+                              ),
+                            ),
+                          ],
+                        ),
                       ),
-                    ),
-                    ElevatedButton.icon(
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: GamerTheme.accentOrange,
-                        foregroundColor: GamerTheme.bgDark,
-                        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                      ElevatedButton.icon(
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: hasPassword ? GamerTheme.accentOrange : GamerTheme.cardElevated,
+                          foregroundColor: hasPassword ? GamerTheme.bgDark : GamerTheme.textMuted,
+                          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                        ),
+                        onPressed: hasPassword
+                            ? () {
+                                Clipboard.setData(ClipboardData(text: room.password));
+                                ScaffoldMessenger.of(context).showSnackBar(
+                                  SnackBar(
+                                    content: Text('Password "${room.password}" copied to clipboard! 🔑'),
+                                    backgroundColor: GamerTheme.accentOrange,
+                                    duration: const Duration(seconds: 2),
+                                  ),
+                                );
+                              }
+                            : null,
+                        icon: const Icon(Icons.copy_rounded, size: 14),
+                        label: const Text('COPY PASSWORD', style: TextStyle(fontSize: 11, fontWeight: FontWeight.w900)),
                       ),
-                      onPressed: () {
-                        Clipboard.setData(ClipboardData(text: passwordText));
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          SnackBar(
-                            content: Text('Password "$passwordText" copied to clipboard! 🔑'),
-                            backgroundColor: GamerTheme.accentOrange,
-                            duration: const Duration(seconds: 2),
-                          ),
-                        );
-                      },
-                      icon: const Icon(Icons.copy_rounded, size: 14),
-                      label: const Text('COPY PASSWORD', style: TextStyle(fontSize: 11, fontWeight: FontWeight.w900)),
-                    ),
-                  ],
+                    ],
+                  ),
                 ),
-              ),
+              ],
 
               const SizedBox(height: 14),
 
@@ -719,7 +932,12 @@ class _TournamentBoardScreenState extends State<TournamentBoardScreen> with Sing
                               children: [
                                 const Text('MAP', style: TextStyle(color: GamerTheme.textMuted, fontSize: 10, fontWeight: FontWeight.bold)),
                                 const SizedBox(height: 2),
-                                Text(mapName, style: const TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.bold)),
+                                Text(
+                                  '$mapName (${room.gameMode})',
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                  style: const TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.bold),
+                                ),
                               ],
                             ),
                           ),
@@ -752,7 +970,7 @@ class _TournamentBoardScreenState extends State<TournamentBoardScreen> with Sing
 
               const SizedBox(height: 14),
 
-              // ENTER BGMI button
+              // Dynamic Game Launch Button
               SizedBox(
                 width: double.infinity,
                 child: ElevatedButton.icon(
@@ -762,13 +980,15 @@ class _TournamentBoardScreenState extends State<TournamentBoardScreen> with Sing
                     padding: const EdgeInsets.symmetric(vertical: 12),
                     shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
                   ),
-                  icon: const Icon(Icons.sports_esports_rounded, size: 18),
-                  label: const Text('ENTER BGMI 🎮', style: TextStyle(fontWeight: FontWeight.w900, fontSize: 13)),
+                  icon: Text(room.gameIcon, style: const TextStyle(fontSize: 16)),
+                  label: Text(room.launchAppLabel, style: const TextStyle(fontWeight: FontWeight.w900, fontSize: 13)),
                   onPressed: () {
-                    Clipboard.setData(ClipboardData(text: roomIdText));
+                    if (hasRoomId) {
+                      Clipboard.setData(ClipboardData(text: room.roomId));
+                    }
                     ScaffoldMessenger.of(context).showSnackBar(
-                      const SnackBar(
-                        content: Text('Copied Room ID! Launching BGMI...'),
+                      SnackBar(
+                        content: Text(hasRoomId ? 'Copied credentials! Launching ${room.gameType}...' : 'Launching ${room.gameType}...'),
                         backgroundColor: GamerTheme.accentBlue,
                       ),
                     );
@@ -783,21 +1003,36 @@ class _TournamentBoardScreenState extends State<TournamentBoardScreen> with Sing
         actions: [
           Row(
             children: [
-              // Small leave room option with refund
-              TextButton(
-                onPressed: () async {
-                  Navigator.pop(dialogCtx);
-                  if (currentUid.isNotEmpty) {
-                    await _tournamentService.leaveRoom(room.id, currentUid);
-                    if (context.mounted) {
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        const SnackBar(content: Text('Left tournament slot. Entry fee (if any) refunded.')),
-                      );
+              if (isHost) ...[
+                TextButton.icon(
+                  style: TextButton.styleFrom(
+                    foregroundColor: GamerTheme.accentBlue,
+                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                  ),
+                  icon: const Icon(Icons.edit_rounded, size: 15),
+                  label: const Text('EDIT', style: TextStyle(fontWeight: FontWeight.w900, fontSize: 12)),
+                  onPressed: () {
+                    Navigator.pop(dialogCtx);
+                    _showEditCredentialsDialog(context, room);
+                  },
+                ),
+              ] else ...[
+                // Small leave room option with refund
+                TextButton(
+                  onPressed: () async {
+                    Navigator.pop(dialogCtx);
+                    if (currentUid.isNotEmpty) {
+                      await _tournamentService.leaveRoom(room.id, currentUid);
+                      if (context.mounted) {
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          const SnackBar(content: Text('Left tournament slot. Entry fee (if any) refunded.')),
+                        );
+                      }
                     }
-                  }
-                },
-                child: const Text('Leave Slot', style: TextStyle(color: GamerTheme.redAccent, fontSize: 11)),
-              ),
+                  },
+                  child: const Text('Leave Slot', style: TextStyle(color: GamerTheme.redAccent, fontSize: 11)),
+                ),
+              ],
               const Spacer(),
               ElevatedButton(
                 style: ElevatedButton.styleFrom(
@@ -811,6 +1046,108 @@ class _TournamentBoardScreenState extends State<TournamentBoardScreen> with Sing
                 child: const Text('CLOSE', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12)),
               ),
             ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _showEditCredentialsDialog(BuildContext context, TournamentRoom room) {
+    final isLinkOnly = room.isLinkOnlyGame;
+    final idController = TextEditingController(text: room.roomId);
+    final passController = TextEditingController(text: room.password);
+
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: GamerTheme.cardDark,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(20),
+          side: const BorderSide(color: GamerTheme.accentBlue, width: 1.5),
+        ),
+        title: Row(
+          children: [
+            Text(room.gameIcon, style: const TextStyle(fontSize: 22)),
+            const SizedBox(width: 8),
+            Expanded(
+              child: Text(
+                'UPDATE ${isLinkOnly ? "INVITE LINK" : "CREDENTIALS"}',
+                style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w900, fontSize: 15),
+              ),
+            ),
+          ],
+        ),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              isLinkOnly ? 'INVITE LINK / ROOM CODE' : 'ROOM ID',
+              style: const TextStyle(color: GamerTheme.textMuted, fontSize: 11, fontWeight: FontWeight.bold),
+            ),
+            const SizedBox(height: 6),
+            TextField(
+              controller: idController,
+              style: const TextStyle(color: Colors.white, fontFamily: 'monospace'),
+              decoration: InputDecoration(
+                hintText: isLinkOnly ? 'e.g. https://ludoking.app/room/123 or Code' : 'e.g. 582910',
+                hintStyle: const TextStyle(color: GamerTheme.textMuted),
+                filled: true,
+                fillColor: GamerTheme.bgDark,
+                border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
+                contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+              ),
+            ),
+            if (!isLinkOnly) ...[
+              const SizedBox(height: 12),
+              const Text('PASSWORD', style: TextStyle(color: GamerTheme.textMuted, fontSize: 11, fontWeight: FontWeight.bold)),
+              const SizedBox(height: 6),
+              TextField(
+                controller: passController,
+                style: const TextStyle(color: Colors.white, fontFamily: 'monospace'),
+                decoration: InputDecoration(
+                  hintText: 'e.g. 1234',
+                  hintStyle: const TextStyle(color: GamerTheme.textMuted),
+                  filled: true,
+                  fillColor: GamerTheme.bgDark,
+                  border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
+                  contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                ),
+              ),
+            ],
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text('CANCEL', style: TextStyle(color: GamerTheme.textMuted)),
+          ),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(
+              backgroundColor: GamerTheme.accentBlue,
+              foregroundColor: GamerTheme.bgDark,
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+            ),
+            onPressed: () async {
+              final newId = idController.text.trim();
+              final newPass = isLinkOnly ? '' : passController.text.trim();
+              await _tournamentService.updateRoomCredentials(
+                roomId: room.id,
+                inGameRoomId: newId,
+                password: newPass,
+              );
+              if (ctx.mounted) Navigator.pop(ctx);
+              if (mounted) {
+                setState(() {});
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(
+                    content: Text('✅ Credentials updated and revealed to players!'),
+                    backgroundColor: GamerTheme.accentBlue,
+                  ),
+                );
+              }
+            },
+            child: const Text('SAVE & REVEAL 🔓', style: TextStyle(fontWeight: FontWeight.w900)),
           ),
         ],
       ),
@@ -1246,32 +1583,53 @@ class _TournamentBoardScreenState extends State<TournamentBoardScreen> with Sing
           SliverToBoxAdapter(
             child: Container(
               color: GamerTheme.bgDark,
-              child: TabBar(
-                controller: _tabController,
-                indicatorColor: GamerTheme.accentBlue,
-                indicatorWeight: 3,
-                labelColor: GamerTheme.accentBlue,
-                unselectedLabelColor: GamerTheme.textMuted,
-                labelStyle: const TextStyle(fontWeight: FontWeight.w900, fontSize: 13),
-                tabs: const [
-                  Tab(text: 'All Rooms'),
-                  Tab(text: 'TDM 1v1/4v4'),
-                  Tab(text: 'Classic Scrims'),
-                  Tab(text: 'Free Entry'),
-                ],
+              padding: const EdgeInsets.symmetric(vertical: 8),
+              child: SizedBox(
+                height: 44,
+                child: ListView.separated(
+                  scrollDirection: Axis.horizontal,
+                  padding: const EdgeInsets.symmetric(horizontal: 14),
+                  itemCount: _gameCategories.length,
+                  separatorBuilder: (_, __) => const SizedBox(width: 8),
+                  itemBuilder: (context, idx) {
+                    final item = _gameCategories[idx];
+                    final name = item['name']!;
+                    final icon = item['icon']!;
+                    final isSelected = _selectedCategory == name;
+                    final isFree = name == 'Free Entry';
+
+                    return ChoiceChip(
+                      avatar: Text(icon, style: const TextStyle(fontSize: 14)),
+                      label: Text(
+                        name,
+                        style: TextStyle(
+                          color: isSelected ? Colors.black : Colors.white,
+                          fontWeight: FontWeight.w900,
+                          fontSize: 12,
+                        ),
+                      ),
+                      selected: isSelected,
+                      selectedColor: isFree ? GamerTheme.neonGreen : GamerTheme.accentBlue,
+                      backgroundColor: GamerTheme.cardDark,
+                      side: BorderSide(
+                        color: isSelected
+                            ? (isFree ? GamerTheme.neonGreen : GamerTheme.accentBlue)
+                            : GamerTheme.borderDark,
+                        width: isSelected ? 1.5 : 1.0,
+                      ),
+                      onSelected: (val) {
+                        setState(() {
+                          _selectedCategory = name;
+                        });
+                      },
+                    );
+                  },
+                ),
               ),
             ),
           ),
         ],
-        body: TabBarView(
-          controller: _tabController,
-          children: [
-            _buildRoomsList(filter: 'all'),
-            _buildRoomsList(filter: 'tdm'),
-            _buildRoomsList(filter: 'classic'),
-            _buildRoomsList(filter: 'free'),
-          ],
-        ),
+        body: _buildRoomsList(category: _selectedCategory),
       ),
       floatingActionButton: FloatingActionButton.extended(
         backgroundColor: GamerTheme.accentBlue,
@@ -1279,12 +1637,12 @@ class _TournamentBoardScreenState extends State<TournamentBoardScreen> with Sing
         elevation: 6,
         icon: const Icon(Icons.add_moderator_rounded, color: GamerTheme.bgDark),
         label: const Text('HOST ROOM', style: TextStyle(fontWeight: FontWeight.w900, letterSpacing: 0.8)),
-        onPressed: _openHostRoomSheet,
+        onPressed: () => _openHostRoomSheet(preselectedGame: (_selectedCategory != 'All Games' && _selectedCategory != 'Free Entry') ? _selectedCategory : null),
       ),
     );
   }
 
-  Widget _buildRoomsList({required String filter}) {
+  Widget _buildRoomsList({required String category}) {
     final localRooms = _tournamentService.rooms;
 
     return StreamBuilder<List<TournamentRoom>>(
@@ -1313,13 +1671,27 @@ class _TournamentBoardScreenState extends State<TournamentBoardScreen> with Sing
         }
 
         final filtered = rooms.where((r) {
-          if (filter == 'tdm') return r.roomType.toLowerCase().contains('tdm');
-          if (filter == 'classic') return r.roomType.toLowerCase().contains('classic');
-          if (filter == 'free') return r.entryFee.toLowerCase().contains('free') || r.entryFeeCoins == 0;
-          return true;
+          if (category == 'Free Entry') {
+            return r.entryFee.toLowerCase().contains('free') || r.entryFeeCoins == 0;
+          }
+          if (category == 'All Games') {
+            return true;
+          }
+          if (category == 'Free Fire') {
+            return r.gameType == 'Free Fire' || r.gameType == 'Free Fire MAX';
+          }
+          return r.gameType.toLowerCase() == category.toLowerCase();
         }).toList();
 
         if (filtered.isEmpty) {
+          final isAll = category == 'All Games';
+          final isFree = category == 'Free Entry';
+          final icon = isAll ? '🏆' : (isFree ? '🆓' : _getCategoryIcon(category));
+          final title = isAll ? 'No Active Custom Rooms' : 'No Active $category Rooms';
+          final subtitle = isAll
+              ? 'Host your own multiplayer tournament room and compete for G-Coins!'
+              : 'Be the first to host a $category tournament match and win G-Coins!';
+
           return Center(
             child: Padding(
               padding: const EdgeInsets.all(32),
@@ -1333,18 +1705,18 @@ class _TournamentBoardScreenState extends State<TournamentBoardScreen> with Sing
                       shape: BoxShape.circle,
                       border: Border.all(color: GamerTheme.borderDark),
                     ),
-                    child: const Text('🏆', style: TextStyle(fontSize: 40)),
+                    child: Text(icon, style: const TextStyle(fontSize: 40)),
                   ),
                   const SizedBox(height: 16),
-                  const Text(
-                    'No Active Custom Rooms',
-                    style: TextStyle(color: GamerTheme.textWhite, fontSize: 18, fontWeight: FontWeight.w900),
+                  Text(
+                    title,
+                    style: const TextStyle(color: GamerTheme.textWhite, fontSize: 18, fontWeight: FontWeight.w900),
                   ),
                   const SizedBox(height: 8),
-                  const Text(
-                    'Host your own BGMI Custom Room or Scrim and compete for G-Coins!',
+                  Text(
+                    subtitle,
                     textAlign: TextAlign.center,
-                    style: TextStyle(color: GamerTheme.textMuted, fontSize: 13),
+                    style: const TextStyle(color: GamerTheme.textMuted, fontSize: 13),
                   ),
                   const SizedBox(height: 20),
                   ElevatedButton.icon(
@@ -1355,8 +1727,11 @@ class _TournamentBoardScreenState extends State<TournamentBoardScreen> with Sing
                       padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
                     ),
                     icon: const Icon(Icons.add_circle_outline_rounded, color: GamerTheme.bgDark),
-                    label: const Text('Host First Room', style: TextStyle(fontWeight: FontWeight.w900)),
-                    onPressed: _openHostRoomSheet,
+                    label: Text(
+                      isAll || isFree ? 'Host First Room' : 'Host $category Room',
+                      style: const TextStyle(fontWeight: FontWeight.w900),
+                    ),
+                    onPressed: () => _openHostRoomSheet(preselectedGame: (!isAll && !isFree) ? category : null),
                   ),
                 ],
               ),
@@ -1481,7 +1856,7 @@ class _TournamentBoardScreenState extends State<TournamentBoardScreen> with Sing
                           const Text('•', style: TextStyle(color: GamerTheme.textMuted, fontSize: 10)),
                           const SizedBox(width: 6),
                           Text(
-                            room.map,
+                            '${room.map} • ${room.gameMode}',
                             style: const TextStyle(color: GamerTheme.accentOrange, fontSize: 11, fontWeight: FontWeight.bold),
                           ),
                         ],
@@ -1496,13 +1871,20 @@ class _TournamentBoardScreenState extends State<TournamentBoardScreen> with Sing
                     borderRadius: BorderRadius.circular(6),
                     border: Border.all(color: GamerTheme.accentBlue.withOpacity(0.35)),
                   ),
-                  child: Text(
-                    room.roomType,
-                    style: const TextStyle(
-                      color: GamerTheme.accentBlue,
-                      fontSize: 11,
-                      fontWeight: FontWeight.w900,
-                    ),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Text(room.gameIcon, style: const TextStyle(fontSize: 12)),
+                      const SizedBox(width: 4),
+                      Text(
+                        room.gameType,
+                        style: const TextStyle(
+                          color: GamerTheme.accentBlue,
+                          fontSize: 11,
+                          fontWeight: FontWeight.w900,
+                        ),
+                      ),
+                    ],
                   ),
                 ),
               ],
@@ -1597,7 +1979,7 @@ class _TournamentBoardScreenState extends State<TournamentBoardScreen> with Sing
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
                     Text(
-                      room.isFull ? 'Room Full (2/2)' : '${room.availableSlots} slots remaining',
+                      room.isFull ? 'Room Full (${room.joinedPlayers.length}/${room.maxSlots})' : '${room.availableSlots} slots remaining',
                       style: TextStyle(
                         color: room.isFull ? const Color(0xFFFF2D55) : GamerTheme.textMuted,
                         fontSize: 11,
@@ -1614,7 +1996,7 @@ class _TournamentBoardScreenState extends State<TournamentBoardScreen> with Sing
             ),
           ),
 
-          // Revealed Room ID & Password (If joined or host)
+          // Revealed Room ID & Password or Invite Link (If joined or host)
           if ((isJoined || isHost) && (room.roomId.isNotEmpty || room.isRoomRevealed)) ...[
             const SizedBox(height: 10),
             Container(
@@ -1627,21 +2009,30 @@ class _TournamentBoardScreenState extends State<TournamentBoardScreen> with Sing
               ),
               child: Row(
                 children: [
-                  const Icon(Icons.vpn_key_rounded, color: GamerTheme.accentBlue, size: 16),
+                  Icon(room.isLinkOnlyGame ? Icons.link_rounded : Icons.vpn_key_rounded, color: GamerTheme.accentBlue, size: 16),
                   const SizedBox(width: 8),
-                  Text(
-                    'ID: ${room.roomId}  |  Pass: ${room.password}',
-                    style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontFamily: 'monospace', fontSize: 12),
+                  Expanded(
+                    child: Text(
+                      room.isLinkOnlyGame
+                          ? 'Link: ${room.roomId}'
+                          : 'ID: ${room.roomId}${room.password.isNotEmpty ? "  |  Pass: ${room.password}" : ""}',
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontFamily: 'monospace', fontSize: 12),
+                    ),
                   ),
-                  const Spacer(),
+                  const SizedBox(width: 8),
                   GestureDetector(
                     onTap: () {
-                      Clipboard.setData(ClipboardData(text: 'Room: ${room.roomId} Pass: ${room.password}'));
+                      final textToCopy = room.isLinkOnlyGame
+                          ? room.roomId
+                          : (room.password.isNotEmpty ? 'Room: ${room.roomId} Pass: ${room.password}' : room.roomId);
+                      Clipboard.setData(ClipboardData(text: textToCopy));
                       ScaffoldMessenger.of(context).showSnackBar(
-                        const SnackBar(content: Text('Room ID & Password copied!')),
+                        SnackBar(content: Text('${room.credentialLabel} copied!')),
                       );
                     },
-                    child: const Text('COPY', style: TextStyle(color: GamerTheme.accentBlue, fontWeight: FontWeight.w900, fontSize: 11)),
+                    child: Text(room.copyLabel, style: const TextStyle(color: GamerTheme.accentBlue, fontWeight: FontWeight.w900, fontSize: 11)),
                   ),
                 ],
               ),

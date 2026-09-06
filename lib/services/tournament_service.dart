@@ -15,7 +15,7 @@ class TournamentService extends ChangeNotifier {
 
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
   final CoinWalletService _walletService = CoinWalletService();
-  static const String _storageKey = 'cached_tournament_rooms_v2';
+  static const String _storageKey = 'cached_tournament_rooms_v3';
 
   List<TournamentRoom> _rooms = [];
   List<TournamentRoom> get rooms => List.unmodifiable(_rooms);
@@ -36,11 +36,201 @@ class TournamentService extends ChangeNotifier {
           map[room.id] = room; // deduplicate
         }
         _rooms = map.values.toList();
-        notifyListeners();
       }
+
+      if (_rooms.isEmpty) {
+        _rooms = _getDefaultMultiGameRooms();
+        await _saveToLocal();
+      }
+      notifyListeners();
     } catch (e) {
       debugPrint('TournamentService: _loadFromLocal error: $e');
+      if (_rooms.isEmpty) {
+        _rooms = _getDefaultMultiGameRooms();
+      }
+      notifyListeners();
     }
+  }
+
+  List<TournamentRoom> _getDefaultMultiGameRooms() {
+    final now = DateTime.now();
+    return [
+      TournamentRoom(
+        id: 'seed_bgmi_tdm_1',
+        hostId: 'host_viper',
+        hostName: 'ViperSniper',
+        hostAvatar: '',
+        gameType: 'BGMI',
+        gameMode: 'TDM 1v1',
+        roomType: 'TDM 1v1',
+        title: 'BGMI Conqueror TDM 1v1 #24',
+        map: 'Warehouse',
+        entryFee: 'FREE',
+        prize: '💰 500 Coins Prize',
+        prizePoolCoins: 500,
+        entryFeeCoins: 0,
+        escrowCoins: 500,
+        status: 'OPEN',
+        roomId: '582910',
+        password: '992',
+        startTime: now.add(const Duration(minutes: 45)),
+        maxSlots: 2,
+        joinedPlayers: const ['host_viper', 'guest'],
+        isLive: true,
+        isRoomRevealed: true,
+        createdAt: now.subtract(const Duration(minutes: 10)),
+      ),
+      TournamentRoom(
+        id: 'seed_ff_clash_2',
+        hostId: 'host_ninja',
+        hostName: 'ShadowNinja',
+        hostAvatar: '',
+        gameType: 'Free Fire MAX',
+        gameMode: 'Clash Squad 4v4',
+        roomType: 'Clash Squad 4v4',
+        title: 'Free Fire MAX Clash Squad 4v4 Cup',
+        map: 'Bermuda',
+        entryFee: '20 Coins',
+        prize: '💰 1,000 Coins Prize',
+        prizePoolCoins: 1000,
+        entryFeeCoins: 20,
+        escrowCoins: 1000,
+        status: 'OPEN',
+        roomId: '772184',
+        password: 'ffmax',
+        startTime: now.add(const Duration(hours: 1, minutes: 15)),
+        maxSlots: 8,
+        joinedPlayers: const ['host_ninja', 'player_ff2', 'player_ff3'],
+        isLive: true,
+        isRoomRevealed: true,
+        createdAt: now.subtract(const Duration(minutes: 20)),
+      ),
+      TournamentRoom(
+        id: 'seed_ludo_king_3',
+        hostId: 'host_roll',
+        hostName: 'RollMaster',
+        hostAvatar: '',
+        gameType: 'Ludo King',
+        gameMode: '1v1',
+        roomType: '1v1',
+        title: 'Ludo King 1v1 Fast Crown Match',
+        map: 'Classic Board',
+        entryFee: 'FREE',
+        prize: '💰 400 Coins Prize',
+        prizePoolCoins: 400,
+        entryFeeCoins: 0,
+        escrowCoins: 400,
+        status: 'OPEN',
+        roomId: 'https://ludoking.app/room/938102',
+        password: '',
+        startTime: now.add(const Duration(minutes: 25)),
+        maxSlots: 2,
+        joinedPlayers: const ['host_roll'],
+        isLive: true,
+        isRoomRevealed: true,
+        createdAt: now.subtract(const Duration(minutes: 15)),
+      ),
+      TournamentRoom(
+        id: 'seed_codm_snd_4',
+        hostId: 'host_ghost',
+        hostName: 'GhostRecon',
+        hostAvatar: '',
+        gameType: 'COD Mobile',
+        gameMode: 'Search & Destroy',
+        roomType: 'Search & Destroy',
+        title: 'CODM Search & Destroy Pro Cup',
+        map: 'Crash',
+        entryFee: '50 Coins',
+        prize: '💰 800 Coins Prize',
+        prizePoolCoins: 800,
+        entryFeeCoins: 50,
+        escrowCoins: 800,
+        status: 'OPEN',
+        roomId: '', // TBD: test TBD logic!
+        password: '',
+        startTime: now.add(const Duration(minutes: 15)),
+        maxSlots: 10,
+        joinedPlayers: const ['host_ghost', 'c_p1', 'c_p2', 'c_p3'],
+        isLive: true,
+        isRoomRevealed: false,
+        createdAt: now.subtract(const Duration(minutes: 5)),
+      ),
+      TournamentRoom(
+        id: 'seed_8ball_pool_5',
+        hostId: 'host_cue',
+        hostName: 'CueWizard',
+        hostAvatar: '',
+        gameType: '8 Ball Pool',
+        gameMode: '1v1',
+        roomType: '1v1',
+        title: '8 Ball Pool High-Stakes 1v1',
+        map: 'Tokyo Warrior',
+        entryFee: 'FREE',
+        prize: '💰 600 Coins Prize',
+        prizePoolCoins: 600,
+        entryFeeCoins: 0,
+        escrowCoins: 600,
+        status: 'OPEN',
+        roomId: 'https://miniclip.8ball/table/4491',
+        password: '',
+        startTime: now.add(const Duration(hours: 2)),
+        maxSlots: 2,
+        joinedPlayers: const ['host_cue'],
+        isLive: true,
+        isRoomRevealed: true,
+        createdAt: now.subtract(const Duration(minutes: 30)),
+      ),
+      TournamentRoom(
+        id: 'seed_valorant_6',
+        hostId: 'host_jett',
+        hostName: 'JettDuelist',
+        hostAvatar: '',
+        gameType: 'Valorant',
+        gameMode: 'Custom 5v5',
+        roomType: 'Custom 5v5',
+        title: 'Valorant Spike Rush 5v5 Scrim',
+        map: 'Ascent',
+        entryFee: '100 Coins',
+        prize: '💰 1,200 Coins Prize',
+        prizePoolCoins: 1200,
+        entryFeeCoins: 100,
+        escrowCoins: 1200,
+        status: 'OPEN',
+        roomId: 'VAL-CUSTOM-8821',
+        password: 'aim',
+        startTime: now.add(const Duration(hours: 1)),
+        maxSlots: 10,
+        joinedPlayers: const ['host_jett', 'val_1', 'val_2'],
+        isLive: true,
+        isRoomRevealed: true,
+        createdAt: now.subtract(const Duration(minutes: 25)),
+      ),
+      TournamentRoom(
+        id: 'seed_pubg_7',
+        hostId: 'host_falcon',
+        hostName: 'FalconLeader',
+        hostAvatar: '',
+        gameType: 'PUBG Mobile',
+        gameMode: 'Classic Scrim',
+        roomType: 'Classic Scrim',
+        title: 'PUBG Mobile Erangel Scrim Cup',
+        map: 'Erangel',
+        entryFee: 'FREE',
+        prize: '💰 1,500 Coins Prize',
+        prizePoolCoins: 1500,
+        entryFeeCoins: 0,
+        escrowCoins: 1500,
+        status: 'OPEN',
+        roomId: 'PUBG-99321',
+        password: '786',
+        startTime: now.add(const Duration(hours: 3)),
+        maxSlots: 100,
+        joinedPlayers: const ['host_falcon', 'pubg_1', 'pubg_2'],
+        isLive: true,
+        isRoomRevealed: true,
+        createdAt: now.subtract(const Duration(minutes: 40)),
+      ),
+    ];
   }
 
   /// Save current rooms list to local storage

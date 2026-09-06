@@ -5,9 +5,11 @@ class TournamentRoom {
   final String hostId;
   final String hostName;
   final String hostAvatar;
-  final String roomType; // 'TDM 1v1', 'TDM 4v4', 'Classic Scrim', 'Custom Room'
+  final String gameType; // 'BGMI', 'PUBG Mobile', 'Free Fire', 'Free Fire MAX', 'COD Mobile', 'Valorant', 'Ludo King', '8 Ball Pool'
+  final String gameMode; // Mode within game (e.g. 'TDM 1v1', 'Clash Squad 4v4', etc.)
+  final String roomType; // 'TDM 1v1', 'TDM 4v4', 'Classic Scrim', 'Custom Room' (kept for backward compatibility)
   final String title;
-  final String map; // 'Erangel', 'Warehouse', 'Miramar', 'Sanhok'
+  final String map; // 'Erangel', 'Warehouse', 'Bermuda', 'Crash', etc.
   final String entryFee; // 'FREE' or '50 Coins'
   final String prize; // '💰 500 Coins Prize'
   final int prizePoolCoins;
@@ -17,8 +19,8 @@ class TournamentRoom {
   final String? winnerUid;
   final String? winnerName;
   final Map<String, dynamic> resultSubmissions; // uid -> {screenshotUrl, submittedAt, ocrText, isVictory}
-  final String roomId; // Room ID (BGMI)
-  final String password; // Password (BGMI)
+  final String roomId; // Room ID or Invite Link
+  final String password; // Password (optional/hidden for link games)
   final DateTime startTime;
   final int maxSlots;
   final List<String> joinedPlayers; // List of userIds
@@ -31,6 +33,8 @@ class TournamentRoom {
     required this.hostId,
     required this.hostName,
     this.hostAvatar = '',
+    this.gameType = 'BGMI',
+    this.gameMode = 'TDM 1v1',
     this.roomType = 'TDM 1v1',
     required this.title,
     this.map = 'Erangel',
@@ -58,6 +62,56 @@ class TournamentRoom {
   bool get isCompleted => status == 'COMPLETED';
   bool get isExpired => status == 'EXPIRED' || status == 'CANCELED';
 
+  String get gameIcon {
+    switch (gameType) {
+      case 'BGMI':
+        return '🪖';
+      case 'PUBG Mobile':
+        return '🪂';
+      case 'Free Fire':
+        return '🔥';
+      case 'Free Fire MAX':
+        return '⚡';
+      case 'COD Mobile':
+        return '🎖️';
+      case 'Valorant':
+        return '⚔️';
+      case 'Ludo King':
+        return '🎲';
+      case '8 Ball Pool':
+        return '🎱';
+      default:
+        return '🎮';
+    }
+  }
+
+  /// Whether this game uses invite link instead of Room ID + Password
+  bool get isLinkOnlyGame => gameType == 'Ludo King' || gameType == '8 Ball Pool';
+
+  String get credentialLabel => isLinkOnlyGame ? 'INVITE LINK / CODE' : 'ROOM ID';
+  String get copyLabel => isLinkOnlyGame ? 'COPY LINK' : 'COPY ID';
+  String get launchAppLabel {
+    switch (gameType) {
+      case 'BGMI':
+        return 'ENTER BGMI 🎮';
+      case 'PUBG Mobile':
+        return 'ENTER PUBG 🪂';
+      case 'Free Fire':
+      case 'Free Fire MAX':
+        return 'ENTER FREE FIRE 🔥';
+      case 'COD Mobile':
+        return 'ENTER COD MOBILE 🎖️';
+      case 'Valorant':
+        return 'ENTER VALORANT ⚔️';
+      case 'Ludo King':
+        return 'OPEN LUDO KING 🎲';
+      case '8 Ball Pool':
+        return 'OPEN 8 BALL POOL 🎱';
+      default:
+        return 'ENTER GAME 🎮';
+    }
+  }
+
   factory TournamentRoom.fromFirestore(DocumentSnapshot doc) {
     final data = doc.data() as Map<String, dynamic>? ?? {};
 
@@ -82,14 +136,18 @@ class TournamentRoom {
     final rawPrize = data['prize']?.toString() ?? '💰 $prizeCoins Coins Prize';
     // Clean up any old rupee signs
     final cleanPrize = rawPrize.replaceAll('₹', '💰 ').replaceAll('Cash', 'Coins');
+    final gType = data['gameType']?.toString() ?? 'BGMI';
+    final gMode = data['gameMode']?.toString() ?? (data['roomType'] ?? 'TDM 1v1');
 
     return TournamentRoom(
       id: data['id'] ?? doc.id,
       hostId: data['hostId'] ?? '',
       hostName: data['hostName'] ?? 'Host',
       hostAvatar: data['hostAvatar'] ?? '',
-      roomType: data['roomType'] ?? 'TDM 1v1',
-      title: data['title'] ?? 'BGMI Custom Tournament',
+      gameType: gType,
+      gameMode: gMode,
+      roomType: data['roomType'] ?? gMode,
+      title: data['title'] ?? 'Custom Tournament',
       map: data['map'] ?? 'Erangel',
       entryFee: data['entryFee']?.toString().replaceAll('₹', '') ?? (feeCoins > 0 ? '$feeCoins Coins' : 'FREE'),
       prize: cleanPrize,
@@ -117,6 +175,8 @@ class TournamentRoom {
       'hostId': hostId,
       'hostName': hostName,
       'hostAvatar': hostAvatar,
+      'gameType': gameType,
+      'gameMode': gameMode,
       'roomType': roomType,
       'title': title.trim(),
       'map': map,
@@ -146,6 +206,8 @@ class TournamentRoom {
       'hostId': hostId,
       'hostName': hostName,
       'hostAvatar': hostAvatar,
+      'gameType': gameType,
+      'gameMode': gameMode,
       'roomType': roomType,
       'title': title.trim(),
       'map': map,
@@ -186,14 +248,18 @@ class TournamentRoom {
     final feeCoins = (json['entryFeeCoins'] as num?)?.toInt() ?? 0;
     final rawPrize = json['prize']?.toString() ?? '💰 $prizeCoins Coins Prize';
     final cleanPrize = rawPrize.replaceAll('₹', '💰 ').replaceAll('Cash', 'Coins');
+    final gType = json['gameType']?.toString() ?? 'BGMI';
+    final gMode = json['gameMode']?.toString() ?? (json['roomType'] ?? 'TDM 1v1');
 
     return TournamentRoom(
       id: json['id'] ?? '',
       hostId: json['hostId'] ?? '',
       hostName: json['hostName'] ?? 'Host',
       hostAvatar: json['hostAvatar'] ?? '',
-      roomType: json['roomType'] ?? 'TDM 1v1',
-      title: json['title'] ?? 'BGMI Custom Tournament',
+      gameType: gType,
+      gameMode: gMode,
+      roomType: json['roomType'] ?? gMode,
+      title: json['title'] ?? 'Custom Tournament',
       map: json['map'] ?? 'Erangel',
       entryFee: json['entryFee']?.toString().replaceAll('₹', '') ?? (feeCoins > 0 ? '$feeCoins Coins' : 'FREE'),
       prize: cleanPrize,
@@ -220,6 +286,8 @@ class TournamentRoom {
     String? hostId,
     String? hostName,
     String? hostAvatar,
+    String? gameType,
+    String? gameMode,
     String? roomType,
     String? title,
     String? map,
@@ -246,6 +314,8 @@ class TournamentRoom {
       hostId: hostId ?? this.hostId,
       hostName: hostName ?? this.hostName,
       hostAvatar: hostAvatar ?? this.hostAvatar,
+      gameType: gameType ?? this.gameType,
+      gameMode: gameMode ?? this.gameMode,
       roomType: roomType ?? this.roomType,
       title: title ?? this.title,
       map: map ?? this.map,
