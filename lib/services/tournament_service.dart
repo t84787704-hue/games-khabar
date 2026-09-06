@@ -3,6 +3,7 @@ import 'package:flutter/foundation.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../models/tournament_room_model.dart';
+import 'coin_wallet_service.dart';
 
 class TournamentService extends ChangeNotifier {
   static final TournamentService _instance = TournamentService._internal();
@@ -13,7 +14,8 @@ class TournamentService extends ChangeNotifier {
   }
 
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
-  static const String _storageKey = 'cached_tournament_rooms_v1';
+  final CoinWalletService _walletService = CoinWalletService();
+  static const String _storageKey = 'cached_tournament_rooms_v2';
 
   List<TournamentRoom> _rooms = [];
   List<TournamentRoom> get rooms => List.unmodifiable(_rooms);
@@ -28,14 +30,16 @@ class TournamentService extends ChangeNotifier {
       final jsonStr = prefs.getString(_storageKey);
       if (jsonStr != null && jsonStr.isNotEmpty) {
         final List decoded = jsonDecode(jsonStr);
-        _rooms = decoded
-            .map((item) => TournamentRoom.fromJson(Map<String, dynamic>.from(item)))
-            .toList();
-        print('TournamentService: Loaded ${_rooms.length} rooms from local storage');
+        final Map<String, TournamentRoom> map = {};
+        for (final item in decoded) {
+          final room = TournamentRoom.fromJson(Map<String, dynamic>.from(item));
+          map[room.id] = room; // deduplicate
+        }
+        _rooms = map.values.toList();
         notifyListeners();
       }
     } catch (e) {
-      print('TournamentService: _loadFromLocal error: $e');
+      debugPrint('TournamentService: _loadFromLocal error: $e');
     }
   }
 
@@ -45,41 +49,37 @@ class TournamentService extends ChangeNotifier {
       final prefs = await SharedPreferences.getInstance();
       final encoded = jsonEncode(_rooms.map((r) => r.toJson()).toList());
       await prefs.setString(_storageKey, encoded);
-      print('TournamentService: Saved ${_rooms.length} rooms to local storage');
     } catch (e) {
-      print('TournamentService: _saveToLocal error: $e');
+      debugPrint('TournamentService: _saveToLocal error: $e');
     }
   }
 
   /// Actually adds room to rooms list, calls notifyListeners(), saves to local storage, and syncs to Firestore
   Future<TournamentRoom> publishRoom(TournamentRoom room) async {
-    print('TournamentService: publishRoom() called for room "${room.title}"');
+    debugPrint('TournamentService: publishRoom() called for room "${room.title}"');
     final doc = room.id.isNotEmpty ? _roomsRef.doc(room.id) : _roomsRef.doc();
     final publishedRoom = room.copyWith(
       id: room.id.isNotEmpty ? room.id : doc.id,
       createdAt: room.createdAt ?? DateTime.now(),
       isLive: true,
+      status: 'OPEN',
     );
 
-    // 1. Actually add room to rooms list (at the top)
+    // 1. Actually add room to rooms list (deduplicated by id)
     _rooms.removeWhere((r) => r.id == publishedRoom.id);
     _rooms.insert(0, publishedRoom);
-    print('TournamentService: publishRoom() - Added room "${publishedRoom.title}" (ID: ${publishedRoom.id}) to rooms list. Total rooms: ${_rooms.length}');
 
     // 2. Save to local storage
     await _saveToLocal();
-    print('TournamentService: publishRoom() - Saved rooms to local storage');
 
     // 3. Call notifyListeners()
     notifyListeners();
-    print('TournamentService: publishRoom() - notifyListeners() called successfully');
 
     // 4. Sync to Firestore in background
     try {
       await doc.set(publishedRoom.toMap());
-      print('TournamentService: publishRoom() - Successfully synced room to Firestore: ${publishedRoom.id}');
     } catch (e) {
-      print('TournamentService: publishRoom() - Firestore sync notice (persisted in local): $e');
+      debugPrint('TournamentService: publishRoom Firestore sync notice: $e');
     }
 
     return publishedRoom;
@@ -92,7 +92,6 @@ class TournamentService extends ChangeNotifier {
 
   /// Fetches rooms from Firestore and local storage, updates rooms list, and notifies listeners
   Future<List<TournamentRoom>> fetchRooms() async {
-    print('TournamentService: fetchRooms() called');
     try {
       if (_rooms.isEmpty) {
         await _loadFromLocal();
@@ -104,9 +103,8 @@ class TournamentService extends ChangeNotifier {
           .get();
 
       final firestoreRooms = snap.docs.map((d) => TournamentRoom.fromFirestore(d)).toList();
-      print('TournamentService: fetchRooms() - Fetched ${firestoreRooms.length} rooms from Firestore');
 
-      // Merge firestore rooms with freshly published local rooms
+      // Deduplicate by ID
       final Map<String, TournamentRoom> roomMap = {};
       for (final r in _rooms) {
         if (r.isLive) roomMap[r.id] = r;
@@ -120,9 +118,8 @@ class TournamentService extends ChangeNotifier {
 
       await _saveToLocal();
       notifyListeners();
-      print('TournamentService: fetchRooms() - Finished with ${_rooms.length} total rooms, called notifyListeners()');
     } catch (e) {
-      print('TournamentService: fetchRooms() error: $e, using ${_rooms.length} cached rooms');
+      debugPrint('TournamentService: fetchRooms error: $e');
       if (_rooms.isEmpty) {
         await _loadFromLocal();
       }
@@ -138,14 +135,14 @@ class TournamentService extends ChangeNotifier {
         .snapshots()
         .map((snap) {
           final streamRooms = snap.docs.map((d) => TournamentRoom.fromFirestore(d)).toList();
-          for (final sr in streamRooms) {
-            final idx = _rooms.indexWhere((r) => r.id == sr.id);
-            if (idx != -1) {
-              _rooms[idx] = sr;
-            } else {
-              _rooms.add(sr);
-            }
+          final Map<String, TournamentRoom> map = {};
+          for (final r in _rooms) {
+            map[r.id] = r;
           }
+          for (final sr in streamRooms) {
+            map[sr.id] = sr;
+          }
+          _rooms = map.values.toList();
           return streamRooms;
         });
   }
@@ -157,28 +154,50 @@ class TournamentService extends ChangeNotifier {
     required String playerName,
   }) async {
     try {
-      print('TournamentService: joinRoom() called for room: $roomId by player: $playerUid');
-      // Update local rooms state immediately
+      debugPrint('TournamentService: joinRoom() called for room: $roomId by player: $playerUid');
       final index = _rooms.indexWhere((r) => r.id == roomId);
+      TournamentRoom? targetRoom;
       if (index != -1) {
-        final room = _rooms[index];
-        if (room.isFull) return false;
-        final updatedPlayers = List<String>.from(room.joinedPlayers);
-        if (!updatedPlayers.contains(playerUid)) {
-          updatedPlayers.add(playerUid);
-          _rooms[index] = room.copyWith(joinedPlayers: updatedPlayers);
-          await _saveToLocal();
-          notifyListeners();
-        }
+        targetRoom = _rooms[index];
+      } else {
+        final doc = await _roomsRef.doc(roomId).get();
+        if (doc.exists) targetRoom = TournamentRoom.fromFirestore(doc);
       }
 
-      final doc = await _roomsRef.doc(roomId).get();
-      if (!doc.exists) return false;
-      final room = TournamentRoom.fromFirestore(doc);
-      if (room.isFull) return false;
+      if (targetRoom == null) return false;
+      if (targetRoom.isFull) return false;
+      if (targetRoom.joinedPlayers.contains(playerUid)) return true; // already joined
 
+      // If entry fee > 0, deduct from player's coins to escrow
+      if (targetRoom.entryFeeCoins > 0 && playerUid != targetRoom.hostId) {
+        final success = await _walletService.holdEntryFeeCoins(
+          userId: playerUid,
+          entryFeeCoins: targetRoom.entryFeeCoins,
+          roomId: targetRoom.id,
+          roomTitle: targetRoom.title,
+        );
+        if (!success) return false; // Not enough coins
+      }
+
+      // Update local room
+      final updatedPlayers = List<String>.from(targetRoom.joinedPlayers)..add(playerUid);
+      final updatedRoom = targetRoom.copyWith(
+        joinedPlayers: updatedPlayers,
+        escrowCoins: targetRoom.escrowCoins + (targetRoom.entryFeeCoins > 0 && playerUid != targetRoom.hostId ? targetRoom.entryFeeCoins : 0),
+      );
+
+      if (index != -1) {
+        _rooms[index] = updatedRoom;
+      } else {
+        _rooms.add(updatedRoom);
+      }
+      await _saveToLocal();
+      notifyListeners();
+
+      // Update Firestore
       await _roomsRef.doc(roomId).update({
         'joinedPlayers': FieldValue.arrayUnion([playerUid]),
+        'escrowCoins': updatedRoom.escrowCoins,
       });
 
       if (hostUid != playerUid) {
@@ -194,29 +213,171 @@ class TournamentService extends ChangeNotifier {
       }
       return true;
     } catch (e) {
-      print('TournamentService: joinRoom error: $e');
+      debugPrint('TournamentService: joinRoom error: $e');
       return false;
     }
   }
 
   Future<void> leaveRoom(String roomId, String playerUid) async {
     try {
-      print('TournamentService: leaveRoom() called for room: $roomId by player: $playerUid');
+      debugPrint('TournamentService: leaveRoom() for room: $roomId by player: $playerUid');
       final index = _rooms.indexWhere((r) => r.id == roomId);
       if (index != -1) {
         final room = _rooms[index];
-        final updatedPlayers = List<String>.from(room.joinedPlayers);
-        updatedPlayers.remove(playerUid);
+        final updatedPlayers = List<String>.from(room.joinedPlayers)..remove(playerUid);
         _rooms[index] = room.copyWith(joinedPlayers: updatedPlayers);
         await _saveToLocal();
         notifyListeners();
+
+        // Refund entry fee if applied
+        if (room.entryFeeCoins > 0 && playerUid != room.hostId) {
+          await _walletService.refundEntryFeeOnLeave(
+            userId: playerUid,
+            entryFeeCoins: room.entryFeeCoins,
+            roomId: room.id,
+            roomTitle: room.title,
+          );
+        }
       }
 
       await _roomsRef.doc(roomId).update({
         'joinedPlayers': FieldValue.arrayRemove([playerUid]),
       });
     } catch (e) {
-      print('TournamentService: leaveRoom error: $e');
+      debugPrint('TournamentService: leaveRoom error: $e');
+    }
+  }
+
+  /// Participant uploads BGMI Victory screenshot with OCR result
+  Future<bool> submitResultScreenshot({
+    required String roomId,
+    required String playerUid,
+    required String playerName,
+    required String screenshotUrl,
+    required String ocrText,
+    required bool isVictory,
+  }) async {
+    try {
+      final submission = {
+        'screenshotUrl': screenshotUrl,
+        'submittedAt': DateTime.now().toIso8601String(),
+        'ocrText': ocrText,
+        'isVictory': isVictory,
+        'playerName': playerName,
+      };
+
+      final index = _rooms.indexWhere((r) => r.id == roomId);
+      if (index != -1) {
+        final subs = Map<String, dynamic>.from(_rooms[index].resultSubmissions);
+        subs[playerUid] = submission;
+        _rooms[index] = _rooms[index].copyWith(resultSubmissions: subs);
+        await _saveToLocal();
+        notifyListeners();
+      }
+
+      await _roomsRef.doc(roomId).update({
+        'resultSubmissions.$playerUid': submission,
+      });
+      return true;
+    } catch (e) {
+      debugPrint('TournamentService: submitResultScreenshot error: $e');
+      return false;
+    }
+  }
+
+  /// Host finishes match and selects the winner:
+  /// Transfers all escrowCoins to winner and updates room status to COMPLETED
+  Future<bool> finishMatchWithWinner({
+    required String roomId,
+    required String winnerUid,
+    required String winnerName,
+  }) async {
+    try {
+      final doc = await _roomsRef.doc(roomId).get();
+      if (!doc.exists) return false;
+      final room = TournamentRoom.fromFirestore(doc);
+
+      // 1. Calculate total escrow reward
+      final totalEntryFees = room.entryFeeCoins * room.joinedPlayers.where((p) => p != room.hostId).length;
+
+      await _walletService.awardWinnerPrize(
+        hostId: room.hostId,
+        winnerId: winnerUid,
+        prizePoolCoins: room.prizePoolCoins,
+        totalEntryFees: totalEntryFees,
+        joiners: room.joinedPlayers,
+        entryFeeCoinsPerJoiner: room.entryFeeCoins,
+        roomId: room.id,
+        roomTitle: room.title,
+      );
+
+      // 2. Penalize any participant who did not submit result (-10 trustScore)
+      for (final pUid in room.joinedPlayers) {
+        if (!room.resultSubmissions.containsKey(pUid) && pUid != room.hostId) {
+          await _walletService.penalizeTrustScore(pUid, 10, 'Did not submit match result');
+        }
+      }
+
+      // 3. Mark room as COMPLETED in memory & Firestore
+      final index = _rooms.indexWhere((r) => r.id == roomId);
+      if (index != -1) {
+        _rooms[index] = _rooms[index].copyWith(
+          status: 'COMPLETED',
+          winnerUid: winnerUid,
+          winnerName: winnerName,
+          isLive: false,
+        );
+        await _saveToLocal();
+        notifyListeners();
+      }
+
+      await _roomsRef.doc(roomId).update({
+        'status': 'COMPLETED',
+        'winnerUid': winnerUid,
+        'winnerName': winnerName,
+        'isLive': false,
+      });
+
+      return true;
+    } catch (e) {
+      debugPrint('TournamentService finishMatchWithWinner error: $e');
+      return false;
+    }
+  }
+
+  /// Cancel or Expire Room:
+  /// Refunds prizePoolCoins to host, refunds entry fees to joiners, and marks status EXPIRED
+  Future<void> cancelOrExpireRoom(String roomId) async {
+    try {
+      final doc = await _roomsRef.doc(roomId).get();
+      if (!doc.exists) return;
+      final room = TournamentRoom.fromFirestore(doc);
+
+      await _walletService.refundRoom(
+        hostId: room.hostId,
+        prizePoolCoins: room.prizePoolCoins,
+        joiners: room.joinedPlayers,
+        entryFeeCoins: room.entryFeeCoins,
+        roomId: room.id,
+        roomTitle: room.title,
+      );
+
+      final index = _rooms.indexWhere((r) => r.id == roomId);
+      if (index != -1) {
+        _rooms[index] = _rooms[index].copyWith(
+          status: 'EXPIRED',
+          isLive: false,
+        );
+        await _saveToLocal();
+        notifyListeners();
+      }
+
+      await _roomsRef.doc(roomId).update({
+        'status': 'EXPIRED',
+        'isLive': false,
+      });
+    } catch (e) {
+      debugPrint('TournamentService cancelOrExpireRoom error: $e');
     }
   }
 
@@ -226,7 +387,6 @@ class TournamentService extends ChangeNotifier {
     required String password,
   }) async {
     try {
-      print('TournamentService: updateRoomCredentials() for room: $roomId');
       final index = _rooms.indexWhere((r) => r.id == roomId);
       if (index != -1) {
         _rooms[index] = _rooms[index].copyWith(
@@ -244,20 +404,20 @@ class TournamentService extends ChangeNotifier {
         'isRoomRevealed': true,
       });
     } catch (e) {
-      print('TournamentService: updateRoomCredentials error: $e');
+      debugPrint('TournamentService: updateRoomCredentials error: $e');
     }
   }
 
   Future<void> closeRoom(String roomId) async {
     try {
-      print('TournamentService: closeRoom() for room: $roomId');
       _rooms.removeWhere((r) => r.id == roomId);
       await _saveToLocal();
       notifyListeners();
 
       await _roomsRef.doc(roomId).update({'isLive': false});
     } catch (e) {
-      print('TournamentService: closeRoom error: $e');
+      debugPrint('TournamentService: closeRoom error: $e');
     }
   }
 }
+

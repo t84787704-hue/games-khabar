@@ -8,8 +8,15 @@ class TournamentRoom {
   final String roomType; // 'TDM 1v1', 'TDM 4v4', 'Classic Scrim', 'Custom Room'
   final String title;
   final String map; // 'Erangel', 'Warehouse', 'Miramar', 'Sanhok'
-  final String entryFee; // 'FREE' or '₹50' or '50 Coins'
-  final String prize; // 'Glory & Bragging' or '₹500 Cash' or 'Pass'
+  final String entryFee; // 'FREE' or '50 Coins'
+  final String prize; // '💰 500 Coins Prize'
+  final int prizePoolCoins;
+  final int entryFeeCoins;
+  final int escrowCoins;
+  final String status; // 'OPEN', 'IN_PROGRESS', 'COMPLETED', 'EXPIRED', 'CANCELED'
+  final String? winnerUid;
+  final String? winnerName;
+  final Map<String, dynamic> resultSubmissions; // uid -> {screenshotUrl, submittedAt, ocrText, isVictory}
   final String roomId; // Room ID (BGMI)
   final String password; // Password (BGMI)
   final DateTime startTime;
@@ -24,15 +31,22 @@ class TournamentRoom {
     required this.hostId,
     required this.hostName,
     this.hostAvatar = '',
-    this.roomType = 'Classic Scrim',
+    this.roomType = 'TDM 1v1',
     required this.title,
     this.map = 'Erangel',
     this.entryFee = 'FREE',
-    this.prize = '₹500 Cash Prize',
+    this.prize = '💰 500 Coins Prize',
+    this.prizePoolCoins = 500,
+    this.entryFeeCoins = 0,
+    this.escrowCoins = 500,
+    this.status = 'OPEN',
+    this.winnerUid,
+    this.winnerName,
+    this.resultSubmissions = const {},
     this.roomId = '',
     this.password = '',
     required this.startTime,
-    this.maxSlots = 100,
+    this.maxSlots = 2,
     this.joinedPlayers = const [],
     this.isLive = true,
     this.isRoomRevealed = false,
@@ -41,6 +55,8 @@ class TournamentRoom {
 
   int get availableSlots => maxSlots - joinedPlayers.length;
   bool get isFull => joinedPlayers.length >= maxSlots;
+  bool get isCompleted => status == 'COMPLETED';
+  bool get isExpired => status == 'EXPIRED' || status == 'CANCELED';
 
   factory TournamentRoom.fromFirestore(DocumentSnapshot doc) {
     final data = doc.data() as Map<String, dynamic>? ?? {};
@@ -61,20 +77,33 @@ class TournamentRoom {
       created = DateTime.tryParse(rawCreated);
     }
 
+    final prizeCoins = (data['prizePoolCoins'] as num?)?.toInt() ?? 500;
+    final feeCoins = (data['entryFeeCoins'] as num?)?.toInt() ?? 0;
+    final rawPrize = data['prize']?.toString() ?? '💰 $prizeCoins Coins Prize';
+    // Clean up any old rupee signs
+    final cleanPrize = rawPrize.replaceAll('₹', '💰 ').replaceAll('Cash', 'Coins');
+
     return TournamentRoom(
       id: data['id'] ?? doc.id,
       hostId: data['hostId'] ?? '',
       hostName: data['hostName'] ?? 'Host',
       hostAvatar: data['hostAvatar'] ?? '',
-      roomType: data['roomType'] ?? 'Classic Scrim',
+      roomType: data['roomType'] ?? 'TDM 1v1',
       title: data['title'] ?? 'BGMI Custom Tournament',
       map: data['map'] ?? 'Erangel',
-      entryFee: data['entryFee'] ?? 'FREE',
-      prize: data['prize'] ?? '₹500 Cash Prize',
+      entryFee: data['entryFee']?.toString().replaceAll('₹', '') ?? (feeCoins > 0 ? '$feeCoins Coins' : 'FREE'),
+      prize: cleanPrize,
+      prizePoolCoins: prizeCoins,
+      entryFeeCoins: feeCoins,
+      escrowCoins: (data['escrowCoins'] as num?)?.toInt() ?? prizeCoins,
+      status: data['status'] ?? 'OPEN',
+      winnerUid: data['winnerUid'],
+      winnerName: data['winnerName'],
+      resultSubmissions: Map<String, dynamic>.from(data['resultSubmissions'] ?? {}),
       roomId: data['roomId'] ?? '',
       password: data['password'] ?? '',
       startTime: start,
-      maxSlots: (data['maxSlots'] as num?)?.toInt() ?? 100,
+      maxSlots: (data['maxSlots'] as num?)?.toInt() ?? 2,
       joinedPlayers: List<String>.from(data['joinedPlayers'] ?? []),
       isLive: data['isLive'] ?? true,
       isRoomRevealed: data['isRoomRevealed'] == true,
@@ -93,6 +122,13 @@ class TournamentRoom {
       'map': map,
       'entryFee': entryFee.trim(),
       'prize': prize.trim(),
+      'prizePoolCoins': prizePoolCoins,
+      'entryFeeCoins': entryFeeCoins,
+      'escrowCoins': escrowCoins,
+      'status': status,
+      'winnerUid': winnerUid,
+      'winnerName': winnerName,
+      'resultSubmissions': resultSubmissions,
       'roomId': roomId.trim(),
       'password': password.trim(),
       'startTime': Timestamp.fromDate(startTime),
@@ -115,6 +151,13 @@ class TournamentRoom {
       'map': map,
       'entryFee': entryFee.trim(),
       'prize': prize.trim(),
+      'prizePoolCoins': prizePoolCoins,
+      'entryFeeCoins': entryFeeCoins,
+      'escrowCoins': escrowCoins,
+      'status': status,
+      'winnerUid': winnerUid,
+      'winnerName': winnerName,
+      'resultSubmissions': resultSubmissions,
       'roomId': roomId.trim(),
       'password': password.trim(),
       'startTime': startTime.toIso8601String(),
@@ -139,20 +182,32 @@ class TournamentRoom {
       created = DateTime.tryParse(rawCreated.toString());
     }
 
+    final prizeCoins = (json['prizePoolCoins'] as num?)?.toInt() ?? 500;
+    final feeCoins = (json['entryFeeCoins'] as num?)?.toInt() ?? 0;
+    final rawPrize = json['prize']?.toString() ?? '💰 $prizeCoins Coins Prize';
+    final cleanPrize = rawPrize.replaceAll('₹', '💰 ').replaceAll('Cash', 'Coins');
+
     return TournamentRoom(
       id: json['id'] ?? '',
       hostId: json['hostId'] ?? '',
       hostName: json['hostName'] ?? 'Host',
       hostAvatar: json['hostAvatar'] ?? '',
-      roomType: json['roomType'] ?? 'Classic Scrim',
+      roomType: json['roomType'] ?? 'TDM 1v1',
       title: json['title'] ?? 'BGMI Custom Tournament',
       map: json['map'] ?? 'Erangel',
-      entryFee: json['entryFee'] ?? 'FREE',
-      prize: json['prize'] ?? '₹500 Cash Prize',
+      entryFee: json['entryFee']?.toString().replaceAll('₹', '') ?? (feeCoins > 0 ? '$feeCoins Coins' : 'FREE'),
+      prize: cleanPrize,
+      prizePoolCoins: prizeCoins,
+      entryFeeCoins: feeCoins,
+      escrowCoins: (json['escrowCoins'] as num?)?.toInt() ?? prizeCoins,
+      status: json['status'] ?? 'OPEN',
+      winnerUid: json['winnerUid'],
+      winnerName: json['winnerName'],
+      resultSubmissions: Map<String, dynamic>.from(json['resultSubmissions'] ?? {}),
       roomId: json['roomId'] ?? '',
       password: json['password'] ?? '',
       startTime: start,
-      maxSlots: (json['maxSlots'] as num?)?.toInt() ?? 100,
+      maxSlots: (json['maxSlots'] as num?)?.toInt() ?? 2,
       joinedPlayers: List<String>.from(json['joinedPlayers'] ?? []),
       isLive: json['isLive'] ?? true,
       isRoomRevealed: json['isRoomRevealed'] == true,
@@ -170,6 +225,13 @@ class TournamentRoom {
     String? map,
     String? entryFee,
     String? prize,
+    int? prizePoolCoins,
+    int? entryFeeCoins,
+    int? escrowCoins,
+    String? status,
+    String? winnerUid,
+    String? winnerName,
+    Map<String, dynamic>? resultSubmissions,
     String? roomId,
     String? password,
     DateTime? startTime,
@@ -189,6 +251,13 @@ class TournamentRoom {
       map: map ?? this.map,
       entryFee: entryFee ?? this.entryFee,
       prize: prize ?? this.prize,
+      prizePoolCoins: prizePoolCoins ?? this.prizePoolCoins,
+      entryFeeCoins: entryFeeCoins ?? this.entryFeeCoins,
+      escrowCoins: escrowCoins ?? this.escrowCoins,
+      status: status ?? this.status,
+      winnerUid: winnerUid ?? this.winnerUid,
+      winnerName: winnerName ?? this.winnerName,
+      resultSubmissions: resultSubmissions ?? this.resultSubmissions,
       roomId: roomId ?? this.roomId,
       password: password ?? this.password,
       startTime: startTime ?? this.startTime,
