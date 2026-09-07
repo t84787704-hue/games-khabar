@@ -78,7 +78,7 @@ class SquadPost {
       joinRequests: joinReqList,
       members: membersList,
       membersCount: (data['membersCount'] as num?)?.toInt() ?? (membersList.isNotEmpty ? membersList.length : 1),
-      requestedCount: (data['requestedCount'] as num?)?.toInt() ?? joinReqList.length,
+      requestedCount: ((data['requestedCount'] as num?)?.toInt() ?? joinReqList.length).clamp(0, 999),
       isActive: data['isActive'] ?? true,
       createdAt: created,
     );

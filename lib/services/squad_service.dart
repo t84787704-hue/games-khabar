@@ -108,24 +108,24 @@ class SquadService {
         'createdAt': FieldValue.serverTimestamp(),
       };
 
-      // 1. Write to 'lfg_posts' -> docId -> 'requests' subcollection
+      // 1. Write to 'lfg_posts' & 'squads' with batch and increment requestedCount
       try {
-        await _lfgPostsRef.doc(postId).collection('requests').doc(applicantUid).set(reqData);
-        await _lfgPostsRef.doc(postId).set({
+        final batch = _firestore.batch();
+        batch.set(_lfgPostsRef.doc(postId).collection('requests').doc(applicantUid), reqData, SetOptions(merge: true));
+        batch.set(_lfgPostsRef.doc(postId), {
           'joinRequests': FieldValue.arrayUnion([applicantUid]),
+          'requestedCount': FieldValue.increment(1),
         }, SetOptions(merge: true));
-      } catch (e) {
-        debugPrint('[SquadService] Error writing to lfg_posts requests: $e');
-      }
 
-      // 2. Also write to 'squads' -> docId -> 'requests' subcollection & arrayUnion
-      try {
-        await _squadRef.doc(postId).collection('requests').doc(applicantUid).set(reqData);
-        await _squadRef.doc(postId).update({
+        batch.set(_squadRef.doc(postId).collection('requests').doc(applicantUid), reqData, SetOptions(merge: true));
+        batch.set(_squadRef.doc(postId), {
           'joinRequests': FieldValue.arrayUnion([applicantUid]),
-        });
+          'requestedCount': FieldValue.increment(1),
+        }, SetOptions(merge: true));
+
+        await batch.commit();
       } catch (e) {
-        debugPrint('[SquadService] Error writing to squads requests: $e');
+        debugPrint('[SquadService] Error writing to requests batch: $e');
       }
 
       // 3. Mirror to legacy
@@ -293,11 +293,17 @@ class SquadService {
           throw "Already in squad";
         }
 
+        final int currentRequested = (targetSnap?.data() as Map<String, dynamic>?)?['requestedCount'] is num
+            ? ((targetSnap!.data() as Map<String, dynamic>)['requestedCount'] as num).toInt()
+            : 0;
+        final dynamic safeRequestedDecrement = currentRequested <= 1 ? 0 : FieldValue.increment(-1);
+
         final updateData = {
           'members': FieldValue.arrayUnion([request.userId]),
-          'joinRequests': FieldValue.arrayRemove([request.userId]),
+          'joinRequests': FieldValue.arrayRemove([request.userId, request.id]),
           'membersCount': FieldValue.increment(1),
-          'requestedCount': FieldValue.increment(-1),
+          'requestedCount': safeRequestedDecrement,
+          'isActive': true,
         };
 
         if (lfgSnap.exists) {

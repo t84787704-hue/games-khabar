@@ -3,6 +3,7 @@ import 'package:flutter/services.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:intl/intl.dart';
+import 'dart:math' as math;
 import '../constants/gamer_theme.dart';
 import '../models/squad_post_model.dart';
 import '../models/squad_request_model.dart';
@@ -381,7 +382,12 @@ class _LFGCardState extends State<LFGCard> {
                         .toList(),
                     builder: (context, reqSnap) {
                       final requests = reqSnap.data ?? [];
-                      final count = requests.isNotEmpty ? requests.length : squad.joinRequests.length;
+                      final count = math.max(
+                        0,
+                        requests.isNotEmpty
+                            ? requests.length
+                            : (squad.requestedCount > 0 ? squad.requestedCount : squad.joinRequests.length),
+                      );
                       final hasRequests = count > 0;
 
                       return Material(
@@ -464,7 +470,7 @@ class _LFGCardState extends State<LFGCard> {
                       const Icon(Icons.people_outline_rounded, size: 16, color: GamerTheme.textMuted),
                       const SizedBox(width: 6),
                       Text(
-                        '${squad.joinRequests.length} requested',
+                        '${math.max(0, squad.requestedCount > 0 ? squad.requestedCount : squad.joinRequests.length)} requested',
                         style: const TextStyle(color: GamerTheme.textMuted, fontSize: 12),
                       ),
                     ],
@@ -504,7 +510,7 @@ class _LFGCardState extends State<LFGCard> {
                       const Icon(Icons.people_outline_rounded, size: 16, color: GamerTheme.textMuted),
                       const SizedBox(width: 6),
                       Text(
-                        '${squad.joinRequests.length} requested',
+                        '${math.max(0, squad.requestedCount > 0 ? squad.requestedCount : squad.joinRequests.length)} requested',
                         style: const TextStyle(color: GamerTheme.textMuted, fontSize: 12),
                       ),
                     ],
