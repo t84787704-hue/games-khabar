@@ -5,6 +5,7 @@ import 'dart:math';
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:share_plus/share_plus.dart';
+import 'package:video_player/video_player.dart';
 import '../constants/gamer_theme.dart';
 import '../models/clip_model.dart';
 import '../services/clip_service.dart';
@@ -24,6 +25,7 @@ class _ClipsScreenState extends State<ClipsScreen> with SingleTickerProviderStat
   final ClipService _clipService = ClipService();
   final GamerAuthService _authService = GamerAuthService();
   late AnimationController _spinController;
+  int _currentPage = 0;
 
   // Fallback default viral BGMI clips so feed is immediately addictive
   final List<GamerClip> _defaultClips = [
@@ -732,12 +734,48 @@ class _ClipsScreenState extends State<ClipsScreen> with SingleTickerProviderStat
                   ? snapshot.data!
                   : _defaultClips;
 
+              final currentGamer = _authService.currentGamer;
+              final currentUid = currentGamer?.uid ?? '';
+
               return PageView.builder(
                 controller: _pageController,
                 scrollDirection: Axis.vertical,
                 itemCount: clips.length,
+                onPageChanged: (index) {
+                  setState(() {
+                    _currentPage = index;
+                  });
+                },
                 itemBuilder: (context, index) {
-                  return _buildClipItem(clips[index]);
+                  final clip = clips[index];
+                  return ClipCard(
+                    key: ValueKey(clip.id),
+                    clip: clip,
+                    isActive: index == _currentPage,
+                    isLiked: clip.likedBy.contains(currentUid),
+                    spinController: _spinController,
+                    onLike: () async {
+                      if (currentGamer == null) return;
+                      await _clipService.toggleLikeClip(
+                        clipId: clip.id,
+                        userId: currentGamer.uid,
+                        authorId: clip.userId,
+                      );
+                    },
+                    onComment: () => _openCommentsSheet(clip),
+                    onShare: () {
+                      Share.share(
+                        '🔥 Check out this sick gaming clip by ${clip.displayName} on Gamers Khabar!\n"${clip.title}"',
+                      );
+                    },
+                    onProfileTap: () {
+                      if (clip.userId.isNotEmpty) {
+                        Navigator.of(context).push(
+                          MaterialPageRoute(builder: (_) => GamerProfileScreen(userId: clip.userId)),
+                        );
+                      }
+                    },
+                  );
                 },
               );
             },
@@ -775,21 +813,151 @@ class _ClipsScreenState extends State<ClipsScreen> with SingleTickerProviderStat
       ),
     );
   }
+}
 
-  Widget _buildClipItem(GamerClip clip) {
-    final currentGamer = _authService.currentGamer;
-    final currentUid = currentGamer?.uid ?? '';
-    final isLiked = clip.likedBy.contains(currentUid);
+/// TikTok / Reels style video player card for gaming clips.
+/// - Fullscreen video playback using video_player
+/// - CircularProgressIndicator while video is loading
+/// - Auto-play when visible, pause when scrolled away
+/// - Tap to pause / resume with animated indicator
+/// - Social interaction overlays (Avatar, Likes, Comments, Share, Audio tag)
+class ClipCard extends StatefulWidget {
+  final GamerClip clip;
+  final bool isActive;
+  final bool isLiked;
+  final VoidCallback onLike;
+  final VoidCallback onComment;
+  final VoidCallback onShare;
+  final VoidCallback onProfileTap;
+  final AnimationController spinController;
 
-    final isVideo = clip.mediaUrl.toLowerCase().contains('.mp4') ||
-        clip.mediaUrl.toLowerCase().contains('.mov') ||
-        clip.mediaUrl.toLowerCase().contains('.webm') ||
-        clip.mediaUrl.toLowerCase().contains('/video/upload/');
+  const ClipCard({
+    super.key,
+    required this.clip,
+    required this.isActive,
+    required this.isLiked,
+    required this.onLike,
+    required this.onComment,
+    required this.onShare,
+    required this.onProfileTap,
+    required this.spinController,
+  });
+
+  @override
+  State<ClipCard> createState() => _ClipCardState();
+}
+
+class _ClipCardState extends State<ClipCard> {
+  VideoPlayerController? _controller;
+  bool _isInitialized = false;
+  bool _hasError = false;
+  bool _userPaused = false;
+
+  bool get _isVideo {
+    final url = widget.clip.mediaUrl.toLowerCase();
+    return url.contains('.mp4') ||
+        url.contains('.mov') ||
+        url.contains('.webm') ||
+        url.contains('.mkv') ||
+        url.contains('/video/upload/') ||
+        url.contains('video');
+  }
+
+  @override
+  void initState() {
+    super.initState();
+    if (_isVideo) {
+      _initVideo();
+    }
+  }
+
+  Future<void> _initVideo() async {
+    try {
+      final videoUri = Uri.parse(widget.clip.mediaUrl);
+      print('🎬 [CLIP_CARD] Initializing video: $videoUri');
+      final controller = VideoPlayerController.networkUrl(videoUri);
+      _controller = controller;
+
+      await controller.initialize();
+      await controller.setLooping(true);
+      await controller.setVolume(1.0);
+
+      if (!mounted) {
+        controller.dispose();
+        return;
+      }
+
+      setState(() {
+        _isInitialized = true;
+      });
+
+      // Auto-play if visible on screen
+      if (widget.isActive && !_userPaused) {
+        controller.play();
+      }
+    } catch (e) {
+      print('❌ [CLIP_CARD] Video initialization error: $e');
+      if (mounted) {
+        setState(() {
+          _hasError = true;
+        });
+      }
+    }
+  }
+
+  @override
+  void didUpdateWidget(ClipCard oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.clip.mediaUrl != widget.clip.mediaUrl) {
+      _controller?.dispose();
+      _controller = null;
+      _isInitialized = false;
+      _hasError = false;
+      _userPaused = false;
+      if (_isVideo) {
+        _initVideo();
+      }
+    } else if (oldWidget.isActive != widget.isActive) {
+      // Auto-play when scrolled to, pause when scrolled away
+      if (widget.isActive) {
+        if (!_userPaused && _controller != null && _isInitialized) {
+          _controller!.play();
+        }
+      } else {
+        if (_controller != null && _isInitialized) {
+          _controller!.pause();
+        }
+      }
+    }
+  }
+
+  @override
+  void dispose() {
+    _controller?.dispose();
+    super.dispose();
+  }
+
+  void _togglePlayPause() {
+    if (_controller == null || !_isInitialized) return;
+    setState(() {
+      if (_controller!.value.isPlaying) {
+        _controller!.pause();
+        _userPaused = true;
+      } else {
+        _controller!.play();
+        _userPaused = false;
+      }
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final clip = widget.clip;
 
     // Derive Cloudinary video thumbnail if image URL is empty
     String displayImageUrl = clip.thumbnail;
     if (displayImageUrl.isEmpty) {
-      if (clip.mediaUrl.contains('cloudinary.com') && isVideo) {
+      if (clip.mediaUrl.contains('cloudinary.com') && _isVideo) {
         displayImageUrl = clip.mediaUrl
             .replaceAll('/video/upload/', '/video/upload/so_0,w_720,c_fill/')
             .replaceAll(RegExp(r'\.(mp4|mov|webm|mkv)(\?.*)?$', caseSensitive: false), '.jpg');
@@ -801,104 +969,102 @@ class _ClipsScreenState extends State<ClipsScreen> with SingleTickerProviderStat
     return Stack(
       fit: StackFit.expand,
       children: [
-        // Simulated Video / Image Canvas
-        Image.network(
-          displayImageUrl,
-          fit: BoxFit.cover,
-          errorBuilder: (_, __, ___) {
-            final isVideo = clip.mediaUrl.toLowerCase().contains('.mp4') ||
-                clip.mediaUrl.toLowerCase().contains('.mov') ||
-                clip.mediaUrl.toLowerCase().contains('.webm') ||
-                clip.mediaUrl.toLowerCase().contains('video');
-            return Container(
-              decoration: const BoxDecoration(
-                gradient: LinearGradient(
-                  begin: Alignment.topLeft,
-                  end: Alignment.bottomRight,
-                  colors: [Color(0xFF1E1430), Color(0xFF0F0818), Color(0xFF160D25)],
-                ),
-              ),
-              child: Center(
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Container(
-                      padding: const EdgeInsets.all(20),
-                      decoration: BoxDecoration(
-                        shape: BoxShape.circle,
-                        color: GamerTheme.accentOrange.withOpacity(0.2),
-                        border: Border.all(color: GamerTheme.accentOrange.withOpacity(0.6), width: 2),
-                        boxShadow: [
-                          BoxShadow(
-                            color: GamerTheme.accentOrange.withOpacity(0.3),
-                            blurRadius: 20,
-                            spreadRadius: 2,
-                          ),
-                        ],
-                      ),
-                      child: Icon(
-                        isVideo ? Icons.play_arrow_rounded : Icons.sports_esports_rounded,
-                        size: 56,
-                        color: GamerTheme.accentOrange,
+        // 1. Fullscreen Video / Thumbnail Surface
+        GestureDetector(
+          onTap: _togglePlayPause,
+          child: Stack(
+            fit: StackFit.expand,
+            children: [
+              if (_isVideo && _isInitialized && _controller != null)
+                SizedBox.expand(
+                  child: FittedBox(
+                    fit: BoxFit.cover,
+                    child: SizedBox(
+                      width: _controller!.value.size.width,
+                      height: _controller!.value.size.height,
+                      child: VideoPlayer(_controller!),
+                    ),
+                  ),
+                )
+              else
+                // Thumbnail / placeholder image while loading or for non-video items
+                Image.network(
+                  displayImageUrl,
+                  fit: BoxFit.cover,
+                  errorBuilder: (_, __, ___) => Container(
+                    decoration: const BoxDecoration(
+                      gradient: LinearGradient(
+                        begin: Alignment.topLeft,
+                        end: Alignment.bottomRight,
+                        colors: [Color(0xFF1E1430), Color(0xFF0F0818), Color(0xFF160D25)],
                       ),
                     ),
-                    const SizedBox(height: 16),
-                    Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
-                      decoration: BoxDecoration(
-                        color: Colors.black54,
-                        borderRadius: BorderRadius.circular(16),
-                        border: Border.all(color: GamerTheme.borderDark),
-                      ),
-                      child: Text(
-                        isVideo ? '▶ ${clip.gameTag} SCREEN RECORDING' : '🎮 ${clip.gameTag} CLUTCH',
-                        style: const TextStyle(
-                          color: Colors.white,
-                          fontSize: 12,
-                          fontWeight: FontWeight.w900,
-                          letterSpacing: 1,
-                        ),
-                      ),
+                    child: const Center(
+                      child: Icon(Icons.sports_esports_rounded, size: 64, color: GamerTheme.accentOrange),
                     ),
-                  ],
+                  ),
                 ),
-              ),
-            );
-          },
+
+              // CircularProgressIndicator while video is initializing
+              if (_isVideo && !_isInitialized && !_hasError)
+                Container(
+                  color: Colors.black26,
+                  child: const Center(
+                    child: CircularProgressIndicator(
+                      color: GamerTheme.accentOrange,
+                      strokeWidth: 3,
+                    ),
+                  ),
+                ),
+
+              // Play Icon overlay when paused by user tap
+              if (_isInitialized && _controller != null && !_controller!.value.isPlaying)
+                Center(
+                  child: Container(
+                    padding: const EdgeInsets.all(16),
+                    decoration: const BoxDecoration(
+                      color: Colors.black54,
+                      shape: BoxShape.circle,
+                    ),
+                    child: const Icon(
+                      Icons.play_arrow_rounded,
+                      size: 64,
+                      color: Colors.white,
+                    ),
+                  ),
+                ),
+            ],
+          ),
         ),
 
-        // Gradient Dark Overlays (Top & Bottom)
-        Container(
-          decoration: const BoxDecoration(
-            gradient: LinearGradient(
-              begin: Alignment.topCenter,
-              end: Alignment.bottomCenter,
-              colors: [
-                Colors.black54,
-                Colors.transparent,
-                Colors.transparent,
-                Colors.black87,
-              ],
-              stops: [0.0, 0.25, 0.6, 1.0],
+        // 2. Gradient overlays (Top and Bottom for contrast)
+        IgnorePointer(
+          child: Container(
+            decoration: const BoxDecoration(
+              gradient: LinearGradient(
+                begin: Alignment.topCenter,
+                end: Alignment.bottomCenter,
+                colors: [
+                  Colors.black54,
+                  Colors.transparent,
+                  Colors.transparent,
+                  Colors.black87,
+                ],
+                stops: [0.0, 0.22, 0.65, 1.0],
+              ),
             ),
           ),
         ),
 
-        // Right Action Column (Instagram Reels Style)
+        // 3. Right Action Column (Avatar, Likes, Comments, Share, Audio Disc)
         Positioned(
           right: 12,
           bottom: 40,
           child: Column(
             children: [
-              // Author Avatar with profile click
+              // Author Avatar with profile navigation
               GestureDetector(
-                onTap: () {
-                  if (clip.userId.isNotEmpty) {
-                    Navigator.of(context).push(
-                      MaterialPageRoute(builder: (_) => GamerProfileScreen(userId: clip.userId)),
-                    );
-                  }
-                },
+                onTap: widget.onProfileTap,
                 child: Container(
                   padding: const EdgeInsets.all(2),
                   decoration: BoxDecoration(
@@ -917,17 +1083,10 @@ class _ClipsScreenState extends State<ClipsScreen> with SingleTickerProviderStat
 
               // Like Button
               _buildActionButton(
-                icon: isLiked ? Icons.favorite_rounded : Icons.favorite_border_rounded,
-                color: isLiked ? Colors.redAccent : Colors.white,
+                icon: widget.isLiked ? Icons.favorite_rounded : Icons.favorite_border_rounded,
+                color: widget.isLiked ? Colors.redAccent : Colors.white,
                 label: '${clip.likesCount}',
-                onTap: () async {
-                  if (currentGamer == null) return;
-                  await _clipService.toggleLikeClip(
-                    clipId: clip.id,
-                    userId: currentGamer.uid,
-                    authorId: clip.userId,
-                  );
-                },
+                onTap: widget.onLike,
               ),
 
               const SizedBox(height: 16),
@@ -937,7 +1096,7 @@ class _ClipsScreenState extends State<ClipsScreen> with SingleTickerProviderStat
                 icon: Icons.chat_bubble_rounded,
                 color: Colors.white,
                 label: '${clip.commentsCount}',
-                onTap: () => _openCommentsSheet(clip),
+                onTap: widget.onComment,
               ),
 
               const SizedBox(height: 16),
@@ -947,19 +1106,17 @@ class _ClipsScreenState extends State<ClipsScreen> with SingleTickerProviderStat
                 icon: Icons.share_rounded,
                 color: Colors.white,
                 label: 'Share',
-                onTap: () {
-                  Share.share('🔥 Check out this sick gaming clip by ${clip.displayName} on Gamers Khabar!\n"${clip.title}"');
-                },
+                onTap: widget.onShare,
               ),
 
               const SizedBox(height: 18),
 
-              // Spinning Vinyl / Sound Icon
+              // Spinning Vinyl Disc
               AnimatedBuilder(
-                animation: _spinController,
+                animation: widget.spinController,
                 builder: (context, child) {
                   return Transform.rotate(
-                    angle: _spinController.value * 2 * pi,
+                    angle: widget.spinController.value * 2 * pi,
                     child: Container(
                       padding: const EdgeInsets.all(8),
                       decoration: const BoxDecoration(
@@ -976,7 +1133,7 @@ class _ClipsScreenState extends State<ClipsScreen> with SingleTickerProviderStat
           ),
         ),
 
-        // Bottom Left Info Overlay: Username, Caption, Music tag
+        // 4. Bottom Left Info Overlay: Username, Caption, Music title
         Positioned(
           left: 16,
           bottom: 30,
@@ -984,16 +1141,11 @@ class _ClipsScreenState extends State<ClipsScreen> with SingleTickerProviderStat
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              // Author tag
+              // Author Tag
               GestureDetector(
-                onTap: () {
-                  if (clip.userId.isNotEmpty) {
-                    Navigator.of(context).push(
-                      MaterialPageRoute(builder: (_) => GamerProfileScreen(userId: clip.userId)),
-                    );
-                  }
-                },
+                onTap: widget.onProfileTap,
                 child: Row(
+                  mainAxisSize: MainAxisSize.min,
                   children: [
                     Text(
                       '@${clip.username}',
