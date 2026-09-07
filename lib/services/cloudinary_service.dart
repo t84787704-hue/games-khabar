@@ -9,7 +9,7 @@ class CloudinaryService {
   // Cloudinary Configuration
   // Put your Cloudinary cloud_name and unsigned upload preset here:
   static String cloudName = 'fka9mgwu'; 
-  static String uploadPreset = 'gamer_clips_preset'; // <-- Paste your Cloudinary unsigned preset name here
+  static String uploadPreset = 'clips_preset'; // Unsigned upload preset from Cloudinary console
   static String folder = 'clips';
 
   // 25GB Free Tier Protection: Max 50MB per clip
