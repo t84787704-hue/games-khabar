@@ -13,7 +13,9 @@ import '../services/squad_service.dart';
 import '../widgets/gamer_avatar.dart';
 import '../widgets/rank_badge_widget.dart';
 import '../widgets/requests_bottom_sheet.dart';
+import '../widgets/squad_members_bottom_sheet.dart';
 import '../screens/gamer_profile_screen.dart';
+import '../screens/chat_screen.dart';
 import '../services/lfg_service.dart';
 
 typedef SquadCard = LFGCard;
@@ -402,57 +404,130 @@ class _LFGCardState extends State<LFGCard> {
               ),
             ),
 
-          // Squad Members Slots (4 Slots: Leader + Accepted Members)
-          Container(
-            margin: const EdgeInsets.fromLTRB(14, 8, 14, 0),
-            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-            decoration: BoxDecoration(
-              color: GamerTheme.bgDark.withOpacity(0.4),
-              borderRadius: BorderRadius.circular(10),
-              border: Border.all(color: GamerTheme.borderLight.withOpacity(0.15)),
-            ),
-            child: Row(
-              children: [
-                const Icon(Icons.shield_outlined, color: GamerTheme.accentCyan, size: 15),
-                const SizedBox(width: 6),
-                Text(
-                  'Squad Members (${squad.members.isNotEmpty ? squad.members.length : squad.membersCount}/4):',
-                  style: const TextStyle(
-                    color: GamerTheme.textMuted,
-                    fontSize: 11.5,
-                    fontWeight: FontWeight.w600,
+          // Squad Members Slots (4 Slots: Leader + Accepted Members) - Tappable to open Member List Bottom Sheet
+          InkWell(
+            onTap: () => SquadMembersBottomSheet.show(context, squad),
+            borderRadius: BorderRadius.circular(10),
+            child: Container(
+              margin: const EdgeInsets.fromLTRB(14, 8, 14, 0),
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+              decoration: BoxDecoration(
+                color: GamerTheme.bgDark.withOpacity(0.4),
+                borderRadius: BorderRadius.circular(10),
+                border: Border.all(color: GamerTheme.borderLight.withOpacity(0.15)),
+              ),
+              child: Row(
+                children: [
+                  const Icon(Icons.shield_outlined, color: GamerTheme.accentCyan, size: 15),
+                  const SizedBox(width: 6),
+                  Text(
+                    'Squad Members (${squad.members.isNotEmpty ? squad.members.length : squad.membersCount}/4):',
+                    style: const TextStyle(
+                      color: GamerTheme.textMuted,
+                      fontSize: 11.5,
+                      fontWeight: FontWeight.w600,
+                    ),
                   ),
-                ),
-                const Spacer(),
-                // 4 squad slot dots / avatars
-                Row(
-                  children: List.generate(4, (index) {
-                    final isFilled = index < (squad.members.isNotEmpty ? squad.members.length : squad.membersCount);
-                    return Container(
-                      margin: const EdgeInsets.only(left: 6),
-                      width: 20,
-                      height: 20,
-                      decoration: BoxDecoration(
-                        color: isFilled ? GamerTheme.accentCyan.withOpacity(0.25) : GamerTheme.cardElevated,
-                        shape: BoxShape.circle,
-                        border: Border.all(
-                          color: isFilled ? GamerTheme.accentCyan : GamerTheme.borderLight.withOpacity(0.4),
-                          width: 1.2,
+                  const Spacer(),
+                  // 4 squad slot dots / avatars
+                  Row(
+                    children: List.generate(4, (index) {
+                      final isFilled = index < (squad.members.isNotEmpty ? squad.members.length : squad.membersCount);
+                      return Container(
+                        margin: const EdgeInsets.only(left: 6),
+                        width: 20,
+                        height: 20,
+                        decoration: BoxDecoration(
+                          color: isFilled ? GamerTheme.accentCyan.withOpacity(0.25) : GamerTheme.cardElevated,
+                          shape: BoxShape.circle,
+                          border: Border.all(
+                            color: isFilled ? GamerTheme.accentCyan : GamerTheme.borderLight.withOpacity(0.4),
+                            width: 1.2,
+                          ),
                         ),
-                      ),
-                      child: Center(
-                        child: Icon(
-                          isFilled ? (index == 0 ? Icons.star_rounded : Icons.person_rounded) : Icons.add_rounded,
-                          size: 12,
-                          color: isFilled ? GamerTheme.accentCyan : GamerTheme.textMuted.withOpacity(0.5),
+                        child: Center(
+                          child: Icon(
+                            isFilled ? (index == 0 ? Icons.star_rounded : Icons.person_rounded) : Icons.add_rounded,
+                            size: 12,
+                            color: isFilled ? GamerTheme.accentCyan : GamerTheme.textMuted.withOpacity(0.5),
+                          ),
                         ),
-                      ),
-                    );
-                  }),
-                ),
-              ],
+                      );
+                    }),
+                  ),
+                  const SizedBox(width: 6),
+                  const Icon(Icons.arrow_forward_ios_rounded, size: 10, color: GamerTheme.accentCyan),
+                ],
+              ),
             ),
           ),
+
+          // Requester Side Info: When user is in members, show Leader UID + COPY button
+          if (isMember) ...[
+            Container(
+              margin: const EdgeInsets.fromLTRB(14, 8, 14, 0),
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
+              decoration: BoxDecoration(
+                color: GamerTheme.cardElevated,
+                borderRadius: BorderRadius.circular(8),
+                border: Border.all(color: GamerTheme.neonGreen.withOpacity(0.4)),
+              ),
+              child: Row(
+                children: [
+                  const Icon(Icons.military_tech_rounded, size: 16, color: GamerTheme.accentOrange),
+                  const SizedBox(width: 6),
+                  Text(
+                    'Leader UID: ${squad.inGameUid.isNotEmpty ? squad.inGameUid : (squad.ownerId.isNotEmpty ? squad.ownerId : squad.userId)}',
+                    style: const TextStyle(
+                      color: GamerTheme.textWhite,
+                      fontSize: 11.5,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                  const Spacer(),
+                  InkWell(
+                    onTap: () {
+                      final leaderUidToCopy = squad.inGameUid.isNotEmpty
+                          ? squad.inGameUid
+                          : (squad.ownerId.isNotEmpty ? squad.ownerId : squad.userId);
+                      Clipboard.setData(ClipboardData(text: leaderUidToCopy));
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        const SnackBar(
+                          content: Text('Leader UID copied to clipboard!'),
+                          backgroundColor: GamerTheme.neonGreen,
+                          duration: Duration(seconds: 2),
+                        ),
+                      );
+                    },
+                    borderRadius: BorderRadius.circular(4),
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                      decoration: BoxDecoration(
+                        color: GamerTheme.neonGreen.withOpacity(0.15),
+                        borderRadius: BorderRadius.circular(4),
+                        border: Border.all(color: GamerTheme.neonGreen, width: 0.8),
+                      ),
+                      child: const Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Icon(Icons.copy_rounded, size: 11, color: GamerTheme.neonGreen),
+                          SizedBox(width: 3),
+                          Text(
+                            'COPY',
+                            style: TextStyle(
+                              color: GamerTheme.neonGreen,
+                              fontSize: 10,
+                              fontWeight: FontWeight.w900,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
 
           const SizedBox(height: 12),
 
@@ -561,6 +636,30 @@ class _LFGCardState extends State<LFGCard> {
                   ),
                   const SizedBox(width: 6),
 
+                  // Owner Action: Squad Chat (if squad has members)
+                  if (squad.members.length > 1 || squad.membersCount > 1) ...[
+                    OutlinedButton.icon(
+                      style: OutlinedButton.styleFrom(
+                        foregroundColor: GamerTheme.accentCyan,
+                        side: const BorderSide(color: GamerTheme.accentCyan, width: 1),
+                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                        minimumSize: const Size(0, 32),
+                        tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                      ),
+                      icon: const Icon(Icons.forum_rounded, size: 14),
+                      label: const Text('Chat', style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold)),
+                      onPressed: () {
+                        Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                            builder: (_) => ChatScreen(postId: squad.id, squad: squad),
+                          ),
+                        );
+                      },
+                    ),
+                    const SizedBox(width: 6),
+                  ],
+
                   // Owner Action: Close LFG
                   TextButton.icon(
                     style: TextButton.styleFrom(
@@ -575,22 +674,8 @@ class _LFGCardState extends State<LFGCard> {
                   ),
                 ] else if (isMember) ...[
                   // Member View: User is already accepted in this squad
-                  Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      const Icon(Icons.people_outline_rounded, size: 16, color: GamerTheme.textMuted),
-                      const SizedBox(width: 6),
-                      Text(
-                        '${math.max(0, squad.membersCount)} members',
-                        style: const TextStyle(color: GamerTheme.textMuted, fontSize: 12),
-                      ),
-                    ],
-                  ),
-
-                  const Spacer(),
-
                   Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
                     decoration: BoxDecoration(
                       color: GamerTheme.cardElevated,
                       borderRadius: BorderRadius.circular(8),
@@ -599,14 +684,83 @@ class _LFGCardState extends State<LFGCard> {
                     child: const Row(
                       mainAxisSize: MainAxisSize.min,
                       children: [
-                        Icon(Icons.check_circle_rounded, size: 16, color: GamerTheme.neonGreen),
-                        SizedBox(width: 6),
+                        Icon(Icons.check_circle_rounded, size: 15, color: GamerTheme.neonGreen),
+                        SizedBox(width: 5),
                         Text(
                           'In Squad',
                           style: TextStyle(
                             fontWeight: FontWeight.w900,
-                            fontSize: 12,
+                            fontSize: 11.5,
                             color: GamerTheme.neonGreen,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+
+                  const Spacer(),
+
+                  // "Open Squad Chat" Button
+                  ElevatedButton.icon(
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: GamerTheme.accentCyan,
+                      foregroundColor: Colors.black,
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+                      elevation: 0,
+                    ),
+                    icon: const Icon(Icons.forum_rounded, size: 16, color: Colors.black),
+                    label: const Text(
+                      'Open Squad Chat',
+                      style: TextStyle(
+                        fontWeight: FontWeight.w900,
+                        fontSize: 12,
+                        color: Colors.black,
+                      ),
+                    ),
+                    onPressed: () {
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (_) => ChatScreen(postId: squad.id, squad: squad),
+                        ),
+                      );
+                    },
+                  ),
+                ] else if (squad.membersCount >= 4 || squad.members.length >= 4) ...[
+                  // Squad Full Badge
+                  Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      const Icon(Icons.people_outline_rounded, size: 16, color: GamerTheme.textMuted),
+                      const SizedBox(width: 6),
+                      Text(
+                        '${math.max(0, squad.membersCount)}/4 members',
+                        style: const TextStyle(color: GamerTheme.textMuted, fontSize: 12),
+                      ),
+                    ],
+                  ),
+
+                  const Spacer(),
+
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
+                    decoration: BoxDecoration(
+                      color: GamerTheme.cardElevated,
+                      borderRadius: BorderRadius.circular(8),
+                      border: Border.all(color: Colors.redAccent.withOpacity(0.5)),
+                    ),
+                    child: const Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Icon(Icons.lock_rounded, size: 15, color: Colors.redAccent),
+                        SizedBox(width: 5),
+                        Text(
+                          'Squad Full',
+                          style: TextStyle(
+                            fontWeight: FontWeight.w900,
+                            fontSize: 11.5,
+                            color: Colors.redAccent,
                           ),
                         ),
                       ],

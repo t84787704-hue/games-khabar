@@ -1,6 +1,7 @@
 import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:firebase_core/firebase_core.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
@@ -85,6 +86,124 @@ class NotificationService {
 
     // 7. Listen for newly added Firestore docs in real-time and notify "New: {gameName}"
     _listenForNewNewsDocuments();
+
+    // 8. Listen for squad request / acceptance notifications for current user
+    _listenForSquadNotifications();
+  }
+
+  /// Saves FCM device token to Firestore users/{uid}
+  Future<void> saveUserFcmToken([String? explicitUid]) async {
+    try {
+      final uid = explicitUid ?? FirebaseAuth.instance.currentUser?.uid;
+      if (uid == null || uid.isEmpty) return;
+      final token = await _fcm?.getToken();
+      if (token != null && token.isNotEmpty) {
+        await FirebaseFirestore.instance.collection('users').doc(uid).set({
+          'fcmToken': token,
+          'lastTokenUpdate': FieldValue.serverTimestamp(),
+        }, SetOptions(merge: true));
+      }
+    } catch (_) {}
+  }
+
+  /// Real-time listener for current user's squad notifications (e.g. requests, accepts)
+  void _listenForSquadNotifications() {
+    bool isFirstSnapshot = true;
+    FirebaseAuth.instance.authStateChanges().listen((user) {
+      if (user == null) return;
+      saveUserFcmToken(user.uid);
+
+      try {
+        FirebaseFirestore.instance
+            .collection('notifications')
+            .where('recipientUid', isEqualTo: user.uid)
+            .orderBy('createdAt', descending: true)
+            .limit(10)
+            .snapshots()
+            .listen((snapshot) {
+          if (isFirstSnapshot) {
+            isFirstSnapshot = false;
+            return;
+          }
+
+          for (final change in snapshot.docChanges) {
+            if (change.type == DocumentChangeType.added) {
+              final data = change.doc.data();
+              if (data != null) {
+                final type = data['type'] as String? ?? '';
+                if (type.startsWith('squad_')) {
+                  final title = data['title'] as String? ?? 'Squad Update 🎮';
+                  final message = data['message'] as String? ?? 'New update in your squad!';
+                  final postId = data['postId'] as String? ?? '';
+                  showSquadNotification(
+                    title: title,
+                    body: message,
+                    postId: postId,
+                    recipientUid: user.uid,
+                  );
+                }
+              }
+            }
+          }
+        }, onError: (_) {});
+      } catch (_) {}
+    });
+  }
+
+  /// Show heads-up banner notification for squad events
+  Future<void> showSquadNotification({
+    required String title,
+    required String body,
+    required String postId,
+    required String recipientUid,
+  }) async {
+    try {
+      final currentUid = FirebaseAuth.instance.currentUser?.uid;
+      // Trigger local notification if device matches recipient or in development
+      if (currentUid != null && currentUid != recipientUid) {
+        // Different user on this client - only show if on same physical test device
+        return;
+      }
+
+      final payloadData = {
+        'postId': postId,
+        'title': title,
+        'body': body,
+        'type': 'squad_event',
+        'click_action': 'FLUTTER_NOTIFICATION_CLICK',
+      };
+
+      final androidDetails = AndroidNotificationDetails(
+        _androidChannel.id,
+        _androidChannel.name,
+        channelDescription: _androidChannel.description,
+        importance: Importance.max,
+        priority: Priority.high,
+        playSound: true,
+        enableVibration: true,
+        icon: '@mipmap/ic_launcher',
+        color: const Color(0xFF00FF88),
+        styleInformation: BigTextStyleInformation(
+          body,
+          contentTitle: title,
+          summaryText: 'Games Khabar • Squads',
+        ),
+      );
+
+      const iosDetails = DarwinNotificationDetails(
+        presentAlert: true,
+        presentBadge: true,
+        presentSound: true,
+      );
+
+      await _localNotifications.show(
+        DateTime.now().millisecondsSinceEpoch ~/ 1000,
+        title,
+        body,
+        NotificationDetails(android: androidDetails, iOS: iosDetails),
+        payload: jsonEncode(payloadData),
+      );
+    } catch (_) {}
   }
 
   /// Real-time Firestore listener: when a new doc is added, trigger notification "New: {gameName}"

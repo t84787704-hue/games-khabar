@@ -6,6 +6,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_storage/firebase_storage.dart';
 import 'package:google_sign_in/google_sign_in.dart';
 import '../models/gamer_user_model.dart';
+import 'notification_service.dart';
 
 class GamerAuthService {
   static final GamerAuthService _instance = GamerAuthService._internal();
@@ -129,6 +130,7 @@ class GamerAuthService {
       final cred = await _auth.signInWithCredential(credential);
       print("LOGGED IN UID: ${cred.user?.uid} | EMAIL: ${cred.user?.email}");
       await refreshCurrentGamer();
+      NotificationService().saveUserFcmToken(cred.user?.uid);
       return cred;
     } catch (e) {
       debugPrint('Google Sign In Error: $e');

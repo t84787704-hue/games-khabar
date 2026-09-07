@@ -3,6 +3,7 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/foundation.dart';
 import 'dart:math' as math;
 import 'squad_service.dart';
+import 'notification_service.dart';
 
 /// LFG Service providing specialized transaction/batch-based request handling for lfg_posts
 class LfgService {
@@ -46,15 +47,24 @@ class LfgService {
       debugPrint("JOIN REQUEST SUCCESS");
 
       if (leaderUid != null && leaderUid.isNotEmpty && leaderUid != currentUserId) {
+        final applicantName = (applicantData?['displayName'] ?? applicantData?['name'] ?? 'A Gamer').toString();
         await _firestore.collection('notifications').add({
           'recipientUid': leaderUid,
           'senderUid': currentUserId,
           'type': 'squad_request',
-          'message': 'requested to join your Squad!',
+          'title': 'New Squad Request 🎮',
+          'message': '$applicantName requested to join your squad',
           'postId': postId,
           'read': false,
           'createdAt': FieldValue.serverTimestamp(),
         }).catchError((_) {});
+
+        NotificationService().showSquadNotification(
+          title: 'New Squad Request 🎮',
+          body: '$applicantName requested to join your squad',
+          postId: postId,
+          recipientUid: leaderUid,
+        );
       }
     } catch (e, stack) {
       debugPrint("JOIN REQUEST FAILED: $e");
@@ -166,6 +176,7 @@ class LfgService {
           ? 0
           : FieldValue.increment(-1);
 
+      final bool isNowFull = (members.length + 1) >= 4;
       final batch = _firestore.batch();
 
       final updateMap = <String, dynamic>{
@@ -173,7 +184,7 @@ class LfgService {
         'members': FieldValue.arrayUnion([requesterId]),
         'requestedCount': safeRequestedDecrement,
         'membersCount': FieldValue.increment(1),
-        'isActive': true,
+        'isActive': !isNowFull,
       };
 
       // 1. Update in lfg_posts
@@ -194,25 +205,190 @@ class LfgService {
       }
 
       await batch.commit();
-      debugPrint("ACCEPT SUCCESS");
+      debugPrint("ACCEPT SUCCESS - SQUAD NOW FULL: $isNowFull");
 
-      // Send accepted notification
+      // 4. Chat Room Creation: doc in chats/{postId} with members array
       try {
+        final chatRef = _firestore.collection('chats').doc(postId);
+        final Set<String> chatMembers = {...members.map((e) => e.toString()), requesterId};
+        if (postOwnerId.isNotEmpty) chatMembers.add(postOwnerId);
+
+        await chatRef.set({
+          'postId': postId,
+          'members': chatMembers.toList(),
+          'leaderUid': postOwnerId,
+          'title': data['displayName'] != null ? "${data['displayName']}'s Squad" : 'Squad Chat',
+          'mode': mode,
+          'inGameUid': inGameUid.isNotEmpty ? inGameUid : (data['inGameUid'] ?? ''),
+          'lastMessage': '$requesterName joined the squad!',
+          'lastMessageTime': FieldValue.serverTimestamp(),
+          'updatedAt': FieldValue.serverTimestamp(),
+          'createdAt': FieldValue.serverTimestamp(),
+        }, SetOptions(merge: true));
+
+        // Add welcome message in chat
+        await chatRef.collection('messages').add({
+          'senderUid': 'system',
+          'senderName': 'Squad Bot',
+          'text': '$requesterName joined the squad! Welcome to the team.',
+          'type': 'system',
+          'createdAt': FieldValue.serverTimestamp(),
+        });
+      } catch (ce) {
+        debugPrint("[LfgService] Chat room creation error: $ce");
+      }
+
+      // 5. Send accepted push notification: "You joined {ownerName}'s squad"
+      try {
+        final ownerName = (data['displayName'] ?? data['username'] ?? 'Leader').toString();
+        final notifMessage = 'You joined $ownerName\'s squad';
+
         await _firestore.collection('notifications').add({
           'recipientUid': requesterId,
-          'senderUid': leaderUid.isNotEmpty ? leaderUid : (currentUid ?? ''),
+          'senderUid': postOwnerId.isNotEmpty ? postOwnerId : (currentUid ?? ''),
           'type': 'squad_accepted',
-          'message': 'accepted your request to join squad ($mode)! Leader BGMI UID: $inGameUid',
+          'title': 'Squad Request Accepted! 🎮',
+          'message': notifMessage,
           'postId': postId,
+          'inGameUid': inGameUid.isNotEmpty ? inGameUid : (data['inGameUid'] ?? ''),
           'read': false,
           'createdAt': FieldValue.serverTimestamp(),
         });
+
+        NotificationService().showSquadNotification(
+          title: 'Squad Request Accepted! 🎮',
+          body: notifMessage,
+          postId: postId,
+          recipientUid: requesterId,
+        );
       } catch (ne) {
         debugPrint("[LfgService] Notification send error: $ne");
       }
     } catch (e, stack) {
       debugPrint("ACCEPT FAILED: $e");
       debugPrint(stack.toString());
+      rethrow;
+    }
+  }
+
+  /// Kick a member from the squad (Owner only)
+  Future<void> kickMember({
+    required String postId,
+    required String memberUid,
+    required String leaderUid,
+    String memberName = 'A player',
+  }) async {
+    try {
+      debugPrint("[LfgService] Kicking member $memberUid from post $postId");
+      final postRef = _firestore.collection('lfg_posts').doc(postId);
+      final squadRef = _firestore.collection('squads').doc(postId);
+      final chatRef = _firestore.collection('chats').doc(postId);
+
+      final updateMap = <String, dynamic>{
+        'members': FieldValue.arrayRemove([memberUid]),
+        'membersCount': FieldValue.increment(-1),
+        'isActive': true, // Re-open squad since a slot opened
+      };
+
+      final batch = _firestore.batch();
+      batch.update(postRef, updateMap);
+      batch.set(squadRef, updateMap, SetOptions(merge: true));
+      batch.set(chatRef, {
+        'members': FieldValue.arrayRemove([memberUid]),
+      }, SetOptions(merge: true));
+      await batch.commit();
+
+      // System message in chat
+      await chatRef.collection('messages').add({
+        'senderUid': 'system',
+        'senderName': 'Squad Bot',
+        'text': '$memberName was removed from the squad.',
+        'type': 'system',
+        'createdAt': FieldValue.serverTimestamp(),
+      }).catchError((_) {});
+
+      // Notify kicked player
+      await _firestore.collection('notifications').add({
+        'recipientUid': memberUid,
+        'senderUid': leaderUid,
+        'type': 'squad_kick',
+        'title': 'Squad Update',
+        'message': 'You were removed from the squad.',
+        'postId': postId,
+        'read': false,
+        'createdAt': FieldValue.serverTimestamp(),
+      }).catchError((_) {});
+
+      NotificationService().showSquadNotification(
+        title: 'Squad Update',
+        body: 'You were removed from the squad.',
+        postId: postId,
+        recipientUid: memberUid,
+      );
+    } catch (e) {
+      debugPrint("[LfgService] KICK ERROR: $e");
+      rethrow;
+    }
+  }
+
+  /// Leave a squad (Member action)
+  Future<void> leaveSquad({
+    required String postId,
+    required String memberUid,
+    required String leaderUid,
+    String memberName = 'A player',
+  }) async {
+    try {
+      debugPrint("[LfgService] Member $memberUid leaving post $postId");
+      final postRef = _firestore.collection('lfg_posts').doc(postId);
+      final squadRef = _firestore.collection('squads').doc(postId);
+      final chatRef = _firestore.collection('chats').doc(postId);
+
+      final updateMap = <String, dynamic>{
+        'members': FieldValue.arrayRemove([memberUid]),
+        'membersCount': FieldValue.increment(-1),
+        'isActive': true, // Re-open squad since a slot opened
+      };
+
+      final batch = _firestore.batch();
+      batch.update(postRef, updateMap);
+      batch.set(squadRef, updateMap, SetOptions(merge: true));
+      batch.set(chatRef, {
+        'members': FieldValue.arrayRemove([memberUid]),
+      }, SetOptions(merge: true));
+      await batch.commit();
+
+      // System message in chat
+      await chatRef.collection('messages').add({
+        'senderUid': 'system',
+        'senderName': 'Squad Bot',
+        'text': '$memberName left the squad.',
+        'type': 'system',
+        'createdAt': FieldValue.serverTimestamp(),
+      }).catchError((_) {});
+
+      // Notify leader
+      if (leaderUid.isNotEmpty && leaderUid != memberUid) {
+        await _firestore.collection('notifications').add({
+          'recipientUid': leaderUid,
+          'senderUid': memberUid,
+          'type': 'squad_leave',
+          'title': 'Squad Update',
+          'message': '$memberName left your squad.',
+          'postId': postId,
+          'read': false,
+          'createdAt': FieldValue.serverTimestamp(),
+        }).catchError((_) {});
+
+        NotificationService().showSquadNotification(
+          title: 'Squad Update',
+          body: '$memberName left your squad.',
+          postId: postId,
+          recipientUid: leaderUid,
+        );
+      }
+    } catch (e) {
+      debugPrint("[LfgService] LEAVE ERROR: $e");
       rethrow;
     }
   }

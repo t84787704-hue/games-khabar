@@ -95,16 +95,60 @@ class SquadService {
         return bTime.compareTo(aTime);
       });
 
-      debugPrint('[SquadService] Fetched active squads docs length from Firestore: ${posts.length}');
-      return posts;
+      // Auto close and 1-hour auto expire logic
+      final now = DateTime.now();
+      final List<SquadPost> activeFiltered = [];
+
+      for (final post in posts) {
+        // 1. If createdAt is >1 hour old, auto expire
+        if (post.createdAt != null && now.difference(post.createdAt!).inHours >= 1) {
+          debugPrint('[SquadService] Post ${post.id} is >1 hour old. Auto-expiring.');
+          _lfgPostsRef.doc(post.id).update({'isActive': false}).catchError((_) {});
+          _squadRef.doc(post.id).update({'isActive': false}).catchError((_) {});
+          continue;
+        }
+
+        // 2. If membersCount >= 4, auto close
+        if (post.membersCount >= 4 || post.members.length >= 4) {
+          debugPrint('[SquadService] Post ${post.id} is full (4/4). Setting isActive = false.');
+          _lfgPostsRef.doc(post.id).update({'isActive': false}).catchError((_) {});
+          _squadRef.doc(post.id).update({'isActive': false}).catchError((_) {});
+          // We can still display it with "Squad Full" badge if wanted or filter:
+          // User request: 'If membersCount == 4, set isActive = false, show "Squad Full" badge'
+          activeFiltered.add(post.copyWith(isActive: false));
+          continue;
+        }
+
+        activeFiltered.add(post);
+      }
+
+      debugPrint('[SquadService] Fetched active squads length: ${activeFiltered.length}');
+      return activeFiltered;
     });
   }
 
   Future<List<SquadPost>> fetchSquadsOnce() async {
     try {
       final snap = await _lfgPostsRef.where('isActive', isEqualTo: true).get();
-      debugPrint('[SquadService] One-time fetched active squads length: ${snap.docs.length}');
-      return snap.docs.map((d) => SquadPost.fromFirestore(d)).toList();
+      final now = DateTime.now();
+      final List<SquadPost> result = [];
+
+      for (final d in snap.docs) {
+        final p = SquadPost.fromFirestore(d);
+        if (p.createdAt != null && now.difference(p.createdAt!).inHours >= 1) {
+          _lfgPostsRef.doc(p.id).update({'isActive': false}).catchError((_) {});
+          _squadRef.doc(p.id).update({'isActive': false}).catchError((_) {});
+          continue;
+        }
+        if (p.membersCount >= 4 || p.members.length >= 4) {
+          _lfgPostsRef.doc(p.id).update({'isActive': false}).catchError((_) {});
+          _squadRef.doc(p.id).update({'isActive': false}).catchError((_) {});
+          result.add(p.copyWith(isActive: false));
+          continue;
+        }
+        result.add(p);
+      }
+      return result;
     } catch (e) {
       debugPrint('[SquadService] Error fetching squads once: $e');
       return [];
