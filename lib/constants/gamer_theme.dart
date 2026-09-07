@@ -11,6 +11,7 @@ class GamerTheme {
 
   // Accents: Blue & Orange
   static const Color accentBlue = Color(0xFF00D2FF);
+  static const Color accentCyan = Color(0xFF00D2FF);
   static const Color electricBlue = Color(0xFF2563EB);
   static const Color deepBlue = Color(0xFF0F172A);
   static const Color accentOrange = Color(0xFFFF6B00);
