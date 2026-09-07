@@ -63,10 +63,11 @@ class _RequestsBottomSheetState extends State<RequestsBottomSheet> {
   Future<void> _handleAccept(SquadJoinRequest req) async {
     setState(() => _processingIds.add(req.id));
     try {
-      // Use transaction-based acceptRequest on lfg_posts / squads
+      // Use Batch-based acceptRequest on lfg_posts / squads passing the actual requestDocId
       await _lfgService.acceptRequest(
         postId: widget.squad.id,
         requesterId: req.userId,
+        requestDocId: req.id,
         requesterName: req.name,
         leaderUid: widget.squad.userId,
         inGameUid: widget.squad.inGameUid,
@@ -82,7 +83,7 @@ class _RequestsBottomSheetState extends State<RequestsBottomSheet> {
                 const SizedBox(width: 8),
                 Expanded(
                   child: Text(
-                    '${req.name} added to squad! Notification sent.',
+                    '${req.name} added to squad',
                     style: const TextStyle(fontWeight: FontWeight.bold),
                   ),
                 ),
@@ -99,7 +100,11 @@ class _RequestsBottomSheetState extends State<RequestsBottomSheet> {
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Failed to accept request: $e')),
+          SnackBar(
+            content: Text(e.toString()),
+            backgroundColor: Colors.redAccent,
+            behavior: SnackBarBehavior.floating,
+          ),
         );
       }
     } finally {

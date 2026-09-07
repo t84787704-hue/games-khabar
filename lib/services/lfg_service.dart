@@ -15,116 +15,68 @@ class LfgService {
   factory LfgService() => _instance;
   LfgService._internal();
 
-  /// Accepts a request from lfg_posts subcollection using a transaction as requested
+  /// Accepts a request from lfg_posts subcollection using Batch + proper logging
   Future<void> acceptRequest({
     required String postId,
     required String requesterId,
+    required String requestDocId,
     String requesterName = 'Gamer',
     String leaderUid = '',
     String inGameUid = '',
     String mode = 'Classic Squad',
   }) async {
     try {
-      debugPrint("[LfgService] Starting acceptRequest for $requesterName ($requesterId) on post $postId");
+      debugPrint("START ACCEPT postId=$postId requesterId=$requesterId docId=$requestDocId");
 
       final currentUid = _auth.currentUser?.uid;
-
-      // Check both 'lfg_posts' and 'squads' collections
       final postRef = _firestore.collection('lfg_posts').doc(postId);
-      final squadRef = _firestore.collection('squads').doc(postId);
+      // Use the actual requestDocId passed from bottom sheet, NOT requesterId
+      final requestRef = postRef.collection('requests').doc(requestDocId);
 
-      await _firestore.runTransaction((tx) async {
-        DocumentSnapshot postSnap = await tx.get(postRef);
-        DocumentReference activeRef = postRef;
-
-        if (!postSnap.exists) {
-          // Check squads collection if not found in lfg_posts
-          final squadSnap = await tx.get(squadRef);
-          if (squadSnap.exists) {
-            postSnap = squadSnap;
-            activeRef = squadRef;
-          } else {
-            // If neither exists yet (e.g. test post or mocked ID), initialize it
-            final postOwnerId = leaderUid.isNotEmpty ? leaderUid : (currentUid ?? 'leader');
-            if (currentUid != null && currentUid != postOwnerId) {
-              throw "Only owner can accept";
-            }
-            tx.set(postRef, {
-              'id': postId,
-              'userId': postOwnerId,
-              'members': [postOwnerId, requesterId],
-              'membersCount': 2,
-              'requestedCount': 0,
-              'joinRequests': [],
-              'isActive': true,
-              'createdAt': FieldValue.serverTimestamp(),
-            }, SetOptions(merge: true));
-            return;
-          }
-        }
-
+      // Security check: verify owner
+      final postSnap = await postRef.get();
+      if (postSnap.exists) {
         final data = postSnap.data() as Map<String, dynamic>? ?? {};
         final postOwnerId = (data['ownerId'] ?? data['userId'] ?? leaderUid).toString();
-
-        // Security check: currentUser != post.ownerId -> throw "Only owner can accept"
         if (currentUid != null && postOwnerId.isNotEmpty && currentUid != postOwnerId) {
           throw "Only owner can accept";
         }
+      }
 
-        List<dynamic> members = List.from(data['members'] ?? []);
-        
-        if (members.isEmpty) {
-          if (postOwnerId.isNotEmpty) {
-            members.add(postOwnerId);
-          }
-        }
-
-        if (members.length >= 4) {
-          throw "Squad Full";
-        }
-        if (members.contains(requesterId)) {
-          throw "Already in squad";
-        }
-
-        final updateData = {
-          'members': FieldValue.arrayUnion([requesterId]),
-          'joinRequests': FieldValue.arrayRemove([requesterId]),
-          'membersCount': FieldValue.increment(1),
-          'requestedCount': FieldValue.increment(-1),
-        };
-
-        // Update in active collection
-        tx.update(activeRef, updateData);
-
-        // Also update the other collection for sync if it exists
-        if (activeRef == postRef) {
-          tx.set(squadRef, {
-            'members': FieldValue.arrayUnion([requesterId]),
-            'joinRequests': FieldValue.arrayRemove([requesterId]),
-            'membersCount': FieldValue.increment(1),
-            'requestedCount': FieldValue.increment(-1),
-          }, SetOptions(merge: true));
-        } else {
-          tx.set(postRef, {
-            'members': FieldValue.arrayUnion([requesterId]),
-            'joinRequests': FieldValue.arrayRemove([requesterId]),
-            'membersCount': FieldValue.increment(1),
-            'requestedCount': FieldValue.increment(-1),
-          }, SetOptions(merge: true));
-        }
-
-        // Delete request doc from subcollections
-        final requestRefLfg = postRef.collection('requests').doc(requesterId);
-        final requestRefSquad = squadRef.collection('requests').doc(requesterId);
-        tx.delete(requestRefLfg);
-        tx.delete(requestRefSquad);
+      final batch = _firestore.batch();
+      batch.update(postRef, {
+        'members': FieldValue.arrayUnion([requesterId]),
+        'joinRequests': FieldValue.arrayRemove([requesterId, requestDocId]),
+        'membersCount': FieldValue.increment(1),
+        'requestedCount': FieldValue.increment(-1),
       });
+      batch.delete(requestRef);
 
-      // Send accepted notification outside transaction
+      // Also clean up in squads collection if exists to keep collections in sync
+      final squadRef = _firestore.collection('squads').doc(postId);
+      final squadRequestRef = squadRef.collection('requests').doc(requestDocId);
+      batch.set(squadRef, {
+        'members': FieldValue.arrayUnion([requesterId]),
+        'joinRequests': FieldValue.arrayRemove([requesterId, requestDocId]),
+        'membersCount': FieldValue.increment(1),
+        'requestedCount': FieldValue.increment(-1),
+      }, SetOptions(merge: true));
+      batch.delete(squadRequestRef);
+
+      // If doc id != requesterId, also attempt delete by requesterId just in case
+      if (requestDocId != requesterId) {
+        batch.delete(postRef.collection('requests').doc(requesterId));
+        batch.delete(squadRef.collection('requests').doc(requesterId));
+      }
+
+      await batch.commit();
+      debugPrint("ACCEPT SUCCESS");
+
+      // Send accepted notification
       try {
         await _firestore.collection('notifications').add({
           'recipientUid': requesterId,
-          'senderUid': leaderUid,
+          'senderUid': leaderUid.isNotEmpty ? leaderUid : (currentUid ?? ''),
           'type': 'squad_accepted',
           'message': 'accepted your request to join squad ($mode)! Leader BGMI UID: $inGameUid',
           'postId': postId,
@@ -134,10 +86,9 @@ class LfgService {
       } catch (ne) {
         debugPrint("[LfgService] Notification send error: $ne");
       }
-
-      debugPrint("[LfgService] Accepted $requesterName to $postId");
-    } catch (e) {
-      debugPrint("[LfgService] ACCEPT ERROR: $e");
+    } catch (e, stack) {
+      debugPrint("ACCEPT FAILED: $e");
+      debugPrint(stack.toString());
       rethrow;
     }
   }
