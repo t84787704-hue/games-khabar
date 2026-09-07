@@ -120,7 +120,10 @@ class _ChatScreenState extends State<ChatScreen> {
           stream: FirebaseFirestore.instance.collection('chats').doc(widget.postId).snapshots(),
           builder: (context, chatSnap) {
             final chatData = chatSnap.data?.data() as Map<String, dynamic>? ?? {};
-            final title = chatData['title'] as String? ?? widget.squad?.title ?? 'Squad Chat';
+            final title = chatData['title'] as String? ??
+                (widget.squad?.displayName.isNotEmpty == true
+                    ? "${widget.squad!.displayName}'s Squad"
+                    : 'Squad Chat');
             final mode = chatData['mode'] as String? ?? widget.squad?.mode ?? 'Classic Squad';
             final inGameUid = chatData['inGameUid'] as String? ?? widget.squad?.inGameUid ?? '';
 
