@@ -3,23 +3,27 @@ import 'package:flutter/services.dart';
 import 'package:intl/intl.dart';
 import '../constants/gamer_theme.dart';
 import '../models/squad_post_model.dart';
+import '../models/squad_request_model.dart';
 import '../models/gamer_user_model.dart';
 import '../services/gamer_auth_service.dart';
 import '../services/squad_service.dart';
 import '../widgets/gamer_avatar.dart';
 import '../widgets/rank_badge_widget.dart';
+import '../widgets/requests_bottom_sheet.dart';
 import '../screens/gamer_profile_screen.dart';
 
-class SquadCard extends StatefulWidget {
+typedef SquadCard = LFGCard;
+
+class LFGCard extends StatefulWidget {
   final SquadPost squad;
 
-  const SquadCard({super.key, required this.squad});
+  const LFGCard({super.key, required this.squad});
 
   @override
-  State<SquadCard> createState() => _SquadCardState();
+  State<LFGCard> createState() => _LFGCardState();
 }
 
-class _SquadCardState extends State<SquadCard> {
+class _LFGCardState extends State<LFGCard> {
   bool _isRequesting = false;
 
   String _formatTime(DateTime? dt) {
@@ -298,16 +302,80 @@ class _SquadCardState extends State<SquadCard> {
             ),
             child: Row(
               children: [
-                Row(
-                  children: [
-                    const Icon(Icons.people_outline_rounded, size: 16, color: GamerTheme.textMuted),
-                    const SizedBox(width: 6),
-                    Text(
-                      '${squad.joinRequests.length} requested',
-                      style: const TextStyle(color: GamerTheme.textMuted, fontSize: 12),
-                    ),
-                  ],
+                // Real-Time Clickable "X requested" Button
+                StreamBuilder<List<SquadJoinRequest>>(
+                  stream: SquadService().getSquadRequestsStream(squad.id, squad.joinRequests),
+                  initialData: squad.joinRequests
+                      .map((uid) => SquadJoinRequest(id: uid, userId: uid, name: 'Gamer'))
+                      .toList(),
+                  builder: (context, reqSnap) {
+                    final requests = reqSnap.data ?? [];
+                    final count = requests.isNotEmpty ? requests.length : squad.joinRequests.length;
+                    final hasRequests = count > 0;
+
+                    return Material(
+                      color: Colors.transparent,
+                      child: InkWell(
+                        onTap: () {
+                          showModalBottomSheet(
+                            context: context,
+                            isScrollControlled: true,
+                            backgroundColor: Colors.transparent,
+                            builder: (_) => RequestsBottomSheet(squad: squad),
+                          );
+                        },
+                        borderRadius: BorderRadius.circular(8),
+                        child: Padding(
+                          padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 5),
+                          child: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Icon(
+                                Icons.people_alt_rounded,
+                                size: 16,
+                                color: hasRequests ? GamerTheme.accentOrange : GamerTheme.textMuted,
+                              ),
+                              const SizedBox(width: 6),
+                              Text(
+                                '$count requested',
+                                style: TextStyle(
+                                  color: hasRequests ? GamerTheme.accentOrange : GamerTheme.textMuted,
+                                  fontSize: 12,
+                                  fontWeight: hasRequests ? FontWeight.bold : FontWeight.w500,
+                                  decoration: TextDecoration.underline,
+                                  decorationColor: hasRequests
+                                      ? GamerTheme.accentOrange.withOpacity(0.5)
+                                      : GamerTheme.textMuted.withOpacity(0.4),
+                                ),
+                              ),
+                              if (hasRequests) ...[
+                                const SizedBox(width: 6),
+                                Container(
+                                  padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1.5),
+                                  decoration: BoxDecoration(
+                                    color: GamerTheme.accentOrange.withOpacity(0.2),
+                                    borderRadius: BorderRadius.circular(6),
+                                    border: Border.all(color: GamerTheme.accentOrange.withOpacity(0.5)),
+                                  ),
+                                  child: const Text(
+                                    'VIEW',
+                                    style: TextStyle(
+                                      color: GamerTheme.accentOrange,
+                                      fontSize: 9,
+                                      fontWeight: FontWeight.w900,
+                                      letterSpacing: 0.5,
+                                    ),
+                                  ),
+                                ),
+                              ],
+                            ],
+                          ),
+                        ),
+                      ),
+                    );
+                  },
                 ),
+
                 const Spacer(),
                 if (isOwnPost) ...[
                   Container(
@@ -378,6 +446,11 @@ class _SquadCardState extends State<SquadCard> {
                               leaderUid: squad.userId,
                               applicantUid: currentGamer.uid,
                               applicantName: currentGamer.displayName,
+                              applicantUsername: currentGamer.username,
+                              applicantAvatar: currentGamer.photoUrl,
+                              applicantTier: currentGamer.rank,
+                              applicantKd: currentGamer.kdRatio,
+                              applicantGameId: currentGamer.gameId,
                             );
                             setState(() => _isRequesting = false);
                             if (context.mounted) {
