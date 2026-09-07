@@ -23,6 +23,9 @@ class TournamentRoom {
   final String password; // Password (optional/hidden for link games)
   final DateTime startTime;
   final int maxSlots;
+  final int currentSlots;
+  final int totalSlots;
+  final String prizePool;
   final List<String> joinedPlayers; // List of userIds
   final bool isLive;
   final bool isRoomRevealed; // reveal Room ID/Pass to joined players
@@ -40,10 +43,11 @@ class TournamentRoom {
     this.map = 'Erangel',
     this.entryFee = 'FREE',
     this.prize = '💰 500 Coins Prize',
+    this.prizePool = '',
     this.prizePoolCoins = 500,
     this.entryFeeCoins = 0,
     this.escrowCoins = 500,
-    this.status = 'OPEN',
+    this.status = 'active',
     this.winnerUid,
     this.winnerName,
     this.resultSubmissions = const {},
@@ -51,16 +55,20 @@ class TournamentRoom {
     this.password = '',
     required this.startTime,
     this.maxSlots = 2,
+    this.currentSlots = 1,
+    this.totalSlots = 2,
     this.joinedPlayers = const [],
     this.isLive = true,
     this.isRoomRevealed = false,
     this.createdAt,
   });
 
-  int get availableSlots => maxSlots - joinedPlayers.length;
-  bool get isFull => joinedPlayers.length >= maxSlots;
-  bool get isCompleted => status == 'COMPLETED';
-  bool get isExpired => status == 'EXPIRED' || status == 'CANCELED';
+  int get availableSlots => (totalSlots > 0 ? totalSlots : maxSlots) - (currentSlots > 0 ? currentSlots : joinedPlayers.length);
+  bool get isFull => (currentSlots > 0 ? currentSlots : joinedPlayers.length) >= (totalSlots > 0 ? totalSlots : maxSlots);
+  bool get isCompleted => status.toUpperCase() == 'COMPLETED';
+  bool get isExpired => status.toUpperCase() == 'EXPIRED' || status.toUpperCase() == 'CANCELED';
+  bool get isActive => status.toLowerCase() == 'active' || status.toUpperCase() == 'OPEN';
+  String get displayPrizePool => prizePool.isNotEmpty ? prizePool : (prizePoolCoins > 0 ? '💰 $prizePoolCoins Coins' : prize);
 
   String get gameIcon {
     switch (gameType) {
@@ -133,11 +141,16 @@ class TournamentRoom {
 
     final prizeCoins = (data['prizePoolCoins'] as num?)?.toInt() ?? 500;
     final feeCoins = (data['entryFeeCoins'] as num?)?.toInt() ?? 0;
-    final rawPrize = data['prize']?.toString() ?? '💰 $prizeCoins Coins Prize';
+    final rawPrize = data['prize']?.toString() ?? data['prizePool']?.toString() ?? '💰 $prizeCoins Coins Prize';
     // Clean up any old rupee signs
     final cleanPrize = rawPrize.replaceAll('₹', '💰 ').replaceAll('Cash', 'Coins');
     final gType = data['gameType']?.toString() ?? 'BGMI';
     final gMode = data['gameMode']?.toString() ?? (data['roomType'] ?? 'TDM 1v1');
+    final joined = List<String>.from(data['joinedPlayers'] ?? []);
+    final cSlots = (data['currentSlots'] as num?)?.toInt() ?? (joined.isNotEmpty ? joined.length : 1);
+    final tSlots = (data['totalSlots'] as num?)?.toInt() ?? (data['maxSlots'] as num?)?.toInt() ?? 2;
+    final pPool = data['prizePool']?.toString() ?? cleanPrize;
+    final statusStr = (data['status']?.toString() ?? 'active');
 
     return TournamentRoom(
       id: data['id'] ?? doc.id,
@@ -147,22 +160,25 @@ class TournamentRoom {
       gameType: gType,
       gameMode: gMode,
       roomType: data['roomType'] ?? gMode,
-      title: data['title'] ?? 'Custom Tournament',
+      title: data['title'] ?? '$gType Match',
       map: data['map'] ?? 'Erangel',
       entryFee: data['entryFee']?.toString().replaceAll('₹', '') ?? (feeCoins > 0 ? '$feeCoins Coins' : 'FREE'),
       prize: cleanPrize,
+      prizePool: pPool,
       prizePoolCoins: prizeCoins,
       entryFeeCoins: feeCoins,
       escrowCoins: (data['escrowCoins'] as num?)?.toInt() ?? prizeCoins,
-      status: data['status'] ?? 'OPEN',
+      status: statusStr.toUpperCase() == 'OPEN' ? 'active' : statusStr,
       winnerUid: data['winnerUid'],
       winnerName: data['winnerName'],
       resultSubmissions: Map<String, dynamic>.from(data['resultSubmissions'] ?? {}),
       roomId: data['roomId'] ?? '',
       password: data['password'] ?? '',
       startTime: start,
-      maxSlots: (data['maxSlots'] as num?)?.toInt() ?? 2,
-      joinedPlayers: List<String>.from(data['joinedPlayers'] ?? []),
+      maxSlots: tSlots,
+      currentSlots: cSlots,
+      totalSlots: tSlots,
+      joinedPlayers: joined,
       isLive: data['isLive'] ?? true,
       isRoomRevealed: data['isRoomRevealed'] == true,
       createdAt: created,
@@ -182,17 +198,21 @@ class TournamentRoom {
       'map': map,
       'entryFee': entryFee.trim(),
       'prize': prize.trim(),
+      'prizePool': prizePool.isNotEmpty ? prizePool : (prizePoolCoins > 0 ? '💰 $prizePoolCoins Coins' : prize),
       'prizePoolCoins': prizePoolCoins,
       'entryFeeCoins': entryFeeCoins,
       'escrowCoins': escrowCoins,
-      'status': status,
+      'status': status.toUpperCase() == 'OPEN' ? 'active' : status,
       'winnerUid': winnerUid,
       'winnerName': winnerName,
       'resultSubmissions': resultSubmissions,
       'roomId': roomId.trim(),
       'password': password.trim(),
       'startTime': Timestamp.fromDate(startTime),
-      'maxSlots': maxSlots,
+      'maxSlots': totalSlots > 0 ? totalSlots : maxSlots,
+      'totalSlots': totalSlots > 0 ? totalSlots : maxSlots,
+      'currentSlots': currentSlots > 0 ? currentSlots : (joinedPlayers.isNotEmpty ? joinedPlayers.length : 1),
+      'slots': '${currentSlots > 0 ? currentSlots : (joinedPlayers.isNotEmpty ? joinedPlayers.length : 1)}/${totalSlots > 0 ? totalSlots : maxSlots}',
       'joinedPlayers': joinedPlayers,
       'isLive': isLive,
       'isRoomRevealed': isRoomRevealed,
@@ -213,6 +233,7 @@ class TournamentRoom {
       'map': map,
       'entryFee': entryFee.trim(),
       'prize': prize.trim(),
+      'prizePool': prizePool.isNotEmpty ? prizePool : (prizePoolCoins > 0 ? '💰 $prizePoolCoins Coins' : prize),
       'prizePoolCoins': prizePoolCoins,
       'entryFeeCoins': entryFeeCoins,
       'escrowCoins': escrowCoins,
@@ -223,7 +244,9 @@ class TournamentRoom {
       'roomId': roomId.trim(),
       'password': password.trim(),
       'startTime': startTime.toIso8601String(),
-      'maxSlots': maxSlots,
+      'maxSlots': totalSlots > 0 ? totalSlots : maxSlots,
+      'totalSlots': totalSlots > 0 ? totalSlots : maxSlots,
+      'currentSlots': currentSlots > 0 ? currentSlots : (joinedPlayers.isNotEmpty ? joinedPlayers.length : 1),
       'joinedPlayers': joinedPlayers,
       'isLive': isLive,
       'isRoomRevealed': isRoomRevealed,
@@ -246,10 +269,14 @@ class TournamentRoom {
 
     final prizeCoins = (json['prizePoolCoins'] as num?)?.toInt() ?? 500;
     final feeCoins = (json['entryFeeCoins'] as num?)?.toInt() ?? 0;
-    final rawPrize = json['prize']?.toString() ?? '💰 $prizeCoins Coins Prize';
+    final rawPrize = json['prize']?.toString() ?? json['prizePool']?.toString() ?? '💰 $prizeCoins Coins Prize';
     final cleanPrize = rawPrize.replaceAll('₹', '💰 ').replaceAll('Cash', 'Coins');
     final gType = json['gameType']?.toString() ?? 'BGMI';
     final gMode = json['gameMode']?.toString() ?? (json['roomType'] ?? 'TDM 1v1');
+    final joined = List<String>.from(json['joinedPlayers'] ?? []);
+    final cSlots = (json['currentSlots'] as num?)?.toInt() ?? (joined.isNotEmpty ? joined.length : 1);
+    final tSlots = (json['totalSlots'] as num?)?.toInt() ?? (json['maxSlots'] as num?)?.toInt() ?? 2;
+    final pPool = json['prizePool']?.toString() ?? cleanPrize;
 
     return TournamentRoom(
       id: json['id'] ?? '',
@@ -263,18 +290,21 @@ class TournamentRoom {
       map: json['map'] ?? 'Erangel',
       entryFee: json['entryFee']?.toString().replaceAll('₹', '') ?? (feeCoins > 0 ? '$feeCoins Coins' : 'FREE'),
       prize: cleanPrize,
+      prizePool: pPool,
       prizePoolCoins: prizeCoins,
       entryFeeCoins: feeCoins,
       escrowCoins: (json['escrowCoins'] as num?)?.toInt() ?? prizeCoins,
-      status: json['status'] ?? 'OPEN',
+      status: json['status'] ?? 'active',
       winnerUid: json['winnerUid'],
       winnerName: json['winnerName'],
       resultSubmissions: Map<String, dynamic>.from(json['resultSubmissions'] ?? {}),
       roomId: json['roomId'] ?? '',
       password: json['password'] ?? '',
       startTime: start,
-      maxSlots: (json['maxSlots'] as num?)?.toInt() ?? 2,
-      joinedPlayers: List<String>.from(json['joinedPlayers'] ?? []),
+      maxSlots: tSlots,
+      currentSlots: cSlots,
+      totalSlots: tSlots,
+      joinedPlayers: joined,
       isLive: json['isLive'] ?? true,
       isRoomRevealed: json['isRoomRevealed'] == true,
       createdAt: created,
@@ -293,6 +323,7 @@ class TournamentRoom {
     String? map,
     String? entryFee,
     String? prize,
+    String? prizePool,
     int? prizePoolCoins,
     int? entryFeeCoins,
     int? escrowCoins,
@@ -304,6 +335,8 @@ class TournamentRoom {
     String? password,
     DateTime? startTime,
     int? maxSlots,
+    int? currentSlots,
+    int? totalSlots,
     List<String>? joinedPlayers,
     bool? isLive,
     bool? isRoomRevealed,
@@ -321,6 +354,7 @@ class TournamentRoom {
       map: map ?? this.map,
       entryFee: entryFee ?? this.entryFee,
       prize: prize ?? this.prize,
+      prizePool: prizePool ?? this.prizePool,
       prizePoolCoins: prizePoolCoins ?? this.prizePoolCoins,
       entryFeeCoins: entryFeeCoins ?? this.entryFeeCoins,
       escrowCoins: escrowCoins ?? this.escrowCoins,
@@ -331,7 +365,9 @@ class TournamentRoom {
       roomId: roomId ?? this.roomId,
       password: password ?? this.password,
       startTime: startTime ?? this.startTime,
-      maxSlots: maxSlots ?? this.maxSlots,
+      maxSlots: totalSlots ?? maxSlots ?? this.maxSlots,
+      currentSlots: currentSlots ?? this.currentSlots,
+      totalSlots: totalSlots ?? this.totalSlots,
       joinedPlayers: joinedPlayers ?? this.joinedPlayers,
       isLive: isLive ?? this.isLive,
       isRoomRevealed: isRoomRevealed ?? this.isRoomRevealed,

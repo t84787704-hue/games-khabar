@@ -538,9 +538,23 @@ class _ClipsScreenState extends State<ClipsScreen> with SingleTickerProviderStat
                                 return;
                               }
 
+                              // 25GB Free Tier Protection: Check file size (max 50MB)
+                              final fileSize = await pickedFile!.length();
+                              const maxLimit = 50 * 1024 * 1024; // 50MB
+                              if (fileSize > maxLimit) {
+                                final mb = (fileSize / (1024 * 1024)).toStringAsFixed(1);
+                                ScaffoldMessenger.of(context).showSnackBar(
+                                  SnackBar(
+                                    content: Text('Clip size ($mb MB) exceeds the 50MB limit! Please choose a shorter or compressed clip.'),
+                                    backgroundColor: GamerTheme.redAccent,
+                                  ),
+                                );
+                                return;
+                              }
+
                               setModalState(() {
                                 isUploading = true;
-                                uploadStatus = 'Uploading clip to Firebase Storage... ⏳';
+                                uploadStatus = 'Uploading clip to Cloudinary... ⏳';
                               });
 
                               String mediaUrl = '';
@@ -552,23 +566,17 @@ class _ClipsScreenState extends State<ClipsScreen> with SingleTickerProviderStat
                                   isVideo: isVideo,
                                 );
                               } catch (e) {
-                                debugPrint('Firebase Storage error: $e');
-                                if (!isVideo) {
-                                  // Fallback base64 for image
-                                  final bytes = await pickedFile!.readAsBytes();
-                                  mediaUrl = 'data:image/jpeg;base64,${base64Encode(bytes)}';
-                                } else {
-                                  setModalState(() => isUploading = false);
-                                  if (mounted) {
-                                    ScaffoldMessenger.of(context).showSnackBar(
-                                      SnackBar(
-                                        content: Text('Upload to cloud failed: $e. Please check connection and try again.'),
-                                        backgroundColor: GamerTheme.redAccent,
-                                      ),
-                                    );
-                                  }
-                                  return;
+                                debugPrint('Cloudinary upload error: $e');
+                                setModalState(() => isUploading = false);
+                                if (mounted) {
+                                  ScaffoldMessenger.of(context).showSnackBar(
+                                    SnackBar(
+                                      content: Text('Cloudinary upload failed: $e. Please check connection and try again.'),
+                                      backgroundColor: GamerTheme.redAccent,
+                                    ),
+                                  );
                                 }
+                                return;
                               }
 
                               setModalState(() {
@@ -612,7 +620,7 @@ class _ClipsScreenState extends State<ClipsScreen> with SingleTickerProviderStat
                                   child: CircularProgressIndicator(strokeWidth: 2, color: GamerTheme.bgDark),
                                 ),
                                 SizedBox(width: 10),
-                                Text('UPLOADING TO STORAGE... ⏳', style: TextStyle(fontWeight: FontWeight.w900, fontSize: 14)),
+                                Text('UPLOADING TO CLOUDINARY... ⏳', style: TextStyle(fontWeight: FontWeight.w900, fontSize: 14)),
                               ],
                             )
                           : const Text('SHARE TO CLIPS FEED 🚀', style: TextStyle(fontWeight: FontWeight.w900, fontSize: 14)),
