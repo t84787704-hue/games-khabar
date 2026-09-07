@@ -50,7 +50,7 @@ class _GamerMainNavigationScreenState extends State<GamerMainNavigationScreen> {
     final screens = [
       const GamerFeedScreen(),
       const SquadFinderScreen(),
-      const ClipsScreen(),
+      ClipsScreen(isTabActive: _currentIndex == 2),
       const TournamentBoardScreen(),
       const GamerProfileScreen(),
     ];
@@ -129,6 +129,17 @@ class _GamerMainNavigationScreenState extends State<GamerMainNavigationScreen> {
     );
   }
 
+  void _onTabTapped(int index) {
+    if (_currentIndex != index) {
+      if (index != 2) {
+        // Pauses all active clip video & audio immediately when leaving Clips tab
+        ClipsPlaybackManager.pauseAllClips();
+      }
+      ClipsPlaybackManager.isClipsTabActive.value = (index == 2);
+      setState(() => _currentIndex = index);
+    }
+  }
+
   Widget _buildNavItem({
     required int index,
     required IconData icon,
@@ -136,7 +147,7 @@ class _GamerMainNavigationScreenState extends State<GamerMainNavigationScreen> {
     required bool isSelected,
   }) {
     return InkWell(
-      onTap: () => setState(() => _currentIndex = index),
+      onTap: () => _onTabTapped(index),
       borderRadius: BorderRadius.circular(12),
       child: Padding(
         padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),

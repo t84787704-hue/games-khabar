@@ -13,14 +13,53 @@ import '../services/gamer_auth_service.dart';
 import '../widgets/gamer_avatar.dart';
 import 'gamer_profile_screen.dart';
 
+/// Global manager for Clips video playback.
+/// Keeps track of active video controllers across all clip cards,
+/// and allows immediate pausing when leaving the Clips tab, opening overlays, or minimizing the app.
+class ClipsPlaybackManager {
+  static final Set<VideoPlayerController> _activeControllers = {};
+  static final ValueNotifier<bool> isClipsTabActive = ValueNotifier<bool>(true);
+
+  /// Register an initialized controller
+  static void register(VideoPlayerController? controller) {
+    if (controller != null) {
+      _activeControllers.add(controller);
+    }
+  }
+
+  /// Unregister when disposed or replaced
+  static void unregister(VideoPlayerController? controller) {
+    if (controller != null) {
+      _activeControllers.remove(controller);
+    }
+  }
+
+  /// Immediately pauses all active clips so no background audio leaks across tabs/screens
+  static void pauseAllClips() {
+    for (final c in _activeControllers.toList()) {
+      try {
+        if (c.value.isInitialized && c.value.isPlaying) {
+          c.pause();
+        }
+      } catch (_) {}
+    }
+  }
+}
+
 class ClipsScreen extends StatefulWidget {
-  const ClipsScreen({super.key});
+  final bool isTabActive;
+
+  const ClipsScreen({
+    super.key,
+    this.isTabActive = true,
+  });
 
   @override
   State<ClipsScreen> createState() => _ClipsScreenState();
 }
 
-class _ClipsScreenState extends State<ClipsScreen> with SingleTickerProviderStateMixin {
+class _ClipsScreenState extends State<ClipsScreen>
+    with SingleTickerProviderStateMixin, WidgetsBindingObserver {
   final PageController _pageController = PageController();
   final ClipService _clipService = ClipService();
   final GamerAuthService _authService = GamerAuthService();
@@ -73,20 +112,60 @@ class _ClipsScreenState extends State<ClipsScreen> with SingleTickerProviderStat
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
     _spinController = AnimationController(
       vsync: this,
       duration: const Duration(seconds: 8),
     )..repeat();
+
+    ClipsPlaybackManager.isClipsTabActive.addListener(_onGlobalTabActiveChanged);
+  }
+
+  void _onGlobalTabActiveChanged() {
+    if (!ClipsPlaybackManager.isClipsTabActive.value) {
+      ClipsPlaybackManager.pauseAllClips();
+    }
+    if (mounted) {
+      setState(() {});
+    }
+  }
+
+  @override
+  void didUpdateWidget(ClipsScreen oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.isTabActive != widget.isTabActive) {
+      if (!widget.isTabActive) {
+        ClipsPlaybackManager.pauseAllClips();
+      }
+      setState(() {});
+    }
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.paused || state == AppLifecycleState.inactive) {
+      ClipsPlaybackManager.pauseAllClips();
+    } else if (state == AppLifecycleState.resumed) {
+      if (widget.isTabActive && ClipsPlaybackManager.isClipsTabActive.value) {
+        if (mounted) {
+          setState(() {});
+        }
+      }
+    }
   }
 
   @override
   void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    ClipsPlaybackManager.isClipsTabActive.removeListener(_onGlobalTabActiveChanged);
+    ClipsPlaybackManager.pauseAllClips();
     _pageController.dispose();
     _spinController.dispose();
     super.dispose();
   }
 
   void _openUploadClipSheet() {
+    ClipsPlaybackManager.pauseAllClips();
     final currentGamer = _authService.currentGamer;
     if (currentGamer == null) {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -748,10 +827,13 @@ class _ClipsScreenState extends State<ClipsScreen> with SingleTickerProviderStat
                 },
                 itemBuilder: (context, index) {
                   final clip = clips[index];
+                  final isEffectivelyActive = widget.isTabActive && ClipsPlaybackManager.isClipsTabActive.value;
+
                   return ClipCard(
                     key: ValueKey(clip.id),
                     clip: clip,
                     isActive: index == _currentPage,
+                    isTabActive: isEffectivelyActive,
                     isLiked: clip.likedBy.contains(currentUid),
                     spinController: _spinController,
                     onLike: () async {
@@ -770,9 +852,14 @@ class _ClipsScreenState extends State<ClipsScreen> with SingleTickerProviderStat
                     },
                     onProfileTap: () {
                       if (clip.userId.isNotEmpty) {
+                        ClipsPlaybackManager.pauseAllClips();
                         Navigator.of(context).push(
                           MaterialPageRoute(builder: (_) => GamerProfileScreen(userId: clip.userId)),
-                        );
+                        ).then((_) {
+                          if (mounted && widget.isTabActive && ClipsPlaybackManager.isClipsTabActive.value) {
+                            setState(() {});
+                          }
+                        });
                       }
                     },
                   );
@@ -824,6 +911,7 @@ class _ClipsScreenState extends State<ClipsScreen> with SingleTickerProviderStat
 class ClipCard extends StatefulWidget {
   final GamerClip clip;
   final bool isActive;
+  final bool isTabActive;
   final bool isLiked;
   final VoidCallback onLike;
   final VoidCallback onComment;
@@ -835,6 +923,7 @@ class ClipCard extends StatefulWidget {
     super.key,
     required this.clip,
     required this.isActive,
+    this.isTabActive = true,
     required this.isLiked,
     required this.onLike,
     required this.onComment,
@@ -877,13 +966,18 @@ class _ClipCardState extends State<ClipCard> {
       print('🎬 [CLIP_CARD] Initializing video: $videoUri');
       final controller = VideoPlayerController.networkUrl(videoUri);
       _controller = controller;
+      ClipsPlaybackManager.register(controller);
 
       await controller.initialize();
       await controller.setLooping(true);
       await controller.setVolume(1.0);
 
       if (!mounted) {
-        controller.dispose();
+        ClipsPlaybackManager.unregister(controller);
+        try {
+          controller.pause();
+          controller.dispose();
+        } catch (_) {}
         return;
       }
 
@@ -891,8 +985,8 @@ class _ClipCardState extends State<ClipCard> {
         _isInitialized = true;
       });
 
-      // Auto-play if visible on screen
-      if (widget.isActive && !_userPaused) {
+      // Auto-play only if active on page AND active on tab
+      if (widget.isActive && widget.isTabActive && !_userPaused) {
         controller.play();
       }
     } catch (e) {
@@ -909,7 +1003,11 @@ class _ClipCardState extends State<ClipCard> {
   void didUpdateWidget(ClipCard oldWidget) {
     super.didUpdateWidget(oldWidget);
     if (oldWidget.clip.mediaUrl != widget.clip.mediaUrl) {
-      _controller?.dispose();
+      ClipsPlaybackManager.unregister(_controller);
+      try {
+        _controller?.pause();
+        _controller?.dispose();
+      } catch (_) {}
       _controller = null;
       _isInitialized = false;
       _hasError = false;
@@ -917,14 +1015,15 @@ class _ClipCardState extends State<ClipCard> {
       if (_isVideo) {
         _initVideo();
       }
-    } else if (oldWidget.isActive != widget.isActive) {
-      // Auto-play when scrolled to, pause when scrolled away
-      if (widget.isActive) {
-        if (!_userPaused && _controller != null && _isInitialized) {
+    } else {
+      // Auto-play when active and on active tab; pause when away or tab changed
+      final shouldPlay = widget.isActive && widget.isTabActive && !_userPaused;
+      if (shouldPlay) {
+        if (_controller != null && _isInitialized && !_controller!.value.isPlaying) {
           _controller!.play();
         }
       } else {
-        if (_controller != null && _isInitialized) {
+        if (_controller != null && _isInitialized && _controller!.value.isPlaying) {
           _controller!.pause();
         }
       }
@@ -932,8 +1031,21 @@ class _ClipCardState extends State<ClipCard> {
   }
 
   @override
+  void deactivate() {
+    try {
+      _controller?.pause();
+    } catch (_) {}
+    super.deactivate();
+  }
+
+  @override
   void dispose() {
-    _controller?.dispose();
+    ClipsPlaybackManager.unregister(_controller);
+    try {
+      _controller?.pause();
+      _controller?.dispose();
+    } catch (_) {}
+    _controller = null;
     super.dispose();
   }
 
