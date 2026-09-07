@@ -6,6 +6,7 @@ import '../models/squad_post_model.dart';
 import '../models/squad_request_model.dart';
 import '../screens/gamer_profile_screen.dart';
 import '../services/squad_service.dart';
+import '../services/lfg_service.dart';
 import '../widgets/gamer_avatar.dart';
 
 class RequestsBottomSheet extends StatefulWidget {
@@ -22,6 +23,7 @@ class RequestsBottomSheet extends StatefulWidget {
 
 class _RequestsBottomSheetState extends State<RequestsBottomSheet> {
   final SquadService _squadService = SquadService();
+  final LfgService _lfgService = LfgService();
   final Set<String> _processingIds = {};
 
   String _formatTime(DateTime? dt) {
@@ -45,11 +47,16 @@ class _RequestsBottomSheetState extends State<RequestsBottomSheet> {
   Future<void> _handleAccept(SquadJoinRequest req) async {
     setState(() => _processingIds.add(req.id));
     try {
-      await _squadService.acceptSquadRequest(
+      // Use transaction-based acceptRequest on lfg_posts / squads
+      await _lfgService.acceptRequest(
         postId: widget.squad.id,
-        request: req,
-        squad: widget.squad,
+        requesterId: req.userId,
+        requesterName: req.name,
+        leaderUid: widget.squad.userId,
+        inGameUid: widget.squad.inGameUid,
+        mode: widget.squad.mode,
       );
+
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
@@ -70,6 +77,8 @@ class _RequestsBottomSheetState extends State<RequestsBottomSheet> {
             duration: const Duration(seconds: 3),
           ),
         );
+        // Close bottom sheet after accept as requested
+        Navigator.of(context).pop();
       }
     } catch (e) {
       if (mounted) {
@@ -87,10 +96,9 @@ class _RequestsBottomSheetState extends State<RequestsBottomSheet> {
   Future<void> _handleReject(SquadJoinRequest req) async {
     setState(() => _processingIds.add(req.id));
     try {
-      await _squadService.rejectSquadRequest(
+      await _lfgService.declineRequest(
         postId: widget.squad.id,
-        requestId: req.id,
-        userId: req.userId,
+        requesterId: req.userId,
       );
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(

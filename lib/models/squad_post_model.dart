@@ -16,6 +16,9 @@ class SquadPost {
   final String description;
   final String inGameUid;
   final List<String> joinRequests; // userIds
+  final List<String> members; // userIds in squad
+  final int membersCount;
+  final int requestedCount;
   final bool isActive;
   final DateTime? createdAt;
 
@@ -35,6 +38,9 @@ class SquadPost {
     this.description = '',
     this.inGameUid = '',
     this.joinRequests = const [],
+    this.members = const [],
+    this.membersCount = 1,
+    this.requestedCount = 0,
     this.isActive = true,
     this.createdAt,
   });
@@ -49,6 +55,9 @@ class SquadPost {
       created = DateTime.tryParse(raw);
     }
     created ??= DateTime.now();
+
+    final membersList = List<String>.from(data['members'] ?? []);
+    final joinReqList = List<String>.from(data['joinRequests'] ?? []);
 
     return SquadPost(
       id: data['id'] ?? doc.id,
@@ -65,7 +74,10 @@ class SquadPost {
       mode: data['mode'] ?? 'Classic Squad',
       description: data['description'] ?? '',
       inGameUid: data['inGameUid'] ?? '',
-      joinRequests: List<String>.from(data['joinRequests'] ?? []),
+      joinRequests: joinReqList,
+      members: membersList,
+      membersCount: (data['membersCount'] as num?)?.toInt() ?? (membersList.isNotEmpty ? membersList.length : 1),
+      requestedCount: (data['requestedCount'] as num?)?.toInt() ?? joinReqList.length,
       isActive: data['isActive'] ?? true,
       createdAt: created,
     );
@@ -88,6 +100,9 @@ class SquadPost {
       'description': description.trim(),
       'inGameUid': inGameUid.trim(),
       'joinRequests': joinRequests,
+      'members': members.isNotEmpty ? members : [userId],
+      'membersCount': membersCount,
+      'requestedCount': requestedCount,
       'isActive': isActive,
       'createdAt': createdAt != null ? Timestamp.fromDate(createdAt!) : FieldValue.serverTimestamp(),
     };
@@ -109,6 +124,9 @@ class SquadPost {
     String? description,
     String? inGameUid,
     List<String>? joinRequests,
+    List<String>? members,
+    int? membersCount,
+    int? requestedCount,
     bool? isActive,
     DateTime? createdAt,
   }) {
@@ -128,6 +146,9 @@ class SquadPost {
       description: description ?? this.description,
       inGameUid: inGameUid ?? this.inGameUid,
       joinRequests: joinRequests ?? this.joinRequests,
+      members: members ?? this.members,
+      membersCount: membersCount ?? this.membersCount,
+      requestedCount: requestedCount ?? this.requestedCount,
       isActive: isActive ?? this.isActive,
       createdAt: createdAt ?? this.createdAt,
     );

@@ -38,10 +38,22 @@ class _LFGCardState extends State<LFGCard> {
   @override
   Widget build(BuildContext context) {
     final squad = widget.squad;
-    final currentGamer = GamerAuthService().currentGamer;
-    final currentUid = currentGamer?.uid ?? '';
-    final isOwnPost = currentUid.isNotEmpty && (currentUid == squad.userId || (currentGamer?.username.isNotEmpty == true && currentGamer?.username == squad.username));
-    final hasRequested = squad.joinRequests.contains(currentUid);
+    final authService = GamerAuthService();
+    final currentGamer = authService.currentGamer;
+    final currentUid = authService.currentUid ?? currentGamer?.uid ?? '';
+    final currentUsername = currentGamer?.username.trim().toLowerCase() ?? '';
+    final postUsername = squad.username.trim().toLowerCase();
+    final currentGameId = currentGamer?.gameId.trim() ?? '';
+    final postInGameUid = squad.inGameUid.trim();
+
+    // Comprehensive owner check: UID, username, or gameId / inGameUid
+    final isOwnPost = (currentUid.isNotEmpty && currentUid == squad.userId) ||
+        (currentUsername.isNotEmpty && currentUsername == postUsername) ||
+        (currentGameId.isNotEmpty && postInGameUid.isNotEmpty && currentGameId == postInGameUid);
+
+    // Requester check: currentUid or username present in joinRequests
+    final hasRequested = squad.joinRequests.contains(currentUid) ||
+        (currentUsername.isNotEmpty && squad.joinRequests.contains(currentUsername));
 
     // Rank badge for squad leader
     final leaderBadge = GamerRankBadge(
@@ -292,6 +304,58 @@ class _LFGCardState extends State<LFGCard> {
               ),
             ),
 
+          // Squad Members Slots (4 Slots: Leader + Accepted Members)
+          Container(
+            margin: const EdgeInsets.fromLTRB(14, 8, 14, 0),
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+            decoration: BoxDecoration(
+              color: GamerTheme.bgDark.withOpacity(0.4),
+              borderRadius: BorderRadius.circular(10),
+              border: Border.all(color: GamerTheme.borderLight.withOpacity(0.15)),
+            ),
+            child: Row(
+              children: [
+                const Icon(Icons.shield_outlined, color: GamerTheme.accentCyan, size: 15),
+                const SizedBox(width: 6),
+                Text(
+                  'Squad Members (${squad.members.isNotEmpty ? squad.members.length : squad.membersCount}/4):',
+                  style: const TextStyle(
+                    color: GamerTheme.textMuted,
+                    fontSize: 11.5,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+                const Spacer(),
+                // 4 squad slot dots / avatars
+                Row(
+                  children: List.generate(4, (index) {
+                    final isFilled = index < (squad.members.isNotEmpty ? squad.members.length : squad.membersCount);
+                    return Container(
+                      margin: const EdgeInsets.only(left: 6),
+                      width: 20,
+                      height: 20,
+                      decoration: BoxDecoration(
+                        color: isFilled ? GamerTheme.accentCyan.withOpacity(0.25) : GamerTheme.cardElevated,
+                        shape: BoxShape.circle,
+                        border: Border.all(
+                          color: isFilled ? GamerTheme.accentCyan : GamerTheme.borderLight.withOpacity(0.4),
+                          width: 1.2,
+                        ),
+                      ),
+                      child: Center(
+                        child: Icon(
+                          isFilled ? (index == 0 ? Icons.star_rounded : Icons.person_rounded) : Icons.add_rounded,
+                          size: 12,
+                          color: isFilled ? GamerTheme.accentCyan : GamerTheme.textMuted.withOpacity(0.5),
+                        ),
+                      ),
+                    );
+                  }),
+                ),
+              ],
+            ),
+          ),
+
           const SizedBox(height: 12),
 
           // Divider and Footer Action
@@ -302,102 +366,84 @@ class _LFGCardState extends State<LFGCard> {
             ),
             child: Row(
               children: [
-                // Real-Time Clickable "X requested" Button
-                StreamBuilder<List<SquadJoinRequest>>(
-                  stream: SquadService().getSquadRequestsStream(squad.id, squad.joinRequests),
-                  initialData: squad.joinRequests
-                      .map((uid) => SquadJoinRequest(id: uid, userId: uid, name: 'Gamer'))
-                      .toList(),
-                  builder: (context, reqSnap) {
-                    final requests = reqSnap.data ?? [];
-                    final count = requests.isNotEmpty ? requests.length : squad.joinRequests.length;
-                    final hasRequests = count > 0;
+                if (isOwnPost) ...[
+                  // Owner View: Real-Time Clickable "X requested VIEW" Button
+                  StreamBuilder<List<SquadJoinRequest>>(
+                    stream: SquadService().getSquadRequestsStream(squad.id, squad.joinRequests),
+                    initialData: squad.joinRequests
+                        .map((uid) => SquadJoinRequest(id: uid, userId: uid, name: 'Gamer'))
+                        .toList(),
+                    builder: (context, reqSnap) {
+                      final requests = reqSnap.data ?? [];
+                      final count = requests.isNotEmpty ? requests.length : squad.joinRequests.length;
+                      final hasRequests = count > 0;
 
-                    return Material(
-                      color: Colors.transparent,
-                      child: InkWell(
-                        onTap: () {
-                          showModalBottomSheet(
-                            context: context,
-                            isScrollControlled: true,
-                            backgroundColor: Colors.transparent,
-                            builder: (_) => RequestsBottomSheet(squad: squad),
-                          );
-                        },
-                        borderRadius: BorderRadius.circular(8),
-                        child: Padding(
-                          padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 5),
-                          child: Row(
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              Icon(
-                                Icons.people_alt_rounded,
-                                size: 16,
-                                color: hasRequests ? GamerTheme.accentOrange : GamerTheme.textMuted,
-                              ),
-                              const SizedBox(width: 6),
-                              Text(
-                                '$count requested',
-                                style: TextStyle(
+                      return Material(
+                        color: Colors.transparent,
+                        child: InkWell(
+                          onTap: () {
+                            showModalBottomSheet(
+                              context: context,
+                              isScrollControlled: true,
+                              backgroundColor: Colors.transparent,
+                              builder: (_) => RequestsBottomSheet(squad: squad),
+                            );
+                          },
+                          borderRadius: BorderRadius.circular(8),
+                          child: Padding(
+                            padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 5),
+                            child: Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                Icon(
+                                  Icons.people_alt_rounded,
+                                  size: 16,
                                   color: hasRequests ? GamerTheme.accentOrange : GamerTheme.textMuted,
-                                  fontSize: 12,
-                                  fontWeight: hasRequests ? FontWeight.bold : FontWeight.w500,
-                                  decoration: TextDecoration.underline,
-                                  decorationColor: hasRequests
-                                      ? GamerTheme.accentOrange.withOpacity(0.5)
-                                      : GamerTheme.textMuted.withOpacity(0.4),
                                 ),
-                              ),
-                              if (hasRequests) ...[
                                 const SizedBox(width: 6),
-                                Container(
-                                  padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1.5),
-                                  decoration: BoxDecoration(
-                                    color: GamerTheme.accentOrange.withOpacity(0.2),
-                                    borderRadius: BorderRadius.circular(6),
-                                    border: Border.all(color: GamerTheme.accentOrange.withOpacity(0.5)),
+                                Text(
+                                  '$count requested',
+                                  style: TextStyle(
+                                    color: hasRequests ? GamerTheme.accentOrange : GamerTheme.textMuted,
+                                    fontSize: 12,
+                                    fontWeight: hasRequests ? FontWeight.bold : FontWeight.w500,
+                                    decoration: TextDecoration.underline,
+                                    decorationColor: hasRequests
+                                        ? GamerTheme.accentOrange.withOpacity(0.5)
+                                        : GamerTheme.textMuted.withOpacity(0.4),
                                   ),
-                                  child: const Text(
-                                    'VIEW',
-                                    style: TextStyle(
-                                      color: GamerTheme.accentOrange,
-                                      fontSize: 9,
-                                      fontWeight: FontWeight.w900,
-                                      letterSpacing: 0.5,
+                                ),
+                                if (hasRequests) ...[
+                                  const SizedBox(width: 6),
+                                  Container(
+                                    padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1.5),
+                                    decoration: BoxDecoration(
+                                      color: GamerTheme.accentOrange.withOpacity(0.2),
+                                      borderRadius: BorderRadius.circular(6),
+                                      border: Border.all(color: GamerTheme.accentOrange.withOpacity(0.5)),
+                                    ),
+                                    child: const Text(
+                                      'VIEW',
+                                      style: TextStyle(
+                                        color: GamerTheme.accentOrange,
+                                        fontSize: 9,
+                                        fontWeight: FontWeight.w900,
+                                        letterSpacing: 0.5,
+                                      ),
                                     ),
                                   ),
-                                ),
+                                ],
                               ],
-                            ],
+                            ),
                           ),
                         ),
-                      ),
-                    );
-                  },
-                ),
-
-                const Spacer(),
-                if (isOwnPost) ...[
-                  Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                    decoration: BoxDecoration(
-                      color: GamerTheme.accentOrange.withOpacity(0.15),
-                      borderRadius: BorderRadius.circular(6),
-                      border: Border.all(color: GamerTheme.accentOrange.withOpacity(0.5)),
-                    ),
-                    child: const Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Icon(Icons.person_rounded, color: GamerTheme.accentOrange, size: 12),
-                        SizedBox(width: 4),
-                        Text(
-                          'Your Post',
-                          style: TextStyle(color: GamerTheme.accentOrange, fontSize: 11, fontWeight: FontWeight.bold),
-                        ),
-                      ],
-                    ),
+                      );
+                    },
                   ),
-                  const SizedBox(width: 8),
+
+                  const Spacer(),
+
+                  // Owner Action: Close LFG
                   TextButton.icon(
                     style: TextButton.styleFrom(
                       foregroundColor: GamerTheme.textMuted,
@@ -409,29 +455,81 @@ class _LFGCardState extends State<LFGCard> {
                       await SquadService().closeSquadPost(squad.id);
                     },
                   ),
+                ] else if (hasRequested) ...[
+                  // Requester View: Non-owner who has already requested
+                  Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      const Icon(Icons.people_outline_rounded, size: 16, color: GamerTheme.textMuted),
+                      const SizedBox(width: 6),
+                      Text(
+                        '${squad.joinRequests.length} requested',
+                        style: const TextStyle(color: GamerTheme.textMuted, fontSize: 12),
+                      ),
+                    ],
+                  ),
+
+                  const Spacer(),
+
+                  // Green "Requested" badge (disabled)
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+                    decoration: BoxDecoration(
+                      color: GamerTheme.cardElevated,
+                      borderRadius: BorderRadius.circular(8),
+                      border: Border.all(color: GamerTheme.neonGreen.withOpacity(0.4)),
+                    ),
+                    child: const Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Icon(Icons.check_circle_rounded, size: 16, color: GamerTheme.neonGreen),
+                        SizedBox(width: 6),
+                        Text(
+                          'Requested',
+                          style: TextStyle(
+                            fontWeight: FontWeight.w900,
+                            fontSize: 12,
+                            color: GamerTheme.neonGreen,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
                 ] else ...[
+                  // Other Users: Non-owner who has not requested yet
+                  Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      const Icon(Icons.people_outline_rounded, size: 16, color: GamerTheme.textMuted),
+                      const SizedBox(width: 6),
+                      Text(
+                        '${squad.joinRequests.length} requested',
+                        style: const TextStyle(color: GamerTheme.textMuted, fontSize: 12),
+                      ),
+                    ],
+                  ),
+
+                  const Spacer(),
+
+                  // "Request to Join" button
                   ElevatedButton.icon(
                     style: ElevatedButton.styleFrom(
-                      backgroundColor: hasRequested ? GamerTheme.cardElevated : GamerTheme.accentOrange,
-                      foregroundColor: hasRequested ? GamerTheme.neonGreen : GamerTheme.bgDark,
+                      backgroundColor: GamerTheme.accentOrange,
+                      foregroundColor: GamerTheme.bgDark,
                       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
                       padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
                       elevation: 0,
                     ),
-                    icon: Icon(
-                      hasRequested ? Icons.check_circle_rounded : Icons.group_add_rounded,
-                      size: 16,
-                      color: hasRequested ? GamerTheme.neonGreen : GamerTheme.bgDark,
-                    ),
-                    label: Text(
-                      hasRequested ? 'Requested' : 'Join Squad',
+                    icon: const Icon(Icons.group_add_rounded, size: 16, color: GamerTheme.bgDark),
+                    label: const Text(
+                      'Request to Join',
                       style: TextStyle(
                         fontWeight: FontWeight.w900,
                         fontSize: 12,
-                        color: hasRequested ? GamerTheme.neonGreen : GamerTheme.bgDark,
+                        color: GamerTheme.bgDark,
                       ),
                     ),
-                    onPressed: hasRequested || _isRequesting
+                    onPressed: _isRequesting
                         ? null
                         : () async {
                             if (currentGamer == null) {

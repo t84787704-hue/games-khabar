@@ -258,44 +258,101 @@ class SquadService {
     required SquadPost squad,
   }) async {
     try {
-      final batch = _firestore.batch();
+      debugPrint('[SquadService] acceptSquadRequest: postId=$postId, requesterId=${request.userId}');
 
-      // 1. Add user to squad members, remove from joinRequests on both collections
-      batch.set(_squadRef.doc(postId), {
-        'members': FieldValue.arrayUnion([request.userId]),
-        'joinRequests': FieldValue.arrayRemove([request.userId]),
-      }, SetOptions(merge: true));
+      // Reference both collections for sync
+      final lfgPostRef = _lfgPostsRef.doc(postId);
+      final squadRef = _squadRef.doc(postId);
 
-      batch.set(_lfgPostsRef.doc(postId), {
-        'members': FieldValue.arrayUnion([request.userId]),
-        'joinRequests': FieldValue.arrayRemove([request.userId]),
-      }, SetOptions(merge: true));
+      await _firestore.runTransaction((tx) async {
+        DocumentSnapshot lfgSnap = await tx.get(lfgPostRef);
+        DocumentSnapshot squadSnap = await tx.get(squadRef);
 
-      try {
-        batch.set(_legacySquadRef.doc(postId), {
+        DocumentSnapshot? targetSnap = lfgSnap.exists ? lfgSnap : (squadSnap.exists ? squadSnap : null);
+        List<dynamic> members = [];
+        if (targetSnap != null) {
+          final data = targetSnap.data() as Map<String, dynamic>? ?? {};
+          members = List.from(data['members'] ?? []);
+          if (members.isEmpty) {
+            final owner = data['userId']?.toString() ?? squad.userId;
+            if (owner.isNotEmpty) members.add(owner);
+          }
+        } else {
+          members = [squad.userId];
+        }
+
+        if (members.length >= 4) {
+          throw "Squad Full";
+        }
+        if (members.contains(request.userId)) {
+          throw "Already in squad";
+        }
+
+        final updateData = {
           'members': FieldValue.arrayUnion([request.userId]),
           'joinRequests': FieldValue.arrayRemove([request.userId]),
+          'membersCount': FieldValue.increment(1),
+          'requestedCount': FieldValue.increment(-1),
+        };
+
+        if (lfgSnap.exists) {
+          tx.update(lfgPostRef, updateData);
+        } else {
+          tx.set(lfgPostRef, {
+            ...squad.toMap(),
+            'members': FieldValue.arrayUnion([squad.userId, request.userId]),
+            'membersCount': 2,
+            'requestedCount': 0,
+          }, SetOptions(merge: true));
+        }
+
+        if (squadSnap.exists) {
+          tx.update(squadRef, updateData);
+        } else {
+          tx.set(squadRef, {
+            ...squad.toMap(),
+            'members': FieldValue.arrayUnion([squad.userId, request.userId]),
+            'membersCount': 2,
+            'requestedCount': 0,
+          }, SetOptions(merge: true));
+        }
+
+        // Delete from requests subcollection
+        final reqLfg = lfgPostRef.collection('requests').doc(request.id);
+        final reqSquad = squadRef.collection('requests').doc(request.id);
+        final reqUserIdLfg = lfgPostRef.collection('requests').doc(request.userId);
+        final reqUserIdSquad = squadRef.collection('requests').doc(request.userId);
+
+        tx.delete(reqLfg);
+        tx.delete(reqSquad);
+        tx.delete(reqUserIdLfg);
+        tx.delete(reqUserIdSquad);
+      });
+
+      // Mirror to legacy if needed
+      try {
+        await _legacySquadRef.doc(postId).set({
+          'members': FieldValue.arrayUnion([request.userId]),
+          'joinRequests': FieldValue.arrayRemove([request.userId]),
+          'membersCount': FieldValue.increment(1),
+          'requestedCount': FieldValue.increment(-1),
         }, SetOptions(merge: true));
       } catch (_) {}
 
-      // 2. Delete request doc from subcollections
-      batch.delete(_lfgPostsRef.doc(postId).collection('requests').doc(request.id));
-      batch.delete(_squadRef.doc(postId).collection('requests').doc(request.id));
+      // Send notification to applicant
+      try {
+        await _notificationsRef.add({
+          'recipientUid': request.userId,
+          'senderUid': squad.userId,
+          'type': 'squad_accepted',
+          'message': 'accepted your request to join squad (${squad.mode})! Leader BGMI UID: ${squad.inGameUid}',
+          'postId': postId,
+          'read': false,
+          'createdAt': FieldValue.serverTimestamp(),
+        });
+      } catch (_) {}
 
-      // 3. Send notification to applicant
-      final notifDoc = _notificationsRef.doc();
-      batch.set(notifDoc, {
-        'recipientUid': request.userId,
-        'senderUid': squad.userId,
-        'type': 'squad_accepted',
-        'message': 'accepted your request to join squad (${squad.mode})! Leader BGMI UID: ${squad.inGameUid}',
-        'postId': postId,
-        'read': false,
-        'createdAt': FieldValue.serverTimestamp(),
-      });
-
-      await batch.commit();
-      debugPrint('[SquadService] Successfully accepted squad request ${request.id}');
+      debugPrint('[SquadService] Successfully accepted squad request ${request.id} for post $postId');
     } catch (e) {
       debugPrint('[SquadService] Error accepting squad request: $e');
       rethrow;
