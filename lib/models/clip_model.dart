@@ -45,14 +45,17 @@ class GamerClip {
       created = DateTime.tryParse(raw);
     }
 
+    final titleText = data['caption']?.toString() ?? data['title']?.toString() ?? 'Gaming Clip 🔥';
+    final videoUrlText = data['videoUrl']?.toString() ?? data['mediaUrl']?.toString() ?? '';
+
     return GamerClip(
       id: data['id'] ?? doc.id,
       userId: data['userId'] ?? '',
       username: data['username'] ?? 'gamer',
       displayName: data['displayName'] ?? 'Gamer',
       userAvatar: data['userAvatar'] ?? '',
-      title: data['title'] ?? 'Insane 1v4 Clutch! 🔥',
-      mediaUrl: data['mediaUrl'] ?? '',
+      title: titleText,
+      mediaUrl: videoUrlText,
       thumbnail: data['thumbnail'] ?? '',
       gameTag: data['gameTag'] ?? 'BGMI',
       songTitle: data['songTitle'] ?? 'BGMI Theme Trap Beat (Remix)',
@@ -71,7 +74,9 @@ class GamerClip {
       'username': username,
       'displayName': displayName,
       'userAvatar': userAvatar,
+      'caption': title.trim(),
       'title': title.trim(),
+      'videoUrl': mediaUrl,
       'mediaUrl': mediaUrl,
       'thumbnail': thumbnail,
       'gameTag': gameTag,

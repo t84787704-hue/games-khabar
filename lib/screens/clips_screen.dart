@@ -557,46 +557,33 @@ class _ClipsScreenState extends State<ClipsScreen> with SingleTickerProviderStat
                                 uploadStatus = 'Uploading clip to Cloudinary... ⏳';
                               });
 
-                              String mediaUrl = '';
                               try {
-                                mediaUrl = await _clipService.uploadClipMedia(
+                                print('🎬 [CLIPS_SCREEN] Starting clip upload to Cloudinary & Firestore...');
+                                await _clipService.uploadClip(
                                   file: pickedFile!,
                                   userId: currentGamer.uid,
-                                  customFileName: fileName,
+                                  caption: titleController.text.trim(),
+                                  username: currentGamer.username,
+                                  displayName: currentGamer.displayName,
+                                  userAvatar: currentGamer.photoUrl,
+                                  gameTag: selectedTag,
+                                  songTitle: 'Original Audio - ${currentGamer.displayName}',
                                   isVideo: isVideo,
                                 );
+                                print('✅ [CLIPS_SCREEN] Clip upload complete!');
                               } catch (e) {
-                                debugPrint('Cloudinary upload error: $e');
+                                print('❌ [CLIPS_SCREEN] Cloudinary upload error: $e');
                                 setModalState(() => isUploading = false);
                                 if (mounted) {
                                   ScaffoldMessenger.of(context).showSnackBar(
                                     SnackBar(
-                                      content: Text('Cloudinary upload failed: $e. Please check connection and try again.'),
+                                      content: Text('Upload failed: $e. Please check your connection and Cloudinary settings.'),
                                       backgroundColor: GamerTheme.redAccent,
                                     ),
                                   );
                                 }
                                 return;
                               }
-
-                              setModalState(() {
-                                uploadStatus = 'Publishing clip to feed... 🚀';
-                              });
-
-                              final clip = GamerClip(
-                                id: '',
-                                userId: currentGamer.uid,
-                                username: currentGamer.username,
-                                displayName: currentGamer.displayName,
-                                userAvatar: currentGamer.photoUrl,
-                                title: titleController.text.trim(),
-                                mediaUrl: mediaUrl,
-                                thumbnail: isVideo ? '' : mediaUrl,
-                                gameTag: selectedTag,
-                                songTitle: 'Original Audio - ${currentGamer.displayName}',
-                                createdAt: DateTime.now(),
-                              );
-                              await _clipService.uploadClip(clip);
 
                               if (ctx.mounted) {
                                 Navigator.pop(ctx);
@@ -785,12 +772,29 @@ class _ClipsScreenState extends State<ClipsScreen> with SingleTickerProviderStat
     final currentUid = currentGamer?.uid ?? '';
     final isLiked = clip.likedBy.contains(currentUid);
 
+    final isVideo = clip.mediaUrl.toLowerCase().contains('.mp4') ||
+        clip.mediaUrl.toLowerCase().contains('.mov') ||
+        clip.mediaUrl.toLowerCase().contains('.webm') ||
+        clip.mediaUrl.toLowerCase().contains('/video/upload/');
+
+    // Derive Cloudinary video thumbnail if image URL is empty
+    String displayImageUrl = clip.thumbnail;
+    if (displayImageUrl.isEmpty) {
+      if (clip.mediaUrl.contains('cloudinary.com') && isVideo) {
+        displayImageUrl = clip.mediaUrl
+            .replaceAll('/video/upload/', '/video/upload/so_0,w_720,c_fill/')
+            .replaceAll(RegExp(r'\.(mp4|mov|webm|mkv)(\?.*)?$', caseSensitive: false), '.jpg');
+      } else {
+        displayImageUrl = clip.mediaUrl;
+      }
+    }
+
     return Stack(
       fit: StackFit.expand,
       children: [
         // Simulated Video / Image Canvas
         Image.network(
-          clip.thumbnail.isNotEmpty ? clip.thumbnail : clip.mediaUrl,
+          displayImageUrl,
           fit: BoxFit.cover,
           errorBuilder: (_, __, ___) {
             final isVideo = clip.mediaUrl.toLowerCase().contains('.mp4') ||
