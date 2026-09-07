@@ -573,12 +573,21 @@ class _ClipsScreenState extends State<ClipsScreen> with SingleTickerProviderStat
                                 print('✅ [CLIPS_SCREEN] Clip upload complete!');
                               } catch (e) {
                                 print('❌ [CLIPS_SCREEN] Cloudinary upload error: $e');
-                                setModalState(() => isUploading = false);
+                                setModalState(() {
+                                  isUploading = false;
+                                  uploadStatus = '';
+                                });
                                 if (mounted) {
                                   ScaffoldMessenger.of(context).showSnackBar(
                                     SnackBar(
-                                      content: Text('Upload failed: $e. Please check your connection and Cloudinary settings.'),
+                                      content: Text('Upload failed: $e'),
                                       backgroundColor: GamerTheme.redAccent,
+                                      duration: const Duration(seconds: 12),
+                                      action: SnackBarAction(
+                                        label: 'DISMISS',
+                                        textColor: Colors.white,
+                                        onPressed: () {},
+                                      ),
                                     ),
                                   );
                                 }
