@@ -3,18 +3,19 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import '../models/clip_model.dart';
 import 'cloudinary_service.dart';
 
-/// Service managing Gaming Clips using 100% Cloudinary for video hosting and Firestore for metadata.
-/// ZERO Firebase Storage dependencies.
+/// Service for managing gaming clips and memes.
+/// Uses 100% Cloudinary for video storage (ZERO Firebase Storage dependencies)
+/// and Cloud Firestore for saving clip records in collection 'clips'.
 class ClipService {
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
-  final CloudinaryService _cloudinaryService = CloudinaryService();
 
   // Firestore collections
   CollectionReference get _clipsRef => _firestore.collection('clips');
   CollectionReference get _legacyClipsRef => _firestore.collection('gamer_clips');
   CollectionReference get _notificationsRef => _firestore.collection('notifications');
 
-  /// Uploads media file to Cloudinary and returns the HTTPS secure_url
+  /// Uploads media directly to Cloudinary and returns the HTTPS secure_url.
+  /// 100% Cloudinary - NO Firebase Storage!
   Future<String> uploadClipMedia({
     required File file,
     required String userId,
@@ -22,12 +23,9 @@ class ClipService {
     bool isVideo = true,
   }) async {
     try {
-      print('🚀 [CLIP_SERVICE] Starting media upload for user $userId (isVideo: $isVideo)...');
-      final secureUrl = await _cloudinaryService.uploadMedia(
-        file: file,
-        isVideo: isVideo,
-      );
-      print('✅ [CLIP_SERVICE] Media upload finished! Secure URL: $secureUrl');
+      print('🚀 [CLIP_SERVICE] uploadClipMedia called for user: $userId (isVideo: $isVideo)');
+      final secureUrl = await CloudinaryService.uploadMedia(file, isVideo: isVideo);
+      print('✅ [CLIP_SERVICE] uploadClipMedia completed: $secureUrl');
       return secureUrl;
     } catch (e) {
       print('❌ [CLIP_SERVICE] uploadClipMedia failed: $e');
@@ -35,10 +33,7 @@ class ClipService {
     }
   }
 
-  /// Full video clip upload pipeline:
-  /// 1. Uploads video directly to Cloudinary (POST https://api.cloudinary.com/v1_1/<cloudName>/video/upload)
-  /// 2. Returns secure_url
-  /// 3. Saves document to Firestore collection 'clips' with {videoUrl, userId, createdAt, caption}
+  /// Uploads video clip to Cloudinary and saves {videoUrl, userId, createdAt, caption} to Firestore collection 'clips'
   Future<String> uploadClip({
     required File file,
     required String userId,
@@ -51,13 +46,13 @@ class ClipService {
     bool isVideo = true,
   }) async {
     try {
-      print('🚀 [CLIP_SERVICE] Step 1: Uploading video to Cloudinary...');
+      print('🚀 [CLIP_SERVICE] Step 1: Uploading video file to Cloudinary...');
       
-      // 1. Upload to Cloudinary unsigned endpoint
-      final secureUrl = await _cloudinaryService.uploadVideo(file: file);
-      print('✅ [CLIP_SERVICE] Step 1 Complete: Cloudinary secure_url obtained: $secureUrl');
+      // 1. Upload to Cloudinary unsigned video endpoint
+      final videoUrl = await CloudinaryService.uploadVideo(file);
+      print('✅ [CLIP_SERVICE] Cloudinary upload successful! URL: $videoUrl');
 
-      print('💾 [CLIP_SERVICE] Step 2: Saving to Firestore collection "clips"...');
+      print('💾 [CLIP_SERVICE] Step 2: Saving clip record to Firestore collection "clips"...');
       
       // 2. Prepare document data for collection 'clips'
       final docRef = _clipsRef.doc();
@@ -66,8 +61,8 @@ class ClipService {
         'userId': userId,
         'caption': caption.trim(),
         'title': caption.trim(),
-        'videoUrl': secureUrl,
-        'mediaUrl': secureUrl,
+        'videoUrl': videoUrl,
+        'mediaUrl': videoUrl,
         'thumbnail': '',
         'username': username,
         'displayName': displayName,
@@ -83,44 +78,27 @@ class ClipService {
 
       // 3. Save to Firestore collection 'clips'
       await docRef.set(clipData);
-      print('✅ [CLIP_SERVICE] Document saved to Firestore "clips" with ID: ${docRef.id}');
+      print('✅ [CLIP_SERVICE] Clip record saved to Firestore collection "clips" (id: ${docRef.id})');
 
-      // Also mirror to 'gamer_clips' for legacy UI sync
+      // Also mirror to 'gamer_clips' for legacy feed compatibility
       await _legacyClipsRef.doc(docRef.id).set(clipData).catchError((e) {
-        print('⚠️ [CLIP_SERVICE] Notice mirroring to gamer_clips: $e');
+        print('⚠️ [CLIP_SERVICE] Legacy mirror notice: $e');
       });
 
-      return secureUrl;
+      return videoUrl;
     } catch (e) {
-      print('❌ [CLIP_SERVICE] uploadClip failed: $e');
+      print('❌ [CLIP_SERVICE] uploadClip error: $e');
       rethrow;
     }
   }
 
-  /// Saves a pre-constructed GamerClip model to Firestore collection 'clips'
-  Future<void> saveClipModel(GamerClip clip) async {
-    try {
-      final docId = clip.id.isNotEmpty ? clip.id : _clipsRef.doc().id;
-      final finalClip = clip.id.isEmpty ? clip.copyWith(id: docId) : clip;
-      final mapData = finalClip.toMap();
-
-      print('💾 [CLIP_SERVICE] Saving GamerClip ${finalClip.id} to collection "clips"...');
-      await _clipsRef.doc(docId).set(mapData);
-      await _legacyClipsRef.doc(docId).set(mapData).catchError((_) {});
-      print('✅ [CLIP_SERVICE] GamerClip saved successfully!');
-    } catch (e) {
-      print('❌ [CLIP_SERVICE] saveClipModel error: $e');
-      rethrow;
-    }
-  }
-
-  /// Real-time stream of gaming clips from Firestore collection 'clips' ordered by createdAt descending
+  /// Real-time stream of clips from Firestore collection 'clips' ordered by createdAt descending
   Stream<List<GamerClip>> getClipsStream() {
     return _clipsRef
         .orderBy('createdAt', descending: true)
         .snapshots()
         .map((snap) {
-          print('📺 [CLIP_SERVICE] Loaded ${snap.docs.length} clips from Firestore "clips" collection');
+          print('📺 [CLIP_SERVICE] Real-time clips fetched: ${snap.docs.length}');
           return snap.docs.map((d) => GamerClip.fromFirestore(d)).toList();
         });
   }
