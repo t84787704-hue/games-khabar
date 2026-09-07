@@ -104,21 +104,64 @@ class LfgService {
         throw "Only owner can accept";
       }
 
+      final int currentRequested = (data['requestedCount'] as num?)?.toInt() ?? 0;
       List<dynamic> members = List.from(data['members'] ?? []);
       if (members.isEmpty && postOwnerId.isNotEmpty) {
         members.add(postOwnerId);
       }
 
-      // Check squad full
+      // 1. If requester is owner: clean from joinRequests and return
+      if (postOwnerId == requesterId) {
+        debugPrint("[LfgService] Requester is post owner. Cleaning from joinRequests.");
+        final batch = _firestore.batch();
+        final safeCount = math.max(0, currentRequested - 1);
+        final cleanMap = <String, dynamic>{
+          'joinRequests': FieldValue.arrayRemove([requesterId, requestDocId]),
+          'requestedCount': safeCount,
+        };
+        batch.update(postRef, cleanMap);
+        batch.delete(postRef.collection('requests').doc(requestDocId));
+        if (requestDocId != requesterId) {
+          batch.delete(postRef.collection('requests').doc(requesterId));
+        }
+        batch.set(squadRef, cleanMap, SetOptions(merge: true));
+        batch.delete(squadRef.collection('requests').doc(requestDocId));
+        if (requestDocId != requesterId) {
+          batch.delete(squadRef.collection('requests').doc(requesterId));
+        }
+        await batch.commit();
+        return;
+      }
+
+      // 2. If requester is already in members: clean from joinRequests, decrement requestedCount, return
+      if (members.contains(requesterId)) {
+        debugPrint("[LfgService] Requester already in members. Cleaning from joinRequests.");
+        final batch = _firestore.batch();
+        final dynamic safeRequestedDecrement = (currentRequested <= 1) ? 0 : FieldValue.increment(-1);
+        final cleanMap = <String, dynamic>{
+          'joinRequests': FieldValue.arrayRemove([requesterId, requestDocId]),
+          'requestedCount': safeRequestedDecrement,
+        };
+        batch.update(postRef, cleanMap);
+        batch.delete(postRef.collection('requests').doc(requestDocId));
+        if (requestDocId != requesterId) {
+          batch.delete(postRef.collection('requests').doc(requesterId));
+        }
+        batch.set(squadRef, cleanMap, SetOptions(merge: true));
+        batch.delete(squadRef.collection('requests').doc(requestDocId));
+        if (requestDocId != requesterId) {
+          batch.delete(squadRef.collection('requests').doc(requesterId));
+        }
+        await batch.commit();
+        return;
+      }
+
+      // 3. Normal Accept: check capacity
       if (members.length >= 4) {
         throw "Full";
       }
-      if (members.contains(requesterId)) {
-        throw "Already in squad";
-      }
 
-      // 3. Security: if requestedCount <= 0 (or negative), set to 0, never decrement below 0
-      final int currentRequested = (data['requestedCount'] as num?)?.toInt() ?? 0;
+      // Ensure requestedCount never goes below 0
       final dynamic safeRequestedDecrement = (currentRequested <= 1)
           ? 0
           : FieldValue.increment(-1);

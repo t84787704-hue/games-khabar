@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:intl/intl.dart';
 import 'package:share_plus/share_plus.dart';
 import '../constants/gamer_theme.dart';
@@ -911,6 +912,25 @@ class _GamerProfileScreenState extends State<GamerProfileScreen> with SingleTick
                             color: GamerTheme.accentOrange,
                             fontSize: 14,
                             fontWeight: FontWeight.w800,
+                          ),
+                        ),
+                        const SizedBox(height: 6),
+                        // Debug: Current Firebase Auth User & UID
+                        Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                          decoration: BoxDecoration(
+                            color: GamerTheme.cardElevated,
+                            borderRadius: BorderRadius.circular(6),
+                            border: Border.all(color: GamerTheme.borderDark),
+                          ),
+                          child: Text(
+                            "Email: ${FirebaseAuth.instance.currentUser?.email} | UID: ${FirebaseAuth.instance.currentUser?.uid}",
+                            style: const TextStyle(
+                              color: Color(0xFF38BDF8),
+                              fontSize: 11,
+                              fontFamily: 'monospace',
+                              fontWeight: FontWeight.w600,
+                            ),
                           ),
                         ),
 

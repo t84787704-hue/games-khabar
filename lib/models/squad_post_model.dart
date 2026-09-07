@@ -87,6 +87,7 @@ class SquadPost {
   Map<String, dynamic> toMap() {
     return {
       'id': id,
+      'ownerId': userId,
       'userId': userId,
       'username': username,
       'displayName': displayName,

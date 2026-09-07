@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:easy_localization/easy_localization.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 import '../utils/admin_security.dart';
 import '../services/bookmark_service.dart';
 import '../services/theme_service.dart';
@@ -226,6 +227,26 @@ class _ProfileScreenState extends State<ProfileScreen> {
                           color: isCurrentAdmin ? neonGreen : textGray,
                           fontSize: 13,
                           fontWeight: isCurrentAdmin ? FontWeight.bold : FontWeight.normal,
+                        ),
+                      ),
+                      const SizedBox(height: 6),
+                      // Debug: Current Firebase Auth User & UID
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                        decoration: BoxDecoration(
+                          color: cardDark2,
+                          borderRadius: BorderRadius.circular(6),
+                          border: Border.all(color: borderDark),
+                        ),
+                        child: Text(
+                          "Email: ${FirebaseAuth.instance.currentUser?.email} | UID: ${FirebaseAuth.instance.currentUser?.uid}",
+                          style: const TextStyle(
+                            color: Color(0xFF38BDF8),
+                            fontSize: 11,
+                            fontFamily: 'monospace',
+                            fontWeight: FontWeight.w600,
+                          ),
+                          textAlign: TextAlign.center,
                         ),
                       ),
                       if (isCurrentAdmin) ...[

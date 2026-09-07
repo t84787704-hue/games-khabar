@@ -17,8 +17,37 @@ class SquadService {
   Future<void> createSquadPost(SquadPost post) async {
     try {
       final doc = post.id.isNotEmpty ? _squadRef.doc(post.id) : _squadRef.doc();
-      final finalPost = post.id.isEmpty ? post.copyWith(id: doc.id) : post;
+      final ownerUid = post.ownerId.isNotEmpty ? post.ownerId : post.userId;
+
+      // Do not allow joinRequests to contain ownerId
+      final cleanJoinRequests = List<String>.from(post.joinRequests)
+        ..remove(ownerUid)
+        ..remove(post.userId);
+
+      final cleanMembers = List<String>.from(post.members);
+      if (ownerUid.isNotEmpty && !cleanMembers.contains(ownerUid)) {
+        cleanMembers.add(ownerUid);
+      }
+
+      final finalPost = post.copyWith(
+        id: doc.id,
+        userId: ownerUid,
+        isActive: true, // Always true on creation
+        joinRequests: cleanJoinRequests,
+        members: cleanMembers,
+        membersCount: cleanMembers.isNotEmpty ? cleanMembers.length : 1,
+        requestedCount: cleanJoinRequests.length,
+      );
+
       final data = finalPost.toMap();
+      data['isActive'] = true;
+      data['ownerId'] = ownerUid;
+      data['userId'] = ownerUid;
+      data['joinRequests'] = cleanJoinRequests;
+      data['members'] = cleanMembers;
+      data['membersCount'] = cleanMembers.length;
+      data['requestedCount'] = cleanJoinRequests.length;
+
       await doc.set(data);
 
       // Also mirror to lfg_posts and legacy collection
@@ -35,20 +64,46 @@ class SquadService {
     }
   }
 
+  /// Real-time stream of all posts where isActive == true
   Stream<List<SquadPost>> getActiveSquadsStream() {
-    return _squadRef
-        .orderBy('createdAt', descending: true)
+    return _lfgPostsRef
+        .where('isActive', isEqualTo: true)
         .snapshots()
-        .map((snap) {
-      debugPrint('[SquadService] Fetched squads docs length from Firestore: ${snap.docs.length}');
-      return snap.docs.map((d) => SquadPost.fromFirestore(d)).toList();
+        .asyncMap((snap) async {
+      final Set<String> seenIds = {};
+      final List<SquadPost> posts = [];
+
+      for (final doc in snap.docs) {
+        seenIds.add(doc.id);
+        posts.add(SquadPost.fromFirestore(doc));
+      }
+
+      // Also fetch from squads where isActive == true for full consistency
+      try {
+        final squadSnap = await _squadRef.where('isActive', isEqualTo: true).get();
+        for (final doc in squadSnap.docs) {
+          if (!seenIds.contains(doc.id)) {
+            seenIds.add(doc.id);
+            posts.add(SquadPost.fromFirestore(doc));
+          }
+        }
+      } catch (_) {}
+
+      posts.sort((a, b) {
+        final aTime = a.createdAt ?? DateTime(1970);
+        final bTime = b.createdAt ?? DateTime(1970);
+        return bTime.compareTo(aTime);
+      });
+
+      debugPrint('[SquadService] Fetched active squads docs length from Firestore: ${posts.length}');
+      return posts;
     });
   }
 
   Future<List<SquadPost>> fetchSquadsOnce() async {
     try {
-      final snap = await _squadRef.orderBy('createdAt', descending: true).get();
-      debugPrint('[SquadService] One-time fetched squads docs length: ${snap.docs.length}');
+      final snap = await _lfgPostsRef.where('isActive', isEqualTo: true).get();
+      debugPrint('[SquadService] One-time fetched active squads length: ${snap.docs.length}');
       return snap.docs.map((d) => SquadPost.fromFirestore(d)).toList();
     } catch (e) {
       debugPrint('[SquadService] Error fetching squads once: $e');
@@ -286,16 +341,44 @@ class SquadService {
           members = [squad.userId];
         }
 
-        if (members.length >= 4) {
-          throw "Squad Full";
-        }
-        if (members.contains(request.userId)) {
-          throw "Already in squad";
-        }
-
+        final postOwner = (targetSnap?.data() as Map<String, dynamic>?)?['ownerId'] ??
+            (targetSnap?.data() as Map<String, dynamic>?)?['userId'] ??
+            squad.ownerId;
         final int currentRequested = (targetSnap?.data() as Map<String, dynamic>?)?['requestedCount'] is num
             ? ((targetSnap!.data() as Map<String, dynamic>)['requestedCount'] as num).toInt()
             : 0;
+
+        // 1. If requester is owner: clean from joinRequests and return
+        if (postOwner == request.userId) {
+          final cleanMap = {
+            'joinRequests': FieldValue.arrayRemove([request.userId, request.id]),
+            'requestedCount': currentRequested <= 1 ? 0 : currentRequested - 1,
+          };
+          if (lfgSnap.exists) tx.update(lfgPostRef, cleanMap);
+          if (squadSnap.exists) tx.update(squadRef, cleanMap);
+          tx.delete(lfgPostRef.collection('requests').doc(request.id));
+          tx.delete(squadRef.collection('requests').doc(request.id));
+          return;
+        }
+
+        // 2. If requester is already in members: clean from joinRequests, decrement requestedCount, return
+        if (members.contains(request.userId)) {
+          final dynamic safeDec = currentRequested <= 1 ? 0 : FieldValue.increment(-1);
+          final cleanMap = {
+            'joinRequests': FieldValue.arrayRemove([request.userId, request.id]),
+            'requestedCount': safeDec,
+          };
+          if (lfgSnap.exists) tx.update(lfgPostRef, cleanMap);
+          if (squadSnap.exists) tx.update(squadRef, cleanMap);
+          tx.delete(lfgPostRef.collection('requests').doc(request.id));
+          tx.delete(squadRef.collection('requests').doc(request.id));
+          return;
+        }
+
+        if (members.length >= 4) {
+          throw "Squad Full";
+        }
+
         final dynamic safeRequestedDecrement = currentRequested <= 1 ? 0 : FieldValue.increment(-1);
 
         final updateData = {

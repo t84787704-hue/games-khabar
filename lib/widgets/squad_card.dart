@@ -14,6 +14,7 @@ import '../widgets/gamer_avatar.dart';
 import '../widgets/rank_badge_widget.dart';
 import '../widgets/requests_bottom_sheet.dart';
 import '../screens/gamer_profile_screen.dart';
+import '../services/lfg_service.dart';
 
 typedef SquadCard = LFGCard;
 
@@ -38,28 +39,119 @@ class _LFGCardState extends State<LFGCard> {
     return DateFormat('dd MMM').format(dt);
   }
 
+  Future<void> _sendJoinRequest(BuildContext context) async {
+    final authUser = FirebaseAuth.instance.currentUser;
+    final currentGamer = GamerAuthService().currentGamer;
+    final currentUserId = authUser?.uid ?? GamerAuthService().currentUid ?? currentGamer?.uid ?? '';
+
+    if (currentUserId.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Please log in to join squads!')),
+      );
+      return;
+    }
+
+    if (widget.squad.ownerId == currentUserId || widget.squad.userId == currentUserId) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text("You cannot join your own squad"),
+          backgroundColor: Colors.redAccent,
+        ),
+      );
+      return;
+    }
+
+    if (widget.squad.members.contains(currentUserId)) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text("Already in squad"),
+          backgroundColor: Colors.redAccent,
+        ),
+      );
+      return;
+    }
+
+    if (widget.squad.joinRequests.contains(currentUserId)) {
+      return;
+    }
+
+    setState(() => _isRequesting = true);
+    try {
+      final effectiveName = currentGamer?.displayName.isNotEmpty == true
+          ? currentGamer!.displayName
+          : (authUser?.displayName ?? 'Gamer');
+      final effectiveUsername = currentGamer?.username ?? '';
+      final effectiveAvatar = currentGamer?.photoUrl ?? authUser?.photoURL ?? '';
+      final effectiveTier = currentGamer?.rank ?? 'Ace';
+      final effectiveKd = currentGamer?.kdRatio ?? 3.0;
+      final effectiveGameId = currentGamer?.gameId ?? '';
+
+      await LfgService().joinRequest(
+        postId: widget.squad.id,
+        currentUserId: currentUserId,
+        leaderUid: widget.squad.userId.isNotEmpty ? widget.squad.userId : widget.squad.ownerId,
+        applicantData: {
+          'id': currentUserId,
+          'userId': currentUserId,
+          'applicantUid': currentUserId,
+          'name': effectiveName,
+          'displayName': effectiveName,
+          'username': effectiveUsername,
+          'userAvatar': effectiveAvatar,
+          'photoUrl': effectiveAvatar,
+          'tier': effectiveTier,
+          'userRank': effectiveTier,
+          'kd': effectiveKd,
+          'kdRatio': effectiveKd,
+          'inGameUid': effectiveGameId,
+          'gameId': effectiveGameId,
+          'status': 'pending',
+          'createdAt': FieldValue.serverTimestamp(),
+        },
+      );
+
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Squad request sent to ${widget.squad.displayName}!'),
+            backgroundColor: GamerTheme.accentOrange,
+          ),
+        );
+      }
+    } catch (e) {
+      debugPrint("Error sending join request: $e");
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(e.toString().replaceAll('Exception: ', '')),
+            backgroundColor: Colors.redAccent,
+          ),
+        );
+      }
+    } finally {
+      if (mounted) {
+        setState(() => _isRequesting = false);
+      }
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final squad = widget.squad;
     final authService = GamerAuthService();
+    final authUser = FirebaseAuth.instance.currentUser;
     final currentGamer = authService.currentGamer;
-    final firebaseUid = FirebaseAuth.instance.currentUser?.uid;
-    final currentUid = firebaseUid ?? authService.currentUid ?? currentGamer?.uid ?? '';
-    final currentUsername = currentGamer?.username.trim().toLowerCase() ?? '';
-    final postUsername = squad.username.trim().toLowerCase();
-    final currentGameId = currentGamer?.gameId.trim() ?? '';
-    final postInGameUid = squad.inGameUid.trim();
+    final currentUid = authUser?.uid ?? authService.currentUid ?? currentGamer?.uid ?? '';
 
-    // Owner check: currentUser UID matches squad ownerId or userId, or gamer username/gameId match
-    final bool isOwner = (currentUid.isNotEmpty && (currentUid == squad.ownerId || currentUid == squad.userId)) ||
-        (firebaseUid != null && (firebaseUid == squad.ownerId || firebaseUid == squad.userId)) ||
-        (currentUsername.isNotEmpty && currentUsername == postUsername) ||
-        (currentGameId.isNotEmpty && postInGameUid.isNotEmpty && currentGameId == postInGameUid);
+    // bool isOwner = post.ownerId == currentUser.uid
+    final bool isOwner = currentUid.isNotEmpty &&
+        (squad.ownerId == currentUid || squad.userId == currentUid);
 
-    // Requester check: currentUid or username present in joinRequests
-    final bool hasRequested = squad.joinRequests.contains(currentUid) ||
-        (firebaseUid != null && squad.joinRequests.contains(firebaseUid)) ||
-        (currentUsername.isNotEmpty && squad.joinRequests.contains(currentUsername));
+    // Check if current user is already a member
+    final bool isMember = currentUid.isNotEmpty && squad.members.contains(currentUid);
+
+    // Requester check: currentUid present in joinRequests
+    final bool hasRequested = currentUid.isNotEmpty && squad.joinRequests.contains(currentUid);
 
     // Rank badge for squad leader
     final leaderBadge = GamerRankBadge(
@@ -450,6 +542,25 @@ class _LFGCardState extends State<LFGCard> {
 
                   const Spacer(),
 
+                  // "Your Post" Badge
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                    decoration: BoxDecoration(
+                      color: GamerTheme.accentOrange.withOpacity(0.15),
+                      borderRadius: BorderRadius.circular(6),
+                      border: Border.all(color: GamerTheme.accentOrange.withOpacity(0.4)),
+                    ),
+                    child: const Text(
+                      'Your Post',
+                      style: TextStyle(
+                        color: GamerTheme.accentOrange,
+                        fontSize: 11,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 6),
+
                   // Owner Action: Close LFG
                   TextButton.icon(
                     style: TextButton.styleFrom(
@@ -461,6 +572,45 @@ class _LFGCardState extends State<LFGCard> {
                     onPressed: () async {
                       await SquadService().closeSquadPost(squad.id);
                     },
+                  ),
+                ] else if (isMember) ...[
+                  // Member View: User is already accepted in this squad
+                  Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      const Icon(Icons.people_outline_rounded, size: 16, color: GamerTheme.textMuted),
+                      const SizedBox(width: 6),
+                      Text(
+                        '${math.max(0, squad.membersCount)} members',
+                        style: const TextStyle(color: GamerTheme.textMuted, fontSize: 12),
+                      ),
+                    ],
+                  ),
+
+                  const Spacer(),
+
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+                    decoration: BoxDecoration(
+                      color: GamerTheme.cardElevated,
+                      borderRadius: BorderRadius.circular(8),
+                      border: Border.all(color: GamerTheme.neonGreen.withOpacity(0.5)),
+                    ),
+                    child: const Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Icon(Icons.check_circle_rounded, size: 16, color: GamerTheme.neonGreen),
+                        SizedBox(width: 6),
+                        Text(
+                          'In Squad',
+                          style: TextStyle(
+                            fontWeight: FontWeight.w900,
+                            fontSize: 12,
+                            color: GamerTheme.neonGreen,
+                          ),
+                        ),
+                      ],
+                    ),
                   ),
                 ] else if (hasRequested) ...[
                   // Requester View: Non-owner who has already requested
@@ -536,37 +686,7 @@ class _LFGCardState extends State<LFGCard> {
                         color: GamerTheme.bgDark,
                       ),
                     ),
-                    onPressed: _isRequesting
-                        ? null
-                        : () async {
-                            if (currentGamer == null) {
-                              ScaffoldMessenger.of(context).showSnackBar(
-                                const SnackBar(content: Text('Please create your Gamer ID to join squads!')),
-                              );
-                              return;
-                            }
-                            setState(() => _isRequesting = true);
-                            await SquadService().requestJoinSquad(
-                              postId: squad.id,
-                              leaderUid: squad.userId,
-                              applicantUid: currentGamer.uid,
-                              applicantName: currentGamer.displayName,
-                              applicantUsername: currentGamer.username,
-                              applicantAvatar: currentGamer.photoUrl,
-                              applicantTier: currentGamer.rank,
-                              applicantKd: currentGamer.kdRatio,
-                              applicantGameId: currentGamer.gameId,
-                            );
-                            setState(() => _isRequesting = false);
-                            if (context.mounted) {
-                              ScaffoldMessenger.of(context).showSnackBar(
-                                SnackBar(
-                                  content: Text('Squad request sent to ${squad.displayName}!'),
-                                  backgroundColor: GamerTheme.accentOrange,
-                                ),
-                              );
-                            }
-                          },
+                    onPressed: _isRequesting ? null : () => _sendJoinRequest(context),
                   ),
                 ],
               ],

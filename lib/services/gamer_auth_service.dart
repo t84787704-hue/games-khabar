@@ -109,9 +109,14 @@ class GamerAuthService {
     return cred;
   }
 
-  /// Google Sign In
-  Future<UserCredential?> signInWithGoogle() async {
+  /// Google Sign In / loginWithGoogle
+  /// First calls GoogleSignIn().signOut() then GoogleSignIn().signIn() to force account chooser
+  Future<UserCredential?> loginWithGoogle() async {
     try {
+      try {
+        await _googleSignIn.signOut();
+      } catch (_) {}
+
       final GoogleSignInAccount? googleUser = await _googleSignIn.signIn();
       if (googleUser == null) return null; // User cancelled
 
@@ -122,6 +127,7 @@ class GamerAuthService {
       );
 
       final cred = await _auth.signInWithCredential(credential);
+      print("LOGGED IN UID: ${cred.user?.uid} | EMAIL: ${cred.user?.email}");
       await refreshCurrentGamer();
       return cred;
     } catch (e) {
@@ -129,6 +135,9 @@ class GamerAuthService {
       rethrow;
     }
   }
+
+  /// Alias for loginWithGoogle
+  Future<UserCredential?> signInWithGoogle() => loginWithGoogle();
 
   /// Quick Anonymous / Guest Sign In for instant access and testing
   Future<UserCredential> signInAnonymously() async {
@@ -223,12 +232,29 @@ class GamerAuthService {
     });
   }
 
-  /// Sign Out
-  Future<void> signOut() async {
+  /// Complete Logout / Sign Out
+  /// Signs out from FirebaseAuth, GoogleSignIn, and calls GoogleSignIn().disconnect()
+  /// to ensure Google account chooser is displayed when logging in with another account.
+  Future<void> logout() async {
+    try {
+      await _auth.signOut();
+    } catch (e) {
+      debugPrint("FirebaseAuth signOut error: $e");
+    }
     try {
       await _googleSignIn.signOut();
-    } catch (_) {}
-    await _auth.signOut();
+    } catch (e) {
+      debugPrint("GoogleSignIn signOut error: $e");
+    }
+    try {
+      await _googleSignIn.disconnect();
+    } catch (e) {
+      debugPrint("GoogleSignIn disconnect error: $e");
+    }
     currentGamerNotifier.value = null;
+    isLoadingNotifier.value = false;
   }
+
+  /// Sign Out alias
+  Future<void> signOut() => logout();
 }

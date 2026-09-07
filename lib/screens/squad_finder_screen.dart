@@ -282,9 +282,10 @@ class _SquadFinderScreenState extends State<SquadFinderScreen> {
                     onPressed: () async {
                       Navigator.pop(ctx);
                       final docId = FirebaseFirestore.instance.collection('squads').doc().id;
+                      final userAuthUid = FirebaseAuth.instance.currentUser?.uid ?? currentGamer.uid;
                       final post = SquadPost(
                         id: docId,
-                        userId: currentGamer.uid,
+                        userId: userAuthUid,
                         username: currentGamer.username,
                         displayName: currentGamer.displayName,
                         userAvatar: currentGamer.photoUrl,
@@ -299,6 +300,9 @@ class _SquadFinderScreenState extends State<SquadFinderScreen> {
                         inGameUid: uidController.text.trim(),
                         isActive: true,
                         joinRequests: const [],
+                        members: [userAuthUid],
+                        membersCount: 1,
+                        requestedCount: 0,
                         createdAt: DateTime.now(),
                       );
 
