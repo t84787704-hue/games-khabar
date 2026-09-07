@@ -2,7 +2,8 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 
 class SquadPost {
   final String id;
-  final String userId;
+  final String userId; // also accessible as ownerId
+  String get ownerId => userId;
   final String username;
   final String displayName;
   final String userAvatar;
@@ -61,7 +62,7 @@ class SquadPost {
 
     return SquadPost(
       id: data['id'] ?? doc.id,
-      userId: data['userId'] ?? '',
+      userId: data['ownerId'] ?? data['userId'] ?? '',
       username: data['username'] ?? 'gamer',
       displayName: data['displayName'] ?? 'Squad Leader',
       userAvatar: data['userAvatar'] ?? '',

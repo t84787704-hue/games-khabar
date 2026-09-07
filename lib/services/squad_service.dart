@@ -260,6 +260,11 @@ class SquadService {
     try {
       debugPrint('[SquadService] acceptSquadRequest: postId=$postId, requesterId=${request.userId}');
 
+      final currentUid = GamerAuthService().currentUid;
+      if (currentUid != null && currentUid != squad.userId && currentUid != squad.ownerId) {
+        throw "Only owner can accept";
+      }
+
       // Reference both collections for sync
       final lfgPostRef = _lfgPostsRef.doc(postId);
       final squadRef = _squadRef.doc(postId);

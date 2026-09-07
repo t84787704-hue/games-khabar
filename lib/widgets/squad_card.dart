@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:firebase_auth/firebase_auth.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:intl/intl.dart';
 import '../constants/gamer_theme.dart';
 import '../models/squad_post_model.dart';
@@ -40,19 +42,22 @@ class _LFGCardState extends State<LFGCard> {
     final squad = widget.squad;
     final authService = GamerAuthService();
     final currentGamer = authService.currentGamer;
-    final currentUid = authService.currentUid ?? currentGamer?.uid ?? '';
+    final firebaseUid = FirebaseAuth.instance.currentUser?.uid;
+    final currentUid = firebaseUid ?? authService.currentUid ?? currentGamer?.uid ?? '';
     final currentUsername = currentGamer?.username.trim().toLowerCase() ?? '';
     final postUsername = squad.username.trim().toLowerCase();
     final currentGameId = currentGamer?.gameId.trim() ?? '';
     final postInGameUid = squad.inGameUid.trim();
 
-    // Comprehensive owner check: UID, username, or gameId / inGameUid
-    final isOwnPost = (currentUid.isNotEmpty && currentUid == squad.userId) ||
+    // Owner check: currentUser UID matches squad ownerId or userId, or gamer username/gameId match
+    final bool isOwner = (currentUid.isNotEmpty && (currentUid == squad.ownerId || currentUid == squad.userId)) ||
+        (firebaseUid != null && (firebaseUid == squad.ownerId || firebaseUid == squad.userId)) ||
         (currentUsername.isNotEmpty && currentUsername == postUsername) ||
         (currentGameId.isNotEmpty && postInGameUid.isNotEmpty && currentGameId == postInGameUid);
 
     // Requester check: currentUid or username present in joinRequests
-    final hasRequested = squad.joinRequests.contains(currentUid) ||
+    final bool hasRequested = squad.joinRequests.contains(currentUid) ||
+        (firebaseUid != null && squad.joinRequests.contains(firebaseUid)) ||
         (currentUsername.isNotEmpty && squad.joinRequests.contains(currentUsername));
 
     // Rank badge for squad leader
@@ -78,8 +83,8 @@ class _LFGCardState extends State<LFGCard> {
         color: GamerTheme.cardDark,
         borderRadius: BorderRadius.circular(16),
         border: Border.all(
-          color: isOwnPost ? GamerTheme.accentOrange.withOpacity(0.7) : GamerTheme.borderDark,
-          width: isOwnPost ? 1.5 : 1.2,
+          color: isOwner ? GamerTheme.accentOrange.withOpacity(0.7) : GamerTheme.borderDark,
+          width: isOwner ? 1.5 : 1.2,
         ),
         boxShadow: [
           BoxShadow(
@@ -130,7 +135,7 @@ class _LFGCardState extends State<LFGCard> {
                             ),
                           ),
                           RankBadgeWidget(badge: leaderBadge, size: 12),
-                          if (isOwnPost) ...[
+                          if (isOwner) ...[
                             const SizedBox(width: 6),
                             Container(
                               padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
@@ -366,8 +371,9 @@ class _LFGCardState extends State<LFGCard> {
             ),
             child: Row(
               children: [
-                if (isOwnPost) ...[
-                  // Owner View: Real-Time Clickable "X requested VIEW" Button
+                if (isOwner) ...[
+                  // Owner View: Real-Time Clickable "X requested VIEW" Button + Close LFG
+                  // Hides "Requested" green badge & "Request to Join" button
                   StreamBuilder<List<SquadJoinRequest>>(
                     stream: SquadService().getSquadRequestsStream(squad.id, squad.joinRequests),
                     initialData: squad.joinRequests
@@ -382,12 +388,7 @@ class _LFGCardState extends State<LFGCard> {
                         color: Colors.transparent,
                         child: InkWell(
                           onTap: () {
-                            showModalBottomSheet(
-                              context: context,
-                              isScrollControlled: true,
-                              backgroundColor: Colors.transparent,
-                              builder: (_) => RequestsBottomSheet(squad: squad),
-                            );
+                            RequestsBottomSheet.show(context, squad);
                           },
                           borderRadius: BorderRadius.circular(8),
                           child: Padding(

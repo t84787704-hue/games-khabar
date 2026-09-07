@@ -1,4 +1,5 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/foundation.dart';
 import '../models/squad_post_model.dart';
 import '../models/squad_request_model.dart';
@@ -7,6 +8,7 @@ import 'squad_service.dart';
 /// LFG Service providing specialized transaction-based request handling for lfg_posts
 class LfgService {
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
+  final FirebaseAuth _auth = FirebaseAuth.instance;
   final SquadService _squadService = SquadService();
 
   static final LfgService _instance = LfgService._internal();
@@ -25,6 +27,8 @@ class LfgService {
     try {
       debugPrint("[LfgService] Starting acceptRequest for $requesterName ($requesterId) on post $postId");
 
+      final currentUid = _auth.currentUser?.uid;
+
       // Check both 'lfg_posts' and 'squads' collections
       final postRef = _firestore.collection('lfg_posts').doc(postId);
       final squadRef = _firestore.collection('squads').doc(postId);
@@ -41,10 +45,14 @@ class LfgService {
             activeRef = squadRef;
           } else {
             // If neither exists yet (e.g. test post or mocked ID), initialize it
+            final postOwnerId = leaderUid.isNotEmpty ? leaderUid : (currentUid ?? 'leader');
+            if (currentUid != null && currentUid != postOwnerId) {
+              throw "Only owner can accept";
+            }
             tx.set(postRef, {
               'id': postId,
-              'userId': leaderUid.isNotEmpty ? leaderUid : 'leader',
-              'members': [leaderUid.isNotEmpty ? leaderUid : 'leader', requesterId],
+              'userId': postOwnerId,
+              'members': [postOwnerId, requesterId],
               'membersCount': 2,
               'requestedCount': 0,
               'joinRequests': [],
@@ -56,12 +64,18 @@ class LfgService {
         }
 
         final data = postSnap.data() as Map<String, dynamic>? ?? {};
+        final postOwnerId = (data['ownerId'] ?? data['userId'] ?? leaderUid).toString();
+
+        // Security check: currentUser != post.ownerId -> throw "Only owner can accept"
+        if (currentUid != null && postOwnerId.isNotEmpty && currentUid != postOwnerId) {
+          throw "Only owner can accept";
+        }
+
         List<dynamic> members = List.from(data['members'] ?? []);
         
         if (members.isEmpty) {
-          final ownerId = data['userId']?.toString() ?? leaderUid;
-          if (ownerId.isNotEmpty) {
-            members.add(ownerId);
+          if (postOwnerId.isNotEmpty) {
+            members.add(postOwnerId);
           }
         }
 

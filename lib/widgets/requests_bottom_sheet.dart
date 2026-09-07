@@ -1,10 +1,12 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:intl/intl.dart';
 import '../constants/gamer_theme.dart';
 import '../models/squad_post_model.dart';
 import '../models/squad_request_model.dart';
 import '../screens/gamer_profile_screen.dart';
+import '../services/gamer_auth_service.dart';
 import '../services/squad_service.dart';
 import '../services/lfg_service.dart';
 import '../widgets/gamer_avatar.dart';
@@ -16,6 +18,20 @@ class RequestsBottomSheet extends StatefulWidget {
     super.key,
     required this.squad,
   });
+
+  /// Helper to open RequestsBottomSheet only if isOwner
+  static void show(BuildContext context, SquadPost squad) {
+    final currentUid = FirebaseAuth.instance.currentUser?.uid ?? GamerAuthService().currentUid ?? '';
+    final isOwner = currentUid.isNotEmpty && (squad.ownerId == currentUid || squad.userId == currentUid);
+    if (!isOwner) return; // Only owner can open
+
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (_) => RequestsBottomSheet(squad: squad),
+    );
+  }
 
   @override
   State<RequestsBottomSheet> createState() => _RequestsBottomSheetState();
@@ -126,6 +142,8 @@ class _RequestsBottomSheetState extends State<RequestsBottomSheet> {
   @override
   Widget build(BuildContext context) {
     final squad = widget.squad;
+    final currentUid = FirebaseAuth.instance.currentUser?.uid ?? GamerAuthService().currentUid ?? '';
+    final isOwner = currentUid.isNotEmpty && (squad.ownerId == currentUid || squad.userId == currentUid);
 
     return Container(
       constraints: BoxConstraints(
@@ -480,60 +498,85 @@ class _RequestsBottomSheetState extends State<RequestsBottomSheet> {
 
                             const SizedBox(height: 12),
 
-                            // Accept & Reject Action Buttons
-                            Row(
-                              mainAxisAlignment: MainAxisAlignment.end,
-                              children: [
-                                // Reject Button
-                                OutlinedButton.icon(
-                                  style: OutlinedButton.styleFrom(
-                                    foregroundColor: Colors.redAccent,
-                                    side: BorderSide(color: Colors.redAccent.withOpacity(0.4)),
-                                    padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
-                                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-                                    visualDensity: VisualDensity.compact,
-                                  ),
-                                  icon: const Icon(Icons.close_rounded, size: 15),
-                                  label: const Text(
-                                    'Decline',
-                                    style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12),
-                                  ),
-                                  onPressed: isBusy ? null : () => _handleReject(req),
-                                ),
-                                const SizedBox(width: 10),
-
-                                // Accept Button
-                                ElevatedButton.icon(
-                                  style: ElevatedButton.styleFrom(
-                                    backgroundColor: GamerTheme.neonGreen,
-                                    foregroundColor: GamerTheme.bgDark,
-                                    elevation: 0,
-                                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
-                                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-                                    visualDensity: VisualDensity.compact,
-                                  ),
-                                  icon: isBusy
-                                      ? const SizedBox(
-                                          width: 14,
-                                          height: 14,
-                                          child: CircularProgressIndicator(
-                                            strokeWidth: 2,
-                                            color: GamerTheme.bgDark,
-                                          ),
-                                        )
-                                      : const Icon(Icons.check_circle_rounded, size: 16, color: GamerTheme.bgDark),
-                                  label: Text(
-                                    isBusy ? 'Adding...' : 'Accept',
-                                    style: const TextStyle(
-                                      color: GamerTheme.bgDark,
-                                      fontWeight: FontWeight.w900,
-                                      fontSize: 12,
+                            // Accept & Reject Action Buttons (Owner only)
+                            if (isOwner)
+                              Row(
+                                mainAxisAlignment: MainAxisAlignment.end,
+                                children: [
+                                  // Reject Button
+                                  OutlinedButton.icon(
+                                    style: OutlinedButton.styleFrom(
+                                      foregroundColor: Colors.redAccent,
+                                      side: BorderSide(color: Colors.redAccent.withOpacity(0.4)),
+                                      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
+                                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                                      visualDensity: VisualDensity.compact,
                                     ),
+                                    icon: const Icon(Icons.close_rounded, size: 15),
+                                    label: const Text(
+                                      'Decline',
+                                      style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12),
+                                    ),
+                                    onPressed: isBusy ? null : () => _handleReject(req),
                                   ),
-                                  onPressed: isBusy ? null : () => _handleAccept(req),
+                                  const SizedBox(width: 10),
+
+                                  // Accept Button
+                                  ElevatedButton.icon(
+                                    style: ElevatedButton.styleFrom(
+                                      backgroundColor: GamerTheme.neonGreen,
+                                      foregroundColor: GamerTheme.bgDark,
+                                      elevation: 0,
+                                      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
+                                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                                      visualDensity: VisualDensity.compact,
+                                    ),
+                                    icon: isBusy
+                                        ? const SizedBox(
+                                            width: 14,
+                                            height: 14,
+                                            child: CircularProgressIndicator(
+                                              strokeWidth: 2,
+                                              color: GamerTheme.bgDark,
+                                            ),
+                                          )
+                                        : const Icon(Icons.check_circle_rounded, size: 16, color: GamerTheme.bgDark),
+                                    label: Text(
+                                      isBusy ? 'Adding...' : 'Accept',
+                                      style: const TextStyle(
+                                        color: GamerTheme.bgDark,
+                                        fontWeight: FontWeight.w900,
+                                        fontSize: 12,
+                                      ),
+                                    ),
+                                    onPressed: isBusy ? null : () => _handleAccept(req),
+                                  ),
+                                ],
+                              )
+                            else
+                              Container(
+                                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                                decoration: BoxDecoration(
+                                  color: GamerTheme.bgDark.withOpacity(0.6),
+                                  borderRadius: BorderRadius.circular(8),
+                                  border: Border.all(color: GamerTheme.borderDark),
                                 ),
-                              ],
-                            ),
+                                child: const Row(
+                                  mainAxisAlignment: MainAxisAlignment.center,
+                                  children: [
+                                    Icon(Icons.hourglass_top_rounded, size: 14, color: GamerTheme.accentOrange),
+                                    SizedBox(width: 6),
+                                    Text(
+                                      'Waiting for owner to accept',
+                                      style: TextStyle(
+                                        color: GamerTheme.textMuted,
+                                        fontSize: 12,
+                                        fontWeight: FontWeight.w600,
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
                           ],
                         ),
                       );
