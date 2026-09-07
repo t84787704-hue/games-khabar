@@ -290,13 +290,39 @@ class GamerSocialService {
     });
   }
 
-  Stream<List<GamerPost>> getUserPostsStream(String userId) {
+  Stream<List<GamerPost>> getUserPostsStream(String userId, [String? username]) {
+    final clean = (username ?? '').replaceAll('@', '').trim();
+    final atUser = clean.isNotEmpty ? '@$clean' : '';
+
+    final List<Filter> filters = [
+      Filter('userId', isEqualTo: userId),
+      Filter('authorId', isEqualTo: userId),
+    ];
+    if (clean.isNotEmpty) {
+      filters.add(Filter('username', isEqualTo: clean));
+      filters.add(Filter('username', isEqualTo: atUser));
+      filters.add(Filter('userId', isEqualTo: clean));
+      filters.add(Filter('userId', isEqualTo: atUser));
+    }
+
+    Filter combined = filters.first;
+    for (int i = 1; i < filters.length; i++) {
+      combined = Filter.or(combined, filters[i]);
+    }
+
     return _firestore
         .collection('posts')
-        .where('userId', isEqualTo: userId)
-        .orderBy('createdAt', descending: true)
+        .where(combined)
         .snapshots()
-        .map((snap) => snap.docs.map((d) => GamerPost.fromFirestore(d)).toList());
+        .map((snap) {
+      final posts = snap.docs.map((d) => GamerPost.fromFirestore(d)).toList();
+      posts.sort((a, b) {
+        final tA = a.createdAt ?? DateTime(1970);
+        final tB = b.createdAt ?? DateTime(1970);
+        return tB.compareTo(tA);
+      });
+      return posts;
+    });
   }
 
   // ==========================================

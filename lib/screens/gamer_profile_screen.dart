@@ -12,6 +12,8 @@ import '../widgets/rank_badge_widget.dart';
 import '../services/verification_service.dart';
 import '../models/challenge_model.dart';
 import '../services/challenge_service.dart';
+import '../services/profile_service.dart';
+import '../widgets/posts_tab.dart';
 import 'create_gamer_id_screen.dart';
 import 'followers_following_screen.dart';
 import 'gamer_auth_screen.dart';
@@ -996,9 +998,18 @@ class _GamerProfileScreenState extends State<GamerProfileScreen> with SingleTick
                           child: Row(
                             mainAxisAlignment: MainAxisAlignment.spaceAround,
                             children: [
-                              _buildStatColumn('${user.postsCount}', 'Posts', () {
-                                _tabController.animateTo(0);
-                              }),
+                              StreamBuilder<List<ProfileFeedItem>>(
+                                stream: ProfileService().getUserPostsAndClipsStream(
+                                  userId: user.uid,
+                                  username: user.username,
+                                ),
+                                builder: (context, snap) {
+                                  final totalCount = snap.hasData ? snap.data!.length : user.postsCount;
+                                  return _buildStatColumn('$totalCount', 'Posts', () {
+                                    _tabController.animateTo(0);
+                                  });
+                                },
+                              ),
                               Container(height: 24, width: 1, color: GamerTheme.borderDark),
                               _buildStatColumn('${user.followersCount}', 'Followers', () {
                                 Navigator.of(context).push(
@@ -1183,46 +1194,10 @@ class _GamerProfileScreenState extends State<GamerProfileScreen> with SingleTick
             body: TabBarView(
               controller: _tabController,
               children: [
-                // Tab 1: Posts Tab
-                StreamBuilder<List<GamerPost>>(
-                  stream: _socialService.getUserPostsStream(user.uid),
-                  builder: (context, postSnap) {
-                    if (postSnap.connectionState == ConnectionState.waiting) {
-                      return const Center(child: CircularProgressIndicator(color: GamerTheme.accentBlue));
-                    }
-
-                    final posts = postSnap.data ?? [];
-                    if (posts.isEmpty) {
-                      return Center(
-                        child: Column(
-                          mainAxisAlignment: MainAxisAlignment.center,
-                          children: [
-                            const Icon(Icons.post_add_rounded, color: GamerTheme.textMuted, size: 48),
-                            const SizedBox(height: 10),
-                            Text(
-                              isOwnProfile
-                                  ? 'You haven\'t posted anything yet.'
-                                  : '@${user.username} hasn\'t posted yet.',
-                              style: const TextStyle(color: GamerTheme.textGray, fontSize: 14),
-                            ),
-                            const SizedBox(height: 4),
-                            const Text(
-                              'Share gameplay updates, squad room codes & tips!',
-                              style: TextStyle(color: GamerTheme.textMuted, fontSize: 12),
-                            ),
-                          ],
-                        ),
-                      );
-                    }
-
-                    return ListView.builder(
-                      itemCount: posts.length,
-                      padding: const EdgeInsets.symmetric(vertical: 8),
-                      itemBuilder: (context, index) {
-                        return PostCard(post: posts[index]);
-                      },
-                    );
-                  },
+                // Tab 1: Posts Tab (Shows merged text posts & Cloudinary video clips)
+                PostsTab(
+                  user: user,
+                  isOwnProfile: isOwnProfile,
                 ),
 
                 // Tab 2: About Tab (Facebook-style info card)
