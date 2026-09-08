@@ -26,6 +26,69 @@ class _ChatScreenState extends State<ChatScreen> {
   final TextEditingController _textController = TextEditingController();
   final ScrollController _scrollController = ScrollController();
   bool _isSending = false;
+  bool _isLeaving = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _ensureChatDocExists();
+  }
+
+  /// Auto-create chats/{postId} document with members: [all squad member uids] if it doesn't exist
+  Future<void> _ensureChatDocExists() async {
+    try {
+      final chatRef = FirebaseFirestore.instance.collection('chats').doc(widget.postId);
+      final chatDoc = await chatRef.get();
+      if (!chatDoc.exists || (chatDoc.data()?['members'] == null)) {
+        // Fetch squad post to get members
+        DocumentSnapshot postDoc = await FirebaseFirestore.instance.collection('lfg_posts').doc(widget.postId).get();
+        if (!postDoc.exists) {
+          postDoc = await FirebaseFirestore.instance.collection('squads').doc(widget.postId).get();
+        }
+
+        List<String> members = [];
+        String title = 'Squad Chat';
+        String mode = 'Classic Squad';
+        String inGameUid = '';
+        String leaderUid = '';
+
+        if (postDoc.exists) {
+          final data = postDoc.data() as Map<String, dynamic>? ?? {};
+          leaderUid = (data['ownerId'] ?? data['userId'] ?? '').toString();
+          final rawMembers = List<dynamic>.from(data['members'] ?? []);
+          members = rawMembers.map((e) => e.toString()).toList();
+          if (leaderUid.isNotEmpty && !members.contains(leaderUid)) {
+            members.insert(0, leaderUid);
+          }
+          title = data['ownerBgmiName'] ?? data['displayName'] ?? 'Squad Chat';
+          mode = data['mode'] ?? 'Classic Squad';
+          inGameUid = data['bgmiUid'] ?? data['inGameUid'] ?? data['gameId'] ?? '';
+        } else if (widget.squad != null) {
+          members = List<String>.from(widget.squad!.members);
+          leaderUid = widget.squad!.ownerId.isNotEmpty ? widget.squad!.ownerId : widget.squad!.userId;
+          if (leaderUid.isNotEmpty && !members.contains(leaderUid)) {
+            members.insert(0, leaderUid);
+          }
+          title = widget.squad!.displayName.isNotEmpty ? "${widget.squad!.displayName}'s Squad" : 'Squad Chat';
+          mode = widget.squad!.mode;
+          inGameUid = widget.squad!.inGameUid;
+        }
+
+        await chatRef.set({
+          'postId': widget.postId,
+          'members': members,
+          'leaderUid': leaderUid,
+          'title': title,
+          'mode': mode,
+          'inGameUid': inGameUid,
+          'createdAt': FieldValue.serverTimestamp(),
+          'updatedAt': FieldValue.serverTimestamp(),
+        }, SetOptions(merge: true));
+      }
+    } catch (e) {
+      debugPrint('[ChatScreen] Error ensuring chat doc: $e');
+    }
+  }
 
   void _scrollToBottom() {
     if (_scrollController.hasClients) {
@@ -49,6 +112,66 @@ class _ChatScreenState extends State<ChatScreen> {
     );
   }
 
+  Future<void> _handleLeaveSquad(String leaderUid, List<String> members) async {
+    final currentUid = FirebaseAuth.instance.currentUser?.uid ?? GamerAuthService().currentUid ?? '';
+    if (currentUid.isEmpty) return;
+
+    final confirm = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: GamerTheme.cardDark,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        title: const Text('Leave Squad?', style: TextStyle(color: GamerTheme.textWhite, fontWeight: FontWeight.bold)),
+        content: const Text(
+          'Are you sure you want to leave this squad? You will be removed from the squad and chat.',
+          style: TextStyle(color: GamerTheme.textMuted),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('CANCEL', style: TextStyle(color: GamerTheme.textMuted)),
+          ),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(backgroundColor: Colors.redAccent),
+            onPressed: () => Navigator.pop(ctx, true),
+            child: const Text('LEAVE', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+          ),
+        ],
+      ),
+    );
+
+    if (confirm != true) return;
+
+    setState(() => _isLeaving = true);
+    try {
+      final user = await GamerAuthService().getUserProfile(currentUid);
+      final memberName = user?.displayName ?? 'Teammate';
+      await LfgService().leaveSquad(
+        postId: widget.postId,
+        memberUid: currentUid,
+        leaderUid: leaderUid,
+        memberName: memberName,
+      );
+      if (mounted) {
+        Navigator.pop(context); // Close chat
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('You left the squad'),
+            backgroundColor: GamerTheme.accentOrange,
+          ),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Failed to leave: $e'), backgroundColor: Colors.redAccent),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _isLeaving = false);
+    }
+  }
+
   Future<void> _sendMessage() async {
     final text = _textController.text.trim();
     if (text.isEmpty || _isSending) return;
@@ -68,7 +191,9 @@ class _ChatScreenState extends State<ChatScreen> {
 
       final chatRef = FirebaseFirestore.instance.collection('chats').doc(widget.postId);
 
+      // Schema: chats/{postId}/messages {senderId, text, createdAt}
       await chatRef.collection('messages').add({
+        'senderId': currentUid,
         'senderUid': currentUid,
         'senderName': senderName,
         'senderAvatar': senderAvatar,
@@ -126,6 +251,8 @@ class _ChatScreenState extends State<ChatScreen> {
                     : 'Squad Chat');
             final mode = chatData['mode'] as String? ?? widget.squad?.mode ?? 'Classic Squad';
             final inGameUid = chatData['inGameUid'] as String? ?? widget.squad?.inGameUid ?? '';
+            final rawMembers = List<dynamic>.from(chatData['members'] ?? widget.squad?.members ?? []);
+            final memberCount = rawMembers.length;
 
             return Column(
               crossAxisAlignment: CrossAxisAlignment.start,
@@ -163,43 +290,94 @@ class _ChatScreenState extends State<ChatScreen> {
                     ),
                   ],
                 ),
-                if (inGameUid.isNotEmpty) ...[
-                  const SizedBox(height: 2),
-                  InkWell(
-                    onTap: () => _copyToClipboard(inGameUid, 'Leader BGMI UID'),
-                    child: Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Text(
-                          'Leader UID: $inGameUid',
-                          style: const TextStyle(color: GamerTheme.neonGreen, fontSize: 11, fontWeight: FontWeight.w600),
-                        ),
-                        const SizedBox(width: 4),
-                        const Icon(Icons.copy_rounded, size: 11, color: GamerTheme.neonGreen),
-                      ],
+                const SizedBox(height: 2),
+                Row(
+                  children: [
+                    Text(
+                      '$memberCount/4 members',
+                      style: const TextStyle(color: GamerTheme.textMuted, fontSize: 11, fontWeight: FontWeight.w500),
                     ),
-                  ),
-                ],
+                    if (inGameUid.isNotEmpty) ...[
+                      const SizedBox(width: 8),
+                      InkWell(
+                        onTap: () => _copyToClipboard(inGameUid, 'Leader BGMI UID'),
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Text(
+                              'UID: $inGameUid',
+                              style: const TextStyle(color: GamerTheme.neonGreen, fontSize: 11, fontWeight: FontWeight.w600),
+                            ),
+                            const SizedBox(width: 3),
+                            const Icon(Icons.copy_rounded, size: 10, color: GamerTheme.neonGreen),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ],
+                ),
               ],
             );
           },
         ),
         actions: [
-          // Squad Members bottom sheet button
-          IconButton(
-            tooltip: 'Squad Members',
-            icon: const Icon(Icons.people_alt_rounded, color: GamerTheme.accentCyan),
-            onPressed: () async {
-              SquadPost? currentSquad = widget.squad;
-              if (currentSquad == null) {
-                final doc = await FirebaseFirestore.instance.collection('lfg_posts').doc(widget.postId).get();
-                if (doc.exists) {
-                  currentSquad = SquadPost.fromFirestore(doc);
-                }
-              }
-              if (currentSquad != null && mounted) {
-                SquadMembersBottomSheet.show(context, currentSquad);
-              }
+          StreamBuilder<DocumentSnapshot>(
+            stream: FirebaseFirestore.instance.collection('chats').doc(widget.postId).snapshots(),
+            builder: (context, chatSnap) {
+              final chatData = chatSnap.data?.data() as Map<String, dynamic>? ?? {};
+              final leaderUid = (chatData['leaderUid'] ?? widget.squad?.ownerId ?? widget.squad?.userId ?? '').toString();
+              final rawMembers = List<dynamic>.from(chatData['members'] ?? widget.squad?.members ?? []);
+              final members = rawMembers.map((e) => e.toString()).toList();
+              final isOwner = currentUid.isNotEmpty && (leaderUid == currentUid);
+              final isMember = members.contains(currentUid) || isOwner;
+
+              return Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  // Leave Squad button for non-owner members
+                  if (!isOwner && isMember)
+                    Padding(
+                      padding: const EdgeInsets.only(right: 4),
+                      child: _isLeaving
+                          ? const SizedBox(
+                              width: 20,
+                              height: 20,
+                              child: CircularProgressIndicator(strokeWidth: 2, color: Colors.redAccent),
+                            )
+                          : TextButton.icon(
+                              style: TextButton.styleFrom(
+                                foregroundColor: Colors.redAccent,
+                                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                                visualDensity: VisualDensity.compact,
+                              ),
+                              icon: const Icon(Icons.exit_to_app_rounded, size: 16),
+                              label: const Text(
+                                'LEAVE',
+                                style: TextStyle(fontSize: 11.5, fontWeight: FontWeight.bold),
+                              ),
+                              onPressed: () => _handleLeaveSquad(leaderUid, members),
+                            ),
+                    ),
+
+                  // Squad Members bottom sheet button
+                  IconButton(
+                    tooltip: 'Squad Members',
+                    icon: const Icon(Icons.people_alt_rounded, color: GamerTheme.accentCyan),
+                    onPressed: () async {
+                      SquadPost? currentSquad = widget.squad;
+                      if (currentSquad == null) {
+                        final doc = await FirebaseFirestore.instance.collection('lfg_posts').doc(widget.postId).get();
+                        if (doc.exists) {
+                          currentSquad = SquadPost.fromFirestore(doc);
+                        }
+                      }
+                      if (currentSquad != null && mounted) {
+                        SquadMembersBottomSheet.show(context, currentSquad);
+                      }
+                    },
+                  ),
+                ],
+              );
             },
           ),
         ],
@@ -249,7 +427,7 @@ class _ChatScreenState extends State<ChatScreen> {
                     itemCount: docs.length,
                     itemBuilder: (context, index) {
                       final data = docs[index].data() as Map<String, dynamic>;
-                      final senderUid = data['senderUid'] as String? ?? '';
+                      final senderUid = (data['senderId'] ?? data['senderUid']) as String? ?? '';
                       final senderName = data['senderName'] as String? ?? 'Gamer';
                       final senderAvatar = data['senderAvatar'] as String? ?? '';
                       final text = data['text'] as String? ?? '';

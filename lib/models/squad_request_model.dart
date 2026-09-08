@@ -10,6 +10,7 @@ class SquadJoinRequest {
   final String tier;
   final double kd;
   final String inGameUid;
+  final bool micOn;
   final String status;
   final DateTime? createdAt;
 
@@ -23,6 +24,7 @@ class SquadJoinRequest {
     this.tier = 'Ace',
     this.kd = 3.0,
     this.inGameUid = '',
+    this.micOn = true,
     this.status = 'pending',
     this.createdAt,
   });
@@ -42,13 +44,15 @@ class SquadJoinRequest {
         data['applicantUid']?.toString() ??
         doc.id;
 
-    final String name = data['name']?.toString() ??
+    final String name = data['bgmiName']?.toString() ??
+        data['name']?.toString() ??
         data['applicantName']?.toString() ??
         data['displayName']?.toString() ??
         'Gamer';
 
-    final String username = data['username']?.toString() ?? '';
-    final String userAvatar = data['userAvatar']?.toString() ??
+    final String username = data['tag']?.toString() ?? data['username']?.toString() ?? '';
+    final String userAvatar = data['avatar']?.toString() ??
+        data['userAvatar']?.toString() ??
         data['photoUrl']?.toString() ??
         '';
 
@@ -61,9 +65,12 @@ class SquadJoinRequest {
         (data['kdRatio'] as num?)?.toDouble() ??
         3.0;
 
-    final String inGameUid = data['inGameUid']?.toString() ??
+    final String inGameUid = data['bgmiUid']?.toString() ??
+        data['inGameUid']?.toString() ??
         data['gameId']?.toString() ??
         '';
+
+    final bool micOn = data['micMandatory'] ?? data['micOn'] ?? data['mic'] ?? true;
 
     final String status = data['status']?.toString() ?? 'pending';
 
@@ -77,6 +84,7 @@ class SquadJoinRequest {
       tier: tier,
       kd: kd,
       inGameUid: inGameUid,
+      micOn: micOn,
       status: status,
       createdAt: created,
     );
@@ -100,6 +108,7 @@ class SquadJoinRequest {
       'kdRatio': kd,
       'inGameUid': inGameUid,
       'gameId': inGameUid,
+      'micOn': micOn,
       'status': status,
       'createdAt': createdAt != null ? Timestamp.fromDate(createdAt!) : FieldValue.serverTimestamp(),
     };

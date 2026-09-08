@@ -64,90 +64,101 @@ class SquadService {
     }
   }
 
-  /// Real-time stream of all posts where isActive == true
+  /// Real-time stream of all posts where isActive == true (and owner's posts regardless of isActive)
   Stream<List<SquadPost>> getActiveSquadsStream() {
     return _lfgPostsRef
-        .where('isActive', isEqualTo: true)
         .snapshots()
         .asyncMap((snap) async {
+      final currentUid = FirebaseAuth.instance.currentUser?.uid ?? GamerAuthService().currentUid ?? '';
       final Set<String> seenIds = {};
-      final List<SquadPost> posts = [];
+      final List<SquadPost> rawPosts = [];
 
       for (final doc in snap.docs) {
         seenIds.add(doc.id);
-        posts.add(SquadPost.fromFirestore(doc));
+        rawPosts.add(SquadPost.fromFirestore(doc));
       }
 
-      // Also fetch from squads where isActive == true for full consistency
+      // Also fetch from squads for consistency
       try {
-        final squadSnap = await _squadRef.where('isActive', isEqualTo: true).get();
+        final squadSnap = await _squadRef.get();
         for (final doc in squadSnap.docs) {
           if (!seenIds.contains(doc.id)) {
             seenIds.add(doc.id);
-            posts.add(SquadPost.fromFirestore(doc));
+            rawPosts.add(SquadPost.fromFirestore(doc));
           }
         }
       } catch (_) {}
 
-      posts.sort((a, b) {
+      final now = DateTime.now();
+      final List<SquadPost> result = [];
+
+      for (final post in rawPosts) {
+        final isOwner = currentUid.isNotEmpty && (post.ownerId == currentUid || post.userId == currentUid);
+
+        // Auto-expire: if post is older than 2 hours and isActive==true, update isActive=false in background
+        if (post.createdAt != null && now.difference(post.createdAt!).inHours >= 2 && post.isActive) {
+          debugPrint('[SquadService] Post ${post.id} is >2 hours old. Auto-expiring.');
+          _lfgPostsRef.doc(post.id).update({'isActive': false}).catchError((_) {});
+          _squadRef.doc(post.id).update({'isActive': false}).catchError((_) {});
+          if (!isOwner) continue;
+        }
+
+        // If membersCount >= 4, auto close
+        if ((post.membersCount >= 4 || post.members.length >= 4) && post.isActive) {
+          _lfgPostsRef.doc(post.id).update({'isActive': false}).catchError((_) {});
+          _squadRef.doc(post.id).update({'isActive': false}).catchError((_) {});
+        }
+
+        // Feed shows isActive==true, orderBy createdAt descending. (Owner's own posts show regardless of isActive).
+        if (post.isActive || isOwner) {
+          result.add(post);
+        }
+      }
+
+      result.sort((a, b) {
         final aTime = a.createdAt ?? DateTime(1970);
         final bTime = b.createdAt ?? DateTime(1970);
         return bTime.compareTo(aTime);
       });
 
-      // Auto close and 1-hour auto expire logic
-      final now = DateTime.now();
-      final List<SquadPost> activeFiltered = [];
-
-      for (final post in posts) {
-        // 1. If createdAt is >1 hour old, auto expire
-        if (post.createdAt != null && now.difference(post.createdAt!).inHours >= 1) {
-          debugPrint('[SquadService] Post ${post.id} is >1 hour old. Auto-expiring.');
-          _lfgPostsRef.doc(post.id).update({'isActive': false}).catchError((_) {});
-          _squadRef.doc(post.id).update({'isActive': false}).catchError((_) {});
-          continue;
-        }
-
-        // 2. If membersCount >= 4, auto close
-        if (post.membersCount >= 4 || post.members.length >= 4) {
-          debugPrint('[SquadService] Post ${post.id} is full (4/4). Setting isActive = false.');
-          _lfgPostsRef.doc(post.id).update({'isActive': false}).catchError((_) {});
-          _squadRef.doc(post.id).update({'isActive': false}).catchError((_) {});
-          // We can still display it with "Squad Full" badge if wanted or filter:
-          // User request: 'If membersCount == 4, set isActive = false, show "Squad Full" badge'
-          activeFiltered.add(post.copyWith(isActive: false));
-          continue;
-        }
-
-        activeFiltered.add(post);
-      }
-
-      debugPrint('[SquadService] Fetched active squads length: ${activeFiltered.length}');
-      return activeFiltered;
+      debugPrint('[SquadService] Fetched active squads length: ${result.length}');
+      return result;
     });
   }
 
   Future<List<SquadPost>> fetchSquadsOnce() async {
     try {
-      final snap = await _lfgPostsRef.where('isActive', isEqualTo: true).get();
+      final snap = await _lfgPostsRef.get();
+      final currentUid = FirebaseAuth.instance.currentUser?.uid ?? GamerAuthService().currentUid ?? '';
       final now = DateTime.now();
       final List<SquadPost> result = [];
 
       for (final d in snap.docs) {
         final p = SquadPost.fromFirestore(d);
-        if (p.createdAt != null && now.difference(p.createdAt!).inHours >= 1) {
+        final isOwner = currentUid.isNotEmpty && (p.ownerId == currentUid || p.userId == currentUid);
+
+        if (p.createdAt != null && now.difference(p.createdAt!).inHours >= 2 && p.isActive) {
           _lfgPostsRef.doc(p.id).update({'isActive': false}).catchError((_) {});
           _squadRef.doc(p.id).update({'isActive': false}).catchError((_) {});
-          continue;
+          if (!isOwner) continue;
         }
-        if (p.membersCount >= 4 || p.members.length >= 4) {
+
+        if ((p.membersCount >= 4 || p.members.length >= 4) && p.isActive) {
           _lfgPostsRef.doc(p.id).update({'isActive': false}).catchError((_) {});
           _squadRef.doc(p.id).update({'isActive': false}).catchError((_) {});
-          result.add(p.copyWith(isActive: false));
-          continue;
         }
-        result.add(p);
+
+        if (p.isActive || isOwner) {
+          result.add(p);
+        }
       }
+
+      result.sort((a, b) {
+        final aTime = a.createdAt ?? DateTime(1970);
+        final bTime = b.createdAt ?? DateTime(1970);
+        return bTime.compareTo(aTime);
+      });
+
       return result;
     } catch (e) {
       debugPrint('[SquadService] Error fetching squads once: $e');
@@ -497,31 +508,48 @@ class SquadService {
     }
   }
 
-  /// Reject join request: delete request doc, remove from joinRequests array
+  /// Reject join request: delete request doc, remove from joinRequests array, decrement requestedCount
   Future<void> rejectSquadRequest({
     required String postId,
     required String requestId,
     required String userId,
   }) async {
     try {
+      int currentRequested = 0;
+      try {
+        final postDoc = await _lfgPostsRef.doc(postId).get();
+        if (postDoc.exists) {
+          final data = postDoc.data() as Map<String, dynamic>? ?? {};
+          currentRequested = (data['requestedCount'] as num?)?.toInt() ?? 0;
+        }
+      } catch (_) {}
+
+      final dynamic safeRequestedDecrement = (currentRequested <= 1) ? 0 : FieldValue.increment(-1);
       final batch = _firestore.batch();
 
       // 1. Delete request doc
       batch.delete(_lfgPostsRef.doc(postId).collection('requests').doc(requestId));
       batch.delete(_squadRef.doc(postId).collection('requests').doc(requestId));
+      if (requestId != userId) {
+        batch.delete(_lfgPostsRef.doc(postId).collection('requests').doc(userId));
+        batch.delete(_squadRef.doc(postId).collection('requests').doc(userId));
+      }
 
-      // 2. Remove from joinRequests array
+      // 2. Remove from joinRequests array and decrement requestedCount
       batch.set(_squadRef.doc(postId), {
-        'joinRequests': FieldValue.arrayRemove([userId]),
+        'joinRequests': FieldValue.arrayRemove([userId, requestId]),
+        'requestedCount': safeRequestedDecrement,
       }, SetOptions(merge: true));
 
       batch.set(_lfgPostsRef.doc(postId), {
-        'joinRequests': FieldValue.arrayRemove([userId]),
+        'joinRequests': FieldValue.arrayRemove([userId, requestId]),
+        'requestedCount': safeRequestedDecrement,
       }, SetOptions(merge: true));
 
       try {
         batch.set(_legacySquadRef.doc(postId), {
-          'joinRequests': FieldValue.arrayRemove([userId]),
+          'joinRequests': FieldValue.arrayRemove([userId, requestId]),
+          'requestedCount': safeRequestedDecrement,
         }, SetOptions(merge: true));
       } catch (_) {}
 
@@ -535,16 +563,88 @@ class SquadService {
 
   Future<void> closeSquadPost(String postId) async {
     try {
-      await _squadRef.doc(postId).update({'isActive': false});
-      try {
-        await _lfgPostsRef.doc(postId).update({'isActive': false});
-      } catch (_) {}
-      try {
-        await _legacySquadRef.doc(postId).update({'isActive': false});
-      } catch (_) {}
+      final batch = _firestore.batch();
+      batch.update(_squadRef.doc(postId), {'isActive': false});
+      batch.update(_lfgPostsRef.doc(postId), {'isActive': false});
+      await batch.commit();
       debugPrint('[SquadService] Closed squad post $postId');
     } catch (e) {
       debugPrint('[SquadService] Error closing squad post: $e');
+      // Fallback
+      await _squadRef.doc(postId).set({'isActive': false}, SetOptions(merge: true)).catchError((_) {});
+      await _lfgPostsRef.doc(postId).set({'isActive': false}, SetOptions(merge: true)).catchError((_) {});
+    }
+  }
+
+  /// Delete Permanently:
+  /// Confirms ownerId == auth.uid
+  /// Batch deletes chats/{postId}/messages
+  /// Deletes chats/{postId}
+  /// Batch deletes lfg_posts/{postId}/requests
+  /// Deletes lfg_posts/{postId}
+  /// Deletes squads/{postId}
+  Future<void> deleteSquadPermanently({required String postId, required String ownerId}) async {
+    final currentUid = FirebaseAuth.instance.currentUser?.uid ?? GamerAuthService().currentUid;
+    if (currentUid == null || (currentUid != ownerId && ownerId.isNotEmpty)) {
+      throw 'Only the squad leader can permanently delete this squad.';
+    }
+
+    try {
+      // 1. Delete all messages in chats/{postId}/messages
+      final chatRef = _firestore.collection('chats').doc(postId);
+      try {
+        final messagesSnap = await chatRef.collection('messages').get();
+        if (messagesSnap.docs.isNotEmpty) {
+          final batch = _firestore.batch();
+          for (final doc in messagesSnap.docs) {
+            batch.delete(doc.reference);
+          }
+          await batch.commit();
+        }
+      } catch (e) {
+        debugPrint('[SquadService] Error deleting messages: $e');
+      }
+
+      // 2. Delete chats/{postId}
+      try {
+        await chatRef.delete();
+      } catch (e) {
+        debugPrint('[SquadService] Error deleting chat doc: $e');
+      }
+
+      // 3. Delete all requests in lfg_posts/{postId}/requests and squads/{postId}/requests
+      try {
+        final reqLfg = await _lfgPostsRef.doc(postId).collection('requests').get();
+        if (reqLfg.docs.isNotEmpty) {
+          final batch = _firestore.batch();
+          for (final doc in reqLfg.docs) {
+            batch.delete(doc.reference);
+          }
+          await batch.commit();
+        }
+      } catch (_) {}
+
+      try {
+        final reqSquad = await _squadRef.doc(postId).collection('requests').get();
+        if (reqSquad.docs.isNotEmpty) {
+          final batch = _firestore.batch();
+          for (final doc in reqSquad.docs) {
+            batch.delete(doc.reference);
+          }
+          await batch.commit();
+        }
+      } catch (_) {}
+
+      // 4. Delete lfg_posts and squads docs
+      final batch = _firestore.batch();
+      batch.delete(_lfgPostsRef.doc(postId));
+      batch.delete(_squadRef.doc(postId));
+      batch.delete(_legacySquadRef.doc(postId));
+      await batch.commit();
+      debugPrint('[SquadService] Permanently deleted squad post $postId');
+    } catch (e) {
+      debugPrint('[SquadService] Error deleting squad permanently: $e');
+      rethrow;
     }
   }
 

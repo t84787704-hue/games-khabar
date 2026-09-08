@@ -455,6 +455,31 @@ class _RequestsBottomSheetState extends State<RequestsBottomSheet> {
                                             ),
                                           ),
 
+                                          // Mic badge
+                                          Container(
+                                            padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2.5),
+                                            decoration: BoxDecoration(
+                                              color: (req.micOn ? GamerTheme.neonGreen : GamerTheme.textMuted).withOpacity(0.15),
+                                              borderRadius: BorderRadius.circular(6),
+                                              border: Border.all(color: (req.micOn ? GamerTheme.neonGreen : GamerTheme.textMuted).withOpacity(0.4)),
+                                            ),
+                                            child: Row(
+                                              mainAxisSize: MainAxisSize.min,
+                                              children: [
+                                                Icon(req.micOn ? Icons.mic_rounded : Icons.mic_off_rounded, size: 11, color: req.micOn ? GamerTheme.neonGreen : GamerTheme.textMuted),
+                                                const SizedBox(width: 3),
+                                                Text(
+                                                  req.micOn ? 'Mic On' : 'No Mic',
+                                                  style: TextStyle(
+                                                    color: req.micOn ? GamerTheme.neonGreen : GamerTheme.textMuted,
+                                                    fontSize: 10.5,
+                                                    fontWeight: FontWeight.bold,
+                                                  ),
+                                                ),
+                                              ],
+                                            ),
+                                          ),
+
                                           // In-game UID
                                           if (req.inGameUid.isNotEmpty)
                                             InkWell(
@@ -519,7 +544,7 @@ class _RequestsBottomSheetState extends State<RequestsBottomSheet> {
                                     ),
                                     icon: const Icon(Icons.close_rounded, size: 15),
                                     label: const Text(
-                                      'Decline',
+                                      'Reject',
                                       style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12),
                                     ),
                                     onPressed: isBusy ? null : () => _handleReject(req),

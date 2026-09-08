@@ -412,4 +412,20 @@ class LfgService {
       rethrow;
     }
   }
+
+  /// Close LFG: set isActive = false so post hides from feed
+  Future<void> closeLfg(String postId) async {
+    await _squadService.closeSquadPost(postId);
+  }
+
+  /// Delete Permanently:
+  /// Confirms ownerId == auth.uid
+  /// Batch deletes chats/{postId}/messages
+  /// Deletes chats/{postId}
+  /// Batch deletes lfg_posts/{postId}/requests
+  /// Deletes lfg_posts/{postId}
+  /// Deletes squads/{postId}
+  Future<void> deletePermanently(String postId, String postOwnerId) async {
+    await _squadService.deleteSquadPermanently(postId: postId, ownerId: postOwnerId);
+  }
 }

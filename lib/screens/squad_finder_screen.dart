@@ -22,11 +22,13 @@ class _SquadFinderScreenState extends State<SquadFinderScreen> {
   // Local list to immediately display created posts without waiting for Firestore stream
   final List<SquadPost> _localSquads = [];
 
+  String _filterMode = 'All';
   String _filterTier = 'All';
   double _filterMinKd = 0.0;
   bool? _filterMicOn;
   String _filterLanguage = 'All';
 
+  final List<String> _modeOptions = ['All', 'Rank Push', 'Classic Squad', 'TDM Tourney', 'Payload'];
   final List<String> _tierOptions = ['All', 'Diamond+', 'Crown+', 'Ace+', 'Conqueror'];
   final List<String> _langOptions = ['All', 'Hindi', 'English', 'Punjabi', 'Tamil', 'Telugu'];
 
@@ -392,10 +394,11 @@ class _SquadFinderScreenState extends State<SquadFinderScreen> {
                           style: TextStyle(color: GamerTheme.textMuted, fontSize: 11, fontWeight: FontWeight.w900),
                         ),
                         const Spacer(),
-                        if (_filterTier != 'All' || _filterMinKd > 0 || _filterMicOn != null || _filterLanguage != 'All')
+                        if (_filterMode != 'All' || _filterTier != 'All' || _filterMinKd > 0 || _filterMicOn != null || _filterLanguage != 'All')
                           GestureDetector(
                             onTap: () {
                               setState(() {
+                                _filterMode = 'All';
                                 _filterTier = 'All';
                                 _filterMinKd = 0.0;
                                 _filterMicOn = null;
@@ -413,6 +416,30 @@ class _SquadFinderScreenState extends State<SquadFinderScreen> {
                       scrollDirection: Axis.horizontal,
                       child: Row(
                         children: [
+                          // Mode dropdown
+                          Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 2),
+                            decoration: BoxDecoration(
+                              color: GamerTheme.cardDark,
+                              borderRadius: BorderRadius.circular(8),
+                              border: Border.all(color: _filterMode != 'All' ? GamerTheme.accentCyan : GamerTheme.borderDark),
+                            ),
+                            child: DropdownButtonHideUnderline(
+                              child: DropdownButton<String>(
+                                value: _filterMode,
+                                dropdownColor: GamerTheme.cardDark,
+                                style: TextStyle(
+                                  color: _filterMode != 'All' ? GamerTheme.accentCyan : GamerTheme.textWhite,
+                                  fontSize: 12,
+                                  fontWeight: FontWeight.bold,
+                                ),
+                                items: _modeOptions.map((m) => DropdownMenuItem(value: m, child: Text('Mode: $m'))).toList(),
+                                onChanged: (v) => setState(() => _filterMode = v ?? 'All'),
+                              ),
+                            ),
+                          ),
+                          const SizedBox(width: 8),
+
                           // Tier dropdown
                           Container(
                             padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 2),
@@ -532,6 +559,10 @@ class _SquadFinderScreenState extends State<SquadFinderScreen> {
                 // Filter in-memory for smooth instant feedback
                 // No where filter for Tier/K/D on initial load; show ALL posts including userId == currentUserId
                 final filtered = squads.where((s) {
+                  if (_filterMode != 'All' &&
+                      !s.mode.toLowerCase().contains(_filterMode.toLowerCase())) {
+                    return false;
+                  }
                   if (_filterTier != 'All' &&
                       !s.tierNeeded.toLowerCase().contains(_filterTier.replaceAll('+', '').toLowerCase()) &&
                       s.tierNeeded != 'Any Tier') {
