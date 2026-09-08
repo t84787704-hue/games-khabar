@@ -16,6 +16,7 @@ import '../widgets/requests_bottom_sheet.dart';
 import '../widgets/squad_members_bottom_sheet.dart';
 import '../screens/gamer_profile_screen.dart';
 import '../screens/chat_screen.dart';
+import '../screens/requests_screen.dart';
 import '../services/lfg_service.dart';
 
 typedef SquadCard = LFGCard;
@@ -39,6 +40,58 @@ class _LFGCardState extends State<LFGCard> {
     if (diff.inMinutes < 60) return '${diff.inMinutes}m ago';
     if (diff.inHours < 24) return '${diff.inHours}h ago';
     return DateFormat('dd MMM').format(dt);
+  }
+
+  void _confirmDelete(BuildContext context, SquadPost squad) {
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: GamerTheme.cardDark,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        title: const Text(
+          'Permanently delete this squad?',
+          style: TextStyle(color: GamerTheme.textWhite, fontWeight: FontWeight.bold, fontSize: 16),
+        ),
+        content: const Text(
+          'Chat will also be deleted and cannot be undone.',
+          style: TextStyle(color: GamerTheme.textMuted, fontSize: 13),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text('Cancel', style: TextStyle(color: GamerTheme.textMuted)),
+          ),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(
+              backgroundColor: Colors.redAccent,
+              foregroundColor: Colors.white,
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+            ),
+            onPressed: () async {
+              Navigator.pop(ctx);
+              try {
+                await LfgService().deletePermanently(
+                  squad.id,
+                  squad.ownerId.isNotEmpty ? squad.ownerId : squad.userId,
+                );
+                if (context.mounted) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(content: Text('Squad deleted permanently')),
+                  );
+                }
+              } catch (e) {
+                if (context.mounted) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(content: Text('Delete failed: $e'), backgroundColor: Colors.redAccent),
+                  );
+                }
+              }
+            },
+            child: const Text('Delete', style: TextStyle(fontWeight: FontWeight.bold)),
+          ),
+        ],
+      ),
+    );
   }
 
   Future<void> _sendJoinRequest(BuildContext context) async {
@@ -540,8 +593,7 @@ class _LFGCardState extends State<LFGCard> {
             child: Row(
               children: [
                 if (isOwner) ...[
-                  // Owner View: Real-Time Clickable "X requested VIEW" Button + Close LFG
-                  // Hides "Requested" green badge & "Request to Join" button
+                  // Owner View: Real-Time Clickable "X requested VIEW" Button + Close LFG + Red Delete button
                   StreamBuilder<List<SquadJoinRequest>>(
                     stream: SquadService().getSquadRequestsStream(squad.id, squad.joinRequests),
                     initialData: squad.joinRequests
@@ -557,84 +609,59 @@ class _LFGCardState extends State<LFGCard> {
                       );
                       final hasRequests = count > 0;
 
-                      return Material(
-                        color: Colors.transparent,
-                        child: InkWell(
-                          onTap: () {
-                            RequestsBottomSheet.show(context, squad);
-                          },
-                          borderRadius: BorderRadius.circular(8),
-                          child: Padding(
-                            padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 5),
-                            child: Row(
-                              mainAxisSize: MainAxisSize.min,
-                              children: [
-                                Icon(
-                                  Icons.people_alt_rounded,
-                                  size: 16,
-                                  color: hasRequests ? GamerTheme.accentOrange : GamerTheme.textMuted,
-                                ),
-                                const SizedBox(width: 6),
-                                Text(
-                                  '$count requested',
-                                  style: TextStyle(
-                                    color: hasRequests ? GamerTheme.accentOrange : GamerTheme.textMuted,
-                                    fontSize: 12,
-                                    fontWeight: hasRequests ? FontWeight.bold : FontWeight.w500,
-                                    decoration: TextDecoration.underline,
-                                    decorationColor: hasRequests
-                                        ? GamerTheme.accentOrange.withOpacity(0.5)
-                                        : GamerTheme.textMuted.withOpacity(0.4),
-                                  ),
-                                ),
-                                if (hasRequests) ...[
-                                  const SizedBox(width: 6),
-                                  Container(
-                                    padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1.5),
-                                    decoration: BoxDecoration(
-                                      color: GamerTheme.accentOrange.withOpacity(0.2),
-                                      borderRadius: BorderRadius.circular(6),
-                                      border: Border.all(color: GamerTheme.accentOrange.withOpacity(0.5)),
-                                    ),
-                                    child: const Text(
-                                      'VIEW',
-                                      style: TextStyle(
-                                        color: GamerTheme.accentOrange,
-                                        fontSize: 9,
-                                        fontWeight: FontWeight.w900,
-                                        letterSpacing: 0.5,
-                                      ),
-                                    ),
-                                  ),
-                                ],
-                              ],
+                      return Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Icon(
+                            Icons.people_alt_rounded,
+                            size: 15,
+                            color: hasRequests ? GamerTheme.accentOrange : GamerTheme.textMuted,
+                          ),
+                          const SizedBox(width: 5),
+                          Text(
+                            '$count requested',
+                            style: TextStyle(
+                              color: hasRequests ? GamerTheme.accentOrange : GamerTheme.textMuted,
+                              fontSize: 12,
+                              fontWeight: hasRequests ? FontWeight.bold : FontWeight.w500,
                             ),
                           ),
-                        ),
+                          if (hasRequests) ...[
+                            const SizedBox(width: 6),
+                            ElevatedButton(
+                              style: ElevatedButton.styleFrom(
+                                backgroundColor: GamerTheme.accentOrange,
+                                foregroundColor: GamerTheme.bgDark,
+                                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(6)),
+                                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                                minimumSize: const Size(0, 26),
+                                elevation: 0,
+                              ),
+                              onPressed: () {
+                                Navigator.push(
+                                  context,
+                                  MaterialPageRoute(
+                                    builder: (_) => RequestsScreen(postId: squad.id, squad: squad),
+                                  ),
+                                );
+                              },
+                              child: const Text(
+                                'VIEW',
+                                style: TextStyle(
+                                  color: GamerTheme.bgDark,
+                                  fontSize: 9.5,
+                                  fontWeight: FontWeight.w900,
+                                  letterSpacing: 0.5,
+                                ),
+                              ),
+                            ),
+                          ],
+                        ],
                       );
                     },
                   ),
 
                   const Spacer(),
-
-                  // "Your Post" Badge
-                  Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                    decoration: BoxDecoration(
-                      color: GamerTheme.accentOrange.withOpacity(0.15),
-                      borderRadius: BorderRadius.circular(6),
-                      border: Border.all(color: GamerTheme.accentOrange.withOpacity(0.4)),
-                    ),
-                    child: const Text(
-                      'Your Post',
-                      style: TextStyle(
-                        color: GamerTheme.accentOrange,
-                        fontSize: 11,
-                        fontWeight: FontWeight.bold,
-                      ),
-                    ),
-                  ),
-                  const SizedBox(width: 6),
 
                   // Owner Action: Squad Chat (if squad has members)
                   if (squad.members.length > 1 || squad.membersCount > 1) ...[
@@ -657,25 +684,42 @@ class _LFGCardState extends State<LFGCard> {
                         );
                       },
                     ),
-                    const SizedBox(width: 6),
+                    const SizedBox(width: 4),
                   ],
 
                   // Owner Action: Close LFG
                   TextButton.icon(
                     style: TextButton.styleFrom(
                       foregroundColor: GamerTheme.textMuted,
-                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                      minimumSize: const Size(0, 32),
                     ),
-                    icon: const Icon(Icons.delete_outline_rounded, size: 16),
+                    icon: const Icon(Icons.close_rounded, size: 15),
                     label: const Text('Close LFG', style: TextStyle(fontSize: 12)),
                     onPressed: () async {
-                      await SquadService().closeSquadPost(squad.id);
+                      await LfgService().closeLfg(squad.id);
+                      if (context.mounted) {
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          const SnackBar(content: Text('LFG Closed')),
+                        );
+                      }
                     },
                   ),
+
+                  // Permanent Delete Button (Red)
+                  IconButton(
+                    style: IconButton.styleFrom(
+                      foregroundColor: Colors.redAccent,
+                      padding: const EdgeInsets.all(6),
+                      minimumSize: const Size(32, 32),
+                    ),
+                    icon: const Icon(Icons.delete_outline_rounded, size: 18, color: Colors.redAccent),
+                    onPressed: () => _confirmDelete(context, squad),
+                  ),
                 ] else if (isMember) ...[
-                  // Member View: User is already accepted in this squad
+                  // Member View: Left "In Squad" green badge. Right: "Open Chat" orange + "COPY UID"
                   Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 5),
                     decoration: BoxDecoration(
                       color: GamerTheme.cardElevated,
                       borderRadius: BorderRadius.circular(8),
@@ -684,13 +728,13 @@ class _LFGCardState extends State<LFGCard> {
                     child: const Row(
                       mainAxisSize: MainAxisSize.min,
                       children: [
-                        Icon(Icons.check_circle_rounded, size: 15, color: GamerTheme.neonGreen),
-                        SizedBox(width: 5),
+                        Icon(Icons.check_circle_rounded, size: 14, color: GamerTheme.neonGreen),
+                        SizedBox(width: 4),
                         Text(
                           'In Squad',
                           style: TextStyle(
                             fontWeight: FontWeight.w900,
-                            fontSize: 11.5,
+                            fontSize: 11,
                             color: GamerTheme.neonGreen,
                           ),
                         ),
@@ -700,22 +744,23 @@ class _LFGCardState extends State<LFGCard> {
 
                   const Spacer(),
 
-                  // "Open Squad Chat" Button
+                  // "Open Chat" orange button
                   ElevatedButton.icon(
                     style: ElevatedButton.styleFrom(
-                      backgroundColor: GamerTheme.accentCyan,
-                      foregroundColor: Colors.black,
+                      backgroundColor: GamerTheme.accentOrange,
+                      foregroundColor: GamerTheme.bgDark,
                       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-                      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                      minimumSize: const Size(0, 32),
                       elevation: 0,
                     ),
-                    icon: const Icon(Icons.forum_rounded, size: 16, color: Colors.black),
+                    icon: const Icon(Icons.forum_rounded, size: 14, color: GamerTheme.bgDark),
                     label: const Text(
-                      'Open Squad Chat',
+                      'Open Chat',
                       style: TextStyle(
                         fontWeight: FontWeight.w900,
-                        fontSize: 12,
-                        color: Colors.black,
+                        fontSize: 11.5,
+                        color: GamerTheme.bgDark,
                       ),
                     ),
                     onPressed: () {
@@ -727,52 +772,49 @@ class _LFGCardState extends State<LFGCard> {
                       );
                     },
                   ),
-                ] else if (squad.membersCount >= 4 || squad.members.length >= 4) ...[
-                  // Squad Full Badge
-                  Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      const Icon(Icons.people_outline_rounded, size: 16, color: GamerTheme.textMuted),
-                      const SizedBox(width: 6),
-                      Text(
-                        '${math.max(0, squad.membersCount)}/4 members',
-                        style: const TextStyle(color: GamerTheme.textMuted, fontSize: 12),
+                  const SizedBox(width: 6),
+
+                  // "COPY UID: ${post['bgmiUidToCopy']}"
+                  ElevatedButton.icon(
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: GamerTheme.cardElevated,
+                      foregroundColor: GamerTheme.accentOrange,
+                      side: const BorderSide(color: GamerTheme.accentOrange, width: 1),
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
+                      minimumSize: const Size(0, 32),
+                      elevation: 0,
+                    ),
+                    icon: const Icon(Icons.copy_rounded, size: 12, color: GamerTheme.accentOrange),
+                    label: Text(
+                      'COPY UID: ${squad.bgmiUidToCopy.isNotEmpty ? squad.bgmiUidToCopy : (squad.inGameUid.isNotEmpty ? squad.inGameUid : squad.ownerId)}',
+                      style: const TextStyle(
+                        fontWeight: FontWeight.w900,
+                        fontSize: 11,
+                        color: GamerTheme.accentOrange,
                       ),
-                    ],
-                  ),
-
-                  const Spacer(),
-
-                  Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
-                    decoration: BoxDecoration(
-                      color: GamerTheme.cardElevated,
-                      borderRadius: BorderRadius.circular(8),
-                      border: Border.all(color: Colors.redAccent.withOpacity(0.5)),
                     ),
-                    child: const Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Icon(Icons.lock_rounded, size: 15, color: Colors.redAccent),
-                        SizedBox(width: 5),
-                        Text(
-                          'Squad Full',
-                          style: TextStyle(
-                            fontWeight: FontWeight.w900,
-                            fontSize: 11.5,
-                            color: Colors.redAccent,
-                          ),
+                    onPressed: () {
+                      final uidToCopy = squad.bgmiUidToCopy.isNotEmpty
+                          ? squad.bgmiUidToCopy
+                          : (squad.inGameUid.isNotEmpty ? squad.inGameUid : squad.ownerId);
+                      Clipboard.setData(ClipboardData(text: uidToCopy));
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        SnackBar(
+                          content: Text('Copied UID $uidToCopy to clipboard!'),
+                          backgroundColor: GamerTheme.accentOrange,
+                          duration: const Duration(seconds: 2),
                         ),
-                      ],
-                    ),
+                      );
+                    },
                   ),
                 ] else if (hasRequested) ...[
                   // Requester View: Non-owner who has already requested
                   Row(
                     mainAxisSize: MainAxisSize.min,
                     children: [
-                      const Icon(Icons.people_outline_rounded, size: 16, color: GamerTheme.textMuted),
-                      const SizedBox(width: 6),
+                      const Icon(Icons.people_outline_rounded, size: 15, color: GamerTheme.textMuted),
+                      const SizedBox(width: 5),
                       Text(
                         '${math.max(0, squad.requestedCount > 0 ? squad.requestedCount : squad.joinRequests.length)} requested',
                         style: const TextStyle(color: GamerTheme.textMuted, fontSize: 12),
@@ -783,36 +825,38 @@ class _LFGCardState extends State<LFGCard> {
                   const Spacer(),
 
                   // Green "Requested" badge (disabled)
-                  Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
-                    decoration: BoxDecoration(
-                      color: GamerTheme.cardElevated,
-                      borderRadius: BorderRadius.circular(8),
-                      border: Border.all(color: GamerTheme.neonGreen.withOpacity(0.4)),
+                  ElevatedButton.icon(
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: GamerTheme.neonGreen.withOpacity(0.18),
+                      foregroundColor: GamerTheme.neonGreen,
+                      disabledBackgroundColor: GamerTheme.neonGreen.withOpacity(0.18),
+                      disabledForegroundColor: GamerTheme.neonGreen,
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(8),
+                        side: BorderSide(color: GamerTheme.neonGreen.withOpacity(0.5)),
+                      ),
+                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                      minimumSize: const Size(0, 32),
+                      elevation: 0,
                     ),
-                    child: const Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Icon(Icons.check_circle_rounded, size: 16, color: GamerTheme.neonGreen),
-                        SizedBox(width: 6),
-                        Text(
-                          'Requested',
-                          style: TextStyle(
-                            fontWeight: FontWeight.w900,
-                            fontSize: 12,
-                            color: GamerTheme.neonGreen,
-                          ),
-                        ),
-                      ],
+                    icon: const Icon(Icons.check_rounded, size: 15, color: GamerTheme.neonGreen),
+                    label: const Text(
+                      'Requested',
+                      style: TextStyle(
+                        fontWeight: FontWeight.w900,
+                        fontSize: 12,
+                        color: GamerTheme.neonGreen,
+                      ),
                     ),
+                    onPressed: null,
                   ),
                 ] else ...[
                   // Other Users: Non-owner who has not requested yet
                   Row(
                     mainAxisSize: MainAxisSize.min,
                     children: [
-                      const Icon(Icons.people_outline_rounded, size: 16, color: GamerTheme.textMuted),
-                      const SizedBox(width: 6),
+                      const Icon(Icons.people_outline_rounded, size: 15, color: GamerTheme.textMuted),
+                      const SizedBox(width: 5),
                       Text(
                         '${math.max(0, squad.requestedCount > 0 ? squad.requestedCount : squad.joinRequests.length)} requested',
                         style: const TextStyle(color: GamerTheme.textMuted, fontSize: 12),
@@ -822,18 +866,19 @@ class _LFGCardState extends State<LFGCard> {
 
                   const Spacer(),
 
-                  // "Request to Join" button
+                  // "Join" button (Orange)
                   ElevatedButton.icon(
                     style: ElevatedButton.styleFrom(
                       backgroundColor: GamerTheme.accentOrange,
                       foregroundColor: GamerTheme.bgDark,
                       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-                      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+                      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
+                      minimumSize: const Size(0, 32),
                       elevation: 0,
                     ),
-                    icon: const Icon(Icons.group_add_rounded, size: 16, color: GamerTheme.bgDark),
+                    icon: const Icon(Icons.group_add_rounded, size: 15, color: GamerTheme.bgDark),
                     label: const Text(
-                      'Request to Join',
+                      'Join',
                       style: TextStyle(
                         fontWeight: FontWeight.w900,
                         fontSize: 12,

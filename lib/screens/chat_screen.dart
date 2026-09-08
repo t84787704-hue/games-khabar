@@ -173,6 +173,56 @@ class _ChatScreenState extends State<ChatScreen> {
     }
   }
 
+  Future<void> _handleEndSquad(String leaderUid) async {
+    final confirm = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: GamerTheme.cardDark,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        title: const Text('End Squad?', style: TextStyle(color: GamerTheme.textWhite, fontWeight: FontWeight.bold)),
+        content: const Text(
+          'Are you sure you want to end this squad? The squad will be closed and permanently removed.',
+          style: TextStyle(color: GamerTheme.textMuted),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('CANCEL', style: TextStyle(color: GamerTheme.textMuted)),
+          ),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(backgroundColor: Colors.redAccent),
+            onPressed: () => Navigator.pop(ctx, true),
+            child: const Text('END SQUAD', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+          ),
+        ],
+      ),
+    );
+
+    if (confirm != true) return;
+
+    setState(() => _isLeaving = true);
+    try {
+      await LfgService().deletePermanently(widget.postId, leaderUid);
+      if (mounted) {
+        Navigator.pop(context);
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Squad ended'),
+            backgroundColor: GamerTheme.accentOrange,
+          ),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Failed to end squad: $e'), backgroundColor: Colors.redAccent),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _isLeaving = false);
+    }
+  }
+
   Future<void> _sendMessage() async {
     final text = _textController.text.trim();
     if (text.isEmpty || _isSending) return;
@@ -336,8 +386,31 @@ class _ChatScreenState extends State<ChatScreen> {
               return Row(
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  // Leave Squad button for non-owner members
-                  if (!isOwner && isMember)
+                  // End Squad for host / Leave Squad button for non-owner members
+                  if (isOwner)
+                    Padding(
+                      padding: const EdgeInsets.only(right: 4),
+                      child: _isLeaving
+                          ? const SizedBox(
+                              width: 20,
+                              height: 20,
+                              child: CircularProgressIndicator(strokeWidth: 2, color: Colors.redAccent),
+                            )
+                          : TextButton.icon(
+                              style: TextButton.styleFrom(
+                                foregroundColor: Colors.redAccent,
+                                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                                visualDensity: VisualDensity.compact,
+                              ),
+                              icon: const Icon(Icons.power_settings_new_rounded, size: 16),
+                              label: const Text(
+                                'END SQUAD',
+                                style: TextStyle(fontSize: 11.5, fontWeight: FontWeight.bold),
+                              ),
+                              onPressed: () => _handleEndSquad(leaderUid),
+                            ),
+                    )
+                  else if (isMember)
                     Padding(
                       padding: const EdgeInsets.only(right: 4),
                       child: _isLeaving

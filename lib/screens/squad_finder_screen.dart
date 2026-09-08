@@ -283,16 +283,44 @@ class _SquadFinderScreenState extends State<SquadFinderScreen> {
                       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                     ),
                     onPressed: () async {
+                      final authUser = FirebaseAuth.instance.currentUser;
+                      if (authUser == null) {
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          const SnackBar(content: Text('Please log in to post squad requests!')),
+                        );
+                        return;
+                      }
+
+                      final bgmiUid = uidController.text.trim();
+                      if (bgmiUid.isEmpty) {
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          const SnackBar(content: Text('Please enter your BGMI UID!')),
+                        );
+                        return;
+                      }
+
                       Navigator.pop(ctx);
-                      final docId = FirebaseFirestore.instance.collection('squads').doc().id;
-                      final userAuthUid = FirebaseAuth.instance.currentUser?.uid ?? currentGamer.uid;
+                      final docId = FirebaseFirestore.instance.collection('lfg_posts').doc().id;
+                      final String uid = authUser.uid;
+                      final String email = authUser.email ?? '';
+                      final String bgmiName = currentGamer.displayName.isNotEmpty
+                          ? currentGamer.displayName
+                          : (authUser.displayName ?? 'Squad Leader');
+                      final String tag = currentGamer.username.isNotEmpty
+                          ? currentGamer.username
+                          : 'gamer';
+                      final String avatar = currentGamer.photoUrl.isNotEmpty
+                          ? currentGamer.photoUrl
+                          : (authUser.photoURL ?? '');
+
                       final post = SquadPost(
                         id: docId,
-                        userId: userAuthUid,
-                        username: currentGamer.username,
-                        displayName: currentGamer.displayName,
-                        userAvatar: currentGamer.photoUrl,
-                        userRank: currentGamer.rank,
+                        userId: uid,
+                        ownerEmail: email,
+                        username: tag,
+                        displayName: bgmiName,
+                        userAvatar: avatar,
+                        userRank: selectedTier,
                         game: 'BGMI',
                         tierNeeded: selectedTier,
                         kdNeeded: selectedKd,
@@ -300,10 +328,10 @@ class _SquadFinderScreenState extends State<SquadFinderScreen> {
                         language: selectedLang,
                         mode: selectedMode,
                         description: descController.text.trim(),
-                        inGameUid: uidController.text.trim(),
+                        inGameUid: bgmiUid,
                         isActive: true,
                         joinRequests: const [],
-                        members: [userAuthUid],
+                        members: [uid],
                         membersCount: 1,
                         requestedCount: 0,
                         createdAt: DateTime.now(),

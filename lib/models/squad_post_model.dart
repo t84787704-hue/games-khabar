@@ -4,6 +4,10 @@ class SquadPost {
   final String id;
   final String userId; // also accessible as ownerId
   String get ownerId => userId;
+  final String ownerEmail;
+  String get bgmiUidToCopy => inGameUid;
+  String get ownerBgmiName => displayName;
+  String get ownerTag => username;
   /// Title getter for backward compatibility with older chat screen versions
   String get title => displayName.isNotEmpty ? "$displayName's Squad" : (description.isNotEmpty ? description : "Squad Chat");
   final String username;
@@ -28,6 +32,7 @@ class SquadPost {
   const SquadPost({
     required this.id,
     required this.userId,
+    this.ownerEmail = '',
     required this.username,
     required this.displayName,
     this.userAvatar = '',
@@ -65,6 +70,7 @@ class SquadPost {
     return SquadPost(
       id: data['postId'] ?? data['id'] ?? doc.id,
       userId: data['ownerId'] ?? data['userId'] ?? '',
+      ownerEmail: data['ownerEmail'] ?? '',
       username: data['ownerTag'] ?? data['tag'] ?? data['username'] ?? 'gamer',
       displayName: data['ownerBgmiName'] ?? data['bgmiName'] ?? data['displayName'] ?? 'Squad Leader',
       userAvatar: data['userAvatar'] ?? data['avatar'] ?? '',
@@ -76,7 +82,7 @@ class SquadPost {
       language: data['lang'] ?? data['language'] ?? 'Hindi',
       mode: data['mode'] ?? 'Classic Squad',
       description: data['description'] ?? '',
-      inGameUid: data['bgmiUid'] ?? data['inGameUid'] ?? '',
+      inGameUid: data['bgmiUidToCopy'] ?? data['bgmiUid'] ?? data['inGameUid'] ?? '',
       joinRequests: joinReqList,
       members: membersList,
       membersCount: (data['membersCount'] as num?)?.toInt() ?? (membersList.isNotEmpty ? membersList.length : 1),
@@ -92,6 +98,7 @@ class SquadPost {
       'id': id,
       'ownerId': userId,
       'userId': userId,
+      'ownerEmail': ownerEmail,
       'ownerBgmiName': displayName,
       'displayName': displayName,
       'ownerTag': username,
@@ -110,6 +117,7 @@ class SquadPost {
       'mode': mode,
       'bgmiUid': inGameUid.trim(),
       'inGameUid': inGameUid.trim(),
+      'bgmiUidToCopy': inGameUid.trim(),
       'description': description.trim(),
       'joinRequests': joinRequests,
       'members': members.isNotEmpty ? members : [userId],
@@ -123,6 +131,7 @@ class SquadPost {
   SquadPost copyWith({
     String? id,
     String? userId,
+    String? ownerEmail,
     String? username,
     String? displayName,
     String? userAvatar,
@@ -145,6 +154,7 @@ class SquadPost {
     return SquadPost(
       id: id ?? this.id,
       userId: userId ?? this.userId,
+      ownerEmail: ownerEmail ?? this.ownerEmail,
       username: username ?? this.username,
       displayName: displayName ?? this.displayName,
       userAvatar: userAvatar ?? this.userAvatar,

@@ -27,23 +27,48 @@ class LfgService {
       final postRef = _firestore.collection('lfg_posts').doc(postId);
       final squadRef = _firestore.collection('squads').doc(postId);
 
-      final batch = _firestore.batch();
-      batch.update(postRef, {
-        'joinRequests': FieldValue.arrayUnion([currentUserId]),
-        'requestedCount': FieldValue.increment(1),
+      await _firestore.runTransaction((transaction) async {
+        final snapshot = await transaction.get(postRef);
+        if (!snapshot.exists) {
+          throw "Post does not exist";
+        }
+        final data = snapshot.data() as Map<String, dynamic>? ?? {};
+        final ownerId = (data['ownerId'] ?? data['userId'] ?? '').toString();
+        final List<dynamic> members = List.from(data['members'] ?? []);
+        final List<dynamic> joinRequests = List.from(data['joinRequests'] ?? []);
+
+        if (currentUserId == ownerId) {
+          throw "You are owner";
+        }
+        if (members.length >= 4) {
+          throw "Squad is full";
+        }
+        if (joinRequests.contains(currentUserId)) {
+          return;
+        }
+
+        final int curRequested = (data['requestedCount'] as num?)?.toInt() ?? joinRequests.length;
+
+        transaction.update(postRef, {
+          'joinRequests': FieldValue.arrayUnion([currentUserId]),
+          'requestedCount': curRequested + 1,
+        });
       });
 
-      batch.set(squadRef, {
-        'joinRequests': FieldValue.arrayUnion([currentUserId]),
-        'requestedCount': FieldValue.increment(1),
-      }, SetOptions(merge: true));
+      // Mirror to squadRef & requests subcollections
+      try {
+        final batch = _firestore.batch();
+        batch.set(squadRef, {
+          'joinRequests': FieldValue.arrayUnion([currentUserId]),
+          'requestedCount': FieldValue.increment(1),
+        }, SetOptions(merge: true));
+        if (applicantData != null) {
+          batch.set(postRef.collection('requests').doc(currentUserId), applicantData, SetOptions(merge: true));
+          batch.set(squadRef.collection('requests').doc(currentUserId), applicantData, SetOptions(merge: true));
+        }
+        await batch.commit();
+      } catch (_) {}
 
-      if (applicantData != null) {
-        batch.set(postRef.collection('requests').doc(currentUserId), applicantData, SetOptions(merge: true));
-        batch.set(squadRef.collection('requests').doc(currentUserId), applicantData, SetOptions(merge: true));
-      }
-
-      await batch.commit();
       debugPrint("JOIN REQUEST SUCCESS");
 
       if (leaderUid != null && leaderUid.isNotEmpty && leaderUid != currentUserId) {
@@ -74,15 +99,6 @@ class LfgService {
   }
 
   /// 2. On Accept (in owner account):
-  /// if (members.length >= 4) throw "Full"
-  /// batch.update(postRef, {
-  ///   'joinRequests': FieldValue.arrayRemove([requesterId]),
-  ///   'members': FieldValue.arrayUnion([requesterId]),
-  ///   'requestedCount': FieldValue.increment(-1),
-  ///   'membersCount': FieldValue.increment(1),
-  ///   'isActive': true,
-  /// });
-  /// Also add security: if requestedCount < 0 then set to 0.
   Future<void> acceptRequest({
     required String postId,
     required String requesterId,
@@ -97,155 +113,123 @@ class LfgService {
 
       final currentUid = _auth.currentUser?.uid;
       final postRef = _firestore.collection('lfg_posts').doc(postId);
+      final chatRef = _firestore.collection('chats').doc(postId);
       final squadRef = _firestore.collection('squads').doc(postId);
 
-      // Verify post and owner permissions
-      DocumentSnapshot postSnap = await postRef.get();
-      if (!postSnap.exists) {
-        final sSnap = await squadRef.get();
-        if (sSnap.exists) {
-          postSnap = sSnap;
+      await _firestore.runTransaction((transaction) async {
+        final snapshot = await transaction.get(postRef);
+        if (!snapshot.exists) {
+          throw "Post does not exist";
         }
-      }
+        final data = snapshot.data() as Map<String, dynamic>? ?? {};
+        final ownerId = (data['ownerId'] ?? data['userId'] ?? leaderUid).toString();
+        if (currentUid != null && ownerId.isNotEmpty && currentUid != ownerId) {
+          throw "Only owner can accept";
+        }
 
-      final data = postSnap.data() as Map<String, dynamic>? ?? {};
-      final postOwnerId = (data['ownerId'] ?? data['userId'] ?? leaderUid).toString();
-      if (currentUid != null && postOwnerId.isNotEmpty && currentUid != postOwnerId) {
-        throw "Only owner can accept";
-      }
+        final List<dynamic> members = List.from(data['members'] ?? []);
+        final List<dynamic> joinRequests = List.from(data['joinRequests'] ?? []);
+        final int curReq = (data['requestedCount'] as num?)?.toInt() ?? joinRequests.length;
+        final int safeRequestedCount = math.max(0, curReq - 1);
 
-      final int currentRequested = (data['requestedCount'] as num?)?.toInt() ?? 0;
-      List<dynamic> members = List.from(data['members'] ?? []);
-      if (members.isEmpty && postOwnerId.isNotEmpty) {
-        members.add(postOwnerId);
-      }
+        // If requesterUid == ownerId: just remove from joinRequests, requestedCount--, return
+        if (requesterId == ownerId) {
+          transaction.update(postRef, {
+            'joinRequests': FieldValue.arrayRemove([requesterId, requestDocId]),
+            'requestedCount': safeRequestedCount,
+          });
+          return;
+        }
 
-      // 1. If requester is owner: clean from joinRequests and return
-      if (postOwnerId == requesterId) {
-        debugPrint("[LfgService] Requester is post owner. Cleaning from joinRequests.");
-        final batch = _firestore.batch();
-        final safeCount = math.max(0, currentRequested - 1);
-        final cleanMap = <String, dynamic>{
+        // If members.contains(requesterUid): remove from joinRequests, requestedCount--, return
+        if (members.contains(requesterId)) {
+          transaction.update(postRef, {
+            'joinRequests': FieldValue.arrayRemove([requesterId, requestDocId]),
+            'requestedCount': safeRequestedCount,
+          });
+          return;
+        }
+
+        // Normal accept
+        if (members.length >= 4) {
+          throw "Squad is full";
+        }
+
+        final int newMembersCount = members.length + 1;
+        final bool isNowFull = newMembersCount >= 4;
+
+        // lfg_posts update: arrayUnion members requesterUid, membersCount++, arrayRemove joinRequests requesterUid, requestedCount-- (if requestedCount <0 set 0)
+        // If membersCount == 4 after accept: set isActive=false
+        transaction.update(postRef, {
+          'members': FieldValue.arrayUnion([requesterId]),
+          'membersCount': newMembersCount,
           'joinRequests': FieldValue.arrayRemove([requesterId, requestDocId]),
-          'requestedCount': safeCount,
-        };
-        batch.update(postRef, cleanMap);
-        batch.delete(postRef.collection('requests').doc(requestDocId));
-        if (requestDocId != requesterId) {
-          batch.delete(postRef.collection('requests').doc(requesterId));
-        }
-        batch.set(squadRef, cleanMap, SetOptions(merge: true));
-        batch.delete(squadRef.collection('requests').doc(requestDocId));
-        if (requestDocId != requesterId) {
-          batch.delete(squadRef.collection('requests').doc(requesterId));
-        }
-        await batch.commit();
-        return;
-      }
-
-      // 2. If requester is already in members: clean from joinRequests, decrement requestedCount, return
-      if (members.contains(requesterId)) {
-        debugPrint("[LfgService] Requester already in members. Cleaning from joinRequests.");
-        final batch = _firestore.batch();
-        final dynamic safeRequestedDecrement = (currentRequested <= 1) ? 0 : FieldValue.increment(-1);
-        final cleanMap = <String, dynamic>{
-          'joinRequests': FieldValue.arrayRemove([requesterId, requestDocId]),
-          'requestedCount': safeRequestedDecrement,
-        };
-        batch.update(postRef, cleanMap);
-        batch.delete(postRef.collection('requests').doc(requestDocId));
-        if (requestDocId != requesterId) {
-          batch.delete(postRef.collection('requests').doc(requesterId));
-        }
-        batch.set(squadRef, cleanMap, SetOptions(merge: true));
-        batch.delete(squadRef.collection('requests').doc(requestDocId));
-        if (requestDocId != requesterId) {
-          batch.delete(squadRef.collection('requests').doc(requesterId));
-        }
-        await batch.commit();
-        return;
-      }
-
-      // 3. Normal Accept: check capacity
-      if (members.length >= 4) {
-        throw "Full";
-      }
-
-      // Ensure requestedCount never goes below 0
-      final dynamic safeRequestedDecrement = (currentRequested <= 1)
-          ? 0
-          : FieldValue.increment(-1);
-
-      final bool isNowFull = (members.length + 1) >= 4;
-      final batch = _firestore.batch();
-
-      final updateMap = <String, dynamic>{
-        'joinRequests': FieldValue.arrayRemove([requesterId, requestDocId]),
-        'members': FieldValue.arrayUnion([requesterId]),
-        'requestedCount': safeRequestedDecrement,
-        'membersCount': FieldValue.increment(1),
-        'isActive': !isNowFull,
-      };
-
-      // 1. Update in lfg_posts
-      batch.update(postRef, updateMap);
-
-      // 2. Delete request doc from subcollection using actual requestDocId
-      final requestRef = postRef.collection('requests').doc(requestDocId);
-      batch.delete(requestRef);
-      if (requestDocId != requesterId) {
-        batch.delete(postRef.collection('requests').doc(requesterId));
-      }
-
-      // 3. Mirror update in squads collection for consistency
-      batch.set(squadRef, updateMap, SetOptions(merge: true));
-      batch.delete(squadRef.collection('requests').doc(requestDocId));
-      if (requestDocId != requesterId) {
-        batch.delete(squadRef.collection('requests').doc(requesterId));
-      }
-
-      await batch.commit();
-      debugPrint("ACCEPT SUCCESS - SQUAD NOW FULL: $isNowFull");
-
-      // 4. Chat Room Creation: doc in chats/{postId} with members array
-      try {
-        final chatRef = _firestore.collection('chats').doc(postId);
-        final Set<String> chatMembers = {...members.map((e) => e.toString()), requesterId};
-        if (postOwnerId.isNotEmpty) chatMembers.add(postOwnerId);
-
-        await chatRef.set({
-          'postId': postId,
-          'members': chatMembers.toList(),
-          'leaderUid': postOwnerId,
-          'title': data['displayName'] != null ? "${data['displayName']}'s Squad" : 'Squad Chat',
-          'mode': mode,
-          'inGameUid': inGameUid.isNotEmpty ? inGameUid : (data['inGameUid'] ?? ''),
-          'lastMessage': '$requesterName joined the squad!',
-          'lastMessageTime': FieldValue.serverTimestamp(),
-          'updatedAt': FieldValue.serverTimestamp(),
-          'createdAt': FieldValue.serverTimestamp(),
-        }, SetOptions(merge: true));
-
-        // Add welcome message in chat
-        await chatRef.collection('messages').add({
-          'senderUid': 'system',
-          'senderName': 'Squad Bot',
-          'text': '$requesterName joined the squad! Welcome to the team.',
-          'type': 'system',
-          'createdAt': FieldValue.serverTimestamp(),
+          'requestedCount': safeRequestedCount,
+          if (isNowFull) 'isActive': false,
         });
-      } catch (ce) {
-        debugPrint("[LfgService] Chat room creation error: $ce");
-      }
 
-      // 5. Send accepted push notification: "You joined {ownerName}'s squad"
+        // chats/{postId} update: if doc exists, arrayUnion members requesterUid, else create doc with members [ownerId, requesterUid]
+        final chatSnap = await transaction.get(chatRef);
+        if (chatSnap.exists) {
+          transaction.update(chatRef, {
+            'members': FieldValue.arrayUnion([requesterId]),
+            'lastMessage': '$requesterName joined the squad!',
+            'lastMessageTime': FieldValue.serverTimestamp(),
+            'updatedAt': FieldValue.serverTimestamp(),
+          });
+        } else {
+          final Set<String> initialMembers = {ownerId, requesterId};
+          initialMembers.remove('');
+          transaction.set(chatRef, {
+            'chatId': postId,
+            'postId': postId,
+            'members': initialMembers.toList(),
+            'leaderUid': ownerId,
+            'ownerId': ownerId,
+            'title': data['ownerBgmiName'] ?? data['displayName'] != null ? "${data['ownerBgmiName'] ?? data['displayName']}'s Squad" : 'Squad Chat',
+            'mode': mode.isNotEmpty ? mode : (data['mode'] ?? 'Classic Squad'),
+            'inGameUid': inGameUid.isNotEmpty ? inGameUid : (data['bgmiUidToCopy'] ?? data['inGameUid'] ?? ''),
+            'bgmiUidToCopy': inGameUid.isNotEmpty ? inGameUid : (data['bgmiUidToCopy'] ?? data['inGameUid'] ?? ''),
+            'lastMessage': '$requesterName joined the squad!',
+            'lastMessageTime': FieldValue.serverTimestamp(),
+            'createdAt': FieldValue.serverTimestamp(),
+            'updatedAt': FieldValue.serverTimestamp(),
+          });
+        }
+      });
+
+      // Cleanup subcollections & mirror to squadRef
+      final actualDocId = requestDocId.isNotEmpty ? requestDocId : requesterId;
+      postRef.collection('requests').doc(actualDocId).delete().catchError((_) {});
+      if (actualDocId != requesterId) {
+        postRef.collection('requests').doc(requesterId).delete().catchError((_) {});
+      }
+      squadRef.collection('requests').doc(actualDocId).delete().catchError((_) {});
+      squadRef.set({
+        'members': FieldValue.arrayUnion([requesterId]),
+        'joinRequests': FieldValue.arrayRemove([requesterId, actualDocId]),
+      }, SetOptions(merge: true)).catchError((_) {});
+
+      // Add system message to chat messages subcollection
+      chatRef.collection('messages').add({
+        'senderId': 'system',
+        'senderUid': 'system',
+        'senderName': 'Squad Bot',
+        'text': 'Welcome @$requesterName to the squad!',
+        'type': 'system',
+        'createdAt': FieldValue.serverTimestamp(),
+      }).catchError((_) {});
+
+      // Send accepted notification
       try {
-        final ownerName = (data['displayName'] ?? data['username'] ?? 'Leader').toString();
-        final notifMessage = 'You joined $ownerName\'s squad';
+        final postSnap = await postRef.get();
+        final data = postSnap.data() as Map<String, dynamic>? ?? {};
+        final ownerName = (data['ownerBgmiName'] ?? data['displayName'] ?? data['username'] ?? 'Leader').toString();
+        final notifMessage = "Your request to join $ownerName's squad was accepted! Tap to chat.";
 
         await _firestore.collection('notifications').add({
           'recipientUid': requesterId,
-          'senderUid': postOwnerId.isNotEmpty ? postOwnerId : (currentUid ?? ''),
+          'senderUid': leaderUid.isNotEmpty ? leaderUid : (currentUid ?? ''),
           'type': 'squad_accepted',
           'title': 'Squad Request Accepted! 🎮',
           'message': notifMessage,
@@ -267,6 +251,47 @@ class LfgService {
     } catch (e, stack) {
       debugPrint("ACCEPT FAILED: $e");
       debugPrint(stack.toString());
+      rethrow;
+    }
+  }
+
+  /// Declines / rejects a request from lfg_posts using transaction
+  Future<void> rejectRequest({
+    required String postId,
+    required String requesterId,
+    String? requestDocId,
+  }) async {
+    try {
+      debugPrint("START REJECT postId=$postId requesterId=$requesterId");
+      final postRef = _firestore.collection('lfg_posts').doc(postId);
+      final squadRef = _firestore.collection('squads').doc(postId);
+
+      await _firestore.runTransaction((transaction) async {
+        final snapshot = await transaction.get(postRef);
+        if (!snapshot.exists) return;
+        final data = snapshot.data() as Map<String, dynamic>? ?? {};
+        final List<dynamic> joinRequests = List.from(data['joinRequests'] ?? []);
+        final int curReq = (data['requestedCount'] as num?)?.toInt() ?? joinRequests.length;
+        final int safeCount = math.max(0, curReq - 1);
+
+        transaction.update(postRef, {
+          'joinRequests': FieldValue.arrayRemove([requesterId, if (requestDocId != null) requestDocId]),
+          'requestedCount': safeCount,
+        });
+      });
+
+      final actualDocId = requestDocId ?? requesterId;
+      postRef.collection('requests').doc(actualDocId).delete().catchError((_) {});
+      if (actualDocId != requesterId) {
+        postRef.collection('requests').doc(requesterId).delete().catchError((_) {});
+      }
+      squadRef.collection('requests').doc(actualDocId).delete().catchError((_) {});
+      squadRef.update({
+        'joinRequests': FieldValue.arrayRemove([requesterId, actualDocId]),
+        'requestedCount': FieldValue.increment(-1),
+      }).catchError((_) {});
+    } catch (e) {
+      debugPrint("REJECT FAILED: $e");
       rethrow;
     }
   }

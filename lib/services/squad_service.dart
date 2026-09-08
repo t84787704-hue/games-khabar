@@ -58,6 +58,27 @@ class SquadService {
       try {
         await _legacySquadRef.doc(doc.id).set(data);
       } catch (_) {}
+
+      // Create chats/{postId} document immediately with members: [ownerUid]
+      try {
+        await _firestore.collection('chats').doc(doc.id).set({
+          'chatId': doc.id,
+          'postId': doc.id,
+          'members': cleanMembers,
+          'leaderUid': ownerUid,
+          'ownerId': ownerUid,
+          'title': "${finalPost.displayName}'s Squad",
+          'mode': finalPost.mode,
+          'inGameUid': finalPost.inGameUid,
+          'bgmiUidToCopy': finalPost.inGameUid,
+          'lastMessage': 'Squad created! Waiting for teammates...',
+          'lastMessageTime': FieldValue.serverTimestamp(),
+          'createdAt': FieldValue.serverTimestamp(),
+          'updatedAt': FieldValue.serverTimestamp(),
+        }, SetOptions(merge: true));
+      } catch (ce) {
+        debugPrint('[SquadService] Chat creation error: $ce');
+      }
       debugPrint('[SquadService] Successfully created squad post doc ${doc.id}');
     } catch (e, st) {
       debugPrint('[SquadService] Error creating squad post: $e\n$st');

@@ -740,6 +740,77 @@ class _ProfileScreenState extends State<ProfileScreen> {
                 ),
                 const SizedBox(height: 20),
 
+                // User Account Sign Out Section (For switching between test accounts)
+                if (FirebaseAuth.instance.currentUser != null) ...[
+                  Container(
+                    margin: const EdgeInsets.only(bottom: 20),
+                    decoration: BoxDecoration(
+                      color: cardDark,
+                      borderRadius: BorderRadius.circular(16),
+                      border: Border.all(color: Colors.redAccent.withOpacity(0.35)),
+                    ),
+                    child: ListTile(
+                      contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+                      leading: Container(
+                        padding: const EdgeInsets.all(8),
+                        decoration: BoxDecoration(
+                          color: Colors.redAccent.withOpacity(0.12),
+                          shape: BoxShape.circle,
+                        ),
+                        child: const Icon(Icons.logout_rounded, color: Colors.redAccent, size: 20),
+                      ),
+                      title: const Text(
+                        'Log Out Account',
+                        style: TextStyle(color: Colors.redAccent, fontWeight: FontWeight.bold, fontSize: 14),
+                      ),
+                      subtitle: Text(
+                        FirebaseAuth.instance.currentUser?.email ?? 'Switch testing account',
+                        style: TextStyle(color: textGray, fontSize: 12),
+                      ),
+                      trailing: const Icon(Icons.arrow_forward_ios_rounded, color: Colors.redAccent, size: 14),
+                      onTap: () async {
+                        final confirm = await showDialog<bool>(
+                          context: context,
+                          builder: (ctx) => AlertDialog(
+                            backgroundColor: cardDark,
+                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                            title: Text('Log Out', style: TextStyle(color: textWhite, fontWeight: FontWeight.bold)),
+                            content: const Text(
+                              'Are you sure you want to log out? You can sign in with any of your 5 Google or Email test accounts.',
+                              style: TextStyle(color: GamerTheme.textMuted),
+                            ),
+                            actions: [
+                              TextButton(
+                                onPressed: () => Navigator.pop(ctx, false),
+                                child: Text('CANCEL', style: TextStyle(color: textGray)),
+                              ),
+                              ElevatedButton(
+                                style: ElevatedButton.styleFrom(backgroundColor: Colors.redAccent),
+                                onPressed: () => Navigator.pop(ctx, true),
+                                child: const Text('LOG OUT', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+                              ),
+                            ],
+                          ),
+                        );
+
+                        if (confirm == true) {
+                          await GamerAuthService().signOut();
+                          await FirebaseAuth.instance.signOut();
+                          if (context.mounted) {
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              const SnackBar(
+                                content: Text('Logged out. You can now select another account.'),
+                                backgroundColor: GamerTheme.accentOrange,
+                              ),
+                            );
+                            Navigator.pushNamedAndRemoveUntil(context, '/login', (route) => false);
+                          }
+                        }
+                      },
+                    ),
+                  ),
+                ],
+
                 // Secret Admin Login / Logout Section
                 AnimatedSize(
                   duration: const Duration(milliseconds: 350),
