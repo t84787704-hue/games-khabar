@@ -474,7 +474,7 @@ class _LFGCardState extends State<LFGCard> {
                   const Icon(Icons.shield_outlined, color: GamerTheme.accentCyan, size: 15),
                   const SizedBox(width: 6),
                   Text(
-                    'Squad Members (${squad.members.isNotEmpty ? squad.members.length : squad.membersCount}/4):',
+                    'Squad Members (${squad.members.isNotEmpty ? squad.members.length : 1}/4):',
                     style: const TextStyle(
                       color: GamerTheme.textMuted,
                       fontSize: 11.5,
@@ -485,7 +485,8 @@ class _LFGCardState extends State<LFGCard> {
                   // 4 squad slot dots / avatars
                   Row(
                     children: List.generate(4, (index) {
-                      final isFilled = index < (squad.members.isNotEmpty ? squad.members.length : squad.membersCount);
+                      final memberCount = squad.members.isNotEmpty ? squad.members.length : 1;
+                      final isFilled = index < memberCount;
                       return Container(
                         margin: const EdgeInsets.only(left: 6),
                         width: 20,
@@ -594,19 +595,17 @@ class _LFGCardState extends State<LFGCard> {
               children: [
                 if (isOwner) ...[
                   // Owner View: Real-Time Clickable "X requested VIEW" Button + Close LFG + Red Delete button
-                  StreamBuilder<List<SquadJoinRequest>>(
-                    stream: SquadService().getSquadRequestsStream(squad.id, squad.joinRequests),
-                    initialData: squad.joinRequests
-                        .map((uid) => SquadJoinRequest(id: uid, userId: uid, name: 'Gamer'))
-                        .toList(),
-                    builder: (context, reqSnap) {
-                      final requests = reqSnap.data ?? [];
-                      final count = math.max(
-                        0,
-                        requests.isNotEmpty
-                            ? requests.length
-                            : (squad.requestedCount > 0 ? squad.requestedCount : squad.joinRequests.length),
-                      );
+                  StreamBuilder<DocumentSnapshot>(
+                    stream: FirebaseFirestore.instance.collection('lfg_posts').doc(squad.id).snapshots(),
+                    builder: (context, docSnap) {
+                      List<dynamic> liveRequests = squad.joinRequests;
+                      int liveReqCount = squad.requestedCount;
+                      if (docSnap.hasData && docSnap.data!.exists) {
+                        final data = docSnap.data!.data() as Map<String, dynamic>? ?? {};
+                        liveRequests = List.from(data['joinRequests'] ?? []);
+                        liveReqCount = (data['requestedCount'] as num?)?.toInt() ?? liveRequests.length;
+                      }
+                      final count = math.max(liveRequests.length, liveReqCount);
                       final hasRequests = count > 0;
 
                       return Row(

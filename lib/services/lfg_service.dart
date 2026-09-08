@@ -37,8 +37,8 @@ class LfgService {
         final List<dynamic> members = List.from(data['members'] ?? []);
         final List<dynamic> joinRequests = List.from(data['joinRequests'] ?? []);
 
-        if (currentUserId == ownerId) {
-          throw "You are owner";
+        if (currentUserId == ownerId || currentUserId == (data['userId'] ?? '').toString()) {
+          throw "Own squad";
         }
         if (members.length >= 4) {
           throw "Squad is full";

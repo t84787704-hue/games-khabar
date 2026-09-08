@@ -32,6 +32,13 @@ class _SquadFinderScreenState extends State<SquadFinderScreen> {
   final List<String> _tierOptions = ['All', 'Diamond+', 'Crown+', 'Ace+', 'Conqueror'];
   final List<String> _langOptions = ['All', 'Hindi', 'English', 'Punjabi', 'Tamil', 'Telugu'];
 
+  @override
+  void initState() {
+    super.initState();
+    final currentUid = FirebaseAuth.instance.currentUser?.uid;
+    _squadService.cleanupCorruptedPosts(currentUid);
+  }
+
   List<SquadPost> _combineSquads(List<SquadPost> streamSquads) {
     final Map<String, SquadPost> map = {};
     for (final s in streamSquads) {
@@ -303,6 +310,10 @@ class _SquadFinderScreenState extends State<SquadFinderScreen> {
                       final docId = FirebaseFirestore.instance.collection('lfg_posts').doc().id;
                       final String uid = authUser.uid;
                       final String email = authUser.email ?? '';
+
+                      // 4. Cleanup: Before creating new squad, delete old corrupted lfg_posts where membersCount is 0 or ownerId!= auth uid
+                      await _squadService.cleanupCorruptedPosts(uid);
+
                       final String bgmiName = currentGamer.displayName.isNotEmpty
                           ? currentGamer.displayName
                           : (authUser.displayName ?? 'Squad Leader');

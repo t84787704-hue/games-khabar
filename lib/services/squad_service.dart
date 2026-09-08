@@ -15,45 +15,75 @@ class SquadService {
   CollectionReference get _legacySquadRef => _firestore.collection('squad_posts');
   CollectionReference get _notificationsRef => _firestore.collection('notifications');
 
+  /// Cleans up old corrupted lfg_posts (where membersCount is 0, members is empty, or ownerId is missing)
+  Future<void> cleanupCorruptedPosts([String? currentAuthUid]) async {
+    try {
+      debugPrint('[SquadService] Starting cleanup of corrupted posts...');
+      final snap = await _lfgPostsRef.get();
+      for (final doc in snap.docs) {
+        final data = doc.data() as Map<String, dynamic>? ?? {};
+        final ownerId = (data['ownerId'] ?? data['userId'] ?? '').toString();
+        final rawMembers = List<dynamic>.from(data['members'] ?? []);
+        final membersCount = (data['membersCount'] as num?)?.toInt() ?? 0;
+        final bool isActive = data['isActive'] ?? true;
+
+        // Corrupted condition: membersCount is 0, members is empty, ownerId is missing,
+        // or old inactive post by this user
+        bool isCorrupted = membersCount <= 0 || rawMembers.isEmpty || ownerId.isEmpty;
+        if (!isCorrupted && currentAuthUid != null && ownerId == currentAuthUid && !isActive) {
+          isCorrupted = true;
+        }
+
+        if (isCorrupted) {
+          debugPrint('[SquadService] Deleting corrupted post: ${doc.id}');
+          await doc.reference.delete().catchError((_) {});
+          await _squadRef.doc(doc.id).delete().catchError((_) {});
+          await _legacySquadRef.doc(doc.id).delete().catchError((_) {});
+          await _firestore.collection('chats').doc(doc.id).delete().catchError((_) {});
+        }
+      }
+    } catch (e) {
+      debugPrint('[SquadService] Error in cleanupCorruptedPosts: $e');
+    }
+  }
+
   Future<void> createSquadPost(SquadPost post) async {
     try {
-      final doc = post.id.isNotEmpty ? _squadRef.doc(post.id) : _squadRef.doc();
-      final ownerUid = post.ownerId.isNotEmpty ? post.ownerId : post.userId;
+      final doc = post.id.isNotEmpty ? _lfgPostsRef.doc(post.id) : _lfgPostsRef.doc();
+      final authUser = FirebaseAuth.instance.currentUser;
+      final ownerUid = authUser?.uid ?? (post.ownerId.isNotEmpty ? post.ownerId : post.userId);
+      final ownerEmail = authUser?.email ?? post.ownerEmail;
 
-      // Do not allow joinRequests to contain ownerId
-      final cleanJoinRequests = List<String>.from(post.joinRequests)
-        ..remove(ownerUid)
-        ..remove(post.userId);
-
-      final cleanMembers = List<String>.from(post.members);
-      if (ownerUid.isNotEmpty && !cleanMembers.contains(ownerUid)) {
-        cleanMembers.add(ownerUid);
-      }
+      // 1. membersCount must always = members.length. When creating post, members = [uid] and membersCount = 1
+      final cleanMembers = [ownerUid];
+      final cleanJoinRequests = <String>[];
 
       final finalPost = post.copyWith(
         id: doc.id,
         userId: ownerUid,
+        ownerEmail: ownerEmail,
         isActive: true, // Always true on creation
         joinRequests: cleanJoinRequests,
         members: cleanMembers,
-        membersCount: cleanMembers.isNotEmpty ? cleanMembers.length : 1,
-        requestedCount: cleanJoinRequests.length,
+        membersCount: 1,
+        requestedCount: 0,
       );
 
       final data = finalPost.toMap();
       data['isActive'] = true;
       data['ownerId'] = ownerUid;
       data['userId'] = ownerUid;
+      data['ownerEmail'] = ownerEmail;
       data['joinRequests'] = cleanJoinRequests;
       data['members'] = cleanMembers;
-      data['membersCount'] = cleanMembers.length;
-      data['requestedCount'] = cleanJoinRequests.length;
+      data['membersCount'] = 1;
+      data['requestedCount'] = 0;
 
       await doc.set(data);
 
-      // Also mirror to lfg_posts and legacy collection
+      // Also mirror to squads and legacy collection
       try {
-        await _lfgPostsRef.doc(doc.id).set(data);
+        await _squadRef.doc(doc.id).set(data);
       } catch (_) {}
       try {
         await _legacySquadRef.doc(doc.id).set(data);
