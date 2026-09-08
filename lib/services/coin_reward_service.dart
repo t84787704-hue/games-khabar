@@ -96,7 +96,7 @@ class CoinRewardService {
 
     if (!doc.exists) {
       await userRef.set({
-        'coins': 0,
+        'coins': 100,
         'adImpressions': 0,
         'lastAdTime': FieldValue.serverTimestamp(),
         'todayNewsCount': 0,
@@ -108,8 +108,11 @@ class CoinRewardService {
         'createdAt': FieldValue.serverTimestamp(),
       }, SetOptions(merge: true));
     } else {
-      // Check if lastEarnDate is from a previous day and needs counter rotation
       final data = doc.data() ?? {};
+      if (data['coins'] == null) {
+        await userRef.set({'coins': 100}, SetOptions(merge: true));
+      }
+      // Check if lastEarnDate is from a previous day and needs counter rotation
       final lastEarn = data['lastEarnDate'] as String? ?? '';
       if (lastEarn != today) {
         final totalToday = (data['totalAdsToday'] as num?)?.toInt() ?? 0;

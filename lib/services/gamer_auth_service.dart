@@ -50,6 +50,10 @@ class GamerAuthService {
     try {
       final doc = await _firestore.collection('users').doc(uid).get();
       if (doc.exists && doc.data() != null) {
+        final data = doc.data()!;
+        if (data['coins'] == null) {
+          await _firestore.collection('users').doc(uid).set({'coins': 100}, SetOptions(merge: true));
+        }
         final gamer = GamerUser.fromFirestore(doc);
         currentGamerNotifier.value = gamer;
         isLoadingNotifier.value = false;
@@ -166,12 +170,19 @@ class GamerAuthService {
   /// Creates or updates `users/{uid}` document
   Future<void> saveGamerProfile(GamerUser user) async {
     final docRef = _firestore.collection('users').doc(user.uid);
-    final exists = (await docRef.get()).exists;
+    final doc = await docRef.get();
+    final exists = doc.exists;
 
+    final userMap = user.toMap();
     if (!exists) {
-      await docRef.set(user.toMap(), SetOptions(merge: true));
+      if (userMap['coins'] == null) userMap['coins'] = 100;
+      await docRef.set(userMap, SetOptions(merge: true));
     } else {
-      await docRef.update(user.toMap());
+      final existingCoins = doc.data()?['coins'];
+      if (existingCoins == null && userMap['coins'] == null) {
+        userMap['coins'] = 100;
+      }
+      await docRef.update(userMap);
     }
 
     currentGamerNotifier.value = user;
@@ -182,6 +193,10 @@ class GamerAuthService {
     try {
       final doc = await _firestore.collection('users').doc(uid).get();
       if (doc.exists) {
+        final data = doc.data() ?? {};
+        if (data['coins'] == null) {
+          await _firestore.collection('users').doc(uid).set({'coins': 100}, SetOptions(merge: true));
+        }
         return GamerUser.fromFirestore(doc);
       }
       return null;

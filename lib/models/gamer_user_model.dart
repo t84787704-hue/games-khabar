@@ -52,6 +52,7 @@ class GamerUser {
   final int squadRoomsCount;
   final DateTime? verificationAppliedAt;
   final String gameId;
+  final int coins;
   final Map<String, dynamic>? verificationProgress;
   final DateTime? createdAt;
 
@@ -77,6 +78,7 @@ class GamerUser {
     this.squadRoomsCount = 0,
     this.verificationAppliedAt,
     this.gameId = '',
+    this.coins = 100,
     this.verificationProgress,
     this.createdAt,
   });
@@ -213,6 +215,7 @@ class GamerUser {
       squadRoomsCount: (data['squadRoomsCount'] as num?)?.toInt() ?? 0,
       verificationAppliedAt: appliedAt,
       gameId: (data['bgmiUid'] ?? data['gameId'] ?? data['inGameId'] ?? '').toString(),
+      coins: (data['coins'] as num?)?.toInt() ?? 100,
       verificationProgress: data['verificationProgress'] is Map
           ? Map<String, dynamic>.from(data['verificationProgress'])
           : null,
@@ -249,6 +252,7 @@ class GamerUser {
       'verificationAppliedAt': verificationAppliedAt != null ? Timestamp.fromDate(verificationAppliedAt!) : null,
       'gameId': gameId.trim(),
       'bgmiUid': gameId.trim(),
+      'coins': coins,
       'verificationProgress': {
         'postsCount': postsCount,
         'likesReceived': likesReceived,
@@ -288,6 +292,7 @@ class GamerUser {
     int? squadRoomsCount,
     DateTime? verificationAppliedAt,
     String? gameId,
+    int? coins,
     Map<String, dynamic>? verificationProgress,
     DateTime? createdAt,
   }) {
@@ -313,6 +318,7 @@ class GamerUser {
       squadRoomsCount: squadRoomsCount ?? this.squadRoomsCount,
       verificationAppliedAt: verificationAppliedAt ?? this.verificationAppliedAt,
       gameId: gameId ?? this.gameId,
+      coins: coins ?? this.coins,
       verificationProgress: verificationProgress ?? this.verificationProgress,
       createdAt: createdAt ?? this.createdAt,
     );

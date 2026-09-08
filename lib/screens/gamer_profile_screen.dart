@@ -719,6 +719,43 @@ class _GamerProfileScreenState extends State<GamerProfileScreen> with SingleTick
                     style: const TextStyle(fontWeight: FontWeight.w900, fontSize: 16),
                   ),
                   actions: [
+                    StreamBuilder<DocumentSnapshot>(
+                      stream: FirebaseFirestore.instance
+                          .collection('users')
+                          .doc(targetUid)
+                          .snapshots(),
+                      builder: (context, coinSnap) {
+                        int coins = user.coins;
+                        if (coinSnap.hasData && coinSnap.data!.exists) {
+                          final data = coinSnap.data!.data() as Map<String, dynamic>? ?? {};
+                          coins = (data['coins'] as num?)?.toInt() ?? 100;
+                        }
+                        return Container(
+                          margin: const EdgeInsets.symmetric(horizontal: 4, vertical: 10),
+                          padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 4),
+                          decoration: BoxDecoration(
+                            color: const Color(0xFFFFD700).withOpacity(0.15),
+                            borderRadius: BorderRadius.circular(16),
+                            border: Border.all(color: const Color(0xFFFFD700), width: 1.2),
+                          ),
+                          child: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              const Text('🪙', style: TextStyle(fontSize: 12)),
+                              const SizedBox(width: 4),
+                              Text(
+                                'Coins: $coins',
+                                style: const TextStyle(
+                                  color: Color(0xFFFFD700),
+                                  fontWeight: FontWeight.w900,
+                                  fontSize: 12,
+                                ),
+                              ),
+                            ],
+                          ),
+                        );
+                      },
+                    ),
                     IconButton(
                       icon: const Icon(Icons.share_rounded, color: GamerTheme.accentBlue),
                       onPressed: () => _shareProfile(user),
