@@ -246,6 +246,7 @@ class _ChatScreenState extends State<ChatScreen> {
           builder: (context, chatSnap) {
             final chatData = chatSnap.data?.data() as Map<String, dynamic>? ?? {};
             final title = chatData['title'] as String? ??
+                widget.squad?.title ??
                 (widget.squad?.displayName.isNotEmpty == true
                     ? "${widget.squad!.displayName}'s Squad"
                     : 'Squad Chat');

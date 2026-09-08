@@ -4,6 +4,7 @@ class SquadPost {
   final String id;
   final String userId; // also accessible as ownerId
   String get ownerId => userId;
+  /// Title getter for backward compatibility with older chat screen versions
   String get title => displayName.isNotEmpty ? "$displayName's Squad" : (description.isNotEmpty ? description : "Squad Chat");
   final String username;
   final String displayName;
