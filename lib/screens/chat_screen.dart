@@ -5,6 +5,7 @@ import 'package:firebase_auth/firebase_auth.dart';
 import '../constants/gamer_theme.dart';
 import '../models/squad_post_model.dart';
 import '../services/gamer_auth_service.dart';
+import '../services/lfg_service.dart';
 import '../widgets/gamer_avatar.dart';
 import '../widgets/squad_members_bottom_sheet.dart';
 
