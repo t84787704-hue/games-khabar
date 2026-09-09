@@ -1,7 +1,11 @@
+import 'dart:convert';
+import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:firebase_storage/firebase_storage.dart';
+import 'package:image_picker/image_picker.dart';
 import '../constants/gamer_theme.dart';
 import '../models/squad_post_model.dart';
 import '../services/gamer_auth_service.dart';
@@ -276,10 +280,143 @@ class _SquadChatScreenState extends State<SquadChatScreen> {
     }
   }
 
+  /// Uploads proof screenshot to Firebase Storage with base64 fallback
+  Future<String> _uploadProofScreenshot(File imageFile, String uid, String squadId) async {
+    try {
+      final storageRef = FirebaseStorage.instance
+          .ref()
+          .child('win_proofs')
+          .child('${squadId}_${uid}_${DateTime.now().millisecondsSinceEpoch}.jpg');
+      final metadata = SettableMetadata(contentType: 'image/jpeg');
+      final uploadTask = await storageRef.putFile(imageFile, metadata);
+      final downloadUrl = await uploadTask.ref.getDownloadURL();
+      return downloadUrl;
+    } catch (e) {
+      debugPrint('[SquadChat] Storage upload notice: $e. Falling back to base64 encoding.');
+      final bytes = await imageFile.readAsBytes();
+      return 'data:image/jpeg;base64,${base64Encode(bytes)}';
+    }
+  }
+
   /// Opens dialog for submitting a Win Proof message in squad chat
-  void _openSubmitWinProofSheet() {
-    final currentGamer = GamerAuthService().currentGamer;
-    final inGameUidController = TextEditingController(text: currentGamer?.gameId ?? '');
+  Future<void> _openSubmitWinProofSheet() async {
+    final currentUid = FirebaseAuth.instance.currentUser?.uid ?? GamerAuthService().currentUid ?? '';
+    if (currentUid.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Please log in first to submit win proof.'),
+          backgroundColor: GamerTheme.redAccent,
+        ),
+      );
+      return;
+    }
+
+    // 1. Fetch live user profile to get verified character UID (gameUid)
+    final userDoc = await FirebaseFirestore.instance.collection('users').doc(currentUid).get();
+    final userData = userDoc.data() ?? {};
+    final characterUid = (userData['bgmiUid'] ?? userData['gameId'] ?? userData['inGameId'] ?? userData['gameUid'] ?? '').toString().trim();
+
+    // Validate: Character UID must be equal to current user's Firestore profile gameUid, don't allow typing any UID.
+    if (characterUid.isEmpty) {
+      if (!mounted) return;
+      showDialog(
+        context: context,
+        builder: (ctx) => AlertDialog(
+          backgroundColor: GamerTheme.cardElevated,
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(16),
+            border: Border.all(color: GamerTheme.redAccent.withOpacity(0.5)),
+          ),
+          title: const Row(
+            children: [
+              Icon(Icons.warning_amber_rounded, color: GamerTheme.accentOrange, size: 24),
+              SizedBox(width: 8),
+              Text(
+                'Character UID Missing',
+                style: TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.bold),
+              ),
+            ],
+          ),
+          content: const Text(
+            'Pehle apni Profile mein Character UID (Game ID) add karen taake victory proof submit kar sakein. Kisi aur ka UID allow nahi hai.',
+            style: TextStyle(color: GamerTheme.textMuted, fontSize: 13.5, height: 1.4),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(ctx),
+              child: const Text('Theek Hai', style: TextStyle(color: GamerTheme.accentCyan)),
+            ),
+          ],
+        ),
+      );
+      return;
+    }
+
+    // 2. Rate limit: 1 proof per 24 hours per user. Check last submission time.
+    DateTime? lastSubmissionTime;
+    final rawLastAt = userData['lastWinProofAt'];
+    if (rawLastAt is Timestamp) {
+      lastSubmissionTime = rawLastAt.toDate();
+    }
+    if (lastSubmissionTime == null) {
+      try {
+        final recentProof = await FirebaseFirestore.instance
+            .collection('win_proofs')
+            .where('submittedBy', isEqualTo: currentUid)
+            .orderBy('createdAt', descending: true)
+            .limit(1)
+            .get();
+        if (recentProof.docs.isNotEmpty) {
+          final t = recentProof.docs.first.data()['createdAt'];
+          if (t is Timestamp) lastSubmissionTime = t.toDate();
+        }
+      } catch (_) {}
+    }
+
+    if (lastSubmissionTime != null) {
+      final diff = DateTime.now().difference(lastSubmissionTime);
+      if (diff.inHours < 24) {
+        final hoursLeft = 23 - diff.inHours;
+        final minutesLeft = 59 - (diff.inMinutes % 60);
+        if (!mounted) return;
+        showDialog(
+          context: context,
+          builder: (ctx) => AlertDialog(
+            backgroundColor: GamerTheme.cardElevated,
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(16),
+              border: Border.all(color: const Color(0xFFFFD700).withOpacity(0.5)),
+            ),
+            title: const Row(
+              children: [
+                Icon(Icons.hourglass_top_rounded, color: Color(0xFFFFD700), size: 24),
+                SizedBox(width: 8),
+                Text(
+                  'Daily Rate Limit',
+                  style: TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.bold),
+                ),
+              ],
+            ),
+            content: Text(
+              'Aap 24 ghante mein sirf 1 win proof submit kar sakte hain.\n\nAgla submission $hoursLeft ghante $minutesLeft minute baad allow hoga.',
+              style: const TextStyle(color: GamerTheme.textMuted, fontSize: 13.5, height: 1.4),
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(ctx),
+                child: const Text('Samajh Gaya', style: TextStyle(color: Color(0xFFFFD700))),
+              ),
+            ],
+          ),
+        );
+        return;
+      }
+    }
+
+    if (!mounted) return;
+
+    File? proofImage;
+    bool isSubmitting = false;
     final noteController = TextEditingController(text: 'Match Won! Victory proof submitted.');
 
     showModalBottomSheet(
@@ -289,137 +426,370 @@ class _SquadChatScreenState extends State<SquadChatScreen> {
       shape: const RoundedRectangleBorder(
         borderRadius: BorderRadius.vertical(top: Radius.circular(22)),
       ),
-      builder: (ctx) => Padding(
-        padding: EdgeInsets.only(
-          left: 20,
-          right: 20,
-          top: 20,
-          bottom: MediaQuery.of(ctx).viewInsets.bottom + 20,
-        ),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
-              children: [
-                Container(
-                  padding: const EdgeInsets.all(8),
-                  decoration: BoxDecoration(
-                    color: const Color(0xFFFFD700).withOpacity(0.2),
-                    shape: BoxShape.circle,
+      builder: (ctx) => StatefulBuilder(
+        builder: (context, setModalState) {
+          return Padding(
+            padding: EdgeInsets.only(
+              left: 20,
+              right: 20,
+              top: 20,
+              bottom: MediaQuery.of(ctx).viewInsets.bottom + 20,
+            ),
+            child: SingleChildScrollView(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    children: [
+                      Container(
+                        padding: const EdgeInsets.all(8),
+                        decoration: BoxDecoration(
+                          color: const Color(0xFFFFD700).withOpacity(0.2),
+                          shape: BoxShape.circle,
+                        ),
+                        child: const Icon(Icons.emoji_events_rounded, color: Color(0xFFFFD700), size: 24),
+                      ),
+                      const SizedBox(width: 12),
+                      const Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              'Submit Win Proof 🏆',
+                              style: TextStyle(color: GamerTheme.textWhite, fontSize: 17, fontWeight: FontWeight.bold),
+                            ),
+                            Text(
+                              'Host approval required • 100 Coins reward',
+                              style: TextStyle(color: GamerTheme.textMuted, fontSize: 12),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
                   ),
-                  child: const Icon(Icons.emoji_events_rounded, color: Color(0xFFFFD700), size: 24),
-                ),
-                const SizedBox(width: 12),
-                const Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      'Submit Win Proof 🏆',
-                      style: TextStyle(color: GamerTheme.textWhite, fontSize: 17, fontWeight: FontWeight.bold),
+                  const SizedBox(height: 18),
+
+                  // Character UID (Read-only, auto-filled from user profile)
+                  const Row(
+                    children: [
+                      Text(
+                        'CHARACTER UID',
+                        style: TextStyle(color: GamerTheme.textMuted, fontSize: 11, fontWeight: FontWeight.bold),
+                      ),
+                      SizedBox(width: 6),
+                      Icon(Icons.lock_rounded, size: 12, color: GamerTheme.neonGreen),
+                      SizedBox(width: 4),
+                      Text(
+                        '(Verified from Profile)',
+                        style: TextStyle(color: GamerTheme.neonGreen, fontSize: 10.5, fontWeight: FontWeight.w600),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 6),
+                  Container(
+                    width: double.infinity,
+                    padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 13),
+                    decoration: BoxDecoration(
+                      color: GamerTheme.bgDark,
+                      borderRadius: BorderRadius.circular(10),
+                      border: Border.all(color: GamerTheme.borderDark),
                     ),
-                    Text(
-                      'Claim 100 Coins reward from Squad Host',
-                      style: TextStyle(color: GamerTheme.textMuted, fontSize: 12),
+                    child: Row(
+                      children: [
+                        const Icon(Icons.badge_rounded, color: GamerTheme.accentCyan, size: 18),
+                        const SizedBox(width: 10),
+                        Expanded(
+                          child: Text(
+                            characterUid,
+                            style: const TextStyle(
+                              color: GamerTheme.textWhite,
+                              fontSize: 14.5,
+                              fontWeight: FontWeight.bold,
+                              fontFamily: 'monospace',
+                            ),
+                          ),
+                        ),
+                        const Text(
+                          'READ-ONLY',
+                          style: TextStyle(color: GamerTheme.textMuted, fontSize: 10, fontWeight: FontWeight.bold),
+                        ),
+                      ],
                     ),
-                  ],
-                ),
-              ],
-            ),
-            const SizedBox(height: 18),
-            const Text(
-              'IN-GAME CHARACTER UID',
-              style: TextStyle(color: GamerTheme.textMuted, fontSize: 11, fontWeight: FontWeight.bold),
-            ),
-            const SizedBox(height: 6),
-            TextField(
-              controller: inGameUidController,
-              style: const TextStyle(color: GamerTheme.textWhite, fontSize: 14),
-              decoration: InputDecoration(
-                hintText: 'e.g. 512938472',
-                hintStyle: const TextStyle(color: GamerTheme.textMuted),
-                filled: true,
-                fillColor: GamerTheme.bgDark,
-                border: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: const BorderSide(color: GamerTheme.borderDark)),
+                  ),
+
+                  const SizedBox(height: 16),
+
+                  // Required Screenshot Upload
+                  Row(
+                    children: [
+                      const Text(
+                        'VICTORY SCREENSHOT',
+                        style: TextStyle(color: GamerTheme.textMuted, fontSize: 11, fontWeight: FontWeight.bold),
+                      ),
+                      const SizedBox(width: 6),
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                        decoration: BoxDecoration(
+                          color: GamerTheme.redAccent.withOpacity(0.2),
+                          borderRadius: BorderRadius.circular(4),
+                        ),
+                        child: const Text(
+                          'REQUIRED',
+                          style: TextStyle(color: GamerTheme.redAccent, fontSize: 9.5, fontWeight: FontWeight.w900),
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 8),
+
+                  GestureDetector(
+                    onTap: isSubmitting
+                        ? null
+                        : () async {
+                            final picker = ImagePicker();
+                            final picked = await picker.pickImage(source: ImageSource.gallery, imageQuality: 80);
+                            if (picked != null) {
+                              setModalState(() {
+                                proofImage = File(picked.path);
+                              });
+                            }
+                          },
+                    child: proofImage == null
+                        ? Container(
+                            width: double.infinity,
+                            height: 120,
+                            decoration: BoxDecoration(
+                              color: GamerTheme.bgDark,
+                              borderRadius: BorderRadius.circular(12),
+                              border: Border.all(
+                                color: const Color(0xFFFFD700).withOpacity(0.6),
+                                width: 1.5,
+                              ),
+                            ),
+                            child: const Column(
+                              mainAxisAlignment: MainAxisAlignment.center,
+                              children: [
+                                Icon(Icons.add_photo_alternate_rounded, color: Color(0xFFFFD700), size: 36),
+                                SizedBox(height: 8),
+                                Text(
+                                  'Tap to Upload Victory Screenshot',
+                                  style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 13),
+                                ),
+                                SizedBox(height: 4),
+                                Text(
+                                  'Chicken Dinner / Results Screen (Required)',
+                                  style: TextStyle(color: GamerTheme.textMuted, fontSize: 11),
+                                ),
+                              ],
+                            ),
+                          )
+                        : Stack(
+                            children: [
+                              ClipRRect(
+                                borderRadius: BorderRadius.circular(12),
+                                child: Image.file(
+                                  proofImage!,
+                                  height: 140,
+                                  width: double.infinity,
+                                  fit: BoxFit.cover,
+                                ),
+                              ),
+                              Positioned(
+                                top: 8,
+                                right: 8,
+                                child: InkWell(
+                                  onTap: isSubmitting ? null : () => setModalState(() => proofImage = null),
+                                  child: Container(
+                                    padding: const EdgeInsets.all(6),
+                                    decoration: const BoxDecoration(
+                                      color: Colors.black87,
+                                      shape: BoxShape.circle,
+                                    ),
+                                    child: const Icon(Icons.close_rounded, color: Colors.white, size: 16),
+                                  ),
+                                ),
+                              ),
+                              Positioned(
+                                bottom: 8,
+                                left: 8,
+                                child: Container(
+                                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                                  decoration: BoxDecoration(
+                                    color: Colors.black.withOpacity(0.7),
+                                    borderRadius: BorderRadius.circular(6),
+                                  ),
+                                  child: const Row(
+                                    mainAxisSize: MainAxisSize.min,
+                                    children: [
+                                      Icon(Icons.check_circle_rounded, color: GamerTheme.neonGreen, size: 12),
+                                      SizedBox(width: 4),
+                                      Text(
+                                        'Screenshot Attached',
+                                        style: TextStyle(color: Colors.white, fontSize: 11, fontWeight: FontWeight.w600),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ),
+                  ),
+
+                  const SizedBox(height: 16),
+                  const Text(
+                    'VICTORY NOTE / DETAILS',
+                    style: TextStyle(color: GamerTheme.textMuted, fontSize: 11, fontWeight: FontWeight.bold),
+                  ),
+                  const SizedBox(height: 6),
+                  TextField(
+                    controller: noteController,
+                    enabled: !isSubmitting,
+                    style: const TextStyle(color: GamerTheme.textWhite, fontSize: 14),
+                    decoration: InputDecoration(
+                      hintText: 'Chicken Dinner / Match Won',
+                      hintStyle: const TextStyle(color: GamerTheme.textMuted),
+                      filled: true,
+                      fillColor: GamerTheme.bgDark,
+                      border: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: const BorderSide(color: GamerTheme.borderDark)),
+                    ),
+                  ),
+                  const SizedBox(height: 22),
+
+                  // SUBMIT BUTTON (Disabled after 1 click, preventing double submission spam)
+                  SizedBox(
+                    width: double.infinity,
+                    height: 48,
+                    child: ElevatedButton.icon(
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: (proofImage != null && !isSubmitting)
+                            ? const Color(0xFFFFD700)
+                            : Colors.grey.shade800,
+                        foregroundColor: (proofImage != null && !isSubmitting) ? Colors.black : Colors.white54,
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                      ),
+                      icon: isSubmitting
+                          ? const SizedBox(
+                              width: 18,
+                              height: 18,
+                              child: CircularProgressIndicator(strokeWidth: 2, color: Colors.black),
+                            )
+                          : const Icon(Icons.send_rounded, size: 18),
+                      label: Text(
+                        isSubmitting
+                            ? 'SUBMITTING PROOF...'
+                            : (proofImage == null ? 'ATTACH SCREENSHOT TO SUBMIT' : 'SUBMIT WIN PROOF'),
+                        style: const TextStyle(fontWeight: FontWeight.w900, fontSize: 13),
+                      ),
+                      onPressed: (isSubmitting || proofImage == null)
+                          ? null
+                          : () async {
+                              // Immediately disable button after 1 click to prevent double submission spam
+                              setModalState(() => isSubmitting = true);
+
+                              try {
+                                final user = await GamerAuthService().getUserProfile(currentUid);
+                                final senderName = user?.displayName ?? 'Teammate';
+                                final senderUsername = user?.username ?? 'gamer';
+                                final senderAvatar = user?.photoUrl ?? '';
+                                final note = noteController.text.trim();
+
+                                // Upload screenshot
+                                final uploadedUrl = await _uploadProofScreenshot(proofImage!, currentUid, widget.postId);
+
+                                final firestore = FirebaseFirestore.instance;
+                                final proofDocRef = firestore.collection('win_proofs').doc();
+                                final proofId = proofDocRef.id;
+
+                                // 1. Save to win_proofs collection with status='pending', submittedBy=auth.uid, createdAt=serverTimestamp
+                                // NEVER set status='rewarded' from app
+                                await proofDocRef.set({
+                                  'id': proofId,
+                                  'squadId': widget.postId,
+                                  'submittedBy': currentUid,
+                                  'userId': currentUid,
+                                  'inGameUid': characterUid,
+                                  'characterUid': characterUid,
+                                  'proofUrl': uploadedUrl,
+                                  'imageUrl': uploadedUrl,
+                                  'note': note.isNotEmpty ? note : 'Match Won! Victory proof submitted.',
+                                  'status': 'pending', // NEVER set status='rewarded' from app
+                                  'createdAt': FieldValue.serverTimestamp(),
+                                  'senderName': senderName,
+                                  'senderUsername': senderUsername,
+                                  'senderAvatar': senderAvatar,
+                                });
+
+                                // Update rate limit timestamp on user profile
+                                await firestore.collection('users').doc(currentUid).set({
+                                  'lastWinProofAt': FieldValue.serverTimestamp(),
+                                }, SetOptions(merge: true));
+
+                                // Add win proof message to squad chat
+                                final chatRef = firestore.collection('chats').doc(widget.postId);
+                                await chatRef.collection('messages').doc(proofId).set({
+                                  'proofId': proofId,
+                                  'senderId': currentUid,
+                                  'senderUid': currentUid,
+                                  'senderName': senderName,
+                                  'senderUsername': senderUsername,
+                                  'senderAvatar': senderAvatar,
+                                  'type': 'win_proof',
+                                  'status': 'pending', // Shows "PENDING APPROVAL"
+                                  'submittedBy': currentUid,
+                                  'inGameUid': characterUid,
+                                  'characterUid': characterUid,
+                                  'proofUrl': uploadedUrl,
+                                  'imageUrl': uploadedUrl,
+                                  'text': note.isNotEmpty ? note : 'Match Won! Victory proof submitted.',
+                                  'createdAt': FieldValue.serverTimestamp(),
+                                });
+
+                                await chatRef.set({
+                                  'lastMessage': '$senderName submitted Win Proof 🏆',
+                                  'lastMessageTime': FieldValue.serverTimestamp(),
+                                  'updatedAt': FieldValue.serverTimestamp(),
+                                }, SetOptions(merge: true));
+
+                                if (mounted) {
+                                  Navigator.pop(ctx);
+                                  ScaffoldMessenger.of(context).showSnackBar(
+                                    const SnackBar(
+                                      content: Text('🏆 Win proof submit ho gaya! Host approval ka intezar karen.'),
+                                      backgroundColor: GamerTheme.accentBlue,
+                                      duration: Duration(seconds: 3),
+                                    ),
+                                  );
+                                  Future.delayed(const Duration(milliseconds: 100), _scrollToBottom);
+                                }
+                              } catch (e) {
+                                debugPrint('Error submitting win proof: $e');
+                                if (mounted) {
+                                  setModalState(() => isSubmitting = false);
+                                  ScaffoldMessenger.of(context).showSnackBar(
+                                    SnackBar(
+                                      content: Text('Submission failed: $e'),
+                                      backgroundColor: GamerTheme.redAccent,
+                                    ),
+                                  );
+                                }
+                              }
+                            },
+                    ),
+                  ),
+                ],
               ),
             ),
-            const SizedBox(height: 14),
-            const Text(
-              'VICTORY NOTE / DETAILS',
-              style: TextStyle(color: GamerTheme.textMuted, fontSize: 11, fontWeight: FontWeight.bold),
-            ),
-            const SizedBox(height: 6),
-            TextField(
-              controller: noteController,
-              style: const TextStyle(color: GamerTheme.textWhite, fontSize: 14),
-              decoration: InputDecoration(
-                hintText: 'Chicken Dinner / Match Won',
-                hintStyle: const TextStyle(color: GamerTheme.textMuted),
-                filled: true,
-                fillColor: GamerTheme.bgDark,
-                border: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: const BorderSide(color: GamerTheme.borderDark)),
-              ),
-            ),
-            const SizedBox(height: 20),
-            SizedBox(
-              width: double.infinity,
-              height: 46,
-              child: ElevatedButton.icon(
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: const Color(0xFFFFD700),
-                  foregroundColor: Colors.black,
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                ),
-                icon: const Icon(Icons.send_rounded, size: 18, color: Colors.black),
-                label: const Text('SUBMIT WIN PROOF', style: TextStyle(fontWeight: FontWeight.w900, fontSize: 13)),
-                onPressed: () async {
-                  final currentUid = FirebaseAuth.instance.currentUser?.uid ?? GamerAuthService().currentUid ?? '';
-                  if (currentUid.isEmpty) return;
-                  final user = await GamerAuthService().getUserProfile(currentUid);
-                  final senderName = user?.displayName ?? 'Teammate';
-                  final senderUsername = user?.username ?? 'gamer';
-                  final senderAvatar = user?.photoUrl ?? '';
-                  final inGameUid = inGameUidController.text.trim();
-                  final note = noteController.text.trim();
-
-                  Navigator.pop(ctx);
-
-                  final chatRef = FirebaseFirestore.instance.collection('chats').doc(widget.postId);
-                  await chatRef.collection('messages').add({
-                    'senderId': currentUid,
-                    'senderUid': currentUid,
-                    'senderName': senderName,
-                    'senderUsername': senderUsername,
-                    'senderAvatar': senderAvatar,
-                    'type': 'win_proof',
-                    'status': 'pending',
-                    'inGameUid': inGameUid,
-                    'text': note.isNotEmpty ? note : 'Match Won! Victory proof submitted.',
-                    'createdAt': FieldValue.serverTimestamp(),
-                  });
-
-                  await chatRef.set({
-                    'lastMessage': '$senderName submitted Win Proof 🏆',
-                    'lastMessageTime': FieldValue.serverTimestamp(),
-                    'updatedAt': FieldValue.serverTimestamp(),
-                  }, SetOptions(merge: true));
-
-                  Future.delayed(const Duration(milliseconds: 100), _scrollToBottom);
-                },
-              ),
-            ),
-          ],
-        ),
+          );
+        },
       ),
     );
   }
 
-  /// Handles "Reward 100 Coins" on win_proof message card
-  Future<void> _handleReward100Coins({
+  /// Handles "Reject" on win_proof message card (Host only)
+  Future<void> _handleRejectWinProof({
     required BuildContext context,
     required String messageDocId,
-    required String hostId,
-    required String winnerId,
     required String winnerTag,
     required String squadId,
   }) async {
@@ -427,28 +797,27 @@ class _SquadChatScreenState extends State<SquadChatScreen> {
         ? winnerTag.trim().substring(1)
         : winnerTag.trim();
 
-    // 3. Show confirm dialog "100 Coins dena hai @fua ko?"
     final confirm = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
         backgroundColor: GamerTheme.cardElevated,
         shape: RoundedRectangleBorder(
           borderRadius: BorderRadius.circular(18),
-          side: BorderSide(color: const Color(0xFFFFD700).withOpacity(0.5)),
+          border: Border.all(color: GamerTheme.redAccent.withOpacity(0.5)),
         ),
         title: const Row(
           children: [
-            Text('🪙', style: TextStyle(fontSize: 22)),
+            Icon(Icons.cancel_outlined, color: GamerTheme.redAccent, size: 22),
             SizedBox(width: 8),
             Text(
-              'Reward Winner',
+              'Reject Win Proof',
               style: TextStyle(color: GamerTheme.textWhite, fontWeight: FontWeight.bold, fontSize: 17),
             ),
           ],
         ),
         content: Text(
-          '100 Coins dena hai @$cleanTag ko?',
-          style: const TextStyle(color: GamerTheme.textWhite, fontSize: 14.5, height: 1.4),
+          'Kya aap @$cleanTag ka win proof reject karna chahte hain?',
+          style: const TextStyle(color: GamerTheme.textWhite, fontSize: 14, height: 1.4),
         ),
         actions: [
           TextButton(
@@ -457,12 +826,12 @@ class _SquadChatScreenState extends State<SquadChatScreen> {
           ),
           ElevatedButton(
             style: ElevatedButton.styleFrom(
-              backgroundColor: const Color(0xFFFFD700),
-              foregroundColor: Colors.black,
+              backgroundColor: GamerTheme.redAccent,
+              foregroundColor: Colors.white,
               shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
             ),
             onPressed: () => Navigator.pop(ctx, true),
-            child: const Text('HAAN, REWARD', style: TextStyle(fontWeight: FontWeight.w900)),
+            child: const Text('HAAN, REJECT', style: TextStyle(fontWeight: FontWeight.w900)),
           ),
         ],
       ),
@@ -470,76 +839,31 @@ class _SquadChatScreenState extends State<SquadChatScreen> {
 
     if (confirm != true) return;
 
+    final currentUid = FirebaseAuth.instance.currentUser?.uid ?? GamerAuthService().currentUid ?? '';
     final firestore = FirebaseFirestore.instance;
-    final hostRef = firestore.collection('users').doc(hostId);
-    final winnerRef = firestore.collection('users').doc(winnerId);
-    final messageRef = firestore
-        .collection('chats')
-        .doc(squadId)
-        .collection('messages')
-        .doc(messageDocId);
+    final messageRef = firestore.collection('chats').doc(squadId).collection('messages').doc(messageDocId);
+    final proofRef = firestore.collection('win_proofs').doc(messageDocId);
 
     try {
-      // Run Firestore transaction
-      await firestore.runTransaction((transaction) async {
-        // Get host doc users/hostId and winner doc users/winnerId
-        final hostDoc = await transaction.get(hostRef);
-        final winnerDoc = await transaction.get(winnerRef);
-
-        final hostData = hostDoc.data() ?? {};
-        final winnerData = winnerDoc.data() ?? {};
-
-        final int hostCoins = (hostData['coins'] as num?)?.toInt() ?? 100;
-        final int winnerCoins = (winnerData['coins'] as num?)?.toInt() ?? 100;
-
-        // Check if host.coins >= 100 else show "Not enough coins"
-        if (hostCoins < 100) {
-          throw 'Not enough coins';
-        }
-
-        // host.coins = host.coins - 100
-        final updatedHostCoins = hostCoins - 100;
-        // winner.coins = winner.coins + 100
-        final updatedWinnerCoins = winnerCoins + 100;
-
-        transaction.set(hostRef, {
-          'coins': updatedHostCoins,
-          'updatedAt': FieldValue.serverTimestamp(),
-        }, SetOptions(merge: true));
-
-        transaction.set(winnerRef, {
-          'coins': updatedWinnerCoins,
-          'updatedAt': FieldValue.serverTimestamp(),
-        }, SetOptions(merge: true));
-
-        // Create doc in 'coin_transactions' collection { from: hostId, to: winnerId, amount: 100, squadId, timestamp }
-        final txRef = firestore.collection('coin_transactions').doc();
-        transaction.set(txRef, {
-          'from': hostId,
-          'to': winnerId,
-          'amount': 100,
-          'squadId': squadId,
-          'timestamp': FieldValue.serverTimestamp(),
-        });
-
-        // Update win_proof message status to 'rewarded'
-        transaction.update(messageRef, {
-          'status': 'rewarded',
-          'rewardedAt': FieldValue.serverTimestamp(),
-          'rewardedBy': hostId,
-        });
+      final batch = firestore.batch();
+      batch.update(messageRef, {
+        'status': 'rejected',
+        'rejectedAt': FieldValue.serverTimestamp(),
+        'rejectedBy': currentUid,
       });
+      batch.set(proofRef, {
+        'status': 'rejected',
+        'rejectedAt': FieldValue.serverTimestamp(),
+        'rejectedBy': currentUid,
+      }, SetOptions(merge: true));
+      await batch.commit();
 
-      // Send chat system message: "Host rewarded 100 coins to @fua"
-      await firestore
-          .collection('chats')
-          .doc(squadId)
-          .collection('messages')
-          .add({
+      // System notification message in squad chat
+      await firestore.collection('chats').doc(squadId).collection('messages').add({
         'senderId': 'system',
         'senderUid': 'system',
         'senderName': 'System',
-        'text': 'Host rewarded 100 coins to @$cleanTag',
+        'text': 'Host rejected win proof submitted by @$cleanTag',
         'type': 'system',
         'createdAt': FieldValue.serverTimestamp(),
       });
@@ -547,21 +871,19 @@ class _SquadChatScreenState extends State<SquadChatScreen> {
       if (context.mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text('🎉 Successfully rewarded 100 coins to @$cleanTag!'),
-            backgroundColor: GamerTheme.neonGreen,
-            duration: const Duration(seconds: 3),
+            content: Text('Win proof from @$cleanTag was rejected.'),
+            backgroundColor: GamerTheme.redAccent,
+            duration: const Duration(seconds: 2),
           ),
         );
       }
     } catch (e) {
-      debugPrint('[RewardCoins] Error: $e');
+      debugPrint('[RejectProof] Error: $e');
       if (context.mounted) {
-        final isInsufficient = e.toString().contains('Not enough coins');
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text(isInsufficient ? 'Not enough coins' : 'Transaction failed: $e'),
+            content: Text('Action failed: $e'),
             backgroundColor: Colors.redAccent,
-            duration: const Duration(seconds: 3),
           ),
         );
       }
@@ -576,18 +898,35 @@ class _SquadChatScreenState extends State<SquadChatScreen> {
     required bool isOwner,
     required String currentUid,
   }) {
-    final senderUid = (data['senderId'] ?? data['senderUid']) as String? ?? '';
+    final senderUid = (data['senderId'] ?? data['senderUid'] ?? data['submittedBy']) as String? ?? '';
     final senderName = data['senderName'] as String? ?? 'Gamer';
     final senderUsername = (data['senderUsername'] ?? data['username'] ?? data['senderTag'] ?? data['tag'] ?? senderName).toString().trim();
     final senderAvatar = data['senderAvatar'] as String? ?? '';
     final status = (data['status'] as String? ?? 'pending').toLowerCase();
-    final inGameUid = (data['inGameUid'] ?? data['bgmiUid'] ?? data['gameId'] ?? '').toString();
+    final inGameUid = (data['inGameUid'] ?? data['characterUid'] ?? data['bgmiUid'] ?? data['gameId'] ?? '').toString();
     final proofUrl = (data['proofUrl'] ?? data['imageUrl'] ?? '').toString();
-    final text = (data['text'] as String? ?? '').trim();
+    final text = (data['text'] ?? data['note'] as String? ?? '').trim();
     final isPending = status == 'pending';
     final isRewarded = status == 'rewarded';
+    final isRejected = status == 'rejected';
 
     final cleanTag = senderUsername.startsWith('@') ? senderUsername.substring(1) : senderUsername;
+
+    final Color statusColor = isRewarded
+        ? GamerTheme.neonGreen
+        : (isRejected ? GamerTheme.redAccent : const Color(0xFFFFD700));
+
+    final String statusLabel = isRewarded
+        ? 'REWARDED'
+        : (isRejected ? 'REJECTED' : 'PENDING APPROVAL');
+
+    final IconData statusIcon = isRewarded
+        ? Icons.check_circle_rounded
+        : (isRejected ? Icons.cancel_rounded : Icons.hourglass_top_rounded);
+
+    final String statusSubtitle = isRewarded
+        ? 'REWARDED • 100 G-Coins Paid'
+        : (isRejected ? 'REJECTED • Proof Not Approved' : 'PENDING APPROVAL • Awaiting Host');
 
     return Container(
       margin: const EdgeInsets.symmetric(vertical: 8, horizontal: 4),
@@ -596,14 +935,12 @@ class _SquadChatScreenState extends State<SquadChatScreen> {
         color: const Color(0xFF161C26),
         borderRadius: BorderRadius.circular(16),
         border: Border.all(
-          color: isRewarded
-              ? GamerTheme.neonGreen.withOpacity(0.8)
-              : const Color(0xFFFFD700).withOpacity(0.8),
+          color: statusColor.withOpacity(0.8),
           width: 1.5,
         ),
         boxShadow: [
           BoxShadow(
-            color: (isRewarded ? GamerTheme.neonGreen : const Color(0xFFFFD700)).withOpacity(0.12),
+            color: statusColor.withOpacity(0.12),
             blurRadius: 12,
             spreadRadius: 1,
           ),
@@ -618,13 +955,13 @@ class _SquadChatScreenState extends State<SquadChatScreen> {
               Container(
                 padding: const EdgeInsets.all(6),
                 decoration: BoxDecoration(
-                  color: (isRewarded ? GamerTheme.neonGreen : const Color(0xFFFFD700)).withOpacity(0.15),
+                  color: statusColor.withOpacity(0.15),
                   shape: BoxShape.circle,
                 ),
                 child: Icon(
                   Icons.emoji_events_rounded,
                   size: 20,
-                  color: isRewarded ? GamerTheme.neonGreen : const Color(0xFFFFD700),
+                  color: statusColor,
                 ),
               ),
               const SizedBox(width: 8),
@@ -642,11 +979,11 @@ class _SquadChatScreenState extends State<SquadChatScreen> {
                       ),
                     ),
                     Text(
-                      isRewarded ? 'Reward Paid • 100 G-Coins' : 'Pending Host Verification',
+                      statusSubtitle,
                       style: TextStyle(
-                        color: isRewarded ? GamerTheme.neonGreen : const Color(0xFFFFD700),
+                        color: statusColor,
                         fontSize: 10.5,
-                        fontWeight: FontWeight.w500,
+                        fontWeight: FontWeight.w600,
                       ),
                     ),
                   ],
@@ -655,10 +992,10 @@ class _SquadChatScreenState extends State<SquadChatScreen> {
               Container(
                 padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                 decoration: BoxDecoration(
-                  color: (isRewarded ? GamerTheme.neonGreen : const Color(0xFFFFA500)).withOpacity(0.2),
+                  color: statusColor.withOpacity(0.18),
                   borderRadius: BorderRadius.circular(8),
                   border: Border.all(
-                    color: isRewarded ? GamerTheme.neonGreen : const Color(0xFFFFA500),
+                    color: statusColor,
                     width: 1,
                   ),
                 ),
@@ -666,15 +1003,15 @@ class _SquadChatScreenState extends State<SquadChatScreen> {
                   mainAxisSize: MainAxisSize.min,
                   children: [
                     Icon(
-                      isRewarded ? Icons.check_circle_rounded : Icons.hourglass_top_rounded,
+                      statusIcon,
                       size: 12,
-                      color: isRewarded ? GamerTheme.neonGreen : const Color(0xFFFFA500),
+                      color: statusColor,
                     ),
                     const SizedBox(width: 4),
                     Text(
-                      isRewarded ? 'REWARDED' : 'PENDING',
+                      statusLabel,
                       style: TextStyle(
-                        color: isRewarded ? GamerTheme.neonGreen : const Color(0xFFFFA500),
+                        color: statusColor,
                         fontSize: 10,
                         fontWeight: FontWeight.w900,
                         letterSpacing: 0.5,
@@ -733,7 +1070,7 @@ class _SquadChatScreenState extends State<SquadChatScreen> {
                       ),
                       const SizedBox(height: 2),
                       Text(
-                        'Character UID: ${inGameUid.isNotEmpty ? inGameUid : (senderUid.isNotEmpty ? senderUid : "Not specified")}',
+                        'Character UID: ${inGameUid.isNotEmpty ? inGameUid : (senderUid.isNotEmpty ? senderUid : "Verified Profile UID")}',
                         style: const TextStyle(
                           color: GamerTheme.textMuted,
                           fontSize: 11,
@@ -773,17 +1110,14 @@ class _SquadChatScreenState extends State<SquadChatScreen> {
             ),
           ],
 
-          // 2. In squad_chat_screen.dart, in win_proof message card:
-          // If isOwner == true and message status == pending, show Row with 2 buttons:
-          // - COPY UID button
-          // - "Reward 100 Coins" button
+          // Only Squad Host can see Approve/Reject buttons when status is Pending
           if (isOwner && isPending) ...[
             const SizedBox(height: 12),
             Row(
               children: [
                 // COPY UID button
                 Expanded(
-                  flex: 4,
+                  flex: 3,
                   child: OutlinedButton.icon(
                     style: OutlinedButton.styleFrom(
                       foregroundColor: GamerTheme.neonGreen,
@@ -791,10 +1125,10 @@ class _SquadChatScreenState extends State<SquadChatScreen> {
                       padding: const EdgeInsets.symmetric(vertical: 10),
                       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
                     ),
-                    icon: const Icon(Icons.copy_rounded, size: 14),
+                    icon: const Icon(Icons.copy_rounded, size: 13),
                     label: const Text(
                       'COPY UID',
-                      style: TextStyle(fontSize: 11.5, fontWeight: FontWeight.bold),
+                      style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold),
                     ),
                     onPressed: () {
                       final uidToCopy = inGameUid.isNotEmpty ? inGameUid : senderUid;
@@ -802,10 +1136,34 @@ class _SquadChatScreenState extends State<SquadChatScreen> {
                     },
                   ),
                 ),
-                const SizedBox(width: 8),
-                // "Reward 100 Coins" button
+                const SizedBox(width: 6),
+                // REJECT button
                 Expanded(
-                  flex: 6,
+                  flex: 3,
+                  child: OutlinedButton.icon(
+                    style: OutlinedButton.styleFrom(
+                      foregroundColor: GamerTheme.redAccent,
+                      side: const BorderSide(color: GamerTheme.redAccent, width: 1.2),
+                      padding: const EdgeInsets.symmetric(vertical: 10),
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                    ),
+                    icon: const Icon(Icons.close_rounded, size: 14),
+                    label: const Text(
+                      'REJECT',
+                      style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold),
+                    ),
+                    onPressed: () => _handleRejectWinProof(
+                      context: context,
+                      messageDocId: messageDocId,
+                      winnerTag: cleanTag,
+                      squadId: widget.postId,
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 6),
+                // APPROVE button
+                Expanded(
+                  flex: 4,
                   child: ElevatedButton.icon(
                     style: ElevatedButton.styleFrom(
                       backgroundColor: const Color(0xFFFFD700),
@@ -814,12 +1172,12 @@ class _SquadChatScreenState extends State<SquadChatScreen> {
                       elevation: 3,
                       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
                     ),
-                    icon: const Text('🪙', style: TextStyle(fontSize: 14)),
+                    icon: const Text('🪙', style: TextStyle(fontSize: 13)),
                     label: const Text(
-                      'Reward 100 Coins',
+                      'APPROVE',
                       style: TextStyle(
                         color: Colors.black,
-                        fontSize: 12,
+                        fontSize: 11.5,
                         fontWeight: FontWeight.w900,
                       ),
                     ),

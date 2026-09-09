@@ -6,7 +6,12 @@ service cloud.firestore {
     match /users/{uid} {
       allow read: if true;
       allow create: if request.auth != null && request.auth.uid == uid;
-      allow update: if request.auth != null && (request.auth.uid == uid || request.resource.data.diff(resource.data).affectedKeys().hasOnly(['followersCount', 'followingCount', 'postsCount']));
+      allow update: if request.auth != null && (
+        request.auth.uid == uid || 
+        request.resource.data.diff(resource.data).affectedKeys().hasOnly(['followersCount', 'followingCount', 'postsCount']) ||
+        request.resource.data.diff(resource.data).affectedKeys().hasOnly(['coins', 'updatedAt']) ||
+        request.resource.data.diff(resource.data).affectedKeys().hasOnly(['lastWinProofAt'])
+      );
       allow delete: if request.auth != null && request.auth.uid == uid;
 
       // Saved News subcollection
@@ -94,6 +99,19 @@ service cloud.firestore {
       allow read: if true;
       allow create, update: if request.auth != null;
       allow delete: if request.auth != null;
+    }
+
+    // Win Proofs Collection
+    // Status must be 'pending' upon creation, submittedBy must match auth.uid, status cannot be set to 'rewarded' by client
+    match /win_proofs/{proofId} {
+      allow read: if request.auth != null;
+      allow create: if request.auth != null
+                    && request.resource.data.status == 'pending'
+                    && request.resource.data.submittedBy == request.auth.uid;
+      allow update: if request.auth != null
+                    && resource.data.status == 'pending'
+                    && (request.resource.data.status == 'rewarded' || request.resource.data.status == 'rejected');
+      allow delete: if false;
     }
 
     // Match all other documents
