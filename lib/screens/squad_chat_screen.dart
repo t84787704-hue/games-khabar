@@ -8,6 +8,7 @@ import 'package:firebase_storage/firebase_storage.dart';
 import 'package:image_picker/image_picker.dart';
 import '../constants/gamer_theme.dart';
 import '../models/squad_post_model.dart';
+import '../services/cloudinary_service.dart';
 import '../services/gamer_auth_service.dart';
 import '../services/lfg_service.dart';
 import '../widgets/gamer_avatar.dart';
@@ -329,22 +330,9 @@ class _SquadChatScreenState extends State<SquadChatScreen> {
     }
   }
 
-  /// Uploads proof screenshot to Firebase Storage with base64 fallback
-  Future<String> _uploadProofScreenshot(File imageFile, String uid, String squadId) async {
-    try {
-      final storageRef = FirebaseStorage.instance
-          .ref()
-          .child('win_proofs')
-          .child('${squadId}_${uid}_${DateTime.now().millisecondsSinceEpoch}.jpg');
-      final metadata = SettableMetadata(contentType: 'image/jpeg');
-      final uploadTask = await storageRef.putFile(imageFile, metadata);
-      final downloadUrl = await uploadTask.ref.getDownloadURL();
-      return downloadUrl;
-    } catch (e) {
-      debugPrint('[SquadChat] Storage upload notice: $e. Falling back to base64 encoding.');
-      final bytes = await imageFile.readAsBytes();
-      return 'data:image/jpeg;base64,${base64Encode(bytes)}';
-    }
+  /// Uploads proof screenshot to Cloudinary using folder match_proofs
+  Future<String?> _uploadProofScreenshot(File imageFile, String uid, String squadId) async {
+    return await CloudinaryService.uploadFile(file: imageFile, folder: 'match_proofs');
   }
 
   /// Opens dialog for submitting a Win Proof message in squad chat
@@ -743,8 +731,21 @@ class _SquadChatScreenState extends State<SquadChatScreen> {
                                 final senderAvatar = user?.photoUrl ?? '';
                                 final note = noteController.text.trim();
 
-                                // Upload screenshot
-                                final uploadedUrl = await _uploadProofScreenshot(proofImage!, currentUid, widget.postId);
+                                // Upload screenshot to Cloudinary
+                                File pickedFile = proofImage!;
+                                String? url = await CloudinaryService.uploadFile(file: pickedFile, folder: 'match_proofs');
+                                if (url == null) {
+                                  if (mounted) {
+                                    setModalState(() => isSubmitting = false);
+                                    ScaffoldMessenger.of(context).showSnackBar(
+                                      const SnackBar(
+                                        content: Text('Screenshot upload failed. Please try again.'),
+                                        backgroundColor: GamerTheme.redAccent,
+                                      ),
+                                    );
+                                  }
+                                  return;
+                                }
 
                                 final firestore = FirebaseFirestore.instance;
                                 final proofDocRef = firestore.collection('win_proofs').doc();
@@ -759,8 +760,9 @@ class _SquadChatScreenState extends State<SquadChatScreen> {
                                   'userId': currentUid,
                                   'inGameUid': characterUid,
                                   'characterUid': characterUid,
-                                  'proofUrl': uploadedUrl,
-                                  'imageUrl': uploadedUrl,
+                                  'proofImageUrl': url,
+                                  'proofUrl': url,
+                                  'imageUrl': url,
                                   'note': note.isNotEmpty ? note : 'Match Won! Victory proof submitted.',
                                   'status': 'pending', // NEVER set status='rewarded' from app
                                   'createdAt': FieldValue.serverTimestamp(),
@@ -788,8 +790,9 @@ class _SquadChatScreenState extends State<SquadChatScreen> {
                                   'submittedBy': currentUid,
                                   'inGameUid': characterUid,
                                   'characterUid': characterUid,
-                                  'proofUrl': uploadedUrl,
-                                  'imageUrl': uploadedUrl,
+                                  'proofImageUrl': url,
+                                  'proofUrl': url,
+                                  'imageUrl': url,
                                   'text': note.isNotEmpty ? note : 'Match Won! Victory proof submitted.',
                                   'createdAt': FieldValue.serverTimestamp(),
                                 });
@@ -1105,7 +1108,7 @@ class _SquadChatScreenState extends State<SquadChatScreen> {
     final senderAvatar = data['senderAvatar'] as String? ?? '';
     final status = (data['status'] as String? ?? 'pending').toLowerCase();
     final inGameUid = (data['inGameUid'] ?? data['characterUid'] ?? data['bgmiUid'] ?? data['gameId'] ?? '').toString();
-    final proofUrl = (data['proofUrl'] ?? data['imageUrl'] ?? '').toString();
+    final proofUrl = (data['proofImageUrl'] ?? data['proofUrl'] ?? data['imageUrl'] ?? '').toString();
     final text = (data['text'] ?? data['note'] as String? ?? '').trim();
     final isPending = status == 'pending';
     final isRewarded = status == 'rewarded';
@@ -1301,13 +1304,21 @@ class _SquadChatScreenState extends State<SquadChatScreen> {
             const SizedBox(height: 8),
             ClipRRect(
               borderRadius: BorderRadius.circular(10),
-              child: Image.network(
-                proofUrl,
-                height: 140,
-                width: double.infinity,
-                fit: BoxFit.cover,
-                errorBuilder: (_, __, ___) => const SizedBox.shrink(),
-              ),
+              child: proofUrl.startsWith('data:image')
+                  ? Image.memory(
+                      base64Decode(proofUrl.split(',').last),
+                      height: 140,
+                      width: double.infinity,
+                      fit: BoxFit.cover,
+                      errorBuilder: (_, __, ___) => const SizedBox.shrink(),
+                    )
+                  : Image.network(
+                      proofUrl,
+                      height: 140,
+                      width: double.infinity,
+                      fit: BoxFit.cover,
+                      errorBuilder: (_, __, ___) => const SizedBox.shrink(),
+                    ),
             ),
           ],
 

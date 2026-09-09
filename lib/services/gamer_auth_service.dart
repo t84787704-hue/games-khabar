@@ -7,6 +7,7 @@ import 'package:firebase_storage/firebase_storage.dart';
 import 'package:google_sign_in/google_sign_in.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../models/gamer_user_model.dart';
+import 'cloudinary_service.dart';
 import 'notification_service.dart';
 
 class GamerAuthService {
@@ -190,8 +191,17 @@ class GamerAuthService {
     return cred;
   }
 
-  /// Uploads photo: attempts Firebase Storage, with fallback to base64 data URI
+  /// Uploads user avatar photo directly to Cloudinary
   Future<String> uploadProfilePhoto(File imageFile, String uid) async {
+    try {
+      final url = await CloudinaryService.uploadFile(file: imageFile, folder: 'user_avatars');
+      if (url != null && url.isNotEmpty) {
+        return url;
+      }
+    } catch (e) {
+      debugPrint('Cloudinary avatar upload notice: $e');
+    }
+
     try {
       final ref = _storage.ref().child('gamer_profiles').child('$uid.jpg');
       final metadata = SettableMetadata(contentType: 'image/jpeg');
@@ -199,9 +209,8 @@ class GamerAuthService {
       final downloadUrl = await uploadTask.ref.getDownloadURL();
       return downloadUrl;
     } catch (e) {
-      debugPrint('Storage upload failed, falling back to base64 encoding: $e');
-      final bytes = await imageFile.readAsBytes();
-      return 'data:image/jpeg;base64,${base64Encode(bytes)}';
+      debugPrint('Storage upload failed: $e');
+      return '';
     }
   }
 

@@ -24,7 +24,10 @@ class ClipService {
   }) async {
     try {
       print('🚀 [CLIP_SERVICE] uploadClipMedia called for user: $userId (isVideo: $isVideo)');
-      final secureUrl = await CloudinaryService.uploadMedia(file, isVideo: isVideo);
+      final secureUrl = await CloudinaryService.uploadFile(file: file, folder: 'gamer_clips');
+      if (secureUrl == null) {
+        throw Exception('Cloudinary upload returned null');
+      }
       print('✅ [CLIP_SERVICE] uploadClipMedia completed: $secureUrl');
       return secureUrl;
     } catch (e) {
@@ -48,8 +51,11 @@ class ClipService {
     try {
       print('🚀 [CLIP_SERVICE] Step 1: Uploading video file to Cloudinary...');
       
-      // 1. Upload to Cloudinary unsigned video endpoint
-      final videoUrl = await CloudinaryService.uploadVideo(file);
+      // 1. Upload to Cloudinary unsigned auto endpoint with folder 'gamer_clips'
+      final videoUrl = await CloudinaryService.uploadFile(file: file, folder: 'gamer_clips');
+      if (videoUrl == null) {
+        throw Exception('Video upload to Cloudinary failed');
+      }
       print('✅ [CLIP_SERVICE] Cloudinary upload successful! URL: $videoUrl');
 
       print('💾 [CLIP_SERVICE] Step 2: Saving clip record to Firestore collection "clips"...');
