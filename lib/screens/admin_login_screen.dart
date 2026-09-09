@@ -79,7 +79,8 @@ class _AdminLoginScreenState extends State<AdminLoginScreen> {
             break;
           case 'wrong-password':
           case 'invalid-credential':
-            _errorMessage = 'Invalid email or password. Please re-check.';
+          case 'user-token-expired':
+            _errorMessage = 'Email ya Password galat hai ya session expire ho gaya hai';
             break;
           case 'invalid-email':
             _errorMessage = 'Please enter a valid email address.';

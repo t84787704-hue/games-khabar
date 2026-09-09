@@ -5,6 +5,7 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_storage/firebase_storage.dart';
 import 'package:google_sign_in/google_sign_in.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import '../models/gamer_user_model.dart';
 import 'notification_service.dart';
 
@@ -94,15 +95,52 @@ class GamerAuthService {
     }
   }
 
-  /// Sign In with Email & Password
-  Future<UserCredential> signInWithEmail(String email, String password) async {
-    final cred = await _auth.signInWithEmailAndPassword(
-      email: email.trim(),
-      password: password,
-    );
-    await refreshCurrentGamer();
-    return cred;
+  /// Login with Email & Password
+  /// Catches 'invalid-credential' or 'user-token-expired', signs out, clears local storage,
+  /// performs auto-retry once after signOut, and returns user-friendly Urdu message.
+  Future<UserCredential> login(String email, String password, {bool isRetry = false}) async {
+    try {
+      final cred = await _auth.signInWithEmailAndPassword(
+        email: email.trim(),
+        password: password,
+      );
+      await refreshCurrentGamer();
+      return cred;
+    } on FirebaseAuthException catch (e) {
+      if (e.code == 'invalid-credential' || e.code == 'user-token-expired') {
+        debugPrint('[AuthService] Caught ${e.code}. Signing out and clearing local storage...');
+        try {
+          await _auth.signOut();
+        } catch (_) {}
+        try {
+          final prefs = await SharedPreferences.getInstance();
+          await prefs.clear();
+        } catch (storageErr) {
+          debugPrint('[AuthService] Storage clear error: $storageErr');
+        }
+
+        // Add auto-retry once after signOut
+        if (!isRetry) {
+          try {
+            debugPrint('[AuthService] Auto-retrying login once after signOut...');
+            return await login(email, password, isRetry: true);
+          } catch (retryErr) {
+            debugPrint('[AuthService] Retry failed: $retryErr');
+          }
+        }
+
+        // Then show user friendly message in Urdu instead of raw Firebase error
+        throw FirebaseAuthException(
+          code: e.code,
+          message: 'Session khatam ho gaya hai, dobara login karen',
+        );
+      }
+      rethrow;
+    }
   }
+
+  /// Sign In with Email & Password (delegates to login)
+  Future<UserCredential> signInWithEmail(String email, String password) => login(email, password);
 
   /// Sign Up with Email & Password
   Future<UserCredential> signUpWithEmail(String email, String password) async {

@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import '../constants/gamer_theme.dart';
 import '../services/gamer_auth_service.dart';
 import 'create_gamer_id_screen.dart';
@@ -20,6 +21,7 @@ class _GamerAuthScreenState extends State<GamerAuthScreen> {
   bool _isSignUp = false;
   bool _isLoading = false;
   bool _obscurePassword = true;
+  String? _errorMessage;
 
   @override
   void dispose() {
@@ -27,6 +29,35 @@ class _GamerAuthScreenState extends State<GamerAuthScreen> {
     _passwordController.dispose();
     _confirmPasswordController.dispose();
     super.dispose();
+  }
+
+  Future<void> _clearCacheAndRetry() async {
+    setState(() {
+      _isLoading = true;
+      _errorMessage = null;
+    });
+    try {
+      await FirebaseAuth.instance.signOut();
+      try {
+        final prefs = await SharedPreferences.getInstance();
+        await prefs.clear();
+      } catch (e) {
+        debugPrint('Error clearing SharedPreferences: $e');
+      }
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Cache clear ho gaya hai. Dobara sign in karen.'),
+            backgroundColor: GamerTheme.accentBlue,
+            duration: Duration(seconds: 2),
+          ),
+        );
+      }
+    } catch (e) {
+      debugPrint('Error in _clearCacheAndRetry: $e');
+    } finally {
+      if (mounted) setState(() => _isLoading = false);
+    }
   }
 
   Future<void> _handlePostAuth() async {
@@ -64,7 +95,10 @@ class _GamerAuthScreenState extends State<GamerAuthScreen> {
       return;
     }
 
-    setState(() => _isLoading = true);
+    setState(() {
+      _isLoading = true;
+      _errorMessage = null;
+    });
 
     try {
       if (_isSignUp) {
@@ -75,34 +109,59 @@ class _GamerAuthScreenState extends State<GamerAuthScreen> {
 
       await _handlePostAuth();
     } on FirebaseAuthException catch (e) {
-      String msg = e.message ?? 'Authentication failed';
-      if (e.code == 'user-not-found') msg = 'No gamer found with this email';
-      if (e.code == 'wrong-password') msg = 'Incorrect password';
-      if (e.code == 'email-already-in-use') msg = 'This email is already registered';
-      _showError(msg);
+      if (!_isSignUp) {
+        // Don't show raw Firebase error in red banner. Always show: "Email ya Password galat hai ya session expire ho gaya hai"
+        final friendlyMsg = (e.message == 'Session khatam ho gaya hai, dobara login karen')
+            ? 'Session khatam ho gaya hai, dobara login karen'
+            : 'Email ya Password galat hai ya session expire ho gaya hai';
+        setState(() => _errorMessage = friendlyMsg);
+      } else {
+        String msg = e.message ?? 'Authentication failed';
+        if (e.code == 'email-already-in-use') msg = 'This email is already registered';
+        setState(() => _errorMessage = msg);
+        _showError(msg);
+      }
     } catch (e) {
-      _showError('Error: $e');
+      if (!_isSignUp) {
+        const friendlyMsg = 'Email ya Password galat hai ya session expire ho gaya hai';
+        setState(() => _errorMessage = friendlyMsg);
+      } else {
+        final msg = 'Error: $e';
+        setState(() => _errorMessage = msg);
+        _showError(msg);
+      }
     } finally {
       if (mounted) setState(() => _isLoading = false);
     }
   }
 
   Future<void> _signInWithGoogle() async {
-    setState(() => _isLoading = true);
+    setState(() {
+      _isLoading = true;
+      _errorMessage = null;
+    });
     try {
       final cred = await GamerAuthService().signInWithGoogle();
       if (cred != null) {
         await _handlePostAuth();
       }
+    } on FirebaseAuthException catch (e) {
+      final friendlyMsg = (e.message == 'Session khatam ho gaya hai, dobara login karen')
+          ? 'Session khatam ho gaya hai, dobara login karen'
+          : 'Email ya Password galat hai ya session expire ho gaya hai';
+      setState(() => _errorMessage = friendlyMsg);
     } catch (e) {
-      _showError('Google Sign-In error: $e');
+      setState(() => _errorMessage = 'Email ya Password galat hai ya session expire ho gaya hai');
     } finally {
       if (mounted) setState(() => _isLoading = false);
     }
   }
 
   Future<void> _signInGuest() async {
-    setState(() => _isLoading = true);
+    setState(() {
+      _isLoading = true;
+      _errorMessage = null;
+    });
     try {
       await GamerAuthService().signInAnonymously();
       await _handlePostAuth();
@@ -245,6 +304,43 @@ class _GamerAuthScreenState extends State<GamerAuthScreen> {
 
                 const SizedBox(height: 24),
 
+                // Red Error Banner
+                if (_errorMessage != null) ...[
+                  Container(
+                    width: double.infinity,
+                    padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                    decoration: BoxDecoration(
+                      color: GamerTheme.redAccent.withOpacity(0.18),
+                      borderRadius: BorderRadius.circular(10),
+                      border: Border.all(color: GamerTheme.redAccent.withOpacity(0.6), width: 1.2),
+                    ),
+                    child: Row(
+                      children: [
+                        const Icon(Icons.error_outline_rounded, color: GamerTheme.redAccent, size: 20),
+                        const SizedBox(width: 10),
+                        Expanded(
+                          child: Text(
+                            _errorMessage!,
+                            style: const TextStyle(
+                              color: Colors.white,
+                              fontSize: 13,
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
+                        ),
+                        InkWell(
+                          onTap: () => setState(() => _errorMessage = null),
+                          child: const Padding(
+                            padding: EdgeInsets.all(4),
+                            child: Icon(Icons.close_rounded, color: Colors.white70, size: 18),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(height: 16),
+                ],
+
                 // Email Input
                 TextField(
                   controller: _emailController,
@@ -327,6 +423,26 @@ class _GamerAuthScreenState extends State<GamerAuthScreen> {
                     ),
                   ),
                 ),
+
+                // Clear Cache & Retry button
+                if (!_isSignUp) ...[
+                  const SizedBox(height: 8),
+                  Center(
+                    child: TextButton.icon(
+                      onPressed: _isLoading ? null : _clearCacheAndRetry,
+                      icon: const Icon(Icons.refresh_rounded, size: 14, color: GamerTheme.textMuted),
+                      label: const Text(
+                        'Clear Cache & Retry',
+                        style: TextStyle(
+                          color: GamerTheme.textMuted,
+                          fontSize: 12,
+                          fontWeight: FontWeight.w600,
+                          decoration: TextDecoration.underline,
+                        ),
+                      ),
+                    ),
+                  ),
+                ],
 
                 const SizedBox(height: 18),
 
