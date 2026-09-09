@@ -483,22 +483,35 @@ class TournamentService extends ChangeNotifier {
     required String winnerName,
   }) async {
     try {
-      final doc = await _roomsRef.doc(roomId).get();
-      if (!doc.exists) return false;
-      final room = TournamentRoom.fromFirestore(doc);
+      TournamentRoom? room;
+      final index = _rooms.indexWhere((r) => r.id == roomId);
+      if (index != -1) {
+        room = _rooms[index];
+      } else {
+        try {
+          final doc = await _roomsRef.doc(roomId).get();
+          if (doc.exists) {
+            room = TournamentRoom.fromFirestore(doc);
+          }
+        } catch (_) {}
+      }
+
+      if (room == null) return false;
 
       // 1. Calculate total escrow reward
       final totalEntryFees = room.entryFeeCoins * room.joinedPlayers.where((p) => p != room.hostId).length;
+      final prizeToAward = room.prizePoolCoins > 0 ? room.prizePoolCoins : room.escrowCoins;
 
       await _walletService.awardWinnerPrize(
         hostId: room.hostId,
         winnerId: winnerUid,
-        prizePoolCoins: room.prizePoolCoins,
+        prizePoolCoins: prizeToAward,
         totalEntryFees: totalEntryFees,
         joiners: room.joinedPlayers,
         entryFeeCoinsPerJoiner: room.entryFeeCoins,
         roomId: room.id,
         roomTitle: room.title,
+        winnerName: winnerName,
       );
 
       // 2. Penalize any participant who did not submit result (-10 trustScore)
@@ -509,9 +522,9 @@ class TournamentService extends ChangeNotifier {
       }
 
       // 3. Mark room as COMPLETED in memory & Firestore
-      final index = _rooms.indexWhere((r) => r.id == roomId);
-      if (index != -1) {
-        _rooms[index] = _rooms[index].copyWith(
+      final roomIdx = _rooms.indexWhere((r) => r.id == roomId);
+      if (roomIdx != -1) {
+        _rooms[roomIdx] = _rooms[roomIdx].copyWith(
           status: 'COMPLETED',
           winnerUid: winnerUid,
           winnerName: winnerName,
@@ -521,12 +534,17 @@ class TournamentService extends ChangeNotifier {
         notifyListeners();
       }
 
-      await _roomsRef.doc(roomId).update({
-        'status': 'COMPLETED',
-        'winnerUid': winnerUid,
-        'winnerName': winnerName,
-        'isLive': false,
-      });
+      try {
+        await _roomsRef.doc(roomId).set({
+          'status': 'COMPLETED',
+          'winnerUid': winnerUid,
+          'winnerName': winnerName,
+          'isLive': false,
+          'updatedAt': FieldValue.serverTimestamp(),
+        }, SetOptions(merge: true));
+      } catch (e) {
+        debugPrint('TournamentService Firestore update error: $e');
+      }
 
       return true;
     } catch (e) {
@@ -539,22 +557,35 @@ class TournamentService extends ChangeNotifier {
   /// Refunds prizePoolCoins to host, refunds entry fees to joiners, and marks status EXPIRED
   Future<void> cancelOrExpireRoom(String roomId) async {
     try {
-      final doc = await _roomsRef.doc(roomId).get();
-      if (!doc.exists) return;
-      final room = TournamentRoom.fromFirestore(doc);
+      TournamentRoom? room;
+      final index = _rooms.indexWhere((r) => r.id == roomId);
+      if (index != -1) {
+        room = _rooms[index];
+      } else {
+        try {
+          final doc = await _roomsRef.doc(roomId).get();
+          if (doc.exists) {
+            room = TournamentRoom.fromFirestore(doc);
+          }
+        } catch (_) {}
+      }
+
+      if (room == null) return;
+
+      final prizeToRefund = room.prizePoolCoins > 0 ? room.prizePoolCoins : room.escrowCoins;
 
       await _walletService.refundRoom(
         hostId: room.hostId,
-        prizePoolCoins: room.prizePoolCoins,
+        prizePoolCoins: prizeToRefund,
         joiners: room.joinedPlayers,
         entryFeeCoins: room.entryFeeCoins,
         roomId: room.id,
         roomTitle: room.title,
       );
 
-      final index = _rooms.indexWhere((r) => r.id == roomId);
-      if (index != -1) {
-        _rooms[index] = _rooms[index].copyWith(
+      final rIndex = _rooms.indexWhere((r) => r.id == roomId);
+      if (rIndex != -1) {
+        _rooms[rIndex] = _rooms[rIndex].copyWith(
           status: 'EXPIRED',
           isLive: false,
         );
@@ -562,10 +593,13 @@ class TournamentService extends ChangeNotifier {
         notifyListeners();
       }
 
-      await _roomsRef.doc(roomId).update({
-        'status': 'EXPIRED',
-        'isLive': false,
-      });
+      try {
+        await _roomsRef.doc(roomId).set({
+          'status': 'EXPIRED',
+          'isLive': false,
+          'updatedAt': FieldValue.serverTimestamp(),
+        }, SetOptions(merge: true));
+      } catch (_) {}
     } catch (e) {
       debugPrint('TournamentService cancelOrExpireRoom error: $e');
     }

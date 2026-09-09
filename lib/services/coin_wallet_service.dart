@@ -104,7 +104,7 @@ class CoinWalletService extends ChangeNotifier {
 
   Stream<CoinWallet> walletStream(String userId) {
     if (userId.isEmpty) {
-      return Stream.value(const CoinWallet(userId: 'guest', coins: 1000));
+      return Stream.value(_currentWallet ?? const CoinWallet(userId: 'guest', coins: 1000));
     }
     return _walletsRef.doc(userId).snapshots().map((snap) {
       if (snap.exists) {
@@ -112,7 +112,7 @@ class CoinWalletService extends ChangeNotifier {
         _currentWallet = w;
         return w;
       }
-      return const CoinWallet(userId: '', coins: 1000);
+      return _currentWallet ?? const CoinWallet(userId: '', coins: 1000);
     });
   }
 
@@ -271,11 +271,16 @@ class CoinWalletService extends ChangeNotifier {
     _saveToLocal(updated);
 
     try {
-      await _walletsRef.doc(userId).update({
+      await _walletsRef.doc(userId).set({
+        'userId': userId,
         'coins': newCoins,
         'escrowCoins': newEscrow,
         'updatedAt': FieldValue.serverTimestamp(),
-      });
+      }, SetOptions(merge: true));
+
+      await _firestore.collection('users').doc(userId).set({
+        'coins': newCoins,
+      }, SetOptions(merge: true));
 
       await _recordTransaction(CoinTransaction(
         id: _transactionsRef.doc().id,
@@ -324,11 +329,16 @@ class CoinWalletService extends ChangeNotifier {
     _saveToLocal(updated);
 
     try {
-      await _walletsRef.doc(userId).update({
+      await _walletsRef.doc(userId).set({
+        'userId': userId,
         'coins': newCoins,
         'escrowCoins': newEscrow,
         'updatedAt': FieldValue.serverTimestamp(),
-      });
+      }, SetOptions(merge: true));
+
+      await _firestore.collection('users').doc(userId).set({
+        'coins': newCoins,
+      }, SetOptions(merge: true));
 
       await _recordTransaction(CoinTransaction(
         id: _transactionsRef.doc().id,
@@ -407,19 +417,49 @@ class CoinWalletService extends ChangeNotifier {
     required int entryFeeCoinsPerJoiner,
     required String roomId,
     required String roomTitle,
+    String? winnerName,
   }) async {
     final totalPrize = prizePoolCoins + totalEntryFees;
     final now = DateTime.now();
 
     try {
       // 1. Release host's escrow hold
-      if (prizePoolCoins > 0) {
-        final hostWallet = await getOrCreateWallet(hostId);
-        final updatedHostEscrow = (hostWallet.escrowCoins - prizePoolCoins).clamp(0, 9999999);
-        await _walletsRef.doc(hostId).update({
-          'escrowCoins': updatedHostEscrow,
-          'updatedAt': FieldValue.serverTimestamp(),
-        });
+      if (prizePoolCoins > 0 && hostId.isNotEmpty) {
+        CoinWallet? hostWallet;
+        if (_currentWallet?.userId == hostId) {
+          hostWallet = _currentWallet;
+        } else {
+          try {
+            final hostDoc = await _walletsRef.doc(hostId).get();
+            if (hostDoc.exists) {
+              hostWallet = CoinWallet.fromFirestore(hostDoc);
+            } else {
+              hostWallet = await _loadFromLocal(hostId);
+            }
+          } catch (_) {}
+        }
+
+        final currentHostEscrow = hostWallet?.escrowCoins ?? prizePoolCoins;
+        final updatedHostEscrow = (currentHostEscrow - prizePoolCoins).clamp(0, 9999999);
+
+        try {
+          await _walletsRef.doc(hostId).set({
+            'userId': hostId,
+            'escrowCoins': updatedHostEscrow,
+            'updatedAt': FieldValue.serverTimestamp(),
+          }, SetOptions(merge: true));
+        } catch (e) {
+          debugPrint('awardWinnerPrize: host Firestore update error: $e');
+        }
+
+        if (_currentWallet?.userId == hostId) {
+          _currentWallet = _currentWallet!.copyWith(
+            escrowCoins: updatedHostEscrow,
+            updatedAt: now,
+          );
+          await _saveToLocal(_currentWallet!);
+          notifyListeners();
+        }
       }
 
       // 2. Clear escrow for any joiners who paid entry fee
@@ -427,39 +467,88 @@ class CoinWalletService extends ChangeNotifier {
         for (final joinerId in joiners) {
           if (joinerId != hostId) {
             try {
-              final joinerDoc = await _walletsRef.doc(joinerId).get();
-              if (joinerDoc.exists) {
-                final jWallet = CoinWallet.fromFirestore(joinerDoc);
-                final updatedJEscrow = (jWallet.escrowCoins - entryFeeCoinsPerJoiner).clamp(0, 9999999);
-                await _walletsRef.doc(joinerId).update({
-                  'escrowCoins': updatedJEscrow,
-                  'updatedAt': FieldValue.serverTimestamp(),
-                });
-              }
+              await _walletsRef.doc(joinerId).set({
+                'escrowCoins': FieldValue.increment(-entryFeeCoinsPerJoiner),
+                'updatedAt': FieldValue.serverTimestamp(),
+              }, SetOptions(merge: true));
             } catch (_) {}
           }
         }
       }
 
-      // 3. Credit Winner with totalPrize
-      final winnerDoc = await _walletsRef.doc(winnerId).get();
-      if (winnerDoc.exists) {
-        final winnerWallet = CoinWallet.fromFirestore(winnerDoc);
-        final newCoins = winnerWallet.coins + totalPrize;
-        final newLifetime = winnerWallet.lifetimeEarned + totalPrize;
+      // 3. Credit Winner with totalPrize in Firestore & Local
+      int winnerOldCoins = 1000;
+      int winnerOldLifetime = 1000;
 
-        await _walletsRef.doc(winnerId).update({
-          'coins': newCoins,
-          'lifetimeEarned': newLifetime,
-          'updatedAt': FieldValue.serverTimestamp(),
-        });
+      if (_currentWallet?.userId == winnerId) {
+        winnerOldCoins = _currentWallet!.coins;
+        winnerOldLifetime = _currentWallet!.lifetimeEarned;
+      } else {
+        try {
+          final winnerDoc = await _walletsRef.doc(winnerId).get();
+          if (winnerDoc.exists) {
+            final w = CoinWallet.fromFirestore(winnerDoc);
+            winnerOldCoins = w.coins;
+            winnerOldLifetime = w.lifetimeEarned;
+          } else {
+            final local = await _loadFromLocal(winnerId);
+            if (local != null) {
+              winnerOldCoins = local.coins;
+              winnerOldLifetime = local.lifetimeEarned;
+            }
+          }
+        } catch (_) {}
+      }
 
-        if (_currentWallet?.userId == winnerId) {
-          _currentWallet = winnerWallet.copyWith(
-            coins: newCoins,
-            lifetimeEarned: newLifetime,
-          );
-          notifyListeners();
+      final newCoins = winnerOldCoins + totalPrize;
+      final newLifetime = winnerOldLifetime + totalPrize;
+
+      // Update Firestore 'coin_wallets' collection
+      await _walletsRef.doc(winnerId).set({
+        'userId': winnerId,
+        'coins': newCoins,
+        'lifetimeEarned': newLifetime,
+        'updatedAt': FieldValue.serverTimestamp(),
+      }, SetOptions(merge: true));
+
+      // Update Firestore 'users' collection
+      await _firestore.collection('users').doc(winnerId).set({
+        'coins': newCoins,
+      }, SetOptions(merge: true));
+
+      // Save winner local cache
+      final updatedWinnerWallet = CoinWallet(
+        userId: winnerId,
+        coins: newCoins,
+        lifetimeEarned: newLifetime,
+        updatedAt: now,
+      );
+      await _saveToLocal(updatedWinnerWallet);
+
+      // Check if the current user on this device is the winner
+      final currentGamer = GamerAuthService().currentGamer;
+      final currentUid = currentGamer?.uid ?? GamerAuthService().currentUid ?? '';
+      final isCurrentWinner = _currentWallet?.userId == winnerId ||
+          (currentUid.isNotEmpty && currentUid == winnerId) ||
+          (winnerName != null &&
+              winnerName.isNotEmpty &&
+              ((currentGamer?.displayName?.toLowerCase() == winnerName.toLowerCase()) ||
+                  (currentGamer?.username.toLowerCase() == winnerName.toLowerCase()) ||
+                  (winnerName.toLowerCase() == 'ii' &&
+                      (currentGamer?.displayName?.toLowerCase() == 'ii' ||
+                          currentGamer?.username.toLowerCase() == 'ii'))));
+
+      if (isCurrentWinner) {
+        _currentWallet = (_currentWallet ?? updatedWinnerWallet).copyWith(
+          coins: newCoins,
+          lifetimeEarned: newLifetime,
+          updatedAt: now,
+        );
+        await _saveToLocal(_currentWallet!);
+        notifyListeners();
+
+        if (currentGamer != null) {
+          GamerAuthService().currentGamerNotifier.value = currentGamer.copyWith(coins: newCoins);
         }
       }
 
@@ -493,15 +582,44 @@ class CoinWalletService extends ChangeNotifier {
     final now = DateTime.now();
     try {
       // 1. Refund host
-      if (prizePoolCoins > 0) {
-        final hostWallet = await getOrCreateWallet(hostId);
-        final newHostCoins = hostWallet.coins + prizePoolCoins;
-        final newHostEscrow = (hostWallet.escrowCoins - prizePoolCoins).clamp(0, 9999999);
-        await _walletsRef.doc(hostId).update({
+      if (prizePoolCoins > 0 && hostId.isNotEmpty) {
+        CoinWallet? hostWallet;
+        if (_currentWallet?.userId == hostId) {
+          hostWallet = _currentWallet;
+        } else {
+          final hostDoc = await _walletsRef.doc(hostId).get();
+          if (hostDoc.exists) {
+            hostWallet = CoinWallet.fromFirestore(hostDoc);
+          } else {
+            hostWallet = await _loadFromLocal(hostId);
+          }
+        }
+
+        final currentHostCoins = hostWallet?.coins ?? 1000;
+        final currentHostEscrow = hostWallet?.escrowCoins ?? prizePoolCoins;
+        final newHostCoins = currentHostCoins + prizePoolCoins;
+        final newHostEscrow = (currentHostEscrow - prizePoolCoins).clamp(0, 9999999);
+
+        await _walletsRef.doc(hostId).set({
+          'userId': hostId,
           'coins': newHostCoins,
           'escrowCoins': newHostEscrow,
           'updatedAt': FieldValue.serverTimestamp(),
-        });
+        }, SetOptions(merge: true));
+
+        await _firestore.collection('users').doc(hostId).set({
+          'coins': newHostCoins,
+        }, SetOptions(merge: true));
+
+        if (_currentWallet?.userId == hostId) {
+          _currentWallet = _currentWallet!.copyWith(
+            coins: newHostCoins,
+            escrowCoins: newHostEscrow,
+            updatedAt: now,
+          );
+          await _saveToLocal(_currentWallet!);
+          notifyListeners();
+        }
 
         await _recordTransaction(CoinTransaction(
           id: _transactionsRef.doc().id,
@@ -521,14 +639,33 @@ class CoinWalletService extends ChangeNotifier {
         for (final jId in joiners) {
           if (jId != hostId) {
             try {
-              final jWallet = await getOrCreateWallet(jId);
-              final newCoins = jWallet.coins + entryFeeCoins;
-              final newEscrow = (jWallet.escrowCoins - entryFeeCoins).clamp(0, 9999999);
-              await _walletsRef.doc(jId).update({
+              final jDoc = await _walletsRef.doc(jId).get();
+              final jWallet = jDoc.exists ? CoinWallet.fromFirestore(jDoc) : await _loadFromLocal(jId);
+              final currentCoins = jWallet?.coins ?? 1000;
+              final currentEscrow = jWallet?.escrowCoins ?? entryFeeCoins;
+              final newCoins = currentCoins + entryFeeCoins;
+              final newEscrow = (currentEscrow - entryFeeCoins).clamp(0, 9999999);
+
+              await _walletsRef.doc(jId).set({
+                'userId': jId,
                 'coins': newCoins,
                 'escrowCoins': newEscrow,
                 'updatedAt': FieldValue.serverTimestamp(),
-              });
+              }, SetOptions(merge: true));
+
+              await _firestore.collection('users').doc(jId).set({
+                'coins': newCoins,
+              }, SetOptions(merge: true));
+
+              if (_currentWallet?.userId == jId) {
+                _currentWallet = _currentWallet!.copyWith(
+                  coins: newCoins,
+                  escrowCoins: newEscrow,
+                  updatedAt: now,
+                );
+                await _saveToLocal(_currentWallet!);
+                notifyListeners();
+              }
 
               await _recordTransaction(CoinTransaction(
                 id: _transactionsRef.doc().id,
