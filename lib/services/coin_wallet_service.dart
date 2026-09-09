@@ -436,11 +436,13 @@ class CoinWalletService extends ChangeNotifier {
   }
 
   /// Finalize Match Winner:
-  /// Transfer all escrowCoins (prize pool + collected entry fees) to winner's coins.
+  /// Transfer all escrowCoins (prize pool + collected entry fees) to winner(s) coins.
+  /// When a team wins, divides the prize pool EQUALLY among all winning team members.
   /// Clear host's escrow and joiner's escrow.
   Future<void> awardWinnerPrize({
     required String hostId,
-    required String winnerId,
+    String? winnerId,
+    List<String>? winnerIds,
     required int prizePoolCoins,
     required int totalEntryFees,
     required List<String> joiners,
@@ -448,12 +450,23 @@ class CoinWalletService extends ChangeNotifier {
     required String roomId,
     required String roomTitle,
     String? winnerName,
+    List<String>? winnerNames,
   }) async {
+    final List<String> allWinnerIds = [];
+    if (winnerIds != null && winnerIds.isNotEmpty) {
+      allWinnerIds.addAll(winnerIds);
+    } else if (winnerId != null && winnerId.isNotEmpty) {
+      allWinnerIds.add(winnerId);
+    }
+    if (allWinnerIds.isEmpty) return;
+
     final totalPrize = prizePoolCoins + totalEntryFees;
+    final int winnerCount = allWinnerIds.length;
+    final int prizePerWinner = (totalPrize / winnerCount).floor();
     final now = DateTime.now();
 
     try {
-      // 1. Release host's escrow hold
+      // 1. Release host's escrow hold (deduct from escrow, NOT from host wallet coins)
       if (prizePoolCoins > 0 && hostId.isNotEmpty) {
         CoinWallet? hostWallet;
         if (_currentWallet?.userId == hostId) {
@@ -490,6 +503,19 @@ class CoinWalletService extends ChangeNotifier {
           await _saveToLocal(_currentWallet!);
           notifyListeners();
         }
+
+        // Record Escrow Transfer transaction for Host
+        await _recordTransaction(CoinTransaction(
+          id: _transactionsRef.doc().id,
+          userId: hostId,
+          type: 'escrow_transferred',
+          amount: 0,
+          status: 'completed',
+          timestamp: now,
+          title: 'Escrow Released to Winner(s) 🏆',
+          description: 'Transferred $prizePoolCoins escrow prize to winning team of "$roomTitle"',
+          roomId: roomId,
+        ));
       }
 
       // 2. Clear escrow for any joiners who paid entry fee
@@ -506,94 +532,106 @@ class CoinWalletService extends ChangeNotifier {
         }
       }
 
-      // 3. Credit Winner with totalPrize in Firestore & Local
-      int winnerOldCoins = 1000;
-      int winnerOldLifetime = 1000;
-
-      if (_currentWallet?.userId == winnerId) {
-        winnerOldCoins = _currentWallet!.coins;
-        winnerOldLifetime = _currentWallet!.lifetimeEarned;
-      } else {
-        try {
-          final winnerDoc = await _walletsRef.doc(winnerId).get();
-          if (winnerDoc.exists) {
-            final w = CoinWallet.fromFirestore(winnerDoc);
-            winnerOldCoins = w.coins;
-            winnerOldLifetime = w.lifetimeEarned;
-          } else {
-            final local = await _loadFromLocal(winnerId);
-            if (local != null) {
-              winnerOldCoins = local.coins;
-              winnerOldLifetime = local.lifetimeEarned;
-            }
-          }
-        } catch (_) {}
-      }
-
-      final newCoins = winnerOldCoins + totalPrize;
-      final newLifetime = winnerOldLifetime + totalPrize;
-
-      // Update Firestore 'coin_wallets' collection
-      await _walletsRef.doc(winnerId).set({
-        'userId': winnerId,
-        'coins': newCoins,
-        'lifetimeEarned': newLifetime,
-        'updatedAt': FieldValue.serverTimestamp(),
-      }, SetOptions(merge: true));
-
-      // Update Firestore 'users' collection
-      await _firestore.collection('users').doc(winnerId).set({
-        'coins': newCoins,
-      }, SetOptions(merge: true));
-
-      // Save winner local cache
-      final updatedWinnerWallet = CoinWallet(
-        userId: winnerId,
-        coins: newCoins,
-        lifetimeEarned: newLifetime,
-        updatedAt: now,
-      );
-      await _saveToLocal(updatedWinnerWallet);
-
-      // Check if the current user on this device is the winner
+      // 3. Credit EACH Winner with their equal share (prizePerWinner) in Firestore & Local
       final currentGamer = GamerAuthService().currentGamer;
       final currentUid = currentGamer?.uid ?? GamerAuthService().currentUid ?? '';
-      final isCurrentWinner = _currentWallet?.userId == winnerId ||
-          (currentUid.isNotEmpty && currentUid == winnerId) ||
-          (winnerName != null &&
-              winnerName.isNotEmpty &&
-              ((currentGamer?.displayName?.toLowerCase() == winnerName.toLowerCase()) ||
-                  (currentGamer?.username.toLowerCase() == winnerName.toLowerCase()) ||
-                  (winnerName.toLowerCase() == 'ii' &&
-                      (currentGamer?.displayName?.toLowerCase() == 'ii' ||
-                          currentGamer?.username.toLowerCase() == 'ii'))));
 
-      if (isCurrentWinner) {
-        _currentWallet = (_currentWallet ?? updatedWinnerWallet).copyWith(
+      for (int i = 0; i < allWinnerIds.length; i++) {
+        final wId = allWinnerIds[i].trim();
+        if (wId.isEmpty) continue;
+
+        final wName = (winnerNames != null && i < winnerNames.length && winnerNames[i].isNotEmpty)
+            ? winnerNames[i]
+            : (winnerName?.isNotEmpty == true ? winnerName! : 'Winner');
+
+        int winnerOldCoins = 1000;
+        int winnerOldLifetime = 1000;
+
+        if (_currentWallet?.userId == wId) {
+          winnerOldCoins = _currentWallet!.coins;
+          winnerOldLifetime = _currentWallet!.lifetimeEarned;
+        } else {
+          try {
+            final winnerDoc = await _walletsRef.doc(wId).get();
+            if (winnerDoc.exists) {
+              final w = CoinWallet.fromFirestore(winnerDoc);
+              winnerOldCoins = w.coins;
+              winnerOldLifetime = w.lifetimeEarned;
+            } else {
+              final local = await _loadFromLocal(wId);
+              if (local != null) {
+                winnerOldCoins = local.coins;
+                winnerOldLifetime = local.lifetimeEarned;
+              }
+            }
+          } catch (_) {}
+        }
+
+        final newCoins = winnerOldCoins + prizePerWinner;
+        final newLifetime = winnerOldLifetime + prizePerWinner;
+
+        // Update Firestore 'coin_wallets' collection
+        try {
+          await _walletsRef.doc(wId).set({
+            'userId': wId,
+            'coins': newCoins,
+            'lifetimeEarned': newLifetime,
+            'updatedAt': FieldValue.serverTimestamp(),
+          }, SetOptions(merge: true));
+
+          // Update Firestore 'users' collection
+          await _firestore.collection('users').doc(wId).set({
+            'coins': newCoins,
+          }, SetOptions(merge: true));
+        } catch (e) {
+          debugPrint('awardWinnerPrize: winner $wId Firestore update error: $e');
+        }
+
+        // Save winner local cache
+        final updatedWinnerWallet = CoinWallet(
+          userId: wId,
           coins: newCoins,
           lifetimeEarned: newLifetime,
           updatedAt: now,
         );
-        await _saveToLocal(_currentWallet!);
-        notifyListeners();
+        await _saveToLocal(updatedWinnerWallet);
 
-        if (currentGamer != null) {
-          GamerAuthService().currentGamerNotifier.value = currentGamer.copyWith(coins: newCoins);
+        // Check if the current user on this device is this winner
+        final isThisDeviceWinner = _currentWallet?.userId == wId ||
+            (currentUid.isNotEmpty && currentUid == wId) ||
+            (wName.isNotEmpty &&
+                ((currentGamer?.displayName?.toLowerCase() == wName.toLowerCase()) ||
+                    (currentGamer?.username.toLowerCase() == wName.toLowerCase())));
+
+        if (isThisDeviceWinner) {
+          _currentWallet = (_currentWallet ?? updatedWinnerWallet).copyWith(
+            coins: newCoins,
+            lifetimeEarned: newLifetime,
+            updatedAt: now,
+          );
+          await _saveToLocal(_currentWallet!);
+          notifyListeners();
+
+          if (currentGamer != null) {
+            GamerAuthService().currentGamerNotifier.value = currentGamer.copyWith(coins: newCoins);
+          }
         }
-      }
 
-      // 4. Record win_prize transaction
-      await _recordTransaction(CoinTransaction(
-        id: _transactionsRef.doc().id,
-        userId: winnerId,
-        type: 'win_prize',
-        amount: totalPrize,
-        status: 'completed',
-        timestamp: now,
-        title: 'Tournament Victory Prize! 🏆',
-        description: 'Won tournament "$roomTitle" and claimed $totalPrize G-Coins!',
-        roomId: roomId,
-      ));
+        // 4. Record win_prize transaction for each winner
+        await _recordTransaction(CoinTransaction(
+          id: _transactionsRef.doc().id,
+          userId: wId,
+          type: 'win_prize',
+          amount: prizePerWinner,
+          status: 'completed',
+          timestamp: now,
+          title: winnerCount > 1 ? 'Team Victory Prize! 🏆' : 'Tournament Victory Prize! 🏆',
+          description: winnerCount > 1
+              ? 'Won tournament "$roomTitle" with team! Equal share: $prizePerWinner G-Coins ($totalPrize total)'
+              : 'Won tournament "$roomTitle" and claimed $prizePerWinner G-Coins from escrow!',
+          roomId: roomId,
+        ));
+      }
     } catch (e) {
       debugPrint('CoinWalletService awardWinnerPrize error: $e');
     }

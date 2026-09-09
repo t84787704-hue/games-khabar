@@ -475,12 +475,15 @@ class TournamentService extends ChangeNotifier {
     }
   }
 
-  /// Host finishes match and selects the winner:
-  /// Transfers all escrowCoins to winner and updates room status to COMPLETED
+  /// Host finishes match and selects the winner (or winning team members):
+  /// Transfers all escrowCoins directly from escrow to winners (divided equally among team members)
+  /// and updates room status to COMPLETED
   Future<bool> finishMatchWithWinner({
     required String roomId,
-    required String winnerUid,
-    required String winnerName,
+    String? winnerUid,
+    List<String>? winnerUids,
+    String? winnerName,
+    List<String>? winnerNames,
   }) async {
     try {
       TournamentRoom? room;
@@ -500,20 +503,37 @@ class TournamentService extends ChangeNotifier {
       final currentRoom = room;
       final hostId = currentRoom.hostId;
 
+      final List<String> allWinnerUids = [];
+      if (winnerUids != null && winnerUids.isNotEmpty) {
+        allWinnerUids.addAll(winnerUids);
+      } else if (winnerUid != null && winnerUid.isNotEmpty) {
+        allWinnerUids.add(winnerUid);
+      }
+      if (allWinnerUids.isEmpty) return false;
+
+      final List<String> allWinnerNames = [];
+      if (winnerNames != null && winnerNames.isNotEmpty) {
+        allWinnerNames.addAll(winnerNames);
+      } else if (winnerName != null && winnerName.isNotEmpty) {
+        allWinnerNames.add(winnerName);
+      } else {
+        allWinnerNames.add('Winner');
+      }
+
       // 1. Calculate total escrow reward
       final totalEntryFees = currentRoom.entryFeeCoins * currentRoom.joinedPlayers.where((p) => p != hostId).length;
       final prizeToAward = currentRoom.prizePoolCoins > 0 ? currentRoom.prizePoolCoins : currentRoom.escrowCoins;
 
       await _walletService.awardWinnerPrize(
         hostId: hostId,
-        winnerId: winnerUid,
+        winnerIds: allWinnerUids,
         prizePoolCoins: prizeToAward,
         totalEntryFees: totalEntryFees,
         joiners: currentRoom.joinedPlayers,
         entryFeeCoinsPerJoiner: currentRoom.entryFeeCoins,
         roomId: currentRoom.id,
         roomTitle: currentRoom.title,
-        winnerName: winnerName,
+        winnerNames: allWinnerNames,
       );
 
       // 2. Penalize any participant who did not submit result (-10 trustScore)
@@ -523,13 +543,16 @@ class TournamentService extends ChangeNotifier {
         }
       }
 
+      final combinedWinnerUid = allWinnerUids.join(',');
+      final combinedWinnerName = allWinnerNames.join(', ');
+
       // 3. Mark room as COMPLETED in memory & Firestore
       final roomIdx = _rooms.indexWhere((r) => r.id == roomId);
       if (roomIdx != -1) {
         _rooms[roomIdx] = _rooms[roomIdx].copyWith(
           status: 'COMPLETED',
-          winnerUid: winnerUid,
-          winnerName: winnerName,
+          winnerUid: combinedWinnerUid,
+          winnerName: combinedWinnerName,
           isLive: false,
         );
         await _saveToLocal();
@@ -539,8 +562,8 @@ class TournamentService extends ChangeNotifier {
       try {
         await _roomsRef.doc(roomId).set({
           'status': 'COMPLETED',
-          'winnerUid': winnerUid,
-          'winnerName': winnerName,
+          'winnerUid': combinedWinnerUid,
+          'winnerName': combinedWinnerName,
           'isLive': false,
           'updatedAt': FieldValue.serverTimestamp(),
         }, SetOptions(merge: true));

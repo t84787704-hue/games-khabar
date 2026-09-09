@@ -1865,25 +1865,27 @@ class _TournamentBoardScreenState extends State<TournamentBoardScreen> with Sing
     );
   }
 
-  /// Host Dialog to Finish Match and Transfer Escrow Coins to Winner
+  /// Host Dialog to Finish Match and Transfer Escrow Coins Equally to Winning Team Members
   void _showFinishMatchDialog(TournamentRoom room) {
-    String? selectedWinnerUid;
-    String? selectedWinnerName;
+    final Set<String> selectedWinnerUids = {};
+    final Map<String, String> selectedWinnerNames = {};
     final Set<String> verifiedUids = {};
+    final List<String> extraTeammates = [];
+    final TextEditingController extraTeammateController = TextEditingController();
 
-    // Auto-detect winner based on victory submission
+    // Auto-detect winners based on victory submission
     for (final entry in room.resultSubmissions.entries) {
       final data = entry.value as Map<String, dynamic>?;
       if (data?['isVictory'] == true) {
-        selectedWinnerUid = entry.key;
-        selectedWinnerName = data?['playerName']?.toString();
-        break;
+        selectedWinnerUids.add(entry.key);
+        selectedWinnerNames[entry.key] = data?['playerName']?.toString() ?? 'Player';
       }
     }
 
-    if (selectedWinnerUid == null && room.joinedPlayers.isNotEmpty) {
-      selectedWinnerUid = room.joinedPlayers.first;
-      selectedWinnerName = selectedWinnerUid == room.hostId ? room.hostName : 'Opponent';
+    if (selectedWinnerUids.isEmpty && room.joinedPlayers.isNotEmpty) {
+      final firstUid = room.joinedPlayers.first;
+      selectedWinnerUids.add(firstUid);
+      selectedWinnerNames[firstUid] = firstUid == room.hostId ? room.hostName : 'Opponent';
     }
 
     showDialog(
@@ -1892,313 +1894,480 @@ class _TournamentBoardScreenState extends State<TournamentBoardScreen> with Sing
       builder: (ctx) => BackdropFilter(
         filter: ImageFilter.blur(sigmaX: 5, sigmaY: 5),
         child: StatefulBuilder(
-          builder: (ctx, setDialogState) => AlertDialog(
-          backgroundColor: GamerTheme.cardDark,
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(20),
-            side: const BorderSide(color: Colors.amber, width: 2),
-          ),
-          title: const Row(
-            children: [
-              Text('🏆', style: TextStyle(fontSize: 24)),
-              SizedBox(width: 10),
-              Expanded(
-                child: Text(
-                  'CONFIRM MATCH WINNER',
-                  style: TextStyle(color: Colors.amber, fontWeight: FontWeight.w900, fontSize: 16),
-                ),
+          builder: (ctx, setDialogState) {
+            final int totalWinners = selectedWinnerUids.length;
+            final int sharePerWinner = totalWinners > 0 ? (room.escrowCoins ~/ totalWinners) : 0;
+
+            return AlertDialog(
+              backgroundColor: GamerTheme.cardDark,
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(20),
+                side: const BorderSide(color: Colors.amber, width: 2),
               ),
-            ],
-          ),
-          content: SingleChildScrollView(
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Container(
-                  padding: const EdgeInsets.all(12),
-                  decoration: BoxDecoration(
-                    color: Colors.amber.withOpacity(0.12),
-                    borderRadius: BorderRadius.circular(10),
-                    border: Border.all(color: Colors.amber.withOpacity(0.3)),
-                  ),
-                  child: Row(
-                    children: [
-                      const Text('💰', style: TextStyle(fontSize: 20)),
-                      const SizedBox(width: 8),
-                      Expanded(
-                        child: Text(
-                          'Total Prize Pool: ${room.escrowCoins} G-Coins\n(Escrow will transfer immediately to winner)',
-                          style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 12),
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-                const SizedBox(height: 14),
-                const Text(
-                  'SELECT WINNER:',
-                  style: TextStyle(color: GamerTheme.textMuted, fontSize: 11, fontWeight: FontWeight.w800),
-                ),
-                const SizedBox(height: 8),
-                ...room.joinedPlayers.map((playerUid) {
-                  final isHost = playerUid == room.hostId;
-                  final submission = room.resultSubmissions[playerUid] as Map<String, dynamic>?;
-                  final hasSubmitted = submission != null;
-                  final isVictoryVerified = submission?['isVictory'] == true;
-                  final playerName = isHost ? room.hostName : (submission?['playerName'] ?? 'Player');
-                  final screenshotUrl = (submission?['screenshotUrl'] ?? submission?['imageUrl'] ?? submission?['localPath'])?.toString() ?? '';
-                  final hasScreenshot = hasSubmitted && screenshotUrl.isNotEmpty;
-                  final isVerified = verifiedUids.contains(playerUid);
-
-                  void openProof() {
-                    setDialogState(() {
-                      verifiedUids.add(playerUid);
-                    });
-                    _openFullScreenScreenshotViewer(
-                      context: ctx,
-                      screenshotUrl: screenshotUrl,
-                      playerName: playerName,
-                      isVictory: isVictoryVerified,
-                      ocrText: submission?['ocrText']?.toString(),
-                      onVerify: () {
-                        setDialogState(() {
-                          selectedWinnerUid = playerUid;
-                          selectedWinnerName = playerName;
-                          verifiedUids.add(playerUid);
-                        });
-                      },
-                    );
-                  }
-
-                  return Container(
-                    margin: const EdgeInsets.only(bottom: 8),
-                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
-                    decoration: BoxDecoration(
-                      color: selectedWinnerUid == playerUid ? GamerTheme.accentBlue.withOpacity(0.15) : GamerTheme.bgDark,
-                      borderRadius: BorderRadius.circular(10),
-                      border: Border.all(
-                        color: selectedWinnerUid == playerUid ? GamerTheme.accentBlue : GamerTheme.borderDark,
-                        width: selectedWinnerUid == playerUid ? 1.5 : 1.0,
-                      ),
+              title: const Row(
+                children: [
+                  Text('🏆', style: TextStyle(fontSize: 24)),
+                  SizedBox(width: 10),
+                  Expanded(
+                    child: Text(
+                      'CONFIRM WINNING TEAM',
+                      style: TextStyle(color: Colors.amber, fontWeight: FontWeight.w900, fontSize: 16),
                     ),
-                    child: InkWell(
-                      onTap: () {
-                        setDialogState(() {
-                          selectedWinnerUid = playerUid;
-                          selectedWinnerName = playerName;
-                        });
-                      },
-                      child: Row(
+                  ),
+                ],
+              ),
+              content: SingleChildScrollView(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    // Escrow Summary Box
+                    Container(
+                      padding: const EdgeInsets.all(12),
+                      decoration: BoxDecoration(
+                        color: Colors.amber.withOpacity(0.12),
+                        borderRadius: BorderRadius.circular(10),
+                        border: Border.all(color: Colors.amber.withOpacity(0.3)),
+                      ),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          Radio<String>(
-                            value: playerUid,
-                            groupValue: selectedWinnerUid,
-                            activeColor: GamerTheme.accentBlue,
-                            materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                            visualDensity: VisualDensity.compact,
-                            onChanged: (val) {
-                              setDialogState(() {
-                                selectedWinnerUid = val;
-                                selectedWinnerName = playerName;
-                              });
-                            },
-                          ),
-                          const SizedBox(width: 4),
-                          Expanded(
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              mainAxisSize: MainAxisSize.min,
-                              children: [
-                                Text(
-                                  '$playerName ${isHost ? "(Host)" : ""}',
+                          Row(
+                            children: [
+                              const Text('💰', style: TextStyle(fontSize: 20)),
+                              const SizedBox(width: 8),
+                              Expanded(
+                                child: Text(
+                                  'Total Escrow Prize: ${room.escrowCoins} G-Coins',
                                   style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 13),
-                                  maxLines: 1,
-                                  overflow: TextOverflow.ellipsis,
                                 ),
-                                if (isVerified)
-                                  const Text('Verified Proof ✓', style: TextStyle(color: GamerTheme.neonGreen, fontSize: 10, fontWeight: FontWeight.bold)),
-                              ],
-                            ),
-                          ),
-                          const SizedBox(width: 6),
-                          if (hasScreenshot) ...[
-                            // 1. Clickable OCR VICTORY badge
-                            InkWell(
-                              onTap: openProof,
-                              borderRadius: BorderRadius.circular(6),
-                              child: Container(
-                                padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 3),
-                                decoration: BoxDecoration(
-                                  color: isVictoryVerified ? GamerTheme.neonGreen.withOpacity(0.2) : GamerTheme.accentBlue.withOpacity(0.2),
-                                  borderRadius: BorderRadius.circular(6),
-                                  border: Border.all(
-                                    color: isVictoryVerified ? GamerTheme.neonGreen.withOpacity(0.6) : GamerTheme.accentBlue.withOpacity(0.6),
-                                  ),
-                                ),
-                                child: Row(
-                                  mainAxisSize: MainAxisSize.min,
-                                  children: [
-                                    Text(
-                                      isVictoryVerified ? 'OCR VICTORY ✓' : 'Screenshot ✓',
-                                      style: TextStyle(
-                                        color: isVictoryVerified ? GamerTheme.neonGreen : GamerTheme.accentBlue,
-                                        fontSize: 9,
-                                        fontWeight: FontWeight.w900,
-                                      ),
-                                    ),
-                                    const SizedBox(width: 2),
-                                    const Icon(Icons.touch_app_rounded, size: 10, color: Colors.white70),
-                                  ],
-                                ),
-                              ),
-                            ),
-                            const SizedBox(width: 6),
-                            // 2. Eye Icon Button 👁️
-                            IconButton(
-                              icon: Icon(
-                                Icons.remove_red_eye_rounded,
-                                color: isVerified ? GamerTheme.neonGreen : GamerTheme.accentBlue,
-                                size: 20,
-                              ),
-                              tooltip: 'View Screenshot (Zoom)',
-                              padding: EdgeInsets.zero,
-                              constraints: const BoxConstraints(minWidth: 28, minHeight: 28),
-                              visualDensity: VisualDensity.compact,
-                              onPressed: openProof,
-                            ),
-                            const SizedBox(width: 4),
-                            // 3. Small thumbnail of uploaded screenshot
-                            GestureDetector(
-                              onTap: openProof,
-                              child: Container(
-                                width: 34,
-                                height: 34,
-                                clipBehavior: Clip.antiAlias,
-                                decoration: BoxDecoration(
-                                  borderRadius: BorderRadius.circular(6),
-                                  border: Border.all(
-                                    color: isVerified ? GamerTheme.neonGreen : Colors.amber,
-                                    width: 1.5,
-                                  ),
-                                ),
-                                child: _buildScreenshotImage(screenshotUrl, width: 34, height: 34, fit: BoxFit.cover),
-                              ),
-                            ),
-                          ] else ...[
-                            // 4. If No Screenshot: Do NOT show Eye Icon or thumbnail
-                            const Text('No Screenshot', style: TextStyle(color: GamerTheme.redAccent, fontSize: 10, fontWeight: FontWeight.bold)),
-                          ],
-                        ],
-                      ),
-                    ),
-                  );
-                }),
-                const SizedBox(height: 8),
-                const Text(
-                  '15-Minute Rule: If participant did not upload victory screenshot, -10 trustScore is applied.',
-                  style: TextStyle(color: GamerTheme.textMuted, fontSize: 11),
-                ),
-              ],
-            ),
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(ctx),
-              child: const Text('CANCEL', style: TextStyle(color: GamerTheme.textMuted)),
-            ),
-            ElevatedButton(
-              style: ElevatedButton.styleFrom(
-                backgroundColor: Colors.amber,
-                foregroundColor: Colors.black,
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-              ),
-              onPressed: selectedWinnerUid == null
-                  ? null
-                  : () async {
-                      // Verify that Host has checked screenshot if one was uploaded
-                      final selectedSubmission = room.resultSubmissions[selectedWinnerUid] as Map<String, dynamic>?;
-                      final selectedScreenshotUrl = (selectedSubmission?['screenshotUrl'] ?? selectedSubmission?['imageUrl'] ?? selectedSubmission?['localPath'])?.toString() ?? '';
-                      final selectedHasScreenshot = selectedSubmission != null && selectedScreenshotUrl.isNotEmpty;
-
-                      if (selectedHasScreenshot && !verifiedUids.contains(selectedWinnerUid)) {
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          const SnackBar(
-                            backgroundColor: Colors.amber,
-                            content: Text(
-                              '⚠️ Please inspect and verify the victory screenshot before confirming!',
-                              style: TextStyle(color: Colors.black, fontWeight: FontWeight.bold),
-                            ),
-                            duration: Duration(seconds: 3),
-                          ),
-                        );
-                        _openFullScreenScreenshotViewer(
-                          context: ctx,
-                          screenshotUrl: selectedScreenshotUrl,
-                          playerName: selectedWinnerName ?? 'Winner',
-                          isVictory: selectedSubmission?['isVictory'] == true,
-                          ocrText: selectedSubmission?['ocrText']?.toString(),
-                          onVerify: () {
-                            setDialogState(() {
-                              verifiedUids.add(selectedWinnerUid!);
-                            });
-                          },
-                        );
-                        return;
-                      }
-
-                      if (!selectedHasScreenshot) {
-                        final proceed = await showDialog<bool>(
-                          context: ctx,
-                          builder: (confirmCtx) => AlertDialog(
-                            backgroundColor: GamerTheme.cardDark,
-                            title: const Text('⚠️ No Screenshot Provided', style: TextStyle(color: Colors.amber, fontWeight: FontWeight.bold, fontSize: 15)),
-                            content: Text(
-                              '$selectedWinnerName did not upload any victory screenshot.\n\nAre you sure you want to declare them as winner and release ${room.escrowCoins} Coins?',
-                              style: const TextStyle(color: Colors.white, fontSize: 13),
-                            ),
-                            actions: [
-                              TextButton(onPressed: () => Navigator.pop(confirmCtx, false), child: const Text('CANCEL', style: TextStyle(color: GamerTheme.textMuted))),
-                              ElevatedButton(
-                                style: ElevatedButton.styleFrom(backgroundColor: Colors.amber, foregroundColor: Colors.black),
-                                onPressed: () => Navigator.pop(confirmCtx, true),
-                                child: const Text('YES, CONFIRM', style: TextStyle(fontWeight: FontWeight.bold)),
                               ),
                             ],
                           ),
-                        );
-                        if (proceed != true) return;
-                      }
-
-                      Navigator.pop(ctx);
-                      final success = await _tournamentService.finishMatchWithWinner(
-                        roomId: room.id,
-                        winnerUid: selectedWinnerUid!,
-                        winnerName: selectedWinnerName ?? 'Winner',
-                      );
-                      if (mounted) {
-                        setState(() {});
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          SnackBar(
-                            backgroundColor: Colors.amber,
-                            content: Text(
-                              success
-                                  ? '🏆 Prize of ${room.escrowCoins} Coins transferred to $selectedWinnerName!'
-                                  : 'Could not complete transfer.',
-                              style: const TextStyle(color: Colors.black, fontWeight: FontWeight.bold),
+                          const SizedBox(height: 6),
+                          Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                            decoration: BoxDecoration(
+                              color: GamerTheme.bgDark.withOpacity(0.6),
+                              borderRadius: BorderRadius.circular(6),
+                            ),
+                            child: Row(
+                              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                              children: [
+                                Text(
+                                  '👥 Winners: $totalWinners ${totalWinners == 1 ? "member" : "team members"}',
+                                  style: const TextStyle(color: GamerTheme.accentBlue, fontSize: 11, fontWeight: FontWeight.bold),
+                                ),
+                                Text(
+                                  '💎 Share: $sharePerWinner Coins each',
+                                  style: const TextStyle(color: GamerTheme.neonGreen, fontSize: 11, fontWeight: FontWeight.w900),
+                                ),
+                              ],
                             ),
                           ),
+                          const SizedBox(height: 4),
+                          const Text(
+                            'Escrow coins will be divided EQUALLY among all checked team members.',
+                            style: TextStyle(color: GamerTheme.textMuted, fontSize: 10),
+                          ),
+                        ],
+                      ),
+                    ),
+                    const SizedBox(height: 14),
+                    const Text(
+                      'CHECK WINNING PLAYERS (EQUAL SPLIT):',
+                      style: TextStyle(color: GamerTheme.textMuted, fontSize: 11, fontWeight: FontWeight.w800),
+                    ),
+                    const SizedBox(height: 8),
+                    // List joined players with checkboxes
+                    ...room.joinedPlayers.map((playerUid) {
+                      final isHost = playerUid == room.hostId;
+                      final submission = room.resultSubmissions[playerUid] as Map<String, dynamic>?;
+                      final hasSubmitted = submission != null;
+                      final isVictoryVerified = submission?['isVictory'] == true;
+                      final playerName = isHost ? room.hostName : (submission?['playerName'] ?? 'Player');
+                      final screenshotUrl = (submission?['screenshotUrl'] ?? submission?['imageUrl'] ?? submission?['localPath'])?.toString() ?? '';
+                      final hasScreenshot = hasSubmitted && screenshotUrl.isNotEmpty;
+                      final isVerified = verifiedUids.contains(playerUid);
+                      final isSelected = selectedWinnerUids.contains(playerUid);
+
+                      void openProof() {
+                        setDialogState(() {
+                          verifiedUids.add(playerUid);
+                        });
+                        _openFullScreenScreenshotViewer(
+                          context: ctx,
+                          screenshotUrl: screenshotUrl,
+                          playerName: playerName,
+                          isVictory: isVictoryVerified,
+                          ocrText: submission?['ocrText']?.toString(),
+                          onVerify: () {
+                            setDialogState(() {
+                              selectedWinnerUids.add(playerUid);
+                              selectedWinnerNames[playerUid] = playerName;
+                              verifiedUids.add(playerUid);
+                            });
+                          },
                         );
                       }
-                    },
-              child: const Text('CONFIRM WINNER 💰', style: TextStyle(fontWeight: FontWeight.w900)),
-            ),
-          ],
+
+                      return Container(
+                        margin: const EdgeInsets.only(bottom: 8),
+                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
+                        decoration: BoxDecoration(
+                          color: isSelected ? GamerTheme.accentBlue.withOpacity(0.15) : GamerTheme.bgDark,
+                          borderRadius: BorderRadius.circular(10),
+                          border: Border.all(
+                            color: isSelected ? GamerTheme.accentBlue : GamerTheme.borderDark,
+                            width: isSelected ? 1.5 : 1.0,
+                          ),
+                        ),
+                        child: InkWell(
+                          onTap: () {
+                            setDialogState(() {
+                              if (isSelected) {
+                                selectedWinnerUids.remove(playerUid);
+                                selectedWinnerNames.remove(playerUid);
+                              } else {
+                                selectedWinnerUids.add(playerUid);
+                                selectedWinnerNames[playerUid] = playerName;
+                              }
+                            });
+                          },
+                          child: Row(
+                            children: [
+                              Checkbox(
+                                value: isSelected,
+                                activeColor: GamerTheme.accentBlue,
+                                materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                                visualDensity: VisualDensity.compact,
+                                onChanged: (val) {
+                                  setDialogState(() {
+                                    if (val == true) {
+                                      selectedWinnerUids.add(playerUid);
+                                      selectedWinnerNames[playerUid] = playerName;
+                                    } else {
+                                      selectedWinnerUids.remove(playerUid);
+                                      selectedWinnerNames.remove(playerUid);
+                                    }
+                                  });
+                                },
+                              ),
+                              const SizedBox(width: 4),
+                              Expanded(
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    Text(
+                                      '$playerName ${isHost ? "(Host)" : ""}',
+                                      style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 13),
+                                      maxLines: 1,
+                                      overflow: TextOverflow.ellipsis,
+                                    ),
+                                    if (isSelected)
+                                      Text(
+                                        '+$sharePerWinner Coins',
+                                        style: const TextStyle(color: GamerTheme.neonGreen, fontSize: 10, fontWeight: FontWeight.bold),
+                                      )
+                                    else if (isVerified)
+                                      const Text('Verified Proof ✓', style: TextStyle(color: GamerTheme.neonGreen, fontSize: 10, fontWeight: FontWeight.bold)),
+                                  ],
+                                ),
+                              ),
+                              const SizedBox(width: 6),
+                              if (hasScreenshot) ...[
+                                // Clickable OCR VICTORY badge
+                                InkWell(
+                                  onTap: openProof,
+                                  borderRadius: BorderRadius.circular(6),
+                                  child: Container(
+                                    padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 3),
+                                    decoration: BoxDecoration(
+                                      color: isVictoryVerified ? GamerTheme.neonGreen.withOpacity(0.2) : GamerTheme.accentBlue.withOpacity(0.2),
+                                      borderRadius: BorderRadius.circular(6),
+                                      border: Border.all(
+                                        color: isVictoryVerified ? GamerTheme.neonGreen.withOpacity(0.6) : GamerTheme.accentBlue.withOpacity(0.6),
+                                      ),
+                                    ),
+                                    child: Row(
+                                      mainAxisSize: MainAxisSize.min,
+                                      children: [
+                                        Text(
+                                          isVictoryVerified ? 'OCR VICTORY ✓' : 'Screenshot ✓',
+                                          style: TextStyle(
+                                            color: isVictoryVerified ? GamerTheme.neonGreen : GamerTheme.accentBlue,
+                                            fontSize: 9,
+                                            fontWeight: FontWeight.w900,
+                                          ),
+                                        ),
+                                        const SizedBox(width: 2),
+                                        const Icon(Icons.touch_app_rounded, size: 10, color: Colors.white70),
+                                      ],
+                                    ),
+                                  ),
+                                ),
+                                const SizedBox(width: 6),
+                                // Eye Icon Button
+                                IconButton(
+                                  icon: Icon(
+                                    Icons.remove_red_eye_rounded,
+                                    color: isVerified ? GamerTheme.neonGreen : GamerTheme.accentBlue,
+                                    size: 20,
+                                  ),
+                                  tooltip: 'View Screenshot (Zoom)',
+                                  padding: EdgeInsets.zero,
+                                  constraints: const BoxConstraints(minWidth: 28, minHeight: 28),
+                                  visualDensity: VisualDensity.compact,
+                                  onPressed: openProof,
+                                ),
+                                const SizedBox(width: 4),
+                                // Thumbnail
+                                GestureDetector(
+                                  onTap: openProof,
+                                  child: Container(
+                                    width: 34,
+                                    height: 34,
+                                    clipBehavior: Clip.antiAlias,
+                                    decoration: BoxDecoration(
+                                      borderRadius: BorderRadius.circular(6),
+                                      border: Border.all(
+                                        color: isVerified ? GamerTheme.neonGreen : Colors.amber,
+                                        width: 1.5,
+                                      ),
+                                    ),
+                                    child: _buildScreenshotImage(screenshotUrl, width: 34, height: 34, fit: BoxFit.cover),
+                                  ),
+                                ),
+                              ] else ...[
+                                const Text('No Screenshot', style: TextStyle(color: GamerTheme.redAccent, fontSize: 10, fontWeight: FontWeight.bold)),
+                              ],
+                            ],
+                          ),
+                        ),
+                      );
+                    }),
+                    // Extra Teammates added from screenshot
+                    if (extraTeammates.isNotEmpty) ...[
+                      const SizedBox(height: 6),
+                      const Text(
+                        'TEAMMATES FROM SCREENSHOT:',
+                        style: TextStyle(color: GamerTheme.accentOrange, fontSize: 11, fontWeight: FontWeight.bold),
+                      ),
+                      const SizedBox(height: 4),
+                      ...extraTeammates.map((eUid) => Container(
+                            margin: const EdgeInsets.only(bottom: 6),
+                            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                            decoration: BoxDecoration(
+                              color: GamerTheme.accentOrange.withOpacity(0.12),
+                              borderRadius: BorderRadius.circular(8),
+                              border: Border.all(color: GamerTheme.accentOrange.withOpacity(0.4)),
+                            ),
+                            child: Row(
+                              children: [
+                                const Icon(Icons.person_add_alt_1_rounded, size: 16, color: GamerTheme.accentOrange),
+                                const SizedBox(width: 8),
+                                Expanded(
+                                  child: Column(
+                                    crossAxisAlignment: CrossAxisAlignment.start,
+                                    children: [
+                                      Text(
+                                        'UID: $eUid',
+                                        style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 12),
+                                      ),
+                                      Text(
+                                        '+$sharePerWinner Coins (Equal share)',
+                                        style: const TextStyle(color: GamerTheme.neonGreen, fontSize: 10, fontWeight: FontWeight.bold),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                                IconButton(
+                                  icon: const Icon(Icons.close_rounded, size: 16, color: GamerTheme.redAccent),
+                                  padding: EdgeInsets.zero,
+                                  constraints: const BoxConstraints(minWidth: 24, minHeight: 24),
+                                  onPressed: () {
+                                    setDialogState(() {
+                                      extraTeammates.remove(eUid);
+                                      selectedWinnerUids.remove(eUid);
+                                      selectedWinnerNames.remove(eUid);
+                                    });
+                                  },
+                                ),
+                              ],
+                            ),
+                          )),
+                    ],
+                    // Input field to add teammate UID from screenshot
+                    const SizedBox(height: 10),
+                    Container(
+                      padding: const EdgeInsets.all(8),
+                      decoration: BoxDecoration(
+                        color: GamerTheme.bgDark,
+                        borderRadius: BorderRadius.circular(10),
+                        border: Border.all(color: GamerTheme.borderDark),
+                      ),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          const Row(
+                            children: [
+                              Icon(Icons.add_circle_outline_rounded, size: 14, color: GamerTheme.accentBlue),
+                              SizedBox(width: 4),
+                              Text(
+                                'Add Teammate UID from Screenshot:',
+                                style: TextStyle(color: GamerTheme.accentBlue, fontSize: 11, fontWeight: FontWeight.bold),
+                              ),
+                            ],
+                          ),
+                          const SizedBox(height: 6),
+                          Row(
+                            children: [
+                              Expanded(
+                                child: SizedBox(
+                                  height: 36,
+                                  child: TextField(
+                                    controller: extraTeammateController,
+                                    style: const TextStyle(color: Colors.white, fontSize: 12),
+                                    decoration: InputDecoration(
+                                      hintText: 'Enter teammate UID / Name...',
+                                      hintStyle: const TextStyle(color: GamerTheme.textMuted, fontSize: 11),
+                                      contentPadding: const EdgeInsets.symmetric(horizontal: 10, vertical: 0),
+                                      filled: true,
+                                      fillColor: GamerTheme.cardDark,
+                                      border: OutlineInputBorder(borderRadius: BorderRadius.circular(6), borderSide: BorderSide.none),
+                                    ),
+                                  ),
+                                ),
+                              ),
+                              const SizedBox(width: 8),
+                              ElevatedButton(
+                                style: ElevatedButton.styleFrom(
+                                  backgroundColor: GamerTheme.accentBlue,
+                                  foregroundColor: GamerTheme.bgDark,
+                                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+                                  minimumSize: Size.zero,
+                                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(6)),
+                                ),
+                                onPressed: () {
+                                  final text = extraTeammateController.text.trim();
+                                  if (text.isNotEmpty) {
+                                    setDialogState(() {
+                                      if (!extraTeammates.contains(text) && !selectedWinnerUids.contains(text)) {
+                                        extraTeammates.add(text);
+                                        selectedWinnerUids.add(text);
+                                        selectedWinnerNames[text] = 'Teammate ($text)';
+                                      }
+                                      extraTeammateController.clear();
+                                    });
+                                  }
+                                },
+                                child: const Text('+ ADD', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 11)),
+                              ),
+                            ],
+                          ),
+                        ],
+                      ),
+                    ),
+                    const SizedBox(height: 8),
+                    const Text(
+                      '15-Minute Rule: If participant did not upload victory screenshot, -10 trustScore is applied.',
+                      style: TextStyle(color: GamerTheme.textMuted, fontSize: 11),
+                    ),
+                  ],
+                ),
+              ),
+              actions: [
+                TextButton(
+                  onPressed: () => Navigator.pop(ctx),
+                  child: const Text('CANCEL', style: TextStyle(color: GamerTheme.textMuted)),
+                ),
+                ElevatedButton(
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: Colors.amber,
+                    foregroundColor: Colors.black,
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+                  ),
+                  onPressed: selectedWinnerUids.isEmpty
+                      ? null
+                      : () async {
+                          // Check if any selected joined player uploaded screenshot but was not verified
+                          bool needsVerification = false;
+                          String unverifiedUid = '';
+                          for (final wUid in selectedWinnerUids) {
+                            final sub = room.resultSubmissions[wUid] as Map<String, dynamic>?;
+                            final sUrl = (sub?['screenshotUrl'] ?? sub?['imageUrl'] ?? sub?['localPath'])?.toString() ?? '';
+                            if (sUrl.isNotEmpty && !verifiedUids.contains(wUid)) {
+                              needsVerification = true;
+                              unverifiedUid = wUid;
+                              break;
+                            }
+                          }
+
+                          if (needsVerification) {
+                            final sub = room.resultSubmissions[unverifiedUid] as Map<String, dynamic>?;
+                            final sUrl = (sub?['screenshotUrl'] ?? sub?['imageUrl'] ?? sub?['localPath'])?.toString() ?? '';
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              const SnackBar(
+                                backgroundColor: Colors.amber,
+                                content: Text(
+                                  '⚠️ Please inspect and verify the victory screenshot before confirming!',
+                                  style: TextStyle(color: Colors.black, fontWeight: FontWeight.bold),
+                                ),
+                                duration: Duration(seconds: 3),
+                              ),
+                            );
+                            _openFullScreenScreenshotViewer(
+                              context: ctx,
+                              screenshotUrl: sUrl,
+                              playerName: selectedWinnerNames[unverifiedUid] ?? 'Winner',
+                              isVictory: sub?['isVictory'] == true,
+                              ocrText: sub?['ocrText']?.toString(),
+                              onVerify: () {
+                                setDialogState(() {
+                                  verifiedUids.add(unverifiedUid);
+                                });
+                              },
+                            );
+                            return;
+                          }
+
+                          Navigator.pop(ctx);
+                          final winnersList = selectedWinnerUids.toList();
+                          final winnerNamesList = winnersList.map((uid) => selectedWinnerNames[uid] ?? uid).toList();
+
+                          final success = await _tournamentService.finishMatchWithWinner(
+                            roomId: room.id,
+                            winnerUids: winnersList,
+                            winnerNames: winnerNamesList,
+                          );
+                          if (mounted) {
+                            setState(() {});
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              SnackBar(
+                                backgroundColor: Colors.amber,
+                                content: Text(
+                                  success
+                                      ? '🏆 Prize of ${room.escrowCoins} Coins divided equally ($sharePerWinner Coins each) among ${winnersList.length} members!'
+                                      : 'Could not complete transfer.',
+                                  style: const TextStyle(color: Colors.black, fontWeight: FontWeight.bold),
+                                ),
+                              ),
+                            );
+                          }
+                        },
+                  child: Text(
+                    totalWinners > 1 ? 'CONFIRM TEAM ($totalWinners) 💰' : 'CONFIRM WINNER 💰',
+                    style: const TextStyle(fontWeight: FontWeight.w900),
+                  ),
+                ),
+              ],
+            );
+          },
         ),
       ),
-    ),
-  );
+    );
   }
 
   @override
