@@ -252,12 +252,18 @@ class CoinWalletService extends ChangeNotifier {
   }) async {
     if (prizePoolCoins <= 0) return true;
 
-    final wallet = await getOrCreateWallet(userId);
+    CoinWallet wallet;
+    if (_currentWallet != null && (_currentWallet!.userId == userId || userId.isEmpty)) {
+      wallet = _currentWallet!;
+    } else {
+      wallet = await getOrCreateWallet(userId);
+    }
+
     if (wallet.coins < prizePoolCoins) {
       return false; // Not enough coins
     }
 
-    final newCoins = wallet.coins - prizePoolCoins;
+    final newCoins = (wallet.coins - prizePoolCoins).clamp(0, 9999999);
     final newEscrow = wallet.escrowCoins + prizePoolCoins;
     final now = DateTime.now();
 
@@ -270,6 +276,12 @@ class CoinWalletService extends ChangeNotifier {
     _currentWallet = updated;
     notifyListeners();
     _saveToLocal(updated);
+
+    // Update GamerAuthService notifier as well
+    final currentGamer = GamerAuthService().currentGamer;
+    if (currentGamer != null && (currentGamer.uid == userId || userId.isEmpty)) {
+      GamerAuthService().currentGamerNotifier.value = currentGamer.copyWith(coins: newCoins);
+    }
 
     try {
       await _walletsRef.doc(userId).set({
@@ -310,12 +322,18 @@ class CoinWalletService extends ChangeNotifier {
   }) async {
     if (entryFeeCoins <= 0) return true;
 
-    final wallet = await getOrCreateWallet(userId);
+    CoinWallet wallet;
+    if (_currentWallet != null && (_currentWallet!.userId == userId || userId.isEmpty)) {
+      wallet = _currentWallet!;
+    } else {
+      wallet = await getOrCreateWallet(userId);
+    }
+
     if (wallet.coins < entryFeeCoins) {
       return false;
     }
 
-    final newCoins = wallet.coins - entryFeeCoins;
+    final newCoins = (wallet.coins - entryFeeCoins).clamp(0, 9999999);
     final newEscrow = wallet.escrowCoins + entryFeeCoins;
     final now = DateTime.now();
 
@@ -328,6 +346,12 @@ class CoinWalletService extends ChangeNotifier {
     _currentWallet = updated;
     notifyListeners();
     _saveToLocal(updated);
+
+    // Update GamerAuthService notifier as well
+    final currentGamer = GamerAuthService().currentGamer;
+    if (currentGamer != null && (currentGamer.uid == userId || userId.isEmpty)) {
+      GamerAuthService().currentGamerNotifier.value = currentGamer.copyWith(coins: newCoins);
+    }
 
     try {
       await _walletsRef.doc(userId).set({
@@ -382,6 +406,11 @@ class CoinWalletService extends ChangeNotifier {
     _currentWallet = updated;
     notifyListeners();
     _saveToLocal(updated);
+
+    final currentGamer = GamerAuthService().currentGamer;
+    if (currentGamer != null && (currentGamer.uid == userId || userId.isEmpty)) {
+      GamerAuthService().currentGamerNotifier.value = currentGamer.copyWith(coins: newCoins);
+    }
 
     try {
       await _walletsRef.doc(userId).update({
@@ -620,6 +649,11 @@ class CoinWalletService extends ChangeNotifier {
           );
           await _saveToLocal(_currentWallet!);
           notifyListeners();
+        }
+
+        final currentGamer = GamerAuthService().currentGamer;
+        if (currentGamer != null && (currentGamer.uid == hostId || hostId.isEmpty)) {
+          GamerAuthService().currentGamerNotifier.value = currentGamer.copyWith(coins: newHostCoins);
         }
 
         await _recordTransaction(CoinTransaction(

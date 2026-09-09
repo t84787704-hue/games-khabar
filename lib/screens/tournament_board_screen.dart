@@ -72,51 +72,11 @@ class _TournamentBoardScreenState extends State<TournamentBoardScreen> with Sing
     _tournamentService.fetchRooms();
 
     final uid = _authService.currentGamer?.uid ?? _authService.currentUid ?? 'guest';
-    _walletService.getOrCreateWallet(uid).then((_) {
-      _checkAndSyncWinnerPrize();
-    });
-  }
-
-  void _checkAndSyncWinnerPrize() {
-    final currentGamer = _authService.currentGamer;
-    final currentUid = currentGamer?.uid ?? _authService.currentUid ?? '';
-    final currentName = currentGamer?.displayName?.toLowerCase() ?? '';
-    final currentUsername = currentGamer?.username.toLowerCase() ?? '';
-
-    for (final room in _tournamentService.rooms) {
-      if (room.isCompleted) {
-        final wUid = room.winnerUid ?? '';
-        final wName = room.winnerName?.toLowerCase() ?? '';
-
-        final isUserWinner = (currentUid.isNotEmpty && wUid.isNotEmpty && wUid == currentUid) ||
-            (currentName.isNotEmpty && wName.isNotEmpty && wName == currentName) ||
-            (currentUsername.isNotEmpty && wName.isNotEmpty && wName == currentUsername) ||
-            (wName == 'ii' && (currentName == 'ii' || currentUsername == 'ii' || currentUid.toLowerCase() == 'ii'));
-
-        if (isUserWinner) {
-          final prize = room.prizePoolCoins > 0 ? room.prizePoolCoins : (room.escrowCoins > 0 ? room.escrowCoins : 100);
-          final wallet = _walletService.currentWallet;
-          if (wallet != null && wallet.coins <= 1000) {
-            _walletService.awardWinnerPrize(
-              hostId: room.hostId,
-              winnerId: wUid.isNotEmpty ? wUid : (currentUid.isNotEmpty ? currentUid : 'II'),
-              prizePoolCoins: prize,
-              totalEntryFees: 0,
-              joiners: room.joinedPlayers,
-              entryFeeCoinsPerJoiner: room.entryFeeCoins,
-              roomId: room.id,
-              roomTitle: room.title,
-              winnerName: room.winnerName ?? 'II',
-            );
-          }
-        }
-      }
-    }
+    _walletService.getOrCreateWallet(uid);
   }
 
   void _onTournamentServiceChanged() {
     if (mounted) {
-      _checkAndSyncWinnerPrize();
       setState(() {});
     }
   }
@@ -941,10 +901,11 @@ class _TournamentBoardScreenState extends State<TournamentBoardScreen> with Sing
                         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                       ),
                       onPressed: () async {
-                        // Check wallet coins for prize pool escrow
-                        if (wallet.coins < prizePoolCoins) {
+                        // Check wallet coins for prize pool escrow using latest balance
+                        final currentCoins = _walletService.currentWallet?.coins ?? wallet.coins;
+                        if (currentCoins < prizePoolCoins) {
                           Navigator.pop(ctx);
-                          _showNotEnoughCoinsDialog(prizePoolCoins, wallet.coins);
+                          _showNotEnoughCoinsDialog(prizePoolCoins, currentCoins);
                           return;
                         }
 
@@ -984,7 +945,7 @@ class _TournamentBoardScreenState extends State<TournamentBoardScreen> with Sing
 
                         final published = await _tournamentService.publishRoom(room);
 
-                        // Hold host coins in escrow
+                        // Hold host coins in escrow (deducts from coins and adds to escrow)
                         await _walletService.holdRoomHostCoins(
                           userId: currentGamer.uid,
                           prizePoolCoins: prizePoolCoins,
