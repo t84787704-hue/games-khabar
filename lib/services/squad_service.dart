@@ -161,11 +161,9 @@ class SquadService {
     await repairBrokenSquads('00pqIF6batluO');
   }
 
-  /// Creates a permanent squad in Firestore:
-  /// 1. FIRST creates parent doc in 'squads' (and 'lfg_posts')
-  /// 2. AFTER that, creates the messages subcollection inside squads/{squadId}/messages
-  ///    and chats/{squadId}/messages
-  Future<String> createSquad({
+  bool isCreating = false;
+
+  Future<void> createSquad({
     String? squadId,
     SquadPost? post,
     String? title,
@@ -177,34 +175,52 @@ class SquadService {
     bool? micOn,
     String? language,
   }) async {
+    if (isCreating) return;
+    isCreating = true;
+
     try {
-      final authUser = FirebaseAuth.instance.currentUser;
-      final currentUid = authUser?.uid ?? (post != null && post.userId.isNotEmpty ? post.userId : (GamerAuthService().currentUid ?? ''));
-      final currentEmail = authUser?.email ?? (post != null ? post.ownerEmail : '');
+      final user = FirebaseAuth.instance.currentUser;
+      if (user == null) return;
 
-      final effectiveSquadId = squadId ?? (post != null && post.id.isNotEmpty ? post.id : _squadRef.doc().id);
-      final docRef = _squadRef.doc(effectiveSquadId);
+      // 1. Pehle check karo kahin pehle se to squad nahi hai
+      final existing = await FirebaseFirestore.instance
+          .collection('chats')
+          .where('hostId', isEqualTo: user.uid)
+          .where('isActive', isEqualTo: true)
+          .get();
 
-      final cleanMembers = [currentUid];
+      if (existing.docs.isNotEmpty) {
+        print("Squad pehle se hai");
+        isCreating = false;
+        return;
+      }
 
-      // 1. When user creates squad, first do:
-      final squadData = {
-        'squadId': effectiveSquadId,
-        'id': effectiveSquadId,
-        'postId': effectiveSquadId,
-        'hostId': currentUid,
-        'userId': currentUid,
-        'ownerId': currentUid,
-        'hostEmail': currentEmail,
-        'ownerEmail': currentEmail,
+      // 2. Ab PARENT document banao - Yahi tum miss kar rahe the
+      final docRef = (squadId != null && squadId.isNotEmpty)
+          ? FirebaseFirestore.instance.collection('chats').doc(squadId)
+          : FirebaseFirestore.instance.collection('chats').doc();
+
+      final String sId = docRef.id;
+      final cleanMembers = [user.uid];
+
+      final Map<String, dynamic> docData = {
+        'squadId': sId,
+        'chatId': sId,
+        'postId': sId,
+        'id': sId,
+        'hostId': user.uid,
+        'userId': user.uid,
+        'ownerId': user.uid,
+        'leaderUid': user.uid,
+        'hostEmail': user.email,
+        'ownerEmail': user.email,
         'createdAt': FieldValue.serverTimestamp(),
         'members': cleanMembers,
         'memberCount': 1,
         'membersCount': 1,
         'isActive': true,
-        // UI & Feed fields
-        'displayName': title ?? post?.displayName ?? "${post?.username ?? 'Gamer'}'s Squad",
         'title': title ?? post?.displayName ?? "${post?.username ?? 'Gamer'}'s Squad",
+        'displayName': title ?? post?.displayName ?? "${post?.username ?? 'Gamer'}'s Squad",
         'username': post?.username ?? 'gamer',
         'ownerTag': post?.username ?? 'gamer',
         'userAvatar': post?.userAvatar ?? '',
@@ -225,77 +241,46 @@ class SquadService {
         'bgmiUidToCopy': inGameUid ?? post?.inGameUid ?? '',
         'joinRequests': <String>[],
         'requestedCount': 0,
+        'lastMessage': 'Squad created!',
+        'lastMessageTime': FieldValue.serverTimestamp(),
         'updatedAt': FieldValue.serverTimestamp(),
       };
 
-      // 1. FIRST set parent document in 'squads'
-      await docRef.set(squadData);
+      await docRef.set(docData);
 
-      // Also persist to 'lfg_posts' and 'squad_posts' to keep all feed queries in sync
+      // Also mirror to squads and lfg_posts for feed compatibility
       try {
-        await _lfgPostsRef.doc(effectiveSquadId).set(squadData);
+        await FirebaseFirestore.instance.collection('squads').doc(sId).set(docData);
       } catch (_) {}
       try {
-        await _legacySquadRef.doc(effectiveSquadId).set(squadData);
+        await FirebaseFirestore.instance.collection('lfg_posts').doc(sId).set(docData);
       } catch (_) {}
 
-      // Create parent doc for 'chats' collection as well FIRST
-      final chatRef = _firestore.collection('chats').doc(effectiveSquadId);
-      try {
-        await chatRef.set({
-          'chatId': effectiveSquadId,
-          'postId': effectiveSquadId,
-          'squadId': effectiveSquadId,
-          'members': cleanMembers,
-          'leaderUid': currentUid,
-          'ownerId': currentUid,
-          'hostId': currentUid,
-          'title': squadData['displayName'],
-          'mode': squadData['mode'],
-          'inGameUid': squadData['inGameUid'],
-          'bgmiUidToCopy': squadData['inGameUid'],
-          'lastMessage': 'Squad created! Waiting for teammates...',
-          'lastMessageTime': FieldValue.serverTimestamp(),
-          'createdAt': FieldValue.serverTimestamp(),
-          'updatedAt': FieldValue.serverTimestamp(),
-          'isActive': true,
-        }, SetOptions(merge: true));
-      } catch (ce) {
-        debugPrint('[SquadService] Chat parent creation error: $ce');
-      }
+      // 3. Uske BAAD messages ka subcollection banao
+      await docRef.collection('messages').add({
+        'text': 'Squad created!',
+        'senderId': user.uid,
+        'senderUid': user.uid,
+        'timestamp': FieldValue.serverTimestamp(),
+        'createdAt': FieldValue.serverTimestamp(),
+      });
 
-      // 2. AFTER that, create messages subcollection:
       try {
-        await docRef.collection('messages').add({
-          'senderId': 'system',
-          'senderUid': 'system',
-          'senderName': 'System',
-          'text': 'Squad created! Welcome teammates.',
-          'type': 'system',
+        await FirebaseFirestore.instance
+            .collection('squads')
+            .doc(sId)
+            .collection('messages')
+            .add({
+          'text': 'Squad created!',
+          'senderId': user.uid,
+          'senderUid': user.uid,
+          'timestamp': FieldValue.serverTimestamp(),
           'createdAt': FieldValue.serverTimestamp(),
         });
-      } catch (me) {
-        debugPrint('[SquadService] Error adding initial message to squads/$effectiveSquadId/messages: $me');
-      }
+      } catch (_) {}
 
-      try {
-        await chatRef.collection('messages').add({
-          'senderId': 'system',
-          'senderUid': 'system',
-          'senderName': 'System',
-          'text': 'Squad created! Welcome teammates.',
-          'type': 'system',
-          'createdAt': FieldValue.serverTimestamp(),
-        });
-      } catch (me) {
-        debugPrint('[SquadService] Error adding initial message to chats/$effectiveSquadId/messages: $me');
-      }
-
-      debugPrint('[SquadService] Successfully created squad doc $effectiveSquadId and messages subcollection');
-      return effectiveSquadId;
-    } catch (e, st) {
-      debugPrint('[SquadService] Error creating squad: $e\n$st');
-      rethrow;
+    } finally {
+      isCreating = false;
     }
   }
 
