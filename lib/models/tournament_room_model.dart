@@ -27,6 +27,9 @@ class TournamentRoom {
   final int totalSlots;
   final String prizePool;
   final List<String> joinedPlayers; // List of userIds
+  final String platform; // 'Mobile', 'PC', 'Console', 'Cross-Platform'
+  final String serverRegion; // 'Asia / India', 'Middle East', 'Europe', etc.
+  final String rules; // Custom or standard rules
   final bool isLive;
   final bool isRoomRevealed; // reveal Room ID/Pass to joined players
   final DateTime? createdAt;
@@ -41,6 +44,9 @@ class TournamentRoom {
     this.roomType = 'TDM 1v1',
     required this.title,
     this.map = 'Erangel',
+    this.platform = 'Mobile',
+    this.serverRegion = 'Asia / India',
+    this.rules = 'Fair play only. No emulators or hacks allowed.',
     this.entryFee = 'FREE',
     this.prize = '💰 500 Coins Prize',
     this.prizePool = '',
@@ -76,28 +82,81 @@ class TournamentRoom {
         return '🪖';
       case 'PUBG Mobile':
         return '🪂';
+      case 'Garena Free Fire':
       case 'Free Fire':
         return '🔥';
+      case 'Free Fire Max':
       case 'Free Fire MAX':
         return '⚡';
       case 'COD Mobile':
         return '🎖️';
+      case 'COD Warzone':
+        return '🎯';
       case 'Valorant':
         return '⚔️';
-      case 'Ludo King':
-        return '🎲';
+      case 'Fortnite':
+        return '⛏️';
+      case 'Apex Legends':
+        return '🏹';
+      case 'Counter-Strike 2':
+      case 'CS2':
+        return '💣';
+      case 'Mobile Legends Bang Bang':
+      case 'MLBB':
+        return '🛡️';
+      case 'League of Legends':
+      case 'LoL':
+        return '🧙‍♂️';
+      case 'Clash Royale':
+        return '👑';
+      case 'Brawl Stars':
+        return '🥊';
+      case 'Minecraft':
+        return '🧱';
+      case 'Roblox':
+        return '🕹️';
+      case 'EA Sports FC 25':
+      case 'FC 25':
+        return '⚽';
       case '8 Ball Pool':
         return '🎱';
+      case 'Ludo King':
+        return '🎲';
+      case 'Among Us':
+        return '🚀';
       default:
         return '🎮';
     }
   }
 
   /// Whether this game uses invite link instead of Room ID + Password
-  bool get isLinkOnlyGame => gameType == 'Ludo King' || gameType == '8 Ball Pool';
+  bool get isLinkOnlyGame =>
+      gameType == 'Ludo King' ||
+      gameType == '8 Ball Pool' ||
+      gameType == 'Clash Royale' ||
+      gameType == 'Brawl Stars';
 
-  String get credentialLabel => isLinkOnlyGame ? 'INVITE LINK / CODE' : 'ROOM ID';
-  String get copyLabel => isLinkOnlyGame ? 'COPY LINK' : 'COPY ID';
+  /// Whether this game uses Lobby Code
+  bool get isLobbyCodeGame =>
+      gameType == 'Valorant' ||
+      gameType == 'Counter-Strike 2' ||
+      gameType == 'Fortnite' ||
+      gameType == 'Apex Legends' ||
+      gameType == 'League of Legends' ||
+      gameType == 'Among Us' ||
+      gameType == 'Roblox';
+
+  String get credentialLabel {
+    if (isLinkOnlyGame) return 'INVITE LINK / CODE';
+    if (isLobbyCodeGame) return 'LOBBY CODE';
+    return 'ROOM ID';
+  }
+
+  String get copyLabel {
+    if (isLinkOnlyGame) return 'COPY LINK';
+    if (isLobbyCodeGame) return 'COPY CODE';
+    return 'COPY ID';
+  }
   String get launchAppLabel {
     switch (gameType) {
       case 'BGMI':
@@ -161,7 +220,10 @@ class TournamentRoom {
       gameMode: gMode,
       roomType: data['roomType'] ?? gMode,
       title: data['title'] ?? '$gType Match',
-      map: data['map'] ?? 'Erangel',
+      map: data['map'] ?? 'Default',
+      platform: data['platform'] ?? 'Mobile',
+      serverRegion: data['serverRegion'] ?? 'Asia / India',
+      rules: data['rules'] ?? 'Fair play only. No emulators or hacks allowed.',
       entryFee: data['entryFee']?.toString().replaceAll('₹', '') ?? (feeCoins > 0 ? '$feeCoins Coins' : 'FREE'),
       prize: cleanPrize,
       prizePool: pPool,
@@ -196,6 +258,9 @@ class TournamentRoom {
       'roomType': roomType,
       'title': title.trim(),
       'map': map,
+      'platform': platform,
+      'serverRegion': serverRegion,
+      'rules': rules,
       'entryFee': entryFee.trim(),
       'prize': prize.trim(),
       'prizePool': prizePool.isNotEmpty ? prizePool : (prizePoolCoins > 0 ? '💰 $prizePoolCoins Coins' : prize),
@@ -231,6 +296,9 @@ class TournamentRoom {
       'roomType': roomType,
       'title': title.trim(),
       'map': map,
+      'platform': platform,
+      'serverRegion': serverRegion,
+      'rules': rules,
       'entryFee': entryFee.trim(),
       'prize': prize.trim(),
       'prizePool': prizePool.isNotEmpty ? prizePool : (prizePoolCoins > 0 ? '💰 $prizePoolCoins Coins' : prize),
@@ -287,7 +355,10 @@ class TournamentRoom {
       gameMode: gMode,
       roomType: json['roomType'] ?? gMode,
       title: json['title'] ?? 'Custom Tournament',
-      map: json['map'] ?? 'Erangel',
+      map: json['map'] ?? 'Default',
+      platform: json['platform'] ?? 'Mobile',
+      serverRegion: json['serverRegion'] ?? 'Asia / India',
+      rules: json['rules'] ?? 'Fair play only. No emulators or hacks allowed.',
       entryFee: json['entryFee']?.toString().replaceAll('₹', '') ?? (feeCoins > 0 ? '$feeCoins Coins' : 'FREE'),
       prize: cleanPrize,
       prizePool: pPool,
@@ -321,6 +392,9 @@ class TournamentRoom {
     String? roomType,
     String? title,
     String? map,
+    String? platform,
+    String? serverRegion,
+    String? rules,
     String? entryFee,
     String? prize,
     String? prizePool,
@@ -352,6 +426,9 @@ class TournamentRoom {
       roomType: roomType ?? this.roomType,
       title: title ?? this.title,
       map: map ?? this.map,
+      platform: platform ?? this.platform,
+      serverRegion: serverRegion ?? this.serverRegion,
+      rules: rules ?? this.rules,
       entryFee: entryFee ?? this.entryFee,
       prize: prize ?? this.prize,
       prizePool: prizePool ?? this.prizePool,

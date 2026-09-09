@@ -389,67 +389,6 @@ class _SquadChatScreenState extends State<SquadChatScreen> {
       return;
     }
 
-    // 2. Rate limit: 1 proof per 24 hours per user. Check last submission time.
-    DateTime? lastSubmissionTime;
-    final rawLastAt = userData['lastWinProofAt'];
-    if (rawLastAt is Timestamp) {
-      lastSubmissionTime = rawLastAt.toDate();
-    }
-    if (lastSubmissionTime == null) {
-      try {
-        final recentProof = await FirebaseFirestore.instance
-            .collection('win_proofs')
-            .where('submittedBy', isEqualTo: currentUid)
-            .orderBy('createdAt', descending: true)
-            .limit(1)
-            .get();
-        if (recentProof.docs.isNotEmpty) {
-          final t = recentProof.docs.first.data()['createdAt'];
-          if (t is Timestamp) lastSubmissionTime = t.toDate();
-        }
-      } catch (_) {}
-    }
-
-    if (lastSubmissionTime != null) {
-      final diff = DateTime.now().difference(lastSubmissionTime);
-      if (diff.inHours < 24) {
-        final hoursLeft = 23 - diff.inHours;
-        final minutesLeft = 59 - (diff.inMinutes % 60);
-        if (!mounted) return;
-        showDialog(
-          context: context,
-          builder: (ctx) => AlertDialog(
-            backgroundColor: GamerTheme.cardElevated,
-            shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(16),
-              side: BorderSide(color: const Color(0xFFFFD700).withOpacity(0.5)),
-            ),
-            title: const Row(
-              children: [
-                Icon(Icons.hourglass_top_rounded, color: Color(0xFFFFD700), size: 24),
-                SizedBox(width: 8),
-                Text(
-                  'Daily Rate Limit',
-                  style: TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.bold),
-                ),
-              ],
-            ),
-            content: Text(
-              'Aap 24 ghante mein sirf 1 win proof submit kar sakte hain.\n\nAgla submission $hoursLeft ghante $minutesLeft minute baad allow hoga.',
-              style: const TextStyle(color: GamerTheme.textMuted, fontSize: 13.5, height: 1.4),
-            ),
-            actions: [
-              TextButton(
-                onPressed: () => Navigator.pop(ctx),
-                child: const Text('Samajh Gaya', style: TextStyle(color: Color(0xFFFFD700))),
-              ),
-            ],
-          ),
-        );
-        return;
-      }
-    }
-
     if (!mounted) return;
 
     File? proofImage;
@@ -1827,12 +1766,6 @@ class _SquadChatScreenState extends State<SquadChatScreen> {
                   ),
                   child: Row(
                     children: [
-                      // Trophy icon button for submitting win proof
-                      IconButton(
-                        tooltip: 'Submit Win Proof',
-                        icon: const Icon(Icons.emoji_events_rounded, color: Color(0xFFFFD700), size: 24),
-                        onPressed: _openSubmitWinProofSheet,
-                      ),
                       Expanded(
                         child: Container(
                           decoration: BoxDecoration(
