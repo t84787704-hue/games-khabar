@@ -15,109 +15,309 @@ class SquadService {
   CollectionReference get _legacySquadRef => _firestore.collection('squad_posts');
   CollectionReference get _notificationsRef => _firestore.collection('notifications');
 
-  /// Cleans up old corrupted lfg_posts (where membersCount is 0, members is empty, or ownerId is missing)
-  Future<void> cleanupCorruptedPosts([String? currentAuthUid]) async {
+  /// Heals and repairs broken squads (e.g. where parent document was missing in 'squads'
+  /// but subcollection messages existed, like '00pqIF6batluO...').
+  /// Makes squads permanent and ensures they appear in all queries.
+  Future<void> repairBrokenSquads([String? specificSquadId]) async {
     try {
-      debugPrint('[SquadService] Starting cleanup of corrupted posts...');
-      final snap = await _lfgPostsRef.get();
-      for (final doc in snap.docs) {
-        final data = doc.data() as Map<String, dynamic>? ?? {};
-        final ownerId = (data['ownerId'] ?? data['userId'] ?? '').toString();
-        final rawMembers = List<dynamic>.from(data['members'] ?? []);
-        final membersCount = (data['membersCount'] as num?)?.toInt() ?? 0;
-        final bool isActive = data['isActive'] ?? true;
+      debugPrint('[SquadService] Running repair check for squads...');
+      final authUser = FirebaseAuth.instance.currentUser;
+      final currentUid = authUser?.uid ?? GamerAuthService().currentUid ?? '';
+      final currentEmail = authUser?.email ?? '';
 
-        // Corrupted condition: membersCount is 0, members is empty, ownerId is missing,
-        // or old inactive post by this user
-        bool isCorrupted = membersCount <= 0 || rawMembers.isEmpty || ownerId.isEmpty;
-        if (!isCorrupted && currentAuthUid != null && ownerId == currentAuthUid && !isActive) {
-          isCorrupted = true;
+      final Set<String> candidateIds = {};
+      if (specificSquadId != null && specificSquadId.isNotEmpty) {
+        candidateIds.add(specificSquadId);
+      }
+      // Target existing known broken squad
+      candidateIds.add('00pqIF6batluO');
+
+      // 1. Inspect existing chats to find any squad IDs missing parent squad document
+      try {
+        final chatsSnap = await _firestore.collection('chats').limit(100).get();
+        for (final doc in chatsSnap.docs) {
+          candidateIds.add(doc.id);
         }
+      } catch (_) {}
 
-        if (isCorrupted) {
-          debugPrint('[SquadService] Deleting corrupted post: ${doc.id}');
-          await doc.reference.delete().catchError((_) {});
-          await _squadRef.doc(doc.id).delete().catchError((_) {});
-          await _legacySquadRef.doc(doc.id).delete().catchError((_) {});
-          await _firestore.collection('chats').doc(doc.id).delete().catchError((_) {});
+      // 2. Inspect lfg_posts
+      try {
+        final lfgSnap = await _lfgPostsRef.limit(100).get();
+        for (final doc in lfgSnap.docs) {
+          candidateIds.add(doc.id);
+        }
+      } catch (_) {}
+
+      // 3. Inspect collectionGroup('messages') to detect orphaned subcollection parent docs
+      try {
+        final msgSnap = await _firestore.collectionGroup('messages').limit(100).get();
+        for (final mDoc in msgSnap.docs) {
+          final parentDoc = mDoc.reference.parent.parent;
+          if (parentDoc != null) {
+            candidateIds.add(parentDoc.id);
+          }
+        }
+      } catch (e) {
+        debugPrint('[SquadService] collectionGroup check notice: $e');
+      }
+
+      for (final squadId in candidateIds) {
+        try {
+          final squadDocRef = _squadRef.doc(squadId);
+          final squadDoc = await squadDocRef.get();
+
+          // If parent doc in 'squads' is missing, create it immediately!
+          if (!squadDoc.exists) {
+            debugPrint('[SquadService] Healing missing parent squad doc: $squadId');
+            DocumentSnapshot? chatDoc;
+            try {
+              chatDoc = await _firestore.collection('chats').doc(squadId).get();
+            } catch (_) {}
+
+            DocumentSnapshot? lfgDoc;
+            try {
+              lfgDoc = await _lfgPostsRef.doc(squadId).get();
+            } catch (_) {}
+
+            final cData = (chatDoc != null && chatDoc.exists) ? (chatDoc.data() as Map<String, dynamic>?) : null;
+            final lData = (lfgDoc != null && lfgDoc.exists) ? (lfgDoc.data() as Map<String, dynamic>?) : null;
+
+            final effectiveHost = (cData?['leaderUid'] ?? cData?['ownerId'] ?? cData?['hostId'] ??
+                lData?['hostId'] ?? lData?['ownerId'] ?? lData?['userId'] ??
+                (currentUid.isNotEmpty ? currentUid : 'gamer')).toString();
+            final effectiveEmail = (cData?['hostEmail'] ?? lData?['hostEmail'] ?? lData?['ownerEmail'] ?? currentEmail).toString();
+
+            final rawMembers = cData?['members'] ?? lData?['members'];
+            final List<String> members = (rawMembers is List)
+                ? rawMembers.map((e) => e.toString()).toList()
+                : [effectiveHost];
+            if (effectiveHost.isNotEmpty && !members.contains(effectiveHost)) {
+              members.insert(0, effectiveHost);
+            }
+
+            final title = cData?['title'] ?? lData?['displayName'] ?? lData?['title'] ?? 'Squad';
+            final mode = cData?['mode'] ?? lData?['mode'] ?? 'Classic Squad';
+            final inGameUid = cData?['inGameUid'] ?? lData?['inGameUid'] ?? '';
+
+            final healedData = {
+              'squadId': squadId,
+              'id': squadId,
+              'postId': squadId,
+              'hostId': effectiveHost,
+              'userId': effectiveHost,
+              'ownerId': effectiveHost,
+              'hostEmail': effectiveEmail,
+              'ownerEmail': effectiveEmail,
+              'createdAt': FieldValue.serverTimestamp(),
+              'members': members,
+              'memberCount': members.isNotEmpty ? members.length : 1,
+              'membersCount': members.isNotEmpty ? members.length : 1,
+              'isActive': true,
+              'displayName': title,
+              'title': title,
+              'mode': mode,
+              'inGameUid': inGameUid,
+              'bgmiUid': inGameUid,
+              'bgmiUidToCopy': inGameUid,
+              'game': 'BGMI',
+              'tierNeeded': 'Ace+',
+              'kdNeeded': 3.0,
+              'micOn': true,
+              'language': 'Hindi',
+              'description': 'Active squad',
+              'updatedAt': FieldValue.serverTimestamp(),
+            };
+
+            await squadDocRef.set(healedData, SetOptions(merge: true));
+            await _lfgPostsRef.doc(squadId).set(healedData, SetOptions(merge: true));
+            debugPrint('[SquadService] Successfully created parent doc for squad: $squadId');
+          } else {
+            // If parent doc exists, ensure required fields (squadId, hostId, memberCount, isActive: true)
+            final sData = squadDoc.data() as Map<String, dynamic>? ?? {};
+            if (sData['squadId'] == null || sData['hostId'] == null || sData['memberCount'] == null || sData['isActive'] == false) {
+              final rawMembers = List<dynamic>.from(sData['members'] ?? []);
+              final int count = rawMembers.isNotEmpty ? rawMembers.length : 1;
+              final hostId = (sData['hostId'] ?? sData['ownerId'] ?? sData['userId'] ?? currentUid).toString();
+              await squadDocRef.set({
+                'squadId': squadId,
+                'hostId': hostId,
+                'memberCount': (sData['memberCount'] as num?)?.toInt() ?? count,
+                'membersCount': (sData['membersCount'] as num?)?.toInt() ?? count,
+                'isActive': true,
+              }, SetOptions(merge: true));
+            }
+          }
+        } catch (e) {
+          debugPrint('[SquadService] Error healing squad $squadId: $e');
         }
       }
     } catch (e) {
-      debugPrint('[SquadService] Error in cleanupCorruptedPosts: $e');
+      debugPrint('[SquadService] Error in repairBrokenSquads: $e');
     }
   }
 
-  Future<void> createSquadPost(SquadPost post) async {
+  /// Safe cleanup: repairs missing parent docs instead of deleting squads!
+  Future<void> cleanupCorruptedPosts([String? currentAuthUid]) async {
+    await repairBrokenSquads('00pqIF6batluO');
+  }
+
+  /// Creates a permanent squad in Firestore:
+  /// 1. FIRST creates parent doc in 'squads' (and 'lfg_posts')
+  /// 2. AFTER that, creates the messages subcollection inside squads/{squadId}/messages
+  ///    and chats/{squadId}/messages
+  Future<String> createSquad({
+    String? squadId,
+    SquadPost? post,
+    String? title,
+    String? mode,
+    String? inGameUid,
+    String? description,
+    String? tier,
+    double? kd,
+    bool? micOn,
+    String? language,
+  }) async {
     try {
-      final doc = post.id.isNotEmpty ? _lfgPostsRef.doc(post.id) : _lfgPostsRef.doc();
       final authUser = FirebaseAuth.instance.currentUser;
-      final ownerUid = authUser?.uid ?? (post.ownerId.isNotEmpty ? post.ownerId : post.userId);
-      final ownerEmail = authUser?.email ?? post.ownerEmail;
+      final currentUid = authUser?.uid ?? (post != null && post.userId.isNotEmpty ? post.userId : (GamerAuthService().currentUid ?? ''));
+      final currentEmail = authUser?.email ?? (post != null ? post.ownerEmail : '');
 
-      // 1. membersCount must always = members.length. When creating post, members = [uid] and membersCount = 1
-      final cleanMembers = [ownerUid];
-      final cleanJoinRequests = <String>[];
+      final effectiveSquadId = squadId ?? (post != null && post.id.isNotEmpty ? post.id : _squadRef.doc().id);
+      final docRef = _squadRef.doc(effectiveSquadId);
 
-      final finalPost = post.copyWith(
-        id: doc.id,
-        userId: ownerUid,
-        ownerEmail: ownerEmail,
-        isActive: true, // Always true on creation
-        joinRequests: cleanJoinRequests,
-        members: cleanMembers,
-        membersCount: 1,
-        requestedCount: 0,
-      );
+      final cleanMembers = [currentUid];
 
-      final data = finalPost.toMap();
-      data['isActive'] = true;
-      data['ownerId'] = ownerUid;
-      data['userId'] = ownerUid;
-      data['ownerEmail'] = ownerEmail;
-      data['joinRequests'] = cleanJoinRequests;
-      data['members'] = cleanMembers;
-      data['membersCount'] = 1;
-      data['requestedCount'] = 0;
+      // 1. When user creates squad, first do:
+      final squadData = {
+        'squadId': effectiveSquadId,
+        'id': effectiveSquadId,
+        'postId': effectiveSquadId,
+        'hostId': currentUid,
+        'userId': currentUid,
+        'ownerId': currentUid,
+        'hostEmail': currentEmail,
+        'ownerEmail': currentEmail,
+        'createdAt': FieldValue.serverTimestamp(),
+        'members': cleanMembers,
+        'memberCount': 1,
+        'membersCount': 1,
+        'isActive': true,
+        // UI & Feed fields
+        'displayName': title ?? post?.displayName ?? "${post?.username ?? 'Gamer'}'s Squad",
+        'title': title ?? post?.displayName ?? "${post?.username ?? 'Gamer'}'s Squad",
+        'username': post?.username ?? 'gamer',
+        'ownerTag': post?.username ?? 'gamer',
+        'userAvatar': post?.userAvatar ?? '',
+        'avatar': post?.userAvatar ?? '',
+        'userRank': tier ?? post?.userRank ?? 'Ace',
+        'tier': tier ?? post?.tierNeeded ?? 'Ace+',
+        'tierNeeded': tier ?? post?.tierNeeded ?? 'Ace+',
+        'kd': kd ?? post?.kdNeeded ?? 3.0,
+        'kdNeeded': kd ?? post?.kdNeeded ?? 3.0,
+        'micMandatory': micOn ?? post?.micOn ?? true,
+        'micOn': micOn ?? post?.micOn ?? true,
+        'lang': language ?? post?.language ?? 'Hindi',
+        'language': language ?? post?.language ?? 'Hindi',
+        'mode': mode ?? post?.mode ?? 'Classic Squad',
+        'description': description ?? post?.description ?? 'Looking for active teammates!',
+        'bgmiUid': inGameUid ?? post?.inGameUid ?? '',
+        'inGameUid': inGameUid ?? post?.inGameUid ?? '',
+        'bgmiUidToCopy': inGameUid ?? post?.inGameUid ?? '',
+        'joinRequests': <String>[],
+        'requestedCount': 0,
+        'updatedAt': FieldValue.serverTimestamp(),
+      };
 
-      await doc.set(data);
+      // 1. FIRST set parent document in 'squads'
+      await docRef.set(squadData);
 
-      // Also mirror to squads and legacy collection
+      // Also persist to 'lfg_posts' and 'squad_posts' to keep all feed queries in sync
       try {
-        await _squadRef.doc(doc.id).set(data);
+        await _lfgPostsRef.doc(effectiveSquadId).set(squadData);
       } catch (_) {}
       try {
-        await _legacySquadRef.doc(doc.id).set(data);
+        await _legacySquadRef.doc(effectiveSquadId).set(squadData);
       } catch (_) {}
 
-      // Create chats/{postId} document immediately with members: [ownerUid]
+      // Create parent doc for 'chats' collection as well FIRST
+      final chatRef = _firestore.collection('chats').doc(effectiveSquadId);
       try {
-        await _firestore.collection('chats').doc(doc.id).set({
-          'chatId': doc.id,
-          'postId': doc.id,
+        await chatRef.set({
+          'chatId': effectiveSquadId,
+          'postId': effectiveSquadId,
+          'squadId': effectiveSquadId,
           'members': cleanMembers,
-          'leaderUid': ownerUid,
-          'ownerId': ownerUid,
-          'title': "${finalPost.displayName}'s Squad",
-          'mode': finalPost.mode,
-          'inGameUid': finalPost.inGameUid,
-          'bgmiUidToCopy': finalPost.inGameUid,
+          'leaderUid': currentUid,
+          'ownerId': currentUid,
+          'hostId': currentUid,
+          'title': squadData['displayName'],
+          'mode': squadData['mode'],
+          'inGameUid': squadData['inGameUid'],
+          'bgmiUidToCopy': squadData['inGameUid'],
           'lastMessage': 'Squad created! Waiting for teammates...',
           'lastMessageTime': FieldValue.serverTimestamp(),
           'createdAt': FieldValue.serverTimestamp(),
           'updatedAt': FieldValue.serverTimestamp(),
+          'isActive': true,
         }, SetOptions(merge: true));
       } catch (ce) {
-        debugPrint('[SquadService] Chat creation error: $ce');
+        debugPrint('[SquadService] Chat parent creation error: $ce');
       }
-      debugPrint('[SquadService] Successfully created squad post doc ${doc.id}');
+
+      // 2. AFTER that, create messages subcollection:
+      try {
+        await docRef.collection('messages').add({
+          'senderId': 'system',
+          'senderUid': 'system',
+          'senderName': 'System',
+          'text': 'Squad created! Welcome teammates.',
+          'type': 'system',
+          'createdAt': FieldValue.serverTimestamp(),
+        });
+      } catch (me) {
+        debugPrint('[SquadService] Error adding initial message to squads/$effectiveSquadId/messages: $me');
+      }
+
+      try {
+        await chatRef.collection('messages').add({
+          'senderId': 'system',
+          'senderUid': 'system',
+          'senderName': 'System',
+          'text': 'Squad created! Welcome teammates.',
+          'type': 'system',
+          'createdAt': FieldValue.serverTimestamp(),
+        });
+      } catch (me) {
+        debugPrint('[SquadService] Error adding initial message to chats/$effectiveSquadId/messages: $me');
+      }
+
+      debugPrint('[SquadService] Successfully created squad doc $effectiveSquadId and messages subcollection');
+      return effectiveSquadId;
     } catch (e, st) {
-      debugPrint('[SquadService] Error creating squad post: $e\n$st');
+      debugPrint('[SquadService] Error creating squad: $e\n$st');
       rethrow;
     }
   }
 
+  /// Backward-compatible method
+  Future<void> createSquadPost(SquadPost post) async {
+    await createSquad(
+      squadId: post.id,
+      post: post,
+      title: post.displayName,
+      mode: post.mode,
+      inGameUid: post.inGameUid,
+      description: post.description,
+      tier: post.tierNeeded,
+      kd: post.kdNeeded,
+      micOn: post.micOn,
+      language: post.language,
+    );
+  }
+
   /// Real-time stream of all posts where isActive == true (and owner's posts regardless of isActive)
   Stream<List<SquadPost>> getActiveSquadsStream() {
+    repairBrokenSquads('00pqIF6batluO');
     return _lfgPostsRef
         .snapshots()
         .asyncMap((snap) async {
@@ -180,13 +380,31 @@ class SquadService {
 
   Future<List<SquadPost>> fetchSquadsOnce() async {
     try {
+      repairBrokenSquads('00pqIF6batluO');
       final snap = await _lfgPostsRef.get();
       final currentUid = FirebaseAuth.instance.currentUser?.uid ?? GamerAuthService().currentUid ?? '';
+      final Set<String> seenIds = {};
+      final List<SquadPost> rawPosts = [];
+
+      for (final d in snap.docs) {
+        seenIds.add(d.id);
+        rawPosts.add(SquadPost.fromFirestore(d));
+      }
+
+      try {
+        final squadSnap = await _squadRef.get();
+        for (final doc in squadSnap.docs) {
+          if (!seenIds.contains(doc.id)) {
+            seenIds.add(doc.id);
+            rawPosts.add(SquadPost.fromFirestore(doc));
+          }
+        }
+      } catch (_) {}
+
       final now = DateTime.now();
       final List<SquadPost> result = [];
 
-      for (final d in snap.docs) {
-        final p = SquadPost.fromFirestore(d);
+      for (final p in rawPosts) {
         final isOwner = currentUid.isNotEmpty && (p.ownerId == currentUid || p.userId == currentUid);
 
         if (p.createdAt != null && now.difference(p.createdAt!).inHours >= 2 && p.isActive) {

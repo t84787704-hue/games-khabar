@@ -64,7 +64,7 @@ class SquadPost {
     }
     created ??= DateTime.now();
 
-    final ownerId = (data['ownerId'] ?? data['userId'] ?? '').toString();
+    final ownerId = (data['hostId'] ?? data['ownerId'] ?? data['userId'] ?? '').toString();
     final rawMembers = List<String>.from(data['members'] ?? []);
     // membersCount must always = members.length. Squad Members (0/4) bug means members was empty.
     // Fix: If members is empty, initialize with ownerId so membersCount is at least 1.
@@ -72,13 +72,16 @@ class SquadPost {
         ? rawMembers
         : (ownerId.isNotEmpty ? [ownerId] : <String>[]);
     final joinReqList = List<String>.from(data['joinRequests'] ?? []);
+    final int count = (data['memberCount'] as num?)?.toInt() ?? 
+        (data['membersCount'] as num?)?.toInt() ?? 
+        membersList.length;
 
     return SquadPost(
-      id: data['postId'] ?? data['id'] ?? doc.id,
+      id: data['squadId'] ?? data['postId'] ?? data['id'] ?? doc.id,
       userId: ownerId,
-      ownerEmail: data['ownerEmail'] ?? '',
+      ownerEmail: data['hostEmail'] ?? data['ownerEmail'] ?? '',
       username: data['ownerTag'] ?? data['tag'] ?? data['username'] ?? 'gamer',
-      displayName: data['ownerBgmiName'] ?? data['bgmiName'] ?? data['displayName'] ?? 'Squad Leader',
+      displayName: data['ownerBgmiName'] ?? data['bgmiName'] ?? data['displayName'] ?? (data['title'] ?? 'Squad Leader'),
       userAvatar: data['userAvatar'] ?? data['avatar'] ?? '',
       userRank: data['tier'] ?? data['userRank'] ?? 'Ace',
       game: data['game'] ?? 'BGMI',
@@ -88,10 +91,10 @@ class SquadPost {
       language: data['lang'] ?? data['language'] ?? 'Hindi',
       mode: data['mode'] ?? 'Classic Squad',
       description: data['description'] ?? '',
-      inGameUid: data['bgmiUidToCopy'] ?? data['bgmiUid'] ?? data['inGameUid'] ?? '',
+      inGameUid: data['bgmiUidToCopy'] ?? data['bgmiUid'] ?? data['inGameUid'] ?? data['gameId'] ?? '',
       joinRequests: joinReqList,
       members: membersList,
-      membersCount: membersList.length,
+      membersCount: count > 0 ? count : (membersList.isNotEmpty ? membersList.length : 1),
       requestedCount: joinReqList.length,
       isActive: data['isActive'] ?? true,
       createdAt: created,
@@ -101,8 +104,11 @@ class SquadPost {
   Map<String, dynamic> toMap() {
     final actualMembers = members.isNotEmpty ? members : (userId.isNotEmpty ? [userId] : <String>[]);
     return {
+      'squadId': id,
       'postId': id,
       'id': id,
+      'hostId': userId,
+      'hostEmail': ownerEmail,
       'ownerId': userId,
       'userId': userId,
       'ownerEmail': ownerEmail,
@@ -128,6 +134,7 @@ class SquadPost {
       'description': description.trim(),
       'joinRequests': joinRequests,
       'members': actualMembers,
+      'memberCount': actualMembers.length,
       'membersCount': actualMembers.length,
       'requestedCount': joinRequests.length,
       'isActive': isActive,

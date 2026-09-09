@@ -42,58 +42,107 @@ class _SquadChatScreenState extends State<SquadChatScreen> {
     _ensureChatDocExists();
   }
 
-  /// Auto-create chats/{postId} document with members: [all squad member uids] if it doesn't exist
+  /// Auto-creates both squads/{postId} and chats/{postId} parent documents if missing
   Future<void> _ensureChatDocExists() async {
     try {
+      final squadRef = FirebaseFirestore.instance.collection('squads').doc(widget.postId);
+      final squadDoc = await squadRef.get();
       final chatRef = FirebaseFirestore.instance.collection('chats').doc(widget.postId);
       final chatDoc = await chatRef.get();
-      if (!chatDoc.exists || (chatDoc.data()?['members'] == null)) {
-        DocumentSnapshot postDoc = await FirebaseFirestore.instance.collection('lfg_posts').doc(widget.postId).get();
-        if (!postDoc.exists) {
-          postDoc = await FirebaseFirestore.instance.collection('squads').doc(widget.postId).get();
+
+      DocumentSnapshot postDoc = await FirebaseFirestore.instance.collection('lfg_posts').doc(widget.postId).get();
+      if (!postDoc.exists) {
+        postDoc = squadDoc;
+      }
+
+      final currentUid = FirebaseAuth.instance.currentUser?.uid ?? GamerAuthService().currentUid ?? '';
+      final currentEmail = FirebaseAuth.instance.currentUser?.email ?? '';
+
+      List<String> members = [];
+      String title = 'Squad Chat';
+      String mode = 'Classic Squad';
+      String inGameUid = '';
+      String leaderUid = '';
+
+      if (postDoc.exists) {
+        final data = postDoc.data() as Map<String, dynamic>? ?? {};
+        leaderUid = (data['hostId'] ?? data['ownerId'] ?? data['userId'] ?? '').toString();
+        final rawMembers = List<dynamic>.from(data['members'] ?? []);
+        members = rawMembers.map((e) => e.toString()).toList();
+        if (leaderUid.isNotEmpty && !members.contains(leaderUid)) {
+          members.insert(0, leaderUid);
         }
-
-        List<String> members = [];
-        String title = 'Squad Chat';
-        String mode = 'Classic Squad';
-        String inGameUid = '';
-        String leaderUid = '';
-
-        if (postDoc.exists) {
-          final data = postDoc.data() as Map<String, dynamic>? ?? {};
-          leaderUid = (data['ownerId'] ?? data['userId'] ?? '').toString();
-          final rawMembers = List<dynamic>.from(data['members'] ?? []);
-          members = rawMembers.map((e) => e.toString()).toList();
-          if (leaderUid.isNotEmpty && !members.contains(leaderUid)) {
-            members.insert(0, leaderUid);
-          }
-          title = data['ownerBgmiName'] ?? data['displayName'] ?? 'Squad Chat';
-          mode = data['mode'] ?? 'Classic Squad';
-          inGameUid = data['bgmiUid'] ?? data['inGameUid'] ?? data['gameId'] ?? '';
-        } else if (widget.squad != null) {
-          members = List<String>.from(widget.squad!.members);
-          leaderUid = widget.squad!.ownerId.isNotEmpty ? widget.squad!.ownerId : widget.squad!.userId;
-          if (leaderUid.isNotEmpty && !members.contains(leaderUid)) {
-            members.insert(0, leaderUid);
-          }
-          title = widget.squad!.displayName.isNotEmpty ? "${widget.squad!.displayName}'s Squad" : 'Squad Chat';
-          mode = widget.squad!.mode;
-          inGameUid = widget.squad!.inGameUid;
+        title = data['ownerBgmiName'] ?? data['displayName'] ?? data['title'] ?? 'Squad Chat';
+        mode = data['mode'] ?? 'Classic Squad';
+        inGameUid = data['bgmiUid'] ?? data['inGameUid'] ?? data['gameId'] ?? '';
+      } else if (widget.squad != null) {
+        members = List<String>.from(widget.squad!.members);
+        leaderUid = widget.squad!.ownerId.isNotEmpty ? widget.squad!.ownerId : widget.squad!.userId;
+        if (leaderUid.isNotEmpty && !members.contains(leaderUid)) {
+          members.insert(0, leaderUid);
         }
+        title = widget.squad!.displayName.isNotEmpty ? "${widget.squad!.displayName}'s Squad" : 'Squad Chat';
+        mode = widget.squad!.mode;
+        inGameUid = widget.squad!.inGameUid;
+      }
 
-        await chatRef.set({
+      if (leaderUid.isEmpty) {
+        leaderUid = currentUid.isNotEmpty ? currentUid : 'gamer';
+      }
+      if (members.isEmpty && leaderUid.isNotEmpty) {
+        members.add(leaderUid);
+      }
+
+      // 1. Ensure parent document in 'squads' collection exists
+      if (!squadDoc.exists) {
+        final squadData = {
+          'squadId': widget.postId,
+          'id': widget.postId,
           'postId': widget.postId,
+          'hostId': leaderUid,
+          'userId': leaderUid,
+          'ownerId': leaderUid,
+          'hostEmail': currentEmail,
+          'ownerEmail': currentEmail,
+          'createdAt': FieldValue.serverTimestamp(),
           'members': members,
-          'leaderUid': leaderUid,
+          'memberCount': members.isNotEmpty ? members.length : 1,
+          'membersCount': members.isNotEmpty ? members.length : 1,
+          'isActive': true,
+          'displayName': title,
           'title': title,
           'mode': mode,
           'inGameUid': inGameUid,
+          'bgmiUid': inGameUid,
+          'bgmiUidToCopy': inGameUid,
+          'game': 'BGMI',
+          'updatedAt': FieldValue.serverTimestamp(),
+        };
+        await squadRef.set(squadData, SetOptions(merge: true));
+        await FirebaseFirestore.instance.collection('lfg_posts').doc(widget.postId).set(squadData, SetOptions(merge: true));
+      }
+
+      // 2. Ensure parent document in 'chats' collection exists
+      if (!chatDoc.exists || (chatDoc.data()?['members'] == null)) {
+        await chatRef.set({
+          'chatId': widget.postId,
+          'postId': widget.postId,
+          'squadId': widget.postId,
+          'members': members,
+          'leaderUid': leaderUid,
+          'ownerId': leaderUid,
+          'hostId': leaderUid,
+          'title': title,
+          'mode': mode,
+          'inGameUid': inGameUid,
+          'bgmiUidToCopy': inGameUid,
           'createdAt': FieldValue.serverTimestamp(),
           'updatedAt': FieldValue.serverTimestamp(),
+          'isActive': true,
         }, SetOptions(merge: true));
       }
     } catch (e) {
-      debugPrint('[SquadChatScreen] Error ensuring chat doc: $e');
+      debugPrint('[SquadChatScreen] Error ensuring squad and chat docs: $e');
     }
   }
 
@@ -325,7 +374,7 @@ class _SquadChatScreenState extends State<SquadChatScreen> {
           backgroundColor: GamerTheme.cardElevated,
           shape: RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(16),
-            border: Border.all(color: GamerTheme.redAccent.withOpacity(0.5)),
+            side: BorderSide(color: GamerTheme.redAccent.withOpacity(0.5)),
           ),
           title: const Row(
             children: [
@@ -385,7 +434,7 @@ class _SquadChatScreenState extends State<SquadChatScreen> {
             backgroundColor: GamerTheme.cardElevated,
             shape: RoundedRectangleBorder(
               borderRadius: BorderRadius.circular(16),
-              border: Border.all(color: const Color(0xFFFFD700).withOpacity(0.5)),
+              side: BorderSide(color: const Color(0xFFFFD700).withOpacity(0.5)),
             ),
             title: const Row(
               children: [
@@ -803,7 +852,7 @@ class _SquadChatScreenState extends State<SquadChatScreen> {
         backgroundColor: GamerTheme.cardElevated,
         shape: RoundedRectangleBorder(
           borderRadius: BorderRadius.circular(18),
-          border: Border.all(color: GamerTheme.redAccent.withOpacity(0.5)),
+          side: BorderSide(color: GamerTheme.redAccent.withOpacity(0.5)),
         ),
         title: const Row(
           children: [
@@ -884,6 +933,158 @@ class _SquadChatScreenState extends State<SquadChatScreen> {
           SnackBar(
             content: Text('Action failed: $e'),
             backgroundColor: Colors.redAccent,
+          ),
+        );
+      }
+    }
+  }
+
+  /// Handles "Reward 100 Coins" on win_proof message card (Host only)
+  Future<void> _handleReward100Coins({
+    required BuildContext context,
+    required String messageDocId,
+    required String hostId,
+    required String winnerId,
+    required String winnerTag,
+    required String squadId,
+  }) async {
+    final cleanTag = winnerTag.trim().startsWith('@')
+        ? winnerTag.trim().substring(1)
+        : winnerTag.trim();
+
+    // Show confirm dialog "100 Coins dena hai @fua ko?"
+    final confirm = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: GamerTheme.cardElevated,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(18),
+          side: BorderSide(color: const Color(0xFFFFD700).withOpacity(0.5)),
+        ),
+        title: const Row(
+          children: [
+            Text('🪙', style: TextStyle(fontSize: 22)),
+            SizedBox(width: 8),
+            Text(
+              'Reward Winner',
+              style: TextStyle(color: GamerTheme.textWhite, fontWeight: FontWeight.bold, fontSize: 17),
+            ),
+          ],
+        ),
+        content: Text(
+          '100 Coins dena hai @$cleanTag ko?',
+          style: const TextStyle(color: GamerTheme.textWhite, fontSize: 14.5, height: 1.4),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('Cancel', style: TextStyle(color: GamerTheme.textMuted)),
+          ),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(
+              backgroundColor: const Color(0xFFFFD700),
+              foregroundColor: Colors.black,
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+            ),
+            onPressed: () => Navigator.pop(ctx, true),
+            child: const Text('HAAN, REWARD', style: TextStyle(fontWeight: FontWeight.w900)),
+          ),
+        ],
+      ),
+    );
+
+    if (confirm != true) return;
+
+    final firestore = FirebaseFirestore.instance;
+    final hostRef = firestore.collection('users').doc(hostId);
+    final winnerRef = firestore.collection('users').doc(winnerId);
+    final messageRef = firestore
+        .collection('chats')
+        .doc(squadId)
+        .collection('messages')
+        .doc(messageDocId);
+
+    try {
+      // Run Firestore transaction to deduct coins from host and add 100 to winner via FieldValue.increment
+      await firestore.runTransaction((transaction) async {
+        final hostDoc = await transaction.get(hostRef);
+        final hostData = hostDoc.data() ?? {};
+        final int hostCoins = (hostData['coins'] as num?)?.toInt() ?? 100;
+
+        if (hostCoins < 100) {
+          throw 'Not enough coins';
+        }
+
+        // Deduct 100 from host, increment 100 for winner using FieldValue.increment
+        transaction.update(hostRef, {
+          'coins': FieldValue.increment(-100),
+          'updatedAt': FieldValue.serverTimestamp(),
+        });
+
+        transaction.update(winnerRef, {
+          'coins': FieldValue.increment(100),
+          'updatedAt': FieldValue.serverTimestamp(),
+        });
+
+        // Create doc in 'coin_transactions' collection
+        final txRef = firestore.collection('coin_transactions').doc();
+        transaction.set(txRef, {
+          'from': hostId,
+          'to': winnerId,
+          'amount': 100,
+          'squadId': squadId,
+          'type': 'win_reward',
+          'timestamp': FieldValue.serverTimestamp(),
+        });
+
+        // Update win_proof message status to 'rewarded'
+        transaction.update(messageRef, {
+          'status': 'rewarded',
+          'rewardedAt': FieldValue.serverTimestamp(),
+          'rewardedBy': hostId,
+        });
+
+        // Also update win_proofs collection
+        final winProofRef = firestore.collection('win_proofs').doc(messageDocId);
+        transaction.set(winProofRef, {
+          'status': 'rewarded',
+          'rewardedAt': FieldValue.serverTimestamp(),
+          'rewardedBy': hostId,
+        }, SetOptions(merge: true));
+      });
+
+      // Send chat system message: "Host rewarded 100 coins to @fua"
+      await firestore
+          .collection('chats')
+          .doc(squadId)
+          .collection('messages')
+          .add({
+        'senderId': 'system',
+        'senderUid': 'system',
+        'senderName': 'System',
+        'text': 'Host rewarded 100 coins to @$cleanTag 🏆',
+        'type': 'system',
+        'createdAt': FieldValue.serverTimestamp(),
+      });
+
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('🎉 Successfully rewarded 100 coins to @$cleanTag!'),
+            backgroundColor: GamerTheme.neonGreen,
+            duration: const Duration(seconds: 3),
+          ),
+        );
+      }
+    } catch (e) {
+      debugPrint('[RewardCoins] Error: $e');
+      if (context.mounted) {
+        final isInsufficient = e.toString().contains('Not enough coins');
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(isInsufficient ? 'Not enough coins' : 'Transaction failed: $e'),
+            backgroundColor: Colors.redAccent,
+            duration: const Duration(seconds: 3),
           ),
         );
       }

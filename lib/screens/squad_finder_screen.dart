@@ -35,8 +35,7 @@ class _SquadFinderScreenState extends State<SquadFinderScreen> {
   @override
   void initState() {
     super.initState();
-    final currentUid = FirebaseAuth.instance.currentUser?.uid;
-    _squadService.cleanupCorruptedPosts(currentUid);
+    _squadService.repairBrokenSquads('00pqIF6batluO');
   }
 
   List<SquadPost> _combineSquads(List<SquadPost> streamSquads) {
@@ -307,12 +306,12 @@ class _SquadFinderScreenState extends State<SquadFinderScreen> {
                       }
 
                       Navigator.pop(ctx);
-                      final docId = FirebaseFirestore.instance.collection('lfg_posts').doc().id;
+                      final docId = FirebaseFirestore.instance.collection('squads').doc().id;
                       final String uid = authUser.uid;
                       final String email = authUser.email ?? '';
 
-                      // 4. Cleanup: Before creating new squad, delete old corrupted lfg_posts where membersCount is 0 or ownerId!= auth uid
-                      await _squadService.cleanupCorruptedPosts(uid);
+                      // 4. Heal any broken squads in background
+                      await _squadService.repairBrokenSquads('00pqIF6batluO');
 
                       final String bgmiName = currentGamer.displayName.isNotEmpty
                           ? currentGamer.displayName
@@ -356,10 +355,10 @@ class _SquadFinderScreenState extends State<SquadFinderScreen> {
 
                       // Write to Firestore
                       try {
-                        await _squadService.createSquadPost(post);
-                        debugPrint('[SquadFinderScreen] Created LFG post doc in Firestore: $docId');
+                        await _squadService.createSquad(squadId: docId, post: post);
+                        debugPrint('[SquadFinderScreen] Created squad doc in Firestore: $docId');
                       } catch (e) {
-                        debugPrint('[SquadFinderScreen] Error saving squad post to Firestore: $e');
+                        debugPrint('[SquadFinderScreen] Error saving squad to Firestore: $e');
                       }
 
                       if (mounted) {
