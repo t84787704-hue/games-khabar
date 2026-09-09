@@ -19,6 +19,9 @@ class _SquadFinderScreenState extends State<SquadFinderScreen> {
   final SquadService _squadService = SquadService();
   final GamerAuthService _authService = GamerAuthService();
 
+  // Guard to prevent duplicate rapid posting
+  bool _isPosting = false;
+
   // Local list to immediately display created posts without waiting for Firestore stream
   final List<SquadPost> _localSquads = [];
 
@@ -35,7 +38,7 @@ class _SquadFinderScreenState extends State<SquadFinderScreen> {
   @override
   void initState() {
     super.initState();
-    _squadService.repairBrokenSquads('00pqIF6batluO');
+    // Removed auto-create / auto-repair logic from initState
   }
 
   List<SquadPost> _combineSquads(List<SquadPost> streamSquads) {
@@ -58,7 +61,15 @@ class _SquadFinderScreenState extends State<SquadFinderScreen> {
     return combined;
   }
 
-  void _openCreateSquadSheet() {
+  Future<void> _openCreateSquadSheet() async {
+    final authUser = FirebaseAuth.instance.currentUser;
+    if (authUser == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Please log in to post squad requests!')),
+      );
+      return;
+    }
+
     final currentGamer = _authService.currentGamer;
     if (currentGamer == null) {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -66,6 +77,27 @@ class _SquadFinderScreenState extends State<SquadFinderScreen> {
       );
       return;
     }
+
+    // Check if user already has an active squad in lfg_posts
+    try {
+      final docRef = FirebaseFirestore.instance.collection('lfg_posts').doc(authUser.uid);
+      final existing = await docRef.get();
+      if (existing.exists && existing.data()?['isActive'] == true) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('Aapka active squad pehle se hai!'),
+              backgroundColor: GamerTheme.accentOrange,
+            ),
+          );
+        }
+        return;
+      }
+    } catch (e) {
+      debugPrint('[SquadFinderScreen] Pre-check error: $e');
+    }
+
+    if (!mounted) return;
 
     String selectedMode = 'Rank Push';
     String selectedTier = 'Ace+';
@@ -289,8 +321,12 @@ class _SquadFinderScreenState extends State<SquadFinderScreen> {
                       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                     ),
                     onPressed: () async {
-                      final authUser = FirebaseAuth.instance.currentUser;
-                      if (authUser == null) {
+                      if (_isPosting) return;
+                      _isPosting = true;
+
+                      final currentUser = FirebaseAuth.instance.currentUser;
+                      if (currentUser == null) {
+                        _isPosting = false;
                         ScaffoldMessenger.of(context).showSnackBar(
                           const SnackBar(content: Text('Please log in to post squad requests!')),
                         );
@@ -299,32 +335,129 @@ class _SquadFinderScreenState extends State<SquadFinderScreen> {
 
                       final bgmiUid = uidController.text.trim();
                       if (bgmiUid.isEmpty) {
+                        _isPosting = false;
                         ScaffoldMessenger.of(context).showSnackBar(
                           const SnackBar(content: Text('Please enter your BGMI UID!')),
                         );
                         return;
                       }
 
-                      Navigator.pop(ctx);
-                      final docId = FirebaseFirestore.instance.collection('squads').doc().id;
-                      final String uid = authUser.uid;
-                      final String email = authUser.email ?? '';
+                      final docRef = FirebaseFirestore.instance.collection('lfg_posts').doc(currentUser.uid);
+                      final existing = await docRef.get();
+                      if (existing.exists && existing.data()?['isActive'] == true) {
+                        // Already has active squad, don't create new
+                        _isPosting = false;
+                        if (ctx.mounted) Navigator.pop(ctx);
+                        if (mounted) {
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            const SnackBar(
+                              content: Text('Aapka active squad pehle se hai!'),
+                              backgroundColor: GamerTheme.accentOrange,
+                            ),
+                          );
+                        }
+                        return;
+                      }
 
-                      // 4. Heal any broken squads in background
-                      await _squadService.repairBrokenSquads('00pqIF6batluO');
+                      Navigator.pop(ctx);
+                      final String uid = currentUser.uid;
+                      final String email = currentUser.email ?? '';
 
                       final String bgmiName = currentGamer.displayName.isNotEmpty
                           ? currentGamer.displayName
-                          : (authUser.displayName ?? 'Squad Leader');
+                          : (currentUser.displayName ?? 'Squad Leader');
                       final String tag = currentGamer.username.isNotEmpty
                           ? currentGamer.username
                           : 'gamer';
                       final String avatar = currentGamer.photoUrl.isNotEmpty
                           ? currentGamer.photoUrl
-                          : (authUser.photoURL ?? '');
+                          : (currentUser.photoURL ?? '');
+
+                      final postData = {
+                        'id': uid,
+                        'postId': uid,
+                        'squadId': uid,
+                        'leaderUid': uid,
+                        'hostId': uid,
+                        'userId': uid,
+                        'ownerId': uid,
+                        'ownerEmail': email,
+                        'hostEmail': email,
+                        'username': tag,
+                        'ownerTag': tag,
+                        'displayName': bgmiName,
+                        'title': bgmiName,
+                        'userAvatar': avatar,
+                        'avatar': avatar,
+                        'userRank': selectedTier,
+                        'tier': selectedTier,
+                        'tierNeeded': selectedTier,
+                        'kd': selectedKd,
+                        'kdNeeded': selectedKd,
+                        'micMandatory': isMicOn,
+                        'micOn': isMicOn,
+                        'lang': selectedLang,
+                        'language': selectedLang,
+                        'mode': selectedMode,
+                        'description': descController.text.trim(),
+                        'bgmiUid': bgmiUid,
+                        'inGameUid': bgmiUid,
+                        'bgmiUidToCopy': bgmiUid,
+                        'game': 'BGMI',
+                        'isActive': true,
+                        'members': [uid],
+                        'memberCount': 1,
+                        'membersCount': 1,
+                        'requestedCount': 0,
+                        'joinRequests': <String>[],
+                        'createdAt': FieldValue.serverTimestamp(),
+                        'updatedAt': FieldValue.serverTimestamp(),
+                      };
+
+                      try {
+                        // 1. In lfg_posts creation, STOP using .add() with random ID. Use user UID as document ID:
+                        // collection('lfg_posts').doc(currentUser.uid).set({...})
+                        await docRef.set(postData);
+
+                        // Also sync to squads and chats with same uid
+                        try {
+                          await FirebaseFirestore.instance.collection('squads').doc(uid).set(postData);
+                        } catch (_) {}
+
+                        try {
+                          final chatRef = FirebaseFirestore.instance.collection('chats').doc(uid);
+                          await chatRef.set({
+                            'squadId': uid,
+                            'chatId': uid,
+                            'postId': uid,
+                            'hostId': uid,
+                            'leaderUid': uid,
+                            'hostEmail': email,
+                            'createdAt': FieldValue.serverTimestamp(),
+                            'members': [uid],
+                            'isActive': true,
+                            'title': bgmiName,
+                            'displayName': bgmiName,
+                          }, SetOptions(merge: true));
+
+                          await chatRef.collection('messages').add({
+                            'text': 'Squad created!',
+                            'senderId': uid,
+                            'senderUid': uid,
+                            'timestamp': FieldValue.serverTimestamp(),
+                            'createdAt': FieldValue.serverTimestamp(),
+                          });
+                        } catch (_) {}
+
+                        debugPrint('[SquadFinderScreen] Posted squad using user UID doc: $uid');
+                      } catch (e) {
+                        debugPrint('[SquadFinderScreen] Error saving squad to Firestore: $e');
+                      } finally {
+                        _isPosting = false;
+                      }
 
                       final post = SquadPost(
-                        id: docId,
+                        id: uid,
                         userId: uid,
                         ownerEmail: email,
                         username: tag,
@@ -347,19 +480,11 @@ class _SquadFinderScreenState extends State<SquadFinderScreen> {
                         createdAt: DateTime.now(),
                       );
 
-                      // 1. Immediately add it to local list and call setState, don't wait for stream
+                      // Update local list
                       setState(() {
-                        _localSquads.removeWhere((p) => p.id == docId);
+                        _localSquads.removeWhere((p) => p.id == uid);
                         _localSquads.insert(0, post);
                       });
-
-                      // Write to Firestore
-                      try {
-                        await _squadService.createSquad(squadId: docId, post: post);
-                        debugPrint('[SquadFinderScreen] Created squad doc in Firestore: $docId');
-                      } catch (e) {
-                        debugPrint('[SquadFinderScreen] Error saving squad to Firestore: $e');
-                      }
 
                       if (mounted) {
                         ScaffoldMessenger.of(context).showSnackBar(
