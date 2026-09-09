@@ -446,6 +446,8 @@ class TournamentService extends ChangeNotifier {
     required String screenshotUrl,
     required String ocrText,
     required bool isVictory,
+    List<String>? detectedWinnerUids,
+    List<String>? detectedWinnerNames,
   }) async {
     try {
       final submission = {
@@ -454,6 +456,8 @@ class TournamentService extends ChangeNotifier {
         'ocrText': ocrText,
         'isVictory': isVictory,
         'playerName': playerName,
+        if (detectedWinnerUids != null) 'detectedWinnerUids': detectedWinnerUids,
+        if (detectedWinnerNames != null) 'detectedWinnerNames': detectedWinnerNames,
       };
 
       final index = _rooms.indexWhere((r) => r.id == roomId);

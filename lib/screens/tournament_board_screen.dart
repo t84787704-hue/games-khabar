@@ -1561,6 +1561,8 @@ class _TournamentBoardScreenState extends State<TournamentBoardScreen> with Sing
     final result = await _ocrService.processResultScreenshot(
       roomId: room.id,
       userId: currentUid,
+      userName: playerName,
+      room: room,
       candidateNames: candidateNames,
     );
 
@@ -1573,7 +1575,7 @@ class _TournamentBoardScreenState extends State<TournamentBoardScreen> with Sing
       return;
     }
 
-    // Submit to room
+    // Submit to room with detected winners
     await _tournamentService.submitResultScreenshot(
       roomId: room.id,
       playerUid: currentUid,
@@ -1581,7 +1583,119 @@ class _TournamentBoardScreenState extends State<TournamentBoardScreen> with Sing
       screenshotUrl: result.imageUrl,
       ocrText: result.recognizedText,
       isVictory: result.isVictory,
+      detectedWinnerUids: result.detectedWinnerUids,
+      detectedWinnerNames: result.detectedWinnerNames,
     );
+
+    // AUTOMATED WINNER REWARD DISTRIBUTION:
+    // If OCR detects victory, automatically divide escrow prize among all winning team members without host intervention
+    if (result.isVictory) {
+      final winnerUids = result.detectedWinnerUids.isNotEmpty ? result.detectedWinnerUids : [currentUid];
+      final winnerNames = result.detectedWinnerNames.isNotEmpty ? result.detectedWinnerNames : [playerName];
+      final totalPrize = room.escrowCoins > 0 ? room.escrowCoins : room.prizePoolCoins;
+      final sharePerMember = (totalPrize / winnerUids.length).floor();
+
+      // Trigger automatic payout directly from escrow
+      final autoDistributed = await _tournamentService.finishMatchWithWinner(
+        roomId: room.id,
+        winnerUids: winnerUids,
+        winnerNames: winnerNames,
+      );
+
+      if (!mounted) return;
+      setState(() {});
+
+      showDialog(
+        context: context,
+        barrierColor: Colors.black.withOpacity(0.75),
+        builder: (ctx) => BackdropFilter(
+          filter: ImageFilter.blur(sigmaX: 5, sigmaY: 5),
+          child: AlertDialog(
+            backgroundColor: GamerTheme.cardDark,
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(20),
+              side: const BorderSide(color: Colors.amber, width: 2),
+            ),
+            title: const Row(
+              children: [
+                Text('🏆', style: TextStyle(fontSize: 26)),
+                SizedBox(width: 8),
+                Expanded(
+                  child: Text(
+                    'VICTORY AUTO-DETECTED!',
+                    style: TextStyle(
+                      color: Colors.amber,
+                      fontWeight: FontWeight.w900,
+                      fontSize: 16,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+            content: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Container(
+                  padding: const EdgeInsets.all(12),
+                  decoration: BoxDecoration(
+                    color: GamerTheme.neonGreen.withOpacity(0.12),
+                    borderRadius: BorderRadius.circular(10),
+                    border: Border.all(color: GamerTheme.neonGreen.withOpacity(0.4)),
+                  ),
+                  child: Row(
+                    children: [
+                      const Icon(Icons.auto_awesome_rounded, color: GamerTheme.neonGreen, size: 22),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: Text(
+                          autoDistributed
+                              ? 'Escrow prize automatically divided & sent to winning team!'
+                              : 'Victory verified! Escrow prize assigned.',
+                          style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 12),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(height: 12),
+                Text(
+                  '💰 Total Escrow Prize: $totalPrize G-Coins',
+                  style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 13),
+                ),
+                const SizedBox(height: 6),
+                Text(
+                  '👥 Winning Team (${winnerUids.length} members):',
+                  style: const TextStyle(color: GamerTheme.textMuted, fontSize: 12, fontWeight: FontWeight.w600),
+                ),
+                const SizedBox(height: 2),
+                Text(
+                  winnerNames.join(', '),
+                  style: const TextStyle(color: GamerTheme.accentBlue, fontWeight: FontWeight.bold, fontSize: 13),
+                ),
+                const SizedBox(height: 8),
+                Text(
+                  '💎 Share Per Winner: $sharePerMember G-Coins each',
+                  style: const TextStyle(color: GamerTheme.neonGreen, fontWeight: FontWeight.w900, fontSize: 13),
+                ),
+              ],
+            ),
+            actions: [
+              ElevatedButton(
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: Colors.amber,
+                  foregroundColor: Colors.black,
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                ),
+                onPressed: () => Navigator.pop(ctx),
+                child: const Text('AWESOME! 💰', style: TextStyle(fontWeight: FontWeight.bold)),
+              ),
+            ],
+          ),
+        ),
+      );
+      return;
+    }
 
     showDialog(
       context: context,
@@ -1594,12 +1708,12 @@ class _TournamentBoardScreenState extends State<TournamentBoardScreen> with Sing
           title: const Row(
             children: [
               Icon(
-                Icons.info_outline_rounded,
+                Icons.warning_amber_rounded,
                 color: GamerTheme.accentOrange,
               ),
               SizedBox(width: 8),
               Text(
-                'RESULT SUBMITTED',
+                'PROOF SUBMITTED',
                 style: TextStyle(
                   color: Colors.white,
                   fontWeight: FontWeight.w900,
@@ -1609,7 +1723,7 @@ class _TournamentBoardScreenState extends State<TournamentBoardScreen> with Sing
             ],
           ),
           content: const Text(
-            'Screenshot uploaded for host verification. Host will review the match result.',
+            'Screenshot uploaded. Victory was not auto-detected from this image. If you won, please make sure the screenshot clearly displays the VICTORY banner.',
             style: TextStyle(color: Colors.white, fontSize: 13, height: 1.4),
           ),
           actions: [
@@ -1873,12 +1987,56 @@ class _TournamentBoardScreenState extends State<TournamentBoardScreen> with Sing
     final List<String> extraTeammates = [];
     final TextEditingController extraTeammateController = TextEditingController();
 
-    // Auto-detect winners based on victory submission
+    // Auto-detect winners based on victory submission & team members
+    bool autoDetected = false;
     for (final entry in room.resultSubmissions.entries) {
       final data = entry.value as Map<String, dynamic>?;
       if (data?['isVictory'] == true) {
-        selectedWinnerUids.add(entry.key);
-        selectedWinnerNames[entry.key] = data?['playerName']?.toString() ?? 'Player';
+        final submitterUid = entry.key;
+        final submitterName = data?['playerName']?.toString() ?? 'Player';
+        selectedWinnerUids.add(submitterUid);
+        selectedWinnerNames[submitterUid] = submitterName;
+
+        // A) If stored detectedWinnerUids exist, add them
+        final detUids = List<String>.from(data?['detectedWinnerUids'] ?? []);
+        final detNames = List<String>.from(data?['detectedWinnerNames'] ?? []);
+        for (int i = 0; i < detUids.length; i++) {
+          selectedWinnerUids.add(detUids[i]);
+          selectedWinnerNames[detUids[i]] = i < detNames.length ? detNames[i] : 'Player';
+        }
+
+        // B) Auto-detect submitter's teammates based on room slot grouping (e.g. 2v2, 4v4, squad)
+        final mode = (room.gameMode.isNotEmpty ? room.gameMode : room.roomType).toLowerCase();
+        int teamSize = 1;
+        if (mode.contains('4v4') || mode.contains('squad')) {
+          teamSize = 4;
+        } else if (mode.contains('2v2') || mode.contains('duo')) {
+          teamSize = 2;
+        } else if (mode.contains('1v1') || mode.contains('solo')) {
+          teamSize = 1;
+        } else if (room.maxSlots >= 8) {
+          teamSize = 4;
+        } else if (room.maxSlots == 4) {
+          teamSize = 2;
+        }
+
+        if (teamSize > 1 && room.joinedPlayers.isNotEmpty) {
+          final sIdx = room.joinedPlayers.indexOf(submitterUid);
+          if (sIdx != -1) {
+            final teamIdx = sIdx ~/ teamSize;
+            final start = teamIdx * teamSize;
+            final end = (start + teamSize).clamp(0, room.joinedPlayers.length);
+            for (int i = start; i < end; i++) {
+              final pUid = room.joinedPlayers[i];
+              selectedWinnerUids.add(pUid);
+              if (!selectedWinnerNames.containsKey(pUid)) {
+                selectedWinnerNames[pUid] = pUid == room.hostId ? room.hostName : 'Player';
+              }
+            }
+          }
+        }
+        autoDetected = true;
+        break;
       }
     }
 
@@ -1973,6 +2131,29 @@ class _TournamentBoardScreenState extends State<TournamentBoardScreen> with Sing
                         ],
                       ),
                     ),
+                    if (autoDetected) ...[
+                      const SizedBox(height: 10),
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+                        decoration: BoxDecoration(
+                          color: GamerTheme.neonGreen.withOpacity(0.12),
+                          borderRadius: BorderRadius.circular(8),
+                          border: Border.all(color: GamerTheme.neonGreen.withOpacity(0.4)),
+                        ),
+                        child: const Row(
+                          children: [
+                            Icon(Icons.auto_awesome_rounded, color: GamerTheme.neonGreen, size: 16),
+                            SizedBox(width: 8),
+                            Expanded(
+                              child: Text(
+                                'Winning team auto-detected by ML Kit OCR!',
+                                style: TextStyle(color: GamerTheme.neonGreen, fontSize: 11, fontWeight: FontWeight.bold),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
                     const SizedBox(height: 14),
                     const Text(
                       'CHECK WINNING PLAYERS (EQUAL SPLIT):',
