@@ -1094,6 +1094,62 @@ class _SquadChatScreenState extends State<SquadChatScreen> {
     }
   }
 
+  /// Opens full screen proof image with InteractiveViewer pinch-to-zoom and close button
+  void _showFullScreenImage(BuildContext context, String imageUrl) {
+    showDialog(
+      context: context,
+      barrierColor: Colors.black.withOpacity(0.92),
+      builder: (dialogContext) {
+        return Dialog(
+          backgroundColor: Colors.transparent,
+          insetPadding: EdgeInsets.zero,
+          child: Stack(
+            children: [
+              Positioned.fill(
+                child: InteractiveViewer(
+                  panEnabled: true,
+                  minScale: 0.5,
+                  maxScale: 4.0,
+                  child: Center(
+                    child: imageUrl.startsWith('data:image')
+                        ? Image.memory(
+                            base64Decode(imageUrl.split(',').last),
+                            fit: BoxFit.contain,
+                          )
+                        : Image.network(
+                            imageUrl,
+                            fit: BoxFit.contain,
+                            loadingBuilder: (context, child, progress) {
+                              if (progress == null) return child;
+                              return const Center(
+                                child: CircularProgressIndicator(color: GamerTheme.neonGreen),
+                              );
+                            },
+                            errorBuilder: (_, __, ___) => const Center(
+                              child: Icon(Icons.broken_image, color: Colors.white54, size: 50),
+                            ),
+                          ),
+                  ),
+                ),
+              ),
+              Positioned(
+                top: MediaQuery.of(dialogContext).padding.top + 10,
+                right: 16,
+                child: IconButton(
+                  icon: const Icon(Icons.close, color: Colors.white, size: 28),
+                  onPressed: () => Navigator.of(dialogContext).pop(),
+                  style: IconButton.styleFrom(
+                    backgroundColor: Colors.black54,
+                  ),
+                ),
+              ),
+            ],
+          ),
+        );
+      },
+    );
+  }
+
   /// Builds the Win Proof message card
   Widget _buildWinProofCard({
     required BuildContext context,
@@ -1302,23 +1358,26 @@ class _SquadChatScreenState extends State<SquadChatScreen> {
 
           if (proofUrl.isNotEmpty) ...[
             const SizedBox(height: 8),
-            ClipRRect(
-              borderRadius: BorderRadius.circular(10),
-              child: proofUrl.startsWith('data:image')
-                  ? Image.memory(
-                      base64Decode(proofUrl.split(',').last),
-                      height: 140,
-                      width: double.infinity,
-                      fit: BoxFit.cover,
-                      errorBuilder: (_, __, ___) => const SizedBox.shrink(),
-                    )
-                  : Image.network(
-                      proofUrl,
-                      height: 140,
-                      width: double.infinity,
-                      fit: BoxFit.cover,
-                      errorBuilder: (_, __, ___) => const SizedBox.shrink(),
-                    ),
+            GestureDetector(
+              onTap: () => _showFullScreenImage(context, proofUrl),
+              child: ClipRRect(
+                borderRadius: BorderRadius.circular(10),
+                child: proofUrl.startsWith('data:image')
+                    ? Image.memory(
+                        base64Decode(proofUrl.split(',').last),
+                        height: 140,
+                        width: double.infinity,
+                        fit: BoxFit.cover,
+                        errorBuilder: (_, __, ___) => const SizedBox.shrink(),
+                      )
+                    : Image.network(
+                        proofUrl,
+                        height: 140,
+                        width: double.infinity,
+                        fit: BoxFit.cover,
+                        errorBuilder: (_, __, ___) => const SizedBox.shrink(),
+                      ),
+              ),
             ),
           ],
 
