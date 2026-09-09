@@ -85,7 +85,7 @@ class _TournamentBoardScreenState extends State<TournamentBoardScreen> with Sing
 
     for (final room in _tournamentService.rooms) {
       if (room.isCompleted) {
-        final wUid = room.winnerUid;
+        final wUid = room.winnerUid ?? '';
         final wName = room.winnerName?.toLowerCase() ?? '';
 
         final isUserWinner = (currentUid.isNotEmpty && wUid.isNotEmpty && wUid == currentUid) ||

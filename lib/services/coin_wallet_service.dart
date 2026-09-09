@@ -5,6 +5,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../models/coin_wallet_model.dart';
 import '../models/coin_transaction_model.dart';
+import 'gamer_auth_service.dart';
 
 class CoinWalletService extends ChangeNotifier {
   static final CoinWalletService _instance = CoinWalletService._internal();

@@ -497,26 +497,28 @@ class TournamentService extends ChangeNotifier {
       }
 
       if (room == null) return false;
+      final currentRoom = room;
+      final hostId = currentRoom.hostId;
 
       // 1. Calculate total escrow reward
-      final totalEntryFees = room.entryFeeCoins * room.joinedPlayers.where((p) => p != room.hostId).length;
-      final prizeToAward = room.prizePoolCoins > 0 ? room.prizePoolCoins : room.escrowCoins;
+      final totalEntryFees = currentRoom.entryFeeCoins * currentRoom.joinedPlayers.where((p) => p != hostId).length;
+      final prizeToAward = currentRoom.prizePoolCoins > 0 ? currentRoom.prizePoolCoins : currentRoom.escrowCoins;
 
       await _walletService.awardWinnerPrize(
-        hostId: room.hostId,
+        hostId: hostId,
         winnerId: winnerUid,
         prizePoolCoins: prizeToAward,
         totalEntryFees: totalEntryFees,
-        joiners: room.joinedPlayers,
-        entryFeeCoinsPerJoiner: room.entryFeeCoins,
-        roomId: room.id,
-        roomTitle: room.title,
+        joiners: currentRoom.joinedPlayers,
+        entryFeeCoinsPerJoiner: currentRoom.entryFeeCoins,
+        roomId: currentRoom.id,
+        roomTitle: currentRoom.title,
         winnerName: winnerName,
       );
 
       // 2. Penalize any participant who did not submit result (-10 trustScore)
-      for (final pUid in room.joinedPlayers) {
-        if (!room.resultSubmissions.containsKey(pUid) && pUid != room.hostId) {
+      for (final pUid in currentRoom.joinedPlayers) {
+        if (!currentRoom.resultSubmissions.containsKey(pUid) && pUid != hostId) {
           await _walletService.penalizeTrustScore(pUid, 10, 'Did not submit match result');
         }
       }
