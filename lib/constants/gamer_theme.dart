@@ -95,6 +95,12 @@ class GamerTheme {
     'Elden Ring': '💍',
   };
 
+  static const Map<String, String> gameBadgeEmoji = gameEmojis;
+
+  static Color getGameColor(String game) {
+    return gameColors[game] ?? accentOrange;
+  }
+
   static const Map<String, Color> gameColors = {
     'PUBG': Color(0xFFF59E0B),
     'Free Fire': Color(0xFFFF3B30),

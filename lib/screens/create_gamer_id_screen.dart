@@ -773,8 +773,8 @@ class _CreateGamerIdScreenState extends State<CreateGamerIdScreen> {
                             dropdownColor: GamerTheme.cardElevated,
                             icon: const Icon(Icons.keyboard_arrow_down_rounded, color: GamerTheme.accentOrange),
                             items: GamerTheme.favoriteGames.map((game) {
-                              final emoji = GamerTheme.gameBadgeEmoji[game] ?? '🎮';
-                              final color = GamerTheme.getGameColor(game);
+                              final emoji = GamerTheme.gameEmojis[game] ?? '🎮';
+                              final color = GamerTheme.gameColors[game] ?? GamerTheme.accentOrange;
                               return DropdownMenuItem<String>(
                                 value: game,
                                 child: Row(
