@@ -940,6 +940,7 @@ class _TournamentBoardScreenState extends State<TournamentBoardScreen> with Sing
                           maxSlots: maxSlots,
                           totalSlots: maxSlots,
                           joinedPlayers: [currentGamer.uid],
+                          joinedPlayerNames: {currentGamer.uid: currentGamer.displayName},
                           isRoomRevealed: roomIdController.text.trim().isNotEmpty,
                         );
 
@@ -1557,7 +1558,9 @@ class _TournamentBoardScreenState extends State<TournamentBoardScreen> with Sing
       ),
     );
 
-    final candidateNames = [playerName, room.hostName];
+    final candidateNames = room.joinedPlayers.map((uid) => room.getPlayerName(uid)).where((n) => n.isNotEmpty).toSet().toList();
+    if (!candidateNames.contains(playerName)) candidateNames.add(playerName);
+    if (!candidateNames.contains(room.hostName)) candidateNames.add(room.hostName);
     final result = await _ocrService.processResultScreenshot(
       roomId: room.id,
       userId: currentUid,
@@ -1997,43 +2000,42 @@ class _TournamentBoardScreenState extends State<TournamentBoardScreen> with Sing
         selectedWinnerUids.add(submitterUid);
         selectedWinnerNames[submitterUid] = submitterName;
 
-        // A) If stored detectedWinnerUids exist, add them
+        // A) If stored detectedWinnerUids exist and match valid team bounds, use them
         final detUids = List<String>.from(data?['detectedWinnerUids'] ?? []);
         final detNames = List<String>.from(data?['detectedWinnerNames'] ?? []);
-        for (int i = 0; i < detUids.length; i++) {
-          selectedWinnerUids.add(detUids[i]);
-          selectedWinnerNames[detUids[i]] = i < detNames.length ? detNames[i] : 'Player';
-        }
+        final totalJoined = room.joinedPlayers.length;
+        final maxTeamWinners = totalJoined > 1 ? (totalJoined ~/ 2).clamp(1, 4) : 1;
 
-        // B) Auto-detect submitter's teammates based on room slot grouping (e.g. 2v2, 4v4, squad)
-        final mode = (room.gameMode.isNotEmpty ? room.gameMode : room.roomType).toLowerCase();
-        int teamSize = 1;
-        if (mode.contains('4v4') || mode.contains('squad')) {
-          teamSize = 4;
-        } else if (mode.contains('2v2') || mode.contains('duo')) {
-          teamSize = 2;
-        } else if (mode.contains('1v1') || mode.contains('solo')) {
-          teamSize = 1;
-        } else if (room.maxSlots >= 8) {
-          teamSize = 4;
-        } else if (room.maxSlots == 4) {
-          teamSize = 2;
-        }
-
-        if (teamSize > 1 && room.joinedPlayers.isNotEmpty) {
-          final sIdx = room.joinedPlayers.indexOf(submitterUid);
-          if (sIdx != -1) {
-            final teamIdx = sIdx ~/ teamSize;
-            final start = teamIdx * teamSize;
-            final end = (start + teamSize).clamp(0, room.joinedPlayers.length);
-            for (int i = start; i < end; i++) {
-              final pUid = room.joinedPlayers[i];
-              selectedWinnerUids.add(pUid);
-              if (!selectedWinnerNames.containsKey(pUid)) {
-                selectedWinnerNames[pUid] = pUid == room.hostId ? room.hostName : 'Player';
+        if (detUids.isNotEmpty && detUids.length <= maxTeamWinners) {
+          selectedWinnerUids.clear();
+          selectedWinnerNames.clear();
+          for (int i = 0; i < detUids.length; i++) {
+            selectedWinnerUids.add(detUids[i]);
+            selectedWinnerNames[detUids[i]] = i < detNames.length ? detNames[i] : room.getPlayerName(detUids[i]);
+          }
+        } else {
+          // B) Submitter + teammate only from submitter's OWN slot group (Team 1 or Team 2), never opposing team!
+          if (maxTeamWinners > 1 && room.joinedPlayers.isNotEmpty) {
+            final sIdx = room.joinedPlayers.indexOf(submitterUid);
+            if (sIdx != -1) {
+              final teamIdx = sIdx ~/ maxTeamWinners;
+              final start = teamIdx * maxTeamWinners;
+              final end = (start + maxTeamWinners).clamp(0, totalJoined);
+              for (int i = start; i < end; i++) {
+                if (selectedWinnerUids.length >= maxTeamWinners) break;
+                final pUid = room.joinedPlayers[i];
+                selectedWinnerUids.add(pUid);
+                selectedWinnerNames[pUid] = room.getPlayerName(pUid);
               }
             }
           }
+        }
+
+        // C) Invariant check: selected winners can never be all players in room!
+        if (selectedWinnerUids.length >= totalJoined && totalJoined > 1) {
+          final trimmed = selectedWinnerUids.take(maxTeamWinners).toList();
+          selectedWinnerUids.clear();
+          selectedWinnerUids.addAll(trimmed);
         }
         autoDetected = true;
         break;

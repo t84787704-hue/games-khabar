@@ -27,6 +27,7 @@ class TournamentRoom {
   final int totalSlots;
   final String prizePool;
   final List<String> joinedPlayers; // List of userIds
+  final Map<String, String> joinedPlayerNames; // Map of userId -> displayName
   final String platform; // 'Mobile', 'PC', 'Console', 'Cross-Platform'
   final String serverRegion; // 'Asia / India', 'Middle East', 'Europe', etc.
   final String rules; // Custom or standard rules
@@ -64,10 +65,23 @@ class TournamentRoom {
     this.currentSlots = 1,
     this.totalSlots = 2,
     this.joinedPlayers = const [],
+    this.joinedPlayerNames = const {},
     this.isLive = true,
     this.isRoomRevealed = false,
     this.createdAt,
   });
+
+  String getPlayerName(String uid) {
+    if (uid == hostId && hostName.isNotEmpty) return hostName;
+    if (joinedPlayerNames.containsKey(uid) && joinedPlayerNames[uid]!.trim().isNotEmpty) {
+      return joinedPlayerNames[uid]!.trim();
+    }
+    final sub = resultSubmissions[uid] as Map<String, dynamic>?;
+    if (sub != null && sub['playerName'] != null && sub['playerName'].toString().trim().isNotEmpty) {
+      return sub['playerName'].toString().trim();
+    }
+    return uid == hostId ? 'Host' : 'Player';
+  }
 
   int get availableSlots => (totalSlots > 0 ? totalSlots : maxSlots) - (currentSlots > 0 ? currentSlots : joinedPlayers.length);
   bool get isFull => (currentSlots > 0 ? currentSlots : joinedPlayers.length) >= (totalSlots > 0 ? totalSlots : maxSlots);
@@ -206,6 +220,7 @@ class TournamentRoom {
     final gType = data['gameType']?.toString() ?? 'BGMI';
     final gMode = data['gameMode']?.toString() ?? (data['roomType'] ?? 'TDM 1v1');
     final joined = List<String>.from(data['joinedPlayers'] ?? []);
+    final pNames = Map<String, String>.from(data['joinedPlayerNames'] ?? data['playerNames'] ?? {});
     final cSlots = (data['currentSlots'] as num?)?.toInt() ?? (joined.isNotEmpty ? joined.length : 1);
     final tSlots = (data['totalSlots'] as num?)?.toInt() ?? (data['maxSlots'] as num?)?.toInt() ?? 2;
     final pPool = data['prizePool']?.toString() ?? cleanPrize;
@@ -241,6 +256,7 @@ class TournamentRoom {
       currentSlots: cSlots,
       totalSlots: tSlots,
       joinedPlayers: joined,
+      joinedPlayerNames: pNames,
       isLive: data['isLive'] ?? true,
       isRoomRevealed: data['isRoomRevealed'] == true,
       createdAt: created,
@@ -279,6 +295,7 @@ class TournamentRoom {
       'currentSlots': currentSlots > 0 ? currentSlots : (joinedPlayers.isNotEmpty ? joinedPlayers.length : 1),
       'slots': '${currentSlots > 0 ? currentSlots : (joinedPlayers.isNotEmpty ? joinedPlayers.length : 1)}/${totalSlots > 0 ? totalSlots : maxSlots}',
       'joinedPlayers': joinedPlayers,
+      'joinedPlayerNames': joinedPlayerNames,
       'isLive': isLive,
       'isRoomRevealed': isRoomRevealed,
       'createdAt': createdAt != null ? Timestamp.fromDate(createdAt!) : FieldValue.serverTimestamp(),
@@ -316,6 +333,7 @@ class TournamentRoom {
       'totalSlots': totalSlots > 0 ? totalSlots : maxSlots,
       'currentSlots': currentSlots > 0 ? currentSlots : (joinedPlayers.isNotEmpty ? joinedPlayers.length : 1),
       'joinedPlayers': joinedPlayers,
+      'joinedPlayerNames': joinedPlayerNames,
       'isLive': isLive,
       'isRoomRevealed': isRoomRevealed,
       'createdAt': createdAt?.toIso8601String(),
@@ -342,6 +360,7 @@ class TournamentRoom {
     final gType = json['gameType']?.toString() ?? 'BGMI';
     final gMode = json['gameMode']?.toString() ?? (json['roomType'] ?? 'TDM 1v1');
     final joined = List<String>.from(json['joinedPlayers'] ?? []);
+    final pNames = Map<String, String>.from(json['joinedPlayerNames'] ?? json['playerNames'] ?? {});
     final cSlots = (json['currentSlots'] as num?)?.toInt() ?? (joined.isNotEmpty ? joined.length : 1);
     final tSlots = (json['totalSlots'] as num?)?.toInt() ?? (json['maxSlots'] as num?)?.toInt() ?? 2;
     final pPool = json['prizePool']?.toString() ?? cleanPrize;
@@ -376,6 +395,7 @@ class TournamentRoom {
       currentSlots: cSlots,
       totalSlots: tSlots,
       joinedPlayers: joined,
+      joinedPlayerNames: pNames,
       isLive: json['isLive'] ?? true,
       isRoomRevealed: json['isRoomRevealed'] == true,
       createdAt: created,
@@ -412,6 +432,7 @@ class TournamentRoom {
     int? currentSlots,
     int? totalSlots,
     List<String>? joinedPlayers,
+    Map<String, String>? joinedPlayerNames,
     bool? isLive,
     bool? isRoomRevealed,
     DateTime? createdAt,
@@ -446,6 +467,7 @@ class TournamentRoom {
       currentSlots: currentSlots ?? this.currentSlots,
       totalSlots: totalSlots ?? this.totalSlots,
       joinedPlayers: joinedPlayers ?? this.joinedPlayers,
+      joinedPlayerNames: joinedPlayerNames ?? this.joinedPlayerNames,
       isLive: isLive ?? this.isLive,
       isRoomRevealed: isRoomRevealed ?? this.isRoomRevealed,
       createdAt: createdAt ?? this.createdAt,

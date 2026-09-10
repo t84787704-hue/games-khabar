@@ -106,47 +106,93 @@ class ScreenshotOcrService {
       winnerNames.add(submitterName);
 
       if (room != null && room.joinedPlayers.isNotEmpty) {
+        final totalJoined = room.joinedPlayers.length;
         final mode = (room.gameMode.isNotEmpty ? room.gameMode : room.roomType).toLowerCase();
+
+        // Determine actual team size for competing sides:
+        // In a tournament room, players are split into 2 opposing teams.
+        // A team size can NEVER equal or exceed totalJoined!
         int teamSize = 1;
-        if (mode.contains('4v4') || mode.contains('squad')) {
-          teamSize = 4;
-        } else if (mode.contains('2v2') || mode.contains('duo')) {
+        if (mode.contains('2v2') || mode.contains('duo')) {
           teamSize = 2;
         } else if (mode.contains('1v1') || mode.contains('solo')) {
           teamSize = 1;
-        } else if (room.maxSlots >= 8) {
-          teamSize = 4;
-        } else if (room.maxSlots == 4) {
-          teamSize = 2;
+        } else if (mode.contains('4v4') || mode.contains('squad')) {
+          // If 4 total players played, it's 2v2 (2 on each team). If 8, it's 4v4.
+          teamSize = totalJoined >= 8 ? 4 : (totalJoined ~/ 2).clamp(1, 2);
+        } else {
+          teamSize = (totalJoined ~/ 2).clamp(1, 4);
         }
 
-        // A) If teamSize > 1, find submitter's teammates based on room slot grouping
-        if (teamSize > 1) {
+        // Safety clamp: maximum winners can never exceed half of players (or at least 1, max 4)
+        final int maxTeamWinners = totalJoined > 1 ? (totalJoined ~/ 2).clamp(1, teamSize) : 1;
+
+        // Clean text for OCR matching (remove non-alphanumeric noise)
+        final cleanUpperOcr = upperText.replaceAll(RegExp(r'[^A-Z0-9]'), '');
+
+        // STEP A: PRIMARY OCR NAME MATCHING
+        // Check other joined players' names in the OCR recognized text.
+        // Winning players have their names clearly visible on the victory screen!
+        for (final pUid in room.joinedPlayers) {
+          if (pUid == userId) continue;
+          if (winnerUids.length >= maxTeamWinners) break;
+
+          final pName = room.getPlayerName(pUid);
+          if (pName.isEmpty || pName.toLowerCase() == 'player') continue;
+
+          final normPName = pName.trim().toUpperCase();
+          final cleanPName = normPName.replaceAll(RegExp(r'[^A-Z0-9]'), '');
+
+          bool isMatched = false;
+          if (normPName.length >= 2 && upperText.contains(normPName)) {
+            isMatched = true;
+          } else if (cleanPName.length >= 3 && cleanUpperOcr.contains(cleanPName)) {
+            isMatched = true;
+          } else {
+            // Also check individual words if multi-word name
+            final words = normPName.split(RegExp(r'\s+')).where((w) => w.length >= 3);
+            for (final word in words) {
+              if (upperText.contains(word)) {
+                isMatched = true;
+                break;
+              }
+            }
+          }
+
+          if (isMatched) {
+            winnerUids.add(pUid);
+            winnerNames.add(pName);
+          }
+        }
+
+        // STEP B: SLOT-BASED TEAMMATE FILL (Only if team game and OCR missed teammate due to font/resolution)
+        // Strictly only take teammates from submitter's OWN slot group (Team 1 or Team 2), NEVER opponents!
+        if (winnerUids.length < maxTeamWinners && maxTeamWinners > 1) {
           final sIdx = room.joinedPlayers.indexOf(userId);
           if (sIdx != -1) {
-            final teamIdx = sIdx ~/ teamSize;
-            final start = teamIdx * teamSize;
-            final end = (start + teamSize).clamp(0, room.joinedPlayers.length);
+            final teamIdx = sIdx ~/ maxTeamWinners;
+            final start = teamIdx * maxTeamWinners;
+            final end = (start + maxTeamWinners).clamp(0, totalJoined);
             for (int i = start; i < end; i++) {
+              if (winnerUids.length >= maxTeamWinners) break;
               final pUid = room.joinedPlayers[i];
               if (!winnerUids.contains(pUid)) {
                 winnerUids.add(pUid);
-                final pName = pUid == room.hostId ? room.hostName : 'Player';
-                winnerNames.add(pName);
+                winnerNames.add(room.getPlayerName(pUid));
               }
             }
           }
         }
 
-        // B) Check if other joined players' names appear in the OCR text
-        for (final pUid in room.joinedPlayers) {
-          if (winnerUids.contains(pUid)) continue;
-          final sub = room.resultSubmissions[pUid] as Map<String, dynamic>?;
-          final pName = (pUid == room.hostId ? room.hostName : sub?['playerName'])?.toString();
-          if (pName != null && pName.isNotEmpty && upperText.contains(pName.toUpperCase())) {
-            winnerUids.add(pUid);
-            winnerNames.add(pName);
-          }
+        // STEP C: HARD INVARIANT SAFEGUARD
+        // If competing sides exist, winners can NEVER equal total players in room!
+        if (winnerUids.length >= totalJoined && totalJoined > 1) {
+          final trimmedUids = winnerUids.take(maxTeamWinners).toList();
+          final trimmedNames = winnerNames.take(maxTeamWinners).toList();
+          winnerUids.clear();
+          winnerUids.addAll(trimmedUids);
+          winnerNames.clear();
+          winnerNames.addAll(trimmedNames);
         }
       }
 

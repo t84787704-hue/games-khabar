@@ -371,8 +371,10 @@ class TournamentService extends ChangeNotifier {
 
       // Update local room
       final updatedPlayers = List<String>.from(targetRoom.joinedPlayers)..add(playerUid);
+      final updatedNames = Map<String, String>.from(targetRoom.joinedPlayerNames)..[playerUid] = playerName;
       final updatedRoom = targetRoom.copyWith(
         joinedPlayers: updatedPlayers,
+        joinedPlayerNames: updatedNames,
         escrowCoins: targetRoom.escrowCoins + (targetRoom.entryFeeCoins > 0 && playerUid != targetRoom.hostId ? targetRoom.entryFeeCoins : 0),
       );
 
@@ -387,6 +389,7 @@ class TournamentService extends ChangeNotifier {
       // Update Firestore
       await _roomsRef.doc(roomId).update({
         'joinedPlayers': FieldValue.arrayUnion([playerUid]),
+        'joinedPlayerNames.$playerUid': playerName,
         'escrowCoins': updatedRoom.escrowCoins,
       });
 
