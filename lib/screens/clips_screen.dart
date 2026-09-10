@@ -65,8 +65,9 @@ class _ClipsScreenState extends State<ClipsScreen>
   final GamerAuthService _authService = GamerAuthService();
   late AnimationController _spinController;
   int _currentPage = 0;
+  final Set<String> _reportedClipIds = {};
 
-  // Fallback default viral BGMI clips so feed is immediately addictive
+  // Fallback default viral gaming clips so feed is immediately addictive & pure gaming
   final List<GamerClip> _defaultClips = [
     const GamerClip(
       id: 'default_1',
@@ -80,19 +81,21 @@ class _ClipsScreenState extends State<ClipsScreen>
       likesCount: 1420,
       commentsCount: 238,
       sharesCount: 95,
+      viewsCount: 6850,
     ),
     const GamerClip(
       id: 'default_2',
       userId: 'scout_god',
       username: 'DynamoRush',
       displayName: 'DynamoOP',
-      title: 'POV: You rush a bridge camp with a Dacia and survive with 1 HP 😂🚗 #BGMI #Meme',
+      title: 'Erangel Bridge Camp 1v4 Squad Wipe with M416 Laser Spray 💀🔥 #BGMI',
       mediaUrl: 'https://images.unsplash.com/photo-1511512578047-dfb367046420?q=80&w=1200&auto=format&fit=crop',
       gameTag: 'BGMI',
       songTitle: 'Phonk Gaming Anthem - Brazilian Drift',
       likesCount: 3105,
       commentsCount: 512,
       sharesCount: 380,
+      viewsCount: 14200,
     ),
     const GamerClip(
       id: 'default_3',
@@ -106,6 +109,7 @@ class _ClipsScreenState extends State<ClipsScreen>
       likesCount: 5820,
       commentsCount: 890,
       sharesCount: 640,
+      viewsCount: 28900,
     ),
   ];
 
@@ -175,13 +179,57 @@ class _ClipsScreenState extends State<ClipsScreen>
     }
 
     final titleController = TextEditingController();
-    String selectedTag = 'BGMI';
+    String? selectedTag;
     File? pickedFile;
     String? fileName;
     bool isVideo = false;
     int? fileSizeBytes;
     bool isUploading = false;
     String uploadStatus = '';
+
+    final availableGameTags = [
+      'BGMI',
+      'PUBG Mobile',
+      'Free Fire',
+      'Free Fire Max',
+      'COD Mobile',
+      'Valorant',
+      'Fortnite',
+      'Apex Legends',
+      'Counter-Strike 2',
+      'Clash Royale',
+      'Brawl Stars',
+      'Minecraft',
+      'Roblox',
+      '8 Ball Pool',
+      'Ludo King',
+      'Gaming Meme',
+    ];
+
+    bool isNonGaming(String text, String fname) {
+      final combined = '$text $fname'.toLowerCase();
+      final nonGamingWords = [
+        'car', 'cars', 'automobile', 'vehicle', 'driving', 'traffic', 'bmw', 'mercedes', 'audi',
+        'lamborghini', 'ferrari', 'porsche', 'supercar', 'honda', 'bike', 'motorcycle', 'vlog',
+        'cooking', 'recipe', 'food', 'restaurant', 'fashion', 'makeup', 'beauty', 'outfit',
+        'gym', 'workout', 'fitness', 'dance', 'dancing', 'wedding', 'marriage', 'politics',
+        'election', 'news', 'crypto', 'forex', 'stock', 'trading', 'baby', 'cat video', 'dog video',
+        'real estate', 'house tour', 'shopping haul', 'travel vlog'
+      ];
+      final gamingAllowed = [
+        'bgmi', 'pubg', 'free fire', 'cod', 'call of duty', 'valorant', 'fortnite', 'apex',
+        'minecraft', 'roblox', 'clash royale', 'brawl stars', 'gta', 'asphalt', 'need for speed',
+        'forza', 'rocket league', 'gameplay', 'clutch', 'sniper', 'kill', 'headshot', 'lobby'
+      ];
+      for (final w in nonGamingWords) {
+        final reg = RegExp(r'\b' + RegExp.escape(w) + r'\b', caseSensitive: false);
+        if (reg.hasMatch(combined)) {
+          final hasGameContext = gamingAllowed.any((g) => combined.contains(g));
+          if (!hasGameContext) return true;
+        }
+      }
+      return false;
+    }
 
     showModalBottomSheet(
       context: context,
@@ -329,37 +377,103 @@ class _ClipsScreenState extends State<ClipsScreen>
                   ),
                   const SizedBox(height: 14),
 
-                  // Tag selection
+                  // Required Game Tag selection
                   Row(
                     children: [
-                      const Text('GAME TAG: ', style: TextStyle(color: GamerTheme.textMuted, fontSize: 11, fontWeight: FontWeight.w800)),
-                      const SizedBox(width: 8),
-                      Wrap(
-                        spacing: 6,
-                        children: ['BGMI', 'Free Fire', 'COD', 'Valorant'].map((tag) {
-                          final isSel = selectedTag == tag;
-                          return GestureDetector(
-                            onTap: isUploading ? null : () => setModalState(() => selectedTag = tag),
-                            child: Container(
-                              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                              decoration: BoxDecoration(
-                                color: isSel ? GamerTheme.accentOrange : GamerTheme.bgDark,
-                                borderRadius: BorderRadius.circular(12),
-                                border: Border.all(color: isSel ? GamerTheme.accentOrange : GamerTheme.borderDark),
-                              ),
-                              child: Text(
+                      const Text(
+                        'SELECT GAME TAG',
+                        style: TextStyle(color: GamerTheme.accentOrange, fontSize: 11, fontWeight: FontWeight.w900),
+                      ),
+                      const SizedBox(width: 6),
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                        decoration: BoxDecoration(
+                          color: GamerTheme.accentOrange.withOpacity(0.2),
+                          borderRadius: BorderRadius.circular(4),
+                        ),
+                        child: const Text(
+                          'REQUIRED',
+                          style: TextStyle(color: GamerTheme.accentOrange, fontSize: 9, fontWeight: FontWeight.w900),
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 8),
+                  Wrap(
+                    spacing: 6,
+                    runSpacing: 6,
+                    children: availableGameTags.map((tag) {
+                      final isSel = selectedTag == tag;
+                      return GestureDetector(
+                        onTap: isUploading ? null : () => setModalState(() => selectedTag = tag),
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+                          decoration: BoxDecoration(
+                            color: isSel ? GamerTheme.accentOrange : GamerTheme.bgDark,
+                            borderRadius: BorderRadius.circular(12),
+                            border: Border.all(
+                              color: isSel ? GamerTheme.accentOrange : GamerTheme.borderLight,
+                              width: isSel ? 1.5 : 1,
+                            ),
+                            boxShadow: isSel
+                                ? [BoxShadow(color: GamerTheme.accentOrange.withOpacity(0.3), blurRadius: 4)]
+                                : null,
+                          ),
+                          child: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              if (isSel) ...[
+                                const Icon(Icons.check, color: GamerTheme.bgDark, size: 12),
+                                const SizedBox(width: 4),
+                              ],
+                              Text(
                                 tag,
                                 style: TextStyle(
                                   color: isSel ? GamerTheme.bgDark : Colors.white70,
                                   fontSize: 11,
-                                  fontWeight: FontWeight.bold,
+                                  fontWeight: isSel ? FontWeight.w900 : FontWeight.bold,
                                 ),
                               ),
-                            ),
-                          );
-                        }).toList(),
-                      ),
-                    ],
+                            ],
+                          ),
+                        ),
+                      );
+                    }).toList(),
+                  ),
+
+                  const SizedBox(height: 14),
+
+                  // Gaming Only Notice Banner
+                  Container(
+                    padding: const EdgeInsets.all(10),
+                    decoration: BoxDecoration(
+                      color: GamerTheme.accentOrange.withOpacity(0.08),
+                      borderRadius: BorderRadius.circular(10),
+                      border: Border.all(color: GamerTheme.accentOrange.withOpacity(0.25)),
+                    ),
+                    child: const Row(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Icon(Icons.sports_esports_rounded, color: GamerTheme.accentOrange, size: 18),
+                        SizedBox(width: 8),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                'GAMING CLIPS & MEMES ONLY',
+                                style: TextStyle(color: GamerTheme.accentOrange, fontSize: 11, fontWeight: FontWeight.w900),
+                              ),
+                              SizedBox(height: 2),
+                              Text(
+                                'Only gaming screen recordings and memes allowed. Non-gaming videos (cars, vlogs, etc.) are strictly prohibited.',
+                                style: TextStyle(color: GamerTheme.textMuted, fontSize: 10.5),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ],
+                    ),
                   ),
 
                   const SizedBox(height: 16),
@@ -606,6 +720,17 @@ class _ClipsScreenState extends State<ClipsScreen>
                       onPressed: isUploading
                           ? null
                           : () async {
+                              // 1. Content Rule: Select Game Tag is REQUIRED
+                              if (selectedTag == null || selectedTag!.isEmpty) {
+                                ScaffoldMessenger.of(context).showSnackBar(
+                                  const SnackBar(
+                                    content: Text('Please select a Game Tag (BGMI, PUBG, Free Fire, COD etc) before posting!'),
+                                    backgroundColor: GamerTheme.redAccent,
+                                  ),
+                                );
+                                return;
+                              }
+
                               if (titleController.text.trim().isEmpty) {
                                 ScaffoldMessenger.of(context).showSnackBar(
                                   const SnackBar(content: Text('Please enter a caption or title for your clip!')),
@@ -615,6 +740,18 @@ class _ClipsScreenState extends State<ClipsScreen>
                               if (pickedFile == null) {
                                 ScaffoldMessenger.of(context).showSnackBar(
                                   const SnackBar(content: Text('Please select a clip or screen recording from your phone first!')),
+                                );
+                                return;
+                              }
+
+                              // 2. Content Rule: Only allow gaming screen recordings & gaming memes
+                              if (isNonGaming(titleController.text.trim(), fileName ?? '')) {
+                                ScaffoldMessenger.of(context).showSnackBar(
+                                  const SnackBar(
+                                    content: Text('Only gaming clips allowed! Non-gaming videos (like cars, vlogs, etc.) are strictly prohibited.'),
+                                    backgroundColor: GamerTheme.redAccent,
+                                    duration: Duration(seconds: 4),
+                                  ),
                                 );
                                 return;
                               }
@@ -647,7 +784,7 @@ class _ClipsScreenState extends State<ClipsScreen>
                                   username: currentGamer.username,
                                   displayName: currentGamer.displayName,
                                   userAvatar: currentGamer.photoUrl,
-                                  gameTag: selectedTag,
+                                  gameTag: selectedTag!,
                                   songTitle: 'Original Audio - ${currentGamer.displayName}',
                                   isVideo: isVideo,
                                 );
@@ -798,6 +935,178 @@ class _ClipsScreenState extends State<ClipsScreen>
     );
   }
 
+  void _openReportDialog(GamerClip clip) {
+    ClipsPlaybackManager.pauseAllClips();
+    final currentGamer = _authService.currentGamer;
+    final currentUid = currentGamer?.uid ?? 'guest';
+
+    String selectedReason = 'Non-Gaming Content (Car, Vlog, IRL, etc.)';
+    final reasons = [
+      'Non-Gaming Content (Car, Vlog, IRL, etc.)',
+      'Inappropriate / Offensive Gameplay',
+      'Spam, Scam or Misleading Video',
+      'Hate Speech or Harassment',
+      'Other Policy Violation',
+    ];
+
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: GamerTheme.cardDark,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+      ),
+      builder: (reportCtx) => StatefulBuilder(
+        builder: (ctx, setReportState) {
+          return Padding(
+            padding: EdgeInsets.only(
+              bottom: MediaQuery.of(ctx).padding.bottom + 20,
+              left: 20,
+              right: 20,
+              top: 20,
+            ),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Center(
+                  child: Container(
+                    width: 40,
+                    height: 4,
+                    decoration: BoxDecoration(
+                      color: GamerTheme.borderLight,
+                      borderRadius: BorderRadius.circular(2),
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 16),
+                Row(
+                  children: [
+                    Container(
+                      padding: const EdgeInsets.all(8),
+                      decoration: BoxDecoration(
+                        color: GamerTheme.redAccent.withOpacity(0.15),
+                        shape: BoxShape.circle,
+                      ),
+                      child: const Icon(Icons.flag_rounded, color: GamerTheme.redAccent, size: 22),
+                    ),
+                    const SizedBox(width: 12),
+                    const Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            'REPORT VIDEO',
+                            style: TextStyle(
+                              color: GamerTheme.textWhite,
+                              fontSize: 16,
+                              fontWeight: FontWeight.w900,
+                              letterSpacing: 0.5,
+                            ),
+                          ),
+                          SizedBox(height: 2),
+                          Text(
+                            'Only gaming screen recordings & memes allowed.',
+                            style: TextStyle(color: GamerTheme.textMuted, fontSize: 11),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 16),
+                const Text(
+                  'SELECT REASON FOR REPORT',
+                  style: TextStyle(
+                    color: GamerTheme.textMuted,
+                    fontSize: 11,
+                    fontWeight: FontWeight.w800,
+                  ),
+                ),
+                const SizedBox(height: 8),
+                ...reasons.map((r) {
+                  final isSel = selectedReason == r;
+                  return InkWell(
+                    onTap: () => setReportState(() => selectedReason = r),
+                    borderRadius: BorderRadius.circular(8),
+                    child: Container(
+                      margin: const EdgeInsets.only(bottom: 6),
+                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                      decoration: BoxDecoration(
+                        color: isSel ? GamerTheme.redAccent.withOpacity(0.12) : GamerTheme.bgDark,
+                        borderRadius: BorderRadius.circular(10),
+                        border: Border.all(
+                          color: isSel ? GamerTheme.redAccent : GamerTheme.borderDark,
+                        ),
+                      ),
+                      child: Row(
+                        children: [
+                          Icon(
+                            isSel ? Icons.radio_button_checked : Icons.radio_button_off,
+                            color: isSel ? GamerTheme.redAccent : Colors.white38,
+                            size: 18,
+                          ),
+                          const SizedBox(width: 10),
+                          Expanded(
+                            child: Text(
+                              r,
+                              style: TextStyle(
+                                color: isSel ? Colors.white : Colors.white70,
+                                fontSize: 12.5,
+                                fontWeight: isSel ? FontWeight.w700 : FontWeight.w500,
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  );
+                }),
+                const SizedBox(height: 16),
+                SizedBox(
+                  width: double.infinity,
+                  child: ElevatedButton(
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: GamerTheme.redAccent,
+                      foregroundColor: Colors.white,
+                      padding: const EdgeInsets.symmetric(vertical: 14),
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                    ),
+                    onPressed: () async {
+                      Navigator.pop(reportCtx);
+                      // Remove from user's current feed immediately
+                      setState(() {
+                        _reportedClipIds.add(clip.id);
+                      });
+                      await _clipService.reportClip(
+                        clipId: clip.id,
+                        reporterId: currentUid,
+                        reason: selectedReason,
+                        clipTitle: clip.title,
+                      );
+                      if (mounted) {
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          const SnackBar(
+                            content: Text('⚠️ Video reported and hidden from your feed. Moderation team notified!'),
+                            backgroundColor: GamerTheme.redAccent,
+                            duration: Duration(seconds: 4),
+                          ),
+                        );
+                      }
+                    },
+                    child: const Text(
+                      'SUBMIT REPORT & HIDE VIDEO',
+                      style: TextStyle(fontWeight: FontWeight.w900, fontSize: 13),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          );
+        },
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -809,9 +1118,10 @@ class _ClipsScreenState extends State<ClipsScreen>
           StreamBuilder<List<GamerClip>>(
             stream: _clipService.getClipsStream(),
             builder: (context, snapshot) {
-              final clips = (snapshot.data != null && snapshot.data!.isNotEmpty)
+              final rawClips = (snapshot.data != null && snapshot.data!.isNotEmpty)
                   ? snapshot.data!
                   : _defaultClips;
+              final clips = rawClips.where((c) => !_reportedClipIds.contains(c.id)).toList();
 
               final currentGamer = _authService.currentGamer;
               final currentUid = currentGamer?.uid ?? '';
@@ -850,6 +1160,7 @@ class _ClipsScreenState extends State<ClipsScreen>
                         '🔥 Check out this sick gaming clip by ${clip.displayName} on Gamers Khabar!\n"${clip.title}"',
                       );
                     },
+                    onReport: () => _openReportDialog(clip),
                     onProfileTap: () {
                       if (clip.userId.isNotEmpty) {
                         ClipsPlaybackManager.pauseAllClips();
@@ -916,6 +1227,7 @@ class ClipCard extends StatefulWidget {
   final VoidCallback onLike;
   final VoidCallback onComment;
   final VoidCallback onShare;
+  final VoidCallback onReport;
   final VoidCallback onProfileTap;
   final AnimationController spinController;
 
@@ -928,6 +1240,7 @@ class ClipCard extends StatefulWidget {
     required this.onLike,
     required this.onComment,
     required this.onShare,
+    required this.onReport,
     required this.onProfileTap,
     required this.spinController,
   });
@@ -941,6 +1254,7 @@ class _ClipCardState extends State<ClipCard> {
   bool _isInitialized = false;
   bool _hasError = false;
   bool _userPaused = false;
+  bool _hasCountedView = false;
 
   bool get _isVideo {
     final url = widget.clip.mediaUrl.toLowerCase();
@@ -957,6 +1271,9 @@ class _ClipCardState extends State<ClipCard> {
     super.initState();
     if (_isVideo) {
       _initVideo();
+    } else if (widget.isActive && widget.isTabActive && !_hasCountedView) {
+      _hasCountedView = true;
+      ClipService().incrementClipViews(widget.clip.id);
     }
   }
 
@@ -988,6 +1305,10 @@ class _ClipCardState extends State<ClipCard> {
       // Auto-play only if active on page AND active on tab
       if (widget.isActive && widget.isTabActive && !_userPaused) {
         controller.play();
+        if (!_hasCountedView) {
+          _hasCountedView = true;
+          ClipService().incrementClipViews(widget.clip.id);
+        }
       }
     } catch (e) {
       print('❌ [CLIP_CARD] Video initialization error: $e');
@@ -1012,6 +1333,7 @@ class _ClipCardState extends State<ClipCard> {
       _isInitialized = false;
       _hasError = false;
       _userPaused = false;
+      _hasCountedView = false;
       if (_isVideo) {
         _initVideo();
       }
@@ -1021,6 +1343,10 @@ class _ClipCardState extends State<ClipCard> {
       if (shouldPlay) {
         if (_controller != null && _isInitialized && !_controller!.value.isPlaying) {
           _controller!.play();
+        }
+        if (!_hasCountedView) {
+          _hasCountedView = true;
+          ClipService().incrementClipViews(widget.clip.id);
         }
       } else {
         if (_controller != null && _isInitialized && _controller!.value.isPlaying) {
@@ -1168,10 +1494,46 @@ class _ClipCardState extends State<ClipCard> {
           ),
         ),
 
-        // 3. Right Action Column (Avatar, Likes, Comments, Share, Audio Disc)
+        // 3. Top-left Game Badge (e.g. BGMI)
+        Positioned(
+          left: 16,
+          top: MediaQuery.of(context).padding.top + 54,
+          child: Container(
+            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+            decoration: BoxDecoration(
+              color: Colors.black.withOpacity(0.75),
+              borderRadius: BorderRadius.circular(16),
+              border: Border.all(color: GamerTheme.accentOrange, width: 1.2),
+              boxShadow: [
+                BoxShadow(
+                  color: GamerTheme.accentOrange.withOpacity(0.3),
+                  blurRadius: 8,
+                ),
+              ],
+            ),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                const Icon(Icons.sports_esports_rounded, color: GamerTheme.accentOrange, size: 14),
+                const SizedBox(width: 5),
+                Text(
+                  (clip.gameTag.isNotEmpty ? clip.gameTag : 'GAMING').toUpperCase(),
+                  style: const TextStyle(
+                    color: Colors.white,
+                    fontWeight: FontWeight.w900,
+                    fontSize: 11.5,
+                    letterSpacing: 0.6,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+
+        // 4. Right Action Column (Avatar, Likes, Comments, Share, Views, Report, Audio Disc)
         Positioned(
           right: 12,
-          bottom: 40,
+          bottom: 30,
           child: Column(
             children: [
               // Author Avatar with profile navigation
@@ -1191,7 +1553,7 @@ class _ClipCardState extends State<ClipCard> {
                 ),
               ),
 
-              const SizedBox(height: 18),
+              const SizedBox(height: 14),
 
               // Like Button
               _buildActionButton(
@@ -1201,7 +1563,7 @@ class _ClipCardState extends State<ClipCard> {
                 onTap: widget.onLike,
               ),
 
-              const SizedBox(height: 16),
+              const SizedBox(height: 12),
 
               // Comment Button
               _buildActionButton(
@@ -1211,7 +1573,7 @@ class _ClipCardState extends State<ClipCard> {
                 onTap: widget.onComment,
               ),
 
-              const SizedBox(height: 16),
+              const SizedBox(height: 12),
 
               // Share Button
               _buildActionButton(
@@ -1221,7 +1583,27 @@ class _ClipCardState extends State<ClipCard> {
                 onTap: widget.onShare,
               ),
 
-              const SizedBox(height: 18),
+              const SizedBox(height: 12),
+
+              // Views Count
+              _buildActionButton(
+                icon: Icons.visibility_rounded,
+                color: Colors.white,
+                label: _formatCount(clip.viewsCount > 0 ? clip.viewsCount : (clip.likesCount * 3 + 45)),
+                onTap: () {},
+              ),
+
+              const SizedBox(height: 12),
+
+              // Report Button (Moderation for non-gaming videos)
+              _buildActionButton(
+                icon: Icons.flag_rounded,
+                color: GamerTheme.redAccent,
+                label: 'Report',
+                onTap: widget.onReport,
+              ),
+
+              const SizedBox(height: 14),
 
               // Spinning Vinyl Disc
               AnimatedBuilder(
@@ -1245,7 +1627,7 @@ class _ClipCardState extends State<ClipCard> {
           ),
         ),
 
-        // 4. Bottom Left Info Overlay: Username, Caption, Music title
+        // 5. Bottom Left Info Overlay: Username, Caption, Music title
         Positioned(
           left: 16,
           bottom: 30,
@@ -1348,5 +1730,14 @@ class _ClipCardState extends State<ClipCard> {
         ],
       ),
     );
+  }
+
+  String _formatCount(int count) {
+    if (count >= 1000000) {
+      return '${(count / 1000000).toStringAsFixed(1)}M';
+    } else if (count >= 1000) {
+      return '${(count / 1000).toStringAsFixed(1)}k';
+    }
+    return '$count';
   }
 }

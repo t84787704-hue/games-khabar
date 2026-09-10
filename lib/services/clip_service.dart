@@ -65,6 +65,7 @@ class ClipService {
       final clipData = {
         'id': docRef.id,
         'userId': userId,
+        'authorId': userId,
         'caption': caption.trim(),
         'title': caption.trim(),
         'videoUrl': videoUrl,
@@ -78,6 +79,7 @@ class ClipService {
         'likesCount': 0,
         'commentsCount': 0,
         'sharesCount': 0,
+        'viewsCount': 1,
         'likedBy': [],
         'createdAt': FieldValue.serverTimestamp(),
       };
@@ -85,6 +87,13 @@ class ClipService {
       // 3. Save to Firestore collection 'clips'
       await docRef.set(clipData);
       print('✅ [CLIP_SERVICE] Clip record saved to Firestore collection "clips" (id: ${docRef.id})');
+
+      // Increment user's posts count in Profile ('users' collection)
+      await _firestore.collection('users').doc(userId).update({
+        'postsCount': FieldValue.increment(1),
+      }).catchError((e) {
+        print('⚠️ [CLIP_SERVICE] Could not increment postsCount for user $userId: $e');
+      });
 
       // Also mirror to 'gamer_clips' for legacy feed compatibility
       await _legacyClipsRef.doc(docRef.id).set(clipData).catchError((e) {
@@ -179,5 +188,44 @@ class ClipService {
         .collection('comments')
         .orderBy('createdAt', descending: true)
         .snapshots();
+  }
+
+  /// Increment clip view count when played in feed
+  Future<void> incrementClipViews(String clipId) async {
+    try {
+      await _clipsRef.doc(clipId).update({
+        'viewsCount': FieldValue.increment(1),
+      }).catchError((_) {});
+      await _legacyClipsRef.doc(clipId).update({
+        'viewsCount': FieldValue.increment(1),
+      }).catchError((_) {});
+    } catch (_) {}
+  }
+
+  /// Report non-gaming or inappropriate clip
+  Future<void> reportClip({
+    required String clipId,
+    required String reporterId,
+    required String reason,
+    required String clipTitle,
+  }) async {
+    try {
+      await _firestore.collection('clip_reports').add({
+        'clipId': clipId,
+        'reporterId': reporterId,
+        'reason': reason,
+        'clipTitle': clipTitle,
+        'createdAt': FieldValue.serverTimestamp(),
+        'status': 'pending_review',
+      });
+      await _clipsRef.doc(clipId).update({
+        'reportsCount': FieldValue.increment(1),
+      }).catchError((_) {});
+      await _legacyClipsRef.doc(clipId).update({
+        'reportsCount': FieldValue.increment(1),
+      }).catchError((_) {});
+    } catch (e) {
+      print('❌ [CLIP_SERVICE] reportClip error: $e');
+    }
   }
 }

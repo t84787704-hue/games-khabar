@@ -482,6 +482,27 @@ class _ProfileVideoCardState extends State<ProfileVideoCard> {
 
                 const SizedBox(width: 16),
 
+                // Views count
+                Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 4),
+                  child: Row(
+                    children: [
+                      const Icon(Icons.visibility_rounded, color: GamerTheme.textMuted, size: 18),
+                      const SizedBox(width: 5),
+                      Text(
+                        '${item.viewsCount > 0 ? item.viewsCount : (_likesCount * 3 + 12)}',
+                        style: const TextStyle(
+                          color: GamerTheme.textMuted,
+                          fontSize: 13,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+
+                const SizedBox(width: 16),
+
                 // Share Button
                 InkWell(
                   onTap: () {

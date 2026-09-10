@@ -14,6 +14,7 @@ class GamerClip {
   final int likesCount;
   final int commentsCount;
   final int sharesCount;
+  final int viewsCount;
   final List<String> likedBy;
   final DateTime? createdAt;
 
@@ -31,6 +32,7 @@ class GamerClip {
     this.likesCount = 0,
     this.commentsCount = 0,
     this.sharesCount = 0,
+    this.viewsCount = 0,
     this.likedBy = const [],
     this.createdAt,
   });
@@ -62,6 +64,7 @@ class GamerClip {
       likesCount: (data['likesCount'] as num?)?.toInt() ?? 0,
       commentsCount: (data['commentsCount'] as num?)?.toInt() ?? 0,
       sharesCount: (data['sharesCount'] as num?)?.toInt() ?? 0,
+      viewsCount: (data['viewsCount'] as num?)?.toInt() ?? 0,
       likedBy: List<String>.from(data['likedBy'] ?? []),
       createdAt: created,
     );
@@ -84,6 +87,7 @@ class GamerClip {
       'likesCount': likesCount,
       'commentsCount': commentsCount,
       'sharesCount': sharesCount,
+      'viewsCount': viewsCount,
       'likedBy': likedBy,
       'createdAt': createdAt != null ? Timestamp.fromDate(createdAt!) : FieldValue.serverTimestamp(),
     };
@@ -103,6 +107,7 @@ class GamerClip {
     int? likesCount,
     int? commentsCount,
     int? sharesCount,
+    int? viewsCount,
     List<String>? likedBy,
     DateTime? createdAt,
   }) {
@@ -120,6 +125,7 @@ class GamerClip {
       likesCount: likesCount ?? this.likesCount,
       commentsCount: commentsCount ?? this.commentsCount,
       sharesCount: sharesCount ?? this.sharesCount,
+      viewsCount: viewsCount ?? this.viewsCount,
       likedBy: likedBy ?? this.likedBy,
       createdAt: createdAt ?? this.createdAt,
     );

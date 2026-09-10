@@ -22,6 +22,7 @@ class ProfileFeedItem {
   final int likesCount;
   final int commentsCount;
   final int sharesCount;
+  final int viewsCount;
   final bool isVerified;
   final bool isClip; // true if video clip from 'clips' collection
   final DateTime? createdAt;
@@ -43,6 +44,7 @@ class ProfileFeedItem {
     this.likesCount = 0,
     this.commentsCount = 0,
     this.sharesCount = 0,
+    this.viewsCount = 0,
     this.isVerified = false,
     this.isClip = false,
     this.createdAt,
@@ -89,6 +91,7 @@ class ProfileFeedItem {
       likesCount: (data['likesCount'] as num?)?.toInt() ?? 0,
       commentsCount: (data['commentsCount'] as num?)?.toInt() ?? 0,
       sharesCount: (data['sharesCount'] as num?)?.toInt() ?? 0,
+      viewsCount: (data['viewsCount'] as num?)?.toInt() ?? 0,
       isVerified: data['isVerified'] == true,
       isClip: hasVideo,
       createdAt: created,
