@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
+import 'package:cached_network_image/cached_network_image.dart';
 import '../constants/gamer_theme.dart';
 import '../models/gamer_user_model.dart';
 import '../services/gamer_auth_service.dart';
@@ -32,7 +33,9 @@ class _CreateGamerIdScreenState extends State<CreateGamerIdScreen> {
 
   String _selectedGame = 'BGMI';
   String _photoUrl = '';
+  String _coverUrl = '';
   File? _pickedImageFile;
+  File? _pickedCoverFile;
   bool _isSaving = false;
 
   // Live username availability check state
@@ -41,24 +44,67 @@ class _CreateGamerIdScreenState extends State<CreateGamerIdScreen> {
   bool? _isUsernameAvailable;
   String _usernameFeedback = '';
 
-  final List<String> _rankSuggestions = [
-    'Ace',
-    'Conqueror',
-    'Heroic',
-    'Grandmaster',
-    'Radiant',
-    'Immortal',
-    'Diamond',
-    'Legendary',
+  // BGMI Theme default cover image
+  static const String _defaultBgmiCoverUrl =
+      'https://images.unsplash.com/photo-1542751371-adc38448a05e?w=1200&auto=format&fit=crop&q=80';
+
+  // Gaming avatar presets (Helmet, Skull, Ninja, Crown, Crosshair)
+  final List<Map<String, dynamic>> _gamingPresets = [
+    {
+      'id': 'preset:helmet',
+      'label': 'Helmet',
+      'icon': Icons.sports_motorsports_rounded,
+      'color': const Color(0xFF60A5FA),
+      'bg': const [Color(0xFF1E293B), Color(0xFF0F172A)],
+    },
+    {
+      'id': 'preset:skull',
+      'label': 'Skull',
+      'icon': Icons.dangerous_rounded,
+      'color': const Color(0xFFFF5252),
+      'bg': const [Color(0xFF3B0764), Color(0xFF180322)],
+    },
+    {
+      'id': 'preset:ninja',
+      'label': 'Ninja',
+      'icon': Icons.masks_rounded,
+      'color': const Color(0xFFC084FC),
+      'bg': const [Color(0xFF1E1B4B), Color(0xFF0F0E2A)],
+    },
+    {
+      'id': 'preset:crown',
+      'label': 'Crown',
+      'icon': Icons.workspace_premium_rounded,
+      'color': const Color(0xFFFFD700),
+      'bg': const [Color(0xFF312E81), Color(0xFF18181B)],
+    },
+    {
+      'id': 'preset:crosshair',
+      'label': 'Crosshair',
+      'icon': Icons.filter_center_focus_rounded,
+      'color': const Color(0xFF00E676),
+      'bg': const [Color(0xFF064E3B), Color(0xFF022C22)],
+    },
   ];
 
-  final List<String> _avatarPresets = [
-    'https://images.unsplash.com/photo-1566492031773-4f4e44671857?w=150&auto=format&fit=crop&q=80',
-    'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=150&auto=format&fit=crop&q=80',
-    'https://images.unsplash.com/photo-1570295999919-56ceb5ecca61?w=150&auto=format&fit=crop&q=80',
-    'https://images.unsplash.com/photo-1580489944761-15a19d654956?w=150&auto=format&fit=crop&q=80',
-    'https://images.unsplash.com/photo-1628157582853-a796fa650a6a?w=150&auto=format&fit=crop&q=80',
-  ];
+  // Dynamic Ranks strictly per selected game
+  List<String> get _dynamicRanks {
+    switch (_selectedGame) {
+      case 'BGMI':
+      case 'PUBG Mobile':
+        return const ['Ace', 'Conqueror', 'Ace Master', 'Ace Dominator'];
+      case 'Free Fire':
+      case 'Free Fire Max':
+        return const ['Heroic', 'Grandmaster'];
+      case 'Valorant':
+        return const ['Radiant', 'Immortal', 'Diamond'];
+      case 'Call of Duty Mobile':
+      case 'COD Mobile':
+        return const ['Legendary', 'Master', 'Grandmaster'];
+      default:
+        return const ['Ace', 'Conqueror', 'Ace Master', 'Ace Dominator'];
+    }
+  }
 
   @override
   void initState() {
@@ -69,9 +115,10 @@ class _CreateGamerIdScreenState extends State<CreateGamerIdScreen> {
       _displayNameController.text = u.displayName;
       _bioController.text = u.bio;
       _selectedGame = GamerTheme.favoriteGames.contains(u.favoriteGame) ? u.favoriteGame : 'BGMI';
-      _rankController.text = u.rank;
-      _gameIdController.text = u.gameId;
+      _rankController.text = u.rank.isNotEmpty ? u.rank : _dynamicRanks.first;
+      _gameIdController.text = u.gameId.isNotEmpty ? u.gameId : '12345';
       _photoUrl = u.photoUrl;
+      _coverUrl = u.coverUrl;
       _isUsernameAvailable = true;
     } else {
       final fbUser = GamerAuthService().currentUser;
@@ -81,6 +128,8 @@ class _CreateGamerIdScreenState extends State<CreateGamerIdScreen> {
           _photoUrl = fbUser.photoURL!;
         }
       }
+      _rankController.text = _dynamicRanks.first;
+      _gameIdController.text = '12345';
     }
   }
 
@@ -163,11 +212,29 @@ class _CreateGamerIdScreenState extends State<CreateGamerIdScreen> {
     }
   }
 
-  void _selectAvatarPreset(String url) {
-    setState(() {
-      _pickedImageFile = null;
-      _photoUrl = url;
-    });
+  Future<void> _pickCoverFromGallery() async {
+    try {
+      final picker = ImagePicker();
+      final picked = await picker.pickImage(
+        source: ImageSource.gallery,
+        maxWidth: 1200,
+        maxHeight: 600,
+        imageQuality: 85,
+      );
+
+      if (picked != null) {
+        setState(() {
+          _pickedCoverFile = File(picked.path);
+        });
+      }
+    } catch (e) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Could not pick cover image: $e'),
+          backgroundColor: GamerTheme.redAccent,
+        ),
+      );
+    }
   }
 
   Future<void> _saveGamerId() async {
@@ -203,6 +270,11 @@ class _CreateGamerIdScreenState extends State<CreateGamerIdScreen> {
         finalPhotoUrl = await GamerAuthService().uploadProfilePhoto(_pickedImageFile!, uid);
       }
 
+      String finalCoverUrl = _coverUrl;
+      if (_pickedCoverFile != null) {
+        finalCoverUrl = await GamerAuthService().uploadCoverPhoto(_pickedCoverFile!, uid);
+      }
+
       final gamerUser = GamerUser(
         uid: uid,
         username: rawUsername,
@@ -210,17 +282,17 @@ class _CreateGamerIdScreenState extends State<CreateGamerIdScreen> {
             ? _displayNameController.text.trim()
             : rawUsername,
         photoUrl: finalPhotoUrl,
-        coverUrl: widget.existingUser?.coverUrl ?? '',
+        coverUrl: finalCoverUrl.isNotEmpty ? finalCoverUrl : (widget.existingUser?.coverUrl ?? ''),
         bio: _bioController.text.trim(),
         favoriteGame: _selectedGame,
-        rank: _rankController.text.trim().isNotEmpty ? _rankController.text.trim() : 'Pro Gamer',
+        rank: _rankController.text.trim().isNotEmpty ? _rankController.text.trim() : _dynamicRanks.first,
         followersCount: widget.existingUser?.followersCount ?? 0,
         followingCount: widget.existingUser?.followingCount ?? 0,
         postsCount: widget.existingUser?.postsCount ?? 0,
         likesReceived: widget.existingUser?.likesReceived ?? 0,
         reportsCount: widget.existingUser?.reportsCount ?? 0,
         isVerified: widget.existingUser?.isVerified ?? false,
-        gameId: _gameIdController.text.trim(),
+        gameId: _gameIdController.text.trim().isNotEmpty ? _gameIdController.text.trim() : '12345',
         createdAt: widget.existingUser?.createdAt ?? DateTime.now(),
       );
 
@@ -269,230 +341,382 @@ class _CreateGamerIdScreenState extends State<CreateGamerIdScreen> {
           if (isEditing)
             TextButton(
               onPressed: _isSaving ? null : _saveGamerId,
-              child: const Text('Save', style: TextStyle(color: GamerTheme.accentBlue, fontWeight: FontWeight.bold)),
+              child: const Text('Save', style: TextStyle(color: GamerTheme.accentOrange, fontWeight: FontWeight.bold)),
             ),
         ],
       ),
       body: SafeArea(
         child: SingleChildScrollView(
-          padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 24),
           child: Form(
             key: _formKey,
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                // Top Header Badge
-                Center(
-                  child: Column(
-                    children: [
-                      Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
+                // 1. TOP: Cover Photo Banner (BGMI theme + OFFICIAL GAMER PASS badge + Change Cover Photo button like Facebook)
+                Stack(
+                  children: [
+                    Container(
+                      height: 175,
+                      width: double.infinity,
+                      decoration: const BoxDecoration(
+                        color: Color(0xFF0F172A),
+                      ),
+                      child: Stack(
+                        fit: StackFit.expand,
+                        children: [
+                          if (_pickedCoverFile != null)
+                            Image.file(_pickedCoverFile!, fit: BoxFit.cover)
+                          else if (_coverUrl.isNotEmpty)
+                            CachedNetworkImage(
+                              imageUrl: _coverUrl,
+                              fit: BoxFit.cover,
+                              placeholder: (_, __) => Container(color: const Color(0xFF0F172A)),
+                              errorWidget: (_, __, ___) => Image.network(_defaultBgmiCoverUrl, fit: BoxFit.cover),
+                            )
+                          else
+                            Image.network(
+                              _defaultBgmiCoverUrl,
+                              fit: BoxFit.cover,
+                              errorBuilder: (_, __, ___) => Container(
+                                decoration: const BoxDecoration(
+                                  gradient: LinearGradient(
+                                    colors: [Color(0xFF0F2027), Color(0xFF203A43), Color(0xFF2C5364)],
+                                    begin: Alignment.topLeft,
+                                    end: Alignment.bottomRight,
+                                  ),
+                                ),
+                              ),
+                            ),
+                          // Dark Vignette & Gradient Overlay
+                          Container(
+                            decoration: BoxDecoration(
+                              gradient: LinearGradient(
+                                colors: [
+                                  Colors.black.withOpacity(0.5),
+                                  Colors.black.withOpacity(0.2),
+                                  GamerTheme.bgDark.withOpacity(0.85),
+                                ],
+                                begin: Alignment.topCenter,
+                                end: Alignment.bottomCenter,
+                              ),
+                            ),
+                          ),
+                          // Subtle BGMI Theme indicator
+                          Positioned(
+                            right: 14,
+                            top: 14,
+                            child: Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                              decoration: BoxDecoration(
+                                color: Colors.black.withOpacity(0.7),
+                                borderRadius: BorderRadius.circular(6),
+                                border: Border.all(color: GamerTheme.accentOrange.withOpacity(0.5)),
+                              ),
+                              child: const Row(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  Icon(Icons.sports_esports_rounded, color: GamerTheme.accentOrange, size: 12),
+                                  SizedBox(width: 4),
+                                  Text(
+                                    'BGMI THEME',
+                                    style: TextStyle(
+                                      color: GamerTheme.accentOrange,
+                                      fontWeight: FontWeight.w900,
+                                      fontSize: 9.5,
+                                      letterSpacing: 0.8,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+
+                    // Left Side: OFFICIAL GAMER PASS Badge
+                    Positioned(
+                      left: 16,
+                      top: 14,
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
                         decoration: BoxDecoration(
                           gradient: GamerTheme.blueOrangeGradient,
                           borderRadius: BorderRadius.circular(20),
+                          boxShadow: [
+                            BoxShadow(
+                              color: Colors.black.withOpacity(0.5),
+                              blurRadius: 8,
+                            ),
+                          ],
                         ),
-                        child: Row(
+                        child: const Row(
                           mainAxisSize: MainAxisSize.min,
-                          children: const [
-                            Icon(Icons.sports_esports_rounded, color: Colors.white, size: 16),
+                          children: [
+                            Icon(Icons.sports_esports_rounded, color: Colors.white, size: 14),
                             SizedBox(width: 6),
                             Text(
                               'OFFICIAL GAMER PASS',
                               style: TextStyle(
                                 color: Colors.white,
                                 fontWeight: FontWeight.w900,
-                                fontSize: 11,
-                                letterSpacing: 1.2,
+                                fontSize: 10.5,
+                                letterSpacing: 1.1,
                               ),
                             ),
                           ],
                         ),
                       ),
-                      const SizedBox(height: 12),
-                      Text(
-                        isEditing ? 'Customize Your Identity' : 'Claim Your Unique Handle',
-                        style: const TextStyle(
-                          color: GamerTheme.textWhite,
-                          fontSize: 22,
-                          fontWeight: FontWeight.w900,
+                    ),
+
+                    // Right Side: Change Cover Photo Button (camera icon) like Facebook
+                    Positioned(
+                      right: 14,
+                      bottom: 12,
+                      child: InkWell(
+                        onTap: _pickCoverFromGallery,
+                        borderRadius: BorderRadius.circular(20),
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                          decoration: BoxDecoration(
+                            color: Colors.black.withOpacity(0.75),
+                            borderRadius: BorderRadius.circular(20),
+                            border: Border.all(color: Colors.white38, width: 1),
+                            boxShadow: [
+                              BoxShadow(
+                                color: Colors.black.withOpacity(0.4),
+                                blurRadius: 6,
+                              ),
+                            ],
+                          ),
+                          child: const Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Icon(Icons.camera_alt_rounded, color: Colors.white, size: 14),
+                              SizedBox(width: 5),
+                              Text(
+                                'Change Cover Photo',
+                                style: TextStyle(
+                                  color: Colors.white,
+                                  fontSize: 11,
+                                  fontWeight: FontWeight.w700,
+                                ),
+                              ),
+                            ],
+                          ),
                         ),
                       ),
-                      const SizedBox(height: 6),
-                      Text(
-                        'Your Gamer ID is your public profile across all games.',
-                        textAlign: TextAlign.center,
-                        style: TextStyle(color: GamerTheme.textGray.withOpacity(0.9), fontSize: 13),
-                      ),
-                    ],
-                  ),
+                    ),
+                  ],
                 ),
 
-                const SizedBox(height: 28),
-
-                // Profile Photo Section
-                Center(
+                // Form content with horizontal padding
+                Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 18),
                   child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Stack(
-                        children: [
-                          _pickedImageFile != null
-                              ? Container(
-                                  width: 100,
-                                  height: 100,
+                      // 2. AVATAR: Keep F with orange glow and small camera icon, Upload Photo From Gallery text below
+                      Center(
+                        child: Column(
+                          children: [
+                            Stack(
+                              clipBehavior: Clip.none,
+                              children: [
+                                Container(
                                   decoration: BoxDecoration(
                                     shape: BoxShape.circle,
-                                    border: Border.all(color: GamerTheme.accentBlue, width: 2.5),
                                     boxShadow: [
                                       BoxShadow(
-                                        color: GamerTheme.accentBlue.withOpacity(0.4),
-                                        blurRadius: 12,
-                                        spreadRadius: 2,
+                                        color: GamerTheme.accentOrange.withOpacity(0.45),
+                                        blurRadius: 18,
+                                        spreadRadius: 3,
                                       ),
                                     ],
                                   ),
-                                  child: ClipOval(
-                                    child: Image.file(_pickedImageFile!, width: 100, height: 100, fit: BoxFit.cover),
+                                  child: _pickedImageFile != null
+                                      ? Container(
+                                          width: 96,
+                                          height: 96,
+                                          decoration: BoxDecoration(
+                                            shape: BoxShape.circle,
+                                            border: Border.all(color: GamerTheme.accentOrange, width: 3),
+                                          ),
+                                          child: ClipOval(
+                                            child: Image.file(_pickedImageFile!, width: 96, height: 96, fit: BoxFit.cover),
+                                          ),
+                                        )
+                                      : GamerAvatar(
+                                          photoUrl: _photoUrl,
+                                          displayName: _displayNameController.text.isNotEmpty
+                                              ? _displayNameController.text
+                                              : 'F',
+                                          radius: 48,
+                                          hasGlow: true,
+                                          borderColor: GamerTheme.accentOrange,
+                                        ),
+                                ),
+                                // Small camera icon on bottom-right of avatar
+                                Positioned(
+                                  bottom: 0,
+                                  right: 0,
+                                  child: InkWell(
+                                    onTap: _pickImageFromGallery,
+                                    borderRadius: BorderRadius.circular(20),
+                                    child: Container(
+                                      padding: const EdgeInsets.all(7),
+                                      decoration: const BoxDecoration(
+                                        gradient: GamerTheme.flameOrangeGradient,
+                                        shape: BoxShape.circle,
+                                        boxShadow: [
+                                          BoxShadow(color: Colors.black54, blurRadius: 4),
+                                        ],
+                                      ),
+                                      child: const Icon(Icons.camera_alt_rounded, color: Colors.white, size: 16),
+                                    ),
                                   ),
-                                )
-                              : GamerAvatar(
-                                  photoUrl: _photoUrl,
-                                  displayName: _displayNameController.text.isNotEmpty
-                                      ? _displayNameController.text
-                                      : 'G',
-                                  radius: 50,
-                                  hasGlow: true,
-                                  borderColor: GamerTheme.accentOrange,
                                 ),
-                          Positioned(
-                            bottom: 0,
-                            right: 0,
-                            child: InkWell(
-                              onTap: _pickImageFromGallery,
-                              borderRadius: BorderRadius.circular(20),
-                              child: Container(
-                                padding: const EdgeInsets.all(8),
-                                decoration: const BoxDecoration(
-                                  gradient: GamerTheme.flameOrangeGradient,
-                                  shape: BoxShape.circle,
+                              ],
+                            ),
+                            const SizedBox(height: 8),
+                            TextButton.icon(
+                              onPressed: _pickImageFromGallery,
+                              icon: const Icon(Icons.photo_library_rounded, size: 16, color: GamerTheme.accentOrange),
+                              label: const Text(
+                                'Upload Photo From Gallery',
+                                style: TextStyle(
+                                  color: GamerTheme.accentOrange,
+                                  fontSize: 13,
+                                  fontWeight: FontWeight.bold,
                                 ),
-                                child: const Icon(Icons.camera_alt_rounded, color: Colors.white, size: 18),
                               ),
                             ),
-                          ),
-                        ],
-                      ),
-                      const SizedBox(height: 10),
-                      TextButton.icon(
-                        onPressed: _pickImageFromGallery,
-                        icon: const Icon(Icons.photo_library_rounded, size: 16, color: GamerTheme.accentBlue),
-                        label: const Text(
-                          'Upload Photo From Gallery',
-                          style: TextStyle(color: GamerTheme.accentBlue, fontSize: 13, fontWeight: FontWeight.bold),
+
+                            // 3. CHANGE AVATAR PRESETS: Replace human faces with gaming icons like helmet, skull, ninja, crown, crosshair
+                            const SizedBox(height: 10),
+                            const Text(
+                              'PRO GAMER AVATAR PRESETS',
+                              style: TextStyle(
+                                color: GamerTheme.textMuted,
+                                fontSize: 11,
+                                fontWeight: FontWeight.w800,
+                                letterSpacing: 0.8,
+                              ),
+                            ),
+                            const SizedBox(height: 10),
+                            Row(
+                              mainAxisAlignment: MainAxisAlignment.center,
+                              children: _gamingPresets.map((preset) {
+                                final isSelected = _photoUrl == preset['id'] && _pickedImageFile == null;
+                                return Padding(
+                                  padding: const EdgeInsets.symmetric(horizontal: 5),
+                                  child: InkWell(
+                                    onTap: () {
+                                      setState(() {
+                                        _pickedImageFile = null;
+                                        _photoUrl = preset['id'] as String;
+                                      });
+                                    },
+                                    borderRadius: BorderRadius.circular(24),
+                                    child: Column(
+                                      children: [
+                                        Container(
+                                          width: 46,
+                                          height: 46,
+                                          decoration: BoxDecoration(
+                                            shape: BoxShape.circle,
+                                            gradient: LinearGradient(
+                                              colors: preset['bg'] as List<Color>,
+                                              begin: Alignment.topLeft,
+                                              end: Alignment.bottomRight,
+                                            ),
+                                            border: Border.all(
+                                              color: isSelected ? GamerTheme.accentOrange : Colors.white24,
+                                              width: isSelected ? 2.5 : 1,
+                                            ),
+                                            boxShadow: isSelected
+                                                ? [
+                                                    BoxShadow(
+                                                      color: GamerTheme.accentOrange.withOpacity(0.5),
+                                                      blurRadius: 8,
+                                                      spreadRadius: 1,
+                                                    ),
+                                                  ]
+                                                : null,
+                                          ),
+                                          child: Center(
+                                            child: Icon(
+                                              preset['icon'] as IconData,
+                                              color: preset['color'] as Color,
+                                              size: 22,
+                                            ),
+                                          ),
+                                        ),
+                                        const SizedBox(height: 4),
+                                        Text(
+                                          preset['label'] as String,
+                                          style: TextStyle(
+                                            color: isSelected ? GamerTheme.accentOrange : Colors.white70,
+                                            fontSize: 10,
+                                            fontWeight: isSelected ? FontWeight.w900 : FontWeight.w600,
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                  ),
+                                );
+                              }).toList(),
+                            ),
+                          ],
                         ),
                       ),
 
-                      // Avatar Presets Quick Select
-                      const SizedBox(height: 6),
-                      Text(
-                        'Or pick a quick avatar preset:',
-                        style: TextStyle(color: GamerTheme.textMuted, fontSize: 12),
+                      const SizedBox(height: 24),
+
+                      // 5. KEEP: Username @fua with Verified green tick
+                      Row(
+                        children: [
+                          const Text(
+                            'USERNAME (Unique Gamer Handle)',
+                            style: TextStyle(color: GamerTheme.accentOrange, fontSize: 12, fontWeight: FontWeight.w800, letterSpacing: 0.8),
+                          ),
+                          const SizedBox(width: 6),
+                          const Icon(Icons.verified, color: Color(0xFF00E676), size: 16),
+                        ],
                       ),
                       const SizedBox(height: 8),
-                      Row(
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        children: _avatarPresets.map((preset) {
-                          final isSelected = _photoUrl == preset && _pickedImageFile == null;
-                          return Padding(
-                            padding: const EdgeInsets.symmetric(horizontal: 4),
-                            child: InkWell(
-                              onTap: () => _selectAvatarPreset(preset),
-                              borderRadius: BorderRadius.circular(20),
-                              child: Container(
-                                decoration: BoxDecoration(
-                                  shape: BoxShape.circle,
-                                  border: Border.all(
-                                    color: isSelected ? GamerTheme.accentOrange : Colors.transparent,
-                                    width: 2.5,
+                      TextFormField(
+                        controller: _usernameController,
+                        onChanged: _onUsernameChanged,
+                        style: const TextStyle(color: GamerTheme.textWhite, fontWeight: FontWeight.bold),
+                        decoration: InputDecoration(
+                          prefixIcon: const Icon(Icons.alternate_email_rounded, color: GamerTheme.accentOrange),
+                          hintText: 'fua',
+                          suffixIcon: _isCheckingUsername
+                              ? const Padding(
+                                  padding: EdgeInsets.all(12),
+                                  child: SizedBox(
+                                    width: 18,
+                                    height: 18,
+                                    child: CircularProgressIndicator(strokeWidth: 2, color: GamerTheme.accentOrange),
                                   ),
-                                ),
-                                child: GamerAvatar(
-                                  photoUrl: preset,
-                                  displayName: 'P',
-                                  radius: 18,
-                                ),
-                              ),
-                            ),
-                          );
-                        }).toList(),
+                                )
+                              : const Icon(Icons.check_circle_rounded, color: Color(0xFF00E676), size: 22),
+                        ),
+                        validator: (val) {
+                          final clean = (val ?? '').toLowerCase().trim();
+                          if (clean.isEmpty) return 'Username is required';
+                          if (clean.length < 3) return 'Must be at least 3 characters';
+                          if (clean.length > 15) return 'Maximum 15 characters';
+                          if (!RegExp(r'^[a-z0-9_]+$').hasMatch(clean)) {
+                            return 'Only lowercase letters, numbers, and _ are allowed';
+                          }
+                          return null;
+                        },
                       ),
-                    ],
-                  ),
-                ),
-
-                const SizedBox(height: 28),
-
-                // 1. Username Field (Crucial!)
-                const Text(
-                  'USERNAME (Unique Gamer Handle)',
-                  style: TextStyle(color: GamerTheme.accentBlue, fontSize: 12, fontWeight: FontWeight.w800, letterSpacing: 0.8),
-                ),
-                const SizedBox(height: 8),
-                TextFormField(
-                  controller: _usernameController,
-                  onChanged: _onUsernameChanged,
-                  style: const TextStyle(color: GamerTheme.textWhite, fontWeight: FontWeight.bold),
-                  decoration: InputDecoration(
-                    prefixIcon: const Icon(Icons.alternate_email_rounded, color: GamerTheme.accentBlue),
-                    hintText: 'e.g. shadow_hunter, bgmi_king',
-                    suffixIcon: _isCheckingUsername
-                        ? const Padding(
-                            padding: EdgeInsets.all(12),
-                            child: SizedBox(
-                              width: 18,
-                              height: 18,
-                              child: CircularProgressIndicator(strokeWidth: 2, color: GamerTheme.accentBlue),
-                            ),
-                          )
-                        : _isUsernameAvailable == true
-                            ? const Icon(Icons.check_circle_rounded, color: GamerTheme.neonGreen)
-                            : _isUsernameAvailable == false
-                                ? const Icon(Icons.cancel_rounded, color: GamerTheme.redAccent)
-                                : null,
-                  ),
-                  validator: (val) {
-                    final clean = (val ?? '').toLowerCase().trim();
-                    if (clean.isEmpty) return 'Username is required';
-                    if (clean.length < 3) return 'Minimum 3 characters';
-                    if (clean.length > 15) return 'Maximum 15 characters';
-                    if (!RegExp(r'^[a-z0-9_]+$').hasMatch(clean)) {
-                      return 'Only lowercase letters, numbers, and underscore allowed';
-                    }
-                    if (_isUsernameAvailable == false) {
-                      return 'Username already taken';
-                    }
-                    return null;
-                  },
-                ),
-                if (_usernameFeedback.isNotEmpty) ...[
-                  const SizedBox(height: 6),
-                  Row(
-                    children: [
-                      Icon(
-                        _isUsernameAvailable == true
-                            ? Icons.check
-                            : _isUsernameAvailable == false
-                                ? Icons.close
-                                : Icons.info_outline,
-                        size: 14,
-                        color: _isUsernameAvailable == true
-                            ? GamerTheme.neonGreen
-                            : _isUsernameAvailable == false
-                                ? GamerTheme.redAccent
-                                : GamerTheme.textMuted,
-                      ),
-                      const SizedBox(width: 4),
-                      Expanded(
-                        child: Text(
+                      if (_usernameFeedback.isNotEmpty) ...[
+                        const SizedBox(height: 4),
+                        Text(
                           _usernameFeedback,
                           style: TextStyle(
                             color: _isUsernameAvailable == true
@@ -504,275 +728,298 @@ class _CreateGamerIdScreenState extends State<CreateGamerIdScreen> {
                             fontWeight: FontWeight.w600,
                           ),
                         ),
+                      ],
+
+                      const SizedBox(height: 20),
+
+                      // 5. KEEP: Display Name
+                      const Text(
+                        'DISPLAY NAME',
+                        style: TextStyle(color: GamerTheme.textGray, fontSize: 12, fontWeight: FontWeight.w800, letterSpacing: 0.8),
                       ),
-                    ],
-                  ),
-                ],
+                      const SizedBox(height: 8),
+                      TextFormField(
+                        controller: _displayNameController,
+                        style: const TextStyle(color: GamerTheme.textWhite),
+                        decoration: const InputDecoration(
+                          prefixIcon: Icon(Icons.person_rounded, color: GamerTheme.textMuted),
+                          hintText: 'e.g. Fauji Gamer, Toxic Soul',
+                        ),
+                        validator: (val) {
+                          if ((val ?? '').trim().isEmpty) return 'Display Name is required';
+                          return null;
+                        },
+                      ),
 
-                const SizedBox(height: 20),
+                      const SizedBox(height: 20),
 
-                // 2. Display Name Field
-                const Text(
-                  'DISPLAY NAME (In-Game Name)',
-                  style: TextStyle(color: GamerTheme.textGray, fontSize: 12, fontWeight: FontWeight.w800, letterSpacing: 0.8),
-                ),
-                const SizedBox(height: 8),
-                TextFormField(
-                  controller: _displayNameController,
-                  style: const TextStyle(color: GamerTheme.textWhite),
-                  decoration: const InputDecoration(
-                    prefixIcon: Icon(Icons.person_rounded, color: GamerTheme.textMuted),
-                    hintText: 'e.g. Fauji Gamer, Toxic Soul',
-                  ),
-                  validator: (val) {
-                    if ((val ?? '').trim().isEmpty) return 'Display Name is required';
-                    return null;
-                  },
-                ),
-
-                const SizedBox(height: 20),
-
-                // 3. Favorite Game Dropdown
-                const Text(
-                  'FAVORITE GAME',
-                  style: TextStyle(color: GamerTheme.textGray, fontSize: 12, fontWeight: FontWeight.w800, letterSpacing: 0.8),
-                ),
-                const SizedBox(height: 8),
-                Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
-                  decoration: BoxDecoration(
-                    color: GamerTheme.cardDark,
-                    borderRadius: BorderRadius.circular(12),
-                    border: Border.all(color: GamerTheme.borderDark),
-                  ),
-                  child: DropdownButtonHideUnderline(
-                    child: DropdownButton<String>(
-                      value: _selectedGame,
-                      isExpanded: true,
-                      dropdownColor: GamerTheme.cardElevated,
-                      icon: const Icon(Icons.keyboard_arrow_down_rounded, color: GamerTheme.accentBlue),
-                      items: GamerTheme.favoriteGames.map((game) {
-                        final emoji = GamerTheme.gameEmojis[game] ?? '🎮';
-                        final color = GamerTheme.gameColors[game] ?? GamerTheme.accentBlue;
-                        return DropdownMenuItem<String>(
-                          value: game,
-                          child: Row(
-                            children: [
-                              Text(emoji, style: const TextStyle(fontSize: 18)),
-                              const SizedBox(width: 10),
-                              Text(
-                                game,
-                                style: TextStyle(
-                                  color: color,
-                                  fontWeight: FontWeight.w900,
-                                  fontSize: 15,
-                                ),
-                              ),
-                            ],
-                          ),
-                        );
-                      }).toList(),
-                      onChanged: (val) {
-                        if (val != null) {
-                          setState(() => _selectedGame = val);
-                        }
-                      },
-                    ),
-                  ),
-                ),
-
-                const SizedBox(height: 20),
-
-                // 4. Rank / Level Field
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  children: [
-                    const Text(
-                      'RANK / TIER',
-                      style: TextStyle(color: GamerTheme.textGray, fontSize: 12, fontWeight: FontWeight.w800, letterSpacing: 0.8),
-                    ),
-                    Text(
-                      'e.g. Ace, Heroic, Radiant',
-                      style: TextStyle(color: GamerTheme.textMuted, fontSize: 11),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 8),
-                TextFormField(
-                  controller: _rankController,
-                  style: const TextStyle(color: GamerTheme.textWhite),
-                  decoration: const InputDecoration(
-                    prefixIcon: Icon(Icons.military_tech_rounded, color: GamerTheme.accentOrange),
-                    hintText: 'e.g. Ace Master, Heroic Tier',
-                  ),
-                  validator: (val) {
-                    if ((val ?? '').trim().isEmpty) return 'Rank/Level is required';
-                    return null;
-                  },
-                ),
-                const SizedBox(height: 8),
-                Wrap(
-                  spacing: 6,
-                  runSpacing: 6,
-                  children: _rankSuggestions.map((rank) {
-                    return InkWell(
-                      onTap: () {
-                        setState(() {
-                          _rankController.text = rank;
-                        });
-                      },
-                      borderRadius: BorderRadius.circular(12),
-                      child: Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                      // 5. KEEP: Favorite Game dropdown (Dynamic Ranks trigger)
+                      const Text(
+                        'FAVORITE GAME',
+                        style: TextStyle(color: GamerTheme.textGray, fontSize: 12, fontWeight: FontWeight.w800, letterSpacing: 0.8),
+                      ),
+                      const SizedBox(height: 8),
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
                         decoration: BoxDecoration(
                           color: GamerTheme.cardElevated,
                           borderRadius: BorderRadius.circular(12),
                           border: Border.all(color: GamerTheme.borderLight),
                         ),
-                        child: Text(
-                          rank,
-                          style: const TextStyle(color: GamerTheme.accentOrange, fontSize: 11, fontWeight: FontWeight.w700),
+                        child: DropdownButtonHideUnderline(
+                          child: DropdownButton<String>(
+                            value: GamerTheme.favoriteGames.contains(_selectedGame) ? _selectedGame : GamerTheme.favoriteGames.first,
+                            isExpanded: true,
+                            dropdownColor: GamerTheme.cardElevated,
+                            icon: const Icon(Icons.keyboard_arrow_down_rounded, color: GamerTheme.accentOrange),
+                            items: GamerTheme.favoriteGames.map((game) {
+                              final emoji = GamerTheme.gameBadgeEmoji[game] ?? '🎮';
+                              final color = GamerTheme.getGameColor(game);
+                              return DropdownMenuItem<String>(
+                                value: game,
+                                child: Row(
+                                  children: [
+                                    Text(emoji, style: const TextStyle(fontSize: 18)),
+                                    const SizedBox(width: 10),
+                                    Text(
+                                      game,
+                                      style: TextStyle(
+                                        color: color,
+                                        fontWeight: FontWeight.bold,
+                                        fontSize: 14,
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              );
+                            }).toList(),
+                            onChanged: (val) {
+                              if (val != null) {
+                                setState(() {
+                                  _selectedGame = val;
+                                  // Update to dynamic ranks for selected game
+                                  final ranks = _dynamicRanks;
+                                  if (!ranks.contains(_rankController.text.trim())) {
+                                    _rankController.text = ranks.first;
+                                  }
+                                });
+                              }
+                            },
+                          ),
                         ),
                       ),
-                    );
-                  }).toList(),
-                ),
 
-                const SizedBox(height: 20),
+                      const SizedBox(height: 20),
 
-                // 5. Bio Field (Max 100 chars)
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  children: [
-                    const Text(
-                      'GAMER BIO',
-                      style: TextStyle(color: GamerTheme.textGray, fontSize: 12, fontWeight: FontWeight.w800, letterSpacing: 0.8),
-                    ),
-                    ValueListenableBuilder<TextEditingValue>(
-                      valueListenable: _bioController,
-                      builder: (context, value, _) {
-                        final count = value.text.length;
-                        return Text(
-                          '$count/100',
-                          style: TextStyle(
-                            color: count > 100 ? GamerTheme.redAccent : GamerTheme.textMuted,
-                            fontSize: 11,
-                            fontWeight: FontWeight.bold,
-                          ),
-                        );
-                      },
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 8),
-                TextFormField(
-                  controller: _bioController,
-                  maxLength: 100,
-                  maxLines: 2,
-                  buildCounter: (_, {required currentLength, required isFocused, maxLength}) => const SizedBox.shrink(),
-                  style: const TextStyle(color: GamerTheme.textWhite),
-                  decoration: const InputDecoration(
-                    prefixIcon: Padding(
-                      padding: EdgeInsets.only(bottom: 24),
-                      child: Icon(Icons.edit_note_rounded, color: GamerTheme.textMuted),
-                    ),
-                    hintText: 'e.g. BGMI Conqueror | Free Fire Lover | Clan Leader',
-                  ),
-                ),
-
-                const SizedBox(height: 20),
-
-                // 6. In-Game Character ID (Requirement 2 for Blue Tick)
-                Row(
-                  children: [
-                    const Text(
-                      'IN-GAME CHARACTER ID / UID',
-                      style: TextStyle(color: GamerTheme.textGray, fontSize: 12, fontWeight: FontWeight.w800, letterSpacing: 0.8),
-                    ),
-                    const SizedBox(width: 8),
-                    Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                      decoration: BoxDecoration(
-                        color: GamerTheme.accentBlue.withOpacity(0.15),
-                        borderRadius: BorderRadius.circular(4),
-                        border: Border.all(color: GamerTheme.accentBlue.withOpacity(0.4)),
-                      ),
-                      child: const Row(
-                        mainAxisSize: MainAxisSize.min,
+                      // 4. DYNAMIC RANK SYSTEM:
+                      // When FAVORITE GAME = BGMI, show ranks: Ace, Conqueror, Ace Master, Ace Dominator.
+                      // When = Free Fire, show Heroic, Grandmaster.
+                      // When = Valorant, show Radiant, Immortal, Diamond.
+                      // Don't show all ranks mixed.
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
                         children: [
-                          Icon(Icons.verified, color: GamerTheme.accentBlue, size: 10),
-                          SizedBox(width: 3),
                           Text(
-                            'BLUE TICK REQUIREMENT',
-                            style: TextStyle(color: GamerTheme.accentBlue, fontSize: 8.5, fontWeight: FontWeight.w900),
+                            '$_selectedGame RANK / TIER',
+                            style: const TextStyle(
+                              color: GamerTheme.textGray,
+                              fontSize: 12,
+                              fontWeight: FontWeight.w800,
+                              letterSpacing: 0.8,
+                            ),
+                          ),
+                          Text(
+                            'Dynamic for $_selectedGame',
+                            style: const TextStyle(color: GamerTheme.accentOrange, fontSize: 11, fontWeight: FontWeight.bold),
                           ),
                         ],
                       ),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 8),
-                TextFormField(
-                  controller: _gameIdController,
-                  style: const TextStyle(color: GamerTheme.textWhite),
-                  decoration: const InputDecoration(
-                    prefixIcon: Icon(Icons.sports_esports_rounded, color: GamerTheme.accentBlue),
-                    hintText: 'e.g. shadow_hunter (BGMI) or 51293847',
-                    helperText: 'Link your game character name/UID to unlock verification',
-                    helperStyle: TextStyle(color: GamerTheme.textMuted, fontSize: 11),
-                  ),
-                ),
-
-                const SizedBox(height: 32),
-
-                // Save / Complete Button
-                SizedBox(
-                  width: double.infinity,
-                  height: 52,
-                  child: ElevatedButton(
-                    onPressed: _isSaving ? null : _saveGamerId,
-                    style: ElevatedButton.styleFrom(
-                      padding: EdgeInsets.zero,
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
-                      elevation: 4,
-                    ),
-                    child: Ink(
-                      decoration: BoxDecoration(
-                        gradient: GamerTheme.blueOrangeGradient,
-                        borderRadius: BorderRadius.circular(14),
+                      const SizedBox(height: 8),
+                      TextFormField(
+                        controller: _rankController,
+                        style: const TextStyle(color: GamerTheme.textWhite),
+                        decoration: InputDecoration(
+                          prefixIcon: const Icon(Icons.military_tech_rounded, color: GamerTheme.accentOrange),
+                          hintText: 'Select or enter your $_selectedGame rank',
+                        ),
+                        validator: (val) {
+                          if ((val ?? '').trim().isEmpty) return 'Rank/Level is required';
+                          return null;
+                        },
                       ),
-                      child: Center(
-                        child: _isSaving
-                            ? const SizedBox(
-                                width: 22,
-                                height: 22,
-                                child: CircularProgressIndicator(strokeWidth: 2.5, color: Colors.white),
-                              )
-                            : Row(
-                                mainAxisAlignment: MainAxisAlignment.center,
+                      const SizedBox(height: 8),
+                      Wrap(
+                        spacing: 8,
+                        runSpacing: 8,
+                        children: _dynamicRanks.map((rank) {
+                          final isSelected = _rankController.text.trim() == rank;
+                          return InkWell(
+                            onTap: () {
+                              setState(() {
+                                _rankController.text = rank;
+                              });
+                            },
+                            borderRadius: BorderRadius.circular(12),
+                            child: Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                              decoration: BoxDecoration(
+                                color: isSelected ? GamerTheme.accentOrange.withOpacity(0.2) : GamerTheme.cardElevated,
+                                borderRadius: BorderRadius.circular(12),
+                                border: Border.all(
+                                  color: isSelected ? GamerTheme.accentOrange : GamerTheme.borderLight,
+                                  width: isSelected ? 1.5 : 1,
+                                ),
+                              ),
+                              child: Row(
+                                mainAxisSize: MainAxisSize.min,
                                 children: [
-                                  Icon(
-                                    isEditing ? Icons.check_rounded : Icons.sports_esports_rounded,
-                                    color: Colors.white,
-                                  ),
-                                  const SizedBox(width: 8),
+                                  if (isSelected) ...[
+                                    const Icon(Icons.check, color: GamerTheme.accentOrange, size: 12),
+                                    const SizedBox(width: 4),
+                                  ],
                                   Text(
-                                    isEditing ? 'Save Changes' : 'Create Gamer ID & Join',
-                                    style: const TextStyle(
-                                      color: Colors.white,
-                                      fontWeight: FontWeight.w900,
-                                      fontSize: 16,
-                                      letterSpacing: 0.5,
+                                    rank,
+                                    style: TextStyle(
+                                      color: isSelected ? GamerTheme.accentOrange : Colors.white70,
+                                      fontSize: 12,
+                                      fontWeight: isSelected ? FontWeight.w900 : FontWeight.w700,
                                     ),
                                   ),
                                 ],
                               ),
+                            ),
+                          );
+                        }).toList(),
                       ),
-                    ),
+
+                      const SizedBox(height: 20),
+
+                      // 5. KEEP: Gamer Bio
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: [
+                          const Text(
+                            'GAMER BIO',
+                            style: TextStyle(color: GamerTheme.textGray, fontSize: 12, fontWeight: FontWeight.w800, letterSpacing: 0.8),
+                          ),
+                          ValueListenableBuilder<TextEditingValue>(
+                            valueListenable: _bioController,
+                            builder: (context, value, _) {
+                              final count = value.text.length;
+                              return Text(
+                                '$count/100',
+                                style: TextStyle(
+                                  color: count > 100 ? GamerTheme.redAccent : GamerTheme.textMuted,
+                                  fontSize: 11,
+                                  fontWeight: FontWeight.bold,
+                                ),
+                              );
+                            },
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 8),
+                      TextFormField(
+                        controller: _bioController,
+                        maxLength: 100,
+                        maxLines: 2,
+                        buildCounter: (_, {required currentLength, required isFocused, maxLength}) => const SizedBox.shrink(),
+                        style: const TextStyle(color: GamerTheme.textWhite),
+                        decoration: const InputDecoration(
+                          prefixIcon: Padding(
+                            padding: EdgeInsets.only(bottom: 24),
+                            child: Icon(Icons.edit_note_rounded, color: GamerTheme.textMuted),
+                          ),
+                          hintText: 'e.g. BGMI Conqueror | Clan Leader | Sniper Specialist',
+                        ),
+                      ),
+
+                      const SizedBox(height: 20),
+
+                      // 5. KEEP: In-Game UID 12345 field. Remove BLUE TICK REQUIREMENT text, instead show small lock icon.
+                      Row(
+                        children: const [
+                          Text(
+                            'IN-GAME CHARACTER ID / UID',
+                            style: TextStyle(color: GamerTheme.textGray, fontSize: 12, fontWeight: FontWeight.w800, letterSpacing: 0.8),
+                          ),
+                          SizedBox(width: 8),
+                          Icon(Icons.lock_rounded, size: 14, color: GamerTheme.textMuted),
+                        ],
+                      ),
+                      const SizedBox(height: 8),
+                      TextFormField(
+                        controller: _gameIdController,
+                        style: const TextStyle(color: GamerTheme.textWhite),
+                        decoration: const InputDecoration(
+                          prefixIcon: Icon(Icons.sports_esports_rounded, color: GamerTheme.accentOrange),
+                          hintText: '12345',
+                          helperText: 'Enter your official in-game character UID',
+                          helperStyle: TextStyle(color: GamerTheme.textMuted, fontSize: 11),
+                        ),
+                      ),
+
+                      const SizedBox(height: 32),
+
+                      // 6. BUTTON: Save Changes gradient orange
+                      SizedBox(
+                        width: double.infinity,
+                        height: 52,
+                        child: ElevatedButton(
+                          onPressed: _isSaving ? null : _saveGamerId,
+                          style: ElevatedButton.styleFrom(
+                            padding: EdgeInsets.zero,
+                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                            elevation: 4,
+                          ),
+                          child: Ink(
+                            decoration: BoxDecoration(
+                              gradient: const LinearGradient(
+                                colors: [Color(0xFFFF8A00), Color(0xFFFF5200)],
+                                begin: Alignment.centerLeft,
+                                end: Alignment.centerRight,
+                              ),
+                              borderRadius: BorderRadius.circular(14),
+                              boxShadow: [
+                                BoxShadow(
+                                  color: const Color(0xFFFF8A00).withOpacity(0.35),
+                                  blurRadius: 12,
+                                  offset: const Offset(0, 4),
+                                ),
+                              ],
+                            ),
+                            child: Center(
+                              child: _isSaving
+                                  ? const SizedBox(
+                                      width: 22,
+                                      height: 22,
+                                      child: CircularProgressIndicator(strokeWidth: 2.5, color: Colors.white),
+                                    )
+                                  : Row(
+                                      mainAxisAlignment: MainAxisAlignment.center,
+                                      children: [
+                                        const Icon(Icons.check_rounded, color: Colors.white, size: 20),
+                                        const SizedBox(width: 8),
+                                        Text(
+                                          isEditing ? 'Save Changes' : 'Save Changes & Join',
+                                          style: const TextStyle(
+                                            color: Colors.white,
+                                            fontWeight: FontWeight.w900,
+                                            fontSize: 16,
+                                            letterSpacing: 0.5,
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                            ),
+                          ),
+                        ),
+                      ),
+
+                      const SizedBox(height: 24),
+                    ],
                   ),
                 ),
-
-                const SizedBox(height: 24),
               ],
             ),
           ),

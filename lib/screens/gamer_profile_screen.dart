@@ -812,7 +812,18 @@ class _GamerProfileScreenState extends State<GamerProfileScreen> with SingleTick
                             ),
                           ),
                           child: Stack(
+                            fit: StackFit.expand,
                             children: [
+                              if (user.coverUrl.isNotEmpty)
+                                CachedNetworkImage(
+                                  imageUrl: user.coverUrl,
+                                  fit: BoxFit.cover,
+                                  placeholder: (_, __) => Container(color: const Color(0xFF0F2027)),
+                                  errorWidget: (_, __, ___) => const SizedBox.shrink(),
+                                ),
+                              Container(
+                                color: Colors.black.withOpacity(user.coverUrl.isNotEmpty ? 0.35 : 0.0),
+                              ),
                               Positioned(
                                 right: -20,
                                 top: -20,

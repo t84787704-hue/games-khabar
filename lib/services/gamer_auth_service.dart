@@ -214,6 +214,29 @@ class GamerAuthService {
     }
   }
 
+  /// Uploads user cover photo directly to Cloudinary or Firebase Storage
+  Future<String> uploadCoverPhoto(File imageFile, String uid) async {
+    try {
+      final url = await CloudinaryService.uploadFile(file: imageFile, folder: 'user_covers');
+      if (url != null && url.isNotEmpty) {
+        return url;
+      }
+    } catch (e) {
+      debugPrint('Cloudinary cover upload notice: $e');
+    }
+
+    try {
+      final ref = _storage.ref().child('gamer_covers').child('$uid.jpg');
+      final metadata = SettableMetadata(contentType: 'image/jpeg');
+      final uploadTask = await ref.putFile(imageFile, metadata);
+      final downloadUrl = await uploadTask.ref.getDownloadURL();
+      return downloadUrl;
+    } catch (e) {
+      debugPrint('Storage cover upload failed: $e');
+      return '';
+    }
+  }
+
   /// Creates or updates `users/{uid}` document
   Future<void> saveGamerProfile(GamerUser user) async {
     final docRef = _firestore.collection('users').doc(user.uid);
