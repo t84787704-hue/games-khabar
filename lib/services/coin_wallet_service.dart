@@ -15,8 +15,8 @@ class CoinWalletService extends ChangeNotifier {
 
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
 
-  CollectionReference get _walletsRef => _firestore.collection('coin_wallets');
-  CollectionReference get _transactionsRef => _firestore.collection('coin_transactions');
+  CollectionReference<Map<String, dynamic>> get _walletsRef => _firestore.collection('coin_wallets');
+  CollectionReference<Map<String, dynamic>> get _transactionsRef => _firestore.collection('coin_transactions');
 
   // Cached active user wallet
   CoinWallet? _currentWallet;
@@ -604,10 +604,11 @@ class CoinWalletService extends ChangeNotifier {
             }
 
             final walletSnap = await transaction.get(walletRef);
-            if (walletSnap.exists && walletSnap.data()?['coins'] != null) {
-              final wCoins = (walletSnap.data()!['coins'] as num).toInt();
+            final walletData = walletSnap.data() as Map<String, dynamic>?;
+            if (walletSnap.exists && walletData != null && walletData['coins'] != null) {
+              final wCoins = (walletData['coins'] as num).toInt();
               if (wCoins > coins) coins = wCoins;
-              lifetime = (walletSnap.data()?['lifetimeEarned'] as num?)?.toInt() ?? (coins + prizePerWinner);
+              lifetime = (walletData['lifetimeEarned'] as num?)?.toInt() ?? (coins + prizePerWinner);
             } else {
               lifetime = coins;
             }

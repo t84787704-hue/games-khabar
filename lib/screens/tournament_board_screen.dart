@@ -489,7 +489,6 @@ class _TournamentBoardScreenState extends State<TournamentBoardScreen> with Sing
                         onSelected: (val) {
                           setSheetState(() {
                             maxSlots = slots;
-                            recalculatePrize();
                           });
                         },
                       );
@@ -777,7 +776,6 @@ class _TournamentBoardScreenState extends State<TournamentBoardScreen> with Sing
                           hostName: currentGamer.displayName,
                           hostAvatar: currentGamer.photoUrl,
                           gameType: selectedGame,
-                          gameName: selectedGame,
                           gameMode: selectedMode,
                           roomType: selectedMode,
                           title: roomTitle,
