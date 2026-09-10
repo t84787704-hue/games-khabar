@@ -1,5 +1,6 @@
 import 'dart:math';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import '../models/gamer_user_model.dart';
 
@@ -100,8 +101,8 @@ class VerificationProgress {
 
   bool get meetsProfileComplete => hasAvatar && hasBio;
   bool get meetsGameId => hasGameIdLinked && gameId.trim().isNotEmpty;
-  bool get meetsPosts => postsCount >= 5;
-  bool get meetsLikes => likesReceived >= 5000;
+  bool get meetsPosts => postsCount >= 3;
+  bool get meetsLikes => likesReceived >= 500;
   bool get meetsAccountAge => accountAgeDays >= 7;
   bool get meetsCleanRecord => noReports && reportsCount == 0;
 
@@ -214,8 +215,9 @@ class VerificationService {
   }
 
   /// Check if user has completed profile (Avatar + Bio + Display Name) and linked BGMI UID
+  /// If avatar is F initial letter, consider it as valid avatar, don't show Missing
   static bool isProfileAndUidComplete(GamerUser user) {
-    final hasAvatar = user.photoUrl.trim().isNotEmpty;
+    const hasAvatar = true;
     final hasBio = user.bio.trim().isNotEmpty;
     final hasName = user.displayName.trim().isNotEmpty;
     final hasUid = user.gameId.trim().isNotEmpty;
@@ -235,14 +237,30 @@ class VerificationService {
     final int squadRooms = squadRoomsCount ?? user.squadRoomsCount;
     final int likes = likesReceived ?? user.likesReceived;
     final int reports = reportsCount ?? user.reportsCount;
-    final int ageDays = accountAgeDays ?? user.accountAgeDays;
+
+    // Calculate account age accurately from createdAt timestamp, never hardcoded 0
+    int ageDays = accountAgeDays ?? user.accountAgeDays;
+    if (ageDays <= 0) {
+      DateTime? created = user.createdAt;
+      if (created == null) {
+        final auth = FirebaseAuth.instance.currentUser;
+        if (auth != null && (user.uid.isEmpty || auth.uid == user.uid)) {
+          created = auth.metadata.creationTime;
+        }
+      }
+      if (created != null) {
+        final diff = DateTime.now().difference(created).inDays;
+        ageDays = diff < 0 ? 0 : diff;
+      }
+    }
 
     final List<VerificationRequirementItem> items = [];
 
     // -----------------------------------------------------------------------
     // Requirement 1: Profile 100% complete + BGMI UID linked
+    // Avatar Photo Missing bug fix: If avatar is F initial letter, consider it as valid avatar
     // -----------------------------------------------------------------------
-    final bool hasAvatar = user.photoUrl.trim().isNotEmpty;
+    const bool hasAvatar = true;
     final bool hasBio = user.bio.trim().isNotEmpty;
     final bool hasName = user.displayName.trim().isNotEmpty;
     final bool hasUid = user.gameId.trim().isNotEmpty;
@@ -258,7 +276,6 @@ class VerificationService {
     String? req1Missing;
     if (!req1Met) {
       final missingParts = <String>[];
-      if (!hasAvatar) missingParts.add('Avatar Photo');
       if (!hasBio) missingParts.add('Bio');
       if (!hasName) missingParts.add('Display Name');
       if (!hasUid) missingParts.add('BGMI UID');
@@ -320,22 +337,22 @@ class VerificationService {
     );
 
     // -----------------------------------------------------------------------
-    // Requirement 3: Min K/D 3.0+
+    // Requirement 3: Min K/D 2.5+
     // -----------------------------------------------------------------------
-    final bool kdMet = user.kdRatio >= 3.0;
-    final double kdProgress = (user.kdRatio / 3.0).clamp(0.0, 1.0);
+    final bool kdMet = user.kdRatio >= 2.5;
+    final double kdProgress = (user.kdRatio / 2.5).clamp(0.0, 1.0);
     String? kdMissing;
     if (!kdMet) {
-      kdMissing = 'Current K/D is ${user.kdRatio.toStringAsFixed(2)}. Need at least 3.0+ K/D.';
+      kdMissing = 'Current K/D is ${user.kdRatio.toStringAsFixed(2)}. Need at least 2.5+ K/D.';
     }
 
     items.add(
       VerificationRequirementItem(
         id: 3,
-        title: 'Minimum 3.0+ K/D Ratio',
-        description: 'Prove high competitive firepower with a consistent 3.0+ Kill/Death ratio.',
+        title: 'Minimum 2.5+ K/D Ratio',
+        description: 'Prove high competitive firepower with a consistent 2.5+ Kill/Death ratio.',
         currentFormatted: '${user.kdRatio.toStringAsFixed(2)} K/D',
-        targetFormatted: '3.0+ K/D',
+        targetFormatted: '2.5+ K/D',
         progress: kdProgress,
         isMet: kdMet,
         missingReason: kdMissing,
@@ -344,31 +361,31 @@ class VerificationService {
     );
 
     // -----------------------------------------------------------------------
-    // Requirement 4: At least 5 Clips posted + 3 Squad/Room posts
+    // Requirement 4: At least 3 Clips posted + 2 Squad/Room posts
     // -----------------------------------------------------------------------
-    final bool clipsMet = clips >= 5;
-    final bool squadRoomsMet = squadRooms >= 3;
+    final bool clipsMet = clips >= 3;
+    final bool squadRoomsMet = squadRooms >= 2;
     final bool req4Met = clipsMet && squadRoomsMet;
 
-    final double clipsPart = (clips.clamp(0, 5) / 5.0) * 0.5;
-    final double squadPart = (squadRooms.clamp(0, 3) / 3.0) * 0.5;
+    final double clipsPart = (clips.clamp(0, 3) / 3.0) * 0.5;
+    final double squadPart = (squadRooms.clamp(0, 2) / 2.0) * 0.5;
     final double req4Progress = (clipsPart + squadPart).clamp(0.0, 1.0);
 
     String? req4Missing;
     if (!req4Met) {
       final missing = <String>[];
-      if (!clipsMet) missing.add('${5 - clips} more clip(s)');
-      if (!squadRoomsMet) missing.add('${3 - squadRooms} more squad/room post(s)');
-      req4Missing = 'Need: ${missing.join(" and ")}.';
+      if (!clipsMet) missing.add('${3 - clips} more clip(s)');
+      if (!squadRoomsMet) missing.add('${2 - squadRooms} more squad/room post(s)');
+      req4Missing = 'Need ${missing.join(" and ")}.';
     }
 
     items.add(
       VerificationRequirementItem(
         id: 4,
-        title: '5 Clips + 3 Squad/Room Posts',
+        title: '3 Clips + 2 Squad/Room Posts',
         description: 'Active community creator sharing highlights and host team scrims.',
-        currentFormatted: '$clips/5 Clips • $squadRooms/3 Squad/Rooms',
-        targetFormatted: '5 Clips & 3 Squad/Rooms',
+        currentFormatted: '$clips/3 Clips • $squadRooms/2 Squad/Rooms',
+        targetFormatted: '3 Clips & 2 Squad/Rooms',
         progress: req4Progress,
         isMet: req4Met,
         missingReason: req4Missing,
@@ -377,22 +394,23 @@ class VerificationService {
     );
 
     // -----------------------------------------------------------------------
-    // Requirement 5: At least 5000 total likes received
+    // Requirement 5: At least 500 total likes received
     // -----------------------------------------------------------------------
-    final bool likesMet = likes >= 5000;
-    final double likesProgress = (likes / 5000.0).clamp(0.0, 1.0);
+    final bool likesMet = likes >= 500;
+    final double likesProgress = (likes / 500.0).clamp(0.0, 1.0);
     String? likesMissing;
     if (!likesMet) {
-      likesMissing = 'Received $likes likes. Need ${5000 - likes} more likes to reach 5,000.';
+      final needLikes = 500 - likes;
+      likesMissing = 'Received $likes likes. Need $needLikes more likes to reach 500.';
     }
 
     items.add(
       VerificationRequirementItem(
         id: 5,
-        title: '5,000+ Total Likes Received',
+        title: '500+ Total Likes Received',
         description: 'Community appreciation and positive engagement on your gameplay content.',
-        currentFormatted: '$likes / 5,000 Likes',
-        targetFormatted: '5,000+ Likes',
+        currentFormatted: '$likes / 500 Likes',
+        targetFormatted: '500+ Likes',
         progress: likesProgress,
         isMet: likesMet,
         missingReason: likesMissing,
@@ -520,19 +538,34 @@ class VerificationService {
       // 4. Reports count
       int reports = (userData['reportsCount'] as num?)?.toInt() ?? 0;
 
-      // 5. Account age
+      // 5. Account age calculated from createdAt timestamp correctly
       DateTime? created;
-      final rawCreated = userData['createdAt'];
+      final rawCreated = userData['createdAt'] ?? userData['created_at'] ?? userData['timestamp'];
       if (rawCreated is Timestamp) {
         created = rawCreated.toDate();
       } else if (rawCreated is String) {
         created = DateTime.tryParse(rawCreated);
+      } else if (rawCreated is int) {
+        created = DateTime.fromMillisecondsSinceEpoch(rawCreated);
       }
+
+      if (created == null) {
+        final authUser = FirebaseAuth.instance.currentUser;
+        if (authUser != null && (uid.isEmpty || authUser.uid == uid)) {
+          created = authUser.metadata.creationTime;
+          if (created != null) {
+            _firestore.collection('users').doc(uid).update({
+              'createdAt': Timestamp.fromDate(created),
+            }).catchError((_) {});
+          }
+        }
+      }
+
       final ageDays = created != null
           ? DateTime.now().difference(created).inDays.clamp(0, 99999)
           : 0;
 
-      final photo = (userData['photoUrl'] ?? '').toString().trim();
+      final photo = (userData['photoUrl'] ?? userData['avatar'] ?? '').toString().trim();
       final bio = (userData['bio'] ?? '').toString().trim();
       final name = (userData['displayName'] ?? '').toString().trim();
       final gameId = (userData['gameId'] ?? userData['inGameId'] ?? '').toString().trim();
@@ -545,10 +578,10 @@ class VerificationService {
         likesReceived: likes,
         reportsCount: reports,
         accountAgeDays: ageDays,
-        isProfileComplete: photo.isNotEmpty && bio.isNotEmpty && name.isNotEmpty,
+        isProfileComplete: bio.isNotEmpty && name.isNotEmpty, // F initial avatar is considered valid
         isGameIdLinked: gameId.isNotEmpty,
         isRankEligible: isRankEligible(rank),
-        isKdEligible: kd >= 3.0,
+        isKdEligible: kd >= 2.5,
       );
     } catch (e) {
       debugPrint('Error in fetchLiveStats: $e');

@@ -383,7 +383,7 @@ class _VerificationScreenState extends State<VerificationScreen> {
                 ),
               ),
               const SizedBox(height: 14),
-              const Text('K/D RATIO (Min 3.0+ required)', style: TextStyle(color: GamerTheme.textMuted, fontSize: 11, fontWeight: FontWeight.bold)),
+              const Text('K/D RATIO (Min 2.5+ required)', style: TextStyle(color: GamerTheme.textMuted, fontSize: 11, fontWeight: FontWeight.bold)),
               const SizedBox(height: 6),
               TextField(
                 controller: kdController,

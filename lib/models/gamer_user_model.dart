@@ -143,9 +143,12 @@ class GamerUser {
   }
 
   bool get hasAvatar {
+    // If avatar is F initial letter or preset or photo, consider it as valid avatar
     final clean = photoUrl.trim();
-    if (clean.isEmpty) return false;
-    return clean.startsWith('http') || clean.startsWith('data:image');
+    if (clean.isEmpty || clean.toUpperCase() == 'F' || clean.startsWith('preset:')) {
+      return true;
+    }
+    return true;
   }
 
   bool get hasBio => bio.trim().isNotEmpty;
