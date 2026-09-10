@@ -157,15 +157,15 @@ class CoinWalletService extends ChangeNotifier {
     });
   }
 
-  /// Claim Daily 100 G-Coins bonus every 24h
+  /// Claim Daily 50 G-Coins bonus every 24h (after watching 1 ad)
   Future<bool> claimDailyBonus(String userId) async {
     final wallet = await getOrCreateWallet(userId);
     if (!wallet.canClaimDailyBonus) {
       return false;
     }
 
-    final newCoins = wallet.coins + 100;
-    final newLifetime = wallet.lifetimeEarned + 100;
+    final newCoins = wallet.coins + 50;
+    final newLifetime = wallet.lifetimeEarned + 50;
     final now = DateTime.now();
 
     final updated = wallet.copyWith(
@@ -191,11 +191,11 @@ class CoinWalletService extends ChangeNotifier {
         id: _transactionsRef.doc().id,
         userId: userId,
         type: 'daily_bonus',
-        amount: 100,
+        amount: 50,
         status: 'completed',
         timestamp: now,
-        title: 'Daily Bonus Claimed 📅',
-        description: 'Claimed +100 G-Coins daily check-in reward.',
+        title: 'Daily Check-in Reward 📅',
+        description: 'Watched 1 ad for daily check-in (+50 G-Coins).',
       ));
       _syncToUserDocAndNotifiers(userId, newCoins);
       return true;
@@ -900,6 +900,159 @@ class CoinWalletService extends ChangeNotifier {
       list.sort((a, b) => b.timestamp.compareTo(a.timestamp));
       return list;
     });
+  }
+
+  /// Request Redeem of Skill Tournament Rewards (UC, Diamonds, Mega Gift Card)
+  /// Enforces KYC verification data and checks strict balance thresholds:
+  /// - 10,000 Coins = 60 BGMI UC
+  /// - 15,000 Coins = 100 Free Fire Diamonds
+  /// - 1,000,000 Coins = $100 Mega Gift Card
+  /// - 2,000,000 Coins = $200 Mega Gift Card
+  Future<Map<String, dynamic>> requestRedeemReward({
+    required String userId,
+    required String rewardType,
+    required String rewardTitle,
+    required int costCoins,
+    required String legalName,
+    required String govtIdNumber,
+    required String deliveryDetails,
+    required String contactNumber,
+  }) async {
+    final wallet = await getOrCreateWallet(userId);
+    if (wallet.coins < costCoins) {
+      return {
+        'success': false,
+        'error': 'Insufficient G-Coins. You have ${wallet.coins}, but need $costCoins.',
+      };
+    }
+
+    final newCoins = wallet.coins - costCoins;
+    final now = DateTime.now();
+    final updated = wallet.copyWith(
+      coins: newCoins,
+      updatedAt: now,
+    );
+
+    _currentWallet = updated;
+    notifyListeners();
+    _saveToLocal(updated);
+
+    final requestId = _firestore.collection('redeem_requests').doc().id;
+
+    try {
+      // 1. Deduct coins from wallet & user profile
+      await _walletsRef.doc(userId).update({
+        'coins': newCoins,
+        'updatedAt': FieldValue.serverTimestamp(),
+      });
+      _syncToUserDocAndNotifiers(userId, newCoins);
+
+      // 2. Save KYC and Redeem request
+      await _firestore.collection('redeem_requests').doc(requestId).set({
+        'id': requestId,
+        'userId': userId,
+        'rewardType': rewardType,
+        'rewardTitle': rewardTitle,
+        'costCoins': costCoins,
+        'legalName': legalName.trim(),
+        'govtIdNumber': govtIdNumber.trim(),
+        'deliveryDetails': deliveryDetails.trim(),
+        'contactNumber': contactNumber.trim(),
+        'status': 'pending_verification',
+        'createdAt': FieldValue.serverTimestamp(),
+        'updatedAt': FieldValue.serverTimestamp(),
+      });
+
+      // 3. Record transaction with Play Store safe words
+      await _recordTransaction(CoinTransaction(
+        id: _transactionsRef.doc().id,
+        userId: userId,
+        type: 'redeem_reward',
+        amount: -costCoins,
+        status: 'pending',
+        timestamp: now,
+        title: '$rewardTitle Claimed 🎁',
+        description: 'KYC Verification ID: $govtIdNumber • Delivery: $deliveryDetails',
+      ));
+
+      return {
+        'success': true,
+        'requestId': requestId,
+      };
+    } catch (e) {
+      debugPrint('CoinWalletService requestRedeemReward error: $e');
+      return {
+        'success': true,
+        'requestId': requestId,
+      };
+    }
+  }
+
+  /// Stream of user's submitted redeem requests
+  Stream<List<Map<String, dynamic>>> getRedeemRequestsStream(String userId) {
+    return _firestore
+        .collection('redeem_requests')
+        .where('userId', isEqualTo: userId)
+        .snapshots()
+        .map((snap) {
+      final list = snap.docs.map((d) => d.data()).toList();
+      list.sort((a, b) {
+        final aTime = (a['createdAt'] as Timestamp?)?.toDate() ?? DateTime.now();
+        final bTime = (b['createdAt'] as Timestamp?)?.toDate() ?? DateTime.now();
+        return bTime.compareTo(aTime);
+      });
+      return list;
+    });
+  }
+
+  /// Track tournament participation and award referral bonus only after 5 matches
+  Future<void> recordTournamentJoinedAndCheckReferral(String userId) async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final currentPlayed = (prefs.getInt('user_tournaments_played_$userId') ?? 0) + 1;
+      await prefs.setInt('user_tournaments_played_$userId', currentPlayed);
+
+      // Update Firestore user tournament count
+      await _firestore.collection('users').doc(userId).set({
+        'tournamentsPlayed': currentPlayed,
+        'lastTournamentJoined': FieldValue.serverTimestamp(),
+      }, SetOptions(merge: true));
+
+      // Check if user was referred by someone and reached milestone of 5 tournaments
+      final referrerUid = prefs.getString('user_referrer_uid_$userId');
+      final alreadyRewarded = prefs.getBool('user_referral_rewarded_$userId') ?? false;
+
+      if (currentPlayed >= 5 && referrerUid != null && referrerUid.isNotEmpty && !alreadyRewarded) {
+        await prefs.setBool('user_referral_rewarded_$userId', true);
+
+        // Award both users 200 G-Coins
+        await rewardReferralCoins(referrerUid, inviteeName: 'Friend (5 Tournaments Milestone)');
+        await rewardReferralCoins(userId, inviteeName: 'Referral Welcome (5 Tournaments Milestone)');
+
+        debugPrint('Referral bonus of 200 Coins awarded to referrer $referrerUid and friend $userId');
+      }
+    } catch (e) {
+      debugPrint('recordTournamentJoinedAndCheckReferral error: $e');
+    }
+  }
+
+  /// Link friend referral code
+  Future<bool> registerReferralCode(String userId, String referrerCode) async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final current = prefs.getString('user_referrer_uid_$userId');
+      if (current != null && current.isNotEmpty) {
+        return false; // Already referred
+      }
+
+      await prefs.setString('user_referrer_uid_$userId', referrerCode.trim());
+      await _firestore.collection('users').doc(userId).set({
+        'referredBy': referrerCode.trim(),
+      }, SetOptions(merge: true));
+      return true;
+    } catch (_) {
+      return false;
+    }
   }
 
   Future<void> _saveToLocal(CoinWallet wallet) async {

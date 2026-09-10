@@ -235,4 +235,124 @@ class AdFreeService {
       ),
     );
   }
+
+  /// Show Rewarded Ad specifically required for an action (e.g., joining tournament, claiming coins)
+  /// Triggers onUserEarnedReward callback once watched
+  Future<void> showRewardedAdForAction({
+    required BuildContext context,
+    required String actionTitle,
+    required VoidCallback onRewardEarned,
+  }) async {
+    RewardedAd.load(
+      adUnitId: rewardedTestAdUnitId,
+      request: const AdRequest(),
+      rewardedAdLoadCallback: RewardedAdLoadCallback(
+        onAdLoaded: (RewardedAd ad) {
+          ad.fullScreenContentCallback = FullScreenContentCallback(
+            onAdDismissedFullScreenContent: (ad) => ad.dispose(),
+            onAdFailedToShowFullScreenContent: (ad, err) {
+              ad.dispose();
+              _showFallbackAdDialog(context, actionTitle, onRewardEarned);
+            },
+          );
+          ad.show(
+            onUserEarnedReward: (ad, reward) {
+              onRewardEarned();
+            },
+          );
+        },
+        onAdFailedToLoad: (err) {
+          debugPrint('RewardedAd load failed ($err), using sponsored ad dialog fallback');
+          _showFallbackAdDialog(context, actionTitle, onRewardEarned);
+        },
+      ),
+    );
+  }
+
+  void _showFallbackAdDialog(BuildContext context, String actionTitle, VoidCallback onRewardEarned) {
+    if (!context.mounted) return;
+    int remaining = 5;
+    Timer? timer;
+
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (ctx) => StatefulBuilder(
+        builder: (c, setState) {
+          timer ??= Timer.periodic(const Duration(seconds: 1), (t) {
+            if (remaining > 1) {
+              setState(() => remaining--);
+            } else {
+              t.cancel();
+              Navigator.pop(ctx);
+              onRewardEarned();
+            }
+          });
+
+          return AlertDialog(
+            backgroundColor: const Color(0xFF0F1523),
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(18),
+              side: const BorderSide(color: Color(0xFF00FF88), width: 1.5),
+            ),
+            title: Row(
+              children: [
+                const Icon(Icons.play_circle_filled_rounded, color: Color(0xFF00FF88), size: 24),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Text(
+                    actionTitle.toUpperCase(),
+                    style: const TextStyle(color: Colors.white, fontSize: 13, fontWeight: FontWeight.w900),
+                  ),
+                ),
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                  decoration: BoxDecoration(color: Colors.white10, borderRadius: BorderRadius.circular(12)),
+                  child: Text('${remaining}s', style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 12)),
+                ),
+              ],
+            ),
+            content: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Container(
+                  height: 120,
+                  width: double.infinity,
+                  decoration: BoxDecoration(
+                    color: const Color(0xFF162032),
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  child: const Center(
+                    child: Column(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        Icon(Icons.tv_rounded, color: Color(0xFF00FF88), size: 36),
+                        SizedBox(height: 8),
+                        Text(
+                          'Sponsored Tournament Video Ad',
+                          style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 13),
+                        ),
+                        SizedBox(height: 4),
+                        Text(
+                          'Verifying free entry reward...',
+                          style: TextStyle(color: Color(0xFF94A3B8), fontSize: 11),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 12),
+                LinearProgressIndicator(
+                  value: (5 - remaining) / 5.0,
+                  backgroundColor: Colors.white12,
+                  color: const Color(0xFF00FF88),
+                  minHeight: 5,
+                ),
+              ],
+            ),
+          );
+        },
+      ),
+    ).then((_) => timer?.cancel());
+  }
 }

@@ -15,6 +15,8 @@ import '../screens/gamer_profile_screen.dart';
 import 'coin_store_screen.dart';
 import '../widgets/coin_history_sheet.dart';
 import '../constants/tournament_game_categories.dart';
+import '../services/ad_free_service.dart';
+import 'redeem_rewards_screen.dart';
 
 class TournamentBoardScreen extends StatefulWidget {
   const TournamentBoardScreen({super.key});
@@ -2465,25 +2467,45 @@ class _TournamentBoardScreenState extends State<TournamentBoardScreen> with Sing
                               ],
                             ),
                           ),
-                          ElevatedButton.icon(
-                            style: ElevatedButton.styleFrom(
-                              backgroundColor: GamerTheme.neonGreen,
-                              foregroundColor: Colors.black,
-                              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-                              minimumSize: Size.zero,
-                              tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                            ),
-                            icon: const Icon(Icons.add_circle_outline_rounded, size: 14, color: Colors.black),
-                            label: const Text('EARN COINS', style: TextStyle(fontWeight: FontWeight.w900, fontSize: 11)),
-                            onPressed: () {
-                              Navigator.push(context, MaterialPageRoute(builder: (_) => const CoinStoreScreen()));
-                            },
+                          Row(
+                            children: [
+                              ElevatedButton.icon(
+                                style: ElevatedButton.styleFrom(
+                                  backgroundColor: const Color(0xFFFFD700),
+                                  foregroundColor: Colors.black,
+                                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                                  minimumSize: Size.zero,
+                                  tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                                ),
+                                icon: const Icon(Icons.card_giftcard_rounded, size: 14, color: Colors.black),
+                                label: const Text('REDEEM', style: TextStyle(fontWeight: FontWeight.w900, fontSize: 11)),
+                                onPressed: () {
+                                  Navigator.push(context, MaterialPageRoute(builder: (_) => const RedeemRewardsScreen()));
+                                },
+                              ),
+                              const SizedBox(width: 8),
+                              ElevatedButton.icon(
+                                style: ElevatedButton.styleFrom(
+                                  backgroundColor: GamerTheme.neonGreen,
+                                  foregroundColor: Colors.black,
+                                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                                  minimumSize: Size.zero,
+                                  tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                                ),
+                                icon: const Icon(Icons.add_circle_outline_rounded, size: 14, color: Colors.black),
+                                label: const Text('EARN COINS', style: TextStyle(fontWeight: FontWeight.w900, fontSize: 11)),
+                                onPressed: () {
+                                  Navigator.push(context, MaterialPageRoute(builder: (_) => const CoinStoreScreen()));
+                                },
+                              ),
+                            ],
                           ),
                         ],
                       ),
                       const SizedBox(height: 8),
-                      // 15-Minute Rule Banner
+                      // 18+ Compliance & 15-Minute Rule Banner
                       Container(
                         width: double.infinity,
                         padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
@@ -2498,7 +2520,7 @@ class _TournamentBoardScreenState extends State<TournamentBoardScreen> with Sing
                             SizedBox(width: 6),
                             Expanded(
                               child: Text(
-                                'Upload Victory Screenshot to claim prize • 15 Min Rule: No Screenshot = No Prize',
+                                '🔞 18+ Skill-Based • No Gambling • Sponsored by Ads • Upload Victory Screenshot',
                                 maxLines: 1,
                                 overflow: TextOverflow.ellipsis,
                                 style: TextStyle(color: GamerTheme.textMuted, fontSize: 10, fontWeight: FontWeight.w600),
@@ -3121,123 +3143,41 @@ class _TournamentBoardScreenState extends State<TournamentBoardScreen> with Sing
                               return;
                             }
 
-                            final wallet = _walletService.currentWallet ?? const CoinWallet(userId: '', coins: 1000);
-                            if (room.entryFeeCoins > 0 && wallet.coins < room.entryFeeCoins) {
-                              _showNotEnoughCoinsDialog(room.entryFeeCoins, wallet.coins);
-                              return;
-                            }
+                            // Mandatory Rewarded Ad Viewing to Join Tournament (100% Free Entry)
+                            // "Ad dekhega tabhi join hoga. Isi se tumhari earning hogi."
+                            await AdFreeService().showRewardedAdForAction(
+                              context: context,
+                              actionTitle: 'Watch 1 Ad to Join Room',
+                              onRewardEarned: () async {
+                                final success = await _tournamentService.joinRoom(
+                                  roomId: room.id,
+                                  hostUid: room.hostId,
+                                  playerUid: currentGamer.uid,
+                                  playerName: currentGamer.displayName,
+                                );
 
-                            // Paid room confirmation before cutting coins
-                            if (room.entryFeeCoins > 0) {
-                              final confirm = await showDialog<bool>(
-                                context: context,
-                                builder: (c) => AlertDialog(
-                                  backgroundColor: GamerTheme.cardDark,
-                                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-                                  title: Row(
-                                    children: [
-                                      Text(room.gameIcon, style: const TextStyle(fontSize: 22)),
-                                      const SizedBox(width: 8),
-                                      const Expanded(
-                                        child: Text(
-                                          'Confirm Paid Entry',
-                                          style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 16),
-                                        ),
-                                      ),
-                                    ],
-                                  ),
-                                  content: Column(
-                                    mainAxisSize: MainAxisSize.min,
-                                    crossAxisAlignment: CrossAxisAlignment.start,
-                                    children: [
-                                      Text(room.title, style: const TextStyle(color: GamerTheme.accentBlue, fontWeight: FontWeight.bold, fontSize: 13)),
-                                      const SizedBox(height: 12),
-                                      Container(
-                                        padding: const EdgeInsets.all(12),
-                                        decoration: BoxDecoration(
-                                          color: GamerTheme.bgDark,
-                                          borderRadius: BorderRadius.circular(10),
-                                          border: Border.all(color: GamerTheme.borderDark),
-                                        ),
-                                        child: Column(
-                                          children: [
-                                            Row(
-                                              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                                              children: [
-                                                const Text('Entry Fee:', style: TextStyle(color: GamerTheme.textMuted, fontSize: 12)),
-                                                Text('💰 ${room.entryFeeCoins} Coins', style: const TextStyle(color: GamerTheme.neonGreen, fontWeight: FontWeight.bold, fontSize: 13)),
-                                              ],
-                                            ),
-                                            const SizedBox(height: 6),
-                                            Row(
-                                              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                                              children: [
-                                                const Text('Prize Pool:', style: TextStyle(color: GamerTheme.textMuted, fontSize: 12)),
-                                                Text('💰 ${room.prizePoolCoins} Coins', style: const TextStyle(color: GamerTheme.accentBlue, fontWeight: FontWeight.bold, fontSize: 13)),
-                                              ],
-                                            ),
-                                            const SizedBox(height: 6),
-                                            Row(
-                                              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                                              children: [
-                                                const Text('Your Balance:', style: TextStyle(color: GamerTheme.textMuted, fontSize: 12)),
-                                                Text('💰 ${wallet.coins} Coins', style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 13)),
-                                              ],
-                                            ),
-                                          ],
-                                        ),
-                                      ),
-                                      const SizedBox(height: 10),
-                                      const Text(
-                                        'Room ID & Password will be unlocked immediately after entry fee is confirmed.',
-                                        style: TextStyle(color: GamerTheme.textMuted, fontSize: 11),
-                                      ),
-                                    ],
-                                  ),
-                                  actions: [
-                                    TextButton(
-                                      onPressed: () => Navigator.pop(c, false),
-                                      child: const Text('Cancel', style: TextStyle(color: GamerTheme.textMuted)),
-                                    ),
-                                    ElevatedButton(
-                                      style: ElevatedButton.styleFrom(
+                                if (context.mounted) {
+                                  if (success) {
+                                    await _walletService.recordTournamentJoinedAndCheckReferral(currentGamer.uid);
+                                    ScaffoldMessenger.of(context).showSnackBar(
+                                      SnackBar(
+                                        content: Text('🎮 Ad Verified! Slot confirmed for ${room.title}! (Entry 100% FREE)'),
                                         backgroundColor: GamerTheme.neonGreen,
-                                        foregroundColor: Colors.black,
                                       ),
-                                      onPressed: () => Navigator.pop(c, true),
-                                      child: Text('PAY 💰 ${room.entryFeeCoins} & JOIN', style: const TextStyle(fontWeight: FontWeight.w900)),
-                                    ),
-                                  ],
-                                ),
-                              );
-                              if (confirm != true) return;
-                            }
-
-                            final success = await _tournamentService.joinRoom(
-                              roomId: room.id,
-                              hostUid: room.hostId,
-                              playerUid: currentGamer.uid,
-                              playerName: currentGamer.displayName,
+                                    );
+                                    // Immediately show Room Details & Credentials dialog
+                                    _showRoomDetailsDialog(context, room, currentGamer.uid);
+                                  } else {
+                                    ScaffoldMessenger.of(context).showSnackBar(
+                                      const SnackBar(
+                                        content: Text('Room is full or error occurred!'),
+                                        backgroundColor: GamerTheme.redAccent,
+                                      ),
+                                    );
+                                  }
+                                }
+                              },
                             );
-
-                            if (context.mounted) {
-                              if (success) {
-                                ScaffoldMessenger.of(context).showSnackBar(
-                                  SnackBar(
-                                    content: Text('🎮 Slot confirmed for ${room.title}!'),
-                                    backgroundColor: GamerTheme.accentBlue,
-                                  ),
-                                );
-                                // Immediately show Room Details & Credentials dialog
-                                _showRoomDetailsDialog(context, room, currentGamer.uid);
-                              } else {
-                                ScaffoldMessenger.of(context).showSnackBar(
-                                  const SnackBar(
-                                    content: Text('Room is full or error occurred!'),
-                                    backgroundColor: GamerTheme.redAccent,
-                                  ),
-                                );
-                              }
                             }
                           },
                     child: Text(

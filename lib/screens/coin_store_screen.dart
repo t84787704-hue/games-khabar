@@ -8,6 +8,7 @@ import '../models/coin_wallet_model.dart';
 import '../models/coin_transaction_model.dart';
 import '../services/coin_wallet_service.dart';
 import '../services/gamer_auth_service.dart';
+import 'redeem_rewards_screen.dart';
 
 class CoinStoreScreen extends StatefulWidget {
   const CoinStoreScreen({super.key});
@@ -74,37 +75,142 @@ class _CoinStoreScreenState extends State<CoinStoreScreen> {
 
   Future<void> _handleClaimDaily(String uid) async {
     if (_isClaimingDaily) return;
+
+    // Daily Login Rule: Watch 1 Ad = 50 Coins. Ad nahi to Coin nahi.
     setState(() => _isClaimingDaily = true);
 
-    final success = await _walletService.claimDailyBonus(uid);
-    setState(() => _isClaimingDaily = false);
+    int remainingSeconds = 5;
+    Timer? adTimer;
 
-    if (!mounted) return;
-    if (success) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          backgroundColor: GamerTheme.neonGreen,
-          content: Row(
-            children: [
-              Text('🎉', style: TextStyle(fontSize: 20)),
-              SizedBox(width: 10),
-              Text(
-                '+100 G-Coins Claimed! Check back in 24h.',
-                style: TextStyle(color: Colors.black, fontWeight: FontWeight.bold),
-              ),
-            ],
-          ),
-          duration: Duration(seconds: 3),
-        ),
-      );
-    } else {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          backgroundColor: GamerTheme.cardElevated,
-          content: Text('Daily bonus not available yet! Please wait for countdown.'),
-        ),
-      );
-    }
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (dialogCtx) => StatefulBuilder(
+        builder: (context, setDialogState) {
+          adTimer ??= Timer.periodic(const Duration(seconds: 1), (t) {
+            if (remainingSeconds > 1) {
+              setDialogState(() => remainingSeconds--);
+            } else {
+              t.cancel();
+              Navigator.pop(dialogCtx);
+              _walletService.claimDailyBonus(uid).then((success) {
+                if (mounted) {
+                  setState(() => _isClaimingDaily = false);
+                  if (success) {
+                    ScaffoldMessenger.of(this.context).showSnackBar(
+                      const SnackBar(
+                        backgroundColor: GamerTheme.neonGreen,
+                        content: Row(
+                          children: [
+                            Text('🎉', style: TextStyle(fontSize: 20)),
+                            SizedBox(width: 10),
+                            Text(
+                              '+50 G-Coins Claimed! (Watched 1 Ad)',
+                              style: TextStyle(color: Colors.black, fontWeight: FontWeight.bold),
+                            ),
+                          ],
+                        ),
+                        duration: Duration(seconds: 3),
+                      ),
+                    );
+                  }
+                }
+              });
+            }
+          });
+
+          return AlertDialog(
+            backgroundColor: GamerTheme.bgDark,
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(20),
+              side: const BorderSide(color: GamerTheme.neonGreen, width: 2),
+            ),
+            title: Row(
+              children: [
+                Container(
+                  padding: const EdgeInsets.all(6),
+                  decoration: BoxDecoration(
+                    color: GamerTheme.neonGreen.withOpacity(0.2),
+                    shape: BoxShape.circle,
+                  ),
+                  child: const Icon(Icons.play_arrow_rounded, color: GamerTheme.neonGreen, size: 20),
+                ),
+                const SizedBox(width: 10),
+                const Expanded(
+                  child: Text(
+                    'DAILY LOGIN SPONSORED AD',
+                    style: TextStyle(
+                      color: GamerTheme.neonGreen,
+                      fontSize: 13,
+                      fontWeight: FontWeight.w900,
+                      letterSpacing: 0.8,
+                    ),
+                  ),
+                ),
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                  decoration: BoxDecoration(
+                    color: Colors.white10,
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  child: Text(
+                    '${remainingSeconds}s',
+                    style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 12),
+                  ),
+                ),
+              ],
+            ),
+            content: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Container(
+                  height: 140,
+                  width: double.infinity,
+                  decoration: BoxDecoration(
+                    gradient: const LinearGradient(
+                      colors: [Color(0xFF1E293B), Color(0xFF0F172A)],
+                      begin: Alignment.topLeft,
+                      end: Alignment.bottomRight,
+                    ),
+                    borderRadius: BorderRadius.circular(16),
+                    border: Border.all(color: GamerTheme.borderLight),
+                  ),
+                  child: const Center(
+                    child: Column(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        Icon(Icons.calendar_today_rounded, color: GamerTheme.neonGreen, size: 44),
+                        SizedBox(height: 8),
+                        Text(
+                          'Daily Reward Verification',
+                          style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 14),
+                        ),
+                        SizedBox(height: 4),
+                        Text(
+                          'Watching ad to claim +50 G-Coins...',
+                          style: TextStyle(color: GamerTheme.textMuted, fontSize: 11),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 12),
+                LinearProgressIndicator(
+                  value: (5 - remainingSeconds) / 5.0,
+                  backgroundColor: GamerTheme.borderDark,
+                  color: GamerTheme.neonGreen,
+                  minHeight: 6,
+                  borderRadius: BorderRadius.circular(3),
+                ),
+              ],
+            ),
+          );
+        },
+      ),
+    ).then((_) {
+      adTimer?.cancel();
+      if (mounted) setState(() => _isClaimingDaily = false);
+    });
   }
 
   void _simulateRewardedAd(String uid) {
@@ -300,15 +406,15 @@ class _CoinStoreScreenState extends State<CoinStoreScreen> {
                 ),
                 const SizedBox(height: 12),
 
-                // 1. Daily Bonus Card
+                // 1. Daily Bonus Card (Watch 1 Ad = 50 Coins)
                 _buildEarnCard(
                   icon: Icons.calendar_today_rounded,
                   iconColor: GamerTheme.neonGreen,
-                  badge: '+100 COINS',
+                  badge: '+50 COINS',
                   badgeColor: GamerTheme.neonGreen,
-                  title: 'Daily Check-in Bonus',
+                  title: 'Daily Check-in (Watch 1 Ad)',
                   subtitle: canClaim
-                      ? 'Ready to claim! Free +100 Coins every 24 hours.'
+                      ? 'Ready! Watch 1 short sponsored ad to claim +50 G-Coins.'
                       : 'Next bonus unlocks in ${_formatDuration(_timeUntilNextClaim)}',
                   actionButton: ElevatedButton(
                     style: ElevatedButton.styleFrom(
@@ -321,7 +427,7 @@ class _CoinStoreScreenState extends State<CoinStoreScreen> {
                     child: _isClaimingDaily
                         ? const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2))
                         : Text(
-                            canClaim ? 'CLAIM 100 💰' : _formatDuration(_timeUntilNextClaim),
+                            canClaim ? 'CLAIM 50 (AD) 📺' : _formatDuration(_timeUntilNextClaim),
                             style: const TextStyle(fontWeight: FontWeight.w900, fontSize: 12),
                           ),
                   ),
@@ -373,14 +479,14 @@ class _CoinStoreScreenState extends State<CoinStoreScreen> {
 
                 const SizedBox(height: 12),
 
-                // 4. Referral Card
+                // 4. Referral Card (Rewarded after friend plays 5 tournaments)
                 _buildEarnCard(
                   icon: Icons.group_add_rounded,
                   iconColor: GamerTheme.accentBlue,
                   badge: '+200 COINS',
                   badgeColor: GamerTheme.accentBlue,
                   title: 'Invite Gaming Squad',
-                  subtitle: 'Share your code "$inviteCode". You & your friend each get +200 G-Coins!',
+                  subtitle: 'Share code "$inviteCode". When your friend plays 5 tournaments (watches 5 ads), BOTH of you receive +200 G-Coins!',
                   actionButton: ElevatedButton.icon(
                     style: ElevatedButton.styleFrom(
                       backgroundColor: GamerTheme.accentBlue,
@@ -392,9 +498,8 @@ class _CoinStoreScreenState extends State<CoinStoreScreen> {
                     label: const Text('INVITE', style: TextStyle(fontWeight: FontWeight.w900, fontSize: 12)),
                     onPressed: () {
                       Share.share(
-                        'Join me on My Gamer ID! Register for free BGMI custom tournaments & win G-Coins. Use code: $inviteCode 🎮💰',
+                        'Join My Gamer ID for free skill tournaments! Use code: $inviteCode. Play 5 matches to earn +200 G-Coins! 🎮💰',
                       );
-                      _walletService.rewardReferralCoins(uid, inviteeName: 'Squad Mate');
                     },
                   ),
                 ),
@@ -601,6 +706,26 @@ class _CoinStoreScreenState extends State<CoinStoreScreen> {
                 ),
               ),
             ],
+          ),
+          const SizedBox(height: 16),
+          SizedBox(
+            width: double.infinity,
+            height: 44,
+            child: ElevatedButton.icon(
+              style: ElevatedButton.styleFrom(
+                backgroundColor: GamerTheme.neonGreen,
+                foregroundColor: Colors.black,
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+              ),
+              icon: const Icon(Icons.card_giftcard_rounded, size: 18),
+              label: const Text(
+                'REDEEM REWARDS (UC, DIAMONDS, GIFT CARDS) 🎁',
+                style: TextStyle(fontWeight: FontWeight.w900, fontSize: 11),
+              ),
+              onPressed: () {
+                Navigator.push(context, MaterialPageRoute(builder: (_) => const RedeemRewardsScreen()));
+              },
+            ),
           ),
         ],
       ),
