@@ -3178,7 +3178,6 @@ class _TournamentBoardScreenState extends State<TournamentBoardScreen> with Sing
                                 }
                               },
                             );
-                            }
                           },
                     child: Text(
                       room.isFull ? 'ROOM FULL' : 'JOIN ROOM ⚔️',

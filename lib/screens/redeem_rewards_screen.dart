@@ -580,7 +580,7 @@ class _RedeemRewardsScreenState extends State<RedeemRewardsScreen> {
                 ),
                 const SizedBox(height: 6),
                 const Text(
-                  'Multiples of 1,000,000 Coins only ($100 & $200 Digital Gift Cards). No micro-redemptions.',
+                  'Multiples of 1,000,000 Coins only (\$100 & \$200 Digital Gift Cards). No micro-redemptions.',
                   style: TextStyle(color: GamerTheme.textMuted, fontSize: 11),
                 ),
                 const SizedBox(height: 12),
