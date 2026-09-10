@@ -1049,6 +1049,101 @@ class _GamerProfileScreenState extends State<GamerProfileScreen> with SingleTick
                           ],
                         ),
 
+                        // Gamer Coins Balance & Full History Banner (Tap to view complete history)
+                        StreamBuilder<DocumentSnapshot>(
+                          stream: FirebaseFirestore.instance
+                              .collection('coin_wallets')
+                              .doc(targetUid)
+                              .snapshots(),
+                          builder: (context, coinSnap) {
+                            int coins = user.coins;
+                            if (coinSnap.hasData && coinSnap.data!.exists) {
+                              final data = coinSnap.data!.data() as Map<String, dynamic>? ?? {};
+                              coins = (data['coins'] as num?)?.toInt() ?? user.coins;
+                            }
+                            return InkWell(
+                              onTap: () => CoinHistorySheet.show(context, userId: targetUid),
+                              borderRadius: BorderRadius.circular(14),
+                              child: Container(
+                                margin: const EdgeInsets.only(top: 12),
+                                padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                                decoration: BoxDecoration(
+                                  gradient: LinearGradient(
+                                    colors: [
+                                      const Color(0xFFFFD700).withOpacity(0.14),
+                                      const Color(0xFF1E293B),
+                                    ],
+                                    begin: Alignment.centerLeft,
+                                    end: Alignment.centerRight,
+                                  ),
+                                  borderRadius: BorderRadius.circular(14),
+                                  border: Border.all(color: const Color(0xFFFFD700).withOpacity(0.4)),
+                                ),
+                                child: Row(
+                                  children: [
+                                    Container(
+                                      padding: const EdgeInsets.all(8),
+                                      decoration: BoxDecoration(
+                                        color: const Color(0xFFFFD700).withOpacity(0.2),
+                                        shape: BoxShape.circle,
+                                      ),
+                                      child: const Text('🪙', style: TextStyle(fontSize: 18)),
+                                    ),
+                                    const SizedBox(width: 10),
+                                    Expanded(
+                                      child: Column(
+                                        crossAxisAlignment: CrossAxisAlignment.start,
+                                        children: [
+                                          const Text(
+                                            'G-COINS WALLET',
+                                            style: TextStyle(
+                                              color: GamerTheme.textMuted,
+                                              fontSize: 10,
+                                              fontWeight: FontWeight.w800,
+                                              letterSpacing: 0.8,
+                                            ),
+                                          ),
+                                          const SizedBox(height: 2),
+                                          Text(
+                                            '$coins Coins',
+                                            style: const TextStyle(
+                                              color: Color(0xFFFFD700),
+                                              fontWeight: FontWeight.w900,
+                                              fontSize: 16,
+                                            ),
+                                          ),
+                                        ],
+                                      ),
+                                    ),
+                                    Container(
+                                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+                                      decoration: BoxDecoration(
+                                        color: const Color(0xFFFFD700),
+                                        borderRadius: BorderRadius.circular(8),
+                                      ),
+                                      child: const Row(
+                                        mainAxisSize: MainAxisSize.min,
+                                        children: [
+                                          Icon(Icons.history_rounded, size: 14, color: Colors.black),
+                                          SizedBox(width: 4),
+                                          Text(
+                                            'Coin History',
+                                            style: TextStyle(
+                                              color: Colors.black,
+                                              fontWeight: FontWeight.w900,
+                                              fontSize: 11,
+                                            ),
+                                          ),
+                                        ],
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            );
+                          },
+                        ),
+
                         const SizedBox(height: 16),
 
                         // Followers / Following / Posts Counts

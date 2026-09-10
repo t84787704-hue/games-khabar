@@ -14,6 +14,7 @@ import '../widgets/gamer_avatar.dart';
 import '../screens/gamer_profile_screen.dart';
 import 'coin_store_screen.dart';
 import '../widgets/coin_history_sheet.dart';
+import '../constants/tournament_game_categories.dart';
 
 class TournamentBoardScreen extends StatefulWidget {
   const TournamentBoardScreen({super.key});
@@ -31,37 +32,17 @@ class _TournamentBoardScreenState extends State<TournamentBoardScreen> with Sing
 
   String _selectedCategory = 'All Games';
 
-  static const List<Map<String, String>> _gameCategories = [
+  static final List<Map<String, String>> _gameCategories = [
     {'name': 'All Games', 'icon': '🎮'},
-    {'name': 'BGMI', 'icon': '🪖'},
-    {'name': 'PUBG Mobile', 'icon': '🪂'},
-    {'name': 'Garena Free Fire', 'icon': '🔥'},
-    {'name': 'Free Fire Max', 'icon': '⚡'},
-    {'name': 'COD Mobile', 'icon': '🎖️'},
-    {'name': 'COD Warzone', 'icon': '🎯'},
-    {'name': 'Valorant', 'icon': '⚔️'},
-    {'name': 'Fortnite', 'icon': '⛏️'},
-    {'name': 'Apex Legends', 'icon': '🏹'},
-    {'name': 'Counter-Strike 2', 'icon': '💣'},
-    {'name': 'Mobile Legends Bang Bang', 'icon': '🛡️'},
-    {'name': 'League of Legends', 'icon': '🧙‍♂️'},
-    {'name': 'Clash Royale', 'icon': '👑'},
-    {'name': 'Brawl Stars', 'icon': '🥊'},
-    {'name': 'Minecraft', 'icon': '🧱'},
-    {'name': 'Roblox', 'icon': '🕹️'},
-    {'name': 'EA Sports FC 25', 'icon': '⚽'},
-    {'name': '8 Ball Pool', 'icon': '🎱'},
-    {'name': 'Ludo King', 'icon': '🎲'},
-    {'name': 'Among Us', 'icon': '🚀'},
-    {'name': 'Others', 'icon': '👾'},
-    {'name': 'Free Entry', 'icon': '🆓'},
+    ...kExactGameCategories.map((name) => {
+      'name': name,
+      'icon': getGameConfig(name).icon,
+    }),
   ];
 
   String _getCategoryIcon(String category) {
-    for (final cat in _gameCategories) {
-      if (cat['name'] == category) return cat['icon']!;
-    }
-    return '🎮';
+    if (category == 'All Games') return '🎮';
+    return getGameConfig(category).icon;
   }
 
   @override
@@ -172,112 +153,19 @@ class _TournamentBoardScreenState extends State<TournamentBoardScreen> with Sing
 
     final wallet = _walletService.currentWallet ?? const CoinWallet(userId: '', coins: 1000);
 
-    const availableGames = [
-      'BGMI',
-      'PUBG Mobile',
-      'Garena Free Fire',
-      'Free Fire Max',
-      'COD Mobile',
-      'COD Warzone',
-      'Valorant',
-      'Fortnite',
-      'Apex Legends',
-      'Counter-Strike 2',
-      'Mobile Legends Bang Bang',
-      'League of Legends',
-      'Clash Royale',
-      'Brawl Stars',
-      'Minecraft',
-      'Roblox',
-      'EA Sports FC 25',
-      '8 Ball Pool',
-      'Ludo King',
-      'Among Us',
-      'Others',
-    ];
+    final availableGames = kExactGameCategories;
 
-    const Map<String, List<String>> gameModes = {
-      'BGMI': ['TDM 1v1', 'TDM 4v4', 'Classic Scrim', 'Warehouse', 'Erangel'],
-      'PUBG Mobile': ['TDM 1v1', 'TDM 4v4', 'Classic Scrim', 'Warehouse', 'Erangel'],
-      'Garena Free Fire': ['Clash Squad 1v1', 'Clash Squad 4v4', 'Battle Royale', 'Lone Wolf 1v1'],
-      'Free Fire Max': ['Clash Squad 1v1', 'Clash Squad 4v4', 'Battle Royale', 'Lone Wolf 1v1'],
-      'COD Mobile': ['1v1 Duel', 'Search & Destroy 5v5', 'TDM 5v5', 'Battle Royale'],
-      'COD Warzone': ['Resurgence', 'Battle Royale', 'Custom Lobby'],
-      'Valorant': ['Custom 1v1', 'Competitive 5v5', 'Deathmatch', 'Swiftplay'],
-      'Fortnite': ['1v1 Build Fight', 'Box Fight', 'Zone Wars', 'Battle Royale'],
-      'Apex Legends': ['Custom 1v1 Arena', 'Trios Battle Royale', 'Control'],
-      'Counter-Strike 2': ['Competitive 5v5', 'Wingman 2v2', '1v1 Aim Duel', 'Deathmatch'],
-      'Mobile Legends Bang Bang': ['Custom 1v1', 'Custom 5v5', 'Brawl Mode'],
-      'League of Legends': ['1v1 Mid Only', 'Custom 5v5', 'ARAM'],
-      'Clash Royale': ['Friendly 1v1', 'Triple Elixir', 'Draft Battle'],
-      'Brawl Stars': ['Solo Showdown', 'Duo Showdown', 'Gem Grab 3v3', 'Brawl Ball 3v3'],
-      'Minecraft': ['Bedwars', 'Skywars', '1v1 PvP Duel', 'Survival Games'],
-      'Roblox': ['Custom Server', 'Arsenal 1v1', 'BedWars', 'Blox Fruits'],
-      'EA Sports FC 25': ['1v1 Friendly Match', 'Ultimate Team Friendly', 'Co-op 2v2'],
-      '8 Ball Pool': ['1v1 Match', 'Tournament 8-Player'],
-      'Ludo King': ['1v1 Classic', '4 Player Classic', 'Quick Mode'],
-      'Among Us': ['Classic 10 Players', 'Classic 15 Players', 'Hide and Seek'],
-      'Others': ['1v1 Match', 'Custom Match', 'Tournament'],
-    };
-
-    const Map<String, List<String>> gameMaps = {
-      'BGMI': ['Warehouse', 'Erangel', 'Miramar', 'Sanhok', 'Livik'],
-      'PUBG Mobile': ['Warehouse', 'Erangel', 'Miramar', 'Sanhok', 'Livik'],
-      'Garena Free Fire': ['Bermuda', 'Kalahari', 'Purgatory', 'Alpine'],
-      'Free Fire Max': ['Bermuda', 'Kalahari', 'Purgatory', 'Alpine'],
-      'COD Mobile': ['Nuketown', 'Crash', 'Standoff', 'Crossfire', 'Isolated'],
-      'COD Warzone': ['Urzikstan', 'Rebirth Island', 'Fortune\'s Keep'],
-      'Valorant': ['Ascent', 'Bind', 'Haven', 'Split', 'Icebox', 'Lotus'],
-      'Fortnite': ['Creative 1v1 Arena', 'Battle Royale Island', 'Box Fight Arena'],
-      'Apex Legends': ['World\'s Edge', 'Olympus', 'Kings Canyon', 'Storm Point'],
-      'Counter-Strike 2': ['Mirage', 'Inferno', 'Dust II', 'Nuke', 'Ancient'],
-      'Mobile Legends Bang Bang': ['Land of Dawn', 'Brawl Battlefield'],
-      'League of Legends': ['Summoner\'s Rift', 'Howling Abyss'],
-      'Clash Royale': ['Legendary Arena', 'Electro Valley', 'Royal Arena'],
-      'Brawl Stars': ['Cavern Churn', 'Double Trouble', 'Sneaky Fields'],
-      'Minecraft': ['Bedwars Arena', 'Skywars Islands', 'PvP Colosseum'],
-      'Roblox': ['Arsenal Arena', 'Custom Island', 'Main World'],
-      'EA Sports FC 25': ['Santiago Bernabéu', 'Wembley Stadium', 'Camp Nou'],
-      '8 Ball Pool': ['London Pub', 'Tokyo Warrior', 'Downtown 8 Ball', 'Sydney Marina'],
-      'Ludo King': ['Classic Board', 'Nature Board', 'Egypt Board'],
-      'Among Us': ['The Skeld', 'MIRA HQ', 'Polus', 'The Airship'],
-      'Others': ['Default Map', 'Custom Map'],
-    };
-
-    String getDefaultPlatform(String game) {
-      if (game == 'Valorant' || game == 'Counter-Strike 2' || game == 'League of Legends') {
-        return 'PC';
-      }
-      if (game == 'EA Sports FC 25' || game == 'COD Warzone') {
-        return 'Console';
-      }
-      if (game == 'Fortnite' || game == 'Roblox' || game == 'Minecraft' || game == 'Among Us') {
-        return 'Cross-Platform';
-      }
-      return 'Mobile';
-    }
-
-    int getDefaultSlots(String mode) {
-      if (mode.contains('1v1') || mode.contains('Duel') || mode.contains('Solo')) return 2;
-      if (mode.contains('2v2') || mode.contains('Wingman') || mode.contains('Duo')) return 4;
-      if (mode.contains('4v4') || mode.contains('4 Player') || mode.contains('Tournament 8-Player')) return 8;
-      if (mode.contains('5v5') || mode.contains('Search & Destroy')) return 10;
-      if (mode.contains('10 Players')) return 10;
-      if (mode.contains('15 Players')) return 15;
-      if (mode.contains('Classic') || mode.contains('Battle Royale') || mode.contains('Scrim')) return 100;
-      return 2;
-    }
-
+    final initialConfig = getGameConfig(preselectedGame ?? 'BGMI');
     String selectedGame = (preselectedGame != null && availableGames.contains(preselectedGame))
         ? preselectedGame
         : 'BGMI';
-    String selectedMode = (gameModes[selectedGame] ?? ['1v1']).first;
-    String selectedMap = (gameMaps[selectedGame] ?? ['Erangel']).first;
-    String selectedPlatform = getDefaultPlatform(selectedGame);
+    String selectedMode = initialConfig.defaultMode;
+    String selectedMap = initialConfig.defaultMap;
+    String selectedPlatform = initialConfig.platform;
     String selectedRegion = 'Asia / India';
-    int maxSlots = getDefaultSlots(selectedMode);
-    int entryFeeCoins = 0;
-    int prizePoolCoins = 500;
+    int maxSlots = initialConfig.defaultSlots;
+    const int entryFeeCoins = 0;
+    const int prizePoolCoins = 500;
     DateTime selectedStartTime = DateTime.now().add(const Duration(minutes: 30));
 
     final titleController = TextEditingController(text: '$selectedGame $selectedMode Match');
@@ -301,21 +189,12 @@ class _TournamentBoardScreenState extends State<TournamentBoardScreen> with Sing
               selectedGame == 'Fortnite' ||
               selectedGame == 'Apex Legends' ||
               selectedGame == 'League of Legends' ||
-              selectedGame == 'Roblox' ||
-              selectedGame == 'Among Us';
+              selectedGame == 'Roblox';
 
           final isLinkOnly = selectedGame == 'Ludo King' ||
               selectedGame == '8 Ball Pool' ||
               selectedGame == 'Clash Royale' ||
               selectedGame == 'Brawl Stars';
-
-          void recalculatePrize() {
-            if (entryFeeCoins > 0) {
-              prizePoolCoins = entryFeeCoins * maxSlots;
-            } else {
-              if (prizePoolCoins == 0) prizePoolCoins = 500;
-            }
-          }
 
           return Padding(
             padding: EdgeInsets.only(
@@ -406,14 +285,12 @@ class _TournamentBoardScreenState extends State<TournamentBoardScreen> with Sing
                           if (val == null) return;
                           setSheetState(() {
                             selectedGame = val;
-                            final modes = gameModes[selectedGame] ?? ['1v1 Match'];
-                            selectedMode = modes.first;
-                            final maps = gameMaps[selectedGame] ?? ['Default'];
-                            selectedMap = maps.first;
-                            selectedPlatform = getDefaultPlatform(selectedGame);
-                            maxSlots = getDefaultSlots(selectedMode);
+                            final cfg = getGameConfig(selectedGame);
+                            selectedMode = cfg.defaultMode;
+                            selectedMap = cfg.defaultMap;
+                            selectedPlatform = cfg.platform;
+                            maxSlots = cfg.defaultSlots;
                             titleController.text = '$selectedGame $selectedMode Match';
-                            recalculatePrize();
                           });
                         },
                       ),
@@ -440,21 +317,19 @@ class _TournamentBoardScreenState extends State<TournamentBoardScreen> with Sing
                               ),
                               child: DropdownButtonHideUnderline(
                                 child: DropdownButton<String>(
-                                  value: (gameModes[selectedGame] ?? []).contains(selectedMode)
+                                  value: getGameConfig(selectedGame).modes.contains(selectedMode)
                                       ? selectedMode
-                                      : (gameModes[selectedGame]?.first ?? '1v1 Match'),
+                                      : getGameConfig(selectedGame).defaultMode,
                                   isExpanded: true,
                                   dropdownColor: GamerTheme.cardDark,
-                                  items: (gameModes[selectedGame] ?? ['1v1 Match'])
+                                  items: getGameConfig(selectedGame).modes
                                       .map((m) => DropdownMenuItem(value: m, child: Text(m, style: const TextStyle(color: Colors.white, fontSize: 12))))
                                       .toList(),
                                   onChanged: (v) {
                                     if (v == null) return;
                                     setSheetState(() {
                                       selectedMode = v;
-                                      maxSlots = getDefaultSlots(selectedMode);
                                       titleController.text = '$selectedGame $selectedMode Match';
-                                      recalculatePrize();
                                     });
                                   },
                                 ),
@@ -479,12 +354,12 @@ class _TournamentBoardScreenState extends State<TournamentBoardScreen> with Sing
                               ),
                               child: DropdownButtonHideUnderline(
                                 child: DropdownButton<String>(
-                                  value: (gameMaps[selectedGame] ?? []).contains(selectedMap)
+                                  value: getGameConfig(selectedGame).maps.contains(selectedMap)
                                       ? selectedMap
-                                      : (gameMaps[selectedGame]?.first ?? 'Default'),
+                                      : getGameConfig(selectedGame).defaultMap,
                                   isExpanded: true,
                                   dropdownColor: GamerTheme.cardDark,
-                                  items: (gameMaps[selectedGame] ?? ['Default'])
+                                  items: getGameConfig(selectedGame).maps
                                       .map((m) => DropdownMenuItem(value: m, child: Text(m, style: const TextStyle(color: Colors.white, fontSize: 12))))
                                       .toList(),
                                   onChanged: (v) => setSheetState(() => selectedMap = v ?? selectedMap),
@@ -623,70 +498,60 @@ class _TournamentBoardScreenState extends State<TournamentBoardScreen> with Sing
 
                   const SizedBox(height: 14),
 
-                  // FIELD 6: ENTRY FEE IN COINS
-                  Row(
+                  // FIELD 6: ENTRY FEE (FREE ONLY)
+                  const Row(
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
-                      const Text('6. ENTRY FEE (PER PLAYER)', style: TextStyle(color: GamerTheme.textMuted, fontSize: 11, fontWeight: FontWeight.w800)),
-                      Text(entryFeeCoins == 0 ? 'FREE (0 Coins)' : '💰 $entryFeeCoins Coins', style: const TextStyle(color: GamerTheme.neonGreen, fontWeight: FontWeight.bold, fontSize: 12)),
+                      Text('6. ENTRY FEE (PER PLAYER)', style: TextStyle(color: GamerTheme.textMuted, fontSize: 11, fontWeight: FontWeight.w800)),
+                      Text('FREE (0 Coins)', style: TextStyle(color: GamerTheme.neonGreen, fontWeight: FontWeight.bold, fontSize: 12)),
                     ],
                   ),
                   const SizedBox(height: 6),
-                  Wrap(
-                    spacing: 8,
-                    children: [0, 10, 20, 50, 100, 200].map((fee) {
-                      final isSelected = entryFeeCoins == fee;
-                      return ChoiceChip(
-                        label: Text(fee == 0 ? 'FREE' : '💰 $fee Coins', style: TextStyle(fontSize: 12, color: isSelected ? Colors.black : Colors.white, fontWeight: FontWeight.bold)),
-                        selected: isSelected,
-                        selectedColor: GamerTheme.neonGreen,
-                        backgroundColor: GamerTheme.bgDark,
-                        onSelected: (val) {
-                          setSheetState(() {
-                            entryFeeCoins = fee;
-                            recalculatePrize();
-                          });
-                        },
-                      );
-                    }).toList(),
+                  Container(
+                    width: double.infinity,
+                    padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                    decoration: BoxDecoration(
+                      color: GamerTheme.bgDark,
+                      borderRadius: BorderRadius.circular(10),
+                      border: Border.all(color: GamerTheme.neonGreen.withOpacity(0.5)),
+                    ),
+                    child: const Row(
+                      children: [
+                        Icon(Icons.check_circle_rounded, color: GamerTheme.neonGreen, size: 18),
+                        SizedBox(width: 8),
+                        Text('FREE ENTRY (0 Coins for all participants)', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 12)),
+                      ],
+                    ),
                   ),
 
                   const SizedBox(height: 14),
 
-                  // FIELD 7: PRIZE POOL (AUTO CALCULATED OR HOST ESCROW)
-                  Row(
+                  // FIELD 7: PRIZE POOL (ADMIN WALLET ESCROW)
+                  const Row(
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
-                      Text(
-                        entryFeeCoins > 0 ? '7. PRIZE POOL (AUTO: $entryFeeCoins × $maxSlots)' : '7. PRIZE POOL (HOST ESCROW)',
-                        style: const TextStyle(color: GamerTheme.textMuted, fontSize: 11, fontWeight: FontWeight.w800),
-                      ),
-                      Text('💰 $prizePoolCoins Coins', style: const TextStyle(color: GamerTheme.accentBlue, fontWeight: FontWeight.bold, fontSize: 12)),
+                      Text('7. PRIZE POOL (SPONSORED)', style: TextStyle(color: GamerTheme.textMuted, fontSize: 11, fontWeight: FontWeight.w800)),
+                      Text('💰 500 Coins', style: TextStyle(color: GamerTheme.accentBlue, fontWeight: FontWeight.bold, fontSize: 12)),
                     ],
                   ),
                   const SizedBox(height: 6),
-                  Wrap(
-                    spacing: 8,
-                    children: [
-                      if (entryFeeCoins > 0)
-                        ChoiceChip(
-                          label: Text('⚡ Auto ($prizePoolCoins)', style: const TextStyle(fontSize: 12, color: Colors.black, fontWeight: FontWeight.bold)),
-                          selected: true,
-                          selectedColor: GamerTheme.accentBlue,
-                          backgroundColor: GamerTheme.bgDark,
-                          onSelected: (_) {},
+                  Container(
+                    width: double.infinity,
+                    padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                    decoration: BoxDecoration(
+                      color: GamerTheme.bgDark,
+                      borderRadius: BorderRadius.circular(10),
+                      border: Border.all(color: GamerTheme.accentBlue.withOpacity(0.5)),
+                    ),
+                    child: const Row(
+                      children: [
+                        Icon(Icons.shield_rounded, color: GamerTheme.accentBlue, size: 18),
+                        SizedBox(width: 8),
+                        Expanded(
+                          child: Text('💰 500 G-Coins Prize Pool sponsored by Admin Wallet (Free for host & players)', style: TextStyle(color: Colors.white, fontSize: 12)),
                         ),
-                      ...[100, 200, 500, 1000, 2000].map((amount) {
-                        final isSelected = prizePoolCoins == amount && entryFeeCoins == 0;
-                        return ChoiceChip(
-                          label: Text('💰 $amount', style: TextStyle(fontSize: 12, color: isSelected ? Colors.black : Colors.white, fontWeight: FontWeight.bold)),
-                          selected: isSelected,
-                          selectedColor: GamerTheme.accentBlue,
-                          backgroundColor: GamerTheme.bgDark,
-                          onSelected: (val) => setSheetState(() => prizePoolCoins = amount),
-                        );
-                      }),
-                    ],
+                      ],
+                    ),
                   ),
 
                   const SizedBox(height: 14),
@@ -902,14 +767,6 @@ class _TournamentBoardScreenState extends State<TournamentBoardScreen> with Sing
                         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                       ),
                       onPressed: () async {
-                        // Check wallet coins for prize pool escrow using latest balance
-                        final currentCoins = _walletService.currentWallet?.coins ?? wallet.coins;
-                        if (currentCoins < prizePoolCoins) {
-                          Navigator.pop(ctx);
-                          _showNotEnoughCoinsDialog(prizePoolCoins, currentCoins);
-                          return;
-                        }
-
                         final roomTitle = titleController.text.trim().isNotEmpty
                             ? titleController.text.trim()
                             : '$selectedGame $selectedMode Match';
@@ -920,6 +777,7 @@ class _TournamentBoardScreenState extends State<TournamentBoardScreen> with Sing
                           hostName: currentGamer.displayName,
                           hostAvatar: currentGamer.photoUrl,
                           gameType: selectedGame,
+                          gameName: selectedGame,
                           gameMode: selectedMode,
                           roomType: selectedMode,
                           title: roomTitle,
@@ -929,11 +787,11 @@ class _TournamentBoardScreenState extends State<TournamentBoardScreen> with Sing
                           rules: rulesController.text.trim().isNotEmpty
                               ? rulesController.text.trim()
                               : 'Fair play only. No emulators or hacks allowed.',
-                          entryFee: entryFeeCoins == 0 ? 'FREE' : '$entryFeeCoins Coins',
-                          prize: '💰 $prizePoolCoins Coins Prize',
-                          prizePoolCoins: prizePoolCoins,
-                          entryFeeCoins: entryFeeCoins,
-                          escrowCoins: prizePoolCoins,
+                          entryFee: 'FREE',
+                          prize: '💰 500 Coins Prize',
+                          prizePoolCoins: 500,
+                          entryFeeCoins: 0,
+                          escrowCoins: 500,
                           status: 'OPEN',
                           roomId: roomIdController.text.trim(),
                           password: isLinkOnly ? '' : passController.text.trim(),
@@ -945,34 +803,26 @@ class _TournamentBoardScreenState extends State<TournamentBoardScreen> with Sing
                           isRoomRevealed: roomIdController.text.trim().isNotEmpty,
                         );
 
-                        final published = await _tournamentService.publishRoom(room);
-
-                        // Hold host coins in escrow (deducts from coins and adds to escrow)
-                        await _walletService.holdRoomHostCoins(
-                          userId: currentGamer.uid,
-                          prizePoolCoins: prizePoolCoins,
-                          roomId: published.id,
-                          roomTitle: roomTitle,
-                        );
+                        await _tournamentService.publishRoom(room);
 
                         if (ctx.mounted) Navigator.pop(ctx);
                         setState(() {
-                          _selectedCategory = 'All Games';
+                          _selectedCategory = selectedGame;
                         });
                         await _tournamentService.fetchRooms();
 
                         if (mounted) {
                           ScaffoldMessenger.of(context).showSnackBar(
                             SnackBar(
-                              content: Text('🎉 $selectedGame Tournament is LIVE! $prizePoolCoins Coins held in Escrow.'),
+                              content: Text('🎉 $selectedGame Tournament is LIVE! 500 Coins Admin Escrow.'),
                               backgroundColor: GamerTheme.accentBlue,
                             ),
                           );
                         }
                       },
-                      child: Text(
-                        'HOST & LOCK 💰 $prizePoolCoins COINS 🔒',
-                        style: const TextStyle(fontWeight: FontWeight.w900, fontSize: 13, letterSpacing: 0.8),
+                      child: const Text(
+                        'HOST FREE TOURNAMENT 🎮 (500 COINS PRIZE)',
+                        style: TextStyle(fontWeight: FontWeight.w900, fontSize: 13, letterSpacing: 0.8),
                       ),
                     ),
                   ),
@@ -2723,7 +2573,7 @@ class _TournamentBoardScreenState extends State<TournamentBoardScreen> with Sing
         elevation: 6,
         icon: const Icon(Icons.add_moderator_rounded, color: GamerTheme.bgDark),
         label: const Text('HOST ROOM', style: TextStyle(fontWeight: FontWeight.w900, letterSpacing: 0.8)),
-        onPressed: () => _openHostRoomSheet(preselectedGame: (_selectedCategory != 'All Games' && _selectedCategory != 'Free Entry') ? _selectedCategory : null),
+        onPressed: () => _openHostRoomSheet(preselectedGame: _selectedCategory != 'All Games' ? _selectedCategory : null),
       ),
     );
   }
@@ -2732,7 +2582,7 @@ class _TournamentBoardScreenState extends State<TournamentBoardScreen> with Sing
     final localRooms = _tournamentService.rooms;
 
     return StreamBuilder<List<TournamentRoom>>(
-      stream: _tournamentService.getLiveRoomsStream(),
+      stream: _tournamentService.getLiveRoomsStream(gameName: category == 'All Games' ? null : category),
       initialData: localRooms.isNotEmpty ? localRooms : null,
       builder: (context, snapshot) {
         final streamRooms = snapshot.data ?? [];
@@ -2757,28 +2607,13 @@ class _TournamentBoardScreenState extends State<TournamentBoardScreen> with Sing
         }
 
         final filtered = rooms.where((r) {
-          if (category == 'Free Entry') {
-            return r.entryFee.toLowerCase().contains('free') || r.entryFeeCoins == 0;
-          }
           if (category == 'All Games') {
             return true;
           }
-          if (category == 'Garena Free Fire' || category == 'Free Fire') {
-            return r.gameType == 'Garena Free Fire' || r.gameType == 'Free Fire' || r.gameType == 'Free Fire Max' || r.gameType == 'Free Fire MAX';
-          }
-          if (category == 'Free Fire Max' || category == 'Free Fire MAX') {
-            return r.gameType == 'Free Fire Max' || r.gameType == 'Free Fire MAX';
-          }
-          if (category == 'Counter-Strike 2') {
-            return r.gameType == 'Counter-Strike 2' || r.gameType == 'CS2';
-          }
-          if (category == 'Mobile Legends Bang Bang') {
-            return r.gameType == 'Mobile Legends Bang Bang' || r.gameType == 'MLBB';
-          }
-          if (category == 'EA Sports FC 25') {
-            return r.gameType == 'EA Sports FC 25' || r.gameType == 'FC 25';
-          }
-          return r.gameType.toLowerCase() == category.toLowerCase();
+          final cat = category.toLowerCase().trim();
+          final gName = r.gameName.toLowerCase().trim();
+          final gType = r.gameType.toLowerCase().trim();
+          return gName == cat || gType == cat;
         }).toList();
 
         if (filtered.isEmpty) {

@@ -4,6 +4,7 @@ import 'package:image_picker/image_picker.dart';
 import 'package:google_mlkit_text_recognition/google_mlkit_text_recognition.dart';
 import 'package:firebase_storage/firebase_storage.dart';
 import '../models/tournament_room_model.dart';
+import '../constants/tournament_game_categories.dart';
 
 class OcrResult {
   final bool isVictory;
@@ -61,8 +62,21 @@ class ScreenshotOcrService {
       final fullText = recognizedText.text;
       final upperText = fullText.toUpperCase();
 
-      // 2. Search for Victory keywords across BGMI, PUBG, Free Fire, COD, etc.
-      final bool hasVictoryKeyword = upperText.contains('VICTORY') ||
+      // 2. Search for Victory keywords specific to THAT game and universal victory terms
+      final gameName = room?.gameName ?? room?.gameType ?? '';
+      final gameConfig = getGameConfig(gameName);
+      final List<String> gameSpecificKeywords = gameConfig.victoryKeywords;
+
+      bool matchedGameKeyword = false;
+      for (final kw in gameSpecificKeywords) {
+        if (upperText.contains(kw.toUpperCase())) {
+          matchedGameKeyword = true;
+          break;
+        }
+      }
+
+      final bool hasVictoryKeyword = matchedGameKeyword ||
+          upperText.contains('VICTORY') ||
           upperText.contains('WINNER') ||
           upperText.contains('WON') ||
           upperText.contains('#1/') ||

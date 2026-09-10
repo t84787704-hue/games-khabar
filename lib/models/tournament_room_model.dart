@@ -6,6 +6,7 @@ class TournamentRoom {
   final String hostName;
   final String hostAvatar;
   final String gameType; // 'BGMI', 'PUBG Mobile', 'Free Fire', 'Free Fire MAX', 'COD Mobile', 'Valorant', 'Ludo King', '8 Ball Pool'
+  String get gameName => gameType;
   final String gameMode; // Mode within game (e.g. 'TDM 1v1', 'Clash Squad 4v4', etc.)
   final String roomType; // 'TDM 1v1', 'TDM 4v4', 'Classic Scrim', 'Custom Room' (kept for backward compatibility)
   final String title;
@@ -217,7 +218,7 @@ class TournamentRoom {
     final rawPrize = data['prize']?.toString() ?? data['prizePool']?.toString() ?? '💰 $prizeCoins Coins Prize';
     // Clean up any old rupee signs
     final cleanPrize = rawPrize.replaceAll('₹', '💰 ').replaceAll('Cash', 'Coins');
-    final gType = data['gameType']?.toString() ?? 'BGMI';
+    final gType = data['gameName']?.toString() ?? data['gameType']?.toString() ?? 'BGMI';
     final gMode = data['gameMode']?.toString() ?? (data['roomType'] ?? 'TDM 1v1');
     final joined = List<String>.from(data['joinedPlayers'] ?? []);
     final pNames = Map<String, String>.from(data['joinedPlayerNames'] ?? data['playerNames'] ?? {});
@@ -269,6 +270,7 @@ class TournamentRoom {
       'hostId': hostId,
       'hostName': hostName,
       'hostAvatar': hostAvatar,
+      'gameName': gameType,
       'gameType': gameType,
       'gameMode': gameMode,
       'roomType': roomType,
@@ -308,6 +310,7 @@ class TournamentRoom {
       'hostId': hostId,
       'hostName': hostName,
       'hostAvatar': hostAvatar,
+      'gameName': gameType,
       'gameType': gameType,
       'gameMode': gameMode,
       'roomType': roomType,
@@ -357,7 +360,7 @@ class TournamentRoom {
     final feeCoins = (json['entryFeeCoins'] as num?)?.toInt() ?? 0;
     final rawPrize = json['prize']?.toString() ?? json['prizePool']?.toString() ?? '💰 $prizeCoins Coins Prize';
     final cleanPrize = rawPrize.replaceAll('₹', '💰 ').replaceAll('Cash', 'Coins');
-    final gType = json['gameType']?.toString() ?? 'BGMI';
+    final gType = json['gameName']?.toString() ?? json['gameType']?.toString() ?? 'BGMI';
     final gMode = json['gameMode']?.toString() ?? (json['roomType'] ?? 'TDM 1v1');
     final joined = List<String>.from(json['joinedPlayers'] ?? []);
     final pNames = Map<String, String>.from(json['joinedPlayerNames'] ?? json['playerNames'] ?? {});

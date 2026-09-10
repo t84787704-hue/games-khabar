@@ -199,3 +199,154 @@ exports.onPriceUpdated = onDocumentUpdated("news/{newsId}", async (event) => {
   }
 });
 
+// -------------------------------------------------------------
+// 2. AUTO BOT FOR ALL GAMES: autoCreateMultiGameTournaments()
+// Logic:
+// - Every 15 minutes, auto-create 1 room for Top 5 games (BGMI, PUBG Mobile, Garena Free Fire, COD Mobile, Valorant).
+// - Every 1 hour, auto-create 1 room for other games (Fortnite, Ludo King, 8 Ball Pool, etc).
+// - All rooms: Entry = FREE (0 Coins) Watch 1 Ad to Join, Prize = 500 Coins from Admin Escrow, Max Players = 2/4/8.
+// - Title format: "{GameName} {Mode} Auto #{ID}".
+// -------------------------------------------------------------
+
+const MULTI_GAME_CONFIGS = {
+  "BGMI": { mode: "Warehouse TDM", map: "Warehouse", slots: [2, 4, 8], shortMode: "TDM" },
+  "PUBG Mobile": { mode: "Warehouse TDM", map: "Warehouse", slots: [2, 4, 8], shortMode: "TDM" },
+  "Garena Free Fire": { mode: "Clash Squad", map: "Bermuda", slots: [4, 2, 8], shortMode: "Clash Squad" },
+  "COD Mobile": { mode: "TDM", map: "Crash", slots: [2, 4, 8], shortMode: "TDM" },
+  "Valorant": { mode: "Spike Rush", map: "Ascent", slots: [2, 4, 8], shortMode: "Spike Rush" },
+  "Free Fire Max": { mode: "Clash Squad", map: "Bermuda", slots: [4, 2, 8], shortMode: "Clash Squad" },
+  "COD Warzone": { mode: "Resurgence", map: "Rebirth Island", slots: [4, 2, 8], shortMode: "Resurgence" },
+  "Fortnite": { mode: "Box Fight 1v1", map: "Creative Arena", slots: [2, 4, 8], shortMode: "Box Fight" },
+  "Apex Legends": { mode: "Arenas 3v3", map: "Party Crasher", slots: [2, 4, 8], shortMode: "Arenas" },
+  "Counter-Strike 2": { mode: "Wingman 2v2", map: "Dust II", slots: [4, 2, 8], shortMode: "Wingman" },
+  "Mobile Legends Bang Bang": { mode: "Classic 5v5", map: "Land of Dawn", slots: [2, 4, 8], shortMode: "Classic" },
+  "League of Legends": { mode: "ARAM 1v1", map: "Howling Abyss", slots: [2, 4, 8], shortMode: "ARAM" },
+  "Clash Royale": { mode: "Friendly 1v1", map: "Legendary Arena", slots: [2, 4], shortMode: "Friendly" },
+  "Brawl Stars": { mode: "Bounty 3v3", map: "Shooting Star", slots: [2, 4, 8], shortMode: "Bounty" },
+  "Minecraft": { mode: "PvP Duel 1v1", map: "Gladiator Arena", slots: [2, 4, 8], shortMode: "PvP Duel" },
+  "Roblox": { mode: "BedWars 1v1", map: "Custom Arena", slots: [2, 4, 8], shortMode: "BedWars" },
+  "EA Sports FC 25": { mode: "Head to Head 1v1", map: "Champions Stadium", slots: [2, 4], shortMode: "1v1" },
+  "8 Ball Pool": { mode: "1v1 Classic", map: "London Pub", slots: [2, 4, 8], shortMode: "1v1 Classic" },
+  "Ludo King": { mode: "Quick 2/4 Player", map: "Classic Board", slots: [2, 4], shortMode: "Quick" },
+};
+
+const TOP_5_GAMES = ["BGMI", "PUBG Mobile", "Garena Free Fire", "COD Mobile", "Valorant"];
+const OTHER_GAMES = [
+  "Free Fire Max", "COD Warzone", "Fortnite", "Apex Legends",
+  "Counter-Strike 2", "Mobile Legends Bang Bang", "League of Legends",
+  "Clash Royale", "Brawl Stars", "Minecraft", "Roblox", "EA Sports FC 25",
+  "8 Ball Pool", "Ludo King"
+];
+
+async function createBotRoomForGame(db, gameName) {
+  const config = MULTI_GAME_CONFIGS[gameName] || {
+    mode: "Custom Match",
+    map: "Default Arena",
+    slots: [2, 4, 8],
+    shortMode: "Match",
+  };
+
+  const randId = Math.floor(100 + Math.random() * 900);
+  const slotOptions = config.slots;
+  const maxPlayers = slotOptions[Math.floor(Math.random() * slotOptions.length)];
+  const title = `${gameName} ${config.shortMode} Auto #${randId}`;
+  const now = new Date();
+  const startTime = new Date(now.getTime() + 30 * 60 * 1000); // 30 mins later
+  const cleanKey = gameName.toLowerCase().replace(/[^a-z0-9]/g, "_");
+  const roomId = `auto_${cleanKey}_${Date.now()}_${randId}`;
+
+  const roomData = {
+    id: roomId,
+    hostId: "admin_bot",
+    hostName: "AI Gaming Bot",
+    hostAvatar: "",
+    gameName: gameName,
+    gameType: gameName,
+    gameMode: config.mode,
+    roomType: config.mode,
+    title: title,
+    map: config.map,
+    platform: "Cross-Platform",
+    serverRegion: "Asia / India",
+    rules: "Official Auto Room. Entry is FREE (Watch 1 Ad to Join). 500 Coins Escrow Prize Pool from Admin Wallet.",
+    entryFee: "FREE (Watch 1 Ad to Join)",
+    entryFeeCoins: 0,
+    prize: "💰 500 Coins Prize",
+    prizePool: "💰 500 Coins",
+    prizePoolCoins: 500,
+    escrowCoins: 500,
+    status: "active",
+    isLive: true,
+    maxSlots: maxPlayers,
+    totalSlots: maxPlayers,
+    currentSlots: 0,
+    slots: `0/${maxPlayers}`,
+    joinedPlayers: [],
+    joinedPlayerNames: {},
+    roomId: `BOT-${randId}`,
+    password: "",
+    startTime: startTime,
+    createdAt: FieldValue.serverTimestamp(),
+    updatedAt: FieldValue.serverTimestamp(),
+  };
+
+  await db.collection("tournament_rooms").doc(roomId).set(roomData, { merge: true });
+  console.log(`Auto-created room for ${gameName}: "${title}" (Max: ${maxPlayers}, Prize: 500 Coins)`);
+  return roomData;
+}
+
+// Scheduled Cloud Function: runs every 15 minutes
+exports.autoCreateMultiGameTournaments = onSchedule("every 15 minutes", async () => {
+  const db = getFirestore();
+  const currentMinute = new Date().getMinutes();
+  const isHourly = currentMinute < 15; // Hourly execution window on the top of the hour
+
+  console.log(`[AutoBot] Running autoCreateMultiGameTournaments (minute: ${currentMinute}, isHourly: ${isHourly})`);
+
+  // 1. Every 15 minutes: Auto-create 1 room for Top 5 games
+  for (const gameName of TOP_5_GAMES) {
+    try {
+      await createBotRoomForGame(db, gameName);
+    } catch (err) {
+      console.error(`Error auto-creating room for ${gameName}:`, err.message);
+    }
+  }
+
+  // 2. Every 1 hour: Auto-create 1 room for other games
+  if (isHourly) {
+    for (const gameName of OTHER_GAMES) {
+      try {
+        await createBotRoomForGame(db, gameName);
+      } catch (err) {
+        console.error(`Error auto-creating room for ${gameName}:`, err.message);
+      }
+    }
+  }
+
+  console.log("[AutoBot] Finished auto-creating multi-game tournament rooms.");
+});
+
+// HTTP endpoint to manually trigger bot creation if needed
+exports.autoCreateMultiGameTournamentsManual = onRequest(async (req, res) => {
+  const db = getFirestore();
+  const forceAll = req.query.all === "true";
+  const gamesToRun = forceAll ? [...TOP_5_GAMES, ...OTHER_GAMES] : TOP_5_GAMES;
+  const created = [];
+
+  for (const game of gamesToRun) {
+    try {
+      const room = await createBotRoomForGame(db, game);
+      created.push(room.title);
+    } catch (e) {
+      console.error(e);
+    }
+  }
+
+  res.json({
+    success: true,
+    message: `Created ${created.length} auto rooms with 500 Coins Admin Escrow and FREE entry`,
+    rooms: created,
+  });
+});
+
+
