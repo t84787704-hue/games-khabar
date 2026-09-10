@@ -722,14 +722,14 @@ class _GamerProfileScreenState extends State<GamerProfileScreen> with SingleTick
                   actions: [
                     StreamBuilder<DocumentSnapshot>(
                       stream: FirebaseFirestore.instance
-                          .collection('users')
+                          .collection('coin_wallets')
                           .doc(targetUid)
                           .snapshots(),
                       builder: (context, coinSnap) {
                         int coins = user.coins;
                         if (coinSnap.hasData && coinSnap.data!.exists) {
                           final data = coinSnap.data!.data() as Map<String, dynamic>? ?? {};
-                          coins = (data['coins'] as num?)?.toInt() ?? 100;
+                          coins = (data['coins'] as num?)?.toInt() ?? user.coins;
                         }
                         return Container(
                           margin: const EdgeInsets.symmetric(horizontal: 4, vertical: 10),

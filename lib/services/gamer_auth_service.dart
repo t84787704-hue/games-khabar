@@ -226,13 +226,16 @@ class GamerAuthService {
       await docRef.set(userMap, SetOptions(merge: true));
     } else {
       final existingCoins = doc.data()?['coins'];
-      if (existingCoins == null && userMap['coins'] == null) {
+      if (existingCoins != null) {
+        userMap['coins'] = existingCoins;
+      } else if (userMap['coins'] == null) {
         userMap['coins'] = 100;
       }
       await docRef.update(userMap);
     }
 
-    currentGamerNotifier.value = user;
+    final realCoins = (userMap['coins'] as num?)?.toInt() ?? user.coins;
+    currentGamerNotifier.value = user.copyWith(coins: realCoins);
   }
 
   /// Fetch any user's profile by UID

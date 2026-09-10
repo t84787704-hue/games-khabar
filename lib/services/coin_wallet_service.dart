@@ -6,6 +6,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import '../models/coin_wallet_model.dart';
 import '../models/coin_transaction_model.dart';
 import 'gamer_auth_service.dart';
+import 'coin_reward_service.dart';
 
 class CoinWalletService extends ChangeNotifier {
   static final CoinWalletService _instance = CoinWalletService._internal();
@@ -23,6 +24,29 @@ class CoinWalletService extends ChangeNotifier {
 
   StreamSubscription<DocumentSnapshot>? _walletSub;
 
+  /// Helper to synchronize coins to 'users' collection and in-memory notifiers
+  Future<void> _syncToUserDocAndNotifiers(String userId, int coins) async {
+    if (userId.isEmpty) return;
+    try {
+      await _firestore.collection('users').doc(userId).set({
+        'coins': coins,
+      }, SetOptions(merge: true));
+    } catch (e) {
+      debugPrint('CoinWalletService _syncToUserDocAndNotifiers error: $e');
+    }
+
+    try {
+      final currentGamer = GamerAuthService().currentGamer;
+      if (currentGamer != null && (currentGamer.uid == userId || userId.isEmpty)) {
+        GamerAuthService().currentGamerNotifier.value = currentGamer.copyWith(coins: coins);
+      }
+    } catch (_) {}
+
+    try {
+      CoinRewardService().coinsNotifier.value = coins;
+    } catch (_) {}
+  }
+
   /// Initialize or fetch wallet for active user. Grants 1,000 Free G-Coins if new.
   Future<CoinWallet> getOrCreateWallet(String userId) async {
     if (userId.isEmpty) {
@@ -34,12 +58,23 @@ class CoinWalletService extends ChangeNotifier {
       final doc = await docRef.get();
 
       if (!doc.exists) {
-        // Initial balance for every new user: 1000 G-Coins free
+        // Check if user already had coins in 'users' doc
+        int initialCoins = 1000;
+        try {
+          final userSnap = await _firestore.collection('users').doc(userId).get();
+          if (userSnap.exists) {
+            final userC = (userSnap.data()?['coins'] as num?)?.toInt();
+            if (userC != null && userC > 0) {
+              initialCoins = userC;
+            }
+          }
+        } catch (_) {}
+
         final newWallet = CoinWallet(
           userId: userId,
-          coins: 1000,
+          coins: initialCoins,
           escrowCoins: 0,
-          lifetimeEarned: 1000,
+          lifetimeEarned: initialCoins,
           trustScore: 100,
           createdAt: DateTime.now(),
           updatedAt: DateTime.now(),
@@ -52,17 +87,18 @@ class CoinWalletService extends ChangeNotifier {
           id: _transactionsRef.doc().id,
           userId: userId,
           type: 'admin_bonus',
-          amount: 1000,
+          amount: initialCoins,
           status: 'completed',
           timestamp: DateTime.now(),
           title: 'Welcome Bonus 🎁',
-          description: 'Free 1,000 G-Coins on joining My Gamer ID!',
+          description: 'Free $initialCoins G-Coins on joining My Gamer ID!',
         ));
 
         _currentWallet = newWallet;
         _saveToLocal(newWallet);
         notifyListeners();
         _listenToWallet(userId);
+        _syncToUserDocAndNotifiers(userId, initialCoins);
         return newWallet;
       } else {
         final existingWallet = CoinWallet.fromFirestore(doc);
@@ -70,6 +106,7 @@ class CoinWalletService extends ChangeNotifier {
         _saveToLocal(existingWallet);
         notifyListeners();
         _listenToWallet(userId);
+        _syncToUserDocAndNotifiers(userId, existingWallet.coins);
         return existingWallet;
       }
     } catch (e) {
@@ -78,11 +115,13 @@ class CoinWalletService extends ChangeNotifier {
       if (local != null) {
         _currentWallet = local;
         notifyListeners();
+        _syncToUserDocAndNotifiers(userId, local.coins);
         return local;
       }
       final fallback = CoinWallet(userId: userId, coins: 1000);
       _currentWallet = fallback;
       notifyListeners();
+      _syncToUserDocAndNotifiers(userId, fallback.coins);
       return fallback;
     }
   }
@@ -95,6 +134,7 @@ class CoinWalletService extends ChangeNotifier {
           _currentWallet = CoinWallet.fromFirestore(snap);
           _saveToLocal(_currentWallet!);
           notifyListeners();
+          _syncToUserDocAndNotifiers(userId, _currentWallet!.coins);
         }
       },
       onError: (err) {
@@ -157,6 +197,7 @@ class CoinWalletService extends ChangeNotifier {
         title: 'Daily Bonus Claimed 📅',
         description: 'Claimed +100 G-Coins daily check-in reward.',
       ));
+      _syncToUserDocAndNotifiers(userId, newCoins);
       return true;
     } catch (e) {
       debugPrint('CoinWalletService claimDailyBonus error: $e');
@@ -198,6 +239,7 @@ class CoinWalletService extends ChangeNotifier {
         title: 'Rewarded Ad Bonus 📺',
         description: 'Watched sponsored gaming ad (+50 G-Coins).',
       ));
+      _syncToUserDocAndNotifiers(userId, newCoins);
     } catch (e) {
       debugPrint('CoinWalletService rewardAdCoins error: $e');
     }
@@ -237,6 +279,7 @@ class CoinWalletService extends ChangeNotifier {
         title: 'Friend Referral Reward 🤝',
         description: '$inviteeName joined My Gamer ID using your invite link (+200 G-Coins).',
       ));
+      _syncToUserDocAndNotifiers(userId, newCoins);
     } catch (e) {
       debugPrint('CoinWalletService rewardReferralCoins error: $e');
     }
@@ -294,6 +337,8 @@ class CoinWalletService extends ChangeNotifier {
       await _firestore.collection('users').doc(userId).set({
         'coins': newCoins,
       }, SetOptions(merge: true));
+
+      _syncToUserDocAndNotifiers(userId, newCoins);
 
       await _recordTransaction(CoinTransaction(
         id: _transactionsRef.doc().id,
@@ -365,6 +410,8 @@ class CoinWalletService extends ChangeNotifier {
         'coins': newCoins,
       }, SetOptions(merge: true));
 
+      _syncToUserDocAndNotifiers(userId, newCoins);
+
       await _recordTransaction(CoinTransaction(
         id: _transactionsRef.doc().id,
         userId: userId,
@@ -418,6 +465,7 @@ class CoinWalletService extends ChangeNotifier {
         'escrowCoins': newEscrow,
         'updatedAt': FieldValue.serverTimestamp(),
       });
+      _syncToUserDocAndNotifiers(userId, newCoins);
 
       await _recordTransaction(CoinTransaction(
         id: _transactionsRef.doc().id,
@@ -615,6 +663,7 @@ class CoinWalletService extends ChangeNotifier {
           if (currentGamer != null) {
             GamerAuthService().currentGamerNotifier.value = currentGamer.copyWith(coins: newCoins);
           }
+          CoinRewardService().coinsNotifier.value = newCoins;
         }
 
         // 4. Record win_prize transaction for each winner
@@ -692,6 +741,7 @@ class CoinWalletService extends ChangeNotifier {
         final currentGamer = GamerAuthService().currentGamer;
         if (currentGamer != null && (currentGamer.uid == hostId || hostId.isEmpty)) {
           GamerAuthService().currentGamerNotifier.value = currentGamer.copyWith(coins: newHostCoins);
+          CoinRewardService().coinsNotifier.value = newHostCoins;
         }
 
         await _recordTransaction(CoinTransaction(

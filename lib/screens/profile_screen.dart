@@ -166,7 +166,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
               StreamBuilder<DocumentSnapshot>(
                 stream: FirebaseAuth.instance.currentUser?.uid != null
                     ? FirebaseFirestore.instance
-                        .collection('users')
+                        .collection('coin_wallets')
                         .doc(FirebaseAuth.instance.currentUser!.uid)
                         .snapshots()
                     : const Stream.empty(),
@@ -175,6 +175,8 @@ class _ProfileScreenState extends State<ProfileScreen> {
                   if (snapshot.hasData && snapshot.data!.exists) {
                     final data = snapshot.data!.data() as Map<String, dynamic>? ?? {};
                     coins = (data['coins'] as num?)?.toInt() ?? 100;
+                  } else {
+                    coins = GamerAuthService().currentGamer?.coins ?? 100;
                   }
                   return Container(
                     margin: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),

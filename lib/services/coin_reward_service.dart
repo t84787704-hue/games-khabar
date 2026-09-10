@@ -404,6 +404,14 @@ class CoinRewardService {
           'lastEarnTime': FieldValue.serverTimestamp(),
         });
 
+        // Also synchronize coin_wallets atomically
+        final walletRef = FirebaseFirestore.instance.collection('coin_wallets').doc(_userId);
+        transaction.set(walletRef, {
+          'userId': _userId,
+          'coins': newCoins,
+          'updatedAt': FieldValue.serverTimestamp(),
+        }, SetOptions(merge: true));
+
         awarded = true;
       });
 
@@ -439,9 +447,17 @@ class CoinRewardService {
         if (!authorSnap.exists || !postSnap.exists) return;
 
         final currentCoins = (authorSnap.data()?['coins'] as num?)?.toInt() ?? 0;
+        final newAuthorCoins = currentCoins + 5;
         transaction.update(authorRef, {
-          'coins': currentCoins + 5,
+          'coins': newAuthorCoins,
         });
+
+        final authorWalletRef = FirebaseFirestore.instance.collection('coin_wallets').doc(postAuthorId);
+        transaction.set(authorWalletRef, {
+          'userId': postAuthorId,
+          'coins': newAuthorCoins,
+          'updatedAt': FieldValue.serverTimestamp(),
+        }, SetOptions(merge: true));
 
         transaction.update(postRef, {
           'helpfulCount': FieldValue.increment(1),
