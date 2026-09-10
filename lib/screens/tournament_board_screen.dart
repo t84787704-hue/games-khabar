@@ -13,6 +13,7 @@ import '../services/screenshot_ocr_service.dart';
 import '../widgets/gamer_avatar.dart';
 import '../screens/gamer_profile_screen.dart';
 import 'coin_store_screen.dart';
+import '../widgets/coin_history_sheet.dart';
 
 class TournamentBoardScreen extends StatefulWidget {
   const TournamentBoardScreen({super.key});
@@ -2583,29 +2584,38 @@ class _TournamentBoardScreenState extends State<TournamentBoardScreen> with Sing
                       Row(
                         mainAxisAlignment: MainAxisAlignment.spaceBetween,
                         children: [
-                          Row(
-                            children: [
-                              const Text('💰', style: TextStyle(fontSize: 22)),
-                              const SizedBox(width: 8),
-                              Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  Text(
-                                    '${NumberFormat("#,###").format(wallet.coins)} G-Coins',
-                                    style: const TextStyle(
-                                      color: Colors.white,
-                                      fontWeight: FontWeight.w900,
-                                      fontSize: 16,
+                          GestureDetector(
+                            onTap: () => CoinHistorySheet.show(context, userId: uid),
+                            child: Row(
+                              children: [
+                                const Text('💰', style: TextStyle(fontSize: 22)),
+                                const SizedBox(width: 8),
+                                Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Row(
+                                      children: [
+                                        Text(
+                                          '${NumberFormat("#,###").format(wallet.coins)} G-Coins',
+                                          style: const TextStyle(
+                                            color: Colors.white,
+                                            fontWeight: FontWeight.w900,
+                                            fontSize: 16,
+                                          ),
+                                        ),
+                                        const SizedBox(width: 4),
+                                        const Icon(Icons.history_rounded, size: 14, color: Colors.white54),
+                                      ],
                                     ),
-                                  ),
-                                  if (wallet.escrowCoins > 0)
-                                    Text(
-                                      '🔒 ${wallet.escrowCoins} in Escrow',
-                                      style: const TextStyle(color: GamerTheme.accentOrange, fontSize: 10, fontWeight: FontWeight.bold),
-                                    ),
-                                ],
-                              ),
-                            ],
+                                    if (wallet.escrowCoins > 0)
+                                      Text(
+                                        '🔒 ${wallet.escrowCoins} in Escrow',
+                                        style: const TextStyle(color: GamerTheme.accentOrange, fontSize: 10, fontWeight: FontWeight.bold),
+                                      ),
+                                  ],
+                                ),
+                              ],
+                            ),
                           ),
                           ElevatedButton.icon(
                             style: ElevatedButton.styleFrom(

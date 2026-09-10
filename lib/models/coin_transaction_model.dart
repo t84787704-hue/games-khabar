@@ -39,16 +39,74 @@ class CoinTransaction {
       time = DateTime.tryParse(rawTime) ?? time;
     }
 
+    final userId = data['userId'] ?? data['to'] ?? data['from'] ?? '';
+    final type = data['type'] ?? 'admin_bonus';
+    final amount = (data['amount'] as num?)?.toInt() ?? 0;
+
+    String title = (data['title'] as String?)?.trim() ?? '';
+    if (title.isEmpty) {
+      switch (type) {
+        case 'win_reward':
+        case 'win_prize':
+          title = 'Match Victory Reward 🏆';
+          break;
+        case 'room_host_hold':
+          title = 'Room Prize Held 🔒';
+          break;
+        case 'entry_fee':
+          title = 'Room Entry Fee 🎮';
+          break;
+        case 'refund':
+          title = 'Coins Refunded ↩️';
+          break;
+        case 'ad_reward':
+          title = 'Watch Ad Reward 📺';
+          break;
+        case 'daily_bonus':
+        case 'daily_login':
+          title = 'Daily Login Bonus 📅';
+          break;
+        case 'news_read':
+          title = 'Gaming News Read 📰';
+          break;
+        case 'post_created':
+          title = 'Community Post ✍️';
+          break;
+        case 'helpful_received':
+          title = 'Helpful Upvote 🌟';
+          break;
+        case 'referral':
+          title = 'Friend Referral 🤝';
+          break;
+        case 'admin_bonus':
+          title = 'Welcome Bonus 🎁';
+          break;
+        default:
+          title = amount >= 0 ? 'Coins Added 🪙' : 'Coins Deducted 🪙';
+      }
+    }
+
+    String description = (data['description'] as String?)?.trim() ?? '';
+    if (description.isEmpty) {
+      if (amount > 0) {
+        description = '+$amount Coins added to your wallet';
+      } else if (amount < 0) {
+        description = '${amount.abs()} Coins deducted from your wallet';
+      } else {
+        description = 'Coin activity recorded';
+      }
+    }
+
     return CoinTransaction(
       id: data['id'] ?? id ?? '',
-      userId: data['userId'] ?? '',
-      type: data['type'] ?? 'admin_bonus',
-      amount: (data['amount'] as num?)?.toInt() ?? 0,
+      userId: userId,
+      type: type,
+      amount: amount,
       status: data['status'] ?? 'completed',
       timestamp: time,
-      title: data['title'] ?? 'Transaction',
-      description: data['description'] ?? '',
-      roomId: data['roomId'],
+      title: title,
+      description: description,
+      roomId: data['roomId'] ?? data['squadId'],
     );
   }
 

@@ -17,6 +17,7 @@ import 'privacy_policy_screen.dart';
 import '../services/gamer_auth_service.dart';
 import '../models/gamer_user_model.dart';
 import 'verification_screen.dart';
+import '../widgets/coin_history_sheet.dart';
 
 class ProfileScreen extends StatefulWidget {
   const ProfileScreen({super.key});
@@ -178,28 +179,36 @@ class _ProfileScreenState extends State<ProfileScreen> {
                   } else {
                     coins = GamerAuthService().currentGamer?.coins ?? 100;
                   }
-                  return Container(
-                    margin: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                    decoration: BoxDecoration(
-                      color: const Color(0xFFFFD700).withOpacity(0.15),
-                      borderRadius: BorderRadius.circular(20),
-                      border: Border.all(color: const Color(0xFFFFD700), width: 1.2),
-                    ),
-                    child: Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        const Text('🪙', style: TextStyle(fontSize: 13)),
-                        const SizedBox(width: 4),
-                        Text(
-                          'Coins: $coins',
-                          style: const TextStyle(
-                            color: Color(0xFFFFD700),
-                            fontWeight: FontWeight.w900,
-                            fontSize: 12.5,
+                  return GestureDetector(
+                    onTap: () {
+                      final uid = FirebaseAuth.instance.currentUser?.uid ?? '';
+                      CoinHistorySheet.show(context, userId: uid);
+                    },
+                    child: Container(
+                      margin: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFFFFD700).withOpacity(0.15),
+                        borderRadius: BorderRadius.circular(20),
+                        border: Border.all(color: const Color(0xFFFFD700), width: 1.2),
+                      ),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          const Text('🪙', style: TextStyle(fontSize: 13)),
+                          const SizedBox(width: 4),
+                          Text(
+                            'Coins: $coins',
+                            style: const TextStyle(
+                              color: Color(0xFFFFD700),
+                              fontWeight: FontWeight.w900,
+                              fontSize: 12.5,
+                            ),
                           ),
-                        ),
-                      ],
+                          const SizedBox(width: 3),
+                          const Icon(Icons.history_rounded, size: 14, color: Color(0xFFFFD700)),
+                        ],
+                      ),
                     ),
                   );
                 },
@@ -626,6 +635,32 @@ class _ProfileScreenState extends State<ProfileScreen> {
                               );
                             },
                           );
+                        },
+                      ),
+                      Divider(color: borderDark, height: 1),
+
+                      // Coin History & Passbook Entry
+                      ListTile(
+                        leading: Container(
+                          padding: const EdgeInsets.all(6),
+                          decoration: BoxDecoration(
+                            color: const Color(0xFFFFD700).withOpacity(0.12),
+                            borderRadius: BorderRadius.circular(8),
+                          ),
+                          child: const Icon(Icons.history_edu_rounded, color: Color(0xFFFFD700), size: 20),
+                        ),
+                        title: Text(
+                          'Coin History & Passbook',
+                          style: TextStyle(color: textWhite, fontSize: 14, fontWeight: FontWeight.bold),
+                        ),
+                        subtitle: Text(
+                          'Kb kitne coin kis liye cut ya add huway',
+                          style: TextStyle(color: textGray, fontSize: 12),
+                        ),
+                        trailing: Icon(Icons.arrow_forward_ios_rounded, color: textGray, size: 14),
+                        onTap: () {
+                          final uid = FirebaseAuth.instance.currentUser?.uid ?? '';
+                          CoinHistorySheet.show(context, userId: uid);
                         },
                       ),
                       Divider(color: borderDark, height: 1),

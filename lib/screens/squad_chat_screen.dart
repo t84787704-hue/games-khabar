@@ -971,11 +971,16 @@ class _SquadChatScreenState extends State<SquadChatScreen> {
         // Create doc in 'coin_transactions' collection
         final txRef = firestore.collection('coin_transactions').doc();
         transaction.set(txRef, {
+          'id': txRef.id,
+          'userId': winnerId,
           'from': hostId,
           'to': winnerId,
           'amount': 100,
           'squadId': squadId,
           'type': 'win_reward',
+          'title': 'Match Victory Reward 🏆',
+          'description': 'Awarded 100 Coins for approved match victory proof',
+          'status': 'completed',
           'timestamp': FieldValue.serverTimestamp(),
         });
 

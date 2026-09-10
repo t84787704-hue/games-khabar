@@ -21,6 +21,7 @@ import 'followers_following_screen.dart';
 import 'gamer_auth_screen.dart';
 import 'saved_news_tab_screen.dart';
 import 'verification_screen.dart';
+import '../widgets/coin_history_sheet.dart';
 
 class GamerProfileScreen extends StatefulWidget {
   final String? userId; // If null, displays currently logged in user's profile
@@ -731,28 +732,33 @@ class _GamerProfileScreenState extends State<GamerProfileScreen> with SingleTick
                           final data = coinSnap.data!.data() as Map<String, dynamic>? ?? {};
                           coins = (data['coins'] as num?)?.toInt() ?? user.coins;
                         }
-                        return Container(
-                          margin: const EdgeInsets.symmetric(horizontal: 4, vertical: 10),
-                          padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 4),
-                          decoration: BoxDecoration(
-                            color: const Color(0xFFFFD700).withOpacity(0.15),
-                            borderRadius: BorderRadius.circular(16),
-                            border: Border.all(color: const Color(0xFFFFD700), width: 1.2),
-                          ),
-                          child: Row(
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              const Text('🪙', style: TextStyle(fontSize: 12)),
-                              const SizedBox(width: 4),
-                              Text(
-                                'Coins: $coins',
-                                style: const TextStyle(
-                                  color: Color(0xFFFFD700),
-                                  fontWeight: FontWeight.w900,
-                                  fontSize: 12,
+                        return GestureDetector(
+                          onTap: () => CoinHistorySheet.show(context, userId: targetUid),
+                          child: Container(
+                            margin: const EdgeInsets.symmetric(horizontal: 4, vertical: 10),
+                            padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 4),
+                            decoration: BoxDecoration(
+                              color: const Color(0xFFFFD700).withOpacity(0.15),
+                              borderRadius: BorderRadius.circular(16),
+                              border: Border.all(color: const Color(0xFFFFD700), width: 1.2),
+                            ),
+                            child: Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                const Text('🪙', style: TextStyle(fontSize: 12)),
+                                const SizedBox(width: 4),
+                                Text(
+                                  'Coins: $coins',
+                                  style: const TextStyle(
+                                    color: Color(0xFFFFD700),
+                                    fontWeight: FontWeight.w900,
+                                    fontSize: 12,
+                                  ),
                                 ),
-                              ),
-                            ],
+                                const SizedBox(width: 3),
+                                const Icon(Icons.history_rounded, size: 13, color: Color(0xFFFFD700)),
+                              ],
+                            ),
                           ),
                         );
                       },

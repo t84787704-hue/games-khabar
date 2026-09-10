@@ -824,6 +824,10 @@ class CoinWalletService extends ChangeNotifier {
     }
   }
 
+  Future<void> recordTransaction(CoinTransaction tx) async {
+    await _recordTransaction(tx);
+  }
+
   Future<void> _recordTransaction(CoinTransaction tx) async {
     try {
       await _transactionsRef.doc(tx.id).set(tx.toMap());
@@ -836,10 +840,12 @@ class CoinWalletService extends ChangeNotifier {
     if (userId.isEmpty) return Stream.value([]);
     return _transactionsRef
         .where('userId', isEqualTo: userId)
-        .orderBy('timestamp', descending: true)
-        .limit(50)
         .snapshots()
-        .map((snap) => snap.docs.map((d) => CoinTransaction.fromFirestore(d)).toList());
+        .map((snap) {
+      final list = snap.docs.map((d) => CoinTransaction.fromFirestore(d)).toList();
+      list.sort((a, b) => b.timestamp.compareTo(a.timestamp));
+      return list;
+    });
   }
 
   Future<void> _saveToLocal(CoinWallet wallet) async {
