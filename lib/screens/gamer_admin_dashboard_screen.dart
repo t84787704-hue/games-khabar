@@ -988,7 +988,7 @@ class _GamerAdminDashboardScreenState extends State<GamerAdminDashboardScreen>
               GamerAvatar(
                 photoUrl: user.photoUrl,
                 radius: 20,
-                username: user.username,
+                displayName: user.displayName.isNotEmpty ? user.displayName : user.username,
               ),
               const SizedBox(width: 10),
               Expanded(
