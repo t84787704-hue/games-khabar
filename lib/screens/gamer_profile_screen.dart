@@ -1,4 +1,6 @@
+import 'dart:io';
 import 'package:flutter/material.dart';
+import 'package:image_picker/image_picker.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
@@ -52,6 +54,185 @@ class _GamerProfileScreenState extends State<GamerProfileScreen> with SingleTick
   void dispose() {
     _tabController.dispose();
     super.dispose();
+  }
+
+  void _showChangeCoverSheet(BuildContext context, GamerUser user) {
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: GamerTheme.cardDark,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      builder: (ctx) {
+        return SafeArea(
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(20, 16, 20, 20),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Center(
+                  child: Container(
+                    width: 40,
+                    height: 4,
+                    decoration: BoxDecoration(
+                      color: GamerTheme.borderLight,
+                      borderRadius: BorderRadius.circular(2),
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 16),
+                const Text(
+                  'Change Cover Photo',
+                  style: TextStyle(
+                    color: GamerTheme.textWhite,
+                    fontSize: 17,
+                    fontWeight: FontWeight.w900,
+                  ),
+                ),
+                const SizedBox(height: 4),
+                const Text(
+                  'Choose a custom banner or select a BGMI theme',
+                  style: TextStyle(color: GamerTheme.textMuted, fontSize: 12),
+                ),
+                const SizedBox(height: 16),
+                ListTile(
+                  leading: Container(
+                    padding: const EdgeInsets.all(8),
+                    decoration: BoxDecoration(
+                      color: GamerTheme.accentOrange.withOpacity(0.15),
+                      borderRadius: BorderRadius.circular(10),
+                    ),
+                    child: const Icon(Icons.photo_library_rounded, color: GamerTheme.accentOrange, size: 20),
+                  ),
+                  title: const Text('Choose from Gallery', style: TextStyle(color: GamerTheme.textWhite, fontWeight: FontWeight.bold, fontSize: 14)),
+                  subtitle: const Text('Upload your custom gaming banner', style: TextStyle(color: GamerTheme.textMuted, fontSize: 11)),
+                  onTap: () {
+                    Navigator.pop(ctx);
+                    _pickAndUploadCoverPhoto(user);
+                  },
+                ),
+                const Divider(color: GamerTheme.borderDark, height: 1),
+                ListTile(
+                  leading: Container(
+                    padding: const EdgeInsets.all(8),
+                    decoration: BoxDecoration(
+                      color: GamerTheme.accentBlue.withOpacity(0.15),
+                      borderRadius: BorderRadius.circular(10),
+                    ),
+                    child: const Icon(Icons.sports_esports_rounded, color: GamerTheme.accentBlue, size: 20),
+                  ),
+                  title: const Text('BGMI Erangel Scrims Banner', style: TextStyle(color: GamerTheme.textWhite, fontWeight: FontWeight.bold, fontSize: 14)),
+                  subtitle: const Text('Official action theme', style: TextStyle(color: GamerTheme.textMuted, fontSize: 11)),
+                  onTap: () {
+                    Navigator.pop(ctx);
+                    _setPresetCover(user, 'https://images.unsplash.com/photo-1542751371-adc38448a05e?w=1200&auto=format&fit=crop&q=80');
+                  },
+                ),
+                ListTile(
+                  leading: Container(
+                    padding: const EdgeInsets.all(8),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFFFFD700).withOpacity(0.15),
+                      borderRadius: BorderRadius.circular(10),
+                    ),
+                    child: const Icon(Icons.military_tech_rounded, color: Color(0xFFFFD700), size: 20),
+                  ),
+                  title: const Text('BGMI Battlegrounds Cyber Banner', style: TextStyle(color: GamerTheme.textWhite, fontWeight: FontWeight.bold, fontSize: 14)),
+                  subtitle: const Text('Neon battleground style', style: TextStyle(color: GamerTheme.textMuted, fontSize: 11)),
+                  onTap: () {
+                    Navigator.pop(ctx);
+                    _setPresetCover(user, 'https://images.unsplash.com/photo-1538481199705-c710c4e965fc?w=1200&auto=format&fit=crop&q=80');
+                  },
+                ),
+              ],
+            ),
+          ),
+        );
+      },
+    );
+  }
+
+  Future<void> _pickAndUploadCoverPhoto(GamerUser user) async {
+    try {
+      final picker = ImagePicker();
+      final picked = await picker.pickImage(
+        source: ImageSource.gallery,
+        maxWidth: 1200,
+        maxHeight: 600,
+        imageQuality: 85,
+      );
+      if (picked == null) return;
+
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Row(
+            children: [
+              SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white)),
+              SizedBox(width: 12),
+              Text('Uploading cover photo...'),
+            ],
+          ),
+          duration: Duration(seconds: 4),
+        ),
+      );
+
+      final file = File(picked.path);
+      final uploadedUrl = await _authService.uploadCoverPhoto(file, user.uid);
+      final finalUrl = uploadedUrl.isNotEmpty ? uploadedUrl : '';
+
+      if (finalUrl.isNotEmpty) {
+        await FirebaseFirestore.instance.collection('users').doc(user.uid).set({
+          'coverUrl': finalUrl,
+        }, SetOptions(merge: true));
+
+        if (mounted) {
+          ScaffoldMessenger.of(context).hideCurrentSnackBar();
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('Cover photo updated successfully!'),
+              backgroundColor: GamerTheme.accentGreen,
+            ),
+          );
+        }
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Could not upload cover photo: $e'),
+            backgroundColor: GamerTheme.redAccent,
+          ),
+        );
+      }
+    }
+  }
+
+  Future<void> _setPresetCover(GamerUser user, String coverUrl) async {
+    try {
+      await FirebaseFirestore.instance.collection('users').doc(user.uid).set({
+        'coverUrl': coverUrl,
+      }, SetOptions(merge: true));
+
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('BGMI cover banner applied!'),
+            backgroundColor: GamerTheme.accentGreen,
+          ),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Failed to set cover: $e'),
+            backgroundColor: GamerTheme.redAccent,
+          ),
+        );
+      }
+    }
   }
 
   void _triggerLiveVerificationCheck(GamerUser user) {
@@ -714,7 +895,7 @@ class _GamerProfileScreenState extends State<GamerProfileScreen> with SingleTick
             headerSliverBuilder: (context, innerBoxIsScrolled) {
               return [
                 SliverAppBar(
-                  expandedHeight: 280,
+                  expandedHeight: 250,
                   pinned: true,
                   backgroundColor: GamerTheme.cardDark,
                   title: Text(
@@ -797,50 +978,58 @@ class _GamerProfileScreenState extends State<GamerProfileScreen> with SingleTick
                     background: Stack(
                       clipBehavior: Clip.none,
                       children: [
-                        // Facebook-Style Cover Art Placeholder / Gradient
+                        // BGMI Pro Cover Banner
                         Container(
-                          height: 160,
+                          height: 175,
                           width: double.infinity,
-                          decoration: BoxDecoration(
-                            gradient: LinearGradient(
-                              colors: [
-                                const Color(0xFF0F2027),
-                                const Color(0xFF203A43),
-                                gameColor.withOpacity(0.4),
-                              ],
-                              begin: Alignment.topLeft,
-                              end: Alignment.bottomRight,
-                            ),
+                          decoration: const BoxDecoration(
+                            color: Color(0xFF0F172A),
                           ),
                           child: Stack(
                             fit: StackFit.expand,
                             children: [
-                              if (user.coverUrl.isNotEmpty)
-                                CachedNetworkImage(
-                                  imageUrl: user.coverUrl,
+                              CachedNetworkImage(
+                                imageUrl: user.coverUrl.isNotEmpty
+                                    ? user.coverUrl
+                                    : 'https://images.unsplash.com/photo-1542751371-adc38448a05e?w=1200&auto=format&fit=crop&q=80',
+                                fit: BoxFit.cover,
+                                placeholder: (_, __) => Container(
+                                  color: const Color(0xFF0F172A),
+                                  child: const Center(
+                                    child: SizedBox(
+                                      width: 24,
+                                      height: 24,
+                                      child: CircularProgressIndicator(strokeWidth: 2, color: GamerTheme.accentOrange),
+                                    ),
+                                  ),
+                                ),
+                                errorWidget: (_, __, ___) => Image.network(
+                                  'https://images.unsplash.com/photo-1542751371-adc38448a05e?w=1200&auto=format&fit=crop&q=80',
                                   fit: BoxFit.cover,
-                                  placeholder: (_, __) => Container(color: const Color(0xFF0F2027)),
-                                  errorWidget: (_, __, ___) => const SizedBox.shrink(),
                                 ),
+                              ),
+                              // Cinematic overlay gradient for high contrast
                               Container(
-                                color: Colors.black.withOpacity(user.coverUrl.isNotEmpty ? 0.35 : 0.0),
-                              ),
-                              Positioned(
-                                right: -20,
-                                top: -20,
-                                child: Icon(
-                                  Icons.sports_esports_rounded,
-                                  size: 160,
-                                  color: Colors.white.withOpacity(0.06),
+                                decoration: BoxDecoration(
+                                  gradient: LinearGradient(
+                                    colors: [
+                                      Colors.black.withOpacity(0.55),
+                                      Colors.transparent,
+                                      Colors.black.withOpacity(0.65),
+                                    ],
+                                    begin: Alignment.topCenter,
+                                    end: Alignment.bottomCenter,
+                                  ),
                                 ),
                               ),
+                              // GAMERS ID NETWORK Tag
                               Positioned(
                                 left: 16,
                                 top: 50,
                                 child: Container(
                                   padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
                                   decoration: BoxDecoration(
-                                    color: Colors.black.withOpacity(0.4),
+                                    color: Colors.black.withOpacity(0.6),
                                     borderRadius: BorderRadius.circular(20),
                                     border: Border.all(color: Colors.white24),
                                   ),
@@ -851,7 +1040,7 @@ class _GamerProfileScreenState extends State<GamerProfileScreen> with SingleTick
                                       Text(
                                         'GAMERS ID NETWORK',
                                         style: TextStyle(
-                                          color: Colors.white.withOpacity(0.9),
+                                          color: Colors.white.withOpacity(0.95),
                                           fontSize: 10,
                                           fontWeight: FontWeight.w900,
                                           letterSpacing: 1.0,
@@ -861,20 +1050,80 @@ class _GamerProfileScreenState extends State<GamerProfileScreen> with SingleTick
                                   ),
                                 ),
                               ),
+                              // Change Cover Photo button
+                              if (isOwnProfile)
+                                Positioned(
+                                  right: 14,
+                                  bottom: 12,
+                                  child: Material(
+                                    color: Colors.transparent,
+                                    child: InkWell(
+                                      onTap: () => _showChangeCoverSheet(context, user),
+                                      borderRadius: BorderRadius.circular(20),
+                                      child: Container(
+                                        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+                                        decoration: BoxDecoration(
+                                          color: Colors.black.withOpacity(0.7),
+                                          borderRadius: BorderRadius.circular(20),
+                                          border: Border.all(color: Colors.white.withOpacity(0.4), width: 1.1),
+                                          boxShadow: [
+                                            BoxShadow(
+                                              color: Colors.black.withOpacity(0.4),
+                                              blurRadius: 6,
+                                            ),
+                                          ],
+                                        ),
+                                        child: const Row(
+                                          mainAxisSize: MainAxisSize.min,
+                                          children: [
+                                            Icon(Icons.camera_alt_rounded, color: Colors.white, size: 13),
+                                            SizedBox(width: 5),
+                                            Text(
+                                              'Change Cover Photo',
+                                              style: TextStyle(
+                                                color: Colors.white,
+                                                fontSize: 11,
+                                                fontWeight: FontWeight.w800,
+                                                letterSpacing: 0.3,
+                                              ),
+                                            ),
+                                          ],
+                                        ),
+                                      ),
+                                    ),
+                                  ),
+                                ),
                             ],
                           ),
                         ),
 
-                        // Facebook-Style Circular Profile Photo
+                        // Avatar F overlapping cover with orange glow
                         Positioned(
-                          top: 105,
+                          top: 129,
                           left: 20,
-                          child: GamerAvatar(
-                            photoUrl: user.photoUrl,
-                            displayName: user.displayName,
-                            radius: 46,
-                            hasGlow: true,
-                            borderColor: gameColor,
+                          child: Container(
+                            decoration: BoxDecoration(
+                              shape: BoxShape.circle,
+                              boxShadow: [
+                                BoxShadow(
+                                  color: const Color(0xFFFF8A00).withOpacity(0.75),
+                                  blurRadius: 20,
+                                  spreadRadius: 4,
+                                ),
+                                BoxShadow(
+                                  color: const Color(0xFFFF5200).withOpacity(0.45),
+                                  blurRadius: 30,
+                                  spreadRadius: 8,
+                                ),
+                              ],
+                            ),
+                            child: GamerAvatar(
+                              photoUrl: user.photoUrl,
+                              displayName: user.displayName,
+                              radius: 46,
+                              hasGlow: true,
+                              borderColor: const Color(0xFFFF8A00),
+                            ),
                           ),
                         ),
                       ],
@@ -885,11 +1134,11 @@ class _GamerProfileScreenState extends State<GamerProfileScreen> with SingleTick
                 // User Info & Badges Section
                 SliverToBoxAdapter(
                   child: Padding(
-                    padding: const EdgeInsets.fromLTRB(20, 10, 20, 12),
+                    padding: const EdgeInsets.fromLTRB(20, 8, 20, 12),
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        // Display Name + Rank Badge + Verified Badge
+                        // Display Name + Rank Badge (Only ACE gold badge next to Fua)
                         Row(
                           children: [
                             Flexible(
@@ -903,60 +1152,12 @@ class _GamerProfileScreenState extends State<GamerProfileScreen> with SingleTick
                                 overflow: TextOverflow.ellipsis,
                               ),
                             ),
+                            const SizedBox(width: 6),
                             RankBadgeWidget(
                               badge: user.getRankBadge(),
                               size: 16,
                               showLabel: true,
                             ),
-                            if (user.isVerifiedBadge) ...[
-                              const SizedBox(width: 4),
-                              const Icon(Icons.verified, color: Colors.blue, size: 20),
-                            ] else if (user.isPendingVerification) ...[
-                              const SizedBox(width: 6),
-                              Container(
-                                padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                                decoration: BoxDecoration(
-                                  color: const Color(0xFFFF8A00).withOpacity(0.18),
-                                  borderRadius: BorderRadius.circular(6),
-                                  border: Border.all(color: const Color(0xFFFF8A00)),
-                                ),
-                                child: const Row(
-                                  mainAxisSize: MainAxisSize.min,
-                                  children: [
-                                    Icon(Icons.hourglass_top_rounded, color: Color(0xFFFF8A00), size: 12),
-                                    SizedBox(width: 3),
-                                    Text('24H REVIEW', style: TextStyle(color: Color(0xFFFF8A00), fontSize: 9, fontWeight: FontWeight.w900)),
-                                  ],
-                                ),
-                              ),
-                            ] else if (isOwnProfile) ...[
-                              const SizedBox(width: 6),
-                              InkWell(
-                                onTap: () {
-                                  Navigator.push(
-                                    context,
-                                    MaterialPageRoute(builder: (_) => VerificationScreen(user: user)),
-                                  );
-                                },
-                                borderRadius: BorderRadius.circular(6),
-                                child: Container(
-                                  padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                                  decoration: BoxDecoration(
-                                    color: Colors.blue.withOpacity(0.15),
-                                    borderRadius: BorderRadius.circular(6),
-                                    border: Border.all(color: Colors.blue.withOpacity(0.6)),
-                                  ),
-                                  child: const Row(
-                                    mainAxisSize: MainAxisSize.min,
-                                    children: [
-                                      Icon(Icons.verified_outlined, color: Colors.blue, size: 12),
-                                      SizedBox(width: 3),
-                                      Text('VERIFY', style: TextStyle(color: Colors.blue, fontSize: 9, fontWeight: FontWeight.w900)),
-                                    ],
-                                  ),
-                                ),
-                              ),
-                            ],
                           ],
                         ),
                         const SizedBox(height: 2),
@@ -968,25 +1169,6 @@ class _GamerProfileScreenState extends State<GamerProfileScreen> with SingleTick
                             color: GamerTheme.accentOrange,
                             fontSize: 14,
                             fontWeight: FontWeight.w800,
-                          ),
-                        ),
-                        const SizedBox(height: 6),
-                        // Debug: Current Firebase Auth User & UID
-                        Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                          decoration: BoxDecoration(
-                            color: GamerTheme.cardElevated,
-                            borderRadius: BorderRadius.circular(6),
-                            border: Border.all(color: GamerTheme.borderDark),
-                          ),
-                          child: Text(
-                            "Email: ${FirebaseAuth.instance.currentUser?.email} | UID: ${FirebaseAuth.instance.currentUser?.uid}",
-                            style: const TextStyle(
-                              color: Color(0xFF38BDF8),
-                              fontSize: 11,
-                              fontFamily: 'monospace',
-                              fontWeight: FontWeight.w600,
-                            ),
                           ),
                         ),
 
