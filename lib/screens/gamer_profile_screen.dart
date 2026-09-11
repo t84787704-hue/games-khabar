@@ -4,6 +4,7 @@ import 'package:image_picker/image_picker.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:firebase_storage/firebase_storage.dart';
 import 'package:intl/intl.dart';
 import 'package:share_plus/share_plus.dart';
 import '../constants/gamer_theme.dart';
@@ -1191,8 +1192,11 @@ class _GamerProfileScreenState extends State<GamerProfileScreen> with SingleTick
 
                         const SizedBox(height: 12),
 
-                        // Favorite Game Badge & Rank Chip
-                        Row(
+                        // Favorite Game Badge, Rank Chip & App Rank (auto)
+                        Wrap(
+                          spacing: 8,
+                          runSpacing: 6,
+                          crossAxisAlignment: WrapCrossAlignment.center,
                           children: [
                             // Favorite Game Badge
                             Container(
@@ -1218,7 +1222,6 @@ class _GamerProfileScreenState extends State<GamerProfileScreen> with SingleTick
                                 ],
                               ),
                             ),
-                            const SizedBox(width: 8),
 
                             // Rank Badge
                             Container(
@@ -1239,6 +1242,40 @@ class _GamerProfileScreenState extends State<GamerProfileScreen> with SingleTick
                                       color: GamerTheme.flameOrange,
                                       fontWeight: FontWeight.w800,
                                       fontSize: 12,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+
+                            // App Rank Badge (Auto points calculation)
+                            Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+                              decoration: BoxDecoration(
+                                color: const Color(0xFF00E5FF).withOpacity(0.12),
+                                borderRadius: BorderRadius.circular(8),
+                                border: Border.all(color: const Color(0xFF00E5FF).withOpacity(0.4)),
+                              ),
+                              child: Row(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  const Icon(Icons.auto_awesome_rounded, color: Color(0xFF00E5FF), size: 14),
+                                  const SizedBox(width: 4),
+                                  Text(
+                                    'App Rank: ${user.appRank}',
+                                    style: const TextStyle(
+                                      color: Color(0xFF00E5FF),
+                                      fontWeight: FontWeight.w800,
+                                      fontSize: 12,
+                                    ),
+                                  ),
+                                  const SizedBox(width: 3),
+                                  const Text(
+                                    '(auto)',
+                                    style: TextStyle(
+                                      color: Color(0xFF8B949E),
+                                      fontSize: 10.5,
+                                      fontWeight: FontWeight.w600,
                                     ),
                                   ),
                                 ],
@@ -1522,6 +1559,11 @@ class _GamerProfileScreenState extends State<GamerProfileScreen> with SingleTick
                           ],
                         ),
 
+                        const SizedBox(height: 14),
+
+                        // Multi-Game Rank Verification Section
+                        _buildGameRanksSection(user, isOwnProfile),
+
                         const SizedBox(height: 16),
                       ],
                     ),
@@ -1582,6 +1624,13 @@ class _GamerProfileScreenState extends State<GamerProfileScreen> with SingleTick
                         title: 'Competitive Tier',
                         value: user.rank,
                         color: GamerTheme.flameOrange,
+                      ),
+                      const SizedBox(height: 12),
+                      _buildAboutCard(
+                        icon: Icons.auto_awesome_rounded,
+                        title: 'App Rank (Auto)',
+                        value: '${user.appRank} (${user.appPoints} pts • Level ${user.level})',
+                        color: const Color(0xFF00E5FF),
                       ),
                       const SizedBox(height: 12),
                       _buildAboutCard(
@@ -1733,7 +1782,865 @@ class _GamerProfileScreenState extends State<GamerProfileScreen> with SingleTick
       ),
     );
   }
+
+  // ===================== MULTI-GAME RANK VERIFICATION =====================
+
+  static const Map<String, List<String>> _kGameRankOptions = {
+    'BGMI': ['Bronze', 'Silver', 'Gold', 'Platinum', 'Diamond', 'Crown', 'ACE', 'Conqueror'],
+    'PUBG Mobile': ['Bronze', 'Silver', 'Gold', 'Platinum', 'Diamond', 'Crown', 'ACE', 'Conqueror'],
+    'Free Fire': ['Bronze', 'Silver', 'Gold', 'Platinum', 'Diamond', 'Heroic', 'Grandmaster'],
+    'COD Mobile': ['Rookie', 'Veteran', 'Elite', 'Pro', 'Master', 'Legendary'],
+    'Valorant': ['Iron', 'Bronze', 'Silver', 'Gold', 'Platinum', 'Diamond', 'Ascendant', 'Immortal', 'Radiant'],
+  };
+
+  IconData _getGameIcon(String gameName) {
+    switch (gameName) {
+      case 'BGMI':
+      case 'PUBG Mobile':
+        return Icons.sports_esports_rounded;
+      case 'Free Fire':
+        return Icons.local_fire_department_rounded;
+      case 'COD Mobile':
+        return Icons.military_tech_rounded;
+      case 'Valorant':
+        return Icons.change_history_rounded;
+      default:
+        return Icons.videogame_asset_rounded;
+    }
+  }
+
+  Color _getGameAccentColor(String gameName) {
+    switch (gameName) {
+      case 'BGMI':
+        return const Color(0xFFFF8A00);
+      case 'PUBG Mobile':
+        return const Color(0xFFFFB800);
+      case 'Free Fire':
+        return const Color(0xFFFF334B);
+      case 'COD Mobile':
+        return const Color(0xFF00FF88);
+      case 'Valorant':
+        return const Color(0xFFFF4655);
+      default:
+        return const Color(0xFF00E5FF);
+    }
+  }
+
+  Widget _buildGameRanksSection(GamerUser user, bool isOwnProfile) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          children: [
+            const Icon(Icons.military_tech_rounded, size: 16, color: GamerTheme.flameOrange),
+            const SizedBox(width: 6),
+            const Text(
+              'VERIFIED GAME RANKS',
+              style: TextStyle(
+                color: GamerTheme.textMuted,
+                fontSize: 12,
+                fontWeight: FontWeight.w900,
+                letterSpacing: 0.8,
+              ),
+            ),
+            const Spacer(),
+            if (isOwnProfile)
+              OutlinedButton.icon(
+                onPressed: () => _showAddVerifyGameRankSheet(user),
+                style: OutlinedButton.styleFrom(
+                  side: const BorderSide(color: Color(0xFF00E5FF), width: 1.2),
+                  backgroundColor: const Color(0xFF00E5FF).withOpacity(0.08),
+                  foregroundColor: const Color(0xFF00E5FF),
+                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                  minimumSize: Size.zero,
+                  tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                ),
+                icon: const Icon(Icons.add_moderator_rounded, size: 14),
+                label: const Text(
+                  'Add / Verify Game Rank',
+                  style: TextStyle(fontSize: 11.5, fontWeight: FontWeight.w800),
+                ),
+              ),
+          ],
+        ),
+        const SizedBox(height: 10),
+
+        if (user.games.isEmpty) ...[
+          Container(
+            width: double.infinity,
+            padding: const EdgeInsets.all(16),
+            decoration: BoxDecoration(
+              color: GamerTheme.cardDark,
+              borderRadius: BorderRadius.circular(14),
+              border: Border.all(color: GamerTheme.borderDark),
+            ),
+            child: Column(
+              children: [
+                const Icon(Icons.shield_outlined, color: Color(0xFF8B949E), size: 30),
+                const SizedBox(height: 8),
+                const Text(
+                  'No verified game ranks yet',
+                  style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 13),
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  isOwnProfile
+                      ? 'Submit your in-game UID and rank screenshot proof to get official verified status!'
+                      : 'This player has not verified any competitive game ranks yet.',
+                  textAlign: TextAlign.center,
+                  style: const TextStyle(color: Color(0xFF8B949E), fontSize: 11.5),
+                ),
+                if (isOwnProfile) ...[
+                  const SizedBox(height: 12),
+                  ElevatedButton.icon(
+                    onPressed: () => _showAddVerifyGameRankSheet(user),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: const Color(0xFF00E5FF),
+                      foregroundColor: const Color(0xFF0B0F14),
+                      elevation: 0,
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                    ),
+                    icon: const Icon(Icons.add_photo_alternate_rounded, size: 16),
+                    label: const Text(
+                      'Add / Verify Game Rank',
+                      style: TextStyle(fontWeight: FontWeight.w900, fontSize: 12),
+                    ),
+                  ),
+                ],
+              ],
+            ),
+          ),
+        ] else ...[
+          Column(
+            children: user.games.map((game) {
+              final isApproved = game.status == 'approved' || game.isVerified;
+              final isPending = game.status == 'pending';
+              final isRejected = game.status == 'rejected';
+              final gameColor = _getGameAccentColor(game.gameName);
+
+              final Color statusBadgeColor = isApproved
+                  ? const Color(0xFF00FF88)
+                  : (isPending ? const Color(0xFFFF8A00) : const Color(0xFFFF4655));
+
+              final String statusText = isApproved
+                  ? 'Verified ✓'
+                  : (isPending ? 'Pending' : 'Rejected');
+
+              return Container(
+                margin: const EdgeInsets.only(bottom: 8),
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: GamerTheme.cardDark,
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(
+                    color: isApproved
+                        ? const Color(0xFF00FF88).withOpacity(0.4)
+                        : (isPending ? const Color(0xFFFF8A00).withOpacity(0.3) : GamerTheme.borderDark),
+                  ),
+                ),
+                child: Row(
+                  children: [
+                    // Game Logo / Icon
+                    Container(
+                      padding: const EdgeInsets.all(10),
+                      decoration: BoxDecoration(
+                        color: gameColor.withOpacity(0.15),
+                        borderRadius: BorderRadius.circular(10),
+                        border: Border.all(color: gameColor.withOpacity(0.4)),
+                      ),
+                      child: Icon(_getGameIcon(game.gameName), color: gameColor, size: 20),
+                    ),
+                    const SizedBox(width: 12),
+
+                    // Game Details
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Row(
+                            children: [
+                              Text(
+                                game.gameName,
+                                style: const TextStyle(
+                                  color: Colors.white,
+                                  fontWeight: FontWeight.bold,
+                                  fontSize: 13,
+                                ),
+                              ),
+                              const SizedBox(width: 8),
+                              Container(
+                                padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                                decoration: BoxDecoration(
+                                  color: statusBadgeColor.withOpacity(0.15),
+                                  borderRadius: BorderRadius.circular(6),
+                                  border: Border.all(color: statusBadgeColor.withOpacity(0.4)),
+                                ),
+                                child: Text(
+                                  statusText,
+                                  style: TextStyle(
+                                    color: statusBadgeColor,
+                                    fontSize: 10.5,
+                                    fontWeight: FontWeight.bold,
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ),
+                          const SizedBox(height: 3),
+                          Text(
+                            'UID: ${game.gameId}',
+                            style: const TextStyle(color: Color(0xFF38BDF8), fontSize: 11.5, fontWeight: FontWeight.w600),
+                          ),
+                          const SizedBox(height: 2),
+                          Row(
+                            children: [
+                              Text(
+                                isApproved && game.verifiedRank.isNotEmpty
+                                    ? 'Verified Rank: ${game.verifiedRank}'
+                                    : 'Claimed Rank: ${game.claimedRank}',
+                                style: TextStyle(
+                                  color: isApproved ? const Color(0xFF00FF88) : const Color(0xFFFF8A00),
+                                  fontSize: 11.5,
+                                  fontWeight: FontWeight.w800,
+                                ),
+                              ),
+                              if (isApproved) ...[
+                                const SizedBox(width: 4),
+                                const Icon(Icons.check_circle_rounded, color: Color(0xFF00FF88), size: 13),
+                              ],
+                            ],
+                          ),
+                          if (isRejected && game.rejectReason != null && game.rejectReason!.isNotEmpty) ...[
+                            const SizedBox(height: 3),
+                            Text(
+                              'Reason: ${game.rejectReason}',
+                              style: const TextStyle(color: Color(0xFFFF4655), fontSize: 11),
+                            ),
+                          ],
+                        ],
+                      ),
+                    ),
+
+                    // Proof thumbnail button if screenshot exists
+                    if (game.screenshotUrl.isNotEmpty) ...[
+                      const SizedBox(width: 8),
+                      IconButton(
+                        tooltip: 'View Screenshot Proof',
+                        icon: const Icon(Icons.photo_library_outlined, size: 20, color: Color(0xFF00E5FF)),
+                        onPressed: () => _showScreenshotProofDialog(
+                          imageUrl: game.screenshotUrl,
+                          title: '${game.gameName} Rank Proof • UID: ${game.gameId}',
+                        ),
+                      ),
+                    ],
+                  ],
+                ),
+              );
+            }).toList(),
+          ),
+        ],
+      ],
+    );
+  }
+
+  void _showScreenshotProofDialog({required String imageUrl, required String title}) {
+    showDialog(
+      context: context,
+      builder: (ctx) => Dialog(
+        backgroundColor: const Color(0xFF10141D),
+        insetPadding: const EdgeInsets.all(16),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Padding(
+              padding: const EdgeInsets.fromLTRB(16, 12, 8, 12),
+              child: Row(
+                children: [
+                  Expanded(
+                    child: Text(
+                      title,
+                      style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 13.5),
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ),
+                  IconButton(
+                    icon: const Icon(Icons.close, color: Colors.white70, size: 20),
+                    onPressed: () => Navigator.pop(ctx),
+                  ),
+                ],
+              ),
+            ),
+            Flexible(
+              child: ClipRRect(
+                borderRadius: const BorderRadius.only(
+                  bottomLeft: Radius.circular(16),
+                  bottomRight: Radius.circular(16),
+                ),
+                child: InteractiveViewer(
+                  maxScale: 4.0,
+                  child: imageUrl.startsWith('http')
+                      ? CachedNetworkImage(
+                          imageUrl: imageUrl,
+                          fit: BoxFit.contain,
+                          placeholder: (_, __) => const Padding(
+                            padding: EdgeInsets.all(48),
+                            child: CircularProgressIndicator(color: Color(0xFF00E5FF)),
+                          ),
+                          errorWidget: (_, __, ___) => const Padding(
+                            padding: EdgeInsets.all(48),
+                            child: Icon(Icons.broken_image_rounded, color: Colors.red, size: 48),
+                          ),
+                        )
+                      : Image.file(
+                          File(imageUrl),
+                          fit: BoxFit.contain,
+                          errorBuilder: (_, __, ___) => const Padding(
+                            padding: EdgeInsets.all(48),
+                            child: Icon(Icons.broken_image_rounded, color: Colors.red, size: 48),
+                          ),
+                        ),
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  void _showAddVerifyGameRankSheet(GamerUser user) {
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (sheetContext) => _AddVerifyGameRankSheet(user: user),
+    );
+  }
 }
+
+class _AddVerifyGameRankSheet extends StatefulWidget {
+  final GamerUser user;
+
+  const _AddVerifyGameRankSheet({required this.user});
+
+  @override
+  State<_AddVerifyGameRankSheet> createState() => _AddVerifyGameRankSheetState();
+}
+
+class _AddVerifyGameRankSheetState extends State<_AddVerifyGameRankSheet> {
+  final _formKey = GlobalKey<FormState>();
+  String _selectedGame = 'BGMI';
+  late String _selectedRank;
+  late TextEditingController _gameIdController;
+  File? _pickedScreenshot;
+  bool _isSubmitting = false;
+  String? _errorMessage;
+
+  @override
+  void initState() {
+    super.initState();
+    _selectedRank = _GamerProfileScreenState._kGameRankOptions['BGMI']!.first;
+    _gameIdController = TextEditingController(text: widget.user.gameId);
+  }
+
+  @override
+  void dispose() {
+    _gameIdController.dispose();
+    super.dispose();
+  }
+
+  Future<void> _pickScreenshot() async {
+    try {
+      final picker = ImagePicker();
+      final picked = await picker.pickImage(
+        source: ImageSource.gallery,
+        imageQuality: 85,
+      );
+      if (picked != null) {
+        setState(() {
+          _pickedScreenshot = File(picked.path);
+          _errorMessage = null;
+        });
+      }
+    } catch (e) {
+      setState(() {
+        _errorMessage = 'Could not select image: $e';
+      });
+    }
+  }
+
+  Future<void> _submitVerification() async {
+    if (!_formKey.currentState!.validate()) return;
+
+    if (_pickedScreenshot == null) {
+      setState(() {
+        _errorMessage = 'Rank screenshot proof is required. Please upload your in-game profile screenshot.';
+      });
+      return;
+    }
+
+    setState(() {
+      _isSubmitting = true;
+      _errorMessage = null;
+    });
+
+    try {
+      final cleanGameName = _selectedGame.replaceAll(RegExp(r'\s+'), '_').toLowerCase();
+      final timestamp = DateTime.now().millisecondsSinceEpoch;
+      final fileName = '${cleanGameName}_$timestamp.jpg';
+
+      String downloadUrl = '';
+      try {
+        final storageRef = FirebaseStorage.instance
+            .ref()
+            .child('rank_verifications')
+            .child(widget.user.uid)
+            .child(fileName);
+
+        final uploadTask = await storageRef.putFile(_pickedScreenshot!);
+        downloadUrl = await uploadTask.ref.getDownloadURL();
+      } catch (storageError) {
+        debugPrint('FirebaseStorage upload note: $storageError. Using local file path fallback.');
+        downloadUrl = _pickedScreenshot!.path;
+      }
+
+      // Update user doc games array
+      final docRef = FirebaseFirestore.instance.collection('users').doc(widget.user.uid);
+      final docSnap = await docRef.get();
+      final currentData = docSnap.data() ?? {};
+      final rawGames = currentData['games'] as List? ?? [];
+      final List<Map<String, dynamic>> gamesList = [];
+      bool replaced = false;
+
+      for (final g in rawGames) {
+        if (g is Map) {
+          final map = Map<String, dynamic>.from(g);
+          if (map['gameName'] == _selectedGame) {
+            gamesList.add({
+              'gameName': _selectedGame,
+              'gameId': _gameIdController.text.trim(),
+              'claimedRank': _selectedRank,
+              'verifiedRank': '',
+              'isVerified': false,
+              'screenshotUrl': downloadUrl,
+              'status': 'pending',
+              'submittedAt': Timestamp.now(),
+            });
+            replaced = true;
+          } else {
+            gamesList.add(map);
+          }
+        }
+      }
+
+      if (!replaced) {
+        gamesList.add({
+          'gameName': _selectedGame,
+          'gameId': _gameIdController.text.trim(),
+          'claimedRank': _selectedRank,
+          'verifiedRank': '',
+          'isVerified': false,
+          'screenshotUrl': downloadUrl,
+          'status': 'pending',
+          'submittedAt': Timestamp.now(),
+        });
+      }
+
+      await docRef.set({
+        'games': gamesList,
+        if (widget.user.gameId.isEmpty) 'gameId': _gameIdController.text.trim(),
+        'updatedAt': FieldValue.serverTimestamp(),
+      }, SetOptions(merge: true));
+
+      if (mounted) {
+        Navigator.pop(context);
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              'Submitted $_selectedGame rank verification ($_selectedRank)! Pending admin review.',
+            ),
+            backgroundColor: const Color(0xFF00FF88),
+          ),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        setState(() {
+          _isSubmitting = false;
+          _errorMessage = 'Error submitting verification: $e';
+        });
+      }
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final bottomInset = MediaQuery.of(context).viewInsets.bottom;
+    final availableRanks = _GamerProfileScreenState._kGameRankOptions[_selectedGame] ?? ['Bronze'];
+
+    return Container(
+      padding: EdgeInsets.fromLTRB(20, 16, 20, 20 + bottomInset),
+      decoration: const BoxDecoration(
+        color: Color(0xFF10141D),
+        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+        border: Border(top: BorderSide(color: Color(0xFF1F2B3E), width: 1.5)),
+      ),
+      child: Form(
+        key: _formKey,
+        child: SingleChildScrollView(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              // Top drag indicator
+              Center(
+                child: Container(
+                  width: 40,
+                  height: 4,
+                  margin: const EdgeInsets.only(bottom: 14),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFF2E384D),
+                    borderRadius: BorderRadius.circular(2),
+                  ),
+                ),
+              ),
+
+              // Title Row
+              Row(
+                children: [
+                  Container(
+                    padding: const EdgeInsets.all(8),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFF00E5FF).withOpacity(0.15),
+                      borderRadius: BorderRadius.circular(8),
+                      border: Border.all(color: const Color(0xFF00E5FF).withOpacity(0.4)),
+                    ),
+                    child: const Icon(Icons.verified_user_rounded, color: Color(0xFF00E5FF), size: 20),
+                  ),
+                  const SizedBox(width: 10),
+                  const Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          'Add / Verify Game Rank',
+                          style: TextStyle(color: Colors.white, fontWeight: FontWeight.w900, fontSize: 16),
+                        ),
+                        Text(
+                          'Upload screenshot proof to verify in-game UID & Rank',
+                          style: TextStyle(color: Color(0xFF8B949E), fontSize: 11),
+                        ),
+                      ],
+                    ),
+                  ),
+                  IconButton(
+                    icon: const Icon(Icons.close, color: Colors.white70),
+                    onPressed: () => Navigator.pop(context),
+                  ),
+                ],
+              ),
+
+              const SizedBox(height: 18),
+
+              // a) Select Game Dropdown
+              const Text(
+                '1. Select Game',
+                style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 13),
+              ),
+              const SizedBox(height: 6),
+              DropdownButtonFormField<String>(
+                value: _selectedGame,
+                dropdownColor: const Color(0xFF161B26),
+                style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w700, fontSize: 14),
+                decoration: InputDecoration(
+                  filled: true,
+                  fillColor: const Color(0xFF161B26),
+                  contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                  border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(10),
+                    borderSide: const BorderSide(color: Color(0xFF1F2B3E)),
+                  ),
+                  enabledBorder: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(10),
+                    borderSide: const BorderSide(color: Color(0xFF1F2B3E)),
+                  ),
+                  focusedBorder: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(10),
+                    borderSide: const BorderSide(color: Color(0xFF00E5FF)),
+                  ),
+                ),
+                items: ['BGMI', 'PUBG Mobile', 'Free Fire', 'COD Mobile', 'Valorant'].map((g) {
+                  return DropdownMenuItem<String>(
+                    value: g,
+                    child: Row(
+                      children: [
+                        const Icon(Icons.sports_esports_rounded, size: 16, color: Color(0xFF00E5FF)),
+                        const SizedBox(width: 8),
+                        Text(g),
+                      ],
+                    ),
+                  );
+                }).toList(),
+                onChanged: (val) {
+                  if (val != null) {
+                    setState(() {
+                      _selectedGame = val;
+                      _selectedRank = _GamerProfileScreenState._kGameRankOptions[val]!.first;
+                    });
+                  }
+                },
+              ),
+
+              const SizedBox(height: 14),
+
+              // b) Enter Game UID/ID
+              const Text(
+                '2. In-Game UID / Player ID',
+                style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 13),
+              ),
+              const SizedBox(height: 6),
+              TextFormField(
+                controller: _gameIdController,
+                style: const TextStyle(color: Colors.white, fontSize: 14, fontWeight: FontWeight.w600),
+                keyboardType: TextInputType.text,
+                decoration: InputDecoration(
+                  hintText: 'Enter your exact in-game UID (e.g. 5123456789)',
+                  hintStyle: const TextStyle(color: Color(0xFF6E7681), fontSize: 13),
+                  prefixIcon: const Icon(Icons.tag_rounded, color: Color(0xFF00E5FF), size: 18),
+                  filled: true,
+                  fillColor: const Color(0xFF161B26),
+                  contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                  border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(10),
+                    borderSide: const BorderSide(color: Color(0xFF1F2B3E)),
+                  ),
+                  enabledBorder: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(10),
+                    borderSide: const BorderSide(color: Color(0xFF1F2B3E)),
+                  ),
+                  focusedBorder: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(10),
+                    borderSide: const BorderSide(color: Color(0xFF00E5FF)),
+                  ),
+                ),
+                validator: (val) {
+                  if (val == null || val.trim().isEmpty) {
+                    return 'Please enter your in-game UID';
+                  }
+                  return null;
+                },
+              ),
+
+              const SizedBox(height: 14),
+
+              // c) Select Claimed Rank Dropdown
+              const Text(
+                '3. Claimed In-Game Rank',
+                style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 13),
+              ),
+              const SizedBox(height: 6),
+              DropdownButtonFormField<String>(
+                value: availableRanks.contains(_selectedRank) ? _selectedRank : availableRanks.first,
+                dropdownColor: const Color(0xFF161B26),
+                style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w700, fontSize: 14),
+                decoration: InputDecoration(
+                  filled: true,
+                  fillColor: const Color(0xFF161B26),
+                  contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                  border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(10),
+                    borderSide: const BorderSide(color: Color(0xFF1F2B3E)),
+                  ),
+                  enabledBorder: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(10),
+                    borderSide: const BorderSide(color: Color(0xFF1F2B3E)),
+                  ),
+                  focusedBorder: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(10),
+                    borderSide: const BorderSide(color: Color(0xFF00E5FF)),
+                  ),
+                ),
+                items: availableRanks.map((r) {
+                  return DropdownMenuItem<String>(
+                    value: r,
+                    child: Row(
+                      children: [
+                        const Icon(Icons.military_tech_rounded, size: 16, color: Color(0xFFFF8A00)),
+                        const SizedBox(width: 8),
+                        Text(r),
+                      ],
+                    ),
+                  );
+                }).toList(),
+                onChanged: (val) {
+                  if (val != null) {
+                    setState(() => _selectedRank = val);
+                  }
+                },
+              ),
+
+              const SizedBox(height: 16),
+
+              // d) Upload Screenshot (required)
+              Row(
+                children: [
+                  const Text(
+                    '4. Upload Screenshot Proof',
+                    style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 13),
+                  ),
+                  const SizedBox(width: 6),
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFFFF4655).withOpacity(0.15),
+                      borderRadius: BorderRadius.circular(4),
+                    ),
+                    child: const Text(
+                      'REQUIRED',
+                      style: TextStyle(color: Color(0xFFFF4655), fontSize: 9.5, fontWeight: FontWeight.bold),
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 4),
+              const Text(
+                'Must show your Game ID + Rank clearly on screen',
+                style: TextStyle(color: Color(0xFF8B949E), fontSize: 11.5),
+              ),
+              const SizedBox(height: 8),
+
+              // Screenshot Picker Box
+              InkWell(
+                onTap: _pickScreenshot,
+                borderRadius: BorderRadius.circular(12),
+                child: Container(
+                  width: double.infinity,
+                  height: 120,
+                  decoration: BoxDecoration(
+                    color: const Color(0xFF161B26),
+                    borderRadius: BorderRadius.circular(12),
+                    border: Border.all(
+                      color: _pickedScreenshot != null ? const Color(0xFF00FF88) : const Color(0xFF2E384D),
+                      width: 1.5,
+                    ),
+                  ),
+                  child: _pickedScreenshot != null
+                      ? ClipRRect(
+                          borderRadius: BorderRadius.circular(11),
+                          child: Stack(
+                            fit: StackFit.expand,
+                            children: [
+                              Image.file(_pickedScreenshot!, fit: BoxFit.cover),
+                              Container(
+                                color: Colors.black.withOpacity(0.4),
+                              ),
+                              Positioned(
+                                bottom: 8,
+                                right: 8,
+                                child: Container(
+                                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                                  decoration: BoxDecoration(
+                                    color: const Color(0xFF10141D),
+                                    borderRadius: BorderRadius.circular(6),
+                                    border: Border.all(color: const Color(0xFF00FF88)),
+                                  ),
+                                  child: const Row(
+                                    mainAxisSize: MainAxisSize.min,
+                                    children: [
+                                      Icon(Icons.check_circle_rounded, color: Color(0xFF00FF88), size: 14),
+                                      SizedBox(width: 4),
+                                      Text(
+                                        'Change Photo',
+                                        style: TextStyle(color: Colors.white, fontSize: 11, fontWeight: FontWeight.bold),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ),
+                        )
+                      : const Column(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            Icon(Icons.add_photo_alternate_rounded, color: Color(0xFF00E5FF), size: 36),
+                            SizedBox(height: 6),
+                            Text(
+                              'Tap to upload rank screenshot proof',
+                              style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 12.5),
+                            ),
+                            SizedBox(height: 2),
+                            Text(
+                              'JPG, PNG supported',
+                              style: TextStyle(color: Color(0xFF6E7681), fontSize: 11),
+                            ),
+                          ],
+                        ),
+                ),
+              ),
+
+              if (_errorMessage != null) ...[
+                const SizedBox(height: 10),
+                Container(
+                  padding: const EdgeInsets.all(10),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFFFF4655).withOpacity(0.12),
+                    borderRadius: BorderRadius.circular(8),
+                    border: Border.all(color: const Color(0xFFFF4655).withOpacity(0.4)),
+                  ),
+                  child: Row(
+                    children: [
+                      const Icon(Icons.error_outline_rounded, color: Color(0xFFFF4655), size: 16),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: Text(
+                          _errorMessage!,
+                          style: const TextStyle(color: Color(0xFFFF4655), fontSize: 11.5),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+
+              const SizedBox(height: 20),
+
+              // e) Submit Button
+              SizedBox(
+                width: double.infinity,
+                child: ElevatedButton.icon(
+                  onPressed: _isSubmitting ? null : _submitVerification,
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: const Color(0xFF00E5FF),
+                    foregroundColor: const Color(0xFF0B0F14),
+                    padding: const EdgeInsets.symmetric(vertical: 14),
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                    elevation: 0,
+                  ),
+                  icon: _isSubmitting
+                      ? const SizedBox(
+                          width: 18,
+                          height: 18,
+                          child: CircularProgressIndicator(color: Color(0xFF0B0F14), strokeWidth: 2),
+                        )
+                      : const Icon(Icons.send_rounded, size: 18),
+                  label: Text(
+                    _isSubmitting ? 'Submitting Verification...' : 'Submit Rank Verification',
+                    style: const TextStyle(fontWeight: FontWeight.w900, fontSize: 14),
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
 
 class _SliverTabBarDelegate extends SliverPersistentHeaderDelegate {
   final TabBar tabBar;

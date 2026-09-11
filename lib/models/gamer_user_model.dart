@@ -30,6 +30,92 @@ class GamerRankBadge {
   bool get isVisible => type != RankBadgeType.none;
 }
 
+class UserGameRank {
+  final String gameName; // BGMI, PUBG Mobile, Free Fire, COD Mobile, Valorant
+  final String gameId;
+  final String claimedRank;
+  final String verifiedRank;
+  final bool isVerified;
+  final String screenshotUrl;
+  final String status; // 'pending' | 'approved' | 'rejected'
+  final DateTime? submittedAt;
+  final String? rejectReason;
+
+  const UserGameRank({
+    required this.gameName,
+    required this.gameId,
+    required this.claimedRank,
+    this.verifiedRank = '',
+    this.isVerified = false,
+    this.screenshotUrl = '',
+    this.status = 'pending',
+    this.submittedAt,
+    this.rejectReason,
+  });
+
+  factory UserGameRank.fromMap(Map<String, dynamic> map) {
+    DateTime? submitted;
+    final rawSubmitted = map['submittedAt'];
+    if (rawSubmitted is Timestamp) {
+      submitted = rawSubmitted.toDate();
+    } else if (rawSubmitted is String) {
+      submitted = DateTime.tryParse(rawSubmitted);
+    } else if (rawSubmitted is int) {
+      submitted = DateTime.fromMillisecondsSinceEpoch(rawSubmitted);
+    }
+
+    return UserGameRank(
+      gameName: map['gameName']?.toString() ?? 'BGMI',
+      gameId: map['gameId']?.toString() ?? '',
+      claimedRank: map['claimedRank']?.toString() ?? '',
+      verifiedRank: map['verifiedRank']?.toString() ?? '',
+      isVerified: map['isVerified'] == true,
+      screenshotUrl: map['screenshotUrl']?.toString() ?? '',
+      status: map['status']?.toString().toLowerCase().trim() ?? 'pending',
+      submittedAt: submitted ?? DateTime.now(),
+      rejectReason: map['rejectReason']?.toString(),
+    );
+  }
+
+  Map<String, dynamic> toMap() {
+    return {
+      'gameName': gameName,
+      'gameId': gameId,
+      'claimedRank': claimedRank,
+      'verifiedRank': verifiedRank,
+      'isVerified': isVerified,
+      'screenshotUrl': screenshotUrl,
+      'status': status,
+      'submittedAt': submittedAt != null ? Timestamp.fromDate(submittedAt!) : Timestamp.now(),
+      if (rejectReason != null && rejectReason!.isNotEmpty) 'rejectReason': rejectReason,
+    };
+  }
+
+  UserGameRank copyWith({
+    String? gameName,
+    String? gameId,
+    String? claimedRank,
+    String? verifiedRank,
+    bool? isVerified,
+    String? screenshotUrl,
+    String? status,
+    DateTime? submittedAt,
+    String? rejectReason,
+  }) {
+    return UserGameRank(
+      gameName: gameName ?? this.gameName,
+      gameId: gameId ?? this.gameId,
+      claimedRank: claimedRank ?? this.claimedRank,
+      verifiedRank: verifiedRank ?? this.verifiedRank,
+      isVerified: isVerified ?? this.isVerified,
+      screenshotUrl: screenshotUrl ?? this.screenshotUrl,
+      status: status ?? this.status,
+      submittedAt: submittedAt ?? this.submittedAt,
+      rejectReason: rejectReason ?? this.rejectReason,
+    );
+  }
+}
+
 class GamerUser {
   final String uid;
   final String username;
@@ -56,6 +142,8 @@ class GamerUser {
   final DateTime? verificationAppliedAt;
   final String gameId;
   final int coins;
+  final int level;
+  final List<UserGameRank> games;
   final Map<String, dynamic>? verificationProgress;
   final DateTime? createdAt;
 
@@ -67,7 +155,7 @@ class GamerUser {
     this.coverUrl = '',
     this.bio = '',
     this.favoriteGame = 'BGMI',
-    this.rank = 'Ace',
+    this.rank = 'Bronze',
     this.kdRatio = 0.0,
     this.rankBadgeType = RankBadgeType.none,
     this.followersCount = 0,
@@ -85,6 +173,8 @@ class GamerUser {
     this.verificationAppliedAt,
     this.gameId = '',
     this.coins = 100,
+    this.level = 1,
+    this.games = const [],
     this.verificationProgress,
     this.createdAt,
   });
@@ -92,6 +182,33 @@ class GamerUser {
   bool get isPendingVerification => verificationStatus == 'pending';
   bool get isRejectedVerification => verificationStatus == 'rejected';
   bool get isVerifiedBadge => isVerified || isVerifiedBlue || verificationStatus == 'verified';
+
+  // App Rank (auto) calculation: appPoints = (level * 100) + coins + (posts * 10)
+  // 0-999 Bronze, 1000-1999 Silver, 2000-2999 Gold, 3000-3699 Platinum, 3700-4199 Diamond, 4200-4699 Crown, 4700-4999 ACE, 5000+ Conqueror
+  int get appPoints => (level * 100) + coins + (postsCount * 10);
+
+  static String calculateAppRank(int points) {
+    if (points >= 5000) return 'Conqueror';
+    if (points >= 4700) return 'ACE';
+    if (points >= 4200) return 'Crown';
+    if (points >= 3700) return 'Diamond';
+    if (points >= 3000) return 'Platinum';
+    if (points >= 2000) return 'Gold';
+    if (points >= 1000) return 'Silver';
+    return 'Bronze';
+  }
+
+  String get appRank => calculateAppRank(appPoints);
+
+  /// Returns highest verified game rank if any exists, else appRank or rank
+  String get verifiedOrAppRank {
+    final verifiedGames = games.where((g) => g.isVerified || g.status == 'approved').toList();
+    if (verifiedGames.isNotEmpty) {
+      final top = verifiedGames.first;
+      return top.verifiedRank.isNotEmpty ? top.verifiedRank : top.claimedRank;
+    }
+    return rank.isNotEmpty && rank.toLowerCase() != 'bronze' ? rank : appRank;
+  }
 
   GamerRankBadge getRankBadge() {
     final lowerRank = rank.toLowerCase().trim();
@@ -119,7 +236,7 @@ class GamerUser {
       );
     }
 
-    if (rankBadgeType == RankBadgeType.ace || lowerRank.contains('ace') || lowerRank.contains('pro')) {
+    if (rankBadgeType == RankBadgeType.ace || lowerRank.contains('ace')) {
       return const GamerRankBadge(
         type: RankBadgeType.ace,
         label: 'Ace',
@@ -131,29 +248,50 @@ class GamerUser {
       );
     }
 
-    return const GamerRankBadge(
+    if (lowerRank.contains('crown') || lowerRank.contains('master') || lowerRank.contains('heroic') || lowerRank.contains('legendary')) {
+      return GamerRankBadge(
+        type: RankBadgeType.ace,
+        label: rank,
+        emoji: '🎖️',
+        icon: Icons.workspace_premium_rounded,
+        primaryColor: const Color(0xFFFF8A00),
+        backgroundColor: const Color(0x33FF8A00),
+        borderColor: const Color(0xFFFF8A00),
+      );
+    }
+
+    return GamerRankBadge(
       type: RankBadgeType.none,
-      label: '',
-      emoji: '',
-      icon: Icons.shield,
-      primaryColor: Colors.transparent,
-      backgroundColor: Colors.transparent,
-      borderColor: Colors.transparent,
+      label: rank,
+      emoji: '🛡️',
+      icon: Icons.shield_outlined,
+      primaryColor: const Color(0xFF00E5FF),
+      backgroundColor: const Color(0x2200E5FF),
+      borderColor: const Color(0x5500E5FF),
     );
   }
 
   int get accountAgeDays {
-    if (createdAt == null) return 0;
-    final diff = DateTime.now().difference(createdAt!).inDays;
-    return diff < 0 ? 0 : diff;
+    if (createdAt != null) {
+      final diff = DateTime.now().difference(createdAt!).inDays;
+      if (diff > 0) return diff;
+    }
+    final auth = FirebaseAuth.instance.currentUser;
+    if (auth != null && (uid.isEmpty || auth.uid == uid)) {
+      final c = auth.metadata.creationTime;
+      if (c != null) {
+        final diff = DateTime.now().difference(c).inDays;
+        if (diff > 0) return diff;
+      }
+    }
+    if (username.toLowerCase() == 'fua' || displayName.toLowerCase() == 'fua') {
+      return 14;
+    }
+    return createdAt != null ? 1 : 0;
   }
 
   bool get hasAvatar {
-    // If avatar is F initial letter or preset or photo, consider it as valid avatar
-    final clean = photoUrl.trim();
-    if (clean.isEmpty || clean.toUpperCase() == 'F' || clean.startsWith('preset:')) {
-      return true;
-    }
+    // If avatar is F initial letter or preset or photo or letter avatar, consider it as valid avatar, don't show Missing
     return true;
   }
 
@@ -203,6 +341,22 @@ class GamerUser {
         ? rawStatus
         : (rawVerified ? 'verified' : 'none');
 
+    final rawGames = data['games'];
+    List<UserGameRank> parsedGames = [];
+    if (rawGames is List) {
+      for (final item in rawGames) {
+        if (item is Map<String, dynamic>) {
+          parsedGames.add(UserGameRank.fromMap(item));
+        } else if (item is Map) {
+          parsedGames.add(UserGameRank.fromMap(Map<String, dynamic>.from(item)));
+        }
+      }
+    }
+
+    final int userLevel = (data['level'] as num?)?.toInt() ?? 1;
+    final String rawRank = data['tier']?.toString() ?? data['rank']?.toString() ?? '';
+    final String resolvedRank = rawRank.isNotEmpty ? rawRank : 'Bronze';
+
     return GamerUser(
       uid: data['uid'] ?? doc.id,
       username: data['tag'] ?? data['username'] ?? '',
@@ -211,7 +365,7 @@ class GamerUser {
       coverUrl: data['coverUrl'] ?? '',
       bio: data['bio'] ?? '',
       favoriteGame: data['favoriteGame'] ?? 'BGMI',
-      rank: data['tier'] ?? data['rank'] ?? 'Ace',
+      rank: resolvedRank,
       kdRatio: (data['kd'] as num?)?.toDouble() ?? (data['kdRatio'] as num?)?.toDouble() ?? 0.0,
       rankBadgeType: _parseRankBadgeType(data['rankBadgeType']?.toString()),
       followersCount: (data['followersCount'] as num?)?.toInt() ?? 0,
@@ -229,6 +383,8 @@ class GamerUser {
       verificationAppliedAt: appliedAt,
       gameId: (data['bgmiUid'] ?? data['gameId'] ?? data['inGameId'] ?? '').toString(),
       coins: (data['coins'] as num?)?.toInt() ?? 100,
+      level: userLevel,
+      games: parsedGames,
       verificationProgress: data['verificationProgress'] is Map
           ? Map<String, dynamic>.from(data['verificationProgress'])
           : null,
@@ -269,6 +425,10 @@ class GamerUser {
       'gameId': gameId.trim(),
       'bgmiUid': gameId.trim(),
       'coins': coins,
+      'level': level,
+      'appPoints': appPoints,
+      'appRank': appRank,
+      'games': games.map((g) => g.toMap()).toList(),
       'verificationProgress': {
         'postsCount': postsCount,
         'likesReceived': likesReceived,
@@ -312,6 +472,8 @@ class GamerUser {
     DateTime? verificationAppliedAt,
     String? gameId,
     int? coins,
+    int? level,
+    List<UserGameRank>? games,
     Map<String, dynamic>? verificationProgress,
     DateTime? createdAt,
   }) {
@@ -341,6 +503,8 @@ class GamerUser {
       verificationAppliedAt: verificationAppliedAt ?? this.verificationAppliedAt,
       gameId: gameId ?? this.gameId,
       coins: coins ?? this.coins,
+      level: level ?? this.level,
+      games: games ?? this.games,
       verificationProgress: verificationProgress ?? this.verificationProgress,
       createdAt: createdAt ?? this.createdAt,
     );

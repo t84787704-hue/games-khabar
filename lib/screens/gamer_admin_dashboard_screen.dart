@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:cached_network_image/cached_network_image.dart';
+import 'package:intl/intl.dart';
 import '../constants/gamer_theme.dart';
 import '../models/gamer_user_model.dart';
 import '../widgets/gamer_avatar.dart';
@@ -20,10 +22,16 @@ class _GamerAdminDashboardScreenState extends State<GamerAdminDashboardScreen>
   final TextEditingController _searchController = TextEditingController();
   String _userSearchQuery = '';
 
+  // Multi-Game Rank Verification state
+  final TextEditingController _rankSearchController = TextEditingController();
+  String _rankSearchQuery = '';
+  String _selectedRankGameFilter = 'All';
+  bool _showOnlyPendingRanks = true;
+
   @override
   void initState() {
     super.initState();
-    _tabController = TabController(length: 5, vsync: this);
+    _tabController = TabController(length: 6, vsync: this);
     _ensureSampleQueueExists();
   }
 
@@ -31,6 +39,7 @@ class _GamerAdminDashboardScreenState extends State<GamerAdminDashboardScreen>
   void dispose() {
     _tabController.dispose();
     _searchController.dispose();
+    _rankSearchController.dispose();
     super.dispose();
   }
 
@@ -45,8 +54,8 @@ class _GamerAdminDashboardScreenState extends State<GamerAdminDashboardScreen>
           'tag': 'kiro_yt',
           'displayName': 'Kiro_YT',
           'bgmiName': 'Kiro_YT',
-          'rank': 'Conqueror',
-          'tier': 'Conqueror',
+          'rank': 'Bronze',
+          'tier': 'Bronze',
           'kdRatio': 4.8,
           'kd': 4.8,
           'gameId': '519283711',
@@ -54,10 +63,23 @@ class _GamerAdminDashboardScreenState extends State<GamerAdminDashboardScreen>
           'followersCount': 1250,
           'postsCount': 18,
           'coins': 650,
+          'level': 4,
           'verificationStatus': 'pending',
           'isVerified': false,
           'isVerifiedBlue': false,
           'createdAt': Timestamp.fromDate(DateTime.now().subtract(const Duration(days: 25))),
+          'games': [
+            {
+              'gameName': 'BGMI',
+              'gameId': '519283711',
+              'claimedRank': 'ACE',
+              'verifiedRank': '',
+              'isVerified': false,
+              'screenshotUrl': 'https://images.unsplash.com/photo-1542751371-adc38448a05e?w=800',
+              'status': 'pending',
+              'submittedAt': Timestamp.fromDate(DateTime.now().subtract(const Duration(hours: 3))),
+            }
+          ],
         },
         {
           'uid': 'sample_shadownova',
@@ -65,8 +87,8 @@ class _GamerAdminDashboardScreenState extends State<GamerAdminDashboardScreen>
           'tag': 'shadownova',
           'displayName': 'ShadowNova',
           'bgmiName': 'ShadowNova',
-          'rank': 'Ace',
-          'tier': 'Ace',
+          'rank': 'Bronze',
+          'tier': 'Bronze',
           'kdRatio': 5.2,
           'kd': 5.2,
           'gameId': '588492019',
@@ -74,10 +96,55 @@ class _GamerAdminDashboardScreenState extends State<GamerAdminDashboardScreen>
           'followersCount': 3400,
           'postsCount': 32,
           'coins': 1200,
+          'level': 6,
           'verificationStatus': 'pending',
           'isVerified': false,
           'isVerifiedBlue': false,
           'createdAt': Timestamp.fromDate(DateTime.now().subtract(const Duration(days: 40))),
+          'games': [
+            {
+              'gameName': 'PUBG Mobile',
+              'gameId': '588492019',
+              'claimedRank': 'Conqueror',
+              'verifiedRank': '',
+              'isVerified': false,
+              'screenshotUrl': 'https://images.unsplash.com/photo-1511512578047-dfb367046420?w=800',
+              'status': 'pending',
+              'submittedAt': Timestamp.fromDate(DateTime.now().subtract(const Duration(hours: 6))),
+            }
+          ],
+        },
+        {
+          'uid': 'sample_ghost_ff',
+          'username': 'ghost_gamer',
+          'tag': 'ghost_gamer',
+          'displayName': 'GhostRider',
+          'bgmiName': 'GhostRider',
+          'rank': 'Bronze',
+          'tier': 'Bronze',
+          'kdRatio': 3.6,
+          'kd': 3.6,
+          'gameId': '884729103',
+          'followersCount': 890,
+          'postsCount': 12,
+          'coins': 420,
+          'level': 3,
+          'verificationStatus': 'none',
+          'isVerified': false,
+          'isVerifiedBlue': false,
+          'createdAt': Timestamp.fromDate(DateTime.now().subtract(const Duration(days: 15))),
+          'games': [
+            {
+              'gameName': 'Free Fire',
+              'gameId': '884729103',
+              'claimedRank': 'Heroic',
+              'verifiedRank': '',
+              'isVerified': false,
+              'screenshotUrl': 'https://images.unsplash.com/photo-1538481199705-c710c4e965fc?w=800',
+              'status': 'pending',
+              'submittedAt': Timestamp.fromDate(DateTime.now().subtract(const Duration(hours: 12))),
+            }
+          ],
         },
       ];
 
@@ -86,6 +153,11 @@ class _GamerAdminDashboardScreenState extends State<GamerAdminDashboardScreen>
         final doc = await docRef.get();
         if (!doc.exists) {
           await docRef.set(sample, SetOptions(merge: true));
+        } else {
+          final data = doc.data();
+          if (data?['games'] == null) {
+            await docRef.set({'games': sample['games']}, SetOptions(merge: true));
+          }
         }
       }
     } catch (_) {}
@@ -126,12 +198,13 @@ class _GamerAdminDashboardScreenState extends State<GamerAdminDashboardScreen>
                     unselectedLabelColor: const Color(0xFF8B949E),
                     labelStyle: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13),
                     unselectedLabelStyle: const TextStyle(fontWeight: FontWeight.w600, fontSize: 13),
-                    tabs: const [
-                      Tab(text: 'Users'),
-                      Tab(text: 'Blue Tick Requests (3 pending)'),
-                      Tab(text: 'Posts Moderation'),
-                      Tab(text: 'Reports'),
-                      Tab(text: 'Coins'),
+                    tabs: [
+                      const Tab(text: 'Users'),
+                      _buildRankVerifyTabTitle(),
+                      const Tab(text: 'Blue Tick Requests (3 pending)'),
+                      const Tab(text: 'Posts Moderation'),
+                      const Tab(text: 'Reports'),
+                      const Tab(text: 'Coins'),
                     ],
                   ),
                 ),
@@ -142,6 +215,7 @@ class _GamerAdminDashboardScreenState extends State<GamerAdminDashboardScreen>
             controller: _tabController,
             children: [
               _buildUsersTab(),
+              _buildRankVerifyTab(),
               _buildBlueTickRequestsTab(),
               _buildPostsModerationTab(),
               _buildReportsTab(),
@@ -150,6 +224,53 @@ class _GamerAdminDashboardScreenState extends State<GamerAdminDashboardScreen>
           ),
         ),
       ),
+    );
+  }
+
+  Widget _buildRankVerifyTabTitle() {
+    return StreamBuilder<QuerySnapshot>(
+      stream: FirebaseFirestore.instance.collection('users').snapshots(),
+      builder: (context, snapshot) {
+        int pendingCount = 0;
+        if (snapshot.hasData) {
+          for (final doc in snapshot.data!.docs) {
+            final data = doc.data() as Map<String, dynamic>?;
+            final rawGames = data?['games'];
+            if (rawGames is List) {
+              for (final g in rawGames) {
+                if (g is Map && g['status'] == 'pending') {
+                  pendingCount++;
+                }
+              }
+            }
+          }
+        }
+
+        return Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const Text('Rank Verify'),
+            if (pendingCount > 0) ...[
+              const SizedBox(width: 6),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                decoration: BoxDecoration(
+                  color: const Color(0xFFFF8A00),
+                  borderRadius: BorderRadius.circular(10),
+                ),
+                child: Text(
+                  '$pendingCount pending',
+                  style: const TextStyle(
+                    color: Colors.white,
+                    fontSize: 10.5,
+                    fontWeight: FontWeight.w800,
+                  ),
+                ),
+              ),
+            ],
+          ],
+        );
+      },
     );
   }
 
@@ -580,23 +701,6 @@ class _GamerAdminDashboardScreenState extends State<GamerAdminDashboardScreen>
                   style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 12),
                 ),
               ),
-              const SizedBox(width: 8),
-              // Make ACE button
-              ElevatedButton.icon(
-                onPressed: () => _makeUserAce(user),
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: const Color(0xFFFF8A00),
-                  foregroundColor: Colors.white,
-                  elevation: 0,
-                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-                ),
-                icon: const Icon(Icons.military_tech_rounded, size: 14),
-                label: const Text(
-                  'Make ACE',
-                  style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12),
-                ),
-              ),
             ],
           ),
         ],
@@ -633,19 +737,641 @@ class _GamerAdminDashboardScreenState extends State<GamerAdminDashboardScreen>
     }
   }
 
-  Future<void> _makeUserAce(GamerUser user) async {
+  // ===================== TAB 2: RANK VERIFICATION TAB =====================
+  Widget _buildRankVerifyTab() {
+    return Column(
+      children: [
+        // Top Search & Filters
+        Container(
+          padding: const EdgeInsets.fromLTRB(16, 12, 16, 8),
+          color: const Color(0xFF0B0F14),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              // Search Bar
+              TextField(
+                controller: _rankSearchController,
+                style: const TextStyle(color: Colors.white, fontSize: 13),
+                decoration: InputDecoration(
+                  hintText: 'Search by username or Game ID...',
+                  hintStyle: const TextStyle(color: Color(0xFF6E7681), fontSize: 13),
+                  prefixIcon: const Icon(Icons.search_rounded, color: Color(0xFF00FF88), size: 18),
+                  suffixIcon: _rankSearchQuery.isNotEmpty
+                      ? IconButton(
+                          icon: const Icon(Icons.clear, color: Color(0xFF6E7681), size: 16),
+                          onPressed: () {
+                            _rankSearchController.clear();
+                            setState(() => _rankSearchQuery = '');
+                          },
+                        )
+                      : null,
+                  filled: true,
+                  fillColor: const Color(0xFF10141D),
+                  contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                  border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(10),
+                    borderSide: const BorderSide(color: Color(0xFF1F2B3E)),
+                  ),
+                  enabledBorder: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(10),
+                    borderSide: const BorderSide(color: Color(0xFF1F2B3E)),
+                  ),
+                  focusedBorder: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(10),
+                    borderSide: const BorderSide(color: Color(0xFF00FF88)),
+                  ),
+                ),
+                onChanged: (val) => setState(() => _rankSearchQuery = val.trim().toLowerCase()),
+              ),
+              const SizedBox(height: 10),
+
+              // Game Filter Chips & History Toggle
+              SingleChildScrollView(
+                scrollDirection: Axis.horizontal,
+                child: Row(
+                  children: [
+                    for (final game in ['All', 'BGMI', 'Free Fire', 'PUBG Mobile', 'COD Mobile']) ...[
+                      Padding(
+                        padding: const EdgeInsets.only(right: 6),
+                        child: ChoiceChip(
+                          label: Text(game),
+                          selected: _selectedRankGameFilter == game,
+                          onSelected: (selected) {
+                            if (selected) setState(() => _selectedRankGameFilter = game);
+                          },
+                          selectedColor: const Color(0xFF00FF88),
+                          backgroundColor: const Color(0xFF161B26),
+                          labelStyle: TextStyle(
+                            color: _selectedRankGameFilter == game ? const Color(0xFF0B0F14) : Colors.white70,
+                            fontWeight: FontWeight.bold,
+                            fontSize: 12,
+                          ),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(20),
+                            side: BorderSide(
+                              color: _selectedRankGameFilter == game ? const Color(0xFF00FF88) : const Color(0xFF1F2B3E),
+                            ),
+                          ),
+                        ),
+                      ),
+                    ],
+                    const SizedBox(width: 6),
+                    // Pending vs All toggle
+                    FilterChip(
+                      label: Text(_showOnlyPendingRanks ? '⏳ Pending' : '📋 All History'),
+                      selected: _showOnlyPendingRanks,
+                      onSelected: (val) => setState(() => _showOnlyPendingRanks = val),
+                      selectedColor: const Color(0xFFFF8A00).withOpacity(0.2),
+                      backgroundColor: const Color(0xFF161B26),
+                      labelStyle: TextStyle(
+                        color: _showOnlyPendingRanks ? const Color(0xFFFF8A00) : const Color(0xFF8B949E),
+                        fontWeight: FontWeight.bold,
+                        fontSize: 12,
+                      ),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(20),
+                        side: BorderSide(
+                          color: _showOnlyPendingRanks ? const Color(0xFFFF8A00) : const Color(0xFF1F2B3E),
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        ),
+
+        // Requests List
+        Expanded(
+          child: StreamBuilder<QuerySnapshot>(
+            stream: FirebaseFirestore.instance.collection('users').snapshots(),
+            builder: (context, snapshot) {
+              if (snapshot.connectionState == ConnectionState.waiting && !snapshot.hasData) {
+                return const Center(child: CircularProgressIndicator(color: Color(0xFF00FF88)));
+              }
+
+              final docs = snapshot.data?.docs ?? [];
+              final List<_RankQueueItem> allItems = [];
+
+              for (final doc in docs) {
+                final user = GamerUser.fromFirestore(doc);
+                for (int i = 0; i < user.games.length; i++) {
+                  final game = user.games[i];
+                  allItems.add(_RankQueueItem(user: user, game: game, gameIndex: i));
+                }
+              }
+
+              // Apply Filters
+              final filtered = allItems.where((item) {
+                // Pending filter
+                if (_showOnlyPendingRanks && item.game.status != 'pending') {
+                  return false;
+                }
+
+                // Game Name filter
+                if (_selectedRankGameFilter != 'All' &&
+                    item.game.gameName.toLowerCase() != _selectedRankGameFilter.toLowerCase()) {
+                  return false;
+                }
+
+                // Search query
+                if (_rankSearchQuery.isNotEmpty) {
+                  final uName = item.user.username.toLowerCase();
+                  final dName = item.user.displayName.toLowerCase();
+                  final gId = item.game.gameId.toLowerCase();
+                  final rank = item.game.claimedRank.toLowerCase();
+                  if (!uName.contains(_rankSearchQuery) &&
+                      !dName.contains(_rankSearchQuery) &&
+                      !gId.contains(_rankSearchQuery) &&
+                      !rank.contains(_rankSearchQuery)) {
+                    return false;
+                  }
+                }
+
+                return true;
+              }).toList();
+
+              // Sort: pending first, then by submittedAt desc
+              filtered.sort((a, b) {
+                if (a.game.status == 'pending' && b.game.status != 'pending') return -1;
+                if (a.game.status != 'pending' && b.game.status == 'pending') return 1;
+                final aTime = a.game.submittedAt ?? DateTime(2020);
+                final bTime = b.game.submittedAt ?? DateTime(2020);
+                return bTime.compareTo(aTime);
+              });
+
+              if (filtered.isEmpty) {
+                return Center(
+                  child: Padding(
+                    padding: const EdgeInsets.all(32),
+                    child: Column(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        Container(
+                          padding: const EdgeInsets.all(18),
+                          decoration: BoxDecoration(
+                            color: const Color(0xFF10141D),
+                            shape: BoxShape.circle,
+                            border: Border.all(color: const Color(0xFF1F2B3E)),
+                          ),
+                          child: const Icon(Icons.verified_outlined, color: Color(0xFF8B949E), size: 40),
+                        ),
+                        const SizedBox(height: 14),
+                        const Text(
+                          'No rank verification requests found',
+                          style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 15),
+                        ),
+                        const SizedBox(height: 6),
+                        Text(
+                          _showOnlyPendingRanks
+                              ? 'All pending screenshot rank submissions have been reviewed!'
+                              : 'No requests match the selected filters.',
+                          textAlign: TextAlign.center,
+                          style: const TextStyle(color: Color(0xFF8B949E), fontSize: 12),
+                        ),
+                      ],
+                    ),
+                  ),
+                );
+              }
+
+              return ListView.separated(
+                padding: const EdgeInsets.fromLTRB(16, 8, 16, 24),
+                itemCount: filtered.length,
+                separatorBuilder: (_, __) => const SizedBox(height: 12),
+                itemBuilder: (context, index) {
+                  return _buildRankVerificationCard(filtered[index]);
+                },
+              );
+            },
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildRankVerificationCard(_RankQueueItem item) {
+    final user = item.user;
+    final game = item.game;
+    final isPending = game.status == 'pending';
+    final isApproved = game.status == 'approved' || game.isVerified;
+    final isRejected = game.status == 'rejected';
+
+    final Color statusColor = isApproved
+        ? const Color(0xFF00FF88)
+        : (isPending ? const Color(0xFFFF8A00) : const Color(0xFFFF4655));
+
+    final String statusLabel = isApproved
+        ? 'Approved ✓'
+        : (isPending ? 'Pending Review ⏳' : 'Rejected ✕');
+
+    final String dateStr = game.submittedAt != null
+        ? DateFormat('dd MMM, hh:mm a').format(game.submittedAt!)
+        : 'Recently';
+
+    return Container(
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: const Color(0xFF10141D),
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(
+          color: isPending ? const Color(0xFFFF8A00).withOpacity(0.4) : const Color(0xFF1F2B3E),
+        ),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          // User Info & Status
+          Row(
+            children: [
+              GamerAvatar(
+                photoUrl: user.photoUrl,
+                radius: 20,
+                username: user.username,
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      user.displayName.isNotEmpty ? user.displayName : user.username,
+                      style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 14),
+                    ),
+                    Text(
+                      '@${user.username} • UID: ${user.uid.length > 8 ? user.uid.substring(0, 8) : user.uid}',
+                      style: const TextStyle(color: Color(0xFF8B949E), fontSize: 11),
+                    ),
+                  ],
+                ),
+              ),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                decoration: BoxDecoration(
+                  color: statusColor.withOpacity(0.15),
+                  borderRadius: BorderRadius.circular(8),
+                  border: Border.all(color: statusColor.withOpacity(0.5)),
+                ),
+                child: Text(
+                  statusLabel,
+                  style: TextStyle(
+                    color: statusColor,
+                    fontSize: 11,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+              ),
+            ],
+          ),
+
+          const SizedBox(height: 12),
+          const Divider(color: Color(0xFF1F2B3E), height: 1),
+          const SizedBox(height: 10),
+
+          // Game Name + Game UID + Claimed Rank
+          Row(
+            children: [
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                decoration: BoxDecoration(
+                  color: const Color(0xFF161B26),
+                  borderRadius: BorderRadius.circular(6),
+                  border: Border.all(color: const Color(0xFF2E384D)),
+                ),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    const Icon(Icons.sports_esports_rounded, size: 14, color: Color(0xFF00FF88)),
+                    const SizedBox(width: 4),
+                    Text(
+                      game.gameName,
+                      style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 12),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(width: 8),
+              Expanded(
+                child: Text(
+                  'ID: ${game.gameId}',
+                  style: const TextStyle(
+                    color: Color(0xFF38BDF8),
+                    fontSize: 12,
+                    fontWeight: FontWeight.w700,
+                  ),
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ),
+              Text(
+                dateStr,
+                style: const TextStyle(color: Color(0xFF6E7681), fontSize: 11),
+              ),
+            ],
+          ),
+
+          const SizedBox(height: 8),
+
+          // Claimed Rank & Verified Rank Info
+          Row(
+            children: [
+              const Text(
+                'Claimed Rank: ',
+                style: TextStyle(color: Color(0xFF8B949E), fontSize: 12),
+              ),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                decoration: BoxDecoration(
+                  color: const Color(0xFFFF8A00).withOpacity(0.2),
+                  borderRadius: BorderRadius.circular(6),
+                  border: Border.all(color: const Color(0xFFFF8A00).withOpacity(0.5)),
+                ),
+                child: Text(
+                  game.claimedRank,
+                  style: const TextStyle(
+                    color: Color(0xFFFF8A00),
+                    fontSize: 12,
+                    fontWeight: FontWeight.w900,
+                  ),
+                ),
+              ),
+              if (isApproved && game.verifiedRank.isNotEmpty) ...[
+                const SizedBox(width: 8),
+                const Icon(Icons.arrow_forward_rounded, size: 12, color: Color(0xFF8B949E)),
+                const SizedBox(width: 8),
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFF00FF88).withOpacity(0.2),
+                    borderRadius: BorderRadius.circular(6),
+                    border: Border.all(color: const Color(0xFF00FF88).withOpacity(0.5)),
+                  ),
+                  child: Text(
+                    'Verified: ${game.verifiedRank}',
+                    style: const TextStyle(
+                      color: Color(0xFF00FF88),
+                      fontSize: 12,
+                      fontWeight: FontWeight.w900,
+                    ),
+                  ),
+                ),
+              ],
+            ],
+          ),
+
+          const SizedBox(height: 10),
+
+          // Screenshot Thumbnail (Tappable for full screen zoom)
+          if (game.screenshotUrl.isNotEmpty) ...[
+            GestureDetector(
+              onTap: () => _showScreenshotViewerDialog(
+                imageUrl: game.screenshotUrl,
+                title: '${user.displayName} • ${game.gameName} Rank Proof',
+              ),
+              child: ClipRRect(
+                borderRadius: BorderRadius.circular(10),
+                child: Stack(
+                  children: [
+                    CachedNetworkImage(
+                      imageUrl: game.screenshotUrl,
+                      height: 140,
+                      width: double.infinity,
+                      fit: BoxFit.cover,
+                      placeholder: (_, __) => Container(
+                        height: 140,
+                        color: const Color(0xFF161B26),
+                        child: const Center(
+                          child: CircularProgressIndicator(color: Color(0xFF00FF88), strokeWidth: 2),
+                        ),
+                      ),
+                      errorWidget: (_, __, ___) => Container(
+                        height: 140,
+                        color: const Color(0xFF161B26),
+                        child: const Center(
+                          child: Icon(Icons.broken_image_rounded, color: Colors.white38, size: 36),
+                        ),
+                      ),
+                    ),
+                    Positioned(
+                      bottom: 6,
+                      right: 6,
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                        decoration: BoxDecoration(
+                          color: Colors.black.withOpacity(0.75),
+                          borderRadius: BorderRadius.circular(6),
+                          border: Border.all(color: Colors.white24),
+                        ),
+                        child: const Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Icon(Icons.zoom_in_rounded, size: 14, color: Colors.white),
+                            SizedBox(width: 4),
+                            Text(
+                              'Tap to inspect proof',
+                              style: TextStyle(color: Colors.white, fontSize: 11, fontWeight: FontWeight.bold),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ] else ...[
+            Container(
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: const Color(0xFF161B26),
+                borderRadius: BorderRadius.circular(8),
+              ),
+              child: const Row(
+                children: [
+                  Icon(Icons.image_not_supported_rounded, color: Color(0xFF8B949E), size: 16),
+                  SizedBox(width: 6),
+                  Text(
+                    'No screenshot uploaded',
+                    style: TextStyle(color: Color(0xFF8B949E), fontSize: 12),
+                  ),
+                ],
+              ),
+            ),
+          ],
+
+          // Rejection reason banner if rejected
+          if (isRejected && game.rejectReason != null && game.rejectReason!.isNotEmpty) ...[
+            const SizedBox(height: 10),
+            Container(
+              padding: const EdgeInsets.all(10),
+              decoration: BoxDecoration(
+                color: const Color(0xFFFF4655).withOpacity(0.12),
+                borderRadius: BorderRadius.circular(8),
+                border: Border.all(color: const Color(0xFFFF4655).withOpacity(0.3)),
+              ),
+              child: Row(
+                children: [
+                  const Icon(Icons.info_outline_rounded, color: Color(0xFFFF4655), size: 16),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: Text(
+                      'Reason: ${game.rejectReason}',
+                      style: const TextStyle(color: Color(0xFFFF4655), fontSize: 12),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
+
+          // Approve / Reject Actions (when pending)
+          if (isPending) ...[
+            const SizedBox(height: 12),
+            _AdminRankActionButtons(
+              item: item,
+              onApprove: () => _approveRankVerification(item),
+              onReject: (reason) => _rejectRankVerification(item, reason),
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+
+  void _showScreenshotViewerDialog({required String imageUrl, required String title}) {
+    showDialog(
+      context: context,
+      builder: (ctx) => Dialog(
+        backgroundColor: const Color(0xFF10141D),
+        insetPadding: const EdgeInsets.all(16),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Padding(
+              padding: const EdgeInsets.fromLTRB(16, 12, 8, 12),
+              child: Row(
+                children: [
+                  Expanded(
+                    child: Text(
+                      title,
+                      style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 14),
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ),
+                  IconButton(
+                    icon: const Icon(Icons.close, color: Colors.white70, size: 20),
+                    onPressed: () => Navigator.pop(ctx),
+                  ),
+                ],
+              ),
+            ),
+            Flexible(
+              child: ClipRRect(
+                borderRadius: const BorderRadius.only(
+                  bottomLeft: Radius.circular(16),
+                  bottomRight: Radius.circular(16),
+                ),
+                child: InteractiveViewer(
+                  maxScale: 4.0,
+                  child: CachedNetworkImage(
+                    imageUrl: imageUrl,
+                    fit: BoxFit.contain,
+                    placeholder: (_, __) => const Padding(
+                      padding: EdgeInsets.all(48),
+                      child: CircularProgressIndicator(color: Color(0xFF00FF88)),
+                    ),
+                    errorWidget: (_, __, ___) => const Padding(
+                      padding: EdgeInsets.all(48),
+                      child: Icon(Icons.broken_image_rounded, color: Colors.red, size: 48),
+                    ),
+                  ),
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  int _getRankWeight(String rankName) {
+    final r = rankName.toLowerCase().trim();
+    if (r.contains('conqueror') || r.contains('radiant') || r.contains('grandmaster')) return 100;
+    if (r.contains('legendary') || r.contains('immortal') || r.contains('heroic')) return 90;
+    if (r.contains('ace') || r.contains('ascendant')) return 80;
+    if (r.contains('crown') || r.contains('master')) return 70;
+    if (r.contains('diamond')) return 60;
+    if (r.contains('platinum') || r.contains('pro')) return 50;
+    if (r.contains('gold') || r.contains('elite')) return 40;
+    if (r.contains('silver') || r.contains('veteran')) return 30;
+    if (r.contains('bronze') || r.contains('rookie') || r.contains('iron')) return 20;
+    return 10;
+  }
+
+  Future<void> _approveRankVerification(_RankQueueItem item) async {
     try {
-      await FirebaseFirestore.instance.collection('users').doc(user.uid).set({
-        'rank': 'Ace',
-        'tier': 'Ace',
-        'rankBadgeType': 'ace',
+      final updatedGames = List<UserGameRank>.from(item.user.games);
+      final approvedGame = item.game.copyWith(
+        isVerified: true,
+        verifiedRank: item.game.claimedRank,
+        status: 'approved',
+      );
+      updatedGames[item.gameIndex] = approvedGame;
+
+      // Update user's main display rank if this approved rank has higher weight
+      String newMainRank = item.user.rank;
+      if (_getRankWeight(item.game.claimedRank) > _getRankWeight(item.user.rank) ||
+          item.user.rank.toLowerCase() == 'bronze' ||
+          item.user.rank.isEmpty) {
+        newMainRank = item.game.claimedRank;
+      }
+
+      await FirebaseFirestore.instance.collection('users').doc(item.user.uid).set({
+        'games': updatedGames.map((g) => g.toMap()).toList(),
+        'rank': newMainRank,
+        'tier': newMainRank,
         'updatedAt': FieldValue.serverTimestamp(),
       }, SetOptions(merge: true));
 
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text('User @${user.username} promoted to rank ACE!'),
+            content: Text(
+              'Approved ${item.game.gameName} rank (${item.game.claimedRank}) for @${item.user.username}!',
+            ),
+            backgroundColor: const Color(0xFF00FF88),
+          ),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Error approving rank: $e'), backgroundColor: const Color(0xFFFF4655)),
+        );
+      }
+    }
+  }
+
+  Future<void> _rejectRankVerification(_RankQueueItem item, String reason) async {
+    try {
+      final updatedGames = List<UserGameRank>.from(item.user.games);
+      final rejectedGame = item.game.copyWith(
+        isVerified: false,
+        status: 'rejected',
+        rejectReason: reason.trim().isNotEmpty ? reason.trim() : 'Screenshot does not verify Game ID and Rank',
+      );
+      updatedGames[item.gameIndex] = rejectedGame;
+
+      await FirebaseFirestore.instance.collection('users').doc(item.user.uid).set({
+        'games': updatedGames.map((g) => g.toMap()).toList(),
+        'updatedAt': FieldValue.serverTimestamp(),
+      }, SetOptions(merge: true));
+
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Rejected ${item.game.gameName} rank verification for @${item.user.username}'),
             backgroundColor: const Color(0xFFFF8A00),
           ),
         );
@@ -653,13 +1379,13 @@ class _GamerAdminDashboardScreenState extends State<GamerAdminDashboardScreen>
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Error updating rank: $e'), backgroundColor: const Color(0xFFFF4655)),
+          SnackBar(content: Text('Error rejecting rank: $e'), backgroundColor: const Color(0xFFFF4655)),
         );
       }
     }
   }
 
-  // ===================== TAB 2: BLUE TICK QUEUE =====================
+  // ===================== TAB 3: BLUE TICK QUEUE =====================
   Widget _buildBlueTickRequestsTab() {
     return StreamBuilder<QuerySnapshot>(
       stream: FirebaseFirestore.instance.collection('users').snapshots(),
@@ -1215,3 +1941,155 @@ class _SliverAppBarDelegate extends SliverPersistentHeaderDelegate {
     return false;
   }
 }
+
+class _RankQueueItem {
+  final GamerUser user;
+  final UserGameRank game;
+  final int gameIndex;
+
+  _RankQueueItem({
+    required this.user,
+    required this.game,
+    required this.gameIndex,
+  });
+}
+
+class _AdminRankActionButtons extends StatefulWidget {
+  final _RankQueueItem item;
+  final VoidCallback onApprove;
+  final ValueChanged<String> onReject;
+
+  const _AdminRankActionButtons({
+    required this.item,
+    required this.onApprove,
+    required this.onReject,
+  });
+
+  @override
+  State<_AdminRankActionButtons> createState() => _AdminRankActionButtonsState();
+}
+
+class _AdminRankActionButtonsState extends State<_AdminRankActionButtons> {
+  final TextEditingController _reasonController = TextEditingController();
+  bool _showReasonField = false;
+
+  @override
+  void dispose() {
+    _reasonController.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        if (_showReasonField) ...[
+          Container(
+            margin: const EdgeInsets.only(bottom: 8),
+            decoration: BoxDecoration(
+              color: const Color(0xFF161B26),
+              borderRadius: BorderRadius.circular(8),
+              border: Border.all(color: const Color(0xFFFF4655).withOpacity(0.5)),
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                TextField(
+                  controller: _reasonController,
+                  style: const TextStyle(color: Colors.white, fontSize: 12),
+                  decoration: const InputDecoration(
+                    hintText: 'Enter rejection reason (e.g. Screenshot unclear, UID mismatch)...',
+                    hintStyle: TextStyle(color: Color(0xFF8B949E), fontSize: 11),
+                    contentPadding: EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+                    border: InputBorder.none,
+                  ),
+                ),
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(8, 0, 8, 8),
+                  child: Wrap(
+                    spacing: 6,
+                    runSpacing: 4,
+                    children: [
+                      'Screenshot blurry',
+                      'UID mismatch',
+                      'Fake rank proof',
+                      'Not profile/tier page',
+                    ].map((reason) {
+                      return InkWell(
+                        onTap: () {
+                          setState(() {
+                            _reasonController.text = reason;
+                          });
+                        },
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                          decoration: BoxDecoration(
+                            color: const Color(0xFF1F2B3E),
+                            borderRadius: BorderRadius.circular(4),
+                          ),
+                          child: Text(
+                            reason,
+                            style: const TextStyle(color: Color(0xFF38BDF8), fontSize: 10),
+                          ),
+                        ),
+                      );
+                    }).toList(),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+        Row(
+          children: [
+            // Reject button
+            Expanded(
+              child: OutlinedButton.icon(
+                onPressed: () {
+                  if (!_showReasonField) {
+                    setState(() => _showReasonField = true);
+                  } else {
+                    widget.onReject(_reasonController.text);
+                  }
+                },
+                style: OutlinedButton.styleFrom(
+                  side: const BorderSide(color: Color(0xFFFF4655)),
+                  backgroundColor: const Color(0xFFFF4655).withOpacity(0.1),
+                  foregroundColor: const Color(0xFFFF4655),
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                  padding: const EdgeInsets.symmetric(vertical: 8),
+                ),
+                icon: const Icon(Icons.close_rounded, size: 14),
+                label: Text(
+                  _showReasonField ? 'Confirm Reject' : 'Reject',
+                  style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 12),
+                ),
+              ),
+            ),
+            const SizedBox(width: 8),
+            // Approve button
+            Expanded(
+              child: ElevatedButton.icon(
+                onPressed: widget.onApprove,
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: const Color(0xFF00FF88),
+                  foregroundColor: const Color(0xFF0B0F14),
+                  elevation: 0,
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                  padding: const EdgeInsets.symmetric(vertical: 8),
+                ),
+                icon: const Icon(Icons.check_rounded, size: 14),
+                label: const Text(
+                  'Approve Rank',
+                  style: TextStyle(fontWeight: FontWeight.w900, fontSize: 12),
+                ),
+              ),
+            ),
+          ],
+        ),
+      ],
+    );
+  }
+}
+

@@ -12,7 +12,8 @@ service cloud.firestore {
     }
 
     // Users: anyone can read profiles, user can edit only own users/{uid}
-    // Only admin can write isBanned, isVerifiedBlue, rank, tier
+    // Only admin can write isBanned, isVerifiedBlue, rank, tier, isAdmin
+    // User can submit games array only with isVerified: false and status: 'pending'
     match /users/{uid} {
       allow read: if true;
       allow create: if request.auth != null && request.auth.uid == uid;
