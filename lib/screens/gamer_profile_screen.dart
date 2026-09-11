@@ -1,4 +1,5 @@
 import 'dart:io';
+import 'dart:math';
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:cached_network_image/cached_network_image.dart';
@@ -1281,6 +1282,38 @@ class _GamerProfileScreenState extends State<GamerProfileScreen> with SingleTick
                                 ],
                               ),
                             ),
+
+                            // Verified Game Ranks Badges
+                            ...user.games
+                                .where((g) => g.isVerified || g.status == 'approved')
+                                .map((g) {
+                              final gColor = _getGameAccentColor(g.gameName);
+                              return Container(
+                                padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 5),
+                                decoration: BoxDecoration(
+                                  color: gColor.withOpacity(0.14),
+                                  borderRadius: BorderRadius.circular(8),
+                                  border: Border.all(color: gColor.withOpacity(0.5)),
+                                ),
+                                child: Row(
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    Icon(_getGameIcon(g.gameName), color: gColor, size: 13),
+                                    const SizedBox(width: 5),
+                                    Text(
+                                      '${g.gameName}: ${g.verifiedRank.isNotEmpty ? g.verifiedRank : g.claimedRank}',
+                                      style: TextStyle(
+                                        color: gColor,
+                                        fontWeight: FontWeight.w800,
+                                        fontSize: 11.5,
+                                      ),
+                                    ),
+                                    const SizedBox(width: 4),
+                                    const Icon(Icons.check_circle_rounded, color: Color(0xFF00FF88), size: 12),
+                                  ],
+                                ),
+                              );
+                            }),
                           ],
                         ),
 
@@ -1786,10 +1819,10 @@ class _GamerProfileScreenState extends State<GamerProfileScreen> with SingleTick
   // ===================== MULTI-GAME RANK VERIFICATION =====================
 
   static const Map<String, List<String>> _kGameRankOptions = {
-    'BGMI': ['Bronze', 'Silver', 'Gold', 'Platinum', 'Diamond', 'Crown', 'ACE', 'Conqueror'],
-    'PUBG Mobile': ['Bronze', 'Silver', 'Gold', 'Platinum', 'Diamond', 'Crown', 'ACE', 'Conqueror'],
+    'BGMI': ['Bronze', 'Silver', 'Gold', 'Platinum', 'Diamond', 'Crown', 'ACE', 'Ace Master', 'Ace Dominator', 'Conqueror'],
+    'PUBG Mobile': ['Bronze', 'Silver', 'Gold', 'Platinum', 'Diamond', 'Crown', 'ACE', 'Ace Master', 'Ace Dominator', 'Conqueror'],
     'Free Fire': ['Bronze', 'Silver', 'Gold', 'Platinum', 'Diamond', 'Heroic', 'Grandmaster'],
-    'COD Mobile': ['Rookie', 'Veteran', 'Elite', 'Pro', 'Master', 'Legendary'],
+    'COD Mobile': ['Rookie', 'Veteran', 'Elite', 'Pro', 'Master', 'Grandmaster', 'Legendary'],
     'Valorant': ['Iron', 'Bronze', 'Silver', 'Gold', 'Platinum', 'Diamond', 'Ascendant', 'Immortal', 'Radiant'],
   };
 
@@ -2116,21 +2149,21 @@ class _GamerProfileScreenState extends State<GamerProfileScreen> with SingleTick
       context: context,
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
-      builder: (sheetContext) => _AddVerifyGameRankSheet(user: user),
+      builder: (sheetContext) => AddVerifyGameRankSheet(user: user),
     );
   }
 }
 
-class _AddVerifyGameRankSheet extends StatefulWidget {
+class AddVerifyGameRankSheet extends StatefulWidget {
   final GamerUser user;
 
-  const _AddVerifyGameRankSheet({required this.user});
+  const AddVerifyGameRankSheet({super.key, required this.user});
 
   @override
-  State<_AddVerifyGameRankSheet> createState() => _AddVerifyGameRankSheetState();
+  State<AddVerifyGameRankSheet> createState() => _AddVerifyGameRankSheetState();
 }
 
-class _AddVerifyGameRankSheetState extends State<_AddVerifyGameRankSheet> {
+class _AddVerifyGameRankSheetState extends State<AddVerifyGameRankSheet> {
   final _formKey = GlobalKey<FormState>();
   String _selectedGame = 'BGMI';
   late String _selectedRank;
@@ -2214,12 +2247,14 @@ class _AddVerifyGameRankSheetState extends State<_AddVerifyGameRankSheet> {
       final rawGames = currentData['games'] as List? ?? [];
       final List<Map<String, dynamic>> gamesList = [];
       bool replaced = false;
+      final entryId = 'game_${DateTime.now().millisecondsSinceEpoch}_${Random().nextInt(9999)}';
 
       for (final g in rawGames) {
         if (g is Map) {
           final map = Map<String, dynamic>.from(g);
           if (map['gameName'] == _selectedGame) {
             gamesList.add({
+              'id': map['id'] ?? entryId,
               'gameName': _selectedGame,
               'gameId': _gameIdController.text.trim(),
               'claimedRank': _selectedRank,
@@ -2238,6 +2273,7 @@ class _AddVerifyGameRankSheetState extends State<_AddVerifyGameRankSheet> {
 
       if (!replaced) {
         gamesList.add({
+          'id': entryId,
           'gameName': _selectedGame,
           'gameId': _gameIdController.text.trim(),
           'claimedRank': _selectedRank,

@@ -790,7 +790,7 @@ class _GamerAdminDashboardScreenState extends State<GamerAdminDashboardScreen>
                 scrollDirection: Axis.horizontal,
                 child: Row(
                   children: [
-                    for (final game in ['All', 'BGMI', 'Free Fire', 'PUBG Mobile', 'COD Mobile']) ...[
+                    for (final game in ['All', 'BGMI', 'Free Fire', 'PUBG Mobile', 'COD Mobile', 'Valorant']) ...[
                       Padding(
                         padding: const EdgeInsets.only(right: 6),
                         child: ChoiceChip(

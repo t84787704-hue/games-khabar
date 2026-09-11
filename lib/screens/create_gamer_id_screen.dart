@@ -8,6 +8,7 @@ import '../models/gamer_user_model.dart';
 import '../services/gamer_auth_service.dart';
 import '../widgets/gamer_avatar.dart';
 import 'gamer_main_navigation_screen.dart';
+import 'gamer_profile_screen.dart';
 
 class CreateGamerIdScreen extends StatefulWidget {
   final bool isEditing;
@@ -958,6 +959,87 @@ class _CreateGamerIdScreenState extends State<CreateGamerIdScreen> {
                           helperStyle: TextStyle(color: GamerTheme.textMuted, fontSize: 11),
                         ),
                       ),
+
+                      // NEW SECTION: "My Game Ranks"
+                      if (widget.existingUser != null) ...[
+                        const SizedBox(height: 24),
+                        Container(
+                          padding: const EdgeInsets.all(16),
+                          decoration: BoxDecoration(
+                            color: GamerTheme.cardDark,
+                            borderRadius: BorderRadius.circular(14),
+                            border: Border.all(color: const Color(0xFF00E5FF).withOpacity(0.3)),
+                          ),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Row(
+                                children: [
+                                  const Icon(Icons.shield_rounded, color: Color(0xFF00E5FF), size: 18),
+                                  const SizedBox(width: 8),
+                                  const Text(
+                                    'MY GAME RANKS',
+                                    style: TextStyle(
+                                      color: Colors.white,
+                                      fontWeight: FontWeight.w900,
+                                      fontSize: 13,
+                                      letterSpacing: 0.5,
+                                    ),
+                                  ),
+                                  const Spacer(),
+                                  OutlinedButton.icon(
+                                    onPressed: () {
+                                      showModalBottomSheet(
+                                        context: context,
+                                        isScrollControlled: true,
+                                        backgroundColor: Colors.transparent,
+                                        builder: (sheetContext) => AddVerifyGameRankSheet(user: widget.existingUser!),
+                                      );
+                                    },
+                                    style: OutlinedButton.styleFrom(
+                                      side: const BorderSide(color: Color(0xFF00E5FF)),
+                                      backgroundColor: const Color(0xFF00E5FF).withOpacity(0.1),
+                                      foregroundColor: const Color(0xFF00E5FF),
+                                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                                      minimumSize: Size.zero,
+                                      tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                                    ),
+                                    icon: const Icon(Icons.add_moderator_rounded, size: 14),
+                                    label: const Text('Add / Verify Game Rank', style: TextStyle(fontSize: 11.5, fontWeight: FontWeight.w800)),
+                                  ),
+                                ],
+                              ),
+                              const SizedBox(height: 10),
+                              if (widget.existingUser!.games.isEmpty)
+                                const Text(
+                                  'No game ranks submitted yet. Tap "Add / Verify Game Rank" to submit screenshot proof for BGMI, Free Fire, Valorant & more.',
+                                  style: TextStyle(color: GamerTheme.textMuted, fontSize: 12),
+                                )
+                              else
+                                Wrap(
+                                  spacing: 8,
+                                  runSpacing: 6,
+                                  children: widget.existingUser!.games.map((g) {
+                                    final isApproved = g.isVerified || g.status == 'approved';
+                                    final isPending = g.status == 'pending';
+                                    final color = isApproved
+                                        ? const Color(0xFF00FF88)
+                                        : (isPending ? const Color(0xFFFF8A00) : const Color(0xFFFF4655));
+                                    return Chip(
+                                      backgroundColor: color.withOpacity(0.12),
+                                      side: BorderSide(color: color.withOpacity(0.5)),
+                                      label: Text(
+                                        '${g.gameName}: ${g.verifiedRank.isNotEmpty ? g.verifiedRank : g.claimedRank} (${g.status})',
+                                        style: TextStyle(color: color, fontSize: 11, fontWeight: FontWeight.bold),
+                                      ),
+                                    );
+                                  }).toList(),
+                                ),
+                            ],
+                          ),
+                        ),
+                      ],
 
                       const SizedBox(height: 32),
 

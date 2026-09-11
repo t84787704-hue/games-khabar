@@ -32,6 +32,7 @@ class GamerRankBadge {
 }
 
 class UserGameRank {
+  final String id;
   final String gameName; // BGMI, PUBG Mobile, Free Fire, COD Mobile, Valorant
   final String gameId;
   final String claimedRank;
@@ -43,6 +44,7 @@ class UserGameRank {
   final String? rejectReason;
 
   const UserGameRank({
+    this.id = '',
     required this.gameName,
     required this.gameId,
     required this.claimedRank,
@@ -66,6 +68,7 @@ class UserGameRank {
     }
 
     return UserGameRank(
+      id: map['id']?.toString() ?? '',
       gameName: map['gameName']?.toString() ?? 'BGMI',
       gameId: map['gameId']?.toString() ?? '',
       claimedRank: map['claimedRank']?.toString() ?? '',
@@ -80,6 +83,7 @@ class UserGameRank {
 
   Map<String, dynamic> toMap() {
     return {
+      if (id.isNotEmpty) 'id': id,
       'gameName': gameName,
       'gameId': gameId,
       'claimedRank': claimedRank,
@@ -93,6 +97,7 @@ class UserGameRank {
   }
 
   UserGameRank copyWith({
+    String? id,
     String? gameName,
     String? gameId,
     String? claimedRank,
@@ -104,6 +109,7 @@ class UserGameRank {
     String? rejectReason,
   }) {
     return UserGameRank(
+      id: id ?? this.id,
       gameName: gameName ?? this.gameName,
       gameId: gameId ?? this.gameId,
       claimedRank: claimedRank ?? this.claimedRank,
