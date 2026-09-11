@@ -9,6 +9,7 @@ import 'screens/create_gamer_id_screen.dart';
 import 'screens/create_post_screen.dart';
 import 'screens/gamer_search_screen.dart';
 import 'screens/gamer_auth_screen.dart';
+import 'screens/banned_screen.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -66,6 +67,7 @@ class GamersIdApp extends StatelessWidget {
           '/create-id': (context) => const CreateGamerIdScreen(),
           '/create-post': (context) => const CreatePostScreen(),
           '/search': (context) => const GamerSearchScreen(),
+          '/banned': (context) => const BannedScreen(),
         },
       ),
     );

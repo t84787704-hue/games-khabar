@@ -150,6 +150,9 @@ class GamerUser {
   final bool isVerifiedBlue;
   final bool isAdmin;
   final bool isBanned;
+  final DateTime? bannedAt;
+  final String? bannedReason;
+  final String? bannedBy;
   final int clipsCount;
   final int squadRoomsCount;
   final DateTime? verificationAppliedAt;
@@ -181,6 +184,9 @@ class GamerUser {
     this.isVerifiedBlue = false,
     this.isAdmin = false,
     this.isBanned = false,
+    this.bannedAt,
+    this.bannedReason,
+    this.bannedBy,
     this.clipsCount = 0,
     this.squadRoomsCount = 0,
     this.verificationAppliedAt,
@@ -347,6 +353,14 @@ class GamerUser {
       appliedAt = DateTime.tryParse(rawApplied);
     }
 
+    DateTime? bannedTimestamp;
+    final rawBannedAt = data['bannedAt'];
+    if (rawBannedAt is Timestamp) {
+      bannedTimestamp = rawBannedAt.toDate();
+    } else if (rawBannedAt is String) {
+      bannedTimestamp = DateTime.tryParse(rawBannedAt);
+    }
+
     final rawStatus = data['verificationStatus']?.toString().toLowerCase().trim();
     final bool rawVerifiedBlue = data['isVerifiedBlue'] == true;
     final bool rawVerified = data['isVerified'] == true || rawVerifiedBlue || rawStatus == 'verified';
@@ -391,6 +405,9 @@ class GamerUser {
       isVerifiedBlue: rawVerifiedBlue || rawVerified,
       isAdmin: data['isAdmin'] == true,
       isBanned: data['isBanned'] == true,
+      bannedAt: bannedTimestamp,
+      bannedReason: data['bannedReason']?.toString(),
+      bannedBy: data['bannedBy']?.toString(),
       clipsCount: (data['clipsCount'] as num?)?.toInt() ?? 0,
       squadRoomsCount: (data['squadRoomsCount'] as num?)?.toInt() ?? 0,
       verificationAppliedAt: appliedAt,
@@ -432,6 +449,9 @@ class GamerUser {
       'isVerifiedBlue': isVerifiedBlue,
       'isAdmin': isAdmin,
       'isBanned': isBanned,
+      if (bannedAt != null) 'bannedAt': Timestamp.fromDate(bannedAt!),
+      if (bannedReason != null && bannedReason!.isNotEmpty) 'bannedReason': bannedReason,
+      if (bannedBy != null && bannedBy!.isNotEmpty) 'bannedBy': bannedBy,
       'clipsCount': clipsCount,
       'squadRoomsCount': squadRoomsCount,
       'verificationAppliedAt': verificationAppliedAt != null ? Timestamp.fromDate(verificationAppliedAt!) : null,
@@ -480,6 +500,9 @@ class GamerUser {
     bool? isVerifiedBlue,
     bool? isAdmin,
     bool? isBanned,
+    DateTime? bannedAt,
+    String? bannedReason,
+    String? bannedBy,
     int? clipsCount,
     int? squadRoomsCount,
     DateTime? verificationAppliedAt,
@@ -511,6 +534,9 @@ class GamerUser {
       isVerifiedBlue: isVerifiedBlue ?? this.isVerifiedBlue,
       isAdmin: isAdmin ?? this.isAdmin,
       isBanned: isBanned ?? this.isBanned,
+      bannedAt: bannedAt ?? this.bannedAt,
+      bannedReason: bannedReason ?? this.bannedReason,
+      bannedBy: bannedBy ?? this.bannedBy,
       clipsCount: clipsCount ?? this.clipsCount,
       squadRoomsCount: squadRoomsCount ?? this.squadRoomsCount,
       verificationAppliedAt: verificationAppliedAt ?? this.verificationAppliedAt,

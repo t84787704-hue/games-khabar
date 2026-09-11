@@ -5,6 +5,7 @@ import '../constants/gamer_theme.dart';
 import '../services/gamer_auth_service.dart';
 import 'create_gamer_id_screen.dart';
 import 'gamer_main_navigation_screen.dart';
+import 'banned_screen.dart';
 
 class GamerAuthScreen extends StatefulWidget {
   const GamerAuthScreen({super.key});
@@ -63,6 +64,14 @@ class _GamerAuthScreenState extends State<GamerAuthScreen> {
   Future<void> _handlePostAuth() async {
     final gamer = await GamerAuthService().refreshCurrentGamer();
     if (!mounted) return;
+
+    if (gamer != null && gamer.isBanned) {
+      Navigator.of(context).pushAndRemoveUntil(
+        MaterialPageRoute(builder: (_) => BannedScreen(reason: gamer.bannedReason)),
+        (route) => false,
+      );
+      return;
+    }
 
     if (gamer == null || gamer.username.isEmpty) {
       // Force user to Create ID screen if username does not exist

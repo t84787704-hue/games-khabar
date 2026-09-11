@@ -583,8 +583,9 @@ class _GamerAdminDashboardScreenState extends State<GamerAdminDashboardScreen>
         borderRadius: BorderRadius.circular(14),
         border: Border.all(
           color: user.isBanned
-              ? const Color(0xFFFF4655).withOpacity(0.5)
+              ? const Color(0xFFFF4655)
               : const Color(0xFF1F2B3E),
+          width: user.isBanned ? 1.5 : 1.0,
         ),
       ),
       child: Column(
@@ -710,19 +711,33 @@ class _GamerAdminDashboardScreenState extends State<GamerAdminDashboardScreen>
 
   Future<void> _toggleBanUser(GamerUser user) async {
     final nextBanned = !user.isBanned;
+    final adminUid = FirebaseAuth.instance.currentUser?.uid ?? 'admin';
     try {
-      await FirebaseFirestore.instance.collection('users').doc(user.uid).set({
-        'isBanned': nextBanned,
-        'updatedAt': FieldValue.serverTimestamp(),
-      }, SetOptions(merge: true));
+      if (nextBanned) {
+        await FirebaseFirestore.instance.collection('users').doc(user.uid).set({
+          'isBanned': true,
+          'bannedAt': FieldValue.serverTimestamp(),
+          'bannedBy': adminUid,
+          'bannedReason': 'Violating community guidelines or banned by admin',
+          'updatedAt': FieldValue.serverTimestamp(),
+        }, SetOptions(merge: true));
+      } else {
+        await FirebaseFirestore.instance.collection('users').doc(user.uid).set({
+          'isBanned': false,
+          'bannedAt': null,
+          'bannedReason': null,
+          'bannedBy': null,
+          'updatedAt': FieldValue.serverTimestamp(),
+        }, SetOptions(merge: true));
+      }
 
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text(
               nextBanned
-                  ? 'User @${user.username} has been BANNED (isBanned=true)'
-                  : 'User @${user.username} has been UNBANNED',
+                  ? 'User @${user.username} banned successfully'
+                  : 'User @${user.username} unbanned successfully',
             ),
             backgroundColor: nextBanned ? const Color(0xFFFF4655) : const Color(0xFF00FF88),
           ),

@@ -6,6 +6,7 @@ import '../models/gamer_user_model.dart';
 import 'gamer_auth_screen.dart';
 import 'create_gamer_id_screen.dart';
 import 'gamer_main_navigation_screen.dart';
+import 'banned_screen.dart';
 
 class GamerAppRoot extends StatefulWidget {
   const GamerAppRoot({super.key});
@@ -48,6 +49,11 @@ class _GamerAppRootState extends State<GamerAppRoot> {
             return ValueListenableBuilder<GamerUser?>(
               valueListenable: _authService.currentGamerNotifier,
               builder: (context, gamer, _) {
+                // If user is banned, immediately lock them on BannedScreen
+                if (gamer != null && gamer.isBanned) {
+                  return BannedScreen(reason: gamer.bannedReason);
+                }
+
                 if (gamer == null || gamer.username.isEmpty) {
                   // After first login, force user to Create ID screen if username not exists
                   return const CreateGamerIdScreen();

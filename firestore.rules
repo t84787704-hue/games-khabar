@@ -11,9 +11,18 @@ service cloud.firestore {
       );
     }
 
+    // Ban check helper: Returns true if user is NOT banned
+    function isNotBanned() {
+      return request.auth != null && (
+        isAdmin() ||
+        !exists(/databases/$(database)/documents/users/$(request.auth.uid)) ||
+        get(/databases/$(database)/documents/users/$(request.auth.uid)).data.isBanned != true
+      );
+    }
+
     // Users: anyone can read profiles, user can edit only own users/{uid}
     // Only admin can write isBanned, isVerifiedBlue, rank, tier, isAdmin
-    // User can submit games array only with isVerified: false and status: 'pending'
+    // User cannot write/update if they are banned
     match /users/{uid} {
       allow read: if true;
       allow create: if request.auth != null && request.auth.uid == uid;
@@ -21,49 +30,50 @@ service cloud.firestore {
         isAdmin() ||
         (
           request.auth.uid == uid &&
-          !request.resource.data.diff(resource.data).affectedKeys().hasAny(['isBanned', 'isVerifiedBlue', 'rank', 'tier', 'isAdmin'])
+          isNotBanned() &&
+          !request.resource.data.diff(resource.data).affectedKeys().hasAny(['isBanned', 'bannedAt', 'bannedReason', 'bannedBy', 'isVerifiedBlue', 'rank', 'tier', 'isAdmin'])
         ) || 
         request.resource.data.diff(resource.data).affectedKeys().hasOnly(['followersCount', 'followingCount', 'postsCount']) ||
         request.resource.data.diff(resource.data).affectedKeys().hasOnly(['coins', 'updatedAt']) ||
         request.resource.data.diff(resource.data).affectedKeys().hasOnly(['lastWinProofAt'])
       );
-      allow delete: if request.auth != null && (request.auth.uid == uid || isAdmin());
+      allow delete: if request.auth != null && (isAdmin() || (request.auth.uid == uid && isNotBanned()));
 
       // Saved News subcollection
       match /saved_news/{newsId} {
-        allow read, write: if request.auth != null && request.auth.uid == uid;
+        allow read, write: if request.auth != null && request.auth.uid == uid && isNotBanned();
       }
     }
 
     // Gaming News
     match /gaming_news/{newsId} {
       allow read: if true;
-      allow write: if true;
+      allow write: if isAdmin();
     }
 
-    // Posts: anyone can read, only owner can delete own post
+    // Posts: anyone can read, banned users cannot create or update
     match /posts/{postId} {
       allow read: if true;
-      allow create: if request.auth != null;
-      allow update: if request.auth != null;
-      allow delete: if request.auth != null && resource.data.userId == request.auth.uid;
+      allow create: if request.auth != null && isNotBanned();
+      allow update: if request.auth != null && (isAdmin() || isNotBanned());
+      allow delete: if request.auth != null && (isAdmin() || (resource.data.userId == request.auth.uid && isNotBanned()));
 
       match /likes/{userId} {
         allow read: if true;
-        allow write: if request.auth != null && request.auth.uid == userId;
+        allow write: if request.auth != null && request.auth.uid == userId && isNotBanned();
       }
 
       match /comments/{commentId} {
         allow read: if true;
-        allow create: if request.auth != null;
-        allow delete: if request.auth != null && resource.data.userId == request.auth.uid;
+        allow create: if request.auth != null && isNotBanned();
+        allow delete: if request.auth != null && (isAdmin() || (resource.data.userId == request.auth.uid && isNotBanned()));
       }
     }
 
-    // Follows
+    // Follows: banned users cannot follow/unfollow
     match /follows/{followId} {
       allow read: if true;
-      allow write: if request.auth != null;
+      allow write: if request.auth != null && isNotBanned();
     }
 
     // Notifications
@@ -74,61 +84,77 @@ service cloud.firestore {
     // Squads / LFG posts
     match /lfg_posts/{postId} {
       allow read: if true;
-      allow create: if request.auth != null;
-      allow update: if request.auth != null;
-      allow delete: if request.auth != null && (resource.data.ownerId == request.auth.uid || resource.data.userId == request.auth.uid);
+      allow create: if request.auth != null && isNotBanned();
+      allow update: if request.auth != null && (isAdmin() || isNotBanned());
+      allow delete: if request.auth != null && (isAdmin() || ((resource.data.ownerId == request.auth.uid || resource.data.userId == request.auth.uid) && isNotBanned()));
 
       match /requests/{reqId} {
-        allow read, write: if request.auth != null;
+        allow read, write: if request.auth != null && isNotBanned();
       }
     }
 
     // Squad chat
     match /chats/{postId} {
-      allow read, write: if request.auth != null && (
+      allow read, write: if request.auth != null && isNotBanned() && (
         resource == null ||
         request.auth.uid in resource.data.members || 
         resource.data.leaderUid == request.auth.uid ||
         resource.data.ownerId == request.auth.uid ||
         request.auth.uid in request.resource.data.members
       );
-      allow create: if request.auth != null;
-      allow delete: if request.auth != null;
+      allow create: if request.auth != null && isNotBanned();
+      allow delete: if request.auth != null && (isAdmin() || isNotBanned());
 
       match /messages/{messageId} {
-        allow read, write: if request.auth != null;
+        allow read, write: if request.auth != null && isNotBanned();
       }
     }
 
+    // Squads
     match /squads/{squadId} {
       allow read: if true;
-      allow create, update: if request.auth != null;
-      allow delete: if request.auth != null;
+      allow create, update: if request.auth != null && isNotBanned();
+      allow delete: if request.auth != null && (isAdmin() || isNotBanned());
 
       match /requests/{requestId} {
-        allow read, write: if request.auth != null;
+        allow read, write: if request.auth != null && isNotBanned();
       }
 
       match /messages/{messageId} {
-        allow read, write: if request.auth != null;
+        allow read, write: if request.auth != null && isNotBanned();
       }
     }
 
     match /squad_posts/{squadId} {
       allow read: if true;
-      allow create, update: if request.auth != null;
-      allow delete: if request.auth != null;
+      allow create, update: if request.auth != null && isNotBanned();
+      allow delete: if request.auth != null && (isAdmin() || isNotBanned());
 
       match /messages/{messageId} {
-        allow read, write: if request.auth != null;
+        allow read, write: if request.auth != null && isNotBanned();
       }
     }
 
+    // Clips / video clips if present
+    match /clips/{clipId} {
+      allow read: if true;
+      allow create: if request.auth != null && isNotBanned();
+      allow update: if request.auth != null && (isAdmin() || isNotBanned());
+      allow delete: if request.auth != null && (isAdmin() || (resource.data.userId == request.auth.uid && isNotBanned()));
+    }
+
+    // Rooms
+    match /rooms/{roomId} {
+      allow read: if true;
+      allow create: if request.auth != null && isNotBanned();
+      allow update: if request.auth != null && (isAdmin() || isNotBanned());
+      allow delete: if request.auth != null && (isAdmin() || isNotBanned());
+    }
+
     // Win Proofs Collection
-    // Status must be 'pending' upon creation, submittedBy must match auth.uid, status cannot be set to 'rewarded' by client
     match /win_proofs/{proofId} {
       allow read: if request.auth != null;
-      allow create: if request.auth != null
+      allow create: if request.auth != null && isNotBanned()
                     && request.resource.data.status == 'pending'
                     && request.resource.data.submittedBy == request.auth.uid;
       allow update: if request.auth != null
@@ -139,7 +165,8 @@ service cloud.firestore {
 
     // Match all other documents
     match /{document=**} {
-      allow read, write: if true;
+      allow read: if true;
+      allow write: if request.auth != null && isNotBanned();
     }
   }
 }

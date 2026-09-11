@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 import 'package:flutter/foundation.dart';
@@ -23,6 +24,8 @@ class GamerAuthService {
   final ValueNotifier<GamerUser?> currentGamerNotifier = ValueNotifier<GamerUser?>(null);
   final ValueNotifier<bool> isLoadingNotifier = ValueNotifier<bool>(true);
 
+  StreamSubscription<DocumentSnapshot>? _userDocSubscription;
+
   User? get currentUser => _auth.currentUser;
   String? get currentUid => _auth.currentUser?.uid;
   bool get isAuthenticated => _auth.currentUser != null;
@@ -32,13 +35,41 @@ class GamerAuthService {
 
   Future<void> init() async {
     _auth.authStateChanges().listen((user) async {
+      _userDocSubscription?.cancel();
+      _userDocSubscription = null;
+
       if (user != null) {
-        await refreshCurrentGamer();
+        // Setup real-time listener for current user's document
+        _listenToUserDoc(user.uid);
       } else {
         currentGamerNotifier.value = null;
         isLoadingNotifier.value = false;
       }
     });
+  }
+
+  void _listenToUserDoc(String uid) {
+    _userDocSubscription?.cancel();
+    _userDocSubscription = _firestore.collection('users').doc(uid).snapshots().listen(
+      (doc) {
+        if (doc.exists && doc.data() != null) {
+          final data = doc.data()!;
+          if (data['coins'] == null) {
+            _firestore.collection('users').doc(uid).set({'coins': 100}, SetOptions(merge: true));
+          }
+          final gamer = GamerUser.fromFirestore(doc);
+          currentGamerNotifier.value = gamer;
+          isLoadingNotifier.value = false;
+        } else {
+          currentGamerNotifier.value = null;
+          isLoadingNotifier.value = false;
+        }
+      },
+      onError: (err) {
+        debugPrint('[AuthService] Error in user doc listener: $err');
+        isLoadingNotifier.value = false;
+      },
+    );
   }
 
   Future<GamerUser?> refreshCurrentGamer() async {
@@ -326,6 +357,8 @@ class GamerAuthService {
   /// Signs out from FirebaseAuth, GoogleSignIn, and calls GoogleSignIn().disconnect()
   /// to ensure Google account chooser is displayed when logging in with another account.
   Future<void> logout() async {
+    _userDocSubscription?.cancel();
+    _userDocSubscription = null;
     try {
       await _auth.signOut();
     } catch (e) {
