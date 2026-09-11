@@ -48,6 +48,9 @@ class GamerUser {
   final int reportsCount;
   final bool isVerified;
   final String verificationStatus; // 'none', 'pending', 'verified', 'rejected'
+  final bool isVerifiedBlue;
+  final bool isAdmin;
+  final bool isBanned;
   final int clipsCount;
   final int squadRoomsCount;
   final DateTime? verificationAppliedAt;
@@ -74,6 +77,9 @@ class GamerUser {
     this.reportsCount = 0,
     this.isVerified = false,
     this.verificationStatus = 'none',
+    this.isVerifiedBlue = false,
+    this.isAdmin = false,
+    this.isBanned = false,
     this.clipsCount = 0,
     this.squadRoomsCount = 0,
     this.verificationAppliedAt,
@@ -85,7 +91,7 @@ class GamerUser {
 
   bool get isPendingVerification => verificationStatus == 'pending';
   bool get isRejectedVerification => verificationStatus == 'rejected';
-  bool get isVerifiedBadge => isVerified || verificationStatus == 'verified';
+  bool get isVerifiedBadge => isVerified || isVerifiedBlue || verificationStatus == 'verified';
 
   GamerRankBadge getRankBadge() {
     final lowerRank = rank.toLowerCase().trim();
@@ -191,7 +197,8 @@ class GamerUser {
     }
 
     final rawStatus = data['verificationStatus']?.toString().toLowerCase().trim();
-    final bool rawVerified = data['isVerified'] == true || rawStatus == 'verified';
+    final bool rawVerifiedBlue = data['isVerifiedBlue'] == true;
+    final bool rawVerified = data['isVerified'] == true || rawVerifiedBlue || rawStatus == 'verified';
     final String status = rawStatus != null && rawStatus.isNotEmpty
         ? rawStatus
         : (rawVerified ? 'verified' : 'none');
@@ -214,6 +221,9 @@ class GamerUser {
       reportsCount: (data['reportsCount'] as num?)?.toInt() ?? 0,
       isVerified: rawVerified,
       verificationStatus: status,
+      isVerifiedBlue: rawVerifiedBlue || rawVerified,
+      isAdmin: data['isAdmin'] == true,
+      isBanned: data['isBanned'] == true,
       clipsCount: (data['clipsCount'] as num?)?.toInt() ?? 0,
       squadRoomsCount: (data['squadRoomsCount'] as num?)?.toInt() ?? 0,
       verificationAppliedAt: appliedAt,
@@ -250,6 +260,9 @@ class GamerUser {
       'reportsCount': reportsCount,
       'isVerified': isVerified,
       'verificationStatus': verificationStatus,
+      'isVerifiedBlue': isVerifiedBlue,
+      'isAdmin': isAdmin,
+      'isBanned': isBanned,
       'clipsCount': clipsCount,
       'squadRoomsCount': squadRoomsCount,
       'verificationAppliedAt': verificationAppliedAt != null ? Timestamp.fromDate(verificationAppliedAt!) : null,
@@ -291,6 +304,9 @@ class GamerUser {
     int? reportsCount,
     bool? isVerified,
     String? verificationStatus,
+    bool? isVerifiedBlue,
+    bool? isAdmin,
+    bool? isBanned,
     int? clipsCount,
     int? squadRoomsCount,
     DateTime? verificationAppliedAt,
@@ -317,6 +333,9 @@ class GamerUser {
       reportsCount: reportsCount ?? this.reportsCount,
       isVerified: isVerified ?? this.isVerified,
       verificationStatus: verificationStatus ?? this.verificationStatus,
+      isVerifiedBlue: isVerifiedBlue ?? this.isVerifiedBlue,
+      isAdmin: isAdmin ?? this.isAdmin,
+      isBanned: isBanned ?? this.isBanned,
       clipsCount: clipsCount ?? this.clipsCount,
       squadRoomsCount: squadRoomsCount ?? this.squadRoomsCount,
       verificationAppliedAt: verificationAppliedAt ?? this.verificationAppliedAt,

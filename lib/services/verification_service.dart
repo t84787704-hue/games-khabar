@@ -177,6 +177,7 @@ class VerificationService {
       }
       final data = doc.data()!;
       final bool isVerified = data['isVerified'] == true ||
+          data['isVerifiedBlue'] == true ||
           data['verificationStatus'] == 'verified';
       _verifiedCache[userId] = isVerified;
       return isVerified;

@@ -1158,6 +1158,10 @@ class _GamerProfileScreenState extends State<GamerProfileScreen> with SingleTick
                               size: 16,
                               showLabel: true,
                             ),
+                            if (user.isVerifiedBlue || user.isVerified) ...[
+                              const SizedBox(width: 5),
+                              const Icon(Icons.verified, color: Color(0xFF1D9BF0), size: 18),
+                            ],
                           ],
                         ),
                         const SizedBox(height: 2),

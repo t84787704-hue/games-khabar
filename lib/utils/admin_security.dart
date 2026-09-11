@@ -1,4 +1,5 @@
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 
 /// In-memory Admin Session manager to synchronize with Firebase Authentication
@@ -37,15 +38,40 @@ class AdminSession {
   }
 }
 
-/// Checks if currently authenticated user is signed in with Firebase Auth
-bool isAdminUser() {
+/// Checks if currently authenticated user is admin:
+/// email == "tufailm483@gmail.com" OR userDoc isAdmin == true
+bool isEmailAdmin(String? email) {
+  if (email == null) return false;
+  return email.trim().toLowerCase() == 'tufailm483@gmail.com';
+}
+
+bool isAdminUser({Map<String, dynamic>? userDocData, bool? docIsAdmin}) {
   try {
     final user = FirebaseAuth.instance.currentUser;
-    if (user != null && user.email != null && user.email!.isNotEmpty) {
+    if (user != null && isEmailAdmin(user.email)) {
       return true;
     }
+    if (docIsAdmin == true) return true;
+    if (userDocData != null && userDocData['isAdmin'] == true) return true;
   } catch (_) {}
-  return AdminSession.isLoggedIn;
+  return false;
+}
+
+/// Helper stream to watch current user's admin state in real time
+Stream<bool> watchIsAdmin() {
+  final user = FirebaseAuth.instance.currentUser;
+  if (user == null) return Stream.value(false);
+  if (isEmailAdmin(user.email)) return Stream.value(true);
+
+  return FirebaseFirestore.instance
+      .collection('users')
+      .doc(user.uid)
+      .snapshots()
+      .map((snapshot) {
+    if (!snapshot.exists) return false;
+    final data = snapshot.data();
+    return data?['isAdmin'] == true || isEmailAdmin(user.email);
+  });
 }
 
 /// Optional confirmation dialog before performing admin actions

@@ -1,4 +1,7 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
+import 'package:firebase_auth/firebase_auth.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
 import '../constants/gamer_theme.dart';
 import '../services/gamer_auth_service.dart';
 import 'gamer_feed_screen.dart';
@@ -7,6 +10,7 @@ import 'clips_screen.dart';
 import 'tournament_board_screen.dart';
 import 'gamer_profile_screen.dart';
 import 'create_gamer_id_screen.dart';
+import 'gamer_admin_dashboard_screen.dart';
 
 class GamerMainNavigationScreen extends StatefulWidget {
   final int initialIndex;
@@ -19,12 +23,53 @@ class GamerMainNavigationScreen extends StatefulWidget {
 
 class _GamerMainNavigationScreenState extends State<GamerMainNavigationScreen> {
   late int _currentIndex;
+  bool _isAdmin = false;
+  StreamSubscription? _adminSub;
 
   @override
   void initState() {
     super.initState();
     _currentIndex = widget.initialIndex;
     _checkUsernameSetup();
+    _checkAdminStatus();
+  }
+
+  void _checkAdminStatus() {
+    final user = FirebaseAuth.instance.currentUser;
+    // Condition 1: FirebaseAuth currentUser email == "tufailm483@gmail.com"
+    if (user != null && user.email?.trim().toLowerCase() == 'tufailm483@gmail.com') {
+      setState(() => _isAdmin = true);
+      return;
+    }
+
+    // Condition 2: userDoc isAdmin == true
+    if (user != null) {
+      _adminSub = FirebaseFirestore.instance
+          .collection('users')
+          .doc(user.uid)
+          .snapshots()
+          .listen((snapshot) {
+        if (!snapshot.exists) return;
+        final data = snapshot.data();
+        final isDocAdmin = data?['isAdmin'] == true;
+        final isEmailMatch = user.email?.trim().toLowerCase() == 'tufailm483@gmail.com';
+        final newIsAdmin = isDocAdmin || isEmailMatch;
+        if (newIsAdmin != _isAdmin && mounted) {
+          setState(() {
+            _isAdmin = newIsAdmin;
+            if (!_isAdmin && _currentIndex > 4) {
+              _currentIndex = 0;
+            }
+          });
+        }
+      });
+    }
+  }
+
+  @override
+  void dispose() {
+    _adminSub?.cancel();
+    super.dispose();
   }
 
   void _checkUsernameSetup() {
@@ -41,18 +86,15 @@ class _GamerMainNavigationScreenState extends State<GamerMainNavigationScreen> {
 
   @override
   Widget build(BuildContext context) {
-    // 5 Viral Gaming Tabs:
-    // Tab 0: Feed (Home)
-    // Tab 1: Squads (Squad Finder LFG System)
-    // Tab 2: Clips (Memes & Clips Zone)
-    // Tab 3: Rooms (Tournament / Custom Room Board)
-    // Tab 4: Profile (Gamer Profile & Badges)
-    final screens = [
+    // Normal tabs: Feed, Squads, Clips, Rooms, Profile
+    // Admin tab: Admin (shield icon) visible ONLY to admin
+    final screens = <Widget>[
       const GamerFeedScreen(),
       const SquadFinderScreen(),
       ClipsScreen(isTabActive: _currentIndex == 2),
       const TournamentBoardScreen(),
       const GamerProfileScreen(),
+      if (_isAdmin) const GamerAdminDashboardScreen(),
     ];
 
     return Scaffold(
@@ -63,7 +105,7 @@ class _GamerMainNavigationScreenState extends State<GamerMainNavigationScreen> {
         top: true,
         bottom: true,
         child: IndexedStack(
-          index: _currentIndex,
+          index: _currentIndex.clamp(0, screens.length - 1),
           children: screens,
         ),
       ),
@@ -121,6 +163,16 @@ class _GamerMainNavigationScreenState extends State<GamerMainNavigationScreen> {
                   label: 'Profile',
                   isSelected: _currentIndex == 4,
                 ),
+
+                // Tab 5: Admin (Visible ONLY to Admin)
+                if (_isAdmin)
+                  _buildNavItem(
+                    index: 5,
+                    icon: Icons.shield_rounded,
+                    label: 'Admin',
+                    isSelected: _currentIndex == 5,
+                    activeColor: const Color(0xFF00FF88),
+                  ),
               ],
             ),
           ),
@@ -145,26 +197,27 @@ class _GamerMainNavigationScreenState extends State<GamerMainNavigationScreen> {
     required IconData icon,
     required String label,
     required bool isSelected,
+    Color activeColor = const Color(0xFF00E5FF),
   }) {
     return InkWell(
       onTap: () => _onTabTapped(index),
       borderRadius: BorderRadius.circular(12),
       child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
+        padding: EdgeInsets.symmetric(horizontal: _isAdmin ? 8 : 12, vertical: 6),
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
             Icon(
               icon,
-              size: 24,
-              color: isSelected ? const Color(0xFF00E5FF) : GamerTheme.textMuted,
+              size: 22,
+              color: isSelected ? activeColor : GamerTheme.textMuted,
             ),
             const SizedBox(height: 3),
             Text(
               label,
               style: TextStyle(
-                color: isSelected ? const Color(0xFF00E5FF) : GamerTheme.textMuted,
-                fontSize: 11,
+                color: isSelected ? activeColor : GamerTheme.textMuted,
+                fontSize: 10,
                 fontWeight: isSelected ? FontWeight.w800 : FontWeight.w500,
               ),
             ),

@@ -2,17 +2,31 @@ rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
     
+    // Admin check helper
+    function isAdmin() {
+      return request.auth != null && (
+        request.auth.token.email == 'tufailm483@gmail.com' ||
+        (exists(/databases/$(database)/documents/users/$(request.auth.uid)) && 
+         get(/databases/$(database)/documents/users/$(request.auth.uid)).data.isAdmin == true)
+      );
+    }
+
     // Users: anyone can read profiles, user can edit only own users/{uid}
+    // Only admin can write isBanned, isVerifiedBlue, rank, tier
     match /users/{uid} {
       allow read: if true;
       allow create: if request.auth != null && request.auth.uid == uid;
       allow update: if request.auth != null && (
-        request.auth.uid == uid || 
+        isAdmin() ||
+        (
+          request.auth.uid == uid &&
+          !request.resource.data.diff(resource.data).affectedKeys().hasAny(['isBanned', 'isVerifiedBlue', 'rank', 'tier', 'isAdmin'])
+        ) || 
         request.resource.data.diff(resource.data).affectedKeys().hasOnly(['followersCount', 'followingCount', 'postsCount']) ||
         request.resource.data.diff(resource.data).affectedKeys().hasOnly(['coins', 'updatedAt']) ||
         request.resource.data.diff(resource.data).affectedKeys().hasOnly(['lastWinProofAt'])
       );
-      allow delete: if request.auth != null && request.auth.uid == uid;
+      allow delete: if request.auth != null && (request.auth.uid == uid || isAdmin());
 
       // Saved News subcollection
       match /saved_news/{newsId} {
