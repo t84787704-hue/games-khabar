@@ -18,6 +18,7 @@ class GamerTheme {
   static const Color flameOrange = Color(0xFFFF8A00);
   static const Color redAccent = Color(0xFFFF3366);
   static const Color neonGreen = Color(0xFF00E676);
+  static const Color accentGreen = Color(0xFF00E676);
 
   // Typography
   static const Color textWhite = Color(0xFFF8FAFC);
