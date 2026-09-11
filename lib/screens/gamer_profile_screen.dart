@@ -1819,11 +1819,66 @@ class _GamerProfileScreenState extends State<GamerProfileScreen> with SingleTick
   // ===================== MULTI-GAME RANK VERIFICATION =====================
 
   static const Map<String, List<String>> _kGameRankOptions = {
-    'BGMI': ['Bronze', 'Silver', 'Gold', 'Platinum', 'Diamond', 'Crown', 'ACE', 'Ace Master', 'Ace Dominator', 'Conqueror'],
-    'PUBG Mobile': ['Bronze', 'Silver', 'Gold', 'Platinum', 'Diamond', 'Crown', 'ACE', 'Ace Master', 'Ace Dominator', 'Conqueror'],
-    'Free Fire': ['Bronze', 'Silver', 'Gold', 'Platinum', 'Diamond', 'Heroic', 'Grandmaster'],
-    'COD Mobile': ['Rookie', 'Veteran', 'Elite', 'Pro', 'Master', 'Grandmaster', 'Legendary'],
-    'Valorant': ['Iron', 'Bronze', 'Silver', 'Gold', 'Platinum', 'Diamond', 'Ascendant', 'Immortal', 'Radiant'],
+    'BGMI': [
+      'Crown I',
+      'Crown II',
+      'Crown III',
+      'Crown IV',
+      'Crown V',
+      'ACE',
+      'ACE Master',
+      'ACE Dominator',
+      'Conqueror',
+      'Top 100 Conqueror',
+    ],
+    'PUBG Mobile': [
+      'Crown I',
+      'Crown II',
+      'Crown III',
+      'Crown IV',
+      'Crown V',
+      'ACE',
+      'ACE Master',
+      'ACE Dominator',
+      'Conqueror',
+      'Top 100 Conqueror',
+    ],
+    'Free Fire': [
+      'Diamond V',
+      'Heroic',
+      'Elite Heroic',
+      'Master',
+      'Elite Master',
+      'Grandmaster',
+      'Top 300 Grandmaster',
+      'Top 100 Grandmaster',
+      'Regional Top',
+      'World Top',
+    ],
+    'COD Mobile': [
+      'Pro III',
+      'Pro IV',
+      'Pro V',
+      'Master I',
+      'Master II',
+      'Master III',
+      'Master IV',
+      'Master V',
+      'Legendary',
+      'Top 5000 Legendary',
+    ],
+    'Valorant': [
+      'Diamond 3',
+      'Ascendant 1',
+      'Ascendant 2',
+      'Ascendant 3',
+      'Immortal 1',
+      'Immortal 2',
+      'Immortal 3',
+      'Radiant',
+      'Top 500 Radiant',
+      'Regional Radiant',
+    ],
   };
 
   IconData _getGameIcon(String gameName) {
@@ -1891,8 +1946,8 @@ class _GamerProfileScreenState extends State<GamerProfileScreen> with SingleTick
                 ),
                 icon: const Icon(Icons.add_moderator_rounded, size: 14),
                 label: const Text(
-                  'Add / Verify Game Rank',
-                  style: TextStyle(fontSize: 11.5, fontWeight: FontWeight.w800),
+                  'Add / Verify Game Rank (Optional - For Pro Players Only)',
+                  style: TextStyle(fontSize: 11, fontWeight: FontWeight.w800),
                 ),
               ),
           ],
@@ -1913,13 +1968,13 @@ class _GamerProfileScreenState extends State<GamerProfileScreen> with SingleTick
                 const Icon(Icons.shield_outlined, color: Color(0xFF8B949E), size: 30),
                 const SizedBox(height: 8),
                 const Text(
-                  'No verified game ranks yet',
+                  'No verified game ranks yet (Optional)',
                   style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 13),
                 ),
                 const SizedBox(height: 4),
                 Text(
                   isOwnProfile
-                      ? 'Submit your in-game UID and rank screenshot proof to get official verified status!'
+                      ? 'Submit your in-game UID and rank screenshot proof to get official verified status! (100% Optional for Pro Players)'
                       : 'This player has not verified any competitive game ranks yet.',
                   textAlign: TextAlign.center,
                   style: const TextStyle(color: Color(0xFF8B949E), fontSize: 11.5),
@@ -1937,8 +1992,8 @@ class _GamerProfileScreenState extends State<GamerProfileScreen> with SingleTick
                     ),
                     icon: const Icon(Icons.add_photo_alternate_rounded, size: 16),
                     label: const Text(
-                      'Add / Verify Game Rank',
-                      style: TextStyle(fontWeight: FontWeight.w900, fontSize: 12),
+                      'Add / Verify Game Rank (Optional - For Pro Players Only)',
+                      style: TextStyle(fontWeight: FontWeight.w900, fontSize: 11.5),
                     ),
                   ),
                 ],
@@ -2263,6 +2318,7 @@ class _AddVerifyGameRankSheetState extends State<AddVerifyGameRankSheet> {
               'screenshotUrl': downloadUrl,
               'status': 'pending',
               'submittedAt': Timestamp.now(),
+              'ownerUid': widget.user.uid,
             });
             replaced = true;
           } else {
@@ -2282,6 +2338,7 @@ class _AddVerifyGameRankSheetState extends State<AddVerifyGameRankSheet> {
           'screenshotUrl': downloadUrl,
           'status': 'pending',
           'submittedAt': Timestamp.now(),
+          'ownerUid': widget.user.uid,
         });
       }
 
@@ -2315,7 +2372,7 @@ class _AddVerifyGameRankSheetState extends State<AddVerifyGameRankSheet> {
   @override
   Widget build(BuildContext context) {
     final bottomInset = MediaQuery.of(context).viewInsets.bottom;
-    final availableRanks = _GamerProfileScreenState._kGameRankOptions[_selectedGame] ?? ['Bronze'];
+    final availableRanks = _GamerProfileScreenState._kGameRankOptions[_selectedGame] ?? ['Crown I'];
 
     return Container(
       padding: EdgeInsets.fromLTRB(20, 16, 20, 20 + bottomInset),
@@ -2362,11 +2419,11 @@ class _AddVerifyGameRankSheetState extends State<AddVerifyGameRankSheet> {
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         Text(
-                          'Add / Verify Game Rank',
+                          'Add / Verify Game Rank (Optional)',
                           style: TextStyle(color: Colors.white, fontWeight: FontWeight.w900, fontSize: 16),
                         ),
                         Text(
-                          'Upload screenshot proof to verify in-game UID & Rank',
+                          'Upload screenshot proof to verify in-game UID & Rank (For Pro Players Only)',
                           style: TextStyle(color: Color(0xFF8B949E), fontSize: 11),
                         ),
                       ],

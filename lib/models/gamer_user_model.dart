@@ -42,6 +42,7 @@ class UserGameRank {
   final String status; // 'pending' | 'approved' | 'rejected'
   final DateTime? submittedAt;
   final String? rejectReason;
+  final String ownerUid;
 
   const UserGameRank({
     this.id = '',
@@ -54,6 +55,7 @@ class UserGameRank {
     this.status = 'pending',
     this.submittedAt,
     this.rejectReason,
+    this.ownerUid = '',
   });
 
   factory UserGameRank.fromMap(Map<String, dynamic> map) {
@@ -78,6 +80,7 @@ class UserGameRank {
       status: map['status']?.toString().toLowerCase().trim() ?? 'pending',
       submittedAt: submitted ?? DateTime.now(),
       rejectReason: map['rejectReason']?.toString(),
+      ownerUid: map['ownerUid']?.toString() ?? '',
     );
   }
 
@@ -93,6 +96,7 @@ class UserGameRank {
       'status': status,
       'submittedAt': submittedAt != null ? Timestamp.fromDate(submittedAt!) : Timestamp.now(),
       if (rejectReason != null && rejectReason!.isNotEmpty) 'rejectReason': rejectReason,
+      if (ownerUid.isNotEmpty) 'ownerUid': ownerUid,
     };
   }
 
@@ -107,6 +111,7 @@ class UserGameRank {
     String? status,
     DateTime? submittedAt,
     String? rejectReason,
+    String? ownerUid,
   }) {
     return UserGameRank(
       id: id ?? this.id,
@@ -119,6 +124,7 @@ class UserGameRank {
       status: status ?? this.status,
       submittedAt: submittedAt ?? this.submittedAt,
       rejectReason: rejectReason ?? this.rejectReason,
+      ownerUid: ownerUid ?? this.ownerUid,
     );
   }
 }

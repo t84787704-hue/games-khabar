@@ -1311,11 +1311,13 @@ class _GamerAdminDashboardScreenState extends State<GamerAdminDashboardScreen>
 
   Future<void> _approveRankVerification(_RankQueueItem item) async {
     try {
+      final targetDocId = item.game.ownerUid.isNotEmpty ? item.game.ownerUid : item.user.uid;
       final updatedGames = List<UserGameRank>.from(item.user.games);
       final approvedGame = item.game.copyWith(
         isVerified: true,
         verifiedRank: item.game.claimedRank,
         status: 'approved',
+        ownerUid: targetDocId,
       );
       updatedGames[item.gameIndex] = approvedGame;
 
@@ -1327,7 +1329,7 @@ class _GamerAdminDashboardScreenState extends State<GamerAdminDashboardScreen>
         newMainRank = item.game.claimedRank;
       }
 
-      await FirebaseFirestore.instance.collection('users').doc(item.user.uid).set({
+      await FirebaseFirestore.instance.collection('users').doc(targetDocId).set({
         'games': updatedGames.map((g) => g.toMap()).toList(),
         'rank': newMainRank,
         'tier': newMainRank,
@@ -1355,15 +1357,17 @@ class _GamerAdminDashboardScreenState extends State<GamerAdminDashboardScreen>
 
   Future<void> _rejectRankVerification(_RankQueueItem item, String reason) async {
     try {
+      final targetDocId = item.game.ownerUid.isNotEmpty ? item.game.ownerUid : item.user.uid;
       final updatedGames = List<UserGameRank>.from(item.user.games);
       final rejectedGame = item.game.copyWith(
         isVerified: false,
         status: 'rejected',
         rejectReason: reason.trim().isNotEmpty ? reason.trim() : 'Screenshot does not verify Game ID and Rank',
+        ownerUid: targetDocId,
       );
       updatedGames[item.gameIndex] = rejectedGame;
 
-      await FirebaseFirestore.instance.collection('users').doc(item.user.uid).set({
+      await FirebaseFirestore.instance.collection('users').doc(targetDocId).set({
         'games': updatedGames.map((g) => g.toMap()).toList(),
         'updatedAt': FieldValue.serverTimestamp(),
       }, SetOptions(merge: true));
