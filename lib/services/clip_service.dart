@@ -2,7 +2,6 @@ import 'dart:io';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import '../models/clip_model.dart';
 import 'cloudinary_service.dart';
-import 'video_compress_service.dart';
 
 /// Service for managing gaming clips and memes.
 /// Uses 100% Cloudinary for video storage (ZERO Firebase Storage dependencies)
@@ -54,22 +53,14 @@ class ClipService {
     bool Function()? isCancelled,
   }) async {
     try {
-      print('🚀 [CLIP_SERVICE] Step 0: Checking video compression...');
-      final fileToUpload = await VideoCompressService.compressIfNeeded(
-        file,
-        totalDurationSec: trimmedDuration > 0 ? trimmedDuration : 30.0,
-        onProgress: onProgress != null ? (p) => onProgress(p * 0.35) : null,
-        isCancelled: isCancelled,
-      );
-
-      print('🚀 [CLIP_SERVICE] Step 1: Uploading video file to Cloudinary with progress...');
+      print('🚀 [CLIP_SERVICE] Uploading video file to Cloudinary with server-side auto quality...');
       
       final uploadResult = await CloudinaryService.uploadVideoWithProgress(
-        file: fileToUpload,
+        file: file,
         userId: userId,
         gameTag: gameTag,
         caption: caption,
-        onProgress: onProgress != null ? (p) => onProgress(0.35 + (p * 0.6)) : null,
+        onProgress: onProgress,
         isCancelled: isCancelled,
       );
 

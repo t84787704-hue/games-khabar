@@ -5,13 +5,14 @@ import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:image_picker/image_picker.dart';
+import 'package:file_picker/file_picker.dart';
+import 'package:path_provider/path_provider.dart';
 import 'package:video_player/video_player.dart';
 import 'package:http/http.dart' as http;
 import '../constants/gamer_theme.dart';
 import '../models/gamer_user_model.dart';
 import '../services/gamer_auth_service.dart';
 import '../services/cloudinary_service.dart';
-import '../services/video_compress_service.dart';
 
 /// Full-featured, completely rebuilt Clip & Meme upload modal.
 /// - Clear, isolated buttons (no accidental gallery triggers)
@@ -144,7 +145,7 @@ class _ClipUploadModalSheetState extends State<ClipUploadModalSheet> {
   // 1. VIDEO SELECTION METHODS
   // ==========================================
 
-  /// Pick video or media from phone gallery with fallback
+  /// Pick video from gallery (uses FilePicker with content URI copy fix + ImagePicker fallback)
   Future<void> _pickVideoFromGallery({bool mediaFallback = false}) async {
     if (_isPickerActive || _isUploading) return;
     setState(() {
@@ -154,64 +155,63 @@ class _ClipUploadModalSheetState extends State<ClipUploadModalSheet> {
     });
 
     try {
-      final picker = ImagePicker();
-      XFile? picked;
+      File? finalFile;
+      String? filename;
 
-      if (mediaFallback) {
-        // Pick any media (video, gif, meme)
-        try {
-          picked = await picker.pickMedia();
-        } catch (e) {
-          debugPrint('pickMedia error: $e, falling back to pickVideo');
-          picked = await picker.pickVideo(source: ImageSource.gallery);
+      // 1. Primary: FilePicker with withData: true (fixes Android content:// permission issues)
+      try {
+        final result = await FilePicker.platform.pickFiles(
+          type: FileType.video,
+          withData: true,
+        );
+        if (result != null && result.files.isNotEmpty) {
+          final pickedItem = result.files.single;
+          filename = pickedItem.name;
+          if (pickedItem.path != null && File(pickedItem.path!).existsSync()) {
+            finalFile = File(pickedItem.path!);
+          } else if (pickedItem.bytes != null) {
+            final tempDir = await getTemporaryDirectory();
+            final temp = File('${tempDir.path}/clip_${DateTime.now().millisecondsSinceEpoch}.mp4');
+            await temp.writeAsBytes(pickedItem.bytes!);
+            finalFile = temp;
+          }
         }
-      } else {
-        // Try pickVideo first
+      } catch (fpErr) {
+        debugPrint('FilePicker note: $fpErr, attempting ImagePicker fallback');
+      }
+
+      // 2. Fallback: ImagePicker
+      if (finalFile == null) {
+        final picker = ImagePicker();
+        XFile? picked;
         try {
           picked = await picker.pickVideo(source: ImageSource.gallery);
-        } catch (videoError) {
-          debugPrint('pickVideo error: $videoError, trying pickMedia fallback');
+        } catch (_) {
           try {
             picked = await picker.pickMedia();
+          } catch (_) {}
+        }
+        if (picked != null) {
+          final tempDir = await getTemporaryDirectory();
+          final temp = File('${tempDir.path}/clip_${DateTime.now().millisecondsSinceEpoch}.mp4');
+          try {
+            final bytes = await picked.readAsBytes();
+            await temp.writeAsBytes(bytes);
+            finalFile = temp;
           } catch (_) {
-            rethrow;
+            finalFile = File(picked.path);
           }
+          filename = picked.name;
         }
       }
 
-      if (picked == null) {
+      if (finalFile == null) {
         if (mounted) {
           setState(() {
-            _pickerNotice = 'ℹ️ No video was selected. If your phone or emulator gallery is empty, tap one of the Instant Clips below to test immediately!';
+            _pickerNotice = 'ℹ️ No video was selected. Tap an Instant Clip below or pick a video from gallery.';
           });
         }
         return;
-      }
-
-      if (mounted) {
-        setState(() {
-          _pickerNotice = 'Loading selected video...';
-        });
-      }
-
-      // Copy file to local temp cache to avoid scoped storage or permission URI locks
-      final sourceFile = File(picked.path);
-      final filename = picked.name.isNotEmpty ? picked.name : picked.path.split('/').last;
-      final ext = filename.contains('.') ? filename.split('.').last : 'mp4';
-      final safePath = '${Directory.systemTemp.path}/gamer_clip_${DateTime.now().millisecondsSinceEpoch}.$ext';
-
-      File finalFile;
-      try {
-        final bytes = await picked.readAsBytes();
-        final destination = File(safePath);
-        await destination.writeAsBytes(bytes);
-        finalFile = destination;
-      } catch (_) {
-        try {
-          finalFile = await sourceFile.copy(safePath);
-        } catch (_) {
-          finalFile = sourceFile;
-        }
       }
 
       int size = 0;
@@ -219,23 +219,19 @@ class _ClipUploadModalSheetState extends State<ClipUploadModalSheet> {
         size = await finalFile.length();
       } catch (_) {}
 
-      const maxBytes = 350 * 1024 * 1024; // 350MB (auto-compressed before upload)
-      if (size > maxBytes) {
-        if (mounted) {
-          setState(() {
-            _pickerNotice = '⚠️ Video is too large (max 350MB allowed)';
-          });
-        }
-        return;
-      }
+      final sizeMB = size ~/ (1024 * 1024);
 
       if (mounted) {
         setState(() {
           _selectedFile = finalFile;
           _networkVideoUrl = null;
-          _videoName = filename.isNotEmpty ? filename : 'clip.mp4';
+          _videoName = (filename != null && filename.isNotEmpty) ? filename : 'clip.mp4';
           _videoSizeBytes = size > 0 ? size : null;
-          _pickerNotice = '✅ Video clip attached successfully! You can trim, add a caption, and share.';
+          if (sizeMB > 95) {
+            _pickerNotice = '⚠️ File is $sizeMB MB (too large). Please tap 30s or 15s Quick Trim before uploading!';
+          } else {
+            _pickerNotice = '✅ Video clip attached ($sizeMB MB)! Ready to upload.';
+          }
           if (_captionController.text.trim().isEmpty) {
             _captionController.text = 'Insane Gaming Clip! 🔥🎮';
           }
@@ -622,55 +618,30 @@ class _ClipUploadModalSheetState extends State<ClipUploadModalSheet> {
       double finalDuration = 30.0;
       double finalOrigDuration = 30.0;
 
-      // Direct file upload to Cloudinary
+      // Direct file upload to Cloudinary (NO CLIENT COMPRESSION)
       if (_selectedFile != null) {
         int originalSizeMB = 0;
         try {
           originalSizeMB = (await _selectedFile!.length()) ~/ (1024 * 1024);
         } catch (_) {}
 
-        // If original size > 100MB, force Quick Trim to 30s BEFORE compression
-        if (originalSizeMB > 100) {
-          final currentTrimDuration = _trimRange.end - _trimRange.start;
-          if (currentTrimDuration > 30.0) {
-            _trimRange = RangeValues(_trimRange.start, _trimRange.start + 30.0);
-            if (mounted) {
-              ScaffoldMessenger.of(context).showSnackBar(
-                SnackBar(
-                  content: Text('⚡ ${originalSizeMB}MB clip too large, trimming to 30s for fast upload'),
-                  backgroundColor: GamerTheme.accentOrange,
-                  duration: const Duration(seconds: 4),
-                ),
-              );
-            }
+        // If file > 95MB (e.g. 155MB gaming clip), require user to trim to 30s or 15s
+        final currentTrimDuration = _trimRange.end - _trimRange.start;
+        if (originalSizeMB > 95 && currentTrimDuration > 30.5) {
+          setState(() {
+            _isUploading = false;
+            _uploadStatus = '';
+            _uploadProgress = 0.0;
+          });
+          if (mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(
+                content: Text('⚠️ File too large (${originalSizeMB}MB). Please tap 30s or 15s Quick Trim before uploading!'),
+                backgroundColor: GamerTheme.accentOrange,
+                duration: const Duration(seconds: 5),
+              ),
+            );
           }
-        }
-
-        setState(() {
-          _uploadStatus = 'Checking video size... ⚡';
-        });
-
-        final clipDuration = (_trimRange.end - _trimRange.start).clamp(1.0, 180.0);
-
-        // Gaming clips (PUBG screen recordings > 25MB, 60fps, 1080p+) are compressed with FFmpeg
-        final fileToUpload = await VideoCompressService.compressIfNeeded(
-          _selectedFile!,
-          totalDurationSec: clipDuration,
-          trimStartSec: _trimRange.start,
-          trimEndSec: _trimRange.end,
-          isCancelled: () => _isCancelled,
-          timeout: const Duration(seconds: 90),
-          onProgress: (compProg) {
-            if (mounted && !_isCancelled) {
-              setState(() {
-                _uploadProgress = (compProg * 0.4).clamp(0.05, 0.4);
-                _uploadStatus = 'Compressing gaming clip (${(compProg * 100).toInt()}%)... ⚡';
-              });
-            }
-          },
-        );
-
-        if (_isCancelled) {
           return;
         }
 
@@ -679,18 +650,22 @@ class _ClipUploadModalSheetState extends State<ClipUploadModalSheet> {
         });
 
         final uploadResult = await _uploadFileToCloudinary(
-          file: fileToUpload,
+          file: _selectedFile!,
           trimStart: _trimRange.start,
           trimEnd: _trimRange.end,
           onProgress: (prog) {
             if (mounted && !_isCancelled) {
               setState(() {
-                _uploadProgress = 0.4 + (prog * 0.55);
+                _uploadProgress = prog;
                 _uploadStatus = 'Uploading to Cloudinary (${(prog * 100).toInt()}%)... 🚀';
               });
             }
           },
         );
+
+        if (_isCancelled) {
+          return;
+        }
 
         finalVideoUrl = uploadResult['videoUrl'] as String;
         finalThumbnailUrl = uploadResult['thumbnailUrl'] as String;
@@ -805,7 +780,7 @@ class _ClipUploadModalSheetState extends State<ClipUploadModalSheet> {
     required void Function(double progress) onProgress,
   }) async {
     const cloudName = 'fka9mgwu';
-    final presets = ['clips_preset', 'gaming_clips_preset'];
+    final presets = ['gaming_clips_preset', 'clips_preset'];
 
     for (final preset in presets) {
       try {
@@ -817,6 +792,8 @@ class _ClipUploadModalSheetState extends State<ClipUploadModalSheet> {
         request.fields['upload_preset'] = preset;
         request.fields['folder'] = 'gaming_clips';
         request.fields['tags'] = 'gaming,$_selectedGameTag';
+        request.fields['quality'] = 'auto:eco';
+        request.fields['fetch_format'] = 'auto';
         request.fields['eager'] = 'q_auto:low,w_720,h_1280,c_limit/f_auto';
 
         int bytesSent = 0;
@@ -1522,7 +1499,6 @@ class _ClipUploadModalSheetState extends State<ClipUploadModalSheet> {
                         ),
                         TextButton(
                           onPressed: () {
-                            VideoCompressService.cancel();
                             setState(() {
                               _isCancelled = true;
                               _isUploading = false;

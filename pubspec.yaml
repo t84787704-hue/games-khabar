@@ -38,6 +38,7 @@ dependencies:
   xml: ^6.5.0
   html: ^0.15.4
   path_provider: ^2.1.2
+  file_picker: ^8.1.0
 
 dev_dependencies:
   flutter_test:
