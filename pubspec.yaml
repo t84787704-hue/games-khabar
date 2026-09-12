@@ -43,6 +43,7 @@ dependencies:
 
 dependency_overrides:
   package_info_plus: ^8.0.0
+  wakelock_plus: 1.1.4
 
 dev_dependencies:
   flutter_test:
