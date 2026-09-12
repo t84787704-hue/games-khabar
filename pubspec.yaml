@@ -41,9 +41,10 @@ dependencies:
   video_player: ^2.9.1
   chewie: ^1.8.5
 
-# یہاں ورژن 8.3.0 کر دیا ہے تاکہ web کا کنفلیکٹ ختم ہو جائے
+# یہاں دونوں پیکیجز کو لاک کر دیا گیا ہے تاکہ Build کے وقت ایرر نہ آئے
 dependency_overrides:
   package_info_plus: 8.3.0
+  wakelock_plus: 1.1.4
 
 dev_dependencies:
   flutter_test:
