@@ -2,7 +2,6 @@ import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:share_plus/share_plus.dart';
 import 'package:cached_network_image/cached_network_image.dart';
-import 'package:url_launcher/url_launcher.dart';
 import '../constants/gamer_theme.dart';
 import '../models/gamer_post_model.dart';
 import '../models/post_comment_model.dart';
@@ -13,7 +12,7 @@ import '../screens/gamer_profile_screen.dart';
 import '../services/verification_service.dart';
 import '../widgets/rank_badge_widget.dart';
 import '../widgets/blue_tick_badge.dart';
-import '../screens/video_player_screen.dart'; // <--- یہ نئی امپورٹ شامل کی گئی ہے
+import '../widgets/inline_video_player.dart'; // <--- یہ نیا امپورٹ ہے
 
 class PostCard extends StatefulWidget {
   final GamerPost post;
@@ -295,134 +294,13 @@ class _PostCardState extends State<PostCard> {
             ),
           ],
 
-          // Video (یہاں تبدیلی کی گئی ہے)
+          // Video (Inline Player) - یہاں نیا کوڈ لگا دیا گیا ہے
           if (widget.post.videoUrl != null && widget.post.videoUrl!.isNotEmpty) ...[
             Padding(
               padding: const EdgeInsets.fromLTRB(14, 4, 14, 10),
               child: ClipRRect(
                 borderRadius: BorderRadius.circular(12),
-                child: InkWell(
-                  // پرانا براؤزر کھولنے والا کوڈ ہٹا کر نیا کوڈ لگا دیا گیا ہے
-                  onTap: () {
-                    Navigator.push(
-                      context,
-                      MaterialPageRoute(
-                        builder: (context) => VideoPlayerScreen(videoUrl: widget.post.videoUrl!),
-                      ),
-                    );
-                  },
-                  child: Container(
-                    height: 210,
-                    width: double.infinity,
-                    color: GamerTheme.cardElevated,
-                    child: Stack(
-                      fit: StackFit.expand,
-                      children: [
-                        CachedNetworkImage(
-                          imageUrl: widget.post.videoUrl!.endsWith('.mp4')
-                              ? widget.post.videoUrl!.replaceAll('.mp4', '.jpg')
-                              : '${widget.post.videoUrl!}.jpg',
-                          fit: BoxFit.cover,
-                          errorWidget: (_, __, ___) => Container(
-                            decoration: BoxDecoration(
-                              gradient: LinearGradient(
-                                colors: [
-                                  GamerTheme.surfaceDark,
-                                  GamerTheme.cardElevated,
-                                ],
-                                begin: Alignment.topLeft,
-                                end: Alignment.bottomRight,
-                              ),
-                            ),
-                            child: const Center(
-                              child: Icon(Icons.videogame_asset_rounded, color: GamerTheme.textMuted, size: 48),
-                            ),
-                          ),
-                        ),
-                        Container(
-                          decoration: BoxDecoration(
-                            gradient: LinearGradient(
-                              colors: [
-                                Colors.black.withOpacity(0.3),
-                                Colors.black.withOpacity(0.7),
-                              ],
-                              begin: Alignment.topCenter,
-                              end: Alignment.bottomCenter,
-                            ),
-                          ),
-                        ),
-                        Center(
-                          child: Container(
-                            width: 56,
-                            height: 56,
-                            decoration: BoxDecoration(
-                              gradient: GamerTheme.blueOrangeGradient,
-                              shape: BoxShape.circle,
-                              boxShadow: [
-                                BoxShadow(
-                                  color: GamerTheme.accentBlue.withOpacity(0.5),
-                                  blurRadius: 16,
-                                  spreadRadius: 2,
-                                ),
-                              ],
-                            ),
-                            child: const Icon(Icons.play_arrow_rounded, color: Colors.white, size: 36),
-                          ),
-                        ),
-                        Positioned(
-                          top: 10,
-                          left: 10,
-                          child: Container(
-                            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                            decoration: BoxDecoration(
-                              color: Colors.black.withOpacity(0.7),
-                              borderRadius: BorderRadius.circular(6),
-                              border: Border.all(color: GamerTheme.neonGreen.withOpacity(0.5)),
-                            ),
-                            child: const Row(
-                              mainAxisSize: MainAxisSize.min,
-                              children: [
-                                Icon(Icons.bolt_rounded, color: GamerTheme.neonGreen, size: 14),
-                                SizedBox(width: 4),
-                                Text(
-                                  'GAMING CLIP • 720P',
-                                  style: TextStyle(
-                                    color: Colors.white,
-                                    fontSize: 10,
-                                    fontWeight: FontWeight.w900,
-                                    letterSpacing: 0.5,
-                                  ),
-                                ),
-                              ],
-                            ),
-                          ),
-                        ),
-                        Positioned(
-                          bottom: 10,
-                          right: 10,
-                          child: Container(
-                            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                            decoration: BoxDecoration(
-                              color: Colors.black.withOpacity(0.75),
-                              borderRadius: BorderRadius.circular(6),
-                            ),
-                            child: const Row(
-                              mainAxisSize: MainAxisSize.min,
-                              children: [
-                                Icon(Icons.play_circle_fill_rounded, color: Colors.white70, size: 12),
-                                SizedBox(width: 4),
-                                Text(
-                                  'Tap to Play',
-                                  style: TextStyle(color: Colors.white, fontSize: 11, fontWeight: FontWeight.bold),
-                                ),
-                              ],
-                            ),
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                ),
+                child: InlineVideoPlayer(videoUrl: widget.post.videoUrl!),
               ),
             ),
           ],
@@ -530,8 +408,7 @@ class _PostCardState extends State<PostCard> {
   }
 }
 
-// _CommentsSheet class ka code yahan aayega (agar aapki file mein hai toh)
-// Agar _CommentsSheet alag file mein hai toh ise hatayein, warna ise yahan rakhein.
+// _CommentsSheet class ka code (اگر آپ کی اصل فائل میں ہے تو اسے استعمال کریں)
 class _CommentsSheet extends StatefulWidget {
   final GamerPost post;
   const _CommentsSheet({required this.post});
@@ -541,12 +418,11 @@ class _CommentsSheet extends StatefulWidget {
 }
 
 class _CommentsSheetState extends State<_CommentsSheet> {
-  // ... (Aapka Comments Sheet ka baaki ka code yahan hoga)
   @override
   Widget build(BuildContext context) {
     return Container(
       padding: const EdgeInsets.all(16),
       child: const Text("Comments Section", style: TextStyle(color: Colors.white)),
-    ); // Yeh placeholder hai, aap apna asli comments code yahan rakhein
+    ); 
   }
 }
