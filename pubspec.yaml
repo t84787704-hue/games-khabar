@@ -41,6 +41,10 @@ dependencies:
   video_player: ^2.9.1
   chewie: ^1.8.5
 
+# یہ سیکشن package_info_plus کے ایرر کو حل کرے گا
+dependency_overrides:
+  package_info_plus: 8.0.0
+
 dev_dependencies:
   flutter_test:
     sdk: flutter
