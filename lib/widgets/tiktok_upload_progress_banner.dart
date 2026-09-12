@@ -132,7 +132,7 @@ class TikTokUploadProgressBanner extends StatelessWidget {
                   child: LinearProgressIndicator(
                     value: task.progress,
                     minHeight: 4,
-                    backgroundColor: GamerTheme.surfaceDark,
+                    backgroundColor: GamerTheme.bgDark,
                     valueColor: const AlwaysStoppedAnimation<Color>(GamerTheme.accentBlue),
                   ),
                 ),

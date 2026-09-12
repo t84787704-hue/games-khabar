@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 import 'dart:math';
@@ -85,8 +86,8 @@ class FastChunkedUploadService {
       final multipartFile = http.MultipartFile(
         'file',
         fileStream.transform(
-          StreamTransformer.fromHandlers(
-            handleData: (data, sink) {
+          StreamTransformer<List<int>, List<int>>.fromHandlers(
+            handleData: (List<int> data, EventSink<List<int>> sink) {
               if (_isCancelled) {
                 sink.close();
                 return;
@@ -98,8 +99,8 @@ class FastChunkedUploadService {
               }
               sink.add(data);
             },
-            handleDone: (sink) => sink.close(),
-            handleError: (error, stackTrace, sink) => sink.addError(error, stackTrace),
+            handleDone: (EventSink<List<int>> sink) => sink.close(),
+            handleError: (Object error, StackTrace stackTrace, EventSink<List<int>> sink) => sink.addError(error, stackTrace),
           ),
         ),
         fileSize,

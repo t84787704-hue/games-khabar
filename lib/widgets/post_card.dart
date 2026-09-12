@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:share_plus/share_plus.dart';
 import 'package:cached_network_image/cached_network_image.dart';
+import 'package:url_launcher/url_launcher.dart';
 import '../constants/gamer_theme.dart';
 import '../models/gamer_post_model.dart';
 import '../models/post_comment_model.dart';
@@ -324,7 +325,7 @@ class _PostCardState extends State<PostCard> {
                             decoration: BoxDecoration(
                               gradient: LinearGradient(
                                 colors: [
-                                  GamerTheme.surfaceDark,
+                                  GamerTheme.bgDark,
                                   GamerTheme.cardElevated,
                                 ],
                                 begin: Alignment.topLeft,
