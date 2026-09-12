@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 class GamerTheme {
   // Core Colors
   static const Color bgDark = Color(0xFF0A0E17);
+  static const Color surfaceDark = Color(0xFF121824);
   static const Color cardDark = Color(0xFF121824);
   static const Color cardElevated = Color(0xFF182234);
   static const Color cardHover = Color(0xFF1E2B42);
