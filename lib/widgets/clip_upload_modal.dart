@@ -11,6 +11,7 @@ import '../constants/gamer_theme.dart';
 import '../models/gamer_user_model.dart';
 import '../services/gamer_auth_service.dart';
 import '../services/cloudinary_service.dart';
+import '../services/video_compress_service.dart';
 
 /// Full-featured, completely rebuilt Clip & Meme upload modal.
 /// - Clear, isolated buttons (no accidental gallery triggers)
@@ -218,11 +219,11 @@ class _ClipUploadModalSheetState extends State<ClipUploadModalSheet> {
         size = await finalFile.length();
       } catch (_) {}
 
-      const maxBytes = 150 * 1024 * 1024; // 150MB
+      const maxBytes = 350 * 1024 * 1024; // 350MB (auto-compressed before upload)
       if (size > maxBytes) {
         if (mounted) {
           setState(() {
-            _pickerNotice = '⚠️ Video is too large (max 150MB allowed)';
+            _pickerNotice = '⚠️ Video is too large (max 350MB allowed)';
           });
         }
         return;
@@ -595,17 +596,34 @@ class _ClipUploadModalSheetState extends State<ClipUploadModalSheet> {
       // Direct file upload to Cloudinary
       if (_selectedFile != null) {
         setState(() {
+          _uploadStatus = 'Checking video size... ⚡';
+        });
+
+        // Gaming clips (PUBG screen recordings > 25MB, 60fps, 1080p+) are compressed to 720p 30fps
+        final fileToUpload = await VideoCompressService.compressIfNeeded(
+          _selectedFile!,
+          onProgress: (compProg) {
+            if (mounted && !_isCancelled) {
+              setState(() {
+                _uploadProgress = (compProg * 0.35).clamp(0.05, 0.35);
+                _uploadStatus = 'Compressing gaming clip (${(compProg * 100).toInt()}%)... ⚡';
+              });
+            }
+          },
+        );
+
+        setState(() {
           _uploadStatus = 'Uploading to Cloudinary... 🚀';
         });
 
         final uploadResult = await _uploadFileToCloudinary(
-          file: _selectedFile!,
+          file: fileToUpload,
           trimStart: _trimRange.start,
           trimEnd: _trimRange.end,
           onProgress: (prog) {
             if (mounted && !_isCancelled) {
               setState(() {
-                _uploadProgress = prog;
+                _uploadProgress = 0.35 + (prog * 0.6);
                 _uploadStatus = 'Uploading to Cloudinary (${(prog * 100).toInt()}%)... 🚀';
               });
             }
@@ -769,6 +787,9 @@ class _ClipUploadModalSheetState extends State<ClipUploadModalSheet> {
         final streamedResponse = await client.send(request);
         final response = await http.Response.fromStream(streamedResponse);
         client.close();
+
+        print("CLOUDINARY STATUS: ${response.statusCode}");
+        debugPrint("CLOUDINARY STATUS: ${response.statusCode}");
 
         if (response.statusCode >= 200 && response.statusCode < 300) {
           final data = jsonDecode(response.body) as Map<String, dynamic>;

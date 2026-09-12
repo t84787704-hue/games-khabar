@@ -2,6 +2,7 @@ import 'dart:io';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import '../models/clip_model.dart';
 import 'cloudinary_service.dart';
+import 'video_compress_service.dart';
 
 /// Service for managing gaming clips and memes.
 /// Uses 100% Cloudinary for video storage (ZERO Firebase Storage dependencies)
@@ -53,14 +54,20 @@ class ClipService {
     bool Function()? isCancelled,
   }) async {
     try {
+      print('🚀 [CLIP_SERVICE] Step 0: Checking video compression...');
+      final fileToUpload = await VideoCompressService.compressIfNeeded(
+        file,
+        onProgress: onProgress != null ? (p) => onProgress(p * 0.35) : null,
+      );
+
       print('🚀 [CLIP_SERVICE] Step 1: Uploading video file to Cloudinary with progress...');
       
       final uploadResult = await CloudinaryService.uploadVideoWithProgress(
-        file: file,
+        file: fileToUpload,
         userId: userId,
         gameTag: gameTag,
         caption: caption,
-        onProgress: onProgress,
+        onProgress: onProgress != null ? (p) => onProgress(0.35 + (p * 0.6)) : null,
         isCancelled: isCancelled,
       );
 
@@ -128,15 +135,59 @@ class ClipService {
     }
   }
 
-  /// Real-time stream of clips from Firestore collection 'clips' ordered by createdAt descending
+  /// Real-time stream of clips from Firestore collection 'clips' ordered by createdAt descending.
+  /// Filters out null, corrupted, and oversized entries that cause black screens.
   Stream<List<GamerClip>> getClipsStream() {
     return _clipsRef
         .orderBy('createdAt', descending: true)
         .snapshots()
         .map((snap) {
           print('📺 [CLIP_SERVICE] Real-time clips fetched: ${snap.docs.length}');
-          return snap.docs.map((d) => GamerClip.fromFirestore(d)).toList();
+          final validClips = <GamerClip>[];
+          for (final d in snap.docs) {
+            final data = d.data() as Map<String, dynamic>?;
+            if (data == null) continue;
+            final vUrl = data['videoUrl']?.toString() ?? data['mediaUrl']?.toString() ?? '';
+            final sizeBytes = (data['sizeBytes'] as num?)?.toInt() ?? 0;
+            final sizeMB = (data['sizeMB'] as num?)?.toInt() ?? (sizeBytes ~/ (1024 * 1024));
+
+            // Clean up and skip broken/null/huge docs that cause black screen
+            if (vUrl.isEmpty || vUrl == 'null' || sizeMB > 100) {
+              print('🧹 [CLIP_SERVICE] Auto-removing black/invalid clip doc: ${d.id}');
+              d.reference.delete().catchError((_) {});
+              _legacyClipsRef.doc(d.id).delete().catchError((_) {});
+              continue;
+            }
+
+            try {
+              validClips.add(GamerClip.fromFirestore(d));
+            } catch (e) {
+              print('⚠️ [CLIP_SERVICE] Skipped corrupt clip: $e');
+            }
+          }
+          return validClips;
         });
+  }
+
+  /// One-time cleanup for any old black/corrupted clip documents in Firestore
+  Future<void> cleanupOldBlackEntries() async {
+    try {
+      final snap = await _clipsRef.get();
+      for (final doc in snap.docs) {
+        final data = doc.data() as Map<String, dynamic>?;
+        if (data == null) continue;
+        final vUrl = data['videoUrl']?.toString() ?? data['mediaUrl']?.toString() ?? '';
+        final sizeBytes = (data['sizeBytes'] as num?)?.toInt() ?? 0;
+        final sizeMB = (data['sizeMB'] as num?)?.toInt() ?? (sizeBytes ~/ (1024 * 1024));
+        if (vUrl.isEmpty || vUrl == 'null' || sizeMB > 100) {
+          print('🧹 [CLIP_SERVICE] Deleting old black entry: ${doc.id}');
+          await doc.reference.delete().catchError((_) {});
+          await _legacyClipsRef.doc(doc.id).delete().catchError((_) {});
+        }
+      }
+    } catch (e) {
+      print('⚠️ [CLIP_SERVICE] cleanupOldBlackEntries error: $e');
+    }
   }
 
   Future<void> toggleLikeClip({

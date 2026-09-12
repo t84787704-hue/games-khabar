@@ -128,6 +128,7 @@ class _ClipsScreenState extends State<ClipsScreen>
     )..repeat();
 
     ClipsPlaybackManager.isClipsTabActive.addListener(_onGlobalTabActiveChanged);
+    _clipService.cleanupOldBlackEntries();
   }
 
   void _onGlobalTabActiveChanged() {
@@ -809,15 +810,17 @@ class _ClipCardState extends State<ClipCard> {
           child: Stack(
             fit: StackFit.expand,
             children: [
+              // Background canvas to support both landscape (16:9) and vertical (9:16) clips cleanly
+              Container(color: Colors.black),
               if (_isVideo && _isInitialized && _controller != null)
-                SizedBox.expand(
-                  child: FittedBox(
-                    fit: BoxFit.cover,
-                    child: SizedBox(
-                      width: (_controller!.value.size.width > 0) ? _controller!.value.size.width : 720,
-                      height: (_controller!.value.size.height > 0) ? _controller!.value.size.height : 1280,
-                      child: VideoPlayer(_controller!),
-                    ),
+                Center(
+                  child: AspectRatio(
+                    aspectRatio: _controller!.value.aspectRatio > 0
+                        ? _controller!.value.aspectRatio
+                        : (_controller!.value.size.width > 0 && _controller!.value.size.height > 0
+                            ? _controller!.value.size.width / _controller!.value.size.height
+                            : (16 / 9)),
+                    child: VideoPlayer(_controller!),
                   ),
                 )
               else

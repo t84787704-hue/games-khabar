@@ -25,8 +25,8 @@ class CloudinaryUploadResult {
 class CloudinaryService {
   // Cloudinary credentials & presets
   static const String cloudName = "fka9mgwu";
-  static const String gamingClipsPreset = "gaming_clips_preset";
-  static const String fallbackPreset = "clips_preset";
+  static const String gamingClipsPreset = "clips_preset";
+  static const String fallbackPreset = "gaming_clips_preset";
 
   /// Generates an auto video thumbnail from Cloudinary URL
   static String getAutoThumbnailUrl(String secureUrl) {
@@ -134,6 +134,9 @@ class CloudinaryService {
 
     final streamedResponse = await client.send(request);
     final response = await http.Response.fromStream(streamedResponse);
+
+    print("CLOUDINARY STATUS: ${response.statusCode}");
+    debugPrint("CLOUDINARY STATUS: ${response.statusCode}");
 
     if (isCancelled != null && isCancelled()) {
       throw Exception('Upload cancelled by user');
