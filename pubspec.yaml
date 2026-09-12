@@ -44,8 +44,6 @@ dependencies:
 dependency_overrides:
   package_info_plus: 4.8.0
   wakelock_plus: 1.1.4
-  path_provider_android: 2.0.30
-  shared_preferences_android: 2.2.2
 
 dev_dependencies:
   flutter_test:
