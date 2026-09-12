@@ -26,7 +26,7 @@ class _VideoPlayerScreenState extends State<VideoPlayerScreen> {
     
     _chewieController = ChewieController(
       videoPlayerController: _videoPlayerController,
-      autoPlay: true,
+      autoPlay: true, // ویڈیو کھلتے ہی چل پڑے گی
       looping: false,
       aspectRatio: _videoPlayerController.value.aspectRatio,
       errorBuilder: (context, errorMessage) {
