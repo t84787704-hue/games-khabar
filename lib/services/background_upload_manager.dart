@@ -25,17 +25,12 @@ class BackgroundUploadManager {
   factory BackgroundUploadManager() => _instance;
   BackgroundUploadManager._internal();
   
-  // ⚠️ YAHAN APNA CLOUD NAME LIKHO - Dashboard se milega
-  static const String _cloudName = 'YOUR_CLOUD_NAME_HERE';
-  static const String _uploadPreset = 'clips_preset'; // ✅ Tumhara preset
+  static const String _cloudName = 'fka9mgwu';
+  static const String _uploadPreset = 'clips_preset';
   
   final ValueNotifier<UploadTaskState?> activeTask = ValueNotifier<UploadTaskState?>(null);
 
   Future<void> startVideoUpload({required File videoFile, required String text, required String gameTag, required String userId, required String username, required String displayName, required String userPhoto, int estimatedDurationSeconds = 180}) async {
-    if (_cloudName == 'YOUR_CLOUD_NAME_HERE') {
-      activeTask.value = UploadTaskState(taskId: 'error', title: 'Error', statusText: '❌ Cloud Name set karo!', hasError: true);
-      return;
-    }
     final taskId = 'task_${DateTime.now().millisecondsSinceEpoch}';
     activeTask.value = UploadTaskState(taskId: taskId, title: text.isNotEmpty ? text : 'Gaming Video', progress: 0.05, statusText: '🚀 Direct Uploading... 5%');
     unawaited(() async {
@@ -91,7 +86,7 @@ class BackgroundUploadManager {
         await Future.delayed(const Duration(milliseconds: 3500));
         if (activeTask.value?.taskId == taskId) activeTask.value = null;
       } catch (e) {
-        activeTask.value = activeTask.value?.copyWith(hasError: true, errorMessage: e.toString(), statusText: '⚠️ Failed');
+        activeTask.value = activeTask.value?.copyWith(hasError: true, errorMessage: e.toString(), statusText: '⚠️ Upload failed');
       }
     }());
   }
