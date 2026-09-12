@@ -3,7 +3,6 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/foundation.dart';
 import '../models/gamer_user_model.dart';
 import '../models/gamer_post_model.dart';
-import '../models/clip_model.dart';
 
 class DemoAccountsService {
   static final DemoAccountsService _instance = DemoAccountsService._internal();
@@ -326,7 +325,7 @@ class DemoAccountsService {
         followersCount: followers,
         followingCount: 18,
         postsCount: 2,
-        clipsCount: 1,
+        clipsCount: 0,
         likesReceived: (followers * 1.8).round(),
         isVerified: blueTick,
         verificationStatus: blueTick ? 'verified' : (uid == 'demo_01' || uid == 'demo_02' ? 'pending' : 'none'),
@@ -387,32 +386,9 @@ class DemoAccountsService {
         createdAt: createdAt.add(const Duration(days: 5, hours: 7)),
       );
       await _firestore.collection('posts').doc(post2Id).set(post2.toMap(), SetOptions(merge: true));
-
-      // 4. Write Clip: 1 Clip in clips collection
-      final clipId = 'clip_${uid}';
-      final clip = GamerClip(
-        id: clipId,
-        userId: uid,
-        username: username,
-        displayName: displayName,
-        userAvatar: photoUrl,
-        title: cfg['clipTitle'],
-        mediaUrl: 'https://assets.mixkit.co/videos/preview/mixkit-player-in-a-gaming-chair-with-a-headset-playing-on-41555-large.mp4',
-        thumbnail: cfg['clipThumb'],
-        gameTag: game,
-        songTitle: 'Phonk Trap Beat (Gaming Remix) 🎧',
-        likesCount: 140 + (uid.hashCode % 720).abs(),
-        commentsCount: 16 + (uid.hashCode % 48).abs(),
-        sharesCount: 12 + (uid.hashCode % 30).abs(),
-        viewsCount: 2400 + (uid.hashCode % 12000).abs(),
-        createdAt: createdAt.add(const Duration(days: 4)),
-      );
-      final clipMap = clip.toMap();
-      clipMap['isDemoAccount'] = true;
-      await _firestore.collection('clips').doc(clipId).set(clipMap, SetOptions(merge: true));
     }
 
-    // 5. Follows System: Make demo accounts follow each other
+    // 4. Follows System: Make demo accounts follow each other
     debugPrint('[DemoAccountsService] Setting up mutual follows between demo accounts...');
     for (int i = 0; i < demoUsersConfig.length; i++) {
       final current = demoUsersConfig[i]['uid'] as String;
@@ -477,19 +453,7 @@ class DemoAccountsService {
         await _firestore.collection('posts').doc('post_${uid}_achieve').delete();
       }
 
-      // 4. Delete demo clips
-      final clipsSnap = await _firestore
-          .collection('clips')
-          .where('isDemoAccount', isEqualTo: true)
-          .get();
-      for (final doc in clipsSnap.docs) {
-        await doc.reference.delete();
-      }
-      for (final uid in demoUids) {
-        await _firestore.collection('clips').doc('clip_$uid').delete();
-      }
-
-      // 5. Delete demo follows
+      // 4. Delete demo follows
       final followsSnap = await _firestore
           .collection('follows')
           .where('isDemoFollow', isEqualTo: true)

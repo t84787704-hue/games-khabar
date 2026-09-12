@@ -368,20 +368,21 @@ class VerificationService {
     );
 
     // -----------------------------------------------------------------------
-    // Requirement 4: At least 3 Clips posted + 2 Squad/Room posts
+    // Requirement 4: At least 3 Posts + 2 Squad/Room posts
     // -----------------------------------------------------------------------
-    final bool clipsMet = clips >= 3;
+    final int communityPosts = (clips > 0) ? clips : user.postsCount;
+    final bool postsMet = communityPosts >= 3;
     final bool squadRoomsMet = squadRooms >= 2;
-    final bool req4Met = clipsMet && squadRoomsMet;
+    final bool req4Met = postsMet && squadRoomsMet;
 
-    final double clipsPart = (clips.clamp(0, 3) / 3.0) * 0.5;
+    final double postsPart = (communityPosts.clamp(0, 3) / 3.0) * 0.5;
     final double squadPart = (squadRooms.clamp(0, 2) / 2.0) * 0.5;
-    final double req4Progress = (clipsPart + squadPart).clamp(0.0, 1.0);
+    final double req4Progress = (postsPart + squadPart).clamp(0.0, 1.0);
 
     String? req4Missing;
     if (!req4Met) {
       final missing = <String>[];
-      if (!clipsMet) missing.add('${3 - clips} more clip(s)');
+      if (!postsMet) missing.add('${3 - communityPosts} more post(s)');
       if (!squadRoomsMet) missing.add('${2 - squadRooms} more squad/room post(s)');
       req4Missing = 'Need ${missing.join(" and ")}';
     }
@@ -389,14 +390,14 @@ class VerificationService {
     items.add(
       VerificationRequirementItem(
         id: 4,
-        title: '3 Clips + 2 Squad/Room Posts',
-        description: 'Active community creator sharing highlights and host team scrims.',
-        currentFormatted: '$clips/3 Clips • $squadRooms/2 Squad/Rooms',
-        targetFormatted: '3 Clips & 2 Squad/Rooms',
+        title: '3 Community Posts + 2 Squad/Room Posts',
+        description: 'Active community creator sharing posts and hosting team scrims.',
+        currentFormatted: '$communityPosts/3 Posts • $squadRooms/2 Squad/Rooms',
+        targetFormatted: '3 Posts & 2 Squad/Rooms',
         progress: req4Progress,
         isMet: req4Met,
         missingReason: req4Missing,
-        icon: Icons.movie_creation_rounded,
+        icon: Icons.dynamic_feed_rounded,
       ),
     );
 

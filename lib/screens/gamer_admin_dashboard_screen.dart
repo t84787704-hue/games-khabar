@@ -64,7 +64,7 @@ class _GamerAdminDashboardScreenState extends State<GamerAdminDashboardScreen>
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
-            content: Text('Successfully created 10 Professional Demo Accounts with Posts & Clips!'),
+            content: Text('Successfully created 10 Professional Demo Accounts with Posts!'),
             backgroundColor: Color(0xFF00FF88),
           ),
         );

@@ -6,7 +6,6 @@ import '../constants/gamer_theme.dart';
 import '../services/gamer_auth_service.dart';
 import 'gamer_feed_screen.dart';
 import 'squad_finder_screen.dart';
-import 'clips_screen.dart';
 import 'tournament_board_screen.dart';
 import 'gamer_profile_screen.dart';
 import 'create_gamer_id_screen.dart';
@@ -86,12 +85,11 @@ class _GamerMainNavigationScreenState extends State<GamerMainNavigationScreen> {
 
   @override
   Widget build(BuildContext context) {
-    // Normal tabs: Feed, Squads, Clips, Rooms, Profile
+    // 4 Core tabs: Feed, Squads, Rooms, Profile
     // Admin tab: Admin (shield icon) visible ONLY to admin
     final screens = <Widget>[
       const GamerFeedScreen(),
       const SquadFinderScreen(),
-      ClipsScreen(isTabActive: _currentIndex == 2),
       const TournamentBoardScreen(),
       const GamerProfileScreen(),
       if (_isAdmin) const GamerAdminDashboardScreen(),
@@ -140,37 +138,29 @@ class _GamerMainNavigationScreenState extends State<GamerMainNavigationScreen> {
                   isSelected: _currentIndex == 1,
                 ),
 
-                // Tab 2: Clips (Reels & Memes)
+                // Tab 2: Rooms (Tournaments / Custom Rooms)
                 _buildNavItem(
                   index: 2,
-                  icon: Icons.movie_filter_rounded,
-                  label: 'Clips',
+                  icon: Icons.military_tech_rounded,
+                  label: 'Rooms',
                   isSelected: _currentIndex == 2,
                 ),
 
-                // Tab 3: Rooms (Tournaments / Custom Rooms)
+                // Tab 3: Profile
                 _buildNavItem(
                   index: 3,
-                  icon: Icons.military_tech_rounded,
-                  label: 'Rooms',
+                  icon: Icons.person_rounded,
+                  label: 'Profile',
                   isSelected: _currentIndex == 3,
                 ),
 
-                // Tab 4: Profile
-                _buildNavItem(
-                  index: 4,
-                  icon: Icons.person_rounded,
-                  label: 'Profile',
-                  isSelected: _currentIndex == 4,
-                ),
-
-                // Tab 5: Admin (Visible ONLY to Admin)
+                // Tab 4: Admin (Visible ONLY to Admin)
                 if (_isAdmin)
                   _buildNavItem(
-                    index: 5,
+                    index: 4,
                     icon: Icons.shield_rounded,
                     label: 'Admin',
-                    isSelected: _currentIndex == 5,
+                    isSelected: _currentIndex == 4,
                     activeColor: const Color(0xFF00FF88),
                   ),
               ],
@@ -183,11 +173,6 @@ class _GamerMainNavigationScreenState extends State<GamerMainNavigationScreen> {
 
   void _onTabTapped(int index) {
     if (_currentIndex != index) {
-      if (index != 2) {
-        // Pauses all active clip video & audio immediately when leaving Clips tab
-        ClipsPlaybackManager.pauseAllClips();
-      }
-      ClipsPlaybackManager.isClipsTabActive.value = (index == 2);
       setState(() => _currentIndex = index);
     }
   }
