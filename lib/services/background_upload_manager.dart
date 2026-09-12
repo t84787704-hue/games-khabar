@@ -24,16 +24,42 @@ class BackgroundUploadManager {
   static final BackgroundUploadManager _instance = BackgroundUploadManager._internal();
   factory BackgroundUploadManager() => _instance;
   BackgroundUploadManager._internal();
+  
+  // ⚠️ YAHAN APNA CLOUD NAME LIKHO - Dashboard se milega
   static const String _cloudName = 'YOUR_CLOUD_NAME_HERE';
-  static const String _uploadPreset = 'tiktok_3min_direct';
+  static const String _uploadPreset = 'clips_preset'; // ✅ Tumhara preset
+  
   final ValueNotifier<UploadTaskState?> activeTask = ValueNotifier<UploadTaskState?>(null);
 
   Future<void> startVideoUpload({required File videoFile, required String text, required String gameTag, required String userId, required String username, required String displayName, required String userPhoto, int estimatedDurationSeconds = 180}) async {
+    if (_cloudName == 'YOUR_CLOUD_NAME_HERE') {
+      activeTask.value = UploadTaskState(taskId: 'error', title: 'Error', statusText: '❌ Cloud Name set karo!', hasError: true);
+      return;
+    }
     final taskId = 'task_${DateTime.now().millisecondsSinceEpoch}';
     activeTask.value = UploadTaskState(taskId: taskId, title: text.isNotEmpty ? text : 'Gaming Video', progress: 0.05, statusText: '🚀 Direct Uploading... 5%');
     unawaited(() async {
       try {
         final fileSize = await videoFile.length();
+        if (fileSize < 95 * 1024 * 1024) {
+          final uri = Uri.parse('https://api.cloudinary.com/v1_1/$_cloudName/video/upload');
+          final request = http.MultipartRequest('POST', uri);
+          request.fields['upload_preset'] = _uploadPreset;
+          request.fields['public_id'] = 'gaming_${DateTime.now().millisecondsSinceEpoch}';
+          request.files.add(await http.MultipartFile.fromPath('file', videoFile.path));
+          final streamedResponse = await request.send();
+          final response = await http.Response.fromStream(streamedResponse);
+          if (response.statusCode == 200 || response.statusCode == 201) {
+            final jsonRes = json.decode(response.body);
+            final String finalUrl = jsonRes['secure_url'];
+            activeTask.value = activeTask.value?.copyWith(progress: 0.95, statusText: 'Posting to Feed... ⚡');
+            await GamerSocialService().createPost(userId: userId, username: username, displayName: displayName, userPhoto: userPhoto, text: text, gameTag: gameTag, mediaUrl: finalUrl);
+            activeTask.value = activeTask.value?.copyWith(progress: 1.0, statusText: '🎉 Video Clip Published!', isCompleted: true, mediaUrl: finalUrl);
+            await Future.delayed(const Duration(milliseconds: 3500));
+            if (activeTask.value?.taskId == taskId) activeTask.value = null;
+            return;
+          } else { throw Exception('${response.body}'); }
+        }
         const int chunkSize = 10 * 1024 * 1024;
         final totalChunks = (fileSize / chunkSize).ceil();
         final String uniqueUploadId = 'gaming_${DateTime.now().millisecondsSinceEpoch}';
@@ -48,8 +74,6 @@ class BackgroundUploadManager {
           request.headers['Content-Range'] = 'bytes $start-${end - 1}/$fileSize';
           request.fields['upload_preset'] = _uploadPreset;
           request.fields['public_id'] = uniqueUploadId;
-          request.fields['eager'] = 'w_720,h_1280,c_limit,q_auto,f_auto';
-          request.fields['eager_async'] = 'true';
           request.files.add(http.MultipartFile.fromBytes('file', bytes, filename: 'chunk_$i.mp4'));
           final streamedResponse = await request.send();
           final response = await http.Response.fromStream(streamedResponse);
@@ -57,8 +81,7 @@ class BackgroundUploadManager {
             final jsonRes = json.decode(response.body);
             if (jsonRes['secure_url'] != null) finalSecureUrl = jsonRes['secure_url'];
             final prog = ((i + 1) / totalChunks).clamp(0.0, 1.0);
-            final pct = (prog * 100).toInt();
-            activeTask.value = activeTask.value?.copyWith(progress: prog, statusText: '🚀 Uploading... $pct%');
+            activeTask.value = activeTask.value?.copyWith(progress: prog, statusText: '🚀 Uploading... ${(prog*100).toInt()}%');
           } else { throw Exception('Upload failed: ${response.body}'); }
         }
         if (finalSecureUrl == null) throw Exception("Cloud upload failed");
@@ -68,7 +91,7 @@ class BackgroundUploadManager {
         await Future.delayed(const Duration(milliseconds: 3500));
         if (activeTask.value?.taskId == taskId) activeTask.value = null;
       } catch (e) {
-        activeTask.value = activeTask.value?.copyWith(hasError: true, errorMessage: e.toString(), statusText: '⚠️ Upload failed. Tap to dismiss.');
+        activeTask.value = activeTask.value?.copyWith(hasError: true, errorMessage: e.toString(), statusText: '⚠️ Failed');
       }
     }());
   }
