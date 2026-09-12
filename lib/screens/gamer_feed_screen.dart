@@ -11,6 +11,7 @@ import '../widgets/post_card.dart';
 import '../widgets/news_post_card.dart';
 import '../widgets/tiktok_upload_progress_banner.dart';
 import 'create_post_screen.dart';
+import 'publish_video_screen.dart';
 import 'gamer_profile_screen.dart';
 import 'gamer_search_screen.dart';
 import 'notifications_screen.dart';
@@ -81,9 +82,14 @@ class _GamerFeedScreenState extends State<GamerFeedScreen> {
       return newsList.map((n) => _FeedItem.news(n)).toList();
     }
 
-    // 2. Filter user posts if Following mode is active
+    // 2. Filter user posts if Videos or Following mode is active
     List<GamerPost> filteredUserPosts = userPosts;
-    if (feedMode == 'following') {
+    if (feedMode == 'videos') {
+      filteredUserPosts = userPosts
+          .where((p) => p.videoUrl != null && p.videoUrl!.trim().isNotEmpty)
+          .toList();
+      return filteredUserPosts.map((p) => _FeedItem.user(p)).toList();
+    } else if (feedMode == 'following') {
       filteredUserPosts = userPosts
           .where((p) => followingIds.contains(p.userId) || p.userId == currentUid)
           .toList();
@@ -395,58 +401,148 @@ class _GamerFeedScreenState extends State<GamerFeedScreen> {
                     borderRadius: BorderRadius.circular(16),
                     border: Border.all(color: GamerTheme.borderDark),
                   ),
-                  child: InkWell(
-                    onTap: () {
-                      Navigator.of(context).push(
-                        MaterialPageRoute(builder: (_) => const CreatePostScreen()),
-                      );
-                    },
-                    borderRadius: BorderRadius.circular(12),
-                    child: Row(
-                      children: [
-                        GamerAvatar(
-                          photoUrl: gamer?.photoUrl ?? '',
-                          displayName: gamer?.displayName ?? 'Gamer',
-                          radius: 18,
-                        ),
-                        const SizedBox(width: 12),
-                        const Expanded(
-                          child: Text(
-                            "What's on your mind, Gamer?",
-                            style: TextStyle(
-                              color: GamerTheme.textMuted,
-                              fontSize: 14,
+                  child: Column(
+                    children: [
+                      InkWell(
+                        onTap: () {
+                          Navigator.of(context).push(
+                            MaterialPageRoute(builder: (_) => const CreatePostScreen()),
+                          );
+                        },
+                        borderRadius: BorderRadius.circular(12),
+                        child: Row(
+                          children: [
+                            GamerAvatar(
+                              photoUrl: gamer?.photoUrl ?? '',
+                              displayName: gamer?.displayName ?? 'Gamer',
+                              radius: 18,
                             ),
-                          ),
-                        ),
-                        Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                          decoration: BoxDecoration(
-                            gradient: GamerTheme.blueOrangeGradient,
-                            borderRadius: BorderRadius.circular(20),
-                          ),
-                          child: const Row(
-                            children: [
-                              Icon(Icons.add_rounded, color: Colors.white, size: 16),
-                              SizedBox(width: 4),
-                              Text(
-                                'Post',
+                            const SizedBox(width: 12),
+                            const Expanded(
+                              child: Text(
+                                "What's on your mind, Gamer?",
                                 style: TextStyle(
-                                  color: Colors.white,
-                                  fontWeight: FontWeight.bold,
-                                  fontSize: 12,
+                                  color: GamerTheme.textMuted,
+                                  fontSize: 14,
                                 ),
                               ),
-                            ],
-                          ),
+                            ),
+                            Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                              decoration: BoxDecoration(
+                                gradient: GamerTheme.blueOrangeGradient,
+                                borderRadius: BorderRadius.circular(20),
+                              ),
+                              child: const Row(
+                                children: [
+                                  Icon(Icons.add_rounded, color: Colors.white, size: 16),
+                                  SizedBox(width: 4),
+                                  Text(
+                                    'Post',
+                                    style: TextStyle(
+                                      color: Colors.white,
+                                      fontWeight: FontWeight.bold,
+                                      fontSize: 12,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ],
                         ),
-                      ],
-                    ),
+                      ),
+                      const SizedBox(height: 10),
+                      const Divider(color: GamerTheme.borderDark, height: 1),
+                      const SizedBox(height: 8),
+                      // Facebook-Style Action Buttons: Text, Video (Max 3m), Photo
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceAround,
+                        children: [
+                          // 1: Text Post
+                          InkWell(
+                            onTap: () {
+                              Navigator.of(context).push(
+                                MaterialPageRoute(builder: (_) => const CreatePostScreen()),
+                              );
+                            },
+                            borderRadius: BorderRadius.circular(8),
+                            child: const Padding(
+                              padding: EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                              child: Row(
+                                children: [
+                                  Icon(Icons.edit_note_rounded, color: GamerTheme.accentBlue, size: 20),
+                                  SizedBox(width: 6),
+                                  Text(
+                                    'Text',
+                                    style: TextStyle(color: Colors.white, fontSize: 12.5, fontWeight: FontWeight.w600),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ),
+                          Container(width: 1, height: 16, color: GamerTheme.borderDark),
+                          // 2: Video Publish (Max 3 Min) -> Facebook-style prominent video button!
+                          InkWell(
+                            onTap: () {
+                              Navigator.of(context).push(
+                                MaterialPageRoute(builder: (_) => const PublishVideoScreen()),
+                              );
+                            },
+                            borderRadius: BorderRadius.circular(8),
+                            child: Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                              decoration: BoxDecoration(
+                                color: GamerTheme.accentOrange.withOpacity(0.12),
+                                borderRadius: BorderRadius.circular(8),
+                                border: Border.all(color: GamerTheme.accentOrange.withOpacity(0.35)),
+                              ),
+                              child: const Row(
+                                children: [
+                                  Icon(Icons.video_call_rounded, color: GamerTheme.accentOrange, size: 20),
+                                  SizedBox(width: 6),
+                                  Text(
+                                    'Video (Max 3m)',
+                                    style: TextStyle(
+                                      color: GamerTheme.accentOrange,
+                                      fontSize: 12.5,
+                                      fontWeight: FontWeight.bold,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ),
+                          Container(width: 1, height: 16, color: GamerTheme.borderDark),
+                          // 3: Photo
+                          InkWell(
+                            onTap: () {
+                              Navigator.of(context).push(
+                                MaterialPageRoute(builder: (_) => const CreatePostScreen()),
+                              );
+                            },
+                            borderRadius: BorderRadius.circular(8),
+                            child: const Padding(
+                              padding: EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                              child: Row(
+                                children: [
+                                  Icon(Icons.photo_library_rounded, color: GamerTheme.neonGreen, size: 18),
+                                  SizedBox(width: 6),
+                                  Text(
+                                    'Photo',
+                                    style: TextStyle(color: Colors.white, fontSize: 12.5, fontWeight: FontWeight.w600),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ],
                   ),
                 ),
               ),
 
-              // Filter Toggle: All vs Following
+              // Filter Toggle: All Gamers vs Videos vs Following
               SliverToBoxAdapter(
                 child: Padding(
                   padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
@@ -472,16 +568,16 @@ class _GamerFeedScreenState extends State<GamerFeedScreen> {
                                 children: [
                                   Icon(
                                     Icons.public_rounded,
-                                    size: 16,
+                                    size: 15,
                                     color: _feedMode == 'all' ? GamerTheme.bgDark : GamerTheme.textGray,
                                   ),
-                                  const SizedBox(width: 6),
+                                  const SizedBox(width: 4),
                                   Text(
-                                    'All Gamers',
+                                    'All',
                                     style: TextStyle(
                                       color: _feedMode == 'all' ? GamerTheme.bgDark : GamerTheme.textGray,
                                       fontWeight: FontWeight.w900,
-                                      fontSize: 13,
+                                      fontSize: 12.5,
                                     ),
                                   ),
                                 ],
@@ -490,7 +586,46 @@ class _GamerFeedScreenState extends State<GamerFeedScreen> {
                           ),
                         ),
                       ),
-                      const SizedBox(width: 10),
+                      const SizedBox(width: 8),
+                      // Videos (Facebook Watch) Toggle
+                      Expanded(
+                        child: InkWell(
+                          onTap: () => setState(() => _feedMode = 'videos'),
+                          borderRadius: BorderRadius.circular(10),
+                          child: Container(
+                            padding: const EdgeInsets.symmetric(vertical: 8),
+                            decoration: BoxDecoration(
+                              color: _feedMode == 'videos' ? const Color(0xFFFF7A00) : GamerTheme.cardDark,
+                              borderRadius: BorderRadius.circular(10),
+                              border: Border.all(
+                                color: _feedMode == 'videos' ? const Color(0xFFFF7A00) : GamerTheme.borderDark,
+                              ),
+                            ),
+                            child: Center(
+                              child: Row(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  Icon(
+                                    Icons.ondemand_video_rounded,
+                                    size: 15,
+                                    color: _feedMode == 'videos' ? Colors.white : GamerTheme.textGray,
+                                  ),
+                                  const SizedBox(width: 4),
+                                  Text(
+                                    'Videos 🎥',
+                                    style: TextStyle(
+                                      color: _feedMode == 'videos' ? Colors.white : GamerTheme.textGray,
+                                      fontWeight: FontWeight.w900,
+                                      fontSize: 12.5,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ),
+                        ),
+                      ),
+                      const SizedBox(width: 8),
                       // Following Toggle
                       Expanded(
                         child: InkWell(
@@ -499,10 +634,10 @@ class _GamerFeedScreenState extends State<GamerFeedScreen> {
                           child: Container(
                             padding: const EdgeInsets.symmetric(vertical: 8),
                             decoration: BoxDecoration(
-                              color: _feedMode == 'following' ? GamerTheme.accentOrange : GamerTheme.cardDark,
+                              color: _feedMode == 'following' ? GamerTheme.neonGreen : GamerTheme.cardDark,
                               borderRadius: BorderRadius.circular(10),
                               border: Border.all(
-                                color: _feedMode == 'following' ? GamerTheme.accentOrange : GamerTheme.borderDark,
+                                color: _feedMode == 'following' ? GamerTheme.neonGreen : GamerTheme.borderDark,
                               ),
                             ),
                             child: Center(
@@ -511,16 +646,16 @@ class _GamerFeedScreenState extends State<GamerFeedScreen> {
                                 children: [
                                   Icon(
                                     Icons.people_alt_rounded,
-                                    size: 16,
-                                    color: _feedMode == 'following' ? Colors.white : GamerTheme.textGray,
+                                    size: 15,
+                                    color: _feedMode == 'following' ? GamerTheme.bgDark : GamerTheme.textGray,
                                   ),
-                                  const SizedBox(width: 6),
+                                  const SizedBox(width: 4),
                                   Text(
                                     'Following',
                                     style: TextStyle(
-                                      color: _feedMode == 'following' ? Colors.white : GamerTheme.textGray,
+                                      color: _feedMode == 'following' ? GamerTheme.bgDark : GamerTheme.textGray,
                                       fontWeight: FontWeight.w900,
-                                      fontSize: 13,
+                                      fontSize: 12.5,
                                     ),
                                   ),
                                 ],
@@ -733,6 +868,7 @@ class _GamerFeedScreenState extends State<GamerFeedScreen> {
   }
 
   Widget _buildEmptyAllState() {
+    final isVideosMode = _feedMode == 'videos';
     return Center(
       child: Padding(
         padding: const EdgeInsets.all(32),
@@ -746,32 +882,43 @@ class _GamerFeedScreenState extends State<GamerFeedScreen> {
                 shape: BoxShape.circle,
                 border: Border.all(color: GamerTheme.borderDark),
               ),
-              child: const Icon(Icons.sports_esports_rounded, color: GamerTheme.accentBlue, size: 48),
+              child: Icon(
+                isVideosMode ? Icons.ondemand_video_rounded : Icons.sports_esports_rounded,
+                color: isVideosMode ? const Color(0xFFFF7A00) : GamerTheme.accentBlue,
+                size: 48,
+              ),
             ),
             const SizedBox(height: 16),
-            const Text(
-              'No posts in this feed yet',
-              style: TextStyle(color: GamerTheme.textWhite, fontSize: 18, fontWeight: FontWeight.bold),
+            Text(
+              isVideosMode ? 'No Gaming Videos Yet' : 'No posts in this feed yet',
+              style: const TextStyle(color: GamerTheme.textWhite, fontSize: 18, fontWeight: FontWeight.bold),
             ),
             const SizedBox(height: 6),
-            const Text(
-              'Be the first player to share your gameplay status, clutch moment or recruit squad members!',
+            Text(
+              isVideosMode
+                  ? 'Upload and share your best clutches and funny moments!\nMaximum video duration: 3 minutes.'
+                  : 'Be the first player to share your gameplay status, clutch moment or recruit squad members!',
               textAlign: TextAlign.center,
-              style: TextStyle(color: GamerTheme.textMuted, fontSize: 13),
+              style: const TextStyle(color: GamerTheme.textMuted, fontSize: 13),
             ),
             const SizedBox(height: 20),
             ElevatedButton.icon(
               style: ElevatedButton.styleFrom(
-                backgroundColor: GamerTheme.accentBlue,
-                foregroundColor: GamerTheme.bgDark,
+                backgroundColor: isVideosMode ? const Color(0xFFFF7A00) : GamerTheme.accentBlue,
+                foregroundColor: Colors.white,
                 padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
                 shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
               ),
-              icon: const Icon(Icons.add_rounded),
-              label: const Text('Create First Post', style: TextStyle(fontWeight: FontWeight.bold)),
+              icon: Icon(isVideosMode ? Icons.video_call_rounded : Icons.add_rounded),
+              label: Text(
+                isVideosMode ? 'Publish Video (Max 3m)' : 'Create First Post',
+                style: const TextStyle(fontWeight: FontWeight.bold),
+              ),
               onPressed: () {
                 Navigator.of(context).push(
-                  MaterialPageRoute(builder: (_) => const CreatePostScreen()),
+                  MaterialPageRoute(
+                    builder: (_) => isVideosMode ? const PublishVideoScreen() : const CreatePostScreen(),
+                  ),
                 );
               },
             ),

@@ -295,6 +295,20 @@ class GamerSocialService {
     });
   }
 
+  /// Stream of all video posts (Facebook Watch style gaming clips)
+  Stream<List<GamerPost>> getVideosStream({String? gameTag}) {
+    Query query = _firestore.collection('posts').orderBy('createdAt', descending: true);
+    if (gameTag != null && gameTag != 'All' && gameTag.isNotEmpty) {
+      query = query.where('gameTag', isEqualTo: gameTag);
+    }
+    return query.limit(100).snapshots().map((snap) {
+      return snap.docs
+          .map((d) => GamerPost.fromFirestore(d))
+          .where((p) => p.videoUrl != null && p.videoUrl!.trim().isNotEmpty)
+          .toList();
+    });
+  }
+
   Stream<List<GamerPost>> getUserPostsStream(String userId, [String? username]) {
     final clean = (username ?? '').replaceAll('@', '').trim();
     final atUser = clean.isNotEmpty ? '@$clean' : '';
