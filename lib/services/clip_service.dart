@@ -36,7 +36,7 @@ class ClipService {
     }
   }
 
-  /// Uploads video clip to Cloudinary and saves {videoUrl, userId, createdAt, caption} to Firestore collection 'clips'
+  /// Uploads video clip to Cloudinary and saves {videoUrl, thumbnailUrl, caption, gameTag, duration, etc.} to Firestore collection 'clips'
   Future<String> uploadClip({
     required File file,
     required String userId,
@@ -47,39 +47,60 @@ class ClipService {
     String gameTag = 'BGMI',
     String songTitle = 'Original Audio',
     bool isVideo = true,
+    double trimmedDuration = 0.0,
+    double originalDuration = 0.0,
+    void Function(double progress)? onProgress,
+    bool Function()? isCancelled,
   }) async {
     try {
-      print('🚀 [CLIP_SERVICE] Step 1: Uploading video file to Cloudinary...');
+      print('🚀 [CLIP_SERVICE] Step 1: Uploading video file to Cloudinary with progress...');
       
-      // 1. Upload to Cloudinary unsigned auto endpoint with folder 'gamer_clips'
-      final videoUrl = await CloudinaryService.uploadFile(file: file, folder: 'gamer_clips');
-      if (videoUrl == null) {
-        throw Exception('Video upload to Cloudinary failed');
-      }
-      print('✅ [CLIP_SERVICE] Cloudinary upload successful! URL: $videoUrl');
+      final uploadResult = await CloudinaryService.uploadVideoWithProgress(
+        file: file,
+        userId: userId,
+        gameTag: gameTag,
+        caption: caption,
+        onProgress: onProgress,
+        isCancelled: isCancelled,
+      );
 
+      final videoUrl = uploadResult.secureUrl;
+      final thumbnailUrl = uploadResult.thumbnailUrl.isNotEmpty 
+          ? uploadResult.thumbnailUrl 
+          : CloudinaryService.getAutoThumbnailUrl(videoUrl);
+      final finalDuration = (uploadResult.duration > 0) ? uploadResult.duration : trimmedDuration;
+
+      print('✅ [CLIP_SERVICE] Cloudinary upload successful! URL: $videoUrl, Thumb: $thumbnailUrl');
       print('💾 [CLIP_SERVICE] Step 2: Saving clip record to Firestore collection "clips"...');
       
-      // 2. Prepare document data for collection 'clips'
+      // Prepare document data for collection 'clips'
       final docRef = _clipsRef.doc();
       final clipData = {
         'id': docRef.id,
         'userId': userId,
         'authorId': userId,
+        'uploaderId': userId,
         'caption': caption.trim(),
         'title': caption.trim(),
         'videoUrl': videoUrl,
         'mediaUrl': videoUrl,
-        'thumbnail': '',
+        'thumbnail': thumbnailUrl,
+        'thumbnailUrl': thumbnailUrl,
+        'publicId': uploadResult.publicId,
         'username': username,
         'displayName': displayName,
         'userAvatar': userAvatar,
         'gameTag': gameTag,
         'songTitle': songTitle,
+        'duration': finalDuration,
+        'originalDuration': originalDuration > 0 ? originalDuration : finalDuration,
+        'isGamingClip': true,
         'likesCount': 0,
         'commentsCount': 0,
         'sharesCount': 0,
-        'viewsCount': 1,
+        'viewsCount': 0,
+        'likes': 0,
+        'views': 0,
         'likedBy': [],
         'createdAt': FieldValue.serverTimestamp(),
       };
