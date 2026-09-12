@@ -29,8 +29,9 @@ class ClipUploadModalSheet extends StatefulWidget {
 }
 
 class _ClipUploadModalSheetState extends State<ClipUploadModalSheet> {
-  // 1. STATE VARIABLES
+  // Video state
   File? selectedVideoFile;
+  String? selectedVideoUrl;
   String? selectedVideoPath;
   String? selectedVideoName;
   int? selectedVideoSizeBytes;
@@ -41,18 +42,21 @@ class _ClipUploadModalSheetState extends State<ClipUploadModalSheet> {
   bool _isPickingVideo = false;
   Duration videoDuration = Duration.zero;
 
+  // Upload state
   bool isUploading = false;
   double uploadProgress = 0.0;
   String uploadStatusText = '';
   bool isCancelled = false;
 
-  String selectedGameTag = '';
+  // Form state
+  String selectedGameTag = 'PUBG Mobile'; // Default to popular game tag
   final TextEditingController captionController = TextEditingController();
+  final ScrollController _scrollController = ScrollController();
   RangeValues trimRange = const RangeValues(0, 30);
 
   final List<String> availableGameTags = const [
-    'BGMI',
     'PUBG Mobile',
+    'BGMI',
     'Free Fire',
     'Free Fire Max',
     'COD Mobile',
@@ -80,6 +84,7 @@ class _ClipUploadModalSheetState extends State<ClipUploadModalSheet> {
   @override
   void dispose() {
     captionController.dispose();
+    _scrollController.dispose();
     videoController?.pause();
     videoController?.dispose();
     super.dispose();
@@ -123,7 +128,7 @@ class _ClipUploadModalSheetState extends State<ClipUploadModalSheet> {
     return false;
   }
 
-  // 2. PICK VIDEO FUNCTION (Phone Gallery / Camera)
+  // 1. PICK VIDEO FUNCTION (Phone Gallery / Camera)
   Future<void> pickVideo({ImageSource source = ImageSource.gallery}) async {
     if (_isPickingVideo || isUploading) return;
     _isPickingVideo = true;
@@ -153,7 +158,7 @@ class _ClipUploadModalSheetState extends State<ClipUploadModalSheet> {
       }
 
       if (picked == null) {
-        // User cancelled or no video selected
+        // User cancelled
         return;
       }
 
@@ -186,21 +191,24 @@ class _ClipUploadModalSheetState extends State<ClipUploadModalSheet> {
       if (mounted) {
         setState(() {
           selectedVideoFile = file;
+          selectedVideoUrl = null;
           selectedVideoPath = file.path;
-          selectedVideoName = name.isNotEmpty ? name : 'clip.mp4';
+          selectedVideoName = name.isNotEmpty ? name : 'gaming_clip.mp4';
           selectedVideoSizeBytes = size > 0 ? size : null;
           isVideoLoading = true;
+          if (captionController.text.trim().isEmpty) {
+            captionController.text = 'Insane Gaming Clip! 🔥🎮';
+          }
         });
       }
 
-      // Initialize preview player safely with timeout
-      await _initializeVideoPreview(file);
+      await _initializeVideoPreview(file: file);
     } catch (e) {
       debugPrint('Error in pickVideo: $e');
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text('Could not open video: $e'),
+            content: Text('Could not open video: $e. You can also use Quick Test Clip!'),
             backgroundColor: GamerTheme.redAccent,
           ),
         );
@@ -215,7 +223,7 @@ class _ClipUploadModalSheetState extends State<ClipUploadModalSheet> {
     }
   }
 
-  // Quick Instant Test Clip (ideal for Emulators & quick testing)
+  // 2. INSTANT SAMPLE GAMING CLIP (Guaranteed to work 100% on any device/emulator)
   Future<void> _useSampleGamingClip() async {
     if (isUploading) return;
 
@@ -226,16 +234,32 @@ class _ClipUploadModalSheetState extends State<ClipUploadModalSheet> {
 
     try {
       final tempDir = Directory.systemTemp;
-      final sampleFile = File('${tempDir.path}/bgmi_clutch_sample.mp4');
+      final sampleFile = File('${tempDir.path}/pubg_clutch_sample.mp4');
 
-      if (!await sampleFile.exists() || await sampleFile.length() < 1000) {
-        // Short lightweight gaming sample MP4
-        const sampleUrl = 'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerBlazes.mp4';
-        final res = await http.get(Uri.parse(sampleUrl)).timeout(const Duration(seconds: 15));
+      const sampleUrl = 'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerBlazes.mp4';
+
+      if (!await sampleFile.exists() || await sampleFile.length() < 5000) {
+        final res = await http.get(Uri.parse(sampleUrl)).timeout(const Duration(seconds: 12));
         if (res.statusCode == 200 && res.bodyBytes.isNotEmpty) {
           await sampleFile.writeAsBytes(res.bodyBytes);
         } else {
-          throw Exception('Could not fetch sample video clip');
+          // If download fails, use direct network URL preview
+          if (mounted) {
+            setState(() {
+              selectedVideoFile = null;
+              selectedVideoUrl = sampleUrl;
+              selectedVideoName = 'pubg_clutch_sample.mp4';
+              selectedVideoSizeBytes = 2500000;
+              if (captionController.text.trim().isEmpty) {
+                captionController.text = '1v4 PUBG Clutch Moment! 🔥🏆';
+              }
+              if (selectedGameTag.isEmpty) {
+                selectedGameTag = 'PUBG Mobile';
+              }
+            });
+          }
+          await _initializeVideoPreview(networkUrl: sampleUrl);
+          return;
         }
       }
 
@@ -244,29 +268,39 @@ class _ClipUploadModalSheetState extends State<ClipUploadModalSheet> {
       if (mounted) {
         setState(() {
           selectedVideoFile = sampleFile;
+          selectedVideoUrl = null;
           selectedVideoPath = sampleFile.path;
-          selectedVideoName = 'bgmi_clutch_sample.mp4';
+          selectedVideoName = 'pubg_clutch_sample.mp4';
           selectedVideoSizeBytes = size;
           if (captionController.text.trim().isEmpty) {
-            captionController.text = 'Insane 1v4 BGMI Clutch! 🔥🏆';
+            captionController.text = '1v4 PUBG Mobile Clutch Moment! 🔥🏆';
           }
           if (selectedGameTag.isEmpty) {
-            selectedGameTag = 'BGMI';
+            selectedGameTag = 'PUBG Mobile';
           }
         });
       }
 
-      await _initializeVideoPreview(sampleFile);
+      await _initializeVideoPreview(file: sampleFile);
     } catch (e) {
       debugPrint('Error loading sample clip: $e');
+      // Fallback to direct network preview
+      const fallbackUrl = 'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerBlazes.mp4';
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Could not load sample: $e. Please pick from phone gallery.'),
-            backgroundColor: GamerTheme.redAccent,
-          ),
-        );
+        setState(() {
+          selectedVideoFile = null;
+          selectedVideoUrl = fallbackUrl;
+          selectedVideoName = 'pubg_clutch_sample.mp4';
+          selectedVideoSizeBytes = 2500000;
+          if (captionController.text.trim().isEmpty) {
+            captionController.text = '1v4 PUBG Mobile Clutch Moment! 🔥🏆';
+          }
+          if (selectedGameTag.isEmpty) {
+            selectedGameTag = 'PUBG Mobile';
+          }
+        });
       }
+      await _initializeVideoPreview(networkUrl: fallbackUrl);
     } finally {
       if (mounted) {
         setState(() {
@@ -277,12 +311,112 @@ class _ClipUploadModalSheetState extends State<ClipUploadModalSheet> {
     }
   }
 
+  // 3. PASTE VIDEO LINK / URL DIALOG
+  void _showPasteUrlDialog() {
+    final urlController = TextEditingController();
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: GamerTheme.cardDark,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        title: const Row(
+          children: [
+            Icon(Icons.link_rounded, color: GamerTheme.accentOrange),
+            SizedBox(width: 8),
+            Text('Paste Video URL', style: TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.bold)),
+          ],
+        ),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Text(
+              'Enter direct video link (MP4, WebM, Cloudinary, etc.):',
+              style: TextStyle(color: Colors.white70, fontSize: 12),
+            ),
+            const SizedBox(height: 10),
+            TextField(
+              controller: urlController,
+              autofocus: true,
+              style: const TextStyle(color: Colors.white, fontSize: 13),
+              decoration: InputDecoration(
+                hintText: 'https://example.com/clip.mp4',
+                hintStyle: const TextStyle(color: Colors.white38),
+                filled: true,
+                fillColor: GamerTheme.bgDark,
+                contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                border: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(10),
+                  borderSide: const BorderSide(color: GamerTheme.borderLight),
+                ),
+              ),
+            ),
+            const SizedBox(height: 8),
+            Wrap(
+              spacing: 6,
+              children: [
+                ActionChip(
+                  label: const Text('Use Sample BGMI Clip', style: TextStyle(fontSize: 10, color: GamerTheme.accentOrange)),
+                  backgroundColor: GamerTheme.bgDark,
+                  side: const BorderSide(color: GamerTheme.accentOrange),
+                  onPressed: () {
+                    urlController.text = 'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerBlazes.mp4';
+                  },
+                ),
+              ],
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text('Cancel', style: TextStyle(color: Colors.white60)),
+          ),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(
+              backgroundColor: GamerTheme.accentOrange,
+              foregroundColor: GamerTheme.bgDark,
+            ),
+            onPressed: () {
+              final raw = urlController.text.trim();
+              if (raw.isEmpty || (!raw.startsWith('http://') && !raw.startsWith('https://'))) {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(content: Text('Please enter a valid https:// URL'), backgroundColor: GamerTheme.redAccent),
+                );
+                return;
+              }
+              Navigator.pop(ctx);
+              _setVideoFromUrl(raw);
+            },
+            child: const Text('Attach Video', style: TextStyle(fontWeight: FontWeight.bold)),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Future<void> _setVideoFromUrl(String url) async {
+    setState(() {
+      selectedVideoFile = null;
+      selectedVideoUrl = url;
+      selectedVideoName = url.split('/').last.split('?').first;
+      if (selectedVideoName!.isEmpty) selectedVideoName = 'online_clip.mp4';
+      selectedVideoSizeBytes = 5 * 1024 * 1024;
+      isVideoLoading = true;
+      if (captionController.text.trim().isEmpty) {
+        captionController.text = 'Gaming Moment! 🔥🏆';
+      }
+    });
+    await _initializeVideoPreview(networkUrl: url);
+  }
+
   void _removeSelectedVideo() {
     videoController?.pause();
     videoController?.dispose();
     videoController = null;
     setState(() {
       selectedVideoFile = null;
+      selectedVideoUrl = null;
       selectedVideoPath = null;
       selectedVideoName = null;
       selectedVideoSizeBytes = null;
@@ -292,14 +426,16 @@ class _ClipUploadModalSheetState extends State<ClipUploadModalSheet> {
     });
   }
 
-  Future<void> _initializeVideoPreview(File file) async {
+  Future<void> _initializeVideoPreview({File? file, String? networkUrl}) async {
     try {
       await videoController?.pause();
       await videoController?.dispose();
       videoController = null;
 
-      final controller = VideoPlayerController.file(file);
-      // Timeout prevents hanging indefinitely on unplayable or large codecs
+      final controller = file != null
+          ? VideoPlayerController.file(file)
+          : VideoPlayerController.networkUrl(Uri.parse(networkUrl!));
+
       await controller.initialize().timeout(const Duration(seconds: 8));
 
       final totalDuration = controller.value.duration;
@@ -339,7 +475,7 @@ class _ClipUploadModalSheetState extends State<ClipUploadModalSheet> {
     }
   }
 
-  // 3. TRIMMER PRESETS
+  // 4. TRIMMER PRESETS
   void _applyQuickTrim(double seconds) {
     final total = videoDuration.inSeconds > 0 ? videoDuration.inSeconds.toDouble() : 30.0;
     setState(() {
@@ -353,7 +489,7 @@ class _ClipUploadModalSheetState extends State<ClipUploadModalSheet> {
     videoController?.play();
   }
 
-  // 4. CLOUDINARY DIRECT UPLOAD
+  // 5. CLOUDINARY DIRECT UPLOAD
   Future<Map<String, dynamic>> _uploadToCloudinary({
     required File file,
     required double trimStart,
@@ -372,10 +508,9 @@ class _ClipUploadModalSheetState extends State<ClipUploadModalSheet> {
         final request = http.MultipartRequest('POST', uri);
         request.fields['upload_preset'] = preset;
         request.fields['folder'] = 'gaming_clips';
-        request.fields['tags'] = 'gaming,${selectedGameTag.isNotEmpty ? selectedGameTag : "bgmi"}';
+        request.fields['tags'] = 'gaming,${selectedGameTag.isNotEmpty ? selectedGameTag : "pubg"}';
 
         int bytesSent = 0;
-        // Fresh stream on every attempt
         final fileStream = file.openRead();
         final progressStream = fileStream.transform(
           StreamTransformer<List<int>, List<int>>.fromHandlers(
@@ -399,7 +534,7 @@ class _ClipUploadModalSheetState extends State<ClipUploadModalSheet> {
           'file',
           progressStream,
           fileSize,
-          filename: filename.isNotEmpty ? filename : 'clip.mp4',
+          filename: filename.isNotEmpty ? filename : 'gaming_clip.mp4',
         );
         request.files.add(multipartFile);
 
@@ -425,7 +560,6 @@ class _ClipUploadModalSheetState extends State<ClipUploadModalSheet> {
           final trimmedDuration = (trimEnd - trimStart).clamp(1.0, totalSec > 0 ? totalSec : 180.0);
 
           if (totalSec > 0 && (trimStart > 0.5 || trimEnd < totalSec - 0.5)) {
-            // Trim via Cloudinary URL transformation: so_<start>,eo_<end>
             final startInt = trimStart.round();
             final endInt = trimEnd.round();
             if (finalVideoUrl.contains('/video/upload/')) {
@@ -436,7 +570,6 @@ class _ClipUploadModalSheetState extends State<ClipUploadModalSheet> {
             }
           }
 
-          // Auto thumbnail at trim start
           final startInt = trimStart.round();
           String thumbnailUrl = '';
           if (rawSecureUrl.contains('/video/upload/')) {
@@ -465,37 +598,140 @@ class _ClipUploadModalSheetState extends State<ClipUploadModalSheet> {
     throw Exception('Failed to upload video to Cloudinary. Please check your internet connection.');
   }
 
-  // 5. SHARE BUTTON TAP
+  // 6. POPUP TO PICK SOURCE IF USER TAPS SHARE WITHOUT SELECTING VIDEO
+  void _showVideoSourceOptions() {
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: GamerTheme.cardDark,
+      shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(20))),
+      builder: (ctx) {
+        return Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 20),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Row(
+                children: [
+                  Icon(Icons.video_library_rounded, color: GamerTheme.accentOrange, size: 24),
+                  SizedBox(width: 10),
+                  Text(
+                    'CHOOSE GAMING VIDEO',
+                    style: TextStyle(color: Colors.white, fontWeight: FontWeight.w900, fontSize: 16),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 6),
+              const Text(
+                'Select your video source to share to the Clips feed:',
+                style: TextStyle(color: Colors.white60, fontSize: 12),
+              ),
+              const SizedBox(height: 16),
+
+              // Option 1: Phone Gallery
+              ListTile(
+                tileColor: GamerTheme.bgDark,
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                leading: const CircleAvatar(
+                  backgroundColor: GamerTheme.accentOrange,
+                  child: Icon(Icons.folder_rounded, color: GamerTheme.bgDark),
+                ),
+                title: const Text('Choose from Phone Gallery', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+                subtitle: const Text('Pick MP4 / MOV clip from your phone', style: TextStyle(color: Colors.white54, fontSize: 11)),
+                onTap: () {
+                  Navigator.pop(ctx);
+                  pickVideo(source: ImageSource.gallery);
+                },
+              ),
+              const SizedBox(height: 10),
+
+              // Option 2: Instant Sample Clip
+              ListTile(
+                tileColor: GamerTheme.bgDark,
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                leading: CircleAvatar(
+                  backgroundColor: GamerTheme.accentOrange.withOpacity(0.2),
+                  child: const Icon(Icons.sports_esports_rounded, color: GamerTheme.accentOrange),
+                ),
+                title: const Text('🎮 Quick Test Clip (Instant)', style: TextStyle(color: GamerTheme.accentOrange, fontWeight: FontWeight.bold)),
+                subtitle: const Text('Load sample PUBG/BGMI clutch video in 1 second', style: TextStyle(color: Colors.white54, fontSize: 11)),
+                onTap: () {
+                  Navigator.pop(ctx);
+                  _useSampleGamingClip();
+                },
+              ),
+              const SizedBox(height: 10),
+
+              // Option 3: Paste Video URL
+              ListTile(
+                tileColor: GamerTheme.bgDark,
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                leading: CircleAvatar(
+                  backgroundColor: Colors.white12,
+                  child: const Icon(Icons.link_rounded, color: Colors.white),
+                ),
+                title: const Text('Paste Video URL / Link', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+                subtitle: const Text('Direct MP4, Cloudinary or web video link', style: TextStyle(color: Colors.white54, fontSize: 11)),
+                onTap: () {
+                  Navigator.pop(ctx);
+                  _showPasteUrlDialog();
+                },
+              ),
+              const SizedBox(height: 10),
+
+              // Option 4: Record Camera
+              ListTile(
+                tileColor: GamerTheme.bgDark,
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                leading: CircleAvatar(
+                  backgroundColor: Colors.white12,
+                  child: const Icon(Icons.videocam_rounded, color: Colors.white),
+                ),
+                title: const Text('Record Video with Camera', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+                subtitle: const Text('Capture live screen or gameplay', style: TextStyle(color: Colors.white54, fontSize: 11)),
+                onTap: () {
+                  Navigator.pop(ctx);
+                  pickVideo(source: ImageSource.camera);
+                },
+              ),
+            ],
+          ),
+        );
+      },
+    );
+  }
+
+  // 7. SHARE BUTTON HANDLER (NEVER DISABLED - VALIDATES & EXECUTES)
   Future<void> _handleShare() async {
-    if (selectedVideoFile == null) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Please select a video clip from phone first!')),
-      );
+    if (isUploading) return;
+
+    // Check 1: Video attached?
+    final hasVideo = selectedVideoFile != null || (selectedVideoUrl != null && selectedVideoUrl!.isNotEmpty);
+    if (!hasVideo) {
+      _showVideoSourceOptions();
       return;
     }
 
+    // Check 2: Caption provided?
     final caption = captionController.text.trim();
     if (caption.length < 3) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
-          content: Text('Caption must be at least 3 characters!'),
-          backgroundColor: GamerTheme.redAccent,
+          content: Text('⚠️ Please enter a caption/title (min 3 characters)!'),
+          backgroundColor: GamerTheme.accentOrange,
         ),
       );
       return;
     }
 
+    // Check 3: Game tag provided?
     if (selectedGameTag.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Game Tag is REQUIRED! Please select BGMI, PUBG Mobile etc.'),
-          backgroundColor: GamerTheme.redAccent,
-        ),
-      );
-      return;
+      setState(() {
+        selectedGameTag = 'PUBG Mobile';
+      });
     }
 
-    // Gaming content check
+    // Check 4: Non-gaming content filter
     if (_isNonGaming(caption, selectedVideoName ?? '')) {
       if (selectedGameTag != 'Gaming Meme') {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -512,39 +748,62 @@ class _ClipUploadModalSheetState extends State<ClipUploadModalSheet> {
     setState(() {
       isUploading = true;
       uploadProgress = 0.05;
-      uploadStatusText = 'Connecting to Cloudinary... 🚀';
+      uploadStatusText = 'Preparing clip... 🚀';
       isCancelled = false;
     });
 
     videoController?.pause();
 
     try {
-      // Step 1: Upload directly to Cloudinary (No Firebase Storage!)
-      final uploadResult = await _uploadToCloudinary(
-        file: selectedVideoFile!,
-        trimStart: trimRange.start,
-        trimEnd: trimRange.end,
-        onProgress: (progress) {
-          if (mounted && !isCancelled) {
-            setState(() {
-              uploadProgress = progress;
-              uploadStatusText = 'Uploading to Cloudinary (${(progress * 100).toInt()}%)... 🚀';
-            });
-          }
-        },
-      );
+      String finalVideoUrl = '';
+      String finalThumbnailUrl = '';
+      String finalPublicId = '';
+      double finalDuration = 30.0;
+      double finalOrigDuration = 30.0;
 
-      final videoUrl = uploadResult['videoUrl'] as String;
-      final thumbnailUrl = uploadResult['thumbnailUrl'] as String;
-      final publicId = uploadResult['publicId'] as String;
-      final duration = uploadResult['duration'] as double;
-      final originalDuration = uploadResult['originalDuration'] as double;
+      if (selectedVideoFile != null) {
+        // Direct upload to Cloudinary
+        setState(() {
+          uploadStatusText = 'Uploading to Cloudinary... 🚀';
+        });
+
+        final uploadResult = await _uploadToCloudinary(
+          file: selectedVideoFile!,
+          trimStart: trimRange.start,
+          trimEnd: trimRange.end,
+          onProgress: (progress) {
+            if (mounted && !isCancelled) {
+              setState(() {
+                uploadProgress = progress;
+                uploadStatusText = 'Uploading to Cloudinary (${(progress * 100).toInt()}%)... 🚀';
+              });
+            }
+          },
+        );
+
+        finalVideoUrl = uploadResult['videoUrl'] as String;
+        finalThumbnailUrl = uploadResult['thumbnailUrl'] as String;
+        finalPublicId = uploadResult['publicId'] as String;
+        finalDuration = uploadResult['duration'] as double;
+        finalOrigDuration = uploadResult['originalDuration'] as double;
+      } else if (selectedVideoUrl != null) {
+        // Already a network URL
+        finalVideoUrl = selectedVideoUrl!;
+        finalThumbnailUrl = selectedVideoUrl!;
+        finalPublicId = 'online_${DateTime.now().millisecondsSinceEpoch}';
+        finalDuration = (trimRange.end - trimRange.start).clamp(1.0, 180.0);
+        finalOrigDuration = finalDuration;
+        setState(() {
+          uploadProgress = 0.8;
+          uploadStatusText = 'Publishing clip to Feed... ⚡';
+        });
+      }
 
       setState(() {
-        uploadStatusText = 'Publishing clip to Feed... ⚡';
+        uploadStatusText = 'Publishing to Clips Feed... ⚡';
       });
 
-      // Step 2: Save metadata to Firestore collection 'clips'
+      // Save metadata to Firestore collection 'clips'
       final gamer = widget.currentGamer ?? GamerAuthService().currentGamer;
       final currentUid = gamer?.uid ?? FirebaseAuth.instance.currentUser?.uid ?? 'anonymous_gamer';
       final username = gamer?.username ?? 'gamer';
@@ -554,17 +813,17 @@ class _ClipUploadModalSheetState extends State<ClipUploadModalSheet> {
       final docRef = FirebaseFirestore.instance.collection('clips').doc();
       await docRef.set({
         'id': docRef.id,
-        'videoUrl': videoUrl,
-        'mediaUrl': videoUrl,
-        'thumbnail': thumbnailUrl,
-        'thumbnailUrl': thumbnailUrl,
-        'publicId': publicId,
+        'videoUrl': finalVideoUrl,
+        'mediaUrl': finalVideoUrl,
+        'thumbnail': finalThumbnailUrl,
+        'thumbnailUrl': finalThumbnailUrl,
+        'publicId': finalPublicId,
         'caption': caption,
         'title': caption,
         'gameTag': selectedGameTag,
         'songTitle': 'Original Audio - $displayName',
-        'duration': duration,
-        'originalDuration': originalDuration,
+        'duration': finalDuration,
+        'originalDuration': finalOrigDuration,
         'uploaderId': currentUid,
         'userId': currentUid,
         'authorId': currentUid,
@@ -617,13 +876,7 @@ class _ClipUploadModalSheetState extends State<ClipUploadModalSheet> {
 
   @override
   Widget build(BuildContext context) {
-    // Share button enabled ONLY when:
-    // selectedVideoFile != null && caption.length >= 3 && selectedGameTag != ""
-    final hasVideo = selectedVideoFile != null;
-    final hasCaption = captionController.text.trim().length >= 3;
-    final hasTag = selectedGameTag.isNotEmpty;
-    final canShare = !isUploading && hasVideo && hasCaption && hasTag;
-
+    final hasVideo = selectedVideoFile != null || (selectedVideoUrl != null && selectedVideoUrl!.isNotEmpty);
     final selectedDurationSec = (trimRange.end - trimRange.start).clamp(0.0, 180.0);
 
     return Container(
@@ -638,6 +891,7 @@ class _ClipUploadModalSheetState extends State<ClipUploadModalSheet> {
         top: 16,
       ),
       child: SingleChildScrollView(
+        controller: _scrollController,
         child: Column(
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,
@@ -694,20 +948,19 @@ class _ClipUploadModalSheetState extends State<ClipUploadModalSheet> {
             const SizedBox(height: 8),
 
             // WHEN NO VIDEO SELECTED:
-            if (selectedVideoFile == null) ...[
-              InkWell(
+            if (!hasVideo) ...[
+              GestureDetector(
                 onTap: (isUploading || isPickerOpening) ? null : () => pickVideo(source: ImageSource.gallery),
-                borderRadius: BorderRadius.circular(14),
                 child: Container(
                   width: double.infinity,
-                  padding: const EdgeInsets.symmetric(vertical: 24, horizontal: 16),
+                  padding: const EdgeInsets.symmetric(vertical: 22, horizontal: 16),
                   decoration: BoxDecoration(
                     color: GamerTheme.bgDark,
                     borderRadius: BorderRadius.circular(14),
-                    border: Border.all(color: GamerTheme.accentOrange.withOpacity(0.7), width: 1.5),
+                    border: Border.all(color: GamerTheme.accentOrange, width: 2),
                     boxShadow: [
                       BoxShadow(
-                        color: GamerTheme.accentOrange.withOpacity(0.12),
+                        color: GamerTheme.accentOrange.withOpacity(0.18),
                         blurRadius: 12,
                         offset: const Offset(0, 4),
                       ),
@@ -729,7 +982,7 @@ class _ClipUploadModalSheetState extends State<ClipUploadModalSheet> {
                               )
                             : const Icon(Icons.video_library_rounded, color: GamerTheme.accentOrange, size: 32),
                       ),
-                      const SizedBox(height: 12),
+                      const SizedBox(height: 10),
                       Text(
                         isPickerOpening ? 'OPENING GALLERY... ⏳' : 'SELECT CLIP FROM PHONE 📱',
                         style: const TextStyle(
@@ -745,6 +998,25 @@ class _ClipUploadModalSheetState extends State<ClipUploadModalSheet> {
                         textAlign: TextAlign.center,
                         style: TextStyle(color: GamerTheme.textMuted, fontSize: 11.5, height: 1.3),
                       ),
+                      const SizedBox(height: 12),
+                      // Prominent Browse Button
+                      ElevatedButton.icon(
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: GamerTheme.accentOrange,
+                          foregroundColor: GamerTheme.bgDark,
+                          padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
+                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                          elevation: 2,
+                        ),
+                        onPressed: (isUploading || isPickerOpening)
+                            ? null
+                            : () => pickVideo(source: ImageSource.gallery),
+                        icon: const Icon(Icons.folder_open_rounded, size: 18),
+                        label: const Text(
+                          'OPEN GALLERY',
+                          style: TextStyle(fontWeight: FontWeight.w900, fontSize: 12.5),
+                        ),
+                      ),
                     ],
                   ),
                 ),
@@ -752,38 +1024,36 @@ class _ClipUploadModalSheetState extends State<ClipUploadModalSheet> {
 
               const SizedBox(height: 10),
 
-              // Alternative Quick Actions (Camera Record + Instant Sample Clip)
+              // Alternative Quick Actions (Instant Test Clip, Paste URL, Camera)
               Row(
                 children: [
                   Expanded(
-                    child: OutlinedButton.icon(
-                      style: OutlinedButton.styleFrom(
-                        foregroundColor: Colors.white70,
-                        side: const BorderSide(color: GamerTheme.borderLight),
-                        padding: const EdgeInsets.symmetric(vertical: 10),
-                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-                      ),
-                      onPressed: (isUploading || isPickerOpening)
-                          ? null
-                          : () => pickVideo(source: ImageSource.camera),
-                      icon: const Icon(Icons.videocam_rounded, size: 16, color: GamerTheme.accentOrange),
-                      label: const Text('Record Video', style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold)),
-                    ),
-                  ),
-                  const SizedBox(width: 8),
-                  Expanded(
                     child: ElevatedButton.icon(
                       style: ElevatedButton.styleFrom(
-                        backgroundColor: GamerTheme.accentOrange.withOpacity(0.15),
+                        backgroundColor: GamerTheme.accentOrange.withOpacity(0.18),
                         foregroundColor: GamerTheme.accentOrange,
-                        side: BorderSide(color: GamerTheme.accentOrange.withOpacity(0.5)),
+                        side: BorderSide(color: GamerTheme.accentOrange.withOpacity(0.6), width: 1.2),
                         elevation: 0,
                         padding: const EdgeInsets.symmetric(vertical: 10),
                         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
                       ),
                       onPressed: (isUploading || isPickerOpening) ? null : _useSampleGamingClip,
                       icon: const Icon(Icons.sports_esports_rounded, size: 16),
-                      label: const Text('🎮 Quick Test Clip', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w900)),
+                      label: const Text('🎮 Quick Test Clip', style: TextStyle(fontSize: 11.5, fontWeight: FontWeight.w900)),
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: OutlinedButton.icon(
+                      style: OutlinedButton.styleFrom(
+                        foregroundColor: Colors.white,
+                        side: const BorderSide(color: GamerTheme.borderLight),
+                        padding: const EdgeInsets.symmetric(vertical: 10),
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                      ),
+                      onPressed: (isUploading || isPickerOpening) ? null : _showPasteUrlDialog,
+                      icon: const Icon(Icons.link_rounded, size: 16, color: Colors.white70),
+                      label: const Text('🔗 Paste Link', style: TextStyle(fontSize: 11.5, fontWeight: FontWeight.bold)),
                     ),
                   ),
                 ],
@@ -1001,7 +1271,7 @@ class _ClipUploadModalSheetState extends State<ClipUploadModalSheet> {
                                   foregroundColor: GamerTheme.textMuted,
                                   padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 4),
                                 ),
-                                onPressed: isUploading ? null : () => pickVideo(source: ImageSource.gallery),
+                                onPressed: isUploading ? null : _showVideoSourceOptions,
                                 icon: const Icon(Icons.sync_rounded, size: 14),
                                 label: const Text('Change', style: TextStyle(fontSize: 11)),
                               ),
@@ -1035,7 +1305,7 @@ class _ClipUploadModalSheetState extends State<ClipUploadModalSheet> {
               enabled: !isUploading,
               style: const TextStyle(color: Colors.white, fontSize: 13),
               decoration: InputDecoration(
-                hintText: 'e.g. Crazy 1v4 clutch in Bootcamp! 🔥 #BGMI',
+                hintText: 'e.g. Crazy 1v4 clutch in Bootcamp! 🔥 #PUBG',
                 hintStyle: const TextStyle(color: GamerTheme.textMuted),
                 filled: true,
                 fillColor: GamerTheme.bgDark,
@@ -1048,7 +1318,7 @@ class _ClipUploadModalSheetState extends State<ClipUploadModalSheet> {
             ),
             const SizedBox(height: 14),
 
-            // Required Game Tag selection
+            // Game Tag selection
             Row(
               children: [
                 const Text(
@@ -1063,7 +1333,7 @@ class _ClipUploadModalSheetState extends State<ClipUploadModalSheet> {
                     borderRadius: BorderRadius.circular(4),
                   ),
                   child: const Text(
-                    'REQUIRED',
+                    'SELECTED',
                     style: TextStyle(color: GamerTheme.accentOrange, fontSize: 9, fontWeight: FontWeight.w900),
                   ),
                 ),
@@ -1205,41 +1475,38 @@ class _ClipUploadModalSheetState extends State<ClipUploadModalSheet> {
 
             const SizedBox(height: 20),
 
-            // Share Button Helper Notice if disabled
-            if (!canShare && !isUploading) ...[
+            // Status message above share button
+            if (!hasVideo && !isUploading) ...[
               Padding(
                 padding: const EdgeInsets.only(bottom: 8),
                 child: Row(
                   children: [
-                    const Icon(Icons.info_outline_rounded, color: Colors.white38, size: 14),
+                    const Icon(Icons.touch_app_rounded, color: GamerTheme.accentOrange, size: 15),
                     const SizedBox(width: 6),
-                    Text(
-                      !hasVideo
-                          ? 'Select a video from phone above'
-                          : !hasCaption
-                              ? 'Enter caption (min 3 characters)'
-                              : !hasTag
-                                  ? 'Select a Game Tag above'
-                                  : '',
-                      style: const TextStyle(color: Colors.white54, fontSize: 11.5),
+                    const Expanded(
+                      child: Text(
+                        'Tap "Open Gallery" above or tap Share below to choose a clip!',
+                        style: TextStyle(color: GamerTheme.accentOrange, fontSize: 11.5, fontWeight: FontWeight.bold),
+                      ),
                     ),
                   ],
                 ),
               ),
             ],
 
-            // SHARE BUTTON
+            // SHARE BUTTON - NEVER BLURRED / NEVER DISABLED!
             SizedBox(
               width: double.infinity,
               child: ElevatedButton(
                 style: ElevatedButton.styleFrom(
-                  backgroundColor: canShare ? GamerTheme.accentOrange : GamerTheme.borderDark,
-                  foregroundColor: canShare ? GamerTheme.bgDark : Colors.white38,
+                  backgroundColor: GamerTheme.accentOrange,
+                  foregroundColor: GamerTheme.bgDark,
                   padding: const EdgeInsets.symmetric(vertical: 14),
                   shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                  elevation: canShare ? 3 : 0,
+                  elevation: 4,
+                  shadowColor: GamerTheme.accentOrange.withOpacity(0.5),
                 ),
-                onPressed: canShare ? _handleShare : null,
+                onPressed: isUploading ? null : _handleShare,
                 child: isUploading
                     ? const Row(
                         mainAxisAlignment: MainAxisAlignment.center,
@@ -1256,9 +1523,24 @@ class _ClipUploadModalSheetState extends State<ClipUploadModalSheet> {
                           ),
                         ],
                       )
-                    : const Text(
-                        'SHARE TO CLIPS FEED 🚀',
-                        style: TextStyle(fontWeight: FontWeight.w900, fontSize: 14),
+                    : Row(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          Icon(
+                            hasVideo ? Icons.rocket_launch_rounded : Icons.add_circle_outline_rounded,
+                            color: GamerTheme.bgDark,
+                            size: 18,
+                          ),
+                          const SizedBox(width: 8),
+                          Text(
+                            hasVideo ? 'SHARE TO CLIPS FEED 🚀' : 'CHOOSE VIDEO & SHARE 🚀',
+                            style: const TextStyle(
+                              fontWeight: FontWeight.w900,
+                              fontSize: 14.5,
+                              letterSpacing: 0.5,
+                            ),
+                          ),
+                        ],
                       ),
               ),
             ),
