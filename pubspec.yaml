@@ -38,6 +38,8 @@ dependencies:
   html: ^0.15.4
   path_provider: ^2.1.2
   ffmpeg_kit_flutter_new: ^4.6.0
+  video_player: ^2.8.2
+  chewie: ^1.7.5
 
 dev_dependencies:
   flutter_test:
