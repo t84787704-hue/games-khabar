@@ -9,6 +9,7 @@ import '../services/language_service.dart';
 import '../widgets/gamer_avatar.dart';
 import '../widgets/post_card.dart';
 import '../widgets/news_post_card.dart';
+import '../widgets/tiktok_upload_progress_banner.dart';
 import 'create_post_screen.dart';
 import 'gamer_profile_screen.dart';
 import 'gamer_search_screen.dart';
@@ -379,6 +380,11 @@ class _GamerFeedScreenState extends State<GamerFeedScreen> {
           },
           child: CustomScrollView(
             slivers: [
+              // TikTok Fast Upload Progress Banner
+              const SliverToBoxAdapter(
+                child: TikTokUploadProgressBanner(),
+              ),
+
               // Facebook-Style "What's on your mind" Quick Create Bar
               SliverToBoxAdapter(
                 child: Container(

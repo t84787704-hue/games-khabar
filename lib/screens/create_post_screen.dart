@@ -1,7 +1,10 @@
+import 'dart:io';
 import 'package:flutter/material.dart';
+import 'package:image_picker/image_picker.dart';
 import '../constants/gamer_theme.dart';
 import '../services/gamer_auth_service.dart';
 import '../services/gamer_social_service.dart';
+import '../services/background_upload_manager.dart';
 import '../widgets/gamer_avatar.dart';
 
 class CreatePostScreen extends StatefulWidget {
@@ -18,6 +21,9 @@ class _CreatePostScreenState extends State<CreatePostScreen> {
 
   String _selectedGameTag = 'BGMI';
   bool _isPosting = false;
+  File? _selectedVideoFile;
+  double _videoSizeMB = 0.0;
+  String? _videoFileName;
 
   final List<String> _quickTips = [
     'Looking for BGMI squad 🎖️',
@@ -42,11 +48,36 @@ class _CreatePostScreenState extends State<CreatePostScreen> {
     super.dispose();
   }
 
+  Future<void> _pickVideo() async {
+    try {
+      final picker = ImagePicker();
+      final picked = await picker.pickVideo(
+        source: ImageSource.gallery,
+        maxDuration: const Duration(minutes: 3),
+      );
+      if (picked != null) {
+        final file = File(picked.path);
+        final bytes = await file.length();
+        setState(() {
+          _selectedVideoFile = file;
+          _videoSizeMB = bytes / (1024 * 1024);
+          _videoFileName = picked.name.isNotEmpty ? picked.name : 'clip.mp4';
+        });
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Could not select video: $e'), backgroundColor: GamerTheme.redAccent),
+        );
+      }
+    }
+  }
+
   Future<void> _submitPost() async {
     final text = _textController.text.trim();
-    if (text.isEmpty) {
+    if (text.isEmpty && _selectedVideoFile == null) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Please write something before posting!'), backgroundColor: GamerTheme.redAccent),
+        const SnackBar(content: Text('Please write something or attach a gaming video clip!'), backgroundColor: GamerTheme.redAccent),
       );
       return;
     }
@@ -60,6 +91,41 @@ class _CreatePostScreenState extends State<CreatePostScreen> {
       return;
     }
 
+    // IF VIDEO SELECTED: TIKTOK ULTRAFAST BACKGROUND UPLOAD
+    if (_selectedVideoFile != null) {
+      BackgroundUploadManager().startVideoUpload(
+        videoFile: _selectedVideoFile!,
+        text: text.isNotEmpty ? text : '🔥 Gameplay clutch by @${user.username}',
+        gameTag: _selectedGameTag,
+        userId: uid,
+        username: user.username,
+        displayName: user.displayName,
+        userPhoto: user.photoUrl,
+        estimatedDurationSeconds: 180,
+      );
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Row(
+            children: [
+              Icon(Icons.bolt_rounded, color: Colors.yellow, size: 20),
+              SizedBox(width: 8),
+              Expanded(
+                child: Text('TikTok Fast Upload started in background! 🚀'),
+              ),
+            ],
+          ),
+          backgroundColor: GamerTheme.cardElevated,
+          duration: Duration(seconds: 3),
+        ),
+      );
+
+      // Close screen immediately like TikTok so user can use feed
+      Navigator.of(context).pop();
+      return;
+    }
+
+    // REGULAR TEXT POST
     setState(() => _isPosting = true);
 
     try {
@@ -218,16 +284,168 @@ class _CreatePostScreenState extends State<CreatePostScreen> {
               // Main Text Area
               TextField(
                 controller: _textController,
-                maxLines: 7,
+                maxLines: 5,
                 style: const TextStyle(color: GamerTheme.textWhite, fontSize: 16, height: 1.4),
                 decoration: const InputDecoration(
-                  hintText: "What's on your mind, Gamer?\n\nShare gameplay status, custom room ID, tips, squad recruitment...",
+                  hintText: "What's on your mind, Gamer?\n\nShare gameplay status, custom room ID, tips, squad recruitment, or upload video clip...",
                   hintStyle: TextStyle(color: GamerTheme.textMuted, fontSize: 14),
                   border: InputBorder.none,
                   enabledBorder: InputBorder.none,
                   focusedBorder: InputBorder.none,
                   filled: false,
                 ),
+              ),
+
+              const SizedBox(height: 12),
+
+              // Video Attachment Section (TikTok Fast Upload)
+              Container(
+                width: double.infinity,
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: GamerTheme.cardElevated,
+                  borderRadius: BorderRadius.circular(14),
+                  border: Border.all(
+                    color: _selectedVideoFile != null ? GamerTheme.neonGreen : GamerTheme.borderDark,
+                    width: _selectedVideoFile != null ? 1.5 : 1,
+                  ),
+                ),
+                child: _selectedVideoFile == null
+                    ? InkWell(
+                        onTap: _pickVideo,
+                        borderRadius: BorderRadius.circular(10),
+                        child: Row(
+                          children: [
+                            Container(
+                              padding: const EdgeInsets.all(10),
+                              decoration: BoxDecoration(
+                                color: GamerTheme.accentBlue.withOpacity(0.15),
+                                shape: BoxShape.circle,
+                              ),
+                              child: const Icon(Icons.video_library_rounded, color: GamerTheme.accentBlue, size: 22),
+                            ),
+                            const SizedBox(width: 12),
+                            Expanded(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  const Text(
+                                    'Attach Video Clip (Up to 3 min / 1000MB)',
+                                    style: TextStyle(
+                                      color: GamerTheme.textWhite,
+                                      fontWeight: FontWeight.bold,
+                                      fontSize: 13.5,
+                                    ),
+                                  ),
+                                  const SizedBox(height: 3),
+                                  Row(
+                                    children: [
+                                      Container(
+                                        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                                        decoration: BoxDecoration(
+                                          color: GamerTheme.neonGreen.withOpacity(0.15),
+                                          borderRadius: BorderRadius.circular(6),
+                                        ),
+                                        child: const Text(
+                                          '⚡ TIKTOK FAST UPLOAD',
+                                          style: TextStyle(
+                                            color: GamerTheme.neonGreen,
+                                            fontSize: 10,
+                                            fontWeight: FontWeight.w900,
+                                          ),
+                                        ),
+                                      ),
+                                      const SizedBox(width: 6),
+                                      const Expanded(
+                                        child: Text(
+                                          'GPU Hardware Compress',
+                                          style: TextStyle(color: GamerTheme.textMuted, fontSize: 11),
+                                          overflow: TextOverflow.ellipsis,
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                ],
+                              ),
+                            ),
+                            const Icon(Icons.add_circle_outline_rounded, color: GamerTheme.accentBlue, size: 24),
+                          ],
+                        ),
+                      )
+                    : Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Row(
+                            children: [
+                              Container(
+                                padding: const EdgeInsets.all(8),
+                                decoration: BoxDecoration(
+                                  color: GamerTheme.accentBlue.withOpacity(0.2),
+                                  borderRadius: BorderRadius.circular(8),
+                                ),
+                                child: const Icon(Icons.movie_filter_rounded, color: GamerTheme.accentBlue, size: 24),
+                              ),
+                              const SizedBox(width: 10),
+                              Expanded(
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Text(
+                                      _videoFileName ?? 'video_clip.mp4',
+                                      style: const TextStyle(
+                                        color: GamerTheme.textWhite,
+                                        fontWeight: FontWeight.bold,
+                                        fontSize: 13,
+                                      ),
+                                      maxLines: 1,
+                                      overflow: TextOverflow.ellipsis,
+                                    ),
+                                    const SizedBox(height: 3),
+                                    Text(
+                                      '${_videoSizeMB.toStringAsFixed(1)} MB • Hardware GPU Compress Active ⚡',
+                                      style: const TextStyle(
+                                        color: GamerTheme.accentOrange,
+                                        fontSize: 11.5,
+                                        fontWeight: FontWeight.w600,
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                              IconButton(
+                                icon: const Icon(Icons.delete_outline_rounded, color: GamerTheme.redAccent, size: 22),
+                                onPressed: () {
+                                  setState(() {
+                                    _selectedVideoFile = null;
+                                    _videoSizeMB = 0.0;
+                                    _videoFileName = null;
+                                  });
+                                },
+                              ),
+                            ],
+                          ),
+                          const SizedBox(height: 8),
+                          Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                            decoration: BoxDecoration(
+                              color: GamerTheme.bgDark,
+                              borderRadius: BorderRadius.circular(8),
+                            ),
+                            child: const Row(
+                              children: [
+                                Icon(Icons.flash_on_rounded, color: GamerTheme.neonGreen, size: 14),
+                                SizedBox(width: 6),
+                                Expanded(
+                                  child: Text(
+                                    'TikTok Background Mode: Screen closes immediately on Post!',
+                                    style: TextStyle(color: GamerTheme.neonGreen, fontSize: 11, fontWeight: FontWeight.w600),
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ],
+                      ),
               ),
 
               const SizedBox(height: 12),

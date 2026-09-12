@@ -295,6 +295,139 @@ class _PostCardState extends State<PostCard> {
             ),
           ],
 
+          if (widget.post.videoUrl != null && widget.post.videoUrl!.isNotEmpty) ...[
+            Padding(
+              padding: const EdgeInsets.fromLTRB(14, 4, 14, 10),
+              child: ClipRRect(
+                borderRadius: BorderRadius.circular(12),
+                child: InkWell(
+                  onTap: () async {
+                    final uri = Uri.tryParse(widget.post.videoUrl!);
+                    if (uri != null) {
+                      await launchUrl(uri, mode: LaunchMode.externalApplication);
+                    }
+                  },
+                  child: Container(
+                    height: 210,
+                    width: double.infinity,
+                    color: GamerTheme.cardElevated,
+                    child: Stack(
+                      fit: StackFit.expand,
+                      children: [
+                        // Cloudinary auto-generated thumbnail
+                        CachedNetworkImage(
+                          imageUrl: widget.post.videoUrl!.endsWith('.mp4')
+                              ? widget.post.videoUrl!.replaceAll('.mp4', '.jpg')
+                              : '${widget.post.videoUrl!}.jpg',
+                          fit: BoxFit.cover,
+                          errorWidget: (_, __, ___) => Container(
+                            decoration: BoxDecoration(
+                              gradient: LinearGradient(
+                                colors: [
+                                  GamerTheme.surfaceDark,
+                                  GamerTheme.cardElevated,
+                                ],
+                                begin: Alignment.topLeft,
+                                end: Alignment.bottomRight,
+                              ),
+                            ),
+                            child: const Center(
+                              child: Icon(Icons.videogame_asset_rounded, color: GamerTheme.textMuted, size: 48),
+                            ),
+                          ),
+                        ),
+                        // Dark gradient overlay
+                        Container(
+                          decoration: BoxDecoration(
+                            gradient: LinearGradient(
+                              colors: [
+                                Colors.black.withOpacity(0.3),
+                                Colors.black.withOpacity(0.7),
+                              ],
+                              begin: Alignment.topCenter,
+                              end: Alignment.bottomCenter,
+                            ),
+                          ),
+                        ),
+                        // Center Play Button
+                        Center(
+                          child: Container(
+                            width: 56,
+                            height: 56,
+                            decoration: BoxDecoration(
+                              gradient: GamerTheme.blueOrangeGradient,
+                              shape: BoxShape.circle,
+                              boxShadow: [
+                                BoxShadow(
+                                  color: GamerTheme.accentBlue.withOpacity(0.5),
+                                  blurRadius: 16,
+                                  spreadRadius: 2,
+                                ),
+                              ],
+                            ),
+                            child: const Icon(Icons.play_arrow_rounded, color: Colors.white, size: 36),
+                          ),
+                        ),
+                        // Top badge: Gaming clip
+                        Positioned(
+                          top: 10,
+                          left: 10,
+                          child: Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                            decoration: BoxDecoration(
+                              color: Colors.black.withOpacity(0.7),
+                              borderRadius: BorderRadius.circular(6),
+                              border: Border.all(color: GamerTheme.neonGreen.withOpacity(0.5)),
+                            ),
+                            child: const Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                Icon(Icons.bolt_rounded, color: GamerTheme.neonGreen, size: 14),
+                                SizedBox(width: 4),
+                                Text(
+                                  'GAMING CLIP • 720P',
+                                  style: TextStyle(
+                                    color: Colors.white,
+                                    fontSize: 10,
+                                    fontWeight: FontWeight.w900,
+                                    letterSpacing: 0.5,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ),
+                        // Bottom badge: Watch Full Video
+                        Positioned(
+                          bottom: 10,
+                          right: 10,
+                          child: Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                            decoration: BoxDecoration(
+                              color: Colors.black.withOpacity(0.75),
+                              borderRadius: BorderRadius.circular(6),
+                            ),
+                            child: const Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                Icon(Icons.open_in_new_rounded, color: Colors.white70, size: 12),
+                                SizedBox(width: 4),
+                                Text(
+                                  'Tap to Play',
+                                  style: TextStyle(color: Colors.white, fontSize: 11, fontWeight: FontWeight.bold),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              ),
+            ),
+          ],
+
           const SizedBox(height: 8),
           const Divider(color: GamerTheme.borderDark, height: 1),
 

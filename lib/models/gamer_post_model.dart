@@ -10,6 +10,7 @@ class GamerPost {
   final String displayName;
   final String text;
   final String? imageUrl;
+  final String? videoUrl;
   final String gameTag;
   final String userRank;
   final double userKd;
@@ -27,6 +28,7 @@ class GamerPost {
     required this.displayName,
     required this.text,
     this.imageUrl,
+    this.videoUrl,
     this.gameTag = 'BGMI',
     this.userRank = 'Ace',
     this.userKd = 0.0,
@@ -104,6 +106,7 @@ class GamerPost {
       displayName: data['displayName'] ?? 'Gamer',
       text: data['text'] ?? '',
       imageUrl: data['imageUrl'] as String?,
+      videoUrl: (data['videoUrl'] ?? data['mediaUrl']) as String?,
       gameTag: data['gameTag'] ?? 'BGMI',
       userRank: data['userRank'] ?? 'Ace',
       userKd: (data['userKd'] as num?)?.toDouble() ?? 0.0,
@@ -124,6 +127,10 @@ class GamerPost {
       'displayName': displayName,
       'text': text.trim(),
       if (imageUrl != null && imageUrl!.isNotEmpty) 'imageUrl': imageUrl,
+      if (videoUrl != null && videoUrl!.isNotEmpty) ...{
+        'videoUrl': videoUrl,
+        'mediaUrl': videoUrl,
+      },
       'gameTag': gameTag,
       'userRank': userRank,
       'userKd': userKd,
@@ -143,6 +150,7 @@ class GamerPost {
     String? displayName,
     String? text,
     String? imageUrl,
+    String? videoUrl,
     String? gameTag,
     String? userRank,
     double? userKd,
@@ -160,6 +168,7 @@ class GamerPost {
       displayName: displayName ?? this.displayName,
       text: text ?? this.text,
       imageUrl: imageUrl ?? this.imageUrl,
+      videoUrl: videoUrl ?? this.videoUrl,
       gameTag: gameTag ?? this.gameTag,
       userRank: userRank ?? this.userRank,
       userKd: userKd ?? this.userKd,

@@ -61,7 +61,7 @@ class ProfileFeedItem {
       displayName: data['displayName']?.toString() ?? 'Gamer',
       userPhoto: data['userPhoto']?.toString() ?? data['userAvatar']?.toString() ?? '',
       text: text,
-      mediaUrl: data['mediaUrl']?.toString() ?? '',
+      mediaUrl: data['mediaUrl']?.toString() ?? data['videoUrl']?.toString() ?? data['imageUrl']?.toString() ?? '',
       gameTag: data['gameTag']?.toString() ?? 'BGMI',
       likesCount: (data['likesCount'] as num?)?.toInt() ?? 0,
       commentsCount: (data['commentsCount'] as num?)?.toInt() ?? 0,

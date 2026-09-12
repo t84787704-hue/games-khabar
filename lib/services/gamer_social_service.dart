@@ -175,6 +175,9 @@ class GamerSocialService {
     required String userPhoto,
     required String text,
     required String gameTag,
+    String? imageUrl,
+    String? mediaUrl,
+    String? videoUrl,
   }) async {
     final postRef = _firestore.collection('posts').doc();
     final userRef = _firestore.collection('users').doc(userId);
@@ -193,6 +196,8 @@ class GamerSocialService {
       userPhoto: userPhoto,
       text: text,
       gameTag: gameTag,
+      imageUrl: imageUrl,
+      videoUrl: videoUrl ?? mediaUrl,
       likesCount: 0,
       commentsCount: 0,
       isVerified: isVerified,
