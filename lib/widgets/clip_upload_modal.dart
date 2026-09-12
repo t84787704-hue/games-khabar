@@ -42,6 +42,7 @@ class _ClipUploadModalSheetState extends State<ClipUploadModalSheet> {
   VideoPlayerController? _videoController;
   bool _isVideoInitializing = false;
   bool _isPickerActive = false;
+  String? _pickerNotice;
 
   // Trimmer state
   RangeValues _trimRange = const RangeValues(0, 30);
@@ -138,70 +139,111 @@ class _ClipUploadModalSheetState extends State<ClipUploadModalSheet> {
   // 1. VIDEO SELECTION METHODS
   // ==========================================
 
-  /// Pick video from phone gallery
-  Future<void> _pickVideoFromGallery() async {
+  /// Pick video or media from phone gallery with fallback
+  Future<void> _pickVideoFromGallery({bool mediaFallback = false}) async {
     if (_isPickerActive || _isUploading) return;
     setState(() {
       _isPickerActive = true;
       _highlightMediaPrompt = false;
+      _pickerNotice = 'Opening phone gallery...';
     });
 
     try {
       final picker = ImagePicker();
-      final XFile? picked = await picker.pickVideo(source: ImageSource.gallery);
+      XFile? picked;
+
+      if (mediaFallback) {
+        // Pick any media (video, gif, meme)
+        try {
+          picked = await picker.pickMedia();
+        } catch (e) {
+          debugPrint('pickMedia error: $e, falling back to pickVideo');
+          picked = await picker.pickVideo(source: ImageSource.gallery);
+        }
+      } else {
+        // Try pickVideo first
+        try {
+          picked = await picker.pickVideo(source: ImageSource.gallery);
+        } catch (videoError) {
+          debugPrint('pickVideo error: $videoError, trying pickMedia fallback');
+          try {
+            picked = await picker.pickMedia();
+          } catch (_) {
+            rethrow;
+          }
+        }
+      }
 
       if (picked == null) {
-        // User cancelled gallery selection
-        return;
-      }
-
-      final file = File(picked.path);
-      int size = 0;
-      try {
-        size = await picked.length();
-      } catch (_) {
-        try {
-          size = await file.length();
-        } catch (_) {}
-      }
-
-      const maxBytes = 150 * 1024 * 1024; // 150MB
-      if (size > maxBytes) {
         if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-              content: Text('⚠️ Video is too large (max 150MB allowed)'),
-              backgroundColor: GamerTheme.redAccent,
-            ),
-          );
+          setState(() {
+            _pickerNotice = 'ℹ️ No video was selected. If your phone or emulator gallery is empty, tap one of the Instant Clips below to test immediately!';
+          });
         }
         return;
       }
 
-      final name = picked.name.isNotEmpty ? picked.name : file.path.split('/').last;
+      if (mounted) {
+        setState(() {
+          _pickerNotice = 'Loading selected video...';
+        });
+      }
+
+      // Copy file to local temp cache to avoid scoped storage or permission URI locks
+      final sourceFile = File(picked.path);
+      final filename = picked.name.isNotEmpty ? picked.name : picked.path.split('/').last;
+      final ext = filename.contains('.') ? filename.split('.').last : 'mp4';
+      final safePath = '${Directory.systemTemp.path}/gamer_clip_${DateTime.now().millisecondsSinceEpoch}.$ext';
+
+      File finalFile;
+      try {
+        final bytes = await picked.readAsBytes();
+        final destination = File(safePath);
+        await destination.writeAsBytes(bytes);
+        finalFile = destination;
+      } catch (_) {
+        try {
+          finalFile = await sourceFile.copy(safePath);
+        } catch (_) {
+          finalFile = sourceFile;
+        }
+      }
+
+      int size = 0;
+      try {
+        size = await finalFile.length();
+      } catch (_) {}
+
+      const maxBytes = 150 * 1024 * 1024; // 150MB
+      if (size > maxBytes) {
+        if (mounted) {
+          setState(() {
+            _pickerNotice = '⚠️ Video is too large (max 150MB allowed)';
+          });
+        }
+        return;
+      }
 
       if (mounted) {
         setState(() {
-          _selectedFile = file;
+          _selectedFile = finalFile;
           _networkVideoUrl = null;
-          _videoName = name.isNotEmpty ? name : 'clip.mp4';
+          _videoName = filename.isNotEmpty ? filename : 'clip.mp4';
           _videoSizeBytes = size > 0 ? size : null;
+          _pickerNotice = '✅ Video clip attached successfully! You can trim, add a caption, and share.';
           if (_captionController.text.trim().isEmpty) {
             _captionController.text = 'Insane Gaming Clip! 🔥🎮';
           }
         });
       }
 
-      await _setupVideoPlayer(file: file);
+      await _setupVideoPlayer(file: finalFile);
     } catch (e) {
       debugPrint('Gallery pick error: $e');
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Could not open video from gallery: $e. You can also pick a Quick Test Clip!'),
-            backgroundColor: GamerTheme.redAccent,
-          ),
-        );
+        setState(() {
+          _pickerNotice = '⚠️ Error opening video: $e\nTap any Instant Clip below to test immediately!';
+        });
       }
     } finally {
       if (mounted) {
@@ -218,53 +260,132 @@ class _ClipUploadModalSheetState extends State<ClipUploadModalSheet> {
     setState(() {
       _isPickerActive = true;
       _highlightMediaPrompt = false;
+      _pickerNotice = 'Opening camera...';
     });
 
     try {
       final picker = ImagePicker();
       final XFile? picked = await picker.pickVideo(source: ImageSource.camera);
 
-      if (picked == null) return;
+      if (picked == null) {
+        if (mounted) {
+          setState(() {
+            _pickerNotice = 'Camera recording was cancelled.';
+          });
+        }
+        return;
+      }
 
-      final file = File(picked.path);
-      final size = await file.length();
-      final name = picked.name.isNotEmpty ? picked.name : 'camera_clip.mp4';
+      final sourceFile = File(picked.path);
+      final filename = picked.name.isNotEmpty ? picked.name : 'camera_clip.mp4';
+      final safePath = '${Directory.systemTemp.path}/cam_clip_${DateTime.now().millisecondsSinceEpoch}.mp4';
+
+      File finalFile;
+      try {
+        final bytes = await picked.readAsBytes();
+        final destination = File(safePath);
+        await destination.writeAsBytes(bytes);
+        finalFile = destination;
+      } catch (_) {
+        finalFile = sourceFile;
+      }
+
+      final size = await finalFile.length();
 
       if (mounted) {
         setState(() {
-          _selectedFile = file;
+          _selectedFile = finalFile;
           _networkVideoUrl = null;
-          _videoName = name;
+          _videoName = filename;
           _videoSizeBytes = size;
+          _pickerNotice = '✅ Recorded clip attached!';
           if (_captionController.text.trim().isEmpty) {
             _captionController.text = 'Recorded Gameplay Clip! 📹🎮';
           }
         });
       }
 
-      await _setupVideoPlayer(file: file);
+      await _setupVideoPlayer(file: finalFile);
     } catch (e) {
       debugPrint('Camera error: $e');
+      if (mounted) {
+        setState(() {
+          _pickerNotice = '⚠️ Camera not available: $e';
+        });
+      }
     } finally {
       if (mounted) setState(() => _isPickerActive = false);
     }
   }
 
-  /// Select one of the instant gaming sample clips (100% works without device files)
+  /// Select one of the instant gaming sample clips (downloads as real local file to device)
   Future<void> _selectSampleClip(Map<String, String> sample) async {
-    if (_isUploading) return;
+    if (_isUploading || _isPickerActive) return;
+
+    final sampleUrl = sample['url']!;
+    final sampleTitle = sample['title']!;
+    final sampleTag = sample['tag']!;
 
     setState(() {
       _highlightMediaPrompt = false;
-      _selectedFile = null;
-      _networkVideoUrl = sample['url']!;
-      _videoName = sample['title']!;
-      _videoSizeBytes = 3 * 1024 * 1024;
-      _selectedGameTag = sample['tag']!;
-      _captionController.text = sample['title']!;
+      _isPickerActive = true;
+      _pickerNotice = 'Preparing $sampleTag gameplay clip on device... ⚡';
     });
 
-    await _setupVideoPlayer(networkUrl: sample['url']!);
+    try {
+      final safeTag = sampleTag.replaceAll(' ', '_').toLowerCase();
+      final cachePath = '${Directory.systemTemp.path}/clip_$safeTag.mp4';
+      final cacheFile = File(cachePath);
+
+      File readyFile;
+      if (await cacheFile.exists() && (await cacheFile.length()) > 50000) {
+        readyFile = cacheFile;
+      } else {
+        final response = await http.get(Uri.parse(sampleUrl)).timeout(const Duration(seconds: 15));
+        if (response.statusCode == 200 && response.bodyBytes.isNotEmpty) {
+          await cacheFile.writeAsBytes(response.bodyBytes);
+          readyFile = cacheFile;
+        } else {
+          throw Exception('Failed to load sample clip bytes');
+        }
+      }
+
+      final size = await readyFile.length();
+
+      if (mounted) {
+        setState(() {
+          _selectedFile = readyFile;
+          _networkVideoUrl = null;
+          _videoName = sampleTitle;
+          _videoSizeBytes = size;
+          _selectedGameTag = sampleTag;
+          _captionController.text = sampleTitle;
+          _pickerNotice = '✅ Loaded $sampleTag clip! Ready to preview & share.';
+        });
+      }
+
+      await _setupVideoPlayer(file: readyFile);
+    } catch (e) {
+      debugPrint('Sample download fallback to direct stream: $e');
+      if (mounted) {
+        setState(() {
+          _selectedFile = null;
+          _networkVideoUrl = sampleUrl;
+          _videoName = sampleTitle;
+          _videoSizeBytes = 3 * 1024 * 1024;
+          _selectedGameTag = sampleTag;
+          _captionController.text = sampleTitle;
+          _pickerNotice = '✅ Loaded $sampleTag clip via streaming link!';
+        });
+        await _setupVideoPlayer(networkUrl: sampleUrl);
+      }
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isPickerActive = false;
+        });
+      }
+    }
   }
 
   /// Paste direct video URL dialog
@@ -378,12 +499,12 @@ class _ClipUploadModalSheetState extends State<ClipUploadModalSheet> {
           ? VideoPlayerController.file(file)
           : VideoPlayerController.networkUrl(Uri.parse(networkUrl!));
 
-      await controller.initialize().timeout(const Duration(seconds: 8));
+      await controller.initialize().timeout(const Duration(seconds: 20));
 
       final duration = controller.value.duration;
-      final totalSec = duration.inSeconds.toDouble().clamp(1.0, 180.0);
+      final totalSec = duration.inSeconds > 0 ? duration.inSeconds.toDouble().clamp(1.0, 180.0) : 30.0;
 
-      await controller.setLooping(false);
+      await controller.setLooping(true);
       await controller.setVolume(1.0);
 
       controller.addListener(() {
@@ -764,6 +885,47 @@ class _ClipUploadModalSheetState extends State<ClipUploadModalSheet> {
             ),
             const SizedBox(height: 16),
 
+            // In-Modal Status / Notice Banner
+            if (_pickerNotice != null)
+              Container(
+                margin: const EdgeInsets.only(bottom: 14),
+                padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                decoration: BoxDecoration(
+                  color: GamerTheme.cardDark,
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(
+                    color: _pickerNotice!.contains('⚠️') ? GamerTheme.redAccent : GamerTheme.accentOrange,
+                    width: 1.5,
+                  ),
+                ),
+                child: Row(
+                  children: [
+                    Icon(
+                      _pickerNotice!.contains('⚠️')
+                          ? Icons.warning_amber_rounded
+                          : _pickerNotice!.contains('✅')
+                              ? Icons.check_circle_rounded
+                              : Icons.info_outline_rounded,
+                      color: _pickerNotice!.contains('⚠️') ? GamerTheme.redAccent : GamerTheme.accentOrange,
+                      size: 20,
+                    ),
+                    const SizedBox(width: 10),
+                    Expanded(
+                      child: Text(
+                        _pickerNotice!,
+                        style: const TextStyle(color: Colors.white, fontSize: 12, height: 1.35),
+                      ),
+                    ),
+                    IconButton(
+                      icon: const Icon(Icons.close, size: 16, color: Colors.white60),
+                      padding: EdgeInsets.zero,
+                      constraints: const BoxConstraints(),
+                      onPressed: () => setState(() => _pickerNotice = null),
+                    ),
+                  ],
+                ),
+              ),
+
             // SECTION 1: MEDIA SELECTION / PREVIEW
             const Text(
               'STEP 1: SELECT VIDEO CLIP',
@@ -796,32 +958,54 @@ class _ClipUploadModalSheetState extends State<ClipUploadModalSheet> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    // Primary Option: Phone Gallery Button
-                    SizedBox(
-                      width: double.infinity,
-                      child: ElevatedButton.icon(
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: GamerTheme.accentOrange,
-                          foregroundColor: GamerTheme.bgDark,
-                          padding: const EdgeInsets.symmetric(vertical: 14),
-                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                          elevation: 2,
+                    // Primary Pickers Row: Gallery Video & Any Media / Meme
+                    Row(
+                      children: [
+                        Expanded(
+                          flex: 3,
+                          child: ElevatedButton.icon(
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor: GamerTheme.accentOrange,
+                              foregroundColor: GamerTheme.bgDark,
+                              padding: const EdgeInsets.symmetric(vertical: 14),
+                              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                              elevation: 2,
+                            ),
+                            onPressed: (_isUploading || _isPickerActive) ? null : () => _pickVideoFromGallery(mediaFallback: false),
+                            icon: _isPickerActive
+                                ? const SizedBox(
+                                    width: 18,
+                                    height: 18,
+                                    child: CircularProgressIndicator(color: GamerTheme.bgDark, strokeWidth: 2),
+                                  )
+                                : const Icon(Icons.video_library_rounded, size: 20),
+                            label: Text(
+                              _isPickerActive ? 'LOADING...' : 'PHONE GALLERY',
+                              style: const TextStyle(fontWeight: FontWeight.w900, fontSize: 12.5),
+                            ),
+                          ),
                         ),
-                        onPressed: (_isUploading || _isPickerActive) ? null : _pickVideoFromGallery,
-                        icon: _isPickerActive
-                            ? const SizedBox(
-                                width: 18,
-                                height: 18,
-                                child: CircularProgressIndicator(color: GamerTheme.bgDark, strokeWidth: 2),
-                              )
-                            : const Icon(Icons.photo_library_rounded, size: 20),
-                        label: Text(
-                          _isPickerActive ? 'OPENING GALLERY...' : 'CHOOSE FROM PHONE GALLERY',
-                          style: const TextStyle(fontWeight: FontWeight.w900, fontSize: 13.5),
+                        const SizedBox(width: 8),
+                        Expanded(
+                          flex: 2,
+                          child: OutlinedButton.icon(
+                            style: OutlinedButton.styleFrom(
+                              foregroundColor: Colors.white,
+                              side: const BorderSide(color: GamerTheme.accentOrange),
+                              padding: const EdgeInsets.symmetric(vertical: 13),
+                              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                            ),
+                            onPressed: (_isUploading || _isPickerActive) ? null : () => _pickVideoFromGallery(mediaFallback: true),
+                            icon: const Icon(Icons.perm_media_rounded, size: 18, color: GamerTheme.accentOrange),
+                            label: const Text(
+                              'ALL MEDIA',
+                              style: TextStyle(fontWeight: FontWeight.bold, fontSize: 11.5),
+                            ),
+                          ),
                         ),
-                      ),
+                      ],
                     ),
-                    const SizedBox(height: 12),
+                    const SizedBox(height: 10),
 
                     // Secondary Options Row: Camera & Paste Link
                     Row(
@@ -836,7 +1020,7 @@ class _ClipUploadModalSheetState extends State<ClipUploadModalSheet> {
                             ),
                             onPressed: (_isUploading || _isPickerActive) ? null : _recordVideoFromCamera,
                             icon: const Icon(Icons.videocam_rounded, size: 16, color: GamerTheme.accentOrange),
-                            label: const Text('Record Video', style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold)),
+                            label: const Text('Record Camera', style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold)),
                           ),
                         ),
                         const SizedBox(width: 8),
@@ -860,18 +1044,25 @@ class _ClipUploadModalSheetState extends State<ClipUploadModalSheet> {
                     const Divider(color: GamerTheme.borderDark, height: 1),
                     const SizedBox(height: 12),
 
-                    // Quick Sample Clips Header
+                    // Quick Sample Clips Header with helpful subtext
                     const Row(
                       children: [
-                        Icon(Icons.bolt_rounded, color: GamerTheme.accentOrange, size: 16),
-                        SizedBox(width: 4),
-                        Text(
-                          'OR TAP A QUICK TEST CLIP (INSTANT):',
-                          style: TextStyle(color: Colors.white70, fontSize: 11, fontWeight: FontWeight.w800),
+                        Icon(Icons.bolt_rounded, color: GamerTheme.accentOrange, size: 18),
+                        SizedBox(width: 6),
+                        Expanded(
+                          child: Text(
+                            'OR TAP 1-TAP INSTANT GAMEPLAY CLIPS:',
+                            style: TextStyle(color: Colors.white, fontSize: 11.5, fontWeight: FontWeight.w900),
+                          ),
                         ),
                       ],
                     ),
-                    const SizedBox(height: 8),
+                    const SizedBox(height: 4),
+                    const Text(
+                      'Emulator has no videos? Tap any clip to load & test immediately with full player and upload:',
+                      style: TextStyle(color: Colors.white54, fontSize: 11),
+                    ),
+                    const SizedBox(height: 10),
 
                     // Quick Sample Clips Chips
                     Wrap(
@@ -880,14 +1071,14 @@ class _ClipUploadModalSheetState extends State<ClipUploadModalSheet> {
                       children: _sampleClips.map((sample) {
                         return ActionChip(
                           backgroundColor: GamerTheme.cardDark,
-                          side: const BorderSide(color: GamerTheme.accentOrange),
-                          padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 2),
-                          avatar: const Icon(Icons.sports_esports_rounded, color: GamerTheme.accentOrange, size: 16),
+                          side: const BorderSide(color: GamerTheme.accentOrange, width: 1.2),
+                          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
+                          avatar: const Icon(Icons.sports_esports_rounded, color: GamerTheme.accentOrange, size: 18),
                           label: Text(
                             sample['tag']!,
-                            style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 11.5),
+                            style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 12),
                           ),
-                          onPressed: _isUploading ? null : () => _selectSampleClip(sample),
+                          onPressed: (_isUploading || _isPickerActive) ? null : () => _selectSampleClip(sample),
                         );
                       }).toList(),
                     ),
