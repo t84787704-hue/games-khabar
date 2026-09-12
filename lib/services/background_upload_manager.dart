@@ -14,69 +14,23 @@ class UploadTaskState {
   final bool hasError;
   final String? errorMessage;
   final String? mediaUrl;
-
-  UploadTaskState({
-    required this.taskId,
-    required this.title,
-    this.progress = 0.0,
-    this.statusText = 'Preparing...',
-    this.isCompleted = false,
-    this.hasError = false,
-    this.errorMessage,
-    this.mediaUrl,
-  });
-
-  UploadTaskState copyWith({
-    double? progress,
-    String? statusText,
-    bool? isCompleted,
-    bool? hasError,
-    String? errorMessage,
-    String? mediaUrl,
-  }) {
-    return UploadTaskState(
-      taskId: taskId,
-      title: title,
-      progress: progress ?? this.progress,
-      statusText: statusText ?? this.statusText,
-      isCompleted: isCompleted ?? this.isCompleted,
-      hasError: hasError ?? this.hasError,
-      errorMessage: errorMessage ?? this.errorMessage,
-      mediaUrl: mediaUrl ?? this.mediaUrl,
-    );
+  UploadTaskState({required this.taskId, required this.title, this.progress = 0.0, this.statusText = 'Preparing...', this.isCompleted = false, this.hasError = false, this.errorMessage, this.mediaUrl});
+  UploadTaskState copyWith({double? progress, String? statusText, bool? isCompleted, bool? hasError, String? errorMessage, String? mediaUrl}) {
+    return UploadTaskState(taskId: taskId, title: title, progress: progress ?? this.progress, statusText: statusText ?? this.statusText, isCompleted: isCompleted ?? this.isCompleted, hasError: hasError ?? this.hasError, errorMessage: errorMessage ?? this.errorMessage, mediaUrl: mediaUrl ?? this.mediaUrl);
   }
 }
 
-/// FIXED - NO DOTENV - DIRECT UPLOAD - No Compression
 class BackgroundUploadManager {
   static final BackgroundUploadManager _instance = BackgroundUploadManager._internal();
   factory BackgroundUploadManager() => _instance;
   BackgroundUploadManager._internal();
-
-  // YAHAN APNA CLOUDINARY NAME DALO
   static const String _cloudName = 'YOUR_CLOUD_NAME_HERE';
   static const String _uploadPreset = 'tiktok_3min_direct';
-
   final ValueNotifier<UploadTaskState?> activeTask = ValueNotifier<UploadTaskState?>(null);
 
-  Future<void> startVideoUpload({
-    required File videoFile,
-    required String text,
-    required String gameTag,
-    required String userId,
-    required String username,
-    required String displayName,
-    required String userPhoto,
-    int estimatedDurationSeconds = 180,
-  }) async {
+  Future<void> startVideoUpload({required File videoFile, required String text, required String gameTag, required String userId, required String username, required String displayName, required String userPhoto, int estimatedDurationSeconds = 180}) async {
     final taskId = 'task_${DateTime.now().millisecondsSinceEpoch}';
-    activeTask.value = UploadTaskState(
-      taskId: taskId,
-      title: text.isNotEmpty ? text : 'Gaming Video',
-      progress: 0.05,
-      statusText: '🚀 Direct Uploading... 5%',
-    );
-
+    activeTask.value = UploadTaskState(taskId: taskId, title: text.isNotEmpty ? text : 'Gaming Video', progress: 0.05, statusText: '🚀 Direct Uploading... 5%');
     unawaited(() async {
       try {
         final fileSize = await videoFile.length();
@@ -84,11 +38,10 @@ class BackgroundUploadManager {
         final totalChunks = (fileSize / chunkSize).ceil();
         final String uniqueUploadId = 'gaming_${DateTime.now().millisecondsSinceEpoch}';
         String? finalSecureUrl;
-
         for (int i = 0; i < totalChunks; i++) {
           final int start = i * chunkSize;
           final int end = (start + chunkSize > fileSize) ? fileSize : start + chunkSize;
-          final bytes = await file.openRead(start, end).expand((e) => e).toList();
+          final bytes = await videoFile.openRead(start, end).expand((e) => e).toList();
           final uri = Uri.parse('https://api.cloudinary.com/v1_1/$_cloudName/video/upload');
           final request = http.MultipartRequest('POST', uri);
           request.headers['X-Unique-Upload-Id'] = uniqueUploadId;
@@ -108,7 +61,6 @@ class BackgroundUploadManager {
             activeTask.value = activeTask.value?.copyWith(progress: prog, statusText: '🚀 Uploading... $pct%');
           } else { throw Exception('Upload failed: ${response.body}'); }
         }
-
         if (finalSecureUrl == null) throw Exception("Cloud upload failed");
         activeTask.value = activeTask.value?.copyWith(progress: 0.95, statusText: 'Posting to Feed... ⚡');
         await GamerSocialService().createPost(userId: userId, username: username, displayName: displayName, userPhoto: userPhoto, text: text, gameTag: gameTag, mediaUrl: finalSecureUrl);
