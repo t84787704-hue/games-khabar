@@ -99,6 +99,7 @@ class CloudinaryService {
     request.fields['upload_preset'] = preset;
     request.fields['folder'] = 'gaming_clips/$userId';
     request.fields['tags'] = 'gaming,${gameTag ?? "bgmi"},$userId';
+    request.fields['eager'] = 'q_auto:low,w_720,h_1280,c_limit/f_auto';
     if (caption != null && caption.isNotEmpty) {
       request.fields['context'] = 'caption=${caption.replaceAll("|", " ")}|gameTag=${gameTag ?? ""}';
     }
@@ -154,13 +155,24 @@ class CloudinaryService {
         throw Exception('Cloudinary upload returned empty secure_url: ${response.body}');
       }
 
+      // Check for eager transformation server-side compression
+      String finalVideoUrl = secureUrl;
+      final eagerList = data['eager'];
+      if (eagerList is List && eagerList.isNotEmpty) {
+        final firstEager = eagerList.first as Map<String, dynamic>?;
+        final eagerSecureUrl = firstEager?['secure_url']?.toString();
+        if (eagerSecureUrl != null && eagerSecureUrl.isNotEmpty) {
+          finalVideoUrl = eagerSecureUrl;
+        }
+      }
+
       onProgress?.call(1.0);
 
-      final thumb = getAutoThumbnailUrl(secureUrl);
-      debugPrint('✅ [CLOUDINARY] Upload success! URL: $secureUrl, duration: $duration s, thumb: $thumb');
+      final thumb = getAutoThumbnailUrl(finalVideoUrl);
+      debugPrint('✅ [CLOUDINARY] Upload success! URL: $finalVideoUrl, duration: $duration s, thumb: $thumb');
 
       return CloudinaryUploadResult(
-        secureUrl: secureUrl,
+        secureUrl: finalVideoUrl,
         publicId: publicId,
         duration: duration,
         width: width,

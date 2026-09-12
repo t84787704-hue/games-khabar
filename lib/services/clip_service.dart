@@ -57,7 +57,9 @@ class ClipService {
       print('🚀 [CLIP_SERVICE] Step 0: Checking video compression...');
       final fileToUpload = await VideoCompressService.compressIfNeeded(
         file,
+        totalDurationSec: trimmedDuration > 0 ? trimmedDuration : 30.0,
         onProgress: onProgress != null ? (p) => onProgress(p * 0.35) : null,
+        isCancelled: isCancelled,
       );
 
       print('🚀 [CLIP_SERVICE] Step 1: Uploading video file to Cloudinary with progress...');

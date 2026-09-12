@@ -509,6 +509,18 @@ class _ClipUploadModalSheetState extends State<ClipUploadModalSheet> {
       final duration = controller.value.duration;
       final totalSec = duration.inSeconds > 0 ? duration.inSeconds.toDouble().clamp(1.0, 180.0) : 30.0;
 
+      int sizeMB = 0;
+      if (file != null) {
+        try {
+          sizeMB = file.lengthSync() ~/ (1024 * 1024);
+        } catch (_) {}
+      } else if (_videoSizeBytes != null) {
+        sizeMB = _videoSizeBytes! ~/ (1024 * 1024);
+      }
+
+      final bool isTooLarge = sizeMB > 100;
+      final double defaultTrimEnd = isTooLarge ? totalSec.clamp(1.0, 30.0) : totalSec;
+
       await controller.setLooping(true);
       await controller.setVolume(1.0);
 
@@ -524,10 +536,27 @@ class _ClipUploadModalSheetState extends State<ClipUploadModalSheet> {
         setState(() {
           _videoController = controller;
           _videoDuration = duration;
-          _trimRange = RangeValues(0, totalSec);
+          _trimRange = RangeValues(0, defaultTrimEnd);
           _isVideoInitializing = false;
+          if (isTooLarge) {
+            _pickerNotice = '⚡ ${sizeMB}MB clip too large, trimming to 30s for fast upload';
+          }
         });
         controller.play();
+
+        if (isTooLarge) {
+          WidgetsBinding.instance.addPostFrameCallback((_) {
+            if (mounted) {
+              ScaffoldMessenger.of(context).showSnackBar(
+                SnackBar(
+                  content: Text('⚡ ${sizeMB}MB clip too large, trimming to 30s for fast upload'),
+                  backgroundColor: GamerTheme.accentOrange,
+                  duration: const Duration(seconds: 4),
+                ),
+              );
+            }
+          });
+        }
       }
     } catch (e) {
       debugPrint('Video player setup note: $e');
@@ -595,22 +624,55 @@ class _ClipUploadModalSheetState extends State<ClipUploadModalSheet> {
 
       // Direct file upload to Cloudinary
       if (_selectedFile != null) {
+        int originalSizeMB = 0;
+        try {
+          originalSizeMB = (await _selectedFile!.length()) ~/ (1024 * 1024);
+        } catch (_) {}
+
+        // If original size > 100MB, force Quick Trim to 30s BEFORE compression
+        if (originalSizeMB > 100) {
+          final currentTrimDuration = _trimRange.end - _trimRange.start;
+          if (currentTrimDuration > 30.0) {
+            _trimRange = RangeValues(_trimRange.start, _trimRange.start + 30.0);
+            if (mounted) {
+              ScaffoldMessenger.of(context).showSnackBar(
+                SnackBar(
+                  content: Text('⚡ ${originalSizeMB}MB clip too large, trimming to 30s for fast upload'),
+                  backgroundColor: GamerTheme.accentOrange,
+                  duration: const Duration(seconds: 4),
+                ),
+              );
+            }
+          }
+        }
+
         setState(() {
           _uploadStatus = 'Checking video size... ⚡';
         });
 
-        // Gaming clips (PUBG screen recordings > 25MB, 60fps, 1080p+) are compressed to 720p 30fps
+        final clipDuration = (_trimRange.end - _trimRange.start).clamp(1.0, 180.0);
+
+        // Gaming clips (PUBG screen recordings > 25MB, 60fps, 1080p+) are compressed with FFmpeg
         final fileToUpload = await VideoCompressService.compressIfNeeded(
           _selectedFile!,
+          totalDurationSec: clipDuration,
+          trimStartSec: _trimRange.start,
+          trimEndSec: _trimRange.end,
+          isCancelled: () => _isCancelled,
+          timeout: const Duration(seconds: 90),
           onProgress: (compProg) {
             if (mounted && !_isCancelled) {
               setState(() {
-                _uploadProgress = (compProg * 0.35).clamp(0.05, 0.35);
+                _uploadProgress = (compProg * 0.4).clamp(0.05, 0.4);
                 _uploadStatus = 'Compressing gaming clip (${(compProg * 100).toInt()}%)... ⚡';
               });
             }
           },
         );
+
+        if (_isCancelled) {
+          return;
+        }
 
         setState(() {
           _uploadStatus = 'Uploading to Cloudinary... 🚀';
@@ -623,7 +685,7 @@ class _ClipUploadModalSheetState extends State<ClipUploadModalSheet> {
           onProgress: (prog) {
             if (mounted && !_isCancelled) {
               setState(() {
-                _uploadProgress = 0.35 + (prog * 0.6);
+                _uploadProgress = 0.4 + (prog * 0.55);
                 _uploadStatus = 'Uploading to Cloudinary (${(prog * 100).toInt()}%)... 🚀';
               });
             }
@@ -755,6 +817,7 @@ class _ClipUploadModalSheetState extends State<ClipUploadModalSheet> {
         request.fields['upload_preset'] = preset;
         request.fields['folder'] = 'gaming_clips';
         request.fields['tags'] = 'gaming,$_selectedGameTag';
+        request.fields['eager'] = 'q_auto:low,w_720,h_1280,c_limit/f_auto';
 
         int bytesSent = 0;
         final fileStream = file.openRead();
@@ -805,6 +868,14 @@ class _ClipUploadModalSheetState extends State<ClipUploadModalSheet> {
 
           // Direct Cloudinary URL guarantees ExoPlayer byte-range support & instant playback
           String finalVideoUrl = rawSecureUrl;
+          final eagerList = data['eager'];
+          if (eagerList is List && eagerList.isNotEmpty) {
+            final firstEager = eagerList.first as Map<String, dynamic>?;
+            final eagerSecureUrl = firstEager?['secure_url']?.toString();
+            if (eagerSecureUrl != null && eagerSecureUrl.isNotEmpty) {
+              finalVideoUrl = eagerSecureUrl;
+            }
+          }
           final totalSec = duration > 0 ? duration : (_videoDuration.inSeconds > 0 ? _videoDuration.inSeconds.toDouble() : 30.0);
           final trimmedDuration = (trimEnd - trimStart).clamp(1.0, totalSec > 0 ? totalSec : 180.0);
 
@@ -1451,9 +1522,11 @@ class _ClipUploadModalSheetState extends State<ClipUploadModalSheet> {
                         ),
                         TextButton(
                           onPressed: () {
+                            VideoCompressService.cancel();
                             setState(() {
                               _isCancelled = true;
                               _isUploading = false;
+                              _uploadStatus = '';
                             });
                           },
                           child: const Text('Cancel', style: TextStyle(color: GamerTheme.redAccent, fontSize: 11, fontWeight: FontWeight.bold)),
