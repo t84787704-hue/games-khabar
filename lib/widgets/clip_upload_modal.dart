@@ -528,7 +528,7 @@ class _ClipUploadModalSheetState extends State<ClipUploadModalSheet> {
                               child: Container(
                                 padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                                 decoration: BoxDecoration(
-                                  color: Colors.black75,
+                                  color: Colors.black87,
                                   borderRadius: BorderRadius.circular(6),
                                   border: Border.all(color: Colors.white24),
                                 ),
