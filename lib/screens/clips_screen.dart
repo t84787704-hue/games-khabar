@@ -551,10 +551,41 @@ class _ClipsScreenState extends State<ClipsScreen>
                     ),
                   ),
                   const Spacer(),
-                  IconButton(
-                    style: IconButton.styleFrom(backgroundColor: Colors.black45),
-                    icon: const Icon(Icons.video_call_rounded, color: GamerTheme.accentOrange, size: 24),
-                    onPressed: _openUploadClipSheet,
+                  Container(
+                    decoration: BoxDecoration(
+                      color: GamerTheme.accentOrange,
+                      borderRadius: BorderRadius.circular(20),
+                      boxShadow: [
+                        BoxShadow(
+                          color: GamerTheme.accentOrange.withOpacity(0.4),
+                          blurRadius: 8,
+                          offset: const Offset(0, 2),
+                        ),
+                      ],
+                    ),
+                    child: InkWell(
+                      onTap: _openUploadClipSheet,
+                      borderRadius: BorderRadius.circular(20),
+                      child: const Padding(
+                        padding: EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Icon(Icons.add_circle_rounded, color: GamerTheme.bgDark, size: 16),
+                            SizedBox(width: 4),
+                            Text(
+                              'POST CLIP',
+                              style: TextStyle(
+                                color: GamerTheme.bgDark,
+                                fontWeight: FontWeight.w900,
+                                fontSize: 12,
+                                letterSpacing: 0.5,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
                   ),
                 ],
               ),
