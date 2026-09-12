@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:share_plus/share_plus.dart';
+import 'package:cached_network_image/cached_network_image.dart';
 import '../constants/gamer_theme.dart';
 import '../models/gamer_post_model.dart';
 import '../models/post_comment_model.dart';
@@ -10,6 +11,7 @@ import '../widgets/gamer_avatar.dart';
 import '../screens/gamer_profile_screen.dart';
 import '../services/verification_service.dart';
 import '../widgets/rank_badge_widget.dart';
+import '../widgets/blue_tick_badge.dart';
 
 class PostCard extends StatefulWidget {
   final GamerPost post;
@@ -174,10 +176,7 @@ class _PostCardState extends State<PostCard> {
                               size: 13,
                               showLabel: false,
                             ),
-                            if (_isAuthorVerified) ...[
-                              const SizedBox(width: 2),
-                              const Icon(Icons.verified, color: Colors.blue, size: 15),
-                            ],
+                            UserBlueTickBadge(userId: widget.post.userId, size: 15),
                           ],
                         ),
                         const SizedBox(height: 2),
@@ -268,6 +267,33 @@ class _PostCardState extends State<PostCard> {
               ),
             ),
           ),
+
+          if (widget.post.imageUrl != null && widget.post.imageUrl!.isNotEmpty) ...[
+            Padding(
+              padding: const EdgeInsets.fromLTRB(14, 4, 14, 10),
+              child: ClipRRect(
+                borderRadius: BorderRadius.circular(12),
+                child: CachedNetworkImage(
+                  imageUrl: widget.post.imageUrl!,
+                  width: double.infinity,
+                  height: 200,
+                  fit: BoxFit.cover,
+                  placeholder: (_, __) => Container(
+                    height: 200,
+                    color: GamerTheme.cardElevated,
+                    child: const Center(
+                      child: SizedBox(
+                        width: 20,
+                        height: 20,
+                        child: CircularProgressIndicator(strokeWidth: 2, color: GamerTheme.accentBlue),
+                      ),
+                    ),
+                  ),
+                  errorWidget: (_, __, ___) => const SizedBox.shrink(),
+                ),
+              ),
+            ),
+          ],
 
           const SizedBox(height: 8),
           const Divider(color: GamerTheme.borderDark, height: 1),
@@ -540,6 +566,7 @@ class _CommentsSheetState extends State<_CommentsSheet> {
                                             fontSize: 12.5,
                                           ),
                                         ),
+                                        UserBlueTickBadge(userId: c.userId, size: 13),
                                         const SizedBox(width: 6),
                                         Text(
                                           '@${c.username}',

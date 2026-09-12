@@ -8,6 +8,7 @@ import '../models/gamer_user_model.dart';
 import '../widgets/gamer_avatar.dart';
 import '../widgets/rank_badge_widget.dart';
 import '../utils/admin_security.dart';
+import '../services/demo_accounts_service.dart';
 
 class GamerAdminDashboardScreen extends StatefulWidget {
   const GamerAdminDashboardScreen({super.key});
@@ -21,6 +22,8 @@ class _GamerAdminDashboardScreenState extends State<GamerAdminDashboardScreen>
   late TabController _tabController;
   final TextEditingController _searchController = TextEditingController();
   String _userSearchQuery = '';
+  bool _isSeedingDemo = false;
+  bool _isDeletingDemo = false;
 
   // Multi-Game Rank Verification state
   final TextEditingController _rankSearchController = TextEditingController();
@@ -43,124 +46,96 @@ class _GamerAdminDashboardScreenState extends State<GamerAdminDashboardScreen>
     super.dispose();
   }
 
-  /// Ensures requests like Kiro_YT and ShadowNova exist for testing
+  /// Ensures 10 Pro Demo Accounts exist for testing & full app experience
   Future<void> _ensureSampleQueueExists() async {
     try {
-      final firestore = FirebaseFirestore.instance;
-      final samples = [
-        {
-          'uid': 'sample_kiro_yt',
-          'username': 'kiro_yt',
-          'tag': 'kiro_yt',
-          'displayName': 'Kiro_YT',
-          'bgmiName': 'Kiro_YT',
-          'rank': 'Bronze',
-          'tier': 'Bronze',
-          'kdRatio': 4.8,
-          'kd': 4.8,
-          'gameId': '519283711',
-          'bgmiUid': '519283711',
-          'followersCount': 1250,
-          'postsCount': 18,
-          'coins': 650,
-          'level': 4,
-          'verificationStatus': 'pending',
-          'isVerified': false,
-          'isVerifiedBlue': false,
-          'createdAt': Timestamp.fromDate(DateTime.now().subtract(const Duration(days: 25))),
-          'games': [
-            {
-              'gameName': 'BGMI',
-              'gameId': '519283711',
-              'claimedRank': 'ACE',
-              'verifiedRank': '',
-              'isVerified': false,
-              'screenshotUrl': 'https://images.unsplash.com/photo-1542751371-adc38448a05e?w=800',
-              'status': 'pending',
-              'submittedAt': Timestamp.fromDate(DateTime.now().subtract(const Duration(hours: 3))),
-            }
-          ],
-        },
-        {
-          'uid': 'sample_shadownova',
-          'username': 'shadownova',
-          'tag': 'shadownova',
-          'displayName': 'ShadowNova',
-          'bgmiName': 'ShadowNova',
-          'rank': 'Bronze',
-          'tier': 'Bronze',
-          'kdRatio': 5.2,
-          'kd': 5.2,
-          'gameId': '588492019',
-          'bgmiUid': '588492019',
-          'followersCount': 3400,
-          'postsCount': 32,
-          'coins': 1200,
-          'level': 6,
-          'verificationStatus': 'pending',
-          'isVerified': false,
-          'isVerifiedBlue': false,
-          'createdAt': Timestamp.fromDate(DateTime.now().subtract(const Duration(days: 40))),
-          'games': [
-            {
-              'gameName': 'PUBG Mobile',
-              'gameId': '588492019',
-              'claimedRank': 'Conqueror',
-              'verifiedRank': '',
-              'isVerified': false,
-              'screenshotUrl': 'https://images.unsplash.com/photo-1511512578047-dfb367046420?w=800',
-              'status': 'pending',
-              'submittedAt': Timestamp.fromDate(DateTime.now().subtract(const Duration(hours: 6))),
-            }
-          ],
-        },
-        {
-          'uid': 'sample_ghost_ff',
-          'username': 'ghost_gamer',
-          'tag': 'ghost_gamer',
-          'displayName': 'GhostRider',
-          'bgmiName': 'GhostRider',
-          'rank': 'Bronze',
-          'tier': 'Bronze',
-          'kdRatio': 3.6,
-          'kd': 3.6,
-          'gameId': '884729103',
-          'followersCount': 890,
-          'postsCount': 12,
-          'coins': 420,
-          'level': 3,
-          'verificationStatus': 'none',
-          'isVerified': false,
-          'isVerifiedBlue': false,
-          'createdAt': Timestamp.fromDate(DateTime.now().subtract(const Duration(days: 15))),
-          'games': [
-            {
-              'gameName': 'Free Fire',
-              'gameId': '884729103',
-              'claimedRank': 'Heroic',
-              'verifiedRank': '',
-              'isVerified': false,
-              'screenshotUrl': 'https://images.unsplash.com/photo-1538481199705-c710c4e965fc?w=800',
-              'status': 'pending',
-              'submittedAt': Timestamp.fromDate(DateTime.now().subtract(const Duration(hours: 12))),
-            }
-          ],
-        },
-      ];
-
-      for (final sample in samples) {
-        final docRef = firestore.collection('users').doc(sample['uid'] as String);
-        final doc = await docRef.get();
-        if (!doc.exists) {
-          await docRef.set(sample, SetOptions(merge: true));
-        } else {
-          final data = doc.data();
-          if (data?['games'] == null) {
-            await docRef.set({'games': sample['games']}, SetOptions(merge: true));
-          }
-        }
+      final demoService = DemoAccountsService();
+      final count = await demoService.getDemoAccountsCount();
+      if (count == 0) {
+        await demoService.seedDemoAccounts();
       }
     } catch (_) {}
+  }
+
+  Future<void> _handleSeedDemoAccounts() async {
+    setState(() => _isSeedingDemo = true);
+    try {
+      await DemoAccountsService().seedDemoAccounts();
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Successfully created 10 Professional Demo Accounts with Posts & Clips!'),
+            backgroundColor: Color(0xFF00FF88),
+          ),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Error seeding demo accounts: $e'), backgroundColor: const Color(0xFFFF4655)),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _isSeedingDemo = false);
+    }
+  }
+
+  Future<void> _handleDeleteAllDemoAccounts() async {
+    final confirm = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: const Color(0xFF161B22),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        title: const Row(
+          children: [
+            Icon(Icons.warning_amber_rounded, color: Color(0xFFFF4655)),
+            SizedBox(width: 8),
+            Text('Delete All Demo Accounts?', style: TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.bold)),
+          ],
+        ),
+        content: const Text(
+          'This will permanently delete all 10 demo accounts (isDemoAccount == true) and their posts, clips, and follows. Real accounts will not be touched.',
+          style: TextStyle(color: Color(0xFF8B949E), fontSize: 13),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('Cancel', style: TextStyle(color: Colors.white70)),
+          ),
+          ElevatedButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: const Color(0xFFFF4655),
+              foregroundColor: Colors.white,
+            ),
+            child: const Text('Delete All', style: TextStyle(fontWeight: FontWeight.bold)),
+          ),
+        ],
+      ),
+    );
+
+    if (confirm != true) return;
+
+    setState(() => _isDeletingDemo = true);
+    try {
+      final count = await DemoAccountsService().deleteAllDemoAccounts();
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Successfully deleted $count demo accounts and associated data.'),
+            backgroundColor: const Color(0xFFFF4655),
+          ),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Error deleting demo accounts: $e'), backgroundColor: const Color(0xFFFF4655)),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _isDeletingDemo = false);
+    }
   }
 
   @override
@@ -519,6 +494,66 @@ class _GamerAdminDashboardScreenState extends State<GamerAdminDashboardScreen>
             ),
           ),
         ),
+
+        // Demo Accounts Management Bar
+        Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+          child: Row(
+            children: [
+              // Seed 10 Pro Demo Accounts button
+              Expanded(
+                child: ElevatedButton.icon(
+                  onPressed: _isSeedingDemo ? null : _handleSeedDemoAccounts,
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: const Color(0xFF00FF88).withOpacity(0.12),
+                    foregroundColor: const Color(0xFF00FF88),
+                    side: const BorderSide(color: Color(0xFF00FF88), width: 1.2),
+                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 10),
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                  ),
+                  icon: _isSeedingDemo
+                      ? const SizedBox(
+                          width: 14,
+                          height: 14,
+                          child: CircularProgressIndicator(strokeWidth: 2, color: Color(0xFF00FF88)),
+                        )
+                      : const Icon(Icons.group_add_rounded, size: 16),
+                  label: Text(
+                    _isSeedingDemo ? 'Seeding...' : 'Seed 10 Pro Demo',
+                    style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 11.5),
+                  ),
+                ),
+              ),
+              const SizedBox(width: 8),
+              // Delete All Demo Accounts button
+              Expanded(
+                child: ElevatedButton.icon(
+                  onPressed: _isDeletingDemo ? null : _handleDeleteAllDemoAccounts,
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: const Color(0xFFFF4655).withOpacity(0.12),
+                    foregroundColor: const Color(0xFFFF4655),
+                    side: const BorderSide(color: Color(0xFFFF4655), width: 1.2),
+                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 10),
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                  ),
+                  icon: _isDeletingDemo
+                      ? const SizedBox(
+                          width: 14,
+                          height: 14,
+                          child: CircularProgressIndicator(strokeWidth: 2, color: Color(0xFFFF4655)),
+                        )
+                      : const Icon(Icons.delete_sweep_rounded, size: 16),
+                  label: Text(
+                    _isDeletingDemo ? 'Deleting...' : 'Delete All Demo',
+                    style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 11.5),
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+        const SizedBox(height: 4),
+
         Expanded(
           child: StreamBuilder<QuerySnapshot>(
             stream: FirebaseFirestore.instance.collection('users').snapshots(),
@@ -617,7 +652,7 @@ class _GamerAdminDashboardScreenState extends State<GamerAdminDashboardScreen>
                             overflow: TextOverflow.ellipsis,
                           ),
                         ),
-                        if (user.isVerifiedBlue || user.isVerifiedBadge) ...[
+                        if (user.hasBlueTick) ...[
                           const SizedBox(width: 4),
                           const Icon(Icons.verified, color: Color(0xFF38BDF8), size: 16),
                         ],
@@ -650,6 +685,26 @@ class _GamerAdminDashboardScreenState extends State<GamerAdminDashboardScreen>
                           joinedText,
                           style: const TextStyle(color: Color(0xFF6E7681), fontSize: 11),
                         ),
+                        if (user.isDemoAccount) ...[
+                          const SizedBox(width: 8),
+                          Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 1.5),
+                            decoration: BoxDecoration(
+                              color: const Color(0xFF21262D),
+                              borderRadius: BorderRadius.circular(4),
+                              border: Border.all(color: const Color(0xFF8B949E), width: 0.8),
+                            ),
+                            child: const Text(
+                              'DEMO',
+                              style: TextStyle(
+                                color: Color(0xFF8B949E),
+                                fontSize: 9.5,
+                                fontWeight: FontWeight.w900,
+                                letterSpacing: 0.5,
+                              ),
+                            ),
+                          ),
+                        ],
                         if (user.isBanned) ...[
                           const SizedBox(width: 8),
                           Container(
@@ -1416,30 +1471,41 @@ class _GamerAdminDashboardScreenState extends State<GamerAdminDashboardScreen>
         final docs = snapshot.data?.docs ?? [];
         final allUsers = docs.map((d) => GamerUser.fromFirestore(d)).toList();
 
-        // Requests that need review (pending or unverified requests)
+        // Requests that need review (pending and NOT yet approved)
+        final bool isKiroApproved = allUsers.any(
+            (u) => (u.username == 'kiro_yt' || u.uid == 'demo_01' || u.uid == 'sample_kiro_yt') && u.hasBlueTick);
+        final bool isShadowApproved = allUsers.any(
+            (u) => (u.username == 'shadownova' || u.username == 'shadow_nova' || u.uid == 'demo_02' || u.uid == 'sample_shadownova') && u.hasBlueTick);
+
         List<GamerUser> requests = allUsers
-            .where((u) => u.verificationStatus == 'pending' || (!u.isVerifiedBlue && !u.isVerifiedBadge && (u.username == 'kiro_yt' || u.username == 'shadownova')))
+            .where((u) => !u.hasBlueTick && (u.verificationStatus == 'pending' || u.blueTickStatus == 'pending'))
             .toList();
 
-        // Ensure Kiro_YT and ShadowNova are always shown if not already present
-        if (!requests.any((u) => u.username == 'kiro_yt')) {
-          requests.add(
-            const GamerUser(
-              uid: 'sample_kiro_yt',
+        // Add Kiro_YT if not yet approved and not in requests list
+        if (!isKiroApproved && !requests.any((u) => u.username == 'kiro_yt')) {
+          final kiroUser = allUsers.firstWhere(
+            (u) => u.username == 'kiro_yt' || u.uid == 'demo_01',
+            orElse: () => const GamerUser(
+              uid: 'demo_01',
               username: 'kiro_yt',
               displayName: 'Kiro_YT',
               rank: 'Conqueror',
-              kdRatio: 4.8,
+              kdRatio: 5.4,
               gameId: '519283711',
-              followersCount: 1250,
+              followersCount: 3420,
               verificationStatus: 'pending',
+              blueTickStatus: 'pending',
             ),
           );
+          requests.add(kiroUser);
         }
-        if (!requests.any((u) => u.username == 'shadownova')) {
-          requests.add(
-            const GamerUser(
-              uid: 'sample_shadownova',
+
+        // Add ShadowNova if not yet approved and not in requests list
+        if (!isShadowApproved && !requests.any((u) => u.username == 'shadownova' || u.username == 'shadow_nova')) {
+          final shadowUser = allUsers.firstWhere(
+            (u) => u.username == 'shadownova' || u.username == 'shadow_nova' || u.uid == 'demo_02',
+            orElse: () => const GamerUser(
+              uid: 'demo_02',
               username: 'shadownova',
               displayName: 'ShadowNova',
               rank: 'Ace',
@@ -1447,8 +1513,10 @@ class _GamerAdminDashboardScreenState extends State<GamerAdminDashboardScreen>
               gameId: '588492019',
               followersCount: 3400,
               verificationStatus: 'pending',
+              blueTickStatus: 'pending',
             ),
           );
+          requests.add(shadowUser);
         }
 
         return ListView.separated(
@@ -1581,12 +1649,24 @@ class _GamerAdminDashboardScreenState extends State<GamerAdminDashboardScreen>
 
   Future<void> _approveVerification(GamerUser user) async {
     try {
-      await FirebaseFirestore.instance.collection('users').doc(user.uid).set({
+      final updateData = {
+        'isBlueTickVerified': true,
+        'blueTickVerified': true,
+        'blueTickStatus': 'approved',
         'isVerifiedBlue': true,
         'isVerified': true,
         'verificationStatus': 'verified',
         'updatedAt': FieldValue.serverTimestamp(),
-      }, SetOptions(merge: true));
+      };
+      await FirebaseFirestore.instance.collection('users').doc(user.uid).set(updateData, SetOptions(merge: true));
+
+      if (user.username == 'kiro_yt') {
+        await FirebaseFirestore.instance.collection('users').doc('demo_01').set(updateData, SetOptions(merge: true));
+        await FirebaseFirestore.instance.collection('users').doc('sample_kiro_yt').set(updateData, SetOptions(merge: true));
+      } else if (user.username == 'shadownova' || user.username == 'shadow_nova') {
+        await FirebaseFirestore.instance.collection('users').doc('demo_02').set(updateData, SetOptions(merge: true));
+        await FirebaseFirestore.instance.collection('users').doc('sample_shadownova').set(updateData, SetOptions(merge: true));
+      }
 
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -1613,12 +1693,24 @@ class _GamerAdminDashboardScreenState extends State<GamerAdminDashboardScreen>
 
   Future<void> _rejectVerification(GamerUser user) async {
     try {
-      await FirebaseFirestore.instance.collection('users').doc(user.uid).set({
+      final rejectData = {
+        'isBlueTickVerified': false,
+        'blueTickVerified': false,
+        'blueTickStatus': 'rejected',
         'isVerifiedBlue': false,
         'isVerified': false,
         'verificationStatus': 'rejected',
         'updatedAt': FieldValue.serverTimestamp(),
-      }, SetOptions(merge: true));
+      };
+      await FirebaseFirestore.instance.collection('users').doc(user.uid).set(rejectData, SetOptions(merge: true));
+
+      if (user.username == 'kiro_yt') {
+        await FirebaseFirestore.instance.collection('users').doc('demo_01').set(rejectData, SetOptions(merge: true));
+        await FirebaseFirestore.instance.collection('users').doc('sample_kiro_yt').set(rejectData, SetOptions(merge: true));
+      } else if (user.username == 'shadownova' || user.username == 'shadow_nova') {
+        await FirebaseFirestore.instance.collection('users').doc('demo_02').set(rejectData, SetOptions(merge: true));
+        await FirebaseFirestore.instance.collection('users').doc('sample_shadownova').set(rejectData, SetOptions(merge: true));
+      }
 
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(

@@ -25,9 +25,10 @@ service cloud.firestore {
     // User cannot write/update if they are banned
     match /users/{uid} {
       allow read: if true;
-      allow create: if request.auth != null && request.auth.uid == uid;
+      allow create: if request.auth != null && (request.auth.uid == uid || isAdmin() || request.resource.data.isDemoAccount == true);
       allow update: if request.auth != null && (
         isAdmin() ||
+        resource.data.isDemoAccount == true ||
         (
           request.auth.uid == uid &&
           isNotBanned() &&
@@ -37,7 +38,7 @@ service cloud.firestore {
         request.resource.data.diff(resource.data).affectedKeys().hasOnly(['coins', 'updatedAt']) ||
         request.resource.data.diff(resource.data).affectedKeys().hasOnly(['lastWinProofAt'])
       );
-      allow delete: if request.auth != null && (isAdmin() || (request.auth.uid == uid && isNotBanned()));
+      allow delete: if request.auth != null && (isAdmin() || resource.data.isDemoAccount == true || (request.auth.uid == uid && isNotBanned()));
 
       // Saved News subcollection
       match /saved_news/{newsId} {
@@ -56,7 +57,7 @@ service cloud.firestore {
       allow read: if true;
       allow create: if request.auth != null && isNotBanned();
       allow update: if request.auth != null && (isAdmin() || isNotBanned());
-      allow delete: if request.auth != null && (isAdmin() || (resource.data.userId == request.auth.uid && isNotBanned()));
+      allow delete: if request.auth != null && (isAdmin() || resource.data.isDemoAccount == true || (resource.data.userId == request.auth.uid && isNotBanned()));
 
       match /likes/{userId} {
         allow read: if true;
@@ -140,7 +141,7 @@ service cloud.firestore {
       allow read: if true;
       allow create: if request.auth != null && isNotBanned();
       allow update: if request.auth != null && (isAdmin() || isNotBanned());
-      allow delete: if request.auth != null && (isAdmin() || (resource.data.userId == request.auth.uid && isNotBanned()));
+      allow delete: if request.auth != null && (isAdmin() || resource.data.isDemoAccount == true || (resource.data.userId == request.auth.uid && isNotBanned()));
     }
 
     // Rooms

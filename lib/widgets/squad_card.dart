@@ -12,6 +12,7 @@ import '../services/gamer_auth_service.dart';
 import '../services/squad_service.dart';
 import '../widgets/gamer_avatar.dart';
 import '../widgets/rank_badge_widget.dart';
+import '../widgets/blue_tick_badge.dart';
 import '../widgets/requests_bottom_sheet.dart';
 import '../widgets/squad_members_bottom_sheet.dart';
 import '../screens/gamer_profile_screen.dart';
@@ -283,6 +284,7 @@ class _LFGCardState extends State<LFGCard> {
                             ),
                           ),
                           RankBadgeWidget(badge: leaderBadge, size: 12),
+                          UserBlueTickBadge(userId: squad.ownerId.isNotEmpty ? squad.ownerId : squad.userId, size: 14),
                           if (isOwner) ...[
                             const SizedBox(width: 6),
                             Container(

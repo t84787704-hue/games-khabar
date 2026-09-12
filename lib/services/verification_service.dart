@@ -157,6 +157,15 @@ class VerificationService {
     return _verifiedCache[userId] ?? false;
   }
 
+  /// Check if a user document has approved blue tick
+  static bool isUserDocBlueTickVerified(Map<String, dynamic>? data) {
+    if (data == null) return false;
+    final bool isBlue = data['isBlueTickVerified'] == true ||
+        data['blueTickVerified'] == true;
+    final String status = data['blueTickStatus']?.toString().toLowerCase().trim() ?? '';
+    return isBlue && status == 'approved';
+  }
+
   /// Mark cache directly
   static void setCache(String userId, bool isVerified) {
     _verifiedCache[userId] = isVerified;
@@ -165,9 +174,6 @@ class VerificationService {
   /// Asynchronously retrieve and cache verified status for a user
   static Future<bool> isUserVerified(String userId) async {
     if (userId.isEmpty) return false;
-    if (_verifiedCache.containsKey(userId)) {
-      return _verifiedCache[userId]!;
-    }
 
     try {
       final doc = await _firestore.collection('users').doc(userId).get();
@@ -176,9 +182,7 @@ class VerificationService {
         return false;
       }
       final data = doc.data()!;
-      final bool isVerified = data['isVerified'] == true ||
-          data['isVerifiedBlue'] == true ||
-          data['verificationStatus'] == 'verified';
+      final bool isVerified = isUserDocBlueTickVerified(data);
       _verifiedCache[userId] = isVerified;
       return isVerified;
     } catch (e) {
@@ -657,6 +661,9 @@ class VerificationService {
         'verificationStatus': 'pending',
         'verificationAppliedAt': Timestamp.fromDate(now),
         'isVerified': false,
+        'isBlueTickVerified': false,
+        'blueTickVerified': false,
+        'blueTickStatus': 'pending',
         'clipsCount': stats.clipsCount,
         'squadRoomsCount': stats.squadRoomsCount,
         'likesReceived': stats.likesReceived,
@@ -666,6 +673,10 @@ class VerificationService {
       await _firestore.collection('users').doc(uid).update({
         'verificationStatus': 'verified',
         'isVerified': true,
+        'isVerifiedBlue': true,
+        'isBlueTickVerified': true,
+        'blueTickVerified': true,
+        'blueTickStatus': 'approved',
         'verifiedAt': Timestamp.fromDate(now),
       });
 
@@ -705,8 +716,12 @@ class VerificationService {
     try {
       await _firestore.collection('users').doc(uid).update({
         'verificationStatus': 'pending',
+        'isBlueTickVerified': false,
+        'blueTickVerified': false,
+        'blueTickStatus': 'pending',
         'verificationAppliedAt': FieldValue.serverTimestamp(),
         'isVerified': false,
+        'isVerifiedBlue': false,
       });
       _verifiedCache[uid] = false;
       return true;
@@ -745,6 +760,10 @@ class VerificationService {
     await _firestore.collection('users').doc(uid).update({
       'verificationStatus': 'verified',
       'isVerified': true,
+      'isVerifiedBlue': true,
+      'isBlueTickVerified': true,
+      'blueTickVerified': true,
+      'blueTickStatus': 'approved',
       'verifiedAt': Timestamp.fromDate(now),
     });
     _verifiedCache[uid] = true;
@@ -824,6 +843,10 @@ class VerificationService {
       if (canVerify && !isVerifiedNow && user.verificationStatus == 'pending') {
         await _firestore.collection('users').doc(uid).update({
           'isVerified': true,
+          'isVerifiedBlue': true,
+          'isBlueTickVerified': true,
+          'blueTickVerified': true,
+          'blueTickStatus': 'approved',
           'verificationStatus': 'verified',
           'verifiedAt': FieldValue.serverTimestamp(),
         });

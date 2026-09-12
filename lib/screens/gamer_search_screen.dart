@@ -110,9 +110,9 @@ class _GamerSearchScreenState extends State<GamerSearchScreen> {
                           overflow: TextOverflow.ellipsis,
                         ),
                       ),
-                      if (user.isVerified) ...[
+                      if (user.hasBlueTick) ...[
                         const SizedBox(width: 4),
-                        const Icon(Icons.verified, color: Colors.blue, size: 14),
+                        const Icon(Icons.verified, color: Color(0xFF1D9BF0), size: 14),
                       ],
                     ],
                   ),

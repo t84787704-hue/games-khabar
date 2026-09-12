@@ -148,11 +148,15 @@ class GamerUser {
   final bool isVerified;
   final String verificationStatus; // 'none', 'pending', 'verified', 'rejected'
   final bool isVerifiedBlue;
+  final bool isBlueTickVerified;
+  final String blueTickStatus; // 'none', 'pending', 'approved', 'rejected'
+  final bool isRankVerified;
   final bool isAdmin;
   final bool isBanned;
   final DateTime? bannedAt;
   final String? bannedReason;
   final String? bannedBy;
+  final bool isDemoAccount;
   final int clipsCount;
   final int squadRoomsCount;
   final DateTime? verificationAppliedAt;
@@ -182,11 +186,15 @@ class GamerUser {
     this.isVerified = false,
     this.verificationStatus = 'none',
     this.isVerifiedBlue = false,
+    this.isBlueTickVerified = false,
+    this.blueTickStatus = 'none',
+    this.isRankVerified = false,
     this.isAdmin = false,
     this.isBanned = false,
     this.bannedAt,
     this.bannedReason,
     this.bannedBy,
+    this.isDemoAccount = false,
     this.clipsCount = 0,
     this.squadRoomsCount = 0,
     this.verificationAppliedAt,
@@ -198,9 +206,15 @@ class GamerUser {
     this.createdAt,
   });
 
-  bool get isPendingVerification => verificationStatus == 'pending';
-  bool get isRejectedVerification => verificationStatus == 'rejected';
-  bool get isVerifiedBadge => isVerified || isVerifiedBlue || verificationStatus == 'verified';
+  bool get isPendingVerification => verificationStatus == 'pending' || blueTickStatus == 'pending';
+  bool get isRejectedVerification => verificationStatus == 'rejected' || blueTickStatus == 'rejected';
+  
+  /// Blue tick (influencer checkmark ✓) is shown ONLY if isBlueTickVerified == true AND blueTickStatus == 'approved'
+  bool get hasBlueTick =>
+      (isBlueTickVerified || isVerifiedBlue) &&
+      (blueTickStatus == 'approved' || verificationStatus == 'verified');
+
+  bool get isVerifiedBadge => hasBlueTick;
 
   // App Rank (auto) calculation: appPoints = (level * 100) + coins + (posts * 10)
   // 0-999 Bronze, 1000-1999 Silver, 2000-2999 Gold, 3000-3699 Platinum, 3700-4199 Diamond, 4200-4699 Crown, 4700-4999 ACE, 5000+ Conqueror
@@ -362,11 +376,12 @@ class GamerUser {
     }
 
     final rawStatus = data['verificationStatus']?.toString().toLowerCase().trim();
-    final bool rawVerifiedBlue = data['isVerifiedBlue'] == true;
-    final bool rawVerified = data['isVerified'] == true || rawVerifiedBlue || rawStatus == 'verified';
+    final bool rawBlueTick = data['isBlueTickVerified'] == true || data['blueTickVerified'] == true;
+    final String rawBlueStatus = data['blueTickStatus']?.toString().toLowerCase().trim() ?? '';
+    final bool hasApprovedBlueTick = rawBlueTick && (rawBlueStatus == 'approved');
     final String status = rawStatus != null && rawStatus.isNotEmpty
         ? rawStatus
-        : (rawVerified ? 'verified' : 'none');
+        : (hasApprovedBlueTick ? 'verified' : 'none');
 
     final rawGames = data['games'];
     List<UserGameRank> parsedGames = [];
@@ -379,6 +394,9 @@ class GamerUser {
         }
       }
     }
+
+    final bool rawRankVerified = data['isRankVerified'] == true ||
+        parsedGames.any((g) => g.isVerified || g.status == 'approved');
 
     final int userLevel = (data['level'] as num?)?.toInt() ?? 1;
     final String rawRank = data['tier']?.toString() ?? data['rank']?.toString() ?? '';
@@ -400,14 +418,18 @@ class GamerUser {
       postsCount: (data['postsCount'] as num?)?.toInt() ?? 0,
       likesReceived: (data['likesReceived'] as num?)?.toInt() ?? 0,
       reportsCount: (data['reportsCount'] as num?)?.toInt() ?? 0,
-      isVerified: rawVerified,
+      isVerified: hasApprovedBlueTick,
       verificationStatus: status,
-      isVerifiedBlue: rawVerifiedBlue || rawVerified,
+      isVerifiedBlue: hasApprovedBlueTick,
+      isBlueTickVerified: rawBlueTick,
+      blueTickStatus: rawBlueStatus.isNotEmpty ? rawBlueStatus : (hasApprovedBlueTick ? 'approved' : 'none'),
+      isRankVerified: rawRankVerified,
       isAdmin: data['isAdmin'] == true,
       isBanned: data['isBanned'] == true,
       bannedAt: bannedTimestamp,
       bannedReason: data['bannedReason']?.toString(),
       bannedBy: data['bannedBy']?.toString(),
+      isDemoAccount: data['isDemoAccount'] == true,
       clipsCount: (data['clipsCount'] as num?)?.toInt() ?? 0,
       squadRoomsCount: (data['squadRoomsCount'] as num?)?.toInt() ?? 0,
       verificationAppliedAt: appliedAt,
@@ -447,11 +469,16 @@ class GamerUser {
       'isVerified': isVerified,
       'verificationStatus': verificationStatus,
       'isVerifiedBlue': isVerifiedBlue,
+      'isBlueTickVerified': isBlueTickVerified,
+      'blueTickVerified': isBlueTickVerified,
+      'blueTickStatus': blueTickStatus,
+      'isRankVerified': isRankVerified,
       'isAdmin': isAdmin,
       'isBanned': isBanned,
       if (bannedAt != null) 'bannedAt': Timestamp.fromDate(bannedAt!),
       if (bannedReason != null && bannedReason!.isNotEmpty) 'bannedReason': bannedReason,
       if (bannedBy != null && bannedBy!.isNotEmpty) 'bannedBy': bannedBy,
+      'isDemoAccount': isDemoAccount,
       'clipsCount': clipsCount,
       'squadRoomsCount': squadRoomsCount,
       'verificationAppliedAt': verificationAppliedAt != null ? Timestamp.fromDate(verificationAppliedAt!) : null,
@@ -498,11 +525,15 @@ class GamerUser {
     bool? isVerified,
     String? verificationStatus,
     bool? isVerifiedBlue,
+    bool? isBlueTickVerified,
+    String? blueTickStatus,
+    bool? isRankVerified,
     bool? isAdmin,
     bool? isBanned,
     DateTime? bannedAt,
     String? bannedReason,
     String? bannedBy,
+    bool? isDemoAccount,
     int? clipsCount,
     int? squadRoomsCount,
     DateTime? verificationAppliedAt,
@@ -532,11 +563,15 @@ class GamerUser {
       isVerified: isVerified ?? this.isVerified,
       verificationStatus: verificationStatus ?? this.verificationStatus,
       isVerifiedBlue: isVerifiedBlue ?? this.isVerifiedBlue,
+      isBlueTickVerified: isBlueTickVerified ?? this.isBlueTickVerified,
+      blueTickStatus: blueTickStatus ?? this.blueTickStatus,
+      isRankVerified: isRankVerified ?? this.isRankVerified,
       isAdmin: isAdmin ?? this.isAdmin,
       isBanned: isBanned ?? this.isBanned,
       bannedAt: bannedAt ?? this.bannedAt,
       bannedReason: bannedReason ?? this.bannedReason,
       bannedBy: bannedBy ?? this.bannedBy,
+      isDemoAccount: isDemoAccount ?? this.isDemoAccount,
       clipsCount: clipsCount ?? this.clipsCount,
       squadRoomsCount: squadRoomsCount ?? this.squadRoomsCount,
       verificationAppliedAt: verificationAppliedAt ?? this.verificationAppliedAt,

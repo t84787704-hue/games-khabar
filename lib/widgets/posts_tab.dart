@@ -10,6 +10,7 @@ import '../services/gamer_auth_service.dart';
 import '../services/profile_service.dart';
 import '../widgets/gamer_avatar.dart';
 import '../widgets/post_card.dart';
+import '../widgets/blue_tick_badge.dart';
 
 /// PostsTab displays all text posts and video clips for a user merged together.
 /// If doc has videoUrl -> shows VideoPlayer card
@@ -274,8 +275,7 @@ class _ProfileVideoCardState extends State<ProfileVideoCard> {
                             ),
                           ),
                           const SizedBox(width: 4),
-                          if (item.isVerified)
-                            const Icon(Icons.verified, color: Colors.blue, size: 15),
+                          UserBlueTickBadge(userId: item.userId, size: 15),
                         ],
                       ),
                       const SizedBox(height: 2),

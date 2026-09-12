@@ -9,12 +9,14 @@ class GamerPost {
   final String userPhoto;
   final String displayName;
   final String text;
+  final String? imageUrl;
   final String gameTag;
   final String userRank;
   final double userKd;
   final int likesCount;
   final int commentsCount;
   final bool isVerified;
+  final bool isDemoAccount;
   final DateTime? createdAt;
 
   const GamerPost({
@@ -24,12 +26,14 @@ class GamerPost {
     this.userPhoto = '',
     required this.displayName,
     required this.text,
+    this.imageUrl,
     this.gameTag = 'BGMI',
     this.userRank = 'Ace',
     this.userKd = 0.0,
     this.likesCount = 0,
     this.commentsCount = 0,
     this.isVerified = false,
+    this.isDemoAccount = false,
     this.createdAt,
   });
 
@@ -99,12 +103,14 @@ class GamerPost {
       userPhoto: data['userPhoto'] ?? '',
       displayName: data['displayName'] ?? 'Gamer',
       text: data['text'] ?? '',
+      imageUrl: data['imageUrl'] as String?,
       gameTag: data['gameTag'] ?? 'BGMI',
       userRank: data['userRank'] ?? 'Ace',
       userKd: (data['userKd'] as num?)?.toDouble() ?? 0.0,
       likesCount: (data['likesCount'] as num?)?.toInt() ?? 0,
       commentsCount: (data['commentsCount'] as num?)?.toInt() ?? 0,
       isVerified: data['isVerified'] == true,
+      isDemoAccount: data['isDemoAccount'] == true,
       createdAt: created,
     );
   }
@@ -117,12 +123,14 @@ class GamerPost {
       'userPhoto': userPhoto,
       'displayName': displayName,
       'text': text.trim(),
+      if (imageUrl != null && imageUrl!.isNotEmpty) 'imageUrl': imageUrl,
       'gameTag': gameTag,
       'userRank': userRank,
       'userKd': userKd,
       'likesCount': likesCount,
       'commentsCount': commentsCount,
       'isVerified': isVerified,
+      'isDemoAccount': isDemoAccount,
       'createdAt': createdAt != null ? Timestamp.fromDate(createdAt!) : FieldValue.serverTimestamp(),
     };
   }
@@ -134,12 +142,14 @@ class GamerPost {
     String? userPhoto,
     String? displayName,
     String? text,
+    String? imageUrl,
     String? gameTag,
     String? userRank,
     double? userKd,
     int? likesCount,
     int? commentsCount,
     bool? isVerified,
+    bool? isDemoAccount,
     DateTime? createdAt,
   }) {
     return GamerPost(
@@ -149,12 +159,14 @@ class GamerPost {
       userPhoto: userPhoto ?? this.userPhoto,
       displayName: displayName ?? this.displayName,
       text: text ?? this.text,
+      imageUrl: imageUrl ?? this.imageUrl,
       gameTag: gameTag ?? this.gameTag,
       userRank: userRank ?? this.userRank,
       userKd: userKd ?? this.userKd,
       likesCount: likesCount ?? this.likesCount,
       commentsCount: commentsCount ?? this.commentsCount,
       isVerified: isVerified ?? this.isVerified,
+      isDemoAccount: isDemoAccount ?? this.isDemoAccount,
       createdAt: createdAt ?? this.createdAt,
     );
   }

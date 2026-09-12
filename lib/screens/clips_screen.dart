@@ -11,6 +11,7 @@ import '../models/clip_model.dart';
 import '../services/clip_service.dart';
 import '../services/gamer_auth_service.dart';
 import '../widgets/gamer_avatar.dart';
+import '../widgets/blue_tick_badge.dart';
 import 'gamer_profile_screen.dart';
 
 /// Global manager for Clips video playback.
@@ -888,7 +889,13 @@ class _ClipsScreenState extends State<ClipsScreen>
                         final d = docs[idx].data() as Map<String, dynamic>? ?? {};
                         return ListTile(
                           dense: true,
-                          title: Text(d['username'] ?? 'gamer', style: const TextStyle(color: GamerTheme.accentOrange, fontWeight: FontWeight.bold)),
+                          title: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Text(d['username'] ?? 'gamer', style: const TextStyle(color: GamerTheme.accentOrange, fontWeight: FontWeight.bold)),
+                              UserBlueTickBadge(userId: d['userId'] ?? '', size: 13),
+                            ],
+                          ),
                           subtitle: Text(d['text'] ?? '', style: const TextStyle(color: Colors.white)),
                         );
                       },
@@ -1650,8 +1657,7 @@ class _ClipCardState extends State<ClipCard> {
                         shadows: [Shadow(color: Colors.black, blurRadius: 6)],
                       ),
                     ),
-                    const SizedBox(width: 4),
-                    const Icon(Icons.verified, color: Colors.blue, size: 16),
+                    UserBlueTickBadge(userId: clip.userId, size: 16),
                   ],
                 ),
               ),
