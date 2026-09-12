@@ -1,62 +1,24 @@
 import 'dart:async';
 import 'dart:io';
-import 'package:flutter/material.dart';
-import 'fast_compress.dart';
-import 'fast_chunked_upload.dart';
-import 'gamer_social_service.dart';
+import 'dart:convert';
+import 'package:flutter/foundation.dart';
+import 'package:http/http.dart' as http;
+import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:flutter_dotenv/flutter_dotenv.dart';
 
-class UploadTaskState {
-  final String taskId;
-  final String title;
-  final double progress; // 0.0 to 1.0
-  final String statusText;
-  final bool isCompleted;
-  final bool hasError;
-  final String? errorMessage;
-  final String? mediaUrl;
-
-  UploadTaskState({
-    required this.taskId,
-    required this.title,
-    this.progress = 0.0,
-    this.statusText = 'Preparing...',
-    this.isCompleted = false,
-    this.hasError = false,
-    this.errorMessage,
-    this.mediaUrl,
-  });
-
-  UploadTaskState copyWith({
-    double? progress,
-    String? statusText,
-    bool? isCompleted,
-    bool? hasError,
-    String? errorMessage,
-    String? mediaUrl,
-  }) {
-    return UploadTaskState(
-      taskId: taskId,
-      title: title,
-      progress: progress ?? this.progress,
-      statusText: statusText ?? this.statusText,
-      isCompleted: isCompleted ?? this.isCompleted,
-      hasError: hasError ?? this.hasError,
-      errorMessage: errorMessage ?? this.errorMessage,
-      mediaUrl: mediaUrl ?? this.mediaUrl,
-    );
-  }
-}
-
-/// TikTok-style Background Video Upload Manager
-/// Allows instant closing of screen while compression & chunked upload continue in background.
 class BackgroundUploadManager {
   static final BackgroundUploadManager _instance = BackgroundUploadManager._internal();
   factory BackgroundUploadManager() => _instance;
   BackgroundUploadManager._internal();
 
-  final ValueNotifier<UploadTaskState?> activeTask = ValueNotifier<UploadTaskState?>(null);
+  bool _isUploading = false;
+  double _progress = 0.0;
+  bool get isUploading => _isUploading;
+  double get progress => _progress;
 
-  /// Start background video processing & upload
+  final StreamController<Map<String, dynamic>> _uploadStatusController = StreamController.broadcast();
+  Stream<Map<String, dynamic>> get uploadStatusStream => _uploadStatusController.stream;
+
   Future<void> startVideoUpload({
     required File videoFile,
     required String text,
@@ -64,113 +26,60 @@ class BackgroundUploadManager {
     required String userId,
     required String username,
     required String displayName,
-    required String userPhoto,
-    int estimatedDurationSeconds = 60,
+    String? userPhoto,
+    int estimatedDurationSeconds = 180,
   }) async {
-    final taskId = 'task_${DateTime.now().millisecondsSinceEpoch}';
-    activeTask.value = UploadTaskState(
-      taskId: taskId,
-      title: text.isNotEmpty ? text : 'Gaming Video',
-      progress: 0.05,
-      statusText: '⚡ Hardware Compressing... 5%',
-    );
-
-    // Run async in background without blocking caller
-    unawaited(() async {
-      try {
-        final originalBytes = await videoFile.length();
-        final double originalMB = originalBytes / (1024 * 1024);
-
-        // Step 1: Fast Hardware GPU Compression (5-10 sec for 1000MB)
-        File fileToUpload = videoFile;
-        if (originalMB > 15.0) {
-          fileToUpload = await FastCompressService.compressGamingVideo(
-            videoFile,
-            totalDurationSeconds: estimatedDurationSeconds,
-            onProgress: (p) {
-              final combinedProg = (p * 0.45).clamp(0.05, 0.45);
-              final pct = (combinedProg * 100).toInt();
-              activeTask.value = activeTask.value?.copyWith(
-                progress: combinedProg,
-                statusText: '⚡ Compressing... $pct%',
-              );
-            },
-            onStatus: (status) {
-              activeTask.value = activeTask.value?.copyWith(statusText: status);
-            },
-          );
-        }
-
-        // Step 2: Parallel Chunked Upload to Cloudinary (8-12 sec)
-        activeTask.value = activeTask.value?.copyWith(
-          progress: 0.48,
-          statusText: '🚀 Fast Uploading... 48%',
-        );
-
-        final uploadResult = await FastChunkedUploadService.uploadVideo(
-          file: fileToUpload,
-          caption: text,
-          gameTag: gameTag,
-          onProgress: (p) {
-            final combinedProg = (0.45 + (p * 0.50)).clamp(0.48, 0.95);
-            final pct = (combinedProg * 100).toInt();
-            activeTask.value = activeTask.value?.copyWith(
-              progress: combinedProg,
-              statusText: '🚀 Uploading... $pct%',
-            );
-          },
-          onStatus: (status) {
-            activeTask.value = activeTask.value?.copyWith(statusText: status);
-          },
-        );
-
-        if (uploadResult == null || uploadResult['secure_url'] == null) {
-          throw Exception("Cloud upload failed or was interrupted");
-        }
-
-        final String videoUrl = uploadResult['secure_url'].toString();
-
-        // Step 3: Save to Firestore
-        activeTask.value = activeTask.value?.copyWith(
-          progress: 0.97,
-          statusText: 'Posting to Feed... ⚡',
-        );
-
-        await GamerSocialService().createPost(
-          userId: userId,
-          username: username,
-          displayName: displayName,
-          userPhoto: userPhoto,
-          text: text,
-          gameTag: gameTag,
-          mediaUrl: videoUrl,
-        );
-
-        // Success state
-        activeTask.value = activeTask.value?.copyWith(
-          progress: 1.0,
-          statusText: '🎉 Video Clip Published!',
-          isCompleted: true,
-          mediaUrl: videoUrl,
-        );
-
-        // Auto dismiss after 3.5 seconds
-        await Future.delayed(const Duration(milliseconds: 3500));
-        if (activeTask.value?.taskId == taskId) {
-          activeTask.value = null;
-        }
-      } catch (e) {
-        debugPrint("❌ [BACKGROUND_UPLOAD] Error: $e");
-        activeTask.value = activeTask.value?.copyWith(
-          hasError: true,
-          errorMessage: e.toString(),
-          statusText: '⚠️ Upload failed. Tap to dismiss.',
-        );
-      }
-    }());
+    if (_isUploading) return;
+    _isUploading = true; _progress = 0.0;
+    try {
+      _uploadStatusController.add({'status': 'uploading', 'progress': 0, 'message': 'Uploading directly to Cloudinary... 0%'});
+      final videoUrl = await _uploadLargeVideoDirect(videoFile);
+      if (videoUrl == null) throw Exception('Upload failed');
+      await FirebaseFirestore.instance.collection('videos').add({
+        'videoUrl': videoUrl, 'caption': text, 'gameTag': gameTag, 'userId': userId,
+        'username': username, 'displayName': displayName, 'userPhotoUrl': userPhoto ?? '',
+        'createdAt': FieldValue.serverTimestamp(), 'duration': estimatedDurationSeconds,
+        'fileSizeMB': (await videoFile.length()) / (1024 * 1024), 'likes': 0, 'views': 0, 'isPublished': true,
+      });
+      _progress = 100;
+      _uploadStatusController.add({'status': 'completed', 'progress': 100, 'message': 'Video published!', 'url': videoUrl});
+    } catch (e) {
+      debugPrint('❌ Direct upload error: $e');
+      _uploadStatusController.add({'status': 'error', 'progress': _progress, 'message': 'Upload failed: $e'});
+    } finally { _isUploading = false; }
   }
 
-  void dismissTask() {
-    activeTask.value = null;
+  Future<String?> _uploadLargeVideoDirect(File file) async {
+    final cloudName = dotenv.env['CLOUDINARY_CLOUD_NAME'] ?? 'YOUR_CLOUD_NAME';
+    final uploadPreset = dotenv.env['CLOUDINARY_UPLOAD_PRESET'] ?? 'tiktok_3min_direct';
+    final fileSize = await file.length();
+    const int chunkSize = 10 * 1024 * 1024;
+    final totalChunks = (fileSize / chunkSize).ceil();
+    final String uniqueUploadId = 'gaming_${DateTime.now().millisecondsSinceEpoch}';
+    String? finalSecureUrl;
+    for (int i = 0; i < totalChunks; i++) {
+      final int start = i * chunkSize;
+      final int end = (start + chunkSize > fileSize) ? fileSize : start + chunkSize;
+      final bytes = await file.openRead(start, end).expand((e) => e).toList();
+      final uri = Uri.parse('https://api.cloudinary.com/v1_1/$cloudName/video/upload');
+      final request = http.MultipartRequest('POST', uri);
+      request.headers['X-Unique-Upload-Id'] = uniqueUploadId;
+      request.headers['Content-Range'] = 'bytes $start-${end - 1}/$fileSize';
+      request.fields['upload_preset'] = uploadPreset;
+      request.fields['public_id'] = uniqueUploadId;
+      request.fields['eager'] = 'w_720,h_1280,c_limit,q_auto,f_auto';
+      request.fields['eager_async'] = 'true';
+      request.files.add(http.MultipartFile.fromBytes('file', bytes, filename: 'chunk_$i.mp4'));
+      final streamedResponse = await request.send();
+      final response = await http.Response.fromStream(streamedResponse);
+      if (response.statusCode == 200 || response.statusCode == 201) {
+        final jsonRes = json.decode(response.body);
+        if (jsonRes['secure_url'] != null) finalSecureUrl = jsonRes['secure_url'];
+        _progress = ((i + 1) / totalChunks) * 100;
+        _uploadStatusController.add({'status': 'uploading', 'progress': _progress.toInt(), 'message': 'Uploading directly... ${_progress.toInt()}%'});
+      } else { throw Exception('Chunk upload failed: ${response.body}'); }
+    }
+    return finalSecureUrl;
   }
+  void dispose() { _uploadStatusController.close(); }
 }
