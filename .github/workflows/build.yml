@@ -26,8 +26,7 @@ jobs:
       - name: Setup Flutter
         uses: subosito/flutter-action@v2
         with:
-          flutter-version: '3.19.6'
-          channel: 'stable'
+          channel: 'stable'  # <--- یہاں سے پرانا ورژن ہٹا دیا ہے، اب یہ خود بخود تازہ ترین ورژن استعمال کرے گا
 
       - name: Clean and Install dependencies
         run: |
