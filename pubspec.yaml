@@ -32,18 +32,19 @@ dependencies:
   translator: ^1.0.0
   webview_flutter: ^4.8.0
   youtube_player_flutter: ^9.1.1
-  youtube_player_iframe: ^5.1.2  # <--- یہاں ورژن واپس 5.1.2 کر دیا ہے
+  youtube_player_iframe: ^5.1.2
   cloud_functions: ^5.1.3
   xml: ^6.5.0
   html: ^0.15.4
   path_provider: ^2.1.4
   ffmpeg_kit_flutter_new: ^4.6.0
-  
-  # یہ تینوں پیکیجز پرانے ورژن پر لاک ہیں تاکہ Android Build کا ایرر نہ آئے
+
+# یہاں wakelock_plus کو 1.3.0 کر دیا گیا ہے
+dependency_overrides:
   video_player: 2.8.2
   chewie: 1.7.4
   package_info_plus: 8.0.0
-  wakelock_plus: 1.1.4
+  wakelock_plus: 1.3.0 
 
 dev_dependencies:
   flutter_test:
