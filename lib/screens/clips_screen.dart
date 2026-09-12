@@ -77,7 +77,8 @@ class _ClipsScreenState extends State<ClipsScreen>
       username: 'MortalSniper',
       displayName: 'AWM King Naman',
       title: 'INSANE 1v4 AWM No-Scope Clutch in Pochinki! 🎯🔥 #BGMI #Sniper',
-      mediaUrl: 'https://images.unsplash.com/photo-1542751371-adc38448a05e?q=80&w=1200&auto=format&fit=crop',
+      mediaUrl: 'https://res.cloudinary.com/fka9mgwu/video/upload/v1789206218/pubg_clutch_clip.mp4',
+      thumbnail: 'https://res.cloudinary.com/fka9mgwu/video/upload/so_1,w_540,c_fill/v1789206218/pubg_clutch_clip.jpg',
       gameTag: 'BGMI',
       songTitle: 'Khabar Beats - BGMI Trap Bass',
       likesCount: 1420,
@@ -91,7 +92,8 @@ class _ClipsScreenState extends State<ClipsScreen>
       username: 'DynamoRush',
       displayName: 'DynamoOP',
       title: 'Erangel Bridge Camp 1v4 Squad Wipe with M416 Laser Spray 💀🔥 #BGMI',
-      mediaUrl: 'https://images.unsplash.com/photo-1511512578047-dfb367046420?q=80&w=1200&auto=format&fit=crop',
+      mediaUrl: 'https://res.cloudinary.com/fka9mgwu/video/upload/v1789206225/bgmi_spray_clip.mp4',
+      thumbnail: 'https://res.cloudinary.com/fka9mgwu/video/upload/so_1,w_540,c_fill/v1789206225/bgmi_spray_clip.jpg',
       gameTag: 'BGMI',
       songTitle: 'Phonk Gaming Anthem - Brazilian Drift',
       likesCount: 3105,
@@ -105,8 +107,9 @@ class _ClipsScreenState extends State<ClipsScreen>
       username: 'JonathanVibes',
       displayName: 'GodL Jonathan',
       title: 'Conqueror Lobby 22 Kills Solo vs Squad Gameplay Highlights 💀⚡',
-      mediaUrl: 'https://images.unsplash.com/photo-1538481199705-c710c4e965fc?q=80&w=1200&auto=format&fit=crop',
-      gameTag: 'BGMI',
+      mediaUrl: 'https://res.cloudinary.com/fka9mgwu/video/upload/v1789206227/freefire_headshot_clip.mp4',
+      thumbnail: 'https://res.cloudinary.com/fka9mgwu/video/upload/so_1,w_540,c_fill/v1789206227/freefire_headshot_clip.jpg',
+      gameTag: 'PUBG Mobile',
       songTitle: 'Jonathan Gyro Master Sound',
       likesCount: 5820,
       commentsCount: 890,
@@ -760,7 +763,16 @@ class _ClipCardState extends State<ClipCard> {
   }
 
   void _togglePlayPause() {
-    if (_controller == null || !_isInitialized) return;
+    if (_hasError || !_isInitialized) {
+      // Tap on errored or uninitialized video triggers reload & play
+      setState(() {
+        _hasError = false;
+        _isInitialized = false;
+      });
+      _initVideo();
+      return;
+    }
+    if (_controller == null) return;
     setState(() {
       if (_controller!.value.isPlaying) {
         _controller!.pause();
@@ -802,8 +814,8 @@ class _ClipCardState extends State<ClipCard> {
                   child: FittedBox(
                     fit: BoxFit.cover,
                     child: SizedBox(
-                      width: _controller!.value.size.width,
-                      height: _controller!.value.size.height,
+                      width: (_controller!.value.size.width > 0) ? _controller!.value.size.width : 720,
+                      height: (_controller!.value.size.height > 0) ? _controller!.value.size.height : 1280,
                       child: VideoPlayer(_controller!),
                     ),
                   ),
@@ -821,8 +833,32 @@ class _ClipCardState extends State<ClipCard> {
                         colors: [Color(0xFF1E1430), Color(0xFF0F0818), Color(0xFF160D25)],
                       ),
                     ),
-                    child: const Center(
-                      child: Icon(Icons.sports_esports_rounded, size: 64, color: GamerTheme.accentOrange),
+                    child: Center(
+                      child: Column(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Container(
+                            padding: const EdgeInsets.all(16),
+                            decoration: BoxDecoration(
+                              color: Colors.black.withOpacity(0.6),
+                              shape: BoxShape.circle,
+                              border: Border.all(color: GamerTheme.accentOrange.withOpacity(0.8), width: 2),
+                            ),
+                            child: Icon(
+                              _hasError ? Icons.refresh_rounded : Icons.sports_esports_rounded,
+                              size: 48,
+                              color: GamerTheme.accentOrange,
+                            ),
+                          ),
+                          if (_hasError) ...[
+                            const SizedBox(height: 10),
+                            const Text(
+                              'Tap to play / reload video ▶',
+                              style: TextStyle(color: Colors.white, fontSize: 13, fontWeight: FontWeight.bold),
+                            ),
+                          ],
+                        ],
+                      ),
                     ),
                   ),
                 ),

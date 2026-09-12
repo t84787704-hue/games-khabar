@@ -79,27 +79,31 @@ class _ClipUploadModalSheetState extends State<ClipUploadModalSheet> {
     'Gaming Meme',
   ];
 
-  // Guaranteed instant sample gaming clips
+  // Guaranteed instant sample gaming clips hosted on verified Cloudinary CDN
   final List<Map<String, String>> _sampleClips = const [
     {
       'title': '1v4 PUBG Clutch Moment! 🔥',
       'tag': 'PUBG Mobile',
-      'url': 'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerBlazes.mp4',
+      'url': 'https://res.cloudinary.com/fka9mgwu/video/upload/v1789206218/pubg_clutch_clip.mp4',
+      'thumb': 'https://res.cloudinary.com/fka9mgwu/video/upload/so_1,w_540,c_fill/v1789206218/pubg_clutch_clip.jpg',
     },
     {
       'title': 'BGMI Pochinki Bridge Spray Wipeout 💀',
       'tag': 'BGMI',
-      'url': 'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerEscapes.mp4',
+      'url': 'https://res.cloudinary.com/fka9mgwu/video/upload/v1789206225/bgmi_spray_clip.mp4',
+      'thumb': 'https://res.cloudinary.com/fka9mgwu/video/upload/so_1,w_540,c_fill/v1789206225/bgmi_spray_clip.jpg',
     },
     {
       'title': 'Free Fire AWM Headshot Highlights 🎯',
       'tag': 'Free Fire',
-      'url': 'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerFun.mp4',
+      'url': 'https://res.cloudinary.com/fka9mgwu/video/upload/v1789206227/freefire_headshot_clip.mp4',
+      'thumb': 'https://res.cloudinary.com/fka9mgwu/video/upload/so_1,w_540,c_fill/v1789206227/freefire_headshot_clip.jpg',
     },
     {
       'title': 'COD Mobile Sniper Quickscope Ace ⚡',
       'tag': 'COD Mobile',
-      'url': 'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerJoyBlazes.mp4',
+      'url': 'https://res.cloudinary.com/fka9mgwu/video/upload/v1789206229/codm_quickscope_clip.mp4',
+      'thumb': 'https://res.cloudinary.com/fka9mgwu/video/upload/so_1,w_540,c_fill/v1789206229/codm_quickscope_clip.jpg',
     },
   ];
 
@@ -616,7 +620,13 @@ class _ClipUploadModalSheetState extends State<ClipUploadModalSheet> {
       } else if (_networkVideoUrl != null) {
         // Direct network link or sample clip
         finalVideoUrl = _networkVideoUrl!;
-        finalThumbnailUrl = _networkVideoUrl!;
+        if (_networkVideoUrl!.contains('/video/upload/')) {
+          finalThumbnailUrl = _networkVideoUrl!
+              .replaceAll('/video/upload/', '/video/upload/so_1,w_540,c_fill/')
+              .replaceAll(RegExp(r'\.(mp4|mov|mkv|webm)(\?.*)?$', caseSensitive: false), '.jpg');
+        } else {
+          finalThumbnailUrl = _networkVideoUrl!;
+        }
         finalPublicId = 'online_${DateTime.now().millisecondsSinceEpoch}';
         finalDuration = (_trimRange.end - _trimRange.start).clamp(1.0, 180.0);
         finalOrigDuration = finalDuration;
@@ -715,7 +725,7 @@ class _ClipUploadModalSheetState extends State<ClipUploadModalSheet> {
     required void Function(double progress) onProgress,
   }) async {
     const cloudName = 'fka9mgwu';
-    final presets = ['gaming_clips_preset', 'clips_preset'];
+    final presets = ['clips_preset', 'gaming_clips_preset'];
 
     for (final preset in presets) {
       try {
@@ -772,27 +782,15 @@ class _ClipUploadModalSheetState extends State<ClipUploadModalSheet> {
 
           onProgress(1.0);
 
-          // Apply video trim transformations
+          // Direct Cloudinary URL guarantees ExoPlayer byte-range support & instant playback
           String finalVideoUrl = rawSecureUrl;
-          final totalSec = duration > 0 ? duration : (_videoDuration.inSeconds > 0 ? _videoDuration.inSeconds.toDouble() : 0.0);
+          final totalSec = duration > 0 ? duration : (_videoDuration.inSeconds > 0 ? _videoDuration.inSeconds.toDouble() : 30.0);
           final trimmedDuration = (trimEnd - trimStart).clamp(1.0, totalSec > 0 ? totalSec : 180.0);
 
-          if (totalSec > 0 && (trimStart > 0.5 || trimEnd < totalSec - 0.5)) {
-            final startInt = trimStart.round();
-            final endInt = trimEnd.round();
-            if (finalVideoUrl.contains('/video/upload/')) {
-              finalVideoUrl = finalVideoUrl.replaceAll(
-                '/video/upload/',
-                '/video/upload/so_$startInt,eo_$endInt/',
-              );
-            }
-          }
-
-          final startInt = trimStart.round();
           String thumbnailUrl = '';
           if (rawSecureUrl.contains('/video/upload/')) {
             thumbnailUrl = rawSecureUrl
-                .replaceAll('/video/upload/', '/video/upload/so_$startInt,w_400,h_700,c_fill/')
+                .replaceAll('/video/upload/', '/video/upload/so_1,w_540,c_fill/')
                 .replaceAll(RegExp(r'\.(mp4|mov|mkv|webm)(\?.*)?$', caseSensitive: false), '.jpg');
           } else {
             thumbnailUrl = rawSecureUrl.replaceAll(RegExp(r'\.(mp4|mov|mkv|webm).*'), '.jpg');
