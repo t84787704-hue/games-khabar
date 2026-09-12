@@ -38,12 +38,14 @@ dependencies:
   html: ^0.15.4
   path_provider: ^2.1.2
   ffmpeg_kit_flutter_new: ^4.6.0
-  video_player: ^2.8.2
-  chewie: ^1.7.5
+  video_player: 2.7.2
+  chewie: 1.6.1
 
 dependency_overrides:
-  package_info_plus: ^8.0.0
+  package_info_plus: 4.8.0
   wakelock_plus: 1.1.4
+  path_provider_android: 2.0.30
+  shared_preferences_android: 2.2.2
 
 dev_dependencies:
   flutter_test:
