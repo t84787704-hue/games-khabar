@@ -13,7 +13,6 @@ if (keystorePropertiesFile.exists()) {
 android {
     namespace = "com.gameskhabar.games_khabar"
     compileSdk 35
-    ndkVersion "28.0.12433566"
 
     compileOptions {
         coreLibraryDesugaringEnabled true
