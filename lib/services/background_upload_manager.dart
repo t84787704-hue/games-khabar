@@ -204,8 +204,8 @@ class BackgroundUploadManager {
               errClean.contains("Network error") ||
               errClean.contains("HandshakeException")) {
             errClean = "Internet connection issue. Please check your WiFi or mobile data and try again.";
-          } else if (errClean.contains("File size too large") || errClean.contains("10485760")) {
-            errClean = "Video exceeds 10MB limit. Try a shorter clip or optimize.";
+          } else if (errClean.contains("File size too large") || errClean.contains("104857600") || errClean.contains("10485760")) {
+            errClean = "Video exceeds 100MB limit after compression. Please select a clip under 3 minutes.";
           } else if (errClean.contains("timed out") || errClean.contains("TimeoutException")) {
             errClean = "Upload timed out. Please check your internet connection and try again.";
           }

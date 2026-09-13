@@ -51,20 +51,20 @@ class FastCompressService {
       onProgress?.call(0.1);
 
       // Clean, robust argument list with universal aspect-ratio preserving 720p scale
-      // and LGPL-compliant mpeg4 encoder with AAC audio.
+      // 720p HD, 1500k bitrate, 30fps, AAC audio (Option B)
       final arguments = [
         '-y',
         '-i', inputPath,
         '-vf', "scale='if(gt(a,1),-2,720)':'if(gt(a,1),720,-2)'",
-        '-r', '24',
+        '-r', '30',
         '-c:v', 'mpeg4',
-        '-b:v', '850k',
-        '-maxrate', '1200k',
-        '-bufsize', '2000k',
+        '-b:v', '1500k',
+        '-maxrate', '1800k',
+        '-bufsize', '3000k',
         '-pix_fmt', 'yuv420p',
         '-movflags', '+faststart',
         '-c:a', 'aac',
-        '-b:a', '64k',
+        '-b:a', '128k',
         '-t', '180',
         outputPath,
       ];
@@ -83,6 +83,43 @@ class FastCompressService {
         if (length > 1000) {
           final double newMB = length / (1024 * 1024);
           debugPrint("✅ [FAST_COMPRESS] Success: ${originalMB.toStringAsFixed(1)}MB -> ${newMB.toStringAsFixed(1)}MB");
+
+          // If still > 100MB, re-compress with 1000k bitrate
+          if (newMB > 100.0) {
+            debugPrint("⚠️ [FAST_COMPRESS] Still >100MB (${newMB.toStringAsFixed(1)}MB). Running pass 2 @ 1000k...");
+            final pass2Path = '${tempDir.path}/compressed_pass2_$timestamp.mp4';
+            final pass2Args = [
+              '-y',
+              '-i', inputPath,
+              '-vf', "scale='if(gt(a,1),-2,720)':'if(gt(a,1),720,-2)'",
+              '-r', '30',
+              '-c:v', 'mpeg4',
+              '-b:v', '1000k',
+              '-maxrate', '1200k',
+              '-bufsize', '2000k',
+              '-pix_fmt', 'yuv420p',
+              '-movflags', '+faststart',
+              '-c:a', 'aac',
+              '-b:a', '96k',
+              '-t', '180',
+              pass2Path,
+            ];
+            final p2Success = await _runFFmpegCommandWithArgs(
+              pass2Args,
+              pass2Path,
+              totalDurationSeconds,
+              onProgress,
+            );
+            final p2File = File(pass2Path);
+            if (p2Success && await p2File.exists()) {
+              final p2Len = await p2File.length();
+              if (p2Len > 1000) {
+                onProgress?.call(1.0);
+                return p2File;
+              }
+            }
+          }
+
           onProgress?.call(1.0);
           return outputFile;
         }
