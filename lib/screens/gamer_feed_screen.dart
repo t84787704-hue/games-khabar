@@ -401,143 +401,53 @@ class _GamerFeedScreenState extends State<GamerFeedScreen> {
                     borderRadius: BorderRadius.circular(16),
                     border: Border.all(color: GamerTheme.borderDark),
                   ),
-                  child: Column(
-                    children: [
-                      InkWell(
-                        onTap: () {
-                          Navigator.of(context).push(
-                            MaterialPageRoute(builder: (_) => const CreatePostScreen()),
-                          );
-                        },
-                        borderRadius: BorderRadius.circular(12),
-                        child: Row(
-                          children: [
-                            GamerAvatar(
-                              photoUrl: gamer?.photoUrl ?? '',
-                              displayName: gamer?.displayName ?? 'Gamer',
-                              radius: 18,
+                  child: InkWell(
+                    onTap: () {
+                      Navigator.of(context).push(
+                        MaterialPageRoute(builder: (_) => const CreatePostScreen()),
+                      );
+                    },
+                    borderRadius: BorderRadius.circular(12),
+                    child: Row(
+                      children: [
+                        GamerAvatar(
+                          photoUrl: gamer?.photoUrl ?? '',
+                          displayName: gamer?.displayName ?? 'Gamer',
+                          radius: 18,
+                        ),
+                        const SizedBox(width: 12),
+                        const Expanded(
+                          child: Text(
+                            "What's on your mind, Gamer?",
+                            style: TextStyle(
+                              color: GamerTheme.textMuted,
+                              fontSize: 14,
                             ),
-                            const SizedBox(width: 12),
-                            const Expanded(
-                              child: Text(
-                                "What's on your mind, Gamer?",
+                          ),
+                        ),
+                        Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                          decoration: BoxDecoration(
+                            gradient: GamerTheme.blueOrangeGradient,
+                            borderRadius: BorderRadius.circular(20),
+                          ),
+                          child: const Row(
+                            children: [
+                              Icon(Icons.add_rounded, color: Colors.white, size: 16),
+                              SizedBox(width: 4),
+                              Text(
+                                'Post',
                                 style: TextStyle(
-                                  color: GamerTheme.textMuted,
-                                  fontSize: 14,
+                                  color: Colors.white,
+                                  fontWeight: FontWeight.bold,
+                                  fontSize: 12,
                                 ),
                               ),
-                            ),
-                            Container(
-                              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                              decoration: BoxDecoration(
-                                gradient: GamerTheme.blueOrangeGradient,
-                                borderRadius: BorderRadius.circular(20),
-                              ),
-                              child: const Row(
-                                children: [
-                                  Icon(Icons.add_rounded, color: Colors.white, size: 16),
-                                  SizedBox(width: 4),
-                                  Text(
-                                    'Post',
-                                    style: TextStyle(
-                                      color: Colors.white,
-                                      fontWeight: FontWeight.bold,
-                                      fontSize: 12,
-                                    ),
-                                  ),
-                                ],
-                              ),
-                            ),
-                          ],
+                            ],
+                          ),
                         ),
-                      ),
-                      const SizedBox(height: 10),
-                      const Divider(color: GamerTheme.borderDark, height: 1),
-                      const SizedBox(height: 8),
-                      // Facebook-Style Action Buttons: Text, Video (Max 3m), Photo
-                      Row(
-                        mainAxisAlignment: MainAxisAlignment.spaceAround,
-                        children: [
-                          // 1: Text Post
-                          InkWell(
-                            onTap: () {
-                              Navigator.of(context).push(
-                                MaterialPageRoute(builder: (_) => const CreatePostScreen()),
-                              );
-                            },
-                            borderRadius: BorderRadius.circular(8),
-                            child: const Padding(
-                              padding: EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                              child: Row(
-                                children: [
-                                  Icon(Icons.edit_note_rounded, color: GamerTheme.accentBlue, size: 20),
-                                  SizedBox(width: 6),
-                                  Text(
-                                    'Text',
-                                    style: TextStyle(color: Colors.white, fontSize: 12.5, fontWeight: FontWeight.w600),
-                                  ),
-                                ],
-                              ),
-                            ),
-                          ),
-                          Container(width: 1, height: 16, color: GamerTheme.borderDark),
-                          // 2: Video Publish (Max 3 Min) -> Facebook-style prominent video button!
-                          InkWell(
-                            onTap: () {
-                              Navigator.of(context).push(
-                                MaterialPageRoute(builder: (_) => const PublishVideoScreen()),
-                              );
-                            },
-                            borderRadius: BorderRadius.circular(8),
-                            child: Container(
-                              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                              decoration: BoxDecoration(
-                                color: GamerTheme.accentOrange.withOpacity(0.12),
-                                borderRadius: BorderRadius.circular(8),
-                                border: Border.all(color: GamerTheme.accentOrange.withOpacity(0.35)),
-                              ),
-                              child: const Row(
-                                children: [
-                                  Icon(Icons.video_call_rounded, color: GamerTheme.accentOrange, size: 20),
-                                  SizedBox(width: 6),
-                                  Text(
-                                    'Video (Max 3m)',
-                                    style: TextStyle(
-                                      color: GamerTheme.accentOrange,
-                                      fontSize: 12.5,
-                                      fontWeight: FontWeight.bold,
-                                    ),
-                                  ),
-                                ],
-                              ),
-                            ),
-                          ),
-                          Container(width: 1, height: 16, color: GamerTheme.borderDark),
-                          // 3: Photo
-                          InkWell(
-                            onTap: () {
-                              Navigator.of(context).push(
-                                MaterialPageRoute(builder: (_) => const CreatePostScreen()),
-                              );
-                            },
-                            borderRadius: BorderRadius.circular(8),
-                            child: const Padding(
-                              padding: EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                              child: Row(
-                                children: [
-                                  Icon(Icons.photo_library_rounded, color: GamerTheme.neonGreen, size: 18),
-                                  SizedBox(width: 6),
-                                  Text(
-                                    'Photo',
-                                    style: TextStyle(color: Colors.white, fontSize: 12.5, fontWeight: FontWeight.w600),
-                                  ),
-                                ],
-                              ),
-                            ),
-                          ),
-                        ],
-                      ),
-                    ],
+                      ],
+                    ),
                   ),
                 ),
               ),
