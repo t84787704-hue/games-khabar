@@ -337,24 +337,9 @@ class _CreatePostScreenState extends State<CreatePostScreen> {
                                     ),
                                   ),
                                   const SizedBox(height: 3),
-                                  Row(
-                                    children: [
-                                      Container(
-                                        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                                        decoration: BoxDecoration(
-                                          color: GamerTheme.neonGreen.withOpacity(0.15),
-                                          borderRadius: BorderRadius.circular(6),
-                                        ),
-                                        child: const Text(
-                                          '⚡ TIKTOK FAST UPLOAD',
-                                          style: TextStyle(
-                                            color: GamerTheme.neonGreen,
-                                            fontSize: 10,
-                                            fontWeight: FontWeight.w900,
-                                          ),
-                                        ),
-                                      ),
-                                      const SizedBox(width: 6),
+                                  
+                                          
+                                                                                
                                       const Expanded(
                                         child: Text(
                                           'GPU Hardware Compress',
