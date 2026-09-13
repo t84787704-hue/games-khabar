@@ -50,14 +50,14 @@ class FastChunkedUploadService {
     debugPrint("🚀 [FAST_UPLOAD] Preparing to upload ${fileSizeMB.toStringAsFixed(1)} MB video");
     final List<String> errorLogs = [];
 
-    final bool wasOptimized = fileSizeMB > 9.5;
-    // If video is > 9.5MB (e.g. mobile game screen recordings), optimize it to fit within Cloudinary's 10MB limit
-    if (wasOptimized) {
-      debugPrint("⚡ [FAST_UPLOAD] Video is ${fileSizeMB.toStringAsFixed(1)}MB (>9.5MB). Optimizing before upload...");
+    // If video is > 20MB (e.g. high-bitrate mobile screen recordings), optimize it before upload
+    final bool needsOptimization = fileSizeMB > 20.0;
+    if (needsOptimization) {
+      debugPrint("⚡ [FAST_UPLOAD] Video is ${fileSizeMB.toStringAsFixed(1)}MB (>20MB). Optimizing before upload...");
       onStatus?.call("⚡ Optimizing video for upload...");
       actualFile = await FastCompressService.compressGamingVideo(
         actualFile,
-        onProgress: (p) => onProgress?.call((p * 0.20).clamp(0.05, 0.20)),
+        onProgress: (p) => onProgress?.call((p * 0.25).clamp(0.05, 0.25)),
         onStatus: onStatus,
       );
       fileSize = await actualFile.length();
@@ -65,40 +65,46 @@ class FastChunkedUploadService {
       debugPrint("⚡ [FAST_UPLOAD] New size after optimization: ${fileSizeMB.toStringAsFixed(1)} MB");
     }
 
-    // Direct Cloudinary High-Speed Upload
-    Map<String, dynamic>? directResult = await _directStreamUpload(
+    Map<String, dynamic>? uploadResult;
+
+    // 1. Direct Cloudinary High-Speed Stream (only for files <= 25MB)
+    // Larger files must NEVER use single-part direct upload to avoid HTTP 413 Payload Too Large
+    if (fileSize <= 25 * 1024 * 1024) {
+      uploadResult = await _directStreamUpload(
+        file: actualFile,
+        fileSize: fileSize,
+        caption: caption,
+        gameTag: gameTag,
+        onProgress: (p) {
+          final effectiveProg = needsOptimization ? (0.25 + (p * 0.73)).clamp(0.25, 0.99) : p;
+          onProgress?.call(effectiveProg);
+        },
+        onStatus: onStatus,
+        onErrorLog: (err) => errorLogs.add(err),
+      );
+    }
+
+    if (uploadResult != null) {
+      return uploadResult;
+    }
+
+    // 2. Chunked Cloudinary Upload (handles files of any size split into safe 6MB parts)
+    debugPrint("📦 Attempting Cloudinary chunked upload for ${fileSizeMB.toStringAsFixed(1)}MB video...");
+    uploadResult = await _chunkedCloudinaryUpload(
       file: actualFile,
       fileSize: fileSize,
       caption: caption,
       gameTag: gameTag,
       onProgress: (p) {
-        // If it was optimized, scale upload progress from 20% to 98%
-        final effectiveProg = wasOptimized ? (0.20 + (p * 0.78)).clamp(0.20, 0.99) : p;
+        final effectiveProg = needsOptimization ? (0.25 + (p * 0.73)).clamp(0.25, 0.99) : p;
         onProgress?.call(effectiveProg);
       },
       onStatus: onStatus,
       onErrorLog: (err) => errorLogs.add(err),
     );
 
-    if (directResult != null) {
-      return directResult;
-    }
-
-    // 2. Fallback: If still > 10MB or direct failed, attempt chunked upload
-    if (fileSize > 10 * 1024 * 1024) {
-      debugPrint("📦 File is ${fileSizeMB.toStringAsFixed(1)}MB. Trying Cloudinary chunked upload...");
-      directResult = await _chunkedCloudinaryUpload(
-        file: actualFile,
-        fileSize: fileSize,
-        caption: caption,
-        gameTag: gameTag,
-        onProgress: onProgress,
-        onStatus: onStatus,
-        onErrorLog: (err) => errorLogs.add(err),
-      );
-      if (directResult != null) {
-        return directResult;
-      }
+    if (uploadResult != null) {
+      return uploadResult;
     }
 
     // 3. Fallback to Firebase Storage
@@ -119,8 +125,18 @@ class FastChunkedUploadService {
 
     // If all failed, format a clear, user-friendly error
     String failureSummary = errorLogs.isNotEmpty
-        ? errorLogs.first
+        ? errorLogs.last
         : "Internet connection error. Please check your network.";
+
+    for (final err in errorLogs) {
+      if (err.contains("413") ||
+          err.contains("File size too large") ||
+          err.contains("104857600") ||
+          err.contains("Request Entity Too Large")) {
+        failureSummary = "Video file is too large (max 100MB). Please select a clip under 3 minutes.";
+        break;
+      }
+    }
 
     if (failureSummary.contains("Failed host lookup") ||
         failureSummary.contains("SocketException") ||
@@ -128,8 +144,8 @@ class FastChunkedUploadService {
         failureSummary.contains("ClientException") ||
         failureSummary.contains("Network error")) {
       failureSummary = "Internet connection error. Please check your WiFi or mobile data and try again.";
-    } else if (failureSummary.contains("File size too large") || failureSummary.contains("10485760")) {
-      failureSummary = "Video exceeds 10MB limit. Please choose a shorter clip.";
+    } else if (failureSummary.contains("413")) {
+      failureSummary = "Video file is too large. Please select a clip under 3 minutes.";
     }
 
     debugPrint("❌ [FAST_UPLOAD] All upload strategies failed: $failureSummary");
@@ -294,7 +310,13 @@ class FastChunkedUploadService {
           lastResponseData = data;
           debugPrint("✅ [CHUNKED_UPLOAD] Part ${chunkIndex + 1}/$totalChunks uploaded successfully");
         } else {
-          final err = "Cloudinary Chunk $chunkIndex failed: HTTP ${resp.statusCode}";
+          String err = "Cloudinary Chunk $chunkIndex failed: HTTP ${resp.statusCode}";
+          try {
+            final json = jsonDecode(resp.body);
+            if (json['error']?['message'] != null) {
+              err = json['error']['message'];
+            }
+          } catch (_) {}
           debugPrint("⚠️ [CHUNKED_UPLOAD] $err");
           onErrorLog?.call(err);
           await raf.close();
@@ -404,7 +426,11 @@ class FastChunkedUploadService {
               final json = jsonDecode(responseBody.body);
               cleanMsg = json['error']?['message'] ?? "Upload failed (${responseBody.statusCode})";
             } catch (_) {
-              cleanMsg = "Upload error (${responseBody.statusCode})";
+              if (responseBody.statusCode == 413) {
+                cleanMsg = "Video file exceeds direct upload size limit (413)";
+              } else {
+                cleanMsg = "Upload error (${responseBody.statusCode})";
+              }
             }
             lastError = cleanMsg;
             debugPrint("⚠️ Direct upload attempt failed on $host: $lastError");

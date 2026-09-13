@@ -35,10 +35,9 @@ class FastCompressService {
       final double originalMB = originalBytes / (1024 * 1024);
       debugPrint("🎬 [FAST_COMPRESS] Input file size: ${originalMB.toStringAsFixed(1)} MB");
 
-      // Skip compression for files under 9.5MB - Cloudinary unsigned preset max file limit is 10MB.
-      // Keeping files under 9.5MB guarantees 100% successful direct upload without rejecting.
-      if (originalMB <= 9.5) {
-        debugPrint("⚡ [FAST_COMPRESS] Video is already under 9.5MB (${originalMB.toStringAsFixed(1)}MB). Uploading directly.");
+      // Skip compression for files under 20MB that are already small enough for high-speed upload.
+      if (originalMB <= 20.0) {
+        debugPrint("⚡ [FAST_COMPRESS] Video is already compact (${originalMB.toStringAsFixed(1)}MB <= 20MB). Uploading directly.");
         onProgress?.call(1.0);
         return inputFile;
       }
@@ -48,21 +47,20 @@ class FastCompressService {
       final outputPath = '${tempDir.path}/compressed_fast_$timestamp.mp4';
       final inputPath = inputFile.path;
 
-      onStatus?.call("⚡ Optimizing video...");
+      onStatus?.call("⚡ Optimizing video for upload...");
       onProgress?.call(0.1);
 
-      // We use executeWithArgumentsAsync to eliminate all shell quoting and escaping bugs.
-      // We use -c:v mpeg4 with bitrate control, which is 100% supported in all standard (LGPL) FFmpegKit builds
-      // (unlike libx264 which is GPL-only and causes 'Unknown encoder' failure on standard builds).
+      // Clean, robust argument list with universal aspect-ratio preserving 720p scale
+      // and LGPL-compliant mpeg4 encoder with AAC audio.
       final arguments = [
         '-y',
         '-i', inputPath,
-        '-vf', 'scale=trunc(if(gt(iw\\,ih)\\,min(1280\\,iw)\\,min(720\\,iw))/2)*2:-2',
+        '-vf', "scale='if(gt(a,1),-2,720)':'if(gt(a,1),720,-2)'",
         '-r', '24',
         '-c:v', 'mpeg4',
-        '-b:v', '700k',
-        '-maxrate', '950k',
-        '-bufsize', '1500k',
+        '-b:v', '850k',
+        '-maxrate', '1200k',
+        '-bufsize', '2000k',
         '-pix_fmt', 'yuv420p',
         '-movflags', '+faststart',
         '-c:a', 'aac',
@@ -82,34 +80,10 @@ class FastCompressService {
       final outputFile = File(outputPath);
       if (success && await outputFile.exists()) {
         final int length = await outputFile.length();
-        if (length > 1000 && length < 9.5 * 1024 * 1024) {
+        if (length > 1000) {
           final double newMB = length / (1024 * 1024);
           debugPrint("✅ [FAST_COMPRESS] Success: ${originalMB.toStringAsFixed(1)}MB -> ${newMB.toStringAsFixed(1)}MB");
           onProgress?.call(1.0);
-          return outputFile;
-        } else if (length >= 9.5 * 1024 * 1024) {
-          debugPrint("⚡ [FAST_COMPRESS] Output is ${(length / (1024 * 1024)).toStringAsFixed(1)}MB (>9.5MB). Running pass 2...");
-          final pass2Path = '${tempDir.path}/compressed_p2_$timestamp.mp4';
-          final pass2Args = [
-            '-y',
-            '-i', outputPath,
-            '-r', '24',
-            '-c:v', 'mpeg4',
-            '-b:v', '400k',
-            '-maxrate', '600k',
-            '-bufsize', '1000k',
-            '-c:a', 'aac',
-            '-b:a', '64k',
-            pass2Path,
-          ];
-          final pass2Success = await _runFFmpegCommandWithArgs(pass2Args, pass2Path, totalDurationSeconds, onProgress);
-          final pass2File = File(pass2Path);
-          if (pass2Success && await pass2File.exists() && await pass2File.length() > 1000) {
-            final double pass2MB = (await pass2File.length()) / (1024 * 1024);
-            debugPrint("✅ [FAST_COMPRESS] Pass 2 Success: $pass2MB MB");
-            onProgress?.call(1.0);
-            return pass2File;
-          }
           return outputFile;
         }
       }
@@ -156,11 +130,11 @@ class FastCompressService {
         },
       );
 
-      // 45-second safety timeout so it never hangs
+      // 90-second safety timeout so it never hangs
       return await completer.future.timeout(
-        const Duration(seconds: 45),
+        const Duration(seconds: 90),
         onTimeout: () {
-          debugPrint("⚠️ [FAST_COMPRESS] Timed out after 45s, cancelling");
+          debugPrint("⚠️ [FAST_COMPRESS] Timed out after 90s, cancelling");
           try {
             FFmpegKit.cancel(session.getSessionId());
           } catch (_) {}
