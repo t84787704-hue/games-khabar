@@ -29,6 +29,15 @@ jobs:
           flutter-version: '3.24.0'
           channel: 'stable'
 
+      - name: Accept Android SDK Licenses
+        run: |
+          mkdir -p "$ANDROID_HOME/licenses" || true
+          echo "24333f8a63b6825ea9c5514f83c2829b004d1fee" >> "$ANDROID_HOME/licenses/android-sdk-license" || true
+          echo "d56f5187479451eabf01fb78af6dfcb131a6481e" >> "$ANDROID_HOME/licenses/android-sdk-license" || true
+          echo "84831b9409646a918e30573bab4c9c91346d8abd" >> "$ANDROID_HOME/licenses/android-sdk-preview-license" || true
+          echo "85642a38d174c49302b00cca0721e87d706dd433" >> "$ANDROID_HOME/licenses/android-sdk-arm-dbt-license" || true
+          yes | flutter doctor --android-licenses || true
+
       - name: Clean and Install dependencies
         run: |
           flutter clean

@@ -11,7 +11,7 @@ import 'package:http/http.dart' as http;
 /// Secondary: Cloudinary HTTP streaming fallback.
 class FastChunkedUploadService {
   static const String cloudName = "fka9mgwu";
-  static const String uploadPreset = "gaming_clips_preset";
+  static const String uploadPreset = "clips_preset";
   static const int defaultChunkSize = 8 * 1024 * 1024; // 8MB chunks
 
   static bool _isCancelled = false;
@@ -37,7 +37,23 @@ class FastChunkedUploadService {
     debugPrint("🚀 [FAST_UPLOAD] Preparing to upload ${fileSizeMB.toStringAsFixed(1)} MB video");
     final List<String> errorLogs = [];
 
-    // 1. Primary Strategy: Firebase Storage (Fast, Google Cloud CDN)
+    // 1. Primary Strategy: Cloudinary High-Speed Upload (verified active preset: clips_preset)
+    final directResult = await _directStreamUpload(
+      file: file,
+      fileSize: fileSize,
+      caption: caption,
+      gameTag: gameTag,
+      onProgress: onProgress,
+      onStatus: onStatus,
+      onErrorLog: (err) => errorLogs.add(err),
+    );
+
+    if (directResult != null) {
+      return directResult;
+    }
+
+    // 2. Secondary Strategy: Firebase Storage fallback
+    debugPrint("⚠️ Cloudinary upload failed. Trying Firebase Storage fallback...");
     final fbResult = await _uploadToFirebaseStorage(
       file: file,
       fileSize: fileSize,
@@ -51,22 +67,6 @@ class FastChunkedUploadService {
 
     if (fbResult != null) {
       return fbResult;
-    }
-
-    // 2. Secondary Strategy: Direct Stream upload fallback
-    debugPrint("⚠️ Firebase Storage not available. Trying HTTP upload fallback...");
-    final directResult = await _directStreamUpload(
-      file: file,
-      fileSize: fileSize,
-      caption: caption,
-      gameTag: gameTag,
-      onProgress: onProgress,
-      onStatus: onStatus,
-      onErrorLog: (err) => errorLogs.add(err),
-    );
-
-    if (directResult != null) {
-      return directResult;
     }
 
     // If both failed, format a clear, informative error
@@ -170,7 +170,7 @@ class FastChunkedUploadService {
     Function(String status)? onStatus,
     Function(String error)? onErrorLog,
   }) async {
-    final presetsToTry = [uploadPreset, "ml_default", "gamersid"];
+    final presetsToTry = [uploadPreset, "clips_preset", "gaming_clips_preset", "clips", "ml_default"];
     String lastError = "";
 
     for (final preset in presetsToTry) {
