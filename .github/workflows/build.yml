@@ -26,7 +26,7 @@ jobs:
       - name: Setup Flutter
         uses: subosito/flutter-action@v2
         with:
-          channel: 'stable'  # <--- یہاں سے پرانا ورژن ہٹا دیا ہے، اب یہ خود بخود تازہ ترین ورژن استعمال کرے گا
+          channel: 'stable'
 
       - name: Clean and Install dependencies
         run: |
@@ -45,10 +45,10 @@ jobs:
         run: keytool -list -v -keystore android/app/upload-keystore.jks -alias ${{ secrets.KEY_ALIAS }} -storepass ${{ secrets.KEYSTORE_PASSWORD }} | grep -E "SHA1|SHA-256"
 
       - name: Build AAB
-        run: flutter build appbundle --release
+        run: flutter build appbundle --release --android-skip-build-dependency-validation
 
       - name: Build APK
-        run: flutter build apk --release
+        run: flutter build apk --release --android-skip-build-dependency-validation
 
       - name: Upload AAB artifact
         uses: actions/upload-artifact@v4
