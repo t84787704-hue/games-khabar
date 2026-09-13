@@ -51,24 +51,65 @@ class FastCompressService {
       onStatus?.call("⚡ Optimizing video...");
       onProgress?.call(0.1);
 
-      // Fast scale command ensuring even width & height (compatible with any screen recording resolution like 1080x2400)
-      // Caps resolution to 720p maximum to guarantee file stays well below 10MB
-      final cmd = '-y -i "$inputPath" -vf "scale=trunc(iw*min(720/iw\\,1280/ih)/2)*2:trunc(ih*min(720/iw\\,1280/ih)/2)*2" -r 30 -c:v libx264 -preset ultrafast -crf 28 -c:a aac -b:a 96k -t 180 "$outputPath"';
+      // We use executeWithArgumentsAsync to eliminate all shell quoting and escaping bugs.
+      // We use -c:v mpeg4 with bitrate control, which is 100% supported in all standard (LGPL) FFmpegKit builds
+      // (unlike libx264 which is GPL-only and causes 'Unknown encoder' failure on standard builds).
+      final arguments = [
+        '-y',
+        '-i', inputPath,
+        '-vf', "scale='trunc(if(gt(iw,ih),min(1280,iw),min(720,iw))/2)*2':-2",
+        '-r', '24',
+        '-c:v', 'mpeg4',
+        '-b:v', '700k',
+        '-maxrate', '950k',
+        '-bufsize', '1500k',
+        '-c:a', 'aac',
+        '-b:a', '64k',
+        '-t', '180',
+        outputPath,
+      ];
 
-      debugPrint("🚀 [FAST_COMPRESS] Executing: $cmd");
-      final bool success = await _runFFmpegCommand(
-        cmd,
+      debugPrint("🚀 [FAST_COMPRESS] Running FFmpeg with args: $arguments");
+      final bool success = await _runFFmpegCommandWithArgs(
+        arguments,
         outputPath,
         totalDurationSeconds,
         onProgress,
       );
 
       final outputFile = File(outputPath);
-      if (success && await outputFile.exists() && await outputFile.length() > 1000) {
-        final double newMB = (await outputFile.length()) / (1024 * 1024);
-        debugPrint("✅ [FAST_COMPRESS] Success: ${originalMB.toStringAsFixed(1)}MB -> ${newMB.toStringAsFixed(1)}MB");
-        onProgress?.call(1.0);
-        return outputFile;
+      if (success && await outputFile.exists()) {
+        final int length = await outputFile.length();
+        if (length > 1000 && length < 9.5 * 1024 * 1024) {
+          final double newMB = length / (1024 * 1024);
+          debugPrint("✅ [FAST_COMPRESS] Success: ${originalMB.toStringAsFixed(1)}MB -> ${newMB.toStringAsFixed(1)}MB");
+          onProgress?.call(1.0);
+          return outputFile;
+        } else if (length >= 9.5 * 1024 * 1024) {
+          debugPrint("⚡ [FAST_COMPRESS] Output is ${(length / (1024 * 1024)).toStringAsFixed(1)}MB (>9.5MB). Running pass 2...");
+          final pass2Path = '${tempDir.path}/compressed_p2_$timestamp.mp4';
+          final pass2Args = [
+            '-y',
+            '-i', outputPath,
+            '-r', '24',
+            '-c:v', 'mpeg4',
+            '-b:v', '400k',
+            '-maxrate', '600k',
+            '-bufsize', '1000k',
+            '-c:a', 'aac',
+            '-b:a', '64k',
+            pass2Path,
+          ];
+          final pass2Success = await _runFFmpegCommandWithArgs(pass2Args, pass2Path, totalDurationSeconds, onProgress);
+          final pass2File = File(pass2Path);
+          if (pass2Success && await pass2File.exists() && await pass2File.length() > 1000) {
+            final double pass2MB = (await pass2File.length()) / (1024 * 1024);
+            debugPrint("✅ [FAST_COMPRESS] Pass 2 Success: $pass2MB MB");
+            onProgress?.call(1.0);
+            return pass2File;
+          }
+          return outputFile;
+        }
       }
     } catch (e) {
       debugPrint("⚠️ [FAST_COMPRESS] Notice: $e. Using original file.");
@@ -78,8 +119,8 @@ class FastCompressService {
     return inputFile;
   }
 
-  static Future<bool> _runFFmpegCommand(
-    String cmd,
+  static Future<bool> _runFFmpegCommandWithArgs(
+    List<String> args,
     String outputPath,
     int totalDurationSeconds,
     Function(double progress)? onProgress,
@@ -88,17 +129,22 @@ class FastCompressService {
     final completer = Completer<bool>();
 
     try {
-      final session = await FFmpegKit.executeAsync(
-        cmd,
+      final session = await FFmpegKit.executeWithArgumentsAsync(
+        args,
         (session) async {
           final returnCode = await session.getReturnCode();
           final isSuccess = ReturnCode.isSuccess(returnCode);
-          debugPrint("🎬 [FAST_COMPRESS] FFmpeg ended, success: $isSuccess");
+          debugPrint("🎬 [FAST_COMPRESS] FFmpeg completed. ReturnCode: $returnCode, Success: $isSuccess");
           if (!completer.isCompleted) {
             completer.complete(isSuccess);
           }
         },
-        (log) {},
+        (log) {
+          final msg = log.getMessage();
+          if (msg.contains("Error") || msg.contains("error") || msg.contains("failed")) {
+            debugPrint("⚠️ [FFMPEG_LOG] $msg");
+          }
+        },
         (Statistics stats) {
           final timeMs = stats.getTime();
           if (timeMs > 0 && targetDurationMs > 0) {
@@ -112,7 +158,7 @@ class FastCompressService {
       return await completer.future.timeout(
         const Duration(seconds: 45),
         onTimeout: () {
-          debugPrint("⚠️ [FAST_COMPRESS] Timed out after 45s, bypassing compression");
+          debugPrint("⚠️ [FAST_COMPRESS] Timed out after 45s, cancelling");
           try {
             FFmpegKit.cancel(session.getSessionId());
           } catch (_) {}

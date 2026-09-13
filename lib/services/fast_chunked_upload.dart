@@ -361,16 +361,23 @@ class FastChunkedUploadService {
           final data = jsonDecode(responseBody.body) as Map<String, dynamic>;
           return data;
         } else {
-          lastError = "Cloudinary ($preset): HTTP ${responseBody.statusCode} - ${responseBody.body}";
+          String cleanMsg;
+          try {
+            final json = jsonDecode(responseBody.body);
+            cleanMsg = json['error']?['message'] ?? responseBody.body;
+          } catch (_) {
+            cleanMsg = "HTTP ${responseBody.statusCode}";
+          }
+          lastError = "Cloudinary: $cleanMsg";
           debugPrint("⚠️ Direct upload attempt failed: $lastError");
         }
       } catch (e) {
-        lastError = "Cloudinary ($preset) error: $e";
+        lastError = "Upload network error: $e";
         debugPrint("❌ Direct upload error: $lastError");
       }
     }
 
-    onErrorLog?.call(lastError.isNotEmpty ? lastError : "Cloudinary preset error");
+    onErrorLog?.call(lastError.isNotEmpty ? lastError : "Cloudinary upload failed");
     return null;
   }
 }

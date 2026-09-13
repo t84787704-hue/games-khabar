@@ -196,7 +196,10 @@ class BackgroundUploadManager {
       } catch (e) {
         debugPrint("❌ [BACKGROUND_UPLOAD] Error: $e");
         if (activeTask.value?.taskId == taskId) {
-          final errClean = e.toString().replaceFirst("Exception: ", "");
+          var errClean = e.toString().replaceFirst("Exception: ", "").trim();
+          if (errClean.contains("File size too large") || errClean.contains("10485760")) {
+            errClean = "Video exceeds 10MB limit. Try a shorter clip or optimize.";
+          }
           activeTask.value = UploadTaskState(
             taskId: taskId,
             title: text.isNotEmpty ? text : 'Gaming Video',
