@@ -6,21 +6,25 @@ allprojects {
 }
 
 rootProject.buildDir = "../build"
+
 subprojects {
     project.buildDir = "${rootProject.buildDir}/${project.name}"
 }
+
 subprojects {
     project.evaluationDependsOn(":app")
 }
 
-// یہ نیا حصہ شامل کیا گیا ہے تاکہ تمام لائبریریاں SDK 35 استعمال کریں
+// Configure Android SDK for all subprojects
 subprojects {
-    afterEvaluate { project ->
-        if (project.hasProperty('android')) {
-            project.android {
-                if (namespace == null) {
-                    namespace project.group
-                }
+    if (it.name != 'flutter_tools') {
+        plugins.withId('com.android.application') {
+            it.android {
+                compileSdkVersion 35
+            }
+        }
+        plugins.withId('com.android.library') {
+            it.android {
                 compileSdkVersion 35
             }
         }
