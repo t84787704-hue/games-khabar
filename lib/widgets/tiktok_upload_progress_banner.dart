@@ -149,8 +149,9 @@ class TikTokUploadProgressBanner extends StatelessWidget {
               ],
             ],
           ),
-        );
-      },
-    );
+        ),
+      );
+    },
+  );
   }
 }
