@@ -197,8 +197,17 @@ class BackgroundUploadManager {
         debugPrint("❌ [BACKGROUND_UPLOAD] Error: $e");
         if (activeTask.value?.taskId == taskId) {
           var errClean = e.toString().replaceFirst("Exception: ", "").trim();
-          if (errClean.contains("File size too large") || errClean.contains("10485760")) {
+          if (errClean.contains("Failed host lookup") ||
+              errClean.contains("SocketException") ||
+              errClean.contains("No address associated with hostname") ||
+              errClean.contains("ClientException") ||
+              errClean.contains("Network error") ||
+              errClean.contains("HandshakeException")) {
+            errClean = "Internet connection issue. Please check your WiFi or mobile data and try again.";
+          } else if (errClean.contains("File size too large") || errClean.contains("10485760")) {
             errClean = "Video exceeds 10MB limit. Try a shorter clip or optimize.";
+          } else if (errClean.contains("timed out") || errClean.contains("TimeoutException")) {
+            errClean = "Upload timed out. Please check your internet connection and try again.";
           }
           activeTask.value = UploadTaskState(
             taskId: taskId,

@@ -5,21 +5,104 @@ import 'dart:math';
 import 'package:firebase_storage/firebase_storage.dart';
 import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
+import 'package:http/io_client.dart';
 import 'fast_compress.dart';
 
 /// High-Speed Chunked & Parallel Uploader for Gaming Video Clips
-/// Primary: Firebase Storage native resumable upload with live byte-level progress.
-/// Secondary: Cloudinary HTTP streaming fallback.
+/// Primary: Multi-region Cloudinary HTTP streaming with DNS-over-HTTPS fallback.
+/// Secondary: Firebase Storage fallback.
 class FastChunkedUploadService {
   static const String cloudName = "fka9mgwu";
   static const String uploadPreset = "clips_preset";
   static const int defaultChunkSize = 6 * 1024 * 1024; // 6MB chunks for Cloudinary chunked upload (must be >= 5MB)
+
+  /// Multi-regional Cloudinary endpoints:
+  /// api-ap: Asia-Pacific (fastest & most reliable for Pakistan/Asia users)
+  /// api: Global / US
+  /// api-eu: Europe
+  static const List<String> cloudinaryHosts = [
+    'api-ap.cloudinary.com',
+    'api.cloudinary.com',
+    'api-eu.cloudinary.com',
+  ];
+
+  static final Map<String, String> _resolvedIpCache = {};
 
   static bool _isCancelled = false;
 
   static void cancel() {
     _isCancelled = true;
     debugPrint("🛑 [FAST_UPLOAD] Upload cancelled by user");
+  }
+
+  /// Resolve hostname using Google or Cloudflare DNS-over-HTTPS if mobile DNS fails
+  static Future<String?> _resolveHostWithDoh(String host) async {
+    final dohUrls = [
+      'https://dns.google/resolve?name=$host&type=A',
+      'https://cloudflare-dns.com/dns-query?name=$host&type=A',
+    ];
+
+    for (final url in dohUrls) {
+      try {
+        final client = HttpClient();
+        client.connectionTimeout = const Duration(seconds: 4);
+        final req = await client.getUrl(Uri.parse(url));
+        req.headers.set('accept', 'application/dns-json');
+        final resp = await req.close().timeout(const Duration(seconds: 4));
+        if (resp.statusCode == 200) {
+          final body = await resp.transform(utf8.decoder).join();
+          final data = jsonDecode(body);
+          final answers = data['Answer'] as List?;
+          if (answers != null && answers.isNotEmpty) {
+            for (final ans in answers) {
+              final ip = ans['data'];
+              if (ip is String && RegExp(r'^\d+\.\d+\.\d+\.\d+$').hasMatch(ip)) {
+                client.close();
+                debugPrint("🌐 [DOH_RESOLVER] Resolved $host -> $ip via DoH");
+                return ip;
+              }
+            }
+          }
+        }
+        client.close();
+      } catch (e) {
+        debugPrint("⚠️ [DOH_RESOLVER] Notice: $e");
+      }
+    }
+    return null;
+  }
+
+  /// Creates a DNS-resilient HTTP client that falls back to DoH if local DNS fails
+  static http.Client _createResilientClient() {
+    final httpClient = HttpClient();
+    httpClient.connectionTimeout = const Duration(seconds: 20);
+    httpClient.connectionFactory = (Uri uri, String? proxyHost, int? proxyPort) async {
+      // 1. Try standard lookup
+      try {
+        final addresses = await InternetAddress.lookup(uri.host);
+        if (addresses.isNotEmpty) {
+          return Socket.startConnect(addresses.first, uri.port);
+        }
+      } catch (_) {}
+
+      // 2. Standard lookup failed (SocketException on local ISP DNS). Try DoH fallback
+      String? ip = _resolvedIpCache[uri.host];
+      if (ip == null) {
+        ip = await _resolveHostWithDoh(uri.host);
+        if (ip != null) {
+          _resolvedIpCache[uri.host] = ip;
+        }
+      }
+
+      if (ip != null) {
+        return Socket.startConnect(InternetAddress(ip), uri.port);
+      }
+
+      // Default fallback
+      return Socket.startConnect(uri.host, uri.port);
+    };
+
+    return IOClient(httpClient);
   }
 
   /// Upload video file with live progress updates
@@ -100,17 +183,27 @@ class FastChunkedUploadService {
       userId: userId,
       onProgress: onProgress,
       onStatus: onStatus,
-      onErrorLog: (err) => errorLogs.add(err),
     );
 
     if (fbResult != null) {
       return fbResult;
     }
 
-    // If all failed, format a clear, informative error
-    final failureSummary = errorLogs.isNotEmpty
-        ? errorLogs.join(" | ")
-        : "Upload failed. Please check network connection.";
+    // If all failed, format a clear, user-friendly error
+    String failureSummary = errorLogs.isNotEmpty
+        ? errorLogs.first
+        : "Internet connection error. Please check your network.";
+
+    if (failureSummary.contains("Failed host lookup") ||
+        failureSummary.contains("SocketException") ||
+        failureSummary.contains("No address associated with hostname") ||
+        failureSummary.contains("ClientException") ||
+        failureSummary.contains("Network error")) {
+      failureSummary = "Internet connection error. Please check your WiFi or mobile data and try again.";
+    } else if (failureSummary.contains("File size too large") || failureSummary.contains("10485760")) {
+      failureSummary = "Video exceeds 10MB limit. Please choose a shorter clip.";
+    }
+
     debugPrint("❌ [FAST_UPLOAD] All upload strategies failed: $failureSummary");
     throw Exception(failureSummary);
   }
@@ -212,21 +305,26 @@ class FastChunkedUploadService {
   }) async {
     final chunkSize = defaultChunkSize; // 6MB
     final uniqueId = 'upload_${DateTime.now().millisecondsSinceEpoch}_${Random().nextInt(999999)}';
-    final url = Uri.parse("https://api.cloudinary.com/v1_1/$cloudName/video/upload");
     final originalFileName = file.path.split(Platform.pathSeparator).last;
     final cleanFileName = originalFileName.isNotEmpty ? originalFileName : 'screen_recording.mp4';
 
     RandomAccessFile? raf;
+    http.Client? client;
     try {
+      client = _createResilientClient();
       raf = await file.open(mode: FileMode.read);
       int start = 0;
       int chunkIndex = 0;
       final totalChunks = (fileSize / chunkSize).ceil();
       Map<String, dynamic>? lastResponseData;
+      // Use Asia-Pacific as primary for Pakistan/Asia
+      final host = cloudinaryHosts.first;
+      final url = Uri.parse("https://$host/v1_1/$cloudName/video/upload");
 
       while (start < fileSize) {
         if (_isCancelled) {
           await raf.close();
+          client.close();
           return null;
         }
 
@@ -259,7 +357,7 @@ class FastChunkedUploadService {
           ),
         );
 
-        final streamed = await request.send().timeout(const Duration(minutes: 3));
+        final streamed = await client.send(request).timeout(const Duration(minutes: 3));
         final resp = await http.Response.fromStream(streamed);
 
         if (resp.statusCode == 200) {
@@ -271,6 +369,7 @@ class FastChunkedUploadService {
           debugPrint("⚠️ [CHUNKED_UPLOAD] $err");
           onErrorLog?.call(err);
           await raf.close();
+          client.close();
           return null;
         }
 
@@ -279,6 +378,7 @@ class FastChunkedUploadService {
       }
 
       await raf.close();
+      client.close();
 
       if (lastResponseData != null && lastResponseData['secure_url'] != null) {
         onProgress?.call(1.0);
@@ -289,6 +389,7 @@ class FastChunkedUploadService {
       try {
         await raf?.close();
       } catch (_) {}
+      client?.close();
       debugPrint("⚠️ [CHUNKED_UPLOAD] Error: $e");
       onErrorLog?.call("Chunked upload: $e");
     }
@@ -296,7 +397,7 @@ class FastChunkedUploadService {
     return null;
   }
 
-  /// Single stream upload with progress tracking and fallback presets
+  /// Single stream upload with progress tracking and multi-regional fallback
   static Future<Map<String, dynamic>?> _directStreamUpload({
     required File file,
     required int fileSize,
@@ -311,69 +412,87 @@ class FastChunkedUploadService {
 
     for (final preset in presetsToTry) {
       if (_isCancelled) return null;
-      try {
-        onStatus?.call("🚀 Uploading (${(fileSize / (1024 * 1024)).toStringAsFixed(1)} MB)...");
-        final uri = Uri.parse("https://api.cloudinary.com/v1_1/$cloudName/video/upload");
-        final request = http.MultipartRequest("POST", uri);
 
-        request.fields['upload_preset'] = preset;
-        request.fields['folder'] = 'gaming_clips';
-        if (gameTag != null && gameTag.isNotEmpty) {
-          request.fields['tags'] = 'gaming,$gameTag';
-        }
+      for (final host in cloudinaryHosts) {
+        if (_isCancelled) return null;
 
-        int bytesSent = 0;
-        final fileStream = file.openRead();
-        final originalFileName = file.path.split(Platform.pathSeparator).last;
+        http.Client? client;
+        try {
+          onStatus?.call("🚀 Uploading (${(fileSize / (1024 * 1024)).toStringAsFixed(1)} MB)...");
+          final uri = Uri.parse("https://$host/v1_1/$cloudName/video/upload");
+          final request = http.MultipartRequest("POST", uri);
 
-        final multipartFile = http.MultipartFile(
-          'file',
-          fileStream.transform(
-            StreamTransformer<List<int>, List<int>>.fromHandlers(
-              handleData: (List<int> data, EventSink<List<int>> sink) {
-                if (_isCancelled) {
-                  sink.close();
-                  return;
-                }
-                bytesSent += data.length;
-                if (fileSize > 0) {
-                  final prog = (bytesSent / fileSize).clamp(0.0, 0.99);
-                  onProgress?.call(prog);
-                }
-                sink.add(data);
-              },
-              handleDone: (sink) => sink.close(),
-              handleError: (error, stackTrace, sink) => sink.addError(error, stackTrace),
-            ),
-          ),
-          fileSize,
-          filename: originalFileName,
-        );
-
-        request.files.add(multipartFile);
-
-        final streamedResponse = await request.send().timeout(const Duration(minutes: 4));
-        final responseBody = await http.Response.fromStream(streamedResponse);
-
-        if (responseBody.statusCode == 200) {
-          onProgress?.call(1.0);
-          onStatus?.call("✅ Upload Complete!");
-          final data = jsonDecode(responseBody.body) as Map<String, dynamic>;
-          return data;
-        } else {
-          String cleanMsg;
-          try {
-            final json = jsonDecode(responseBody.body);
-            cleanMsg = json['error']?['message'] ?? responseBody.body;
-          } catch (_) {
-            cleanMsg = "HTTP ${responseBody.statusCode}";
+          request.fields['upload_preset'] = preset;
+          request.fields['folder'] = 'gaming_clips';
+          if (gameTag != null && gameTag.isNotEmpty) {
+            request.fields['tags'] = 'gaming,$gameTag';
           }
-          lastError = "Cloudinary: $cleanMsg";
-          debugPrint("⚠️ Direct upload attempt failed: $lastError");
+
+          int bytesSent = 0;
+          final fileStream = file.openRead();
+          final originalFileName = file.path.split(Platform.pathSeparator).last;
+
+          final multipartFile = http.MultipartFile(
+            'file',
+            fileStream.transform(
+              StreamTransformer<List<int>, List<int>>.fromHandlers(
+                handleData: (List<int> data, EventSink<List<int>> sink) {
+                  if (_isCancelled) {
+                    sink.close();
+                    return;
+                  }
+                  bytesSent += data.length;
+                  if (fileSize > 0) {
+                    final prog = (bytesSent / fileSize).clamp(0.0, 0.99);
+                    onProgress?.call(prog);
+                  }
+                  sink.add(data);
+                },
+                handleDone: (sink) => sink.close(),
+                handleError: (error, stackTrace, sink) => sink.addError(error, stackTrace),
+              ),
+            ),
+            fileSize,
+            filename: originalFileName,
+          );
+
+          request.files.add(multipartFile);
+
+          client = _createResilientClient();
+          final streamedResponse = await client.send(request).timeout(const Duration(minutes: 4));
+          final responseBody = await http.Response.fromStream(streamedResponse);
+
+          if (responseBody.statusCode == 200) {
+            onProgress?.call(1.0);
+            onStatus?.call("✅ Upload Complete!");
+            final data = jsonDecode(responseBody.body) as Map<String, dynamic>;
+            client.close();
+            return data;
+          } else {
+            String cleanMsg;
+            try {
+              final json = jsonDecode(responseBody.body);
+              cleanMsg = json['error']?['message'] ?? responseBody.body;
+            } catch (_) {
+              cleanMsg = "HTTP ${responseBody.statusCode}";
+            }
+            lastError = "Cloudinary: $cleanMsg";
+            debugPrint("⚠️ Direct upload attempt failed on $host: $lastError");
+            if (responseBody.statusCode == 400 && cleanMsg.contains("File size too large")) {
+              onErrorLog?.call(lastError);
+              client.close();
+              return null;
+            }
+          }
+        } catch (e) {
+          lastError = "Network error: $e";
+          debugPrint("❌ Direct upload error on $host: $lastError");
+        } finally {
+          client?.close();
         }
-      } catch (e) {
-        lastError = "Upload network error: $e";
-        debugPrint("❌ Direct upload error: $lastError");
+
+        // Brief delay before trying next host
+        await Future.delayed(const Duration(milliseconds: 500));
       }
     }
 
