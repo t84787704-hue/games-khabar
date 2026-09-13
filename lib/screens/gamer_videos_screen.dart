@@ -50,26 +50,44 @@ class _GamerVideosScreenState extends State<GamerVideosScreen> {
           ],
         ),
       ),
-      floatingActionButton: SizedBox(
-        height: 38,
-        child: FloatingActionButton.extended(
-          onPressed: () {
-            Navigator.of(context).push(
-              MaterialPageRoute(builder: (_) => const PublishVideoScreen()),
-            );
-          },
-          backgroundColor: GamerTheme.accentBlue,
-          elevation: 4,
-          materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
-          extendedPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-          icon: const Icon(Icons.video_call_rounded, color: Colors.white, size: 16),
-          label: const Text(
-            'Post Video (Max 3m)',
-            style: TextStyle(
-              color: Colors.white,
-              fontWeight: FontWeight.bold,
-              fontSize: 12,
+      floatingActionButton: Container(
+        decoration: BoxDecoration(
+          color: GamerTheme.accentBlue,
+          borderRadius: BorderRadius.circular(20),
+          boxShadow: [
+            BoxShadow(
+              color: GamerTheme.accentBlue.withOpacity(0.4),
+              blurRadius: 8,
+              offset: const Offset(0, 3),
+            ),
+          ],
+        ),
+        child: Material(
+          color: Colors.transparent,
+          child: InkWell(
+            onTap: () {
+              Navigator.of(context).push(
+                MaterialPageRoute(builder: (_) => const PublishVideoScreen()),
+              );
+            },
+            borderRadius: BorderRadius.circular(20),
+            child: const Padding(
+              padding: EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Icon(Icons.video_call_rounded, color: Colors.white, size: 16),
+                  SizedBox(width: 6),
+                  Text(
+                    'Post Video (Max 3m)',
+                    style: TextStyle(
+                      color: Colors.white,
+                      fontWeight: FontWeight.bold,
+                      fontSize: 12,
+                    ),
+                  ),
+                ],
+              ),
             ),
           ),
         ),
