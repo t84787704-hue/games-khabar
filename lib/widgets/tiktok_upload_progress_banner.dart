@@ -17,87 +17,97 @@ class TikTokUploadProgressBanner extends StatelessWidget {
         final bool isSuccess = task.isCompleted;
         final bool isError = task.hasError;
 
-        return AnimatedContainer(
-          duration: const Duration(milliseconds: 300),
-          margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-          decoration: BoxDecoration(
-            color: GamerTheme.cardDark,
-            borderRadius: BorderRadius.circular(14),
-            border: Border.all(
-              color: isSuccess
-                  ? GamerTheme.neonGreen
-                  : isError
-                      ? GamerTheme.redAccent
-                      : GamerTheme.accentBlue.withOpacity(0.6),
-              width: 1.5,
-            ),
-            boxShadow: [
-              BoxShadow(
-                color: (isSuccess
-                        ? GamerTheme.neonGreen
-                        : isError
-                            ? GamerTheme.redAccent
-                            : GamerTheme.accentBlue)
-                    .withOpacity(0.25),
-                blurRadius: 12,
-                offset: const Offset(0, 4),
+        return GestureDetector(
+          onTap: isError ? () => BackgroundUploadManager().dismissTask() : null,
+          child: AnimatedContainer(
+            duration: const Duration(milliseconds: 300),
+            margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+            decoration: BoxDecoration(
+              color: GamerTheme.cardDark,
+              borderRadius: BorderRadius.circular(14),
+              border: Border.all(
+                color: isSuccess
+                    ? GamerTheme.neonGreen
+                    : isError
+                        ? GamerTheme.redAccent
+                        : GamerTheme.accentBlue.withOpacity(0.6),
+                width: 1.5,
               ),
-            ],
-          ),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Row(
-                children: [
-                  // Spinning / status icon
-                  if (!isSuccess && !isError)
-                    const SizedBox(
-                      width: 18,
-                      height: 18,
-                      child: CircularProgressIndicator(
-                        strokeWidth: 2.2,
-                        color: GamerTheme.accentBlue,
-                      ),
-                    )
-                  else if (isSuccess)
-                    const Icon(Icons.check_circle_rounded, color: GamerTheme.neonGreen, size: 20)
-                  else
-                    const Icon(Icons.error_outline_rounded, color: GamerTheme.redAccent, size: 20),
-                  const SizedBox(width: 10),
-
-                  // Status Text
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          task.statusText,
-                          style: TextStyle(
-                            color: isSuccess
-                                ? GamerTheme.neonGreen
-                                : isError
-                                    ? GamerTheme.redAccent
-                                    : Colors.white,
-                            fontSize: 13,
-                            fontWeight: FontWeight.bold,
-                          ),
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
+              boxShadow: [
+                BoxShadow(
+                  color: (isSuccess
+                          ? GamerTheme.neonGreen
+                          : isError
+                              ? GamerTheme.redAccent
+                              : GamerTheme.accentBlue)
+                      .withOpacity(0.25),
+                  blurRadius: 12,
+                  offset: const Offset(0, 4),
+                ),
+              ],
+            ),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Row(
+                  children: [
+                    // Spinning / status icon
+                    if (!isSuccess && !isError)
+                      const SizedBox(
+                        width: 18,
+                        height: 18,
+                        child: CircularProgressIndicator(
+                          strokeWidth: 2.2,
+                          color: GamerTheme.accentBlue,
                         ),
-                        if (task.title.isNotEmpty && !isSuccess && !isError)
+                      )
+                    else if (isSuccess)
+                      const Icon(Icons.check_circle_rounded, color: GamerTheme.neonGreen, size: 20)
+                    else
+                      const Icon(Icons.error_outline_rounded, color: GamerTheme.redAccent, size: 20),
+                    const SizedBox(width: 10),
+
+                    // Status Text
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
                           Text(
-                            task.title,
-                            style: const TextStyle(
-                              color: GamerTheme.textMuted,
-                              fontSize: 11,
+                            task.statusText,
+                            style: TextStyle(
+                              color: isSuccess
+                                  ? GamerTheme.neonGreen
+                                  : isError
+                                      ? GamerTheme.redAccent
+                                      : Colors.white,
+                              fontSize: 13,
+                              fontWeight: FontWeight.bold,
                             ),
                             maxLines: 1,
                             overflow: TextOverflow.ellipsis,
                           ),
-                      ],
+                          if (task.title.isNotEmpty && !isSuccess && !isError)
+                            Text(
+                              task.title,
+                              style: const TextStyle(
+                                color: GamerTheme.textMuted,
+                                fontSize: 11,
+                              ),
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                          if (isError)
+                            const Text(
+                              'Tap to dismiss and try again',
+                              style: TextStyle(
+                                color: GamerTheme.textMuted,
+                                fontSize: 11,
+                              ),
+                            ),
+                        ],
+                      ),
                     ),
-                  ),
 
                   // Progress percentage or Dismiss
                   if (!isSuccess && !isError)
