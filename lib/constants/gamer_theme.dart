@@ -153,14 +153,6 @@ class GamerTheme {
         type: BottomNavigationBarType.fixed,
         elevation: 8,
       ),
-      cardTheme: CardThemeData(
-        color: cardDark,
-        elevation: 0,
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(16),
-          side: const BorderSide(color: borderDark, width: 1),
-        ),
-      ),
       inputDecorationTheme: InputDecorationTheme(
         filled: true,
         fillColor: cardDark,
