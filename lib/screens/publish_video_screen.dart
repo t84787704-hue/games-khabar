@@ -38,7 +38,9 @@ class _PublishVideoScreenState extends State<PublishVideoScreen> {
 
   Future<void> _pickVideo(ImageSource source) async {
     try {
-      final picked = await _picker.pickVideo(source: source, maxDuration: const Duration(minutes: 3));
+      final picked = await _picker.pickVideo(
+        source: source,
+      );
       if (picked != null) { final file = File(picked.path); await _loadVideoFile(file); }
     } catch (e) {
       if (mounted) { ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Could not pick video: $e'), backgroundColor: GamerTheme.redAccent)); }

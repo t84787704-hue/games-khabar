@@ -53,7 +53,6 @@ class _CreatePostScreenState extends State<CreatePostScreen> {
       final picker = ImagePicker();
       final picked = await picker.pickVideo(
         source: ImageSource.gallery,
-        maxDuration: const Duration(minutes: 3),
       );
       if (picked != null) {
         final file = File(picked.path);
