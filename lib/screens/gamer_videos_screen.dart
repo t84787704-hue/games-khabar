@@ -49,59 +49,29 @@ class _GamerVideosScreenState extends State<GamerVideosScreen> {
             ),
           ],
         ),
-        actions: [
-          // Facebook-style quick publish video button in header
-          Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
-            child: InkWell(
-              onTap: () {
-                Navigator.of(context).push(
-                  MaterialPageRoute(builder: (_) => const PublishVideoScreen()),
-                );
-              },
-              borderRadius: BorderRadius.circular(20),
-              child: Container(
-                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                decoration: BoxDecoration(
-                  gradient: GamerTheme.blueOrangeGradient,
-                  borderRadius: BorderRadius.circular(20),
-                  boxShadow: [
-                    BoxShadow(
-                      color: GamerTheme.accentBlue.withOpacity(0.3),
-                      blurRadius: 8,
-                    ),
-                  ],
-                ),
-                child: const Row(
-                  children: [
-                    Icon(Icons.video_call_rounded, color: Colors.white, size: 18),
-                    SizedBox(width: 6),
-                    Text(
-                      'Publish Video',
-                      style: TextStyle(
-                        color: Colors.white,
-                        fontWeight: FontWeight.bold,
-                        fontSize: 12,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
+      ),
+      floatingActionButton: SizedBox(
+        height: 38,
+        child: FloatingActionButton.extended(
+          onPressed: () {
+            Navigator.of(context).push(
+              MaterialPageRoute(builder: (_) => const PublishVideoScreen()),
+            );
+          },
+          backgroundColor: GamerTheme.accentBlue,
+          elevation: 4,
+          materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+          extendedPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+          icon: const Icon(Icons.video_call_rounded, color: Colors.white, size: 16),
+          label: const Text(
+            'Post Video (Max 3m)',
+            style: TextStyle(
+              color: Colors.white,
+              fontWeight: FontWeight.bold,
+              fontSize: 12,
             ),
           ),
-        ],
-      ),
-      floatingActionButton: FloatingActionButton.extended(
-        onPressed: () {
-          Navigator.of(context).push(
-            MaterialPageRoute(builder: (_) => const PublishVideoScreen()),
-          );
-        },
-        backgroundColor: GamerTheme.accentBlue,
-        icon: const Icon(Icons.video_call_rounded, color: Colors.white),
-        label: const Text(
-          'Post Video (Max 3m)',
-          style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
         ),
       ),
       body: CustomScrollView(
