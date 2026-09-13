@@ -329,7 +329,7 @@ class _CreatePostScreenState extends State<CreatePostScreen> {
                                 crossAxisAlignment: CrossAxisAlignment.start,
                                 children: [
                                   const Text(
-                                    'Attach Video Clip (Up to 3 min / 1000MB)',
+                                    'Attach Video Clip (Up to 3 min / 100MB)',
                                     style: TextStyle(
                                       color: GamerTheme.textWhite,
                                       fontWeight: FontWeight.bold,
