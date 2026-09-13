@@ -18,7 +18,41 @@ class TikTokUploadProgressBanner extends StatelessWidget {
         final bool isError = task.hasError;
 
         return GestureDetector(
-          onTap: isError ? () => BackgroundUploadManager().dismissTask() : null,
+          onTap: isError
+              ? () {
+                  if (task.errorMessage != null && task.errorMessage!.isNotEmpty) {
+                    showDialog(
+                      context: context,
+                      builder: (ctx) => AlertDialog(
+                        backgroundColor: GamerTheme.cardDark,
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                        title: const Row(
+                          children: [
+                            Icon(Icons.error_outline_rounded, color: GamerTheme.redAccent),
+                            SizedBox(width: 8),
+                            Text("Upload Error", style: TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.bold)),
+                          ],
+                        ),
+                        content: Text(
+                          task.errorMessage!,
+                          style: const TextStyle(color: Colors.white70, fontSize: 13),
+                        ),
+                        actions: [
+                          TextButton(
+                            onPressed: () {
+                              Navigator.pop(ctx);
+                              BackgroundUploadManager().dismissTask();
+                            },
+                            child: const Text("Dismiss", style: TextStyle(color: GamerTheme.accentBlue)),
+                          ),
+                        ],
+                      ),
+                    );
+                  } else {
+                    BackgroundUploadManager().dismissTask();
+                  }
+                }
+              : null,
           child: AnimatedContainer(
             duration: const Duration(milliseconds: 300),
             margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),

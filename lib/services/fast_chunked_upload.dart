@@ -35,8 +35,9 @@ class FastChunkedUploadService {
     final double fileSizeMB = fileSize / (1024 * 1024);
 
     debugPrint("🚀 [FAST_UPLOAD] Preparing to upload ${fileSizeMB.toStringAsFixed(1)} MB video");
+    final List<String> errorLogs = [];
 
-    // 1. Primary Strategy: Firebase Storage (Fast, Google Cloud CDN, 100% reliable in this app)
+    // 1. Primary Strategy: Firebase Storage (Fast, Google Cloud CDN)
     final fbResult = await _uploadToFirebaseStorage(
       file: file,
       fileSize: fileSize,
@@ -45,6 +46,7 @@ class FastChunkedUploadService {
       userId: userId,
       onProgress: onProgress,
       onStatus: onStatus,
+      onErrorLog: (err) => errorLogs.add(err),
     );
 
     if (fbResult != null) {
@@ -60,13 +62,19 @@ class FastChunkedUploadService {
       gameTag: gameTag,
       onProgress: onProgress,
       onStatus: onStatus,
+      onErrorLog: (err) => errorLogs.add(err),
     );
 
     if (directResult != null) {
       return directResult;
     }
 
-    return null;
+    // If both failed, format a clear, informative error
+    final failureSummary = errorLogs.isNotEmpty
+        ? errorLogs.join(" | ")
+        : "Firebase Storage or Cloudinary unsigned preset not configured.";
+    debugPrint("❌ [FAST_UPLOAD] All upload strategies failed: $failureSummary");
+    throw Exception(failureSummary);
   }
 
   /// Firebase Storage upload with live byte-level progress reporting
@@ -78,6 +86,7 @@ class FastChunkedUploadService {
     String? userId,
     Function(double progress)? onProgress,
     Function(String status)? onStatus,
+    Function(String error)? onErrorLog,
   }) async {
     try {
       final double mb = fileSize / (1024 * 1024);
@@ -146,11 +155,12 @@ class FastChunkedUploadService {
       };
     } catch (e) {
       debugPrint("⚠️ [FIREBASE_STORAGE] Upload notice: $e");
+      onErrorLog?.call("Firebase Storage: ${e.toString().split('\n').first}");
       return null;
     }
   }
 
-  /// Single stream upload with progress tracking
+  /// Single stream upload with progress tracking and fallback presets
   static Future<Map<String, dynamic>?> _directStreamUpload({
     required File file,
     required int fileSize,
@@ -158,63 +168,73 @@ class FastChunkedUploadService {
     String? gameTag,
     Function(double progress)? onProgress,
     Function(String status)? onStatus,
+    Function(String error)? onErrorLog,
   }) async {
-    try {
-      onStatus?.call("🚀 Fast Uploading (${(fileSize / (1024 * 1024)).toStringAsFixed(1)} MB)...");
-      final uri = Uri.parse("https://api.cloudinary.com/v1_1/$cloudName/auto/upload");
-      final request = http.MultipartRequest("POST", uri);
+    final presetsToTry = [uploadPreset, "ml_default", "gamersid"];
+    String lastError = "";
 
-      request.fields['upload_preset'] = uploadPreset;
-      request.fields['folder'] = 'gaming_clips';
-      if (gameTag != null && gameTag.isNotEmpty) {
-        request.fields['tags'] = 'gaming,$gameTag';
-      }
+    for (final preset in presetsToTry) {
+      if (_isCancelled) return null;
+      try {
+        onStatus?.call("🚀 Uploading via Cloudinary (${(fileSize / (1024 * 1024)).toStringAsFixed(1)} MB)...");
+        final uri = Uri.parse("https://api.cloudinary.com/v1_1/$cloudName/video/upload");
+        final request = http.MultipartRequest("POST", uri);
 
-      int bytesSent = 0;
-      final fileStream = file.openRead();
-      final originalFileName = file.path.split(Platform.pathSeparator).last;
+        request.fields['upload_preset'] = preset;
+        request.fields['folder'] = 'gaming_clips';
+        if (gameTag != null && gameTag.isNotEmpty) {
+          request.fields['tags'] = 'gaming,$gameTag';
+        }
 
-      final multipartFile = http.MultipartFile(
-        'file',
-        fileStream.transform(
-          StreamTransformer<List<int>, List<int>>.fromHandlers(
-            handleData: (List<int> data, EventSink<List<int>> sink) {
-              if (_isCancelled) {
-                sink.close();
-                return;
-              }
-              bytesSent += data.length;
-              if (fileSize > 0) {
-                final prog = (bytesSent / fileSize).clamp(0.0, 0.99);
-                onProgress?.call(prog);
-              }
-              sink.add(data);
-            },
-            handleDone: (sink) => sink.close(),
-            handleError: (error, stackTrace, sink) => sink.addError(error, stackTrace),
+        int bytesSent = 0;
+        final fileStream = file.openRead();
+        final originalFileName = file.path.split(Platform.pathSeparator).last;
+
+        final multipartFile = http.MultipartFile(
+          'file',
+          fileStream.transform(
+            StreamTransformer<List<int>, List<int>>.fromHandlers(
+              handleData: (List<int> data, EventSink<List<int>> sink) {
+                if (_isCancelled) {
+                  sink.close();
+                  return;
+                }
+                bytesSent += data.length;
+                if (fileSize > 0) {
+                  final prog = (bytesSent / fileSize).clamp(0.0, 0.99);
+                  onProgress?.call(prog);
+                }
+                sink.add(data);
+              },
+              handleDone: (sink) => sink.close(),
+              handleError: (error, stackTrace, sink) => sink.addError(error, stackTrace),
+            ),
           ),
-        ),
-        fileSize,
-        filename: originalFileName,
-      );
+          fileSize,
+          filename: originalFileName,
+        );
 
-      request.files.add(multipartFile);
+        request.files.add(multipartFile);
 
-      final streamedResponse = await request.send().timeout(const Duration(minutes: 3));
-      final responseBody = await http.Response.fromStream(streamedResponse);
+        final streamedResponse = await request.send().timeout(const Duration(minutes: 4));
+        final responseBody = await http.Response.fromStream(streamedResponse);
 
-      if (responseBody.statusCode == 200) {
-        onProgress?.call(1.0);
-        onStatus?.call("✅ Upload Complete!");
-        final data = jsonDecode(responseBody.body) as Map<String, dynamic>;
-        return data;
-      } else {
-        debugPrint("⚠️ Direct upload failed: ${responseBody.statusCode} - ${responseBody.body}");
-        return null;
+        if (responseBody.statusCode == 200) {
+          onProgress?.call(1.0);
+          onStatus?.call("✅ Upload Complete!");
+          final data = jsonDecode(responseBody.body) as Map<String, dynamic>;
+          return data;
+        } else {
+          lastError = "Cloudinary ($preset): HTTP ${responseBody.statusCode} - ${responseBody.body}";
+          debugPrint("⚠️ Direct upload attempt failed: $lastError");
+        }
+      } catch (e) {
+        lastError = "Cloudinary ($preset) error: $e";
+        debugPrint("❌ Direct upload error: $lastError");
       }
-    } catch (e) {
-      debugPrint("❌ Direct upload error: $e");
-      return null;
     }
+
+    onErrorLog?.call(lastError.isNotEmpty ? lastError : "Cloudinary preset error");
+    return null;
   }
 }
