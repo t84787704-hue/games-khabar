@@ -81,15 +81,46 @@ class BackgroundUploadManager {
         final originalBytes = await videoFile.length();
         final double originalMB = originalBytes / (1024 * 1024);
 
-        // Direct upload without risky local re-encoding hangs
+        // Step 1: Fast optimization if > 9.5MB (Cloudinary unsigned limit is 10MB)
         File fileToUpload = videoFile;
-        debugPrint("🚀 [BACKGROUND_UPLOAD] Uploading original recording (${originalMB.toStringAsFixed(1)} MB) directly...");
+        if (originalMB > 9.5) {
+          activeTask.value = activeTask.value?.copyWith(
+            statusText: '⚡ Optimizing clip...',
+            progress: 0.08,
+          );
+
+          fileToUpload = await FastCompressService.compressGamingVideo(
+            videoFile,
+            totalDurationSeconds: estimatedDurationSeconds,
+            onProgress: (p) {
+              if (activeTask.value?.taskId != taskId ||
+                  activeTask.value?.hasError == true ||
+                  activeTask.value?.isCompleted == true) {
+                return;
+              }
+              final combinedProg = (0.05 + (p * 0.15)).clamp(0.05, 0.20);
+              final pct = (combinedProg * 100).toInt();
+              activeTask.value = activeTask.value?.copyWith(
+                progress: combinedProg,
+                statusText: '⚡ Optimizing... $pct%',
+              );
+            },
+            onStatus: (status) {
+              if (activeTask.value?.taskId != taskId ||
+                  activeTask.value?.hasError == true ||
+                  activeTask.value?.isCompleted == true) {
+                return;
+              }
+              activeTask.value = activeTask.value?.copyWith(statusText: status);
+            },
+          );
+        }
 
         // Step 2: Upload with live progress
         if (activeTask.value?.taskId == taskId &&
             activeTask.value?.hasError != true) {
           activeTask.value = activeTask.value?.copyWith(
-            progress: 0.05,
+            progress: 0.22,
             statusText: '🚀 Starting upload...',
           );
         }
@@ -105,7 +136,7 @@ class BackgroundUploadManager {
                 activeTask.value?.isCompleted == true) {
               return;
             }
-            final combinedProg = (0.05 + (p * 0.90)).clamp(0.05, 0.98);
+            final combinedProg = (0.20 + (p * 0.75)).clamp(0.20, 0.98);
             final pct = (combinedProg * 100).toInt();
             activeTask.value = activeTask.value?.copyWith(
               progress: combinedProg,

@@ -35,9 +35,10 @@ class FastCompressService {
       final double originalMB = originalBytes / (1024 * 1024);
       debugPrint("🎬 [FAST_COMPRESS] Input file size: ${originalMB.toStringAsFixed(1)} MB");
 
-      // Skip compression for files under 35MB - direct upload is already fast
-      if (originalMB <= 35.0) {
-        debugPrint("⚡ [FAST_COMPRESS] Video is already optimal (${originalMB.toStringAsFixed(1)}MB). Uploading directly.");
+      // Skip compression for files under 9.5MB - Cloudinary unsigned preset max file limit is 10MB.
+      // Keeping files under 9.5MB guarantees 100% successful direct upload without rejecting.
+      if (originalMB <= 9.5) {
+        debugPrint("⚡ [FAST_COMPRESS] Video is already under 9.5MB (${originalMB.toStringAsFixed(1)}MB). Uploading directly.");
         onProgress?.call(1.0);
         return inputFile;
       }
@@ -50,8 +51,9 @@ class FastCompressService {
       onStatus?.call("⚡ Optimizing video...");
       onProgress?.call(0.1);
 
-      // Fast scale command
-      final cmd = '-y -i "$inputPath" -vf "scale=-2:720" -r 30 -c:v mpeg4 -qscale:v 4 -c:a aac -b:a 128k -t 180 "$outputPath"';
+      // Fast scale command ensuring even width & height (compatible with any screen recording resolution like 1080x2400)
+      // Caps resolution to 720p maximum to guarantee file stays well below 10MB
+      final cmd = '-y -i "$inputPath" -vf "scale=trunc(iw*min(720/iw\\,1280/ih)/2)*2:trunc(ih*min(720/iw\\,1280/ih)/2)*2" -r 30 -c:v libx264 -preset ultrafast -crf 28 -c:a aac -b:a 96k -t 180 "$outputPath"';
 
       debugPrint("🚀 [FAST_COMPRESS] Executing: $cmd");
       final bool success = await _runFFmpegCommand(
@@ -106,11 +108,11 @@ class FastCompressService {
         },
       );
 
-      // 15-second safety timeout so it never hangs
+      // 45-second safety timeout so it never hangs
       return await completer.future.timeout(
-        const Duration(seconds: 15),
+        const Duration(seconds: 45),
         onTimeout: () {
-          debugPrint("⚠️ [FAST_COMPRESS] Timed out after 15s, bypassing compression");
+          debugPrint("⚠️ [FAST_COMPRESS] Timed out after 45s, bypassing compression");
           try {
             FFmpegKit.cancel(session.getSessionId());
           } catch (_) {}

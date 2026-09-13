@@ -5,6 +5,7 @@ import 'dart:math';
 import 'package:firebase_storage/firebase_storage.dart';
 import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
+import 'fast_compress.dart';
 
 /// High-Speed Chunked & Parallel Uploader for Gaming Video Clips
 /// Primary: Firebase Storage native resumable upload with live byte-level progress.
@@ -31,35 +32,39 @@ class FastChunkedUploadService {
     Function(String status)? onStatus,
   }) async {
     _isCancelled = false;
-    final int fileSize = await file.length();
-    final double fileSizeMB = fileSize / (1024 * 1024);
+    File actualFile = file;
+    int fileSize = await actualFile.length();
+    double fileSizeMB = fileSize / (1024 * 1024);
 
     debugPrint("🚀 [FAST_UPLOAD] Preparing to upload ${fileSizeMB.toStringAsFixed(1)} MB video");
     final List<String> errorLogs = [];
 
-    // 1. Primary Strategy: Cloudinary High-Speed Upload
-    // For files >= 10MB (typical mobile game screen recordings), use chunked upload for 100% stability.
-    // For smaller clips (<10MB), use single fast stream upload.
-    Map<String, dynamic>? directResult;
-    if (fileSize > 10 * 1024 * 1024) {
-      debugPrint("📦 File is ${fileSizeMB.toStringAsFixed(1)}MB. Using Cloudinary chunked upload...");
-      directResult = await _chunkedCloudinaryUpload(
-        file: file,
-        fileSize: fileSize,
-        caption: caption,
-        gameTag: gameTag,
-        onProgress: onProgress,
+    final bool wasOptimized = fileSizeMB > 9.5;
+    // If video is > 9.5MB (e.g. mobile game screen recordings), optimize it to fit within Cloudinary's 10MB limit
+    if (wasOptimized) {
+      debugPrint("⚡ [FAST_UPLOAD] Video is ${fileSizeMB.toStringAsFixed(1)}MB (>9.5MB). Optimizing before upload...");
+      onStatus?.call("⚡ Optimizing video for upload...");
+      actualFile = await FastCompressService.compressGamingVideo(
+        actualFile,
+        onProgress: (p) => onProgress?.call((p * 0.20).clamp(0.05, 0.20)),
         onStatus: onStatus,
-        onErrorLog: (err) => errorLogs.add(err),
       );
+      fileSize = await actualFile.length();
+      fileSizeMB = fileSize / (1024 * 1024);
+      debugPrint("⚡ [FAST_UPLOAD] New size after optimization: ${fileSizeMB.toStringAsFixed(1)} MB");
     }
 
-    directResult ??= await _directStreamUpload(
-      file: file,
+    // Direct Cloudinary High-Speed Upload
+    Map<String, dynamic>? directResult = await _directStreamUpload(
+      file: actualFile,
       fileSize: fileSize,
       caption: caption,
       gameTag: gameTag,
-      onProgress: onProgress,
+      onProgress: (p) {
+        // If it was optimized, scale upload progress from 20% to 98%
+        final effectiveProg = wasOptimized ? (0.20 + (p * 0.78)).clamp(0.20, 0.99) : p;
+        onProgress?.call(effectiveProg);
+      },
       onStatus: onStatus,
       onErrorLog: (err) => errorLogs.add(err),
     );
@@ -68,10 +73,27 @@ class FastChunkedUploadService {
       return directResult;
     }
 
-    // 2. Secondary Strategy: Firebase Storage fallback
+    // 2. Fallback: If still > 10MB or direct failed, attempt chunked upload
+    if (fileSize > 10 * 1024 * 1024) {
+      debugPrint("📦 File is ${fileSizeMB.toStringAsFixed(1)}MB. Trying Cloudinary chunked upload...");
+      directResult = await _chunkedCloudinaryUpload(
+        file: actualFile,
+        fileSize: fileSize,
+        caption: caption,
+        gameTag: gameTag,
+        onProgress: onProgress,
+        onStatus: onStatus,
+        onErrorLog: (err) => errorLogs.add(err),
+      );
+      if (directResult != null) {
+        return directResult;
+      }
+    }
+
+    // 3. Fallback to Firebase Storage
     debugPrint("⚠️ Cloudinary upload failed. Trying Firebase Storage fallback...");
     final fbResult = await _uploadToFirebaseStorage(
-      file: file,
+      file: actualFile,
       fileSize: fileSize,
       caption: caption,
       gameTag: gameTag,
@@ -85,7 +107,7 @@ class FastChunkedUploadService {
       return fbResult;
     }
 
-    // If both failed, format a clear, informative error
+    // If all failed, format a clear, informative error
     final failureSummary = errorLogs.isNotEmpty
         ? errorLogs.join(" | ")
         : "Upload failed. Please check network connection.";
@@ -284,13 +306,13 @@ class FastChunkedUploadService {
     Function(String status)? onStatus,
     Function(String error)? onErrorLog,
   }) async {
-    final presetsToTry = [uploadPreset, "clips_preset", "gaming_clips_preset", "clips", "ml_default"];
+    final presetsToTry = [uploadPreset];
     String lastError = "";
 
     for (final preset in presetsToTry) {
       if (_isCancelled) return null;
       try {
-        onStatus?.call("🚀 Uploading via Cloudinary (${(fileSize / (1024 * 1024)).toStringAsFixed(1)} MB)...");
+        onStatus?.call("🚀 Uploading (${(fileSize / (1024 * 1024)).toStringAsFixed(1)} MB)...");
         final uri = Uri.parse("https://api.cloudinary.com/v1_1/$cloudName/video/upload");
         final request = http.MultipartRequest("POST", uri);
 
