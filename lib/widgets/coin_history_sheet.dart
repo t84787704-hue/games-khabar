@@ -39,23 +39,88 @@ class _CoinHistorySheetState extends State<CoinHistorySheet> {
   Future<void> _syncCoins() async {
     setState(() => _isSyncing = true);
     try {
-      final res = await CoinWalletService.recalculateCoins(widget.userId);
+      final currentUserId = widget.userId.isNotEmpty
+          ? widget.userId
+          : (FirebaseAuth.instance.currentUser?.uid ?? GamerAuthService().currentUid ?? '');
+      if (currentUserId.isEmpty) throw 'User not logged in';
+
+      // 1. Sum all transactions
+      final QuerySnapshot txs = await FirebaseFirestore.instance
+          .collection('transactions')
+          .where('userId', isEqualTo: currentUserId)
+          .get();
+
+      int total = 0;
+      for (var doc in txs.docs) {
+        final data = doc.data() as Map<String, dynamic>? ?? {};
+        final dynamic rawAmount = data['amount'];
+        if (rawAmount is num) {
+          total += rawAmount.toInt();
+        }
+      }
+
+      // Also check coin_transactions in case some were saved there
+      try {
+        final QuerySnapshot txs2 = await FirebaseFirestore.instance
+            .collection('coin_transactions')
+            .where('userId', isEqualTo: currentUserId)
+            .get();
+        final Set<String> existingIds = txs.docs.map((d) => d.id).toSet();
+        for (var doc in txs2.docs) {
+          if (!existingIds.contains(doc.id)) {
+            final data = doc.data() as Map<String, dynamic>? ?? {};
+            final dynamic rawAmount = data['amount'];
+            if (rawAmount is num) {
+              total += rawAmount.toInt();
+            }
+          }
+        }
+      } catch (_) {}
+
+      // 2. Force update gCoins to match sum
+      await FirebaseFirestore.instance.collection('users').doc(currentUserId).set({
+        'gCoins': total,
+        'coins': total,
+        'inEscrow': 0,
+        'lastSyncedAt': FieldValue.serverTimestamp(),
+      }, SetOptions(merge: true));
+
+      try {
+        await FirebaseFirestore.instance.collection('wallets').doc(currentUserId).set({
+          'coins': total,
+          'gCoins': total,
+          'updatedAt': FieldValue.serverTimestamp(),
+        }, SetOptions(merge: true));
+        await FirebaseFirestore.instance.collection('coin_wallets').doc(currentUserId).set({
+          'coins': total,
+          'gCoins': total,
+          'updatedAt': FieldValue.serverTimestamp(),
+        }, SetOptions(merge: true));
+      } catch (_) {}
+
+      // Update in-memory state if this device is the user
+      final currentGamer = GamerAuthService().currentGamer;
+      if (currentGamer != null && (currentGamer.uid == currentUserId || currentUserId.isEmpty)) {
+        GamerAuthService().currentGamerNotifier.value = currentGamer.copyWith(coins: total);
+        CoinRewardService().coinsNotifier.value = total;
+      }
+
+      debugPrint('SYNCED: gCoins set to $total from ${txs.docs.length} transactions');
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text(res >= 0
-                ? 'Wallet synchronized! Accurate balance: $res Coins'
-                : 'Wallet balance is already up to date.'),
+            content: Text('Synced! Balance now $total Coins'),
             backgroundColor: GamerTheme.neonGreen,
             behavior: SnackBarBehavior.floating,
           ),
         );
       }
     } catch (e) {
+      debugPrint('SYNC FAILED: $e');
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text('Sync failed: $e'),
+            content: Text('Failed: $e'),
             backgroundColor: GamerTheme.redAccent,
             behavior: SnackBarBehavior.floating,
           ),
@@ -194,9 +259,8 @@ class _CoinHistorySheetState extends State<CoinHistorySheet> {
                     }
                   }
 
-                  // Base initial coins is 500 unless user already has a welcome bonus tx
-                  final int initialCoins = hasInitialBonus ? 0 : 500;
-                  final int expectedBalance = (initialCoins + totalAdded - totalDeducted).clamp(0, 9999999);
+                  // Expected balance matches exact sum of transactions
+                  final int expectedBalance = (totalAdded - totalDeducted).clamp(0, 9999999);
                   final bool hasMismatch = displayTxs.isNotEmpty && expectedBalance != currentCoins;
 
                   return Padding(
@@ -313,7 +377,7 @@ class _CoinHistorySheetState extends State<CoinHistorySheet> {
                                   const SizedBox(width: 8),
                                   Expanded(
                                     child: Text(
-                                      'Calculated: $expectedBalance Coins ($initialCoins initial + $totalAdded win - $totalDeducted), Profile has $currentCoins Coins.',
+                                      'Calculated: $expectedBalance Coins (+$totalAdded added, -$totalDeducted deducted), Profile has $currentCoins Coins.',
                                       style: const TextStyle(color: Colors.white, fontSize: 11),
                                     ),
                                   ),

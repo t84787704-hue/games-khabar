@@ -1640,13 +1640,30 @@ class _InRoomBottomSheetContentState extends State<_InRoomBottomSheetContent> {
 
     if (confirmed != true) return;
 
+    final String roomId = room.id;
+    final int prize = room.prize;
+
+    // Idempotency lock
     try {
-      // Set status to sending immediately to lock UI and prevent race conditions
-      await roomRef.update({'rewardStatus': 'sending'});
+      final DocumentSnapshot roomSnap = await roomRef.get();
+      final roomData = roomSnap.data() as Map<String, dynamic>? ?? {};
+      if (roomData['rewardStatus'] == 'sent') {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('Reward already sent!'),
+              backgroundColor: GamerTheme.accentOrange,
+              behavior: SnackBarBehavior.floating,
+            ),
+          );
+        }
+        return;
+      }
+    } catch (_) {}
 
-      final int prize = room.prize;
-      final String roomId = room.id;
+    await roomRef.update({'rewardStatus': 'sending'});
 
+    try {
       // Resolve winner ID
       String resolvedWinnerId = winnerId;
       for (final u in room.joinedUsers) {
@@ -1682,66 +1699,105 @@ class _InRoomBottomSheetContentState extends State<_InRoomBottomSheetContent> {
         resolvedWinnerId = winnerId.isNotEmpty ? winnerId : widget.currentUserId;
       }
 
-      final WriteBatch batch = FirebaseFirestore.instance.batch();
-
-      // 1. WINNER KO +500 - APP SE (Host se cut nahi, Escrow se nahi)
       final DocumentReference winnerRef = FirebaseFirestore.instance.collection('users').doc(resolvedWinnerId);
-      batch.set(winnerRef, {
-        'gCoins': FieldValue.increment(prize), // App se direct
-        'coins': FieldValue.increment(prize),
-        'totalWinnings': FieldValue.increment(prize),
-        'wins': FieldValue.increment(1),
-      }, SetOptions(merge: true));
 
-      // 2. TRANSACTION - FROM ADMIN / APPLICATION
-      final String newId = FirebaseFirestore.instance.collection('transactions').doc().id;
-      final DocumentReference txRef = FirebaseFirestore.instance.collection('transactions').doc(newId);
-      final txData = {
-        'id': newId,
-        'userId': resolvedWinnerId,
-        'amount': prize, // +500
-        'type': 'win_reward',
-        'from': 'application', // IMPORTANT: from app, not host
-        'to': resolvedWinnerId,
-        'title': 'Match Victory Reward 🏆 (From App)',
-        'description': 'Won ${room.game} Match: ${room.title} - Prize from App',
-        'roomId': roomId,
-        'approvedBy': widget.currentUserId, // Host ne approve kiya lekin pay app ne kiya
-        'prizeSource': 'application',
-        'status': 'completed',
-        'winProofUrl': winProofUrl,
-        'createdAt': FieldValue.serverTimestamp(),
-        'timestamp': FieldValue.serverTimestamp(),
-      };
-      batch.set(txRef, txData);
-      batch.set(FirebaseFirestore.instance.collection('coin_transactions').doc(newId), txData);
+      // Use atomic transaction NOT batch for guarantee
+      await FirebaseFirestore.instance.runTransaction((transaction) async {
+        // All gets first
+        final DocumentSnapshot winnerSnap = await transaction.get(winnerRef);
+        final DocumentSnapshot txRoomSnap = await transaction.get(roomRef);
 
-      // 3. ROOM STATUS - Complete with single send lock
-      batch.update(roomRef, {
-        'rewardStatus': 'sent',
-        'rewardSentAt': FieldValue.serverTimestamp(),
-        'status': 'completed',
-        'winnerId': resolvedWinnerId,
-        'winnerName': winnerName,
-        'prizeSource': 'application',
-        'isLive': false,
-        'completedAt': FieldValue.serverTimestamp(),
+        final txRoomData = txRoomSnap.data() as Map<String, dynamic>? ?? {};
+        if (txRoomData['rewardStatus'] == 'sent') {
+          throw 'Already sent';
+        }
+
+        int currentCoins = 0;
+        int currentWins = 0;
+        int currentWinnings = 0;
+
+        if (winnerSnap.exists) {
+          final winnerData = winnerSnap.data() as Map<String, dynamic>? ?? {};
+          final rawCoins = winnerData['gCoins'] ?? winnerData['coins'];
+          if (rawCoins is num) currentCoins = rawCoins.toInt();
+          final rawWins = winnerData['wins'];
+          if (rawWins is num) currentWins = rawWins.toInt();
+          final rawWinnings = winnerData['totalWinnings'];
+          if (rawWinnings is num) currentWinnings = rawWinnings.toInt();
+        }
+
+        final int updatedCoins = currentCoins + prize;
+
+        // 1. Increment winner using direct value (NO FieldValue.increment inside transaction)
+        if (winnerSnap.exists) {
+          transaction.update(winnerRef, {
+            'gCoins': updatedCoins,
+            'coins': updatedCoins,
+            'totalWinnings': currentWinnings + prize,
+            'wins': currentWins + 1,
+            'lastRewardAt': FieldValue.serverTimestamp(),
+          });
+        } else {
+          transaction.set(winnerRef, {
+            'gCoins': updatedCoins,
+            'coins': updatedCoins,
+            'totalWinnings': prize,
+            'wins': 1,
+            'lastRewardAt': FieldValue.serverTimestamp(),
+          });
+        }
+
+        // 2. Create transaction log
+        final DocumentReference txRef = FirebaseFirestore.instance.collection('transactions').doc();
+        final String txId = txRef.id;
+        final txLogData = {
+          'id': txId,
+          'userId': resolvedWinnerId,
+          'amount': prize, // +500
+          'type': 'win_reward',
+          'from': 'application',
+          'to': resolvedWinnerId,
+          'title': 'Match Victory Reward 🏆 (From App)',
+          'description': 'Won ${room.game} Match: ${room.title} - Prize from App',
+          'roomId': roomId,
+          'approvedBy': widget.currentUserId,
+          'prizeSource': 'application',
+          'status': 'completed',
+          'winProofUrl': winProofUrl,
+          'createdAt': FieldValue.serverTimestamp(),
+          'timestamp': FieldValue.serverTimestamp(),
+        };
+        transaction.set(txRef, txLogData);
+
+        final DocumentReference coinTxRef = FirebaseFirestore.instance.collection('coin_transactions').doc(txId);
+        transaction.set(coinTxRef, txLogData);
+
+        // 3. Mark room sent
+        transaction.update(roomRef, {
+          'rewardStatus': 'sent',
+          'status': 'completed',
+          'winnerId': resolvedWinnerId,
+          'winnerName': winnerName,
+          'prizeSource': 'application',
+          'rewardSentAt': FieldValue.serverTimestamp(),
+          'isCompleted': true,
+          'isLive': false,
+          'completedAt': FieldValue.serverTimestamp(),
+        });
+
+        // 4. System Announcement
+        final DocumentReference msgRef = roomRef.collection('messages').doc();
+        transaction.set(msgRef, {
+          'type': 'system_reward',
+          'message': '🎉 $winnerName won and received $prize Coins from App!',
+          'timestamp': FieldValue.serverTimestamp(),
+          'senderId': 'system',
+          'senderName': 'ROOM BOT',
+          'isHost': false,
+        });
       });
 
-      // 4. SYSTEM MESSAGE
-      final DocumentReference msgRef = roomRef.collection('messages').doc();
-      batch.set(msgRef, {
-        'type': 'system_reward',
-        'message': '🎉 $winnerName won and received $prize Coins from App!',
-        'timestamp': FieldValue.serverTimestamp(),
-        'senderId': 'system',
-        'senderName': 'ROOM BOT',
-        'isHost': false,
-      });
-
-      // Commit batch: host coins and escrow are untouched!
-      await batch.commit();
-
+      debugPrint('REWARD SUCCESS: $prize to $resolvedWinnerId');
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
@@ -1753,15 +1809,14 @@ class _InRoomBottomSheetContentState extends State<_InRoomBottomSheetContent> {
         );
       }
     } catch (e) {
-      debugPrint('Error approving reward: $e');
-      try {
-        await roomRef.update({'rewardStatus': 'idle'});
-      } catch (_) {}
+      await roomRef.update({'rewardStatus': 'pending'});
+      debugPrint('REWARD FAILED: $e');
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text('Error approving reward: $e'),
+            content: Text('Failed: $e'),
             backgroundColor: GamerTheme.redAccent,
+            behavior: SnackBarBehavior.floating,
           ),
         );
       }

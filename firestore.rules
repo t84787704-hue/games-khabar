@@ -35,7 +35,7 @@ service cloud.firestore {
           !request.resource.data.diff(resource.data).affectedKeys().hasAny(['isBanned', 'bannedAt', 'bannedReason', 'bannedBy', 'isVerifiedBlue', 'rank', 'tier', 'isAdmin'])
         ) || 
         request.resource.data.diff(resource.data).affectedKeys().hasOnly(['followersCount', 'followingCount', 'postsCount']) ||
-        request.resource.data.diff(resource.data).affectedKeys().hasOnly(['coins', 'updatedAt']) ||
+        request.resource.data.diff(resource.data).affectedKeys().hasOnly(['coins', 'gCoins', 'updatedAt', 'lastUpdated', 'inEscrow', 'totalWinnings', 'wins', 'lastRewardAt', 'lastRecalculatedAt', 'lastSyncedAt']) ||
         request.resource.data.diff(resource.data).affectedKeys().hasOnly(['lastWinProofAt'])
       );
       allow delete: if request.auth != null && (isAdmin() || resource.data.isDemoAccount == true || (request.auth.uid == uid && isNotBanned()));
