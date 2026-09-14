@@ -1116,9 +1116,7 @@ class _GamerRoomsScreenState extends State<GamerRoomsScreen> {
                       ),
                     ],
                   ),
-                );
-              },
-            ),
+              ),
 
             // Filter chips: All Games, BGMI, Free Fire, PUBG Mobile
             Container(
