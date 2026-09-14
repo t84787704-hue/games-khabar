@@ -17,6 +17,7 @@ import '../widgets/coin_history_sheet.dart';
 import '../constants/tournament_game_categories.dart';
 import '../services/ad_free_service.dart';
 import 'redeem_rewards_screen.dart';
+export 'gamer_rooms_screen.dart';
 
 class TournamentBoardScreen extends StatefulWidget {
   const TournamentBoardScreen({super.key});

@@ -7,7 +7,7 @@ import '../services/gamer_auth_service.dart';
 import 'gamer_feed_screen.dart';
 import 'gamer_videos_screen.dart';
 import 'squad_finder_screen.dart';
-import 'tournament_board_screen.dart';
+import 'gamer_rooms_screen.dart';
 import 'gamer_profile_screen.dart';
 import 'create_gamer_id_screen.dart';
 import 'gamer_admin_dashboard_screen.dart';
@@ -92,7 +92,7 @@ class _GamerMainNavigationScreenState extends State<GamerMainNavigationScreen> {
       const GamerFeedScreen(),
       const GamerVideosScreen(),
       const SquadFinderScreen(),
-      const TournamentBoardScreen(),
+      const GamerRoomsScreen(),
       const GamerProfileScreen(),
       if (_isAdmin) const GamerAdminDashboardScreen(),
     ];
