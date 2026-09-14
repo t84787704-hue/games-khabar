@@ -331,28 +331,15 @@ class _GamerRoomsScreenState extends State<GamerRoomsScreen> {
             });
 
             if (entryFeeCoins > 0) {
-              final userRef = FirebaseFirestore.instance.collection('users').doc(uid);
-              transaction.update(userRef, {
-                'gCoins': FieldValue.increment(-entryFeeCoins),
-                'coins': FieldValue.increment(-entryFeeCoins),
-                'inEscrow': FieldValue.increment(entryFeeCoins),
-              });
-
-              final String txId = FirebaseFirestore.instance.collection('transactions').doc().id;
-              final Map<String, dynamic> txData = {
-                'id': txId,
-                'userId': uid,
-                'type': 'escrow_hold',
-                'amount': -entryFeeCoins,
-                'title': 'Entry Fee Escrow 🔒',
-                'description': 'Slot registration for ${room.title}',
-                'status': 'in_escrow',
-                'roomId': room.id,
-                'timestamp': FieldValue.serverTimestamp(),
-                'createdAt': FieldValue.serverTimestamp(),
-              };
-              transaction.set(FirebaseFirestore.instance.collection('transactions').doc(txId), txData);
-              transaction.set(FirebaseFirestore.instance.collection('coin_transactions').doc(txId), txData);
+              await CoinWalletService.updateCoins(
+                userId: uid,
+                amount: -entryFeeCoins,
+                type: 'escrow_hold',
+                inEscrowChange: entryFeeCoins,
+                title: 'Entry Fee Escrow 🔒',
+                description: 'Slot registration for ${room.title}',
+                roomId: room.id,
+              );
             }
           });
 
@@ -448,32 +435,19 @@ class _GamerRoomsScreenState extends State<GamerRoomsScreen> {
 
               final batch = FirebaseFirestore.instance.batch();
               batch.update(roomRef, updates);
+              await batch.commit();
 
               if (entryFeeCoins > 0) {
-                final userRef = FirebaseFirestore.instance.collection('users').doc(uid);
-                final String refundTxId = FirebaseFirestore.instance.collection('transactions').doc().id;
-                final Map<String, dynamic> refundTxData = {
-                  'id': refundTxId,
-                  'userId': uid,
-                  'type': 'escrow_refund',
-                  'amount': entryFeeCoins,
-                  'title': 'Coins Refunded ↩️',
-                  'description': 'Slot cancellation refund for ${room.title}',
-                  'status': 'refunded',
-                  'roomId': room.id,
-                  'timestamp': FieldValue.serverTimestamp(),
-                  'createdAt': FieldValue.serverTimestamp(),
-                };
-                batch.set(userRef, {
-                  'gCoins': FieldValue.increment(entryFeeCoins),
-                  'coins': FieldValue.increment(entryFeeCoins),
-                  'inEscrow': FieldValue.increment(-entryFeeCoins),
-                }, SetOptions(merge: true));
-                batch.set(FirebaseFirestore.instance.collection('transactions').doc(refundTxId), refundTxData);
-                batch.set(FirebaseFirestore.instance.collection('coin_transactions').doc(refundTxId), refundTxData);
+                await CoinWalletService.updateCoins(
+                  userId: uid,
+                  amount: entryFeeCoins,
+                  type: 'escrow_refund',
+                  inEscrowChange: -entryFeeCoins,
+                  title: 'Entry Fee Refunded ↩️',
+                  description: 'Slot cancellation refund for ${room.title}',
+                  roomId: room.id,
+                );
               }
-
-              await batch.commit();
 
               setState(() {
                 _joinedRoomIds.remove(room.id);
@@ -1691,78 +1665,38 @@ class _InRoomBottomSheetContentState extends State<_InRoomBottomSheetContent> {
       final DocumentReference winnerRef = FirebaseFirestore.instance.collection('users').doc(resolvedWinnerId);
       print('Winner ref: ${winnerRef.path}');
 
-      // FIX 1: Batch writes
-      final WriteBatch batch = FirebaseFirestore.instance.batch();
+      // FIX 1: Unified coin update using updateCoins
+      // 1. Send prize to Winner
+      await CoinWalletService.updateCoins(
+        userId: resolvedWinnerId,
+        amount: prize,
+        type: 'win_reward',
+        title: 'Match Victory Reward 🏆',
+        description: 'Won ${widget.room.game} Match: ${widget.room.title}',
+        roomId: roomId,
+        winProofUrl: winProofUrl,
+      );
 
-      // 1. Winner coins increment (field name exactly 'gCoins' and 'coins')
-      batch.set(winnerRef, {
-        'gCoins': FieldValue.increment(prize),
-        'coins': FieldValue.increment(prize),
-        'inEscrow': FieldValue.increment(0),
-        'totalWinnings': FieldValue.increment(prize),
-        'wins': FieldValue.increment(1),
-        'displayName': winnerName,
-        'lastRewardAt': FieldValue.serverTimestamp(),
-      }, SetOptions(merge: true));
-
-      // Also update wallets collection for compatibility
-      final DocumentReference walletRef = FirebaseFirestore.instance.collection('wallets').doc(resolvedWinnerId);
-      batch.set(walletRef, {
-        'coins': FieldValue.increment(prize),
-        'userId': resolvedWinnerId,
-        'lastUpdated': FieldValue.serverTimestamp(),
-      }, SetOptions(merge: true));
-
-      final DocumentReference coinWalletRef = FirebaseFirestore.instance.collection('coin_wallets').doc(resolvedWinnerId);
-      batch.set(coinWalletRef, {
-        'coins': FieldValue.increment(prize),
-        'userId': resolvedWinnerId,
-        'lastUpdated': FieldValue.serverTimestamp(),
-      }, SetOptions(merge: true));
-
-      // 2. Create winner transaction record (+prize)
-      final DocumentReference txRef = FirebaseFirestore.instance.collection('transactions').doc();
-      final Map<String, dynamic> txData = {
-        'id': txRef.id,
-        'userId': resolvedWinnerId,
-        'type': 'win_reward',
-        'amount': prize,
-        'title': 'Match Victory Reward 🏆',
-        'description': 'Won ${widget.room.game} Match: ${widget.room.title}',
-        'roomId': roomId,
-        'winProofUrl': winProofUrl,
-        'status': 'completed',
-        'createdAt': FieldValue.serverTimestamp(),
-        'timestamp': FieldValue.serverTimestamp(),
-      };
-      batch.set(txRef, txData);
-      batch.set(FirebaseFirestore.instance.collection('coin_transactions').doc(txRef.id), txData);
-
-      // 3. Update host escrow balance and log release transaction
-      if (widget.room.hostId.isNotEmpty) {
-        final DocumentReference hostRef = FirebaseFirestore.instance.collection('users').doc(widget.room.hostId);
-        batch.set(hostRef, {
+      // 2. Release host escrow balance and log transaction
+      if (widget.room.hostId.isNotEmpty && widget.room.hostId != resolvedWinnerId) {
+        await CoinWalletService.updateCoins(
+          userId: widget.room.hostId,
+          amount: -prize,
+          type: 'escrow_release',
+          inEscrowChange: -prize,
+          title: 'Escrow Released to Winner 🏆',
+          description: 'Transferred $prize Coins escrow prize to $winnerName (${widget.room.title})',
+          roomId: roomId,
+        );
+      } else if (widget.room.hostId == resolvedWinnerId) {
+        // Host won own room: release host escrow
+        await FirebaseFirestore.instance.collection('users').doc(resolvedWinnerId).set({
           'inEscrow': FieldValue.increment(-prize),
         }, SetOptions(merge: true));
-
-        final DocumentReference hostTxRef = FirebaseFirestore.instance.collection('transactions').doc();
-        final Map<String, dynamic> hostTxData = {
-          'id': hostTxRef.id,
-          'userId': widget.room.hostId,
-          'type': 'escrow_release',
-          'amount': -prize,
-          'title': 'Escrow Released to Winner 🏆',
-          'description': 'Transferred $prize Coins escrow prize to $winnerName (${widget.room.title})',
-          'roomId': roomId,
-          'status': 'released',
-          'createdAt': FieldValue.serverTimestamp(),
-          'timestamp': FieldValue.serverTimestamp(),
-        };
-        batch.set(hostTxRef, hostTxData);
-        batch.set(FirebaseFirestore.instance.collection('coin_transactions').doc(hostTxRef.id), hostTxData);
       }
 
-      // 4. Update room status
+      // 3. Update room status and system chat message in a batch
+      final WriteBatch batch = FirebaseFirestore.instance.batch();
       final DocumentReference roomRef = FirebaseFirestore.instance.collection('rooms').doc(roomId);
       batch.update(roomRef, {
         'status': 'completed',
@@ -1772,7 +1706,7 @@ class _InRoomBottomSheetContentState extends State<_InRoomBottomSheetContent> {
         'isLive': false,
       });
 
-      // 5. System message in chat
+      // System message in chat
       final DocumentReference msgRef = roomRef.collection('messages').doc();
       batch.set(msgRef, {
         'type': 'system_reward',

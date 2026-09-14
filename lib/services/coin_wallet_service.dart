@@ -30,6 +30,7 @@ class CoinWalletService extends ChangeNotifier {
     try {
       await _firestore.collection('users').doc(userId).set({
         'coins': coins,
+        'gCoins': coins,
       }, SetOptions(merge: true));
     } catch (e) {
       debugPrint('CoinWalletService _syncToUserDocAndNotifiers error: $e');
@@ -45,6 +46,197 @@ class CoinWalletService extends ChangeNotifier {
     try {
       CoinRewardService().coinsNotifier.value = coins;
     } catch (_) {}
+  }
+
+  /// =========================================================================
+  /// FIX 1 - UNIFIED COIN UPDATE FUNCTION (Single Source of Truth)
+  /// Atomically increments users.gCoins, users.coins, creates transaction
+  /// in both 'transactions' & 'coin_transactions' collections, and syncs wallets.
+  /// =========================================================================
+  static Future<void> updateCoins({
+    required String userId,
+    required int amount,
+    required String type, // 'win_reward', 'escrow_hold', 'escrow_refund', 'team_prize', 'win_prize', etc.
+    required String description,
+    String? title,
+    String? roomId,
+    String? winProofUrl,
+    int? inEscrowChange,
+  }) async {
+    if (userId.isEmpty) return;
+    try {
+      final firestore = FirebaseFirestore.instance;
+      final WriteBatch batch = firestore.batch();
+      final DocumentReference userRef = firestore.collection('users').doc(userId);
+
+      // 1. Increment users.gCoins & users.coins (Exact field names, single source of truth)
+      final Map<String, dynamic> userUpdate = {
+        'gCoins': FieldValue.increment(amount),
+        'coins': FieldValue.increment(amount),
+        'lastUpdated': FieldValue.serverTimestamp(),
+      };
+      if (inEscrowChange != null && inEscrowChange != 0) {
+        userUpdate['inEscrow'] = FieldValue.increment(inEscrowChange);
+      }
+      if (type == 'win_reward' || type == 'win_prize' || type == 'team_prize') {
+        if (amount > 0) {
+          userUpdate['totalWinnings'] = FieldValue.increment(amount);
+          userUpdate['wins'] = FieldValue.increment(1);
+          userUpdate['lastRewardAt'] = FieldValue.serverTimestamp();
+        }
+      }
+      batch.set(userRef, userUpdate, SetOptions(merge: true));
+
+      // 2. Also keep wallets & coin_wallets collections synchronized
+      final DocumentReference walletRef = firestore.collection('wallets').doc(userId);
+      batch.set(walletRef, {
+        'coins': FieldValue.increment(amount),
+        'gCoins': FieldValue.increment(amount),
+        'userId': userId,
+        'updatedAt': FieldValue.serverTimestamp(),
+      }, SetOptions(merge: true));
+
+      final DocumentReference coinWalletRef = firestore.collection('coin_wallets').doc(userId);
+      final Map<String, dynamic> coinWalletUpdate = {
+        'coins': FieldValue.increment(amount),
+        'gCoins': FieldValue.increment(amount),
+        'userId': userId,
+        'updatedAt': FieldValue.serverTimestamp(),
+      };
+      if (amount > 0) {
+        coinWalletUpdate['lifetimeEarned'] = FieldValue.increment(amount);
+      }
+      if (inEscrowChange != null && inEscrowChange != 0) {
+        coinWalletUpdate['escrowCoins'] = FieldValue.increment(inEscrowChange);
+      }
+      batch.set(coinWalletRef, coinWalletUpdate, SetOptions(merge: true));
+
+      // 3. Create transaction record in 'transactions' and 'coin_transactions'
+      final DocumentReference txDoc = firestore.collection('transactions').doc();
+      final String txId = txDoc.id;
+
+      String resolvedTitle = title ?? '';
+      if (resolvedTitle.isEmpty) {
+        switch (type) {
+          case 'win_reward':
+          case 'win_prize':
+            resolvedTitle = 'Match Victory Reward 🏆';
+            break;
+          case 'team_prize':
+            resolvedTitle = 'Team Victory Prize! 🏆';
+            break;
+          case 'escrow_hold':
+            resolvedTitle = 'Entry Fee Escrow 🔒';
+            break;
+          case 'escrow_refund':
+            resolvedTitle = 'Entry Fee Refunded ↩️';
+            break;
+          case 'escrow_release':
+          case 'escrow_transferred':
+            resolvedTitle = 'Escrow Released to Winner 🏆';
+            break;
+          default:
+            resolvedTitle = amount > 0 ? 'Coins Added 🪙' : 'Coins Deducted 🪙';
+        }
+      }
+
+      final Map<String, dynamic> txData = {
+        'id': txId,
+        'userId': userId,
+        'amount': amount,
+        'type': type,
+        'title': resolvedTitle,
+        'description': description,
+        'roomId': roomId ?? '',
+        'status': 'completed',
+        'createdAt': FieldValue.serverTimestamp(),
+        'timestamp': FieldValue.serverTimestamp(),
+      };
+      if (winProofUrl != null && winProofUrl.isNotEmpty) {
+        txData['winProofUrl'] = winProofUrl;
+      }
+
+      batch.set(txDoc, txData);
+      batch.set(firestore.collection('coin_transactions').doc(txId), txData);
+
+      await batch.commit();
+      debugPrint('Coins updated: $userId $amount ($type) new balance will be auto via StreamBuilder');
+    } catch (e) {
+      debugPrint('updateCoins error: $e');
+      rethrow;
+    }
+  }
+
+  /// =========================================================================
+  /// FIX 2 - MIGRATION TO FIX EXISTING MISMATCH
+  /// Sums all transactions for userId, updates users.gCoins & users.coins
+  /// =========================================================================
+  static Future<int> recalculateCoins(String userId) async {
+    if (userId.isEmpty) return 0;
+    try {
+      final firestore = FirebaseFirestore.instance;
+      final snap1 = await firestore
+          .collection('transactions')
+          .where('userId', isEqualTo: userId)
+          .get();
+      final snap2 = await firestore
+          .collection('coin_transactions')
+          .where('userId', isEqualTo: userId)
+          .get();
+
+      final Map<String, CoinTransaction> txMap = {};
+      for (final doc in snap1.docs) {
+        final tx = CoinTransaction.fromFirestore(doc);
+        txMap[tx.id] = tx;
+      }
+      for (final doc in snap2.docs) {
+        final tx = CoinTransaction.fromFirestore(doc);
+        txMap[tx.id] = tx;
+      }
+
+      if (txMap.isEmpty) {
+        debugPrint('recalculateCoins: No transactions found for $userId, keeping existing balance');
+        return -1;
+      }
+
+      int sum = 0;
+      for (final tx in txMap.values) {
+        sum += tx.amount;
+      }
+
+      if (sum < 0) sum = 0;
+
+      await firestore.collection('users').doc(userId).set({
+        'gCoins': sum,
+        'coins': sum,
+        'lastRecalculatedAt': FieldValue.serverTimestamp(),
+      }, SetOptions(merge: true));
+
+      await firestore.collection('wallets').doc(userId).set({
+        'coins': sum,
+        'gCoins': sum,
+        'updatedAt': FieldValue.serverTimestamp(),
+      }, SetOptions(merge: true));
+
+      await firestore.collection('coin_wallets').doc(userId).set({
+        'coins': sum,
+        'gCoins': sum,
+        'updatedAt': FieldValue.serverTimestamp(),
+      }, SetOptions(merge: true));
+
+      // Update in-memory state if this device is the user
+      final currentGamer = GamerAuthService().currentGamer;
+      if (currentGamer != null && (currentGamer.uid == userId || userId.isEmpty)) {
+        GamerAuthService().currentGamerNotifier.value = currentGamer.copyWith(coins: sum);
+        CoinRewardService().coinsNotifier.value = sum;
+      }
+
+      debugPrint('Recalculated: $sum from ${txMap.length} transactions for $userId');
+      return sum;
+    } catch (e) {
+      debugPrint('recalculateCoins error: $e');
+      return -1;
+    }
   }
 
   /// Initialize or fetch wallet for active user. Grants 1,000 Free G-Coins if new.
@@ -320,37 +512,22 @@ class CoinWalletService extends ChangeNotifier {
     notifyListeners();
     _saveToLocal(updated);
 
-    // Update GamerAuthService notifier as well
     final currentGamer = GamerAuthService().currentGamer;
     if (currentGamer != null && (currentGamer.uid == userId || userId.isEmpty)) {
       GamerAuthService().currentGamerNotifier.value = currentGamer.copyWith(coins: newCoins);
+      CoinRewardService().coinsNotifier.value = newCoins;
     }
 
     try {
-      await _walletsRef.doc(userId).set({
-        'userId': userId,
-        'coins': newCoins,
-        'escrowCoins': newEscrow,
-        'updatedAt': FieldValue.serverTimestamp(),
-      }, SetOptions(merge: true));
-
-      await _firestore.collection('users').doc(userId).set({
-        'coins': newCoins,
-      }, SetOptions(merge: true));
-
-      _syncToUserDocAndNotifiers(userId, newCoins);
-
-      await _recordTransaction(CoinTransaction(
-        id: _transactionsRef.doc().id,
+      await updateCoins(
         userId: userId,
-        type: 'room_host_hold',
         amount: -prizePoolCoins,
-        status: 'completed',
-        timestamp: now,
+        type: 'room_host_hold',
+        inEscrowChange: prizePoolCoins,
         title: 'Host Prize Escrow 🔒',
         description: 'Held in escrow for tournament "$roomTitle"',
         roomId: roomId,
-      ));
+      );
       return true;
     } catch (e) {
       debugPrint('CoinWalletService holdRoomHostCoins error: $e');
@@ -392,37 +569,22 @@ class CoinWalletService extends ChangeNotifier {
     notifyListeners();
     _saveToLocal(updated);
 
-    // Update GamerAuthService notifier as well
     final currentGamer = GamerAuthService().currentGamer;
     if (currentGamer != null && (currentGamer.uid == userId || userId.isEmpty)) {
       GamerAuthService().currentGamerNotifier.value = currentGamer.copyWith(coins: newCoins);
+      CoinRewardService().coinsNotifier.value = newCoins;
     }
 
     try {
-      await _walletsRef.doc(userId).set({
-        'userId': userId,
-        'coins': newCoins,
-        'escrowCoins': newEscrow,
-        'updatedAt': FieldValue.serverTimestamp(),
-      }, SetOptions(merge: true));
-
-      await _firestore.collection('users').doc(userId).set({
-        'coins': newCoins,
-      }, SetOptions(merge: true));
-
-      _syncToUserDocAndNotifiers(userId, newCoins);
-
-      await _recordTransaction(CoinTransaction(
-        id: _transactionsRef.doc().id,
+      await updateCoins(
         userId: userId,
-        type: 'entry_fee',
         amount: -entryFeeCoins,
-        status: 'completed',
-        timestamp: now,
+        type: 'escrow_hold',
+        inEscrowChange: entryFeeCoins,
         title: 'Entry Fee Escrow 🎮',
         description: 'Slot registration for "$roomTitle"',
         roomId: roomId,
-      ));
+      );
       return true;
     } catch (e) {
       debugPrint('CoinWalletService holdEntryFeeCoins error: $e');
@@ -457,27 +619,19 @@ class CoinWalletService extends ChangeNotifier {
     final currentGamer = GamerAuthService().currentGamer;
     if (currentGamer != null && (currentGamer.uid == userId || userId.isEmpty)) {
       GamerAuthService().currentGamerNotifier.value = currentGamer.copyWith(coins: newCoins);
+      CoinRewardService().coinsNotifier.value = newCoins;
     }
 
     try {
-      await _walletsRef.doc(userId).update({
-        'coins': newCoins,
-        'escrowCoins': newEscrow,
-        'updatedAt': FieldValue.serverTimestamp(),
-      });
-      _syncToUserDocAndNotifiers(userId, newCoins);
-
-      await _recordTransaction(CoinTransaction(
-        id: _transactionsRef.doc().id,
+      await updateCoins(
         userId: userId,
-        type: 'refund',
         amount: entryFeeCoins,
-        status: 'completed',
-        timestamp: now,
+        type: 'escrow_refund',
+        inEscrowChange: -entryFeeCoins,
         title: 'Entry Fee Refunded ↩️',
         description: 'Left slot for "$roomTitle"',
         roomId: roomId,
-      ));
+      );
     } catch (e) {
       debugPrint('CoinWalletService refundEntryFeeOnLeave error: $e');
     }
@@ -586,159 +740,51 @@ class CoinWalletService extends ChangeNotifier {
         }
       }
 
-      // 3. FIRESTORE TRANSACTION: Send coins atomically to correct UIDs (No hardcoded IDs)
-      final Map<String, int> finalCoinsMap = {};
-      final Map<String, int> finalLifetimeMap = {};
-
-      try {
-        await _firestore.runTransaction((transaction) async {
-          // A. Read phase: get current coin balances for all winning UIDs
-          final Map<String, int> currentCoinsMap = {};
-          final Map<String, int> currentLifetimeMap = {};
-
-          for (final wId in allWinnerIds) {
-            final userRef = _firestore.collection('users').doc(wId);
-            final walletRef = _walletsRef.doc(wId);
-
-            int coins = 1000;
-            int lifetime = 1000;
-
-            final userSnap = await transaction.get(userRef);
-            if (userSnap.exists && userSnap.data()?['coins'] != null) {
-              coins = (userSnap.data()!['coins'] as num).toInt();
-            }
-
-            final walletSnap = await transaction.get(walletRef);
-            final walletData = walletSnap.data() as Map<String, dynamic>?;
-            if (walletSnap.exists && walletData != null && walletData['coins'] != null) {
-              final wCoins = (walletData['coins'] as num).toInt();
-              if (wCoins > coins) coins = wCoins;
-              lifetime = (walletData['lifetimeEarned'] as num?)?.toInt() ?? (coins + prizePerWinner);
-            } else {
-              lifetime = coins;
-            }
-
-            currentCoinsMap[wId] = coins;
-            currentLifetimeMap[wId] = lifetime;
-          }
-
-          // B. Write phase: update users and coin_wallets with exact equal share
-          for (final wId in allWinnerIds) {
-            final userRef = _firestore.collection('users').doc(wId);
-            final walletRef = _walletsRef.doc(wId);
-
-            final newCoins = (currentCoinsMap[wId] ?? 1000) + prizePerWinner;
-            final newLifetime = (currentLifetimeMap[wId] ?? 1000) + prizePerWinner;
-
-            finalCoinsMap[wId] = newCoins;
-            finalLifetimeMap[wId] = newLifetime;
-
-            transaction.set(userRef, {
-              'coins': newCoins,
-            }, SetOptions(merge: true));
-
-            transaction.set(walletRef, {
-              'userId': wId,
-              'coins': newCoins,
-              'lifetimeEarned': newLifetime,
-              'updatedAt': FieldValue.serverTimestamp(),
-            }, SetOptions(merge: true));
-          }
-
-          // Update room status in transaction
-          if (roomId.isNotEmpty) {
-            final roomRef = _firestore.collection('tournament_rooms').doc(roomId);
-            final combinedWName = (winnerNames != null && winnerNames.isNotEmpty) ? winnerNames.join(', ') : 'Winner';
-            transaction.set(roomRef, {
-              'status': 'COMPLETED',
-              'winnerUid': allWinnerIds.join(','),
-              'winnerName': combinedWName,
-              'isLive': false,
-              'updatedAt': FieldValue.serverTimestamp(),
-            }, SetOptions(merge: true));
-          }
-        });
-      } catch (txError) {
-        debugPrint('awardWinnerPrize: Firestore Transaction fallback notice: $txError');
-        // Fallback direct update if transaction encountered offline/network condition
-        for (final wId in allWinnerIds) {
-          int oldCoins = _currentWallet?.userId == wId ? _currentWallet!.coins : 1000;
-          final newCoins = oldCoins + prizePerWinner;
-          finalLifetimeMap[wId] = newCoins;
-          finalCoinsMap[wId] = newCoins;
-          try {
-            await _walletsRef.doc(wId).set({
-              'userId': wId,
-              'coins': newCoins,
-              'updatedAt': FieldValue.serverTimestamp(),
-            }, SetOptions(merge: true));
-            await _firestore.collection('users').doc(wId).set({
-              'coins': newCoins,
-            }, SetOptions(merge: true));
-          } catch (_) {}
-        }
-      }
-
-      // 4. Update Local State and create CoinTransaction entries for each winner
-      final currentGamer = GamerAuthService().currentGamer;
-      final currentUid = currentGamer?.uid ?? GamerAuthService().currentUid ?? '';
-
+      // 3. Atomically distribute prize to all winner UIDs using unified updateCoins
       for (int i = 0; i < allWinnerIds.length; i++) {
         final wId = allWinnerIds[i].trim();
         if (wId.isEmpty) continue;
 
-        final wName = (winnerNames != null && i < winnerNames.length && winnerNames[i].isNotEmpty)
-            ? winnerNames[i]
-            : (winnerName?.isNotEmpty == true ? winnerName! : 'Winner');
-
-        final finalCoins = finalCoinsMap[wId] ?? ((_currentWallet?.userId == wId ? _currentWallet!.coins : 1000) + prizePerWinner);
-        final finalLifetime = finalLifetimeMap[wId] ?? finalCoins;
-
-        // Save winner local cache
-        final updatedWinnerWallet = CoinWallet(
+        await updateCoins(
           userId: wId,
-          coins: finalCoins,
-          lifetimeEarned: finalLifetime,
-          updatedAt: now,
-        );
-        await _saveToLocal(updatedWinnerWallet);
-
-        // Check if the current user on this device is this winner
-        final isThisDeviceWinner = _currentWallet?.userId == wId ||
-            (currentUid.isNotEmpty && currentUid == wId) ||
-            (wName.isNotEmpty &&
-                ((currentGamer?.displayName?.toLowerCase() == wName.toLowerCase()) ||
-                    (currentGamer?.username.toLowerCase() == wName.toLowerCase())));
-
-        if (isThisDeviceWinner) {
-          _currentWallet = (_currentWallet ?? updatedWinnerWallet).copyWith(
-            coins: finalCoins,
-            lifetimeEarned: finalLifetime,
-            updatedAt: now,
-          );
-          await _saveToLocal(_currentWallet!);
-          notifyListeners();
-
-          if (currentGamer != null) {
-            GamerAuthService().currentGamerNotifier.value = currentGamer.copyWith(coins: finalCoins);
-          }
-          CoinRewardService().coinsNotifier.value = finalCoins;
-        }
-
-        // Record win_prize transaction in history for each winner UID
-        await _recordTransaction(CoinTransaction(
-          id: _transactionsRef.doc().id,
-          userId: wId,
-          type: 'win_prize',
           amount: prizePerWinner,
-          status: 'completed',
-          timestamp: now,
+          type: winnerCount > 1 ? 'team_prize' : 'win_prize',
           title: winnerCount > 1 ? 'Team Victory Prize! 🏆' : 'Tournament Victory Prize! 🏆',
           description: winnerCount > 1
               ? 'Won tournament "$roomTitle" with team! Equal share: $prizePerWinner G-Coins ($totalPrize total from Admin Escrow)'
               : 'Won tournament "$roomTitle" and claimed $prizePerWinner G-Coins from Admin Escrow!',
           roomId: roomId,
-        ));
+        );
+
+        // Update local wallet if current device user
+        final currentGamer = GamerAuthService().currentGamer;
+        final currentUid = currentGamer?.uid ?? GamerAuthService().currentUid ?? '';
+        final isThisDevice = _currentWallet?.userId == wId ||
+            (currentUid.isNotEmpty && currentUid == wId);
+        if (isThisDevice) {
+          final newCoins = (_currentWallet?.coins ?? 1000) + prizePerWinner;
+          _currentWallet = (_currentWallet ?? CoinWallet(userId: wId, coins: newCoins)).copyWith(
+            coins: newCoins,
+            updatedAt: now,
+          );
+          notifyListeners();
+          if (currentGamer != null) {
+            GamerAuthService().currentGamerNotifier.value = currentGamer.copyWith(coins: newCoins);
+          }
+          CoinRewardService().coinsNotifier.value = newCoins;
+        }
+      }
+
+      // Update room status to COMPLETED
+      if (roomId.isNotEmpty) {
+        final combinedWName = (winnerNames != null && winnerNames.isNotEmpty) ? winnerNames.join(', ') : 'Winner';
+        await _firestore.collection('tournament_rooms').doc(roomId).set({
+          'status': 'COMPLETED',
+          'winnerUid': allWinnerIds.join(','),
+          'winnerName': combinedWName,
+          'isLive': false,
+          'updatedAt': FieldValue.serverTimestamp(),
+        }, SetOptions(merge: true));
       }
     } catch (e) {
       debugPrint('CoinWalletService awardWinnerPrize error: $e');
@@ -759,61 +805,30 @@ class CoinWalletService extends ChangeNotifier {
     try {
       // 1. Refund host
       if (prizePoolCoins > 0 && hostId.isNotEmpty) {
-        CoinWallet? hostWallet;
-        if (_currentWallet?.userId == hostId) {
-          hostWallet = _currentWallet;
-        } else {
-          final hostDoc = await _walletsRef.doc(hostId).get();
-          if (hostDoc.exists) {
-            hostWallet = CoinWallet.fromFirestore(hostDoc);
-          } else {
-            hostWallet = await _loadFromLocal(hostId);
-          }
-        }
-
-        final currentHostCoins = hostWallet?.coins ?? 1000;
-        final currentHostEscrow = hostWallet?.escrowCoins ?? prizePoolCoins;
-        final newHostCoins = currentHostCoins + prizePoolCoins;
-        final newHostEscrow = (currentHostEscrow - prizePoolCoins).clamp(0, 9999999);
-
-        await _walletsRef.doc(hostId).set({
-          'userId': hostId,
-          'coins': newHostCoins,
-          'escrowCoins': newHostEscrow,
-          'updatedAt': FieldValue.serverTimestamp(),
-        }, SetOptions(merge: true));
-
-        await _firestore.collection('users').doc(hostId).set({
-          'coins': newHostCoins,
-        }, SetOptions(merge: true));
-
-        if (_currentWallet?.userId == hostId) {
-          _currentWallet = _currentWallet!.copyWith(
-            coins: newHostCoins,
-            escrowCoins: newHostEscrow,
-            updatedAt: now,
-          );
-          await _saveToLocal(_currentWallet!);
-          notifyListeners();
-        }
-
-        final currentGamer = GamerAuthService().currentGamer;
-        if (currentGamer != null && (currentGamer.uid == hostId || hostId.isEmpty)) {
-          GamerAuthService().currentGamerNotifier.value = currentGamer.copyWith(coins: newHostCoins);
-          CoinRewardService().coinsNotifier.value = newHostCoins;
-        }
-
-        await _recordTransaction(CoinTransaction(
-          id: _transactionsRef.doc().id,
+        await updateCoins(
           userId: hostId,
-          type: 'refund',
           amount: prizePoolCoins,
-          status: 'completed',
-          timestamp: now,
+          type: 'refund',
+          inEscrowChange: -prizePoolCoins,
           title: 'Host Prize Refunded ↩️',
           description: 'Tournament "$roomTitle" expired/cancelled. Escrow refunded.',
           roomId: roomId,
-        ));
+        );
+
+        if (_currentWallet?.userId == hostId) {
+          final newCoins = (_currentWallet?.coins ?? 1000) + prizePoolCoins;
+          _currentWallet = _currentWallet!.copyWith(
+            coins: newCoins,
+            escrowCoins: ((_currentWallet?.escrowCoins ?? prizePoolCoins) - prizePoolCoins).clamp(0, 9999999),
+            updatedAt: now,
+          );
+          notifyListeners();
+          final currentGamer = GamerAuthService().currentGamer;
+          if (currentGamer != null) {
+            GamerAuthService().currentGamerNotifier.value = currentGamer.copyWith(coins: newCoins);
+            CoinRewardService().coinsNotifier.value = newCoins;
+          }
+        }
       }
 
       // 2. Refund joiners
@@ -821,46 +836,33 @@ class CoinWalletService extends ChangeNotifier {
         for (final jId in joiners) {
           if (jId != hostId) {
             try {
-              final jDoc = await _walletsRef.doc(jId).get();
-              final jWallet = jDoc.exists ? CoinWallet.fromFirestore(jDoc) : await _loadFromLocal(jId);
-              final currentCoins = jWallet?.coins ?? 1000;
-              final currentEscrow = jWallet?.escrowCoins ?? entryFeeCoins;
-              final newCoins = currentCoins + entryFeeCoins;
-              final newEscrow = (currentEscrow - entryFeeCoins).clamp(0, 9999999);
-
-              await _walletsRef.doc(jId).set({
-                'userId': jId,
-                'coins': newCoins,
-                'escrowCoins': newEscrow,
-                'updatedAt': FieldValue.serverTimestamp(),
-              }, SetOptions(merge: true));
-
-              await _firestore.collection('users').doc(jId).set({
-                'coins': newCoins,
-              }, SetOptions(merge: true));
-
-              if (_currentWallet?.userId == jId) {
-                _currentWallet = _currentWallet!.copyWith(
-                  coins: newCoins,
-                  escrowCoins: newEscrow,
-                  updatedAt: now,
-                );
-                await _saveToLocal(_currentWallet!);
-                notifyListeners();
-              }
-
-              await _recordTransaction(CoinTransaction(
-                id: _transactionsRef.doc().id,
+              await updateCoins(
                 userId: jId,
-                type: 'refund',
                 amount: entryFeeCoins,
-                status: 'completed',
-                timestamp: now,
+                type: 'refund',
+                inEscrowChange: -entryFeeCoins,
                 title: 'Entry Fee Refunded ↩️',
                 description: 'Tournament "$roomTitle" cancelled. $entryFeeCoins Coins returned.',
                 roomId: roomId,
-              ));
-            } catch (_) {}
+              );
+
+              if (_currentWallet?.userId == jId) {
+                final newCoins = (_currentWallet?.coins ?? 1000) + entryFeeCoins;
+                _currentWallet = _currentWallet!.copyWith(
+                  coins: newCoins,
+                  escrowCoins: ((_currentWallet?.escrowCoins ?? entryFeeCoins) - entryFeeCoins).clamp(0, 9999999),
+                  updatedAt: now,
+                );
+                notifyListeners();
+                final currentGamer = GamerAuthService().currentGamer;
+                if (currentGamer != null) {
+                  GamerAuthService().currentGamerNotifier.value = currentGamer.copyWith(coins: newCoins);
+                  CoinRewardService().coinsNotifier.value = newCoins;
+                }
+              }
+            } catch (e) {
+              debugPrint('refundRoom joiner $jId error: $e');
+            }
           }
         }
       }

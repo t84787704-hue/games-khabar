@@ -34,6 +34,37 @@ class CoinHistorySheet extends StatefulWidget {
 class _CoinHistorySheetState extends State<CoinHistorySheet> {
   final CoinWalletService _walletService = CoinWalletService();
   int _selectedFilter = 0; // 0: All, 1: Added (+), 2: Deducted (-)
+  bool _isSyncing = false;
+
+  Future<void> _syncCoins() async {
+    setState(() => _isSyncing = true);
+    try {
+      final res = await CoinWalletService.recalculateCoins(widget.userId);
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(res >= 0
+                ? 'Wallet synchronized! Accurate balance: $res Coins'
+                : 'Wallet balance is already up to date.'),
+            backgroundColor: GamerTheme.neonGreen,
+            behavior: SnackBarBehavior.floating,
+          ),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Sync failed: $e'),
+            backgroundColor: GamerTheme.redAccent,
+            behavior: SnackBarBehavior.floating,
+          ),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _isSyncing = false);
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -157,6 +188,9 @@ class _CoinHistorySheetState extends State<CoinHistorySheet> {
                     totalAdded = currentCoins;
                   }
 
+                  final int expectedBalance = (totalAdded - totalDeducted).clamp(0, 9999999);
+                  final bool hasMismatch = allTxs.isNotEmpty && expectedBalance != currentCoins;
+
                   return Padding(
                     padding: const EdgeInsets.symmetric(horizontal: 16),
                     child: Container(
@@ -178,14 +212,32 @@ class _CoinHistorySheetState extends State<CoinHistorySheet> {
                               Column(
                                 crossAxisAlignment: CrossAxisAlignment.start,
                                 children: [
-                                  const Text(
-                                    'CURRENT BALANCE',
-                                    style: TextStyle(
-                                      color: GamerTheme.textMuted,
-                                      fontSize: 11,
-                                      fontWeight: FontWeight.bold,
-                                      letterSpacing: 1,
-                                    ),
+                                  Row(
+                                    children: [
+                                      const Text(
+                                        'CURRENT BALANCE',
+                                        style: TextStyle(
+                                          color: GamerTheme.textMuted,
+                                          fontSize: 11,
+                                          fontWeight: FontWeight.bold,
+                                          letterSpacing: 1,
+                                        ),
+                                      ),
+                                      const SizedBox(width: 6),
+                                      InkWell(
+                                        onTap: _isSyncing ? null : _syncCoins,
+                                        child: Padding(
+                                          padding: const EdgeInsets.all(2),
+                                          child: _isSyncing
+                                              ? const SizedBox(
+                                                  width: 12,
+                                                  height: 12,
+                                                  child: CircularProgressIndicator(strokeWidth: 1.5, color: GamerTheme.neonGreen),
+                                                )
+                                              : const Icon(Icons.sync_rounded, size: 14, color: GamerTheme.textMuted),
+                                        ),
+                                      ),
+                                    ],
                                   ),
                                   const SizedBox(height: 4),
                                   Row(
@@ -237,6 +289,47 @@ class _CoinHistorySheetState extends State<CoinHistorySheet> {
                                 ),
                             ],
                           ),
+                          if (hasMismatch) ...[
+                            const SizedBox(height: 10),
+                            Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+                              decoration: BoxDecoration(
+                                color: GamerTheme.accentOrange.withOpacity(0.15),
+                                borderRadius: BorderRadius.circular(10),
+                                border: Border.all(color: GamerTheme.accentOrange.withOpacity(0.4)),
+                              ),
+                              child: Row(
+                                children: [
+                                  const Icon(Icons.sync_problem_rounded, color: GamerTheme.accentOrange, size: 18),
+                                  const SizedBox(width: 8),
+                                  Expanded(
+                                    child: Text(
+                                      'History shows $expectedBalance Coins ($totalAdded - $totalDeducted), Profile has $currentCoins Coins.',
+                                      style: const TextStyle(color: Colors.white, fontSize: 11),
+                                    ),
+                                  ),
+                                  const SizedBox(width: 8),
+                                  ElevatedButton(
+                                    style: ElevatedButton.styleFrom(
+                                      backgroundColor: GamerTheme.accentOrange,
+                                      foregroundColor: Colors.black,
+                                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                                      minimumSize: const Size(54, 26),
+                                      tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                                    ),
+                                    onPressed: _isSyncing ? null : _syncCoins,
+                                    child: _isSyncing
+                                        ? const SizedBox(
+                                            width: 12,
+                                            height: 12,
+                                            child: CircularProgressIndicator(strokeWidth: 2, color: Colors.black),
+                                          )
+                                        : const Text('Sync', style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold)),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ],
                           const SizedBox(height: 12),
                           const Divider(color: GamerTheme.borderDark, height: 1),
                           const SizedBox(height: 12),
@@ -318,6 +411,15 @@ class _CoinHistorySheetState extends State<CoinHistorySheet> {
                                 ),
                               ),
                             ],
+                          ),
+                          const SizedBox(height: 8),
+                          Text(
+                            'Formula: Added (+${NumberFormat("#,###").format(totalAdded)}) - Deducted (-${NumberFormat("#,###").format(totalDeducted)}) = ${NumberFormat("#,###").format(expectedBalance)}',
+                            style: TextStyle(
+                              color: hasMismatch ? GamerTheme.accentOrange : GamerTheme.textMuted,
+                              fontSize: 10,
+                              fontWeight: FontWeight.w500,
+                            ),
                           ),
                           const SizedBox(height: 12),
                           SizedBox(
