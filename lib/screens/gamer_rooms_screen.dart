@@ -42,6 +42,10 @@ class GamerRoom {
   final String status;
   final DateTime createdAt;
   final DateTime startTime;
+  final String rewardStatus; // 'idle', 'sending', 'sent'
+  final String? winnerId;
+  final String? winnerName;
+  final String prizeSource; // 'application'
 
   const GamerRoom({
     required this.id,
@@ -61,11 +65,15 @@ class GamerRoom {
     required this.status,
     required this.createdAt,
     required this.startTime,
+    this.rewardStatus = 'idle',
+    this.winnerId,
+    this.winnerName,
+    this.prizeSource = 'application',
   });
 
   bool get isFull => filled >= total;
-  bool get isCompleted => status.toLowerCase() == 'completed';
-  bool get isActive => status.toLowerCase() == 'active' || status.toUpperCase() == 'OPEN';
+  bool get isCompleted => status.toLowerCase() == 'completed' || rewardStatus == 'sent';
+  bool get isActive => !isCompleted && (status.toLowerCase() == 'active' || status.toUpperCase() == 'OPEN');
 
   factory GamerRoom.fromFirestore(DocumentSnapshot doc) {
     final data = doc.data() as Map<String, dynamic>? ?? {};
@@ -84,8 +92,8 @@ class GamerRoom {
       prize = (data['prizePoolCoins'] as num).toInt();
     }
 
-    final entryFee = (data['entryFee'] ??
-        (data['entryFeeCoins'] == null || data['entryFeeCoins'] == 0 ? 'FREE' : '${data['entryFeeCoins']} Coins')).toString();
+    // Free entry for all rooms
+    const entryFee = 'FREE';
 
     final int total = (data['total'] ?? data['totalSlots'] ?? data['maxSlots'] ?? 2) as int;
 
@@ -120,6 +128,10 @@ class GamerRoom {
     final roomIdCode = (data['roomIdCode'] ?? data['roomId'] ?? '').toString();
     final password = (data['password'] ?? '').toString();
     final status = (data['status'] ?? 'active').toString();
+    final rewardStatus = (data['rewardStatus'] ?? (status.toLowerCase() == 'completed' ? 'sent' : 'idle')).toString();
+    final winnerId = data['winnerId']?.toString();
+    final winnerName = data['winnerName']?.toString();
+    final prizeSource = (data['prizeSource'] ?? 'application').toString();
 
     DateTime created = DateTime.now();
     if (data['createdAt'] is Timestamp) {
@@ -151,6 +163,10 @@ class GamerRoom {
       status: status,
       createdAt: created,
       startTime: start,
+      rewardStatus: rewardStatus,
+      winnerId: winnerId,
+      winnerName: winnerName,
+      prizeSource: prizeSource,
     );
   }
 }
@@ -259,32 +275,7 @@ class _GamerRoomsScreenState extends State<GamerRoomsScreen> {
       return;
     }
 
-    int entryFeeCoins = 0;
-    if (!room.entryFee.toUpperCase().contains('FREE')) {
-      final match = RegExp(r'(\d+)').firstMatch(room.entryFee);
-      if (match != null) {
-        entryFeeCoins = int.tryParse(match.group(1) ?? '0') ?? 0;
-      }
-    }
-
-    if (entryFeeCoins > 0) {
-      final userDoc = await FirebaseFirestore.instance.collection('users').doc(uid).get();
-      final uData = userDoc.data() ?? {};
-      final currentCoins = (uData['gCoins'] ?? uData['coins'] ?? 0) as num;
-      if (currentCoins < entryFeeCoins) {
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: Text('Not enough Coins! You need $entryFeeCoins Coins to join.'),
-              backgroundColor: GamerTheme.redAccent,
-              behavior: SnackBarBehavior.floating,
-            ),
-          );
-        }
-        return;
-      }
-    }
-
+    // All rooms have 100% FREE entry - No coin deduction, no escrow hold
     await AdFreeService().showRewardedAdForAction(
       context: context,
       actionTitle: 'Watch 1 Ad to Join Room',
@@ -321,6 +312,7 @@ class _GamerRoomsScreenState extends State<GamerRoomsScreen> {
               'joinedAt': Timestamp.now(),
             };
 
+            // FREE ENTRY: Update filled and joined users, NO coin deduction
             transaction.update(roomRef, {
               'filled': FieldValue.increment(1),
               'currentSlots': FieldValue.increment(1),
@@ -330,17 +322,16 @@ class _GamerRoomsScreenState extends State<GamerRoomsScreen> {
               'joinedPlayerNames.$uid': name,
             });
 
-            if (entryFeeCoins > 0) {
-              await CoinWalletService.updateCoins(
-                userId: uid,
-                amount: -entryFeeCoins,
-                type: 'escrow_hold',
-                inEscrowChange: entryFeeCoins,
-                title: 'Entry Fee Escrow 🔒',
-                description: 'Slot registration for ${room.title}',
-                roomId: room.id,
-              );
-            }
+            // System message: "$name joined the room"
+            final msgRef = roomRef.collection('messages').doc();
+            transaction.set(msgRef, {
+              'type': 'system',
+              'message': '$name joined the room',
+              'timestamp': FieldValue.serverTimestamp(),
+              'senderId': 'system',
+              'senderName': 'ROOM BOT',
+              'isHost': false,
+            });
           });
 
           if (mounted) {
@@ -351,7 +342,7 @@ class _GamerRoomsScreenState extends State<GamerRoomsScreen> {
 
             ScaffoldMessenger.of(context).showSnackBar(
               const SnackBar(
-                content: Text('Joined! Room ID will be visible 10 mins before'),
+                content: Text('Joined! Free Entry - Room ID will be visible 10 mins before match'),
                 backgroundColor: _neonGreen,
                 behavior: SnackBarBehavior.floating,
               ),
@@ -401,17 +392,10 @@ class _GamerRoomsScreenState extends State<GamerRoomsScreen> {
           },
           onLeaveRoom: () async {
             final uid = currentUserId;
+            final name = currentUserName;
             final roomRef = FirebaseFirestore.instance.collection('rooms').doc(room.id);
 
             try {
-              int entryFeeCoins = 0;
-              if (!room.entryFee.toUpperCase().contains('FREE')) {
-                final match = RegExp(r'(\d+)').firstMatch(room.entryFee);
-                if (match != null) {
-                  entryFeeCoins = int.tryParse(match.group(1) ?? '0') ?? 0;
-                }
-              }
-
               // Find matching user map
               Map<String, dynamic>? matchingUser;
               for (final u in room.joinedUsers) {
@@ -435,19 +419,19 @@ class _GamerRoomsScreenState extends State<GamerRoomsScreen> {
 
               final batch = FirebaseFirestore.instance.batch();
               batch.update(roomRef, updates);
-              await batch.commit();
 
-              if (entryFeeCoins > 0) {
-                await CoinWalletService.updateCoins(
-                  userId: uid,
-                  amount: entryFeeCoins,
-                  type: 'escrow_refund',
-                  inEscrowChange: -entryFeeCoins,
-                  title: 'Entry Fee Refunded ↩️',
-                  description: 'Slot cancellation refund for ${room.title}',
-                  roomId: room.id,
-                );
-              }
+              // Add leave system message
+              final msgRef = roomRef.collection('messages').doc();
+              batch.set(msgRef, {
+                'type': 'system',
+                'message': '$name left the room',
+                'timestamp': FieldValue.serverTimestamp(),
+                'senderId': 'system',
+                'senderName': 'ROOM BOT',
+                'isHost': false,
+              });
+
+              await batch.commit();
 
               setState(() {
                 _joinedRoomIds.remove(room.id);
@@ -456,8 +440,8 @@ class _GamerRoomsScreenState extends State<GamerRoomsScreen> {
               if (ctx.mounted) Navigator.pop(ctx);
               if (mounted) {
                 ScaffoldMessenger.of(context).showSnackBar(
-                  SnackBar(
-                    content: Text(entryFeeCoins > 0 ? 'You left the room. $entryFeeCoins Coins refunded.' : 'You left the room.'),
+                  const SnackBar(
+                    content: Text('You left the room.'),
                     backgroundColor: GamerTheme.redAccent,
                     behavior: SnackBarBehavior.floating,
                   ),
@@ -880,7 +864,7 @@ class _GamerRoomsScreenState extends State<GamerRoomsScreen> {
                               '${room.prize} Coins',
                               style: const TextStyle(
                                 color: Colors.cyanAccent,
-                                fontSize: 13.5,
+                                fontSize: 13,
                                 fontWeight: FontWeight.bold,
                               ),
                               maxLines: 1,
@@ -889,7 +873,16 @@ class _GamerRoomsScreenState extends State<GamerRoomsScreen> {
                           ),
                         ],
                       ),
-                      const SizedBox(height: 2),
+                      const SizedBox(height: 1),
+                      Text(
+                        '(From App)',
+                        style: TextStyle(
+                          color: _neonGreen.withOpacity(0.9),
+                          fontSize: 9,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                      const SizedBox(height: 1),
                       const Text(
                         'PRIZE POOL',
                         style: TextStyle(
@@ -908,17 +901,26 @@ class _GamerRoomsScreenState extends State<GamerRoomsScreen> {
                   child: Column(
                     mainAxisSize: MainAxisSize.min,
                     children: [
-                      Text(
-                        room.entryFee,
-                        style: const TextStyle(
-                          color: _neonGreen,
-                          fontSize: 13.5,
-                          fontWeight: FontWeight.bold,
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                        decoration: BoxDecoration(
+                          color: _neonGreen.withOpacity(0.15),
+                          borderRadius: BorderRadius.circular(6),
+                          border: Border.all(color: _neonGreen.withOpacity(0.5)),
                         ),
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
+                        child: const Text(
+                          'FREE',
+                          style: TextStyle(
+                            color: _neonGreen,
+                            fontSize: 11.5,
+                            fontWeight: FontWeight.w900,
+                            letterSpacing: 0.5,
+                          ),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                        ),
                       ),
-                      const SizedBox(height: 2),
+                      const SizedBox(height: 3),
                       const Text(
                         'ENTRY FEE',
                         style: TextStyle(
@@ -1580,20 +1582,42 @@ class _InRoomBottomSheetContentState extends State<_InRoomBottomSheetContent> {
     );
   }
 
-  // Host Reward Approval
+  // Host Reward Approval - Prize Funded by Application
   Future<void> _approveReward({
     required String winnerId,
     required String winnerName,
     required String winProofUrl,
+    required GamerRoom room,
   }) async {
+    final roomRef = FirebaseFirestore.instance.collection('rooms').doc(room.id);
+
+    // Check idempotency (ek hi baar)
+    try {
+      final freshDoc = await roomRef.get();
+      final freshData = freshDoc.data() ?? {};
+      final currentRewardStatus = (freshData['rewardStatus'] ?? room.rewardStatus).toString();
+      if (currentRewardStatus == 'sent') {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('Reward already sent!'),
+              backgroundColor: GamerTheme.accentOrange,
+              behavior: SnackBarBehavior.floating,
+            ),
+          );
+        }
+        return;
+      }
+    } catch (_) {}
+
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
         backgroundColor: GamerTheme.cardDark,
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-        title: const Text('Confirm Reward', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+        title: const Text('Approve Reward', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
         content: Text(
-          'Send ${widget.room.prize} G-Coins to $winnerName and mark room completed?',
+          'Send ${room.prize} Coins to $winnerName directly from the Application and mark match completed?',
           style: const TextStyle(color: GamerTheme.textGray),
         ),
         actions: [
@@ -1617,15 +1641,15 @@ class _InRoomBottomSheetContentState extends State<_InRoomBottomSheetContent> {
     if (confirmed != true) return;
 
     try {
-      final int prize = widget.room.prize;
-      final String roomId = widget.room.id;
+      // Set status to sending immediately to lock UI and prevent race conditions
+      await roomRef.update({'rewardStatus': 'sending'});
 
-      // FIX 3: Ensure winnerId is correct - match joinedUsers or slot 2
+      final int prize = room.prize;
+      final String roomId = room.id;
+
+      // Resolve winner ID
       String resolvedWinnerId = winnerId;
-      print('DEBUG: Received winnerId: "$winnerId", winnerName: "$winnerName"');
-
-      // 1. Check joinedUsers for matching user name or id
-      for (final u in widget.room.joinedUsers) {
+      for (final u in room.joinedUsers) {
         final uId = (u['id'] ?? '').toString();
         final uName = (u['name'] ?? '').toString();
         if (uName.toLowerCase().trim() == winnerName.toLowerCase().trim() && uId.isNotEmpty && uId != 'guest' && uId != 'anonymous') {
@@ -1638,106 +1662,90 @@ class _InRoomBottomSheetContentState extends State<_InRoomBottomSheetContent> {
         }
       }
 
-      // 2. If winnerId is still unresolved or guest, check slot 2 in joinedUsers (e.g., Slot 2 Dtive in screenshot)
-      if ((resolvedWinnerId.isEmpty || resolvedWinnerId == 'guest' || resolvedWinnerId == 'anonymous') && widget.room.joinedUsers.length > 1) {
-        final slot2Id = (widget.room.joinedUsers[1]['id'] ?? '').toString();
+      if ((resolvedWinnerId.isEmpty || resolvedWinnerId == 'guest' || resolvedWinnerId == 'anonymous') && room.joinedUsers.length > 1) {
+        final slot2Id = (room.joinedUsers[1]['id'] ?? '').toString();
         if (slot2Id.isNotEmpty && slot2Id != 'guest') {
           resolvedWinnerId = slot2Id;
         }
       }
 
-      // 3. If still empty, check joinedUserIds for first non-host user
       if (resolvedWinnerId.isEmpty || resolvedWinnerId == 'guest' || resolvedWinnerId == 'anonymous') {
-        for (final uid in widget.room.joinedUserIds) {
-          if (uid != widget.room.hostId && uid.isNotEmpty && uid != 'guest') {
+        for (final uid in room.joinedUserIds) {
+          if (uid != room.hostId && uid.isNotEmpty && uid != 'guest') {
             resolvedWinnerId = uid;
             break;
           }
         }
       }
 
-      // Fallback
       if (resolvedWinnerId.isEmpty || resolvedWinnerId == 'guest' || resolvedWinnerId == 'anonymous') {
         resolvedWinnerId = winnerId.isNotEmpty ? winnerId : widget.currentUserId;
       }
 
-      print('Approving reward for $resolvedWinnerId prize $prize');
-      final DocumentReference winnerRef = FirebaseFirestore.instance.collection('users').doc(resolvedWinnerId);
-      print('Winner ref: ${winnerRef.path}');
-
-      // FIX 1: Unified coin update using updateCoins
-      // 1. Send prize to Winner
-      await CoinWalletService.updateCoins(
-        userId: resolvedWinnerId,
-        amount: prize,
-        type: 'win_reward',
-        title: 'Match Victory Reward 🏆',
-        description: 'Won ${widget.room.game} Match: ${widget.room.title}',
-        roomId: roomId,
-        winProofUrl: winProofUrl,
-      );
-
-      // 2. Release host escrow balance and log transaction
-      if (widget.room.hostId.isNotEmpty && widget.room.hostId != resolvedWinnerId) {
-        await CoinWalletService.updateCoins(
-          userId: widget.room.hostId,
-          amount: -prize,
-          type: 'escrow_release',
-          inEscrowChange: -prize,
-          title: 'Escrow Released to Winner 🏆',
-          description: 'Transferred $prize Coins escrow prize to $winnerName (${widget.room.title})',
-          roomId: roomId,
-        );
-      } else if (widget.room.hostId == resolvedWinnerId) {
-        // Host won own room: release host escrow
-        await FirebaseFirestore.instance.collection('users').doc(resolvedWinnerId).set({
-          'inEscrow': FieldValue.increment(-prize),
-        }, SetOptions(merge: true));
-      }
-
-      // 3. Update room status and system chat message in a batch
       final WriteBatch batch = FirebaseFirestore.instance.batch();
-      final DocumentReference roomRef = FirebaseFirestore.instance.collection('rooms').doc(roomId);
+
+      // 1. WINNER KO +500 - APP SE (Host se cut nahi, Escrow se nahi)
+      final DocumentReference winnerRef = FirebaseFirestore.instance.collection('users').doc(resolvedWinnerId);
+      batch.set(winnerRef, {
+        'gCoins': FieldValue.increment(prize), // App se direct
+        'coins': FieldValue.increment(prize),
+        'totalWinnings': FieldValue.increment(prize),
+        'wins': FieldValue.increment(1),
+      }, SetOptions(merge: true));
+
+      // 2. TRANSACTION - FROM ADMIN / APPLICATION
+      final String newId = FirebaseFirestore.instance.collection('transactions').doc().id;
+      final DocumentReference txRef = FirebaseFirestore.instance.collection('transactions').doc(newId);
+      final txData = {
+        'id': newId,
+        'userId': resolvedWinnerId,
+        'amount': prize, // +500
+        'type': 'win_reward',
+        'from': 'application', // IMPORTANT: from app, not host
+        'to': resolvedWinnerId,
+        'title': 'Match Victory Reward 🏆 (From App)',
+        'description': 'Won ${room.game} Match: ${room.title} - Prize from App',
+        'roomId': roomId,
+        'approvedBy': widget.currentUserId, // Host ne approve kiya lekin pay app ne kiya
+        'prizeSource': 'application',
+        'status': 'completed',
+        'winProofUrl': winProofUrl,
+        'createdAt': FieldValue.serverTimestamp(),
+        'timestamp': FieldValue.serverTimestamp(),
+      };
+      batch.set(txRef, txData);
+      batch.set(FirebaseFirestore.instance.collection('coin_transactions').doc(newId), txData);
+
+      // 3. ROOM STATUS - Complete with single send lock
       batch.update(roomRef, {
+        'rewardStatus': 'sent',
+        'rewardSentAt': FieldValue.serverTimestamp(),
         'status': 'completed',
         'winnerId': resolvedWinnerId,
         'winnerName': winnerName,
-        'completedAt': FieldValue.serverTimestamp(),
+        'prizeSource': 'application',
         'isLive': false,
+        'completedAt': FieldValue.serverTimestamp(),
       });
 
-      // System message in chat
+      // 4. SYSTEM MESSAGE
       final DocumentReference msgRef = roomRef.collection('messages').doc();
       batch.set(msgRef, {
         'type': 'system_reward',
-        'message': '🎉 $winnerName won and received $prize Coins!',
+        'message': '🎉 $winnerName won and received $prize Coins from App!',
         'timestamp': FieldValue.serverTimestamp(),
         'senderId': 'system',
         'senderName': 'ROOM BOT',
         'isHost': false,
       });
 
+      // Commit batch: host coins and escrow are untouched!
       await batch.commit();
-
-      // FIX 4 - TEST FLOW:
-      // After approve, immediately fetch winner doc and print new balance
-      final winnerDocAfter = await winnerRef.get();
-      int newBalance = prize;
-      if (winnerDocAfter.exists && winnerDocAfter.data() != null) {
-        final d = winnerDocAfter.data() as Map<String, dynamic>;
-        final raw = d['gCoins'] ?? d['coins'] ?? prize;
-        if (raw is num) newBalance = raw.toInt();
-      }
-      print('New balance for $winnerName ($resolvedWinnerId): $newBalance');
-
-      if (resolvedWinnerId == widget.currentUserId) {
-        CoinWalletService().getOrCreateWallet(resolvedWinnerId);
-      }
 
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text('$prize Coins sent to $winnerName! New balance: $newBalance'),
+            content: Text('✓ $prize Coins sent to $winnerName from Application!'),
             backgroundColor: _neonGreen,
             behavior: SnackBarBehavior.floating,
             duration: const Duration(seconds: 4),
@@ -1746,6 +1754,9 @@ class _InRoomBottomSheetContentState extends State<_InRoomBottomSheetContent> {
       }
     } catch (e) {
       debugPrint('Error approving reward: $e');
+      try {
+        await roomRef.update({'rewardStatus': 'idle'});
+      } catch (_) {}
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
@@ -1784,172 +1795,300 @@ class _InRoomBottomSheetContentState extends State<_InRoomBottomSheetContent> {
 
   @override
   Widget build(BuildContext context) {
-    final now = DateTime.now();
-    final bool isWithin10Mins = widget.room.startTime.difference(now).inMinutes <= 10;
-    final int onlineCount = widget.room.joinedUsers.isNotEmpty
-        ? widget.room.joinedUsers.length
-        : (widget.room.joinedUserIds.isNotEmpty ? widget.room.joinedUserIds.length : 1);
+    return StreamBuilder<DocumentSnapshot>(
+      stream: FirebaseFirestore.instance.collection('rooms').doc(widget.room.id).snapshots(),
+      builder: (context, roomSnapshot) {
+        GamerRoom room = widget.room;
+        if (roomSnapshot.hasData && roomSnapshot.data != null && roomSnapshot.data!.exists) {
+          room = GamerRoom.fromFirestore(roomSnapshot.data!);
+        }
 
-    return Column(
-      children: [
-        // Handle bar
-        Container(
-          width: 40,
-          height: 4,
-          margin: const EdgeInsets.only(top: 12, bottom: 8),
-          decoration: BoxDecoration(
-            color: GamerTheme.borderDark,
-            borderRadius: BorderRadius.circular(2),
-          ),
-        ),
+        final now = DateTime.now();
+        final bool isWithin10Mins = room.startTime.difference(now).inMinutes <= 10;
+        final bool isHost = room.hostId == widget.currentUserId;
+        final bool isJoined = room.joinedUserIds.contains(widget.currentUserId);
+        final bool canAccess = isHost || isJoined;
+        final int onlineCount = room.joinedUsers.isNotEmpty
+            ? room.joinedUsers.length
+            : (room.joinedUserIds.isNotEmpty ? room.joinedUserIds.length : 1);
+        final String rewardStatus = room.rewardStatus;
 
-        // Header: Title + Host • Map + Badge + Close X
-        Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
-          child: Row(
-            children: [
-              Expanded(
+        return Column(
+          children: [
+            // Handle bar
+            Container(
+              width: 40,
+              height: 4,
+              margin: const EdgeInsets.only(top: 12, bottom: 8),
+              decoration: BoxDecoration(
+                color: GamerTheme.borderDark,
+                borderRadius: BorderRadius.circular(2),
+              ),
+            ),
+
+            // Header: Title + Host • Map + Badge + Close X
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+              child: Row(
+                children: [
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          room.title,
+                          style: const TextStyle(
+                            color: Colors.white,
+                            fontWeight: FontWeight.bold,
+                            fontSize: 16,
+                          ),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                        const SizedBox(height: 2),
+                        Text(
+                          'Host: ${room.hostName} • ${room.map}',
+                          style: const TextStyle(color: GamerTheme.textGray, fontSize: 12),
+                        ),
+                      ],
+                    ),
+                  ),
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                    decoration: BoxDecoration(
+                      color: isHost
+                          ? GamerTheme.accentOrange
+                          : (isJoined ? _neonGreen : GamerTheme.cardElevated),
+                      borderRadius: BorderRadius.circular(6),
+                    ),
+                    child: Text(
+                      isHost ? 'HOSTING' : (isJoined ? 'JOINED' : (room.isFull ? 'FULL' : 'OPEN')),
+                      style: TextStyle(
+                        color: isJoined && !isHost ? Colors.black : Colors.white,
+                        fontSize: 10,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  IconButton(
+                    icon: const Icon(Icons.close_rounded, color: GamerTheme.textMuted, size: 20),
+                    onPressed: () => Navigator.pop(context),
+                  ),
+                ],
+              ),
+            ),
+            const Divider(color: GamerTheme.borderDark, height: 1),
+
+            // Scrollable Body
+            Expanded(
+              child: SingleChildScrollView(
+                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text(
-                      widget.room.title,
-                      style: const TextStyle(
-                        color: Colors.white,
-                        fontWeight: FontWeight.bold,
-                        fontSize: 16,
+                    // MATCH STATS BANNER: PRIZE POOL (FROM APP) + ENTRY FEE (FREE) + ESCROW
+                    Container(
+                      margin: const EdgeInsets.only(bottom: 12),
+                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                      decoration: BoxDecoration(
+                        color: GamerTheme.cardDark,
+                        borderRadius: BorderRadius.circular(12),
+                        border: Border.all(color: GamerTheme.borderDark),
                       ),
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                    ),
-                    const SizedBox(height: 2),
-                    Text(
-                      'Host: ${widget.room.hostName} • ${widget.room.map}',
-                      style: const TextStyle(color: GamerTheme.textGray, fontSize: 12),
-                    ),
-                  ],
-                ),
-              ),
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                decoration: BoxDecoration(
-                  color: isHost
-                      ? GamerTheme.accentOrange
-                      : (isJoined ? _neonGreen : GamerTheme.cardElevated),
-                  borderRadius: BorderRadius.circular(6),
-                ),
-                child: Text(
-                  isHost ? 'HOSTING' : (isJoined ? 'JOINED' : (widget.room.isFull ? 'FULL' : 'OPEN')),
-                  style: TextStyle(
-                    color: isJoined && !isHost ? Colors.black : Colors.white,
-                    fontSize: 10,
-                    fontWeight: FontWeight.bold,
-                  ),
-                ),
-              ),
-              const SizedBox(width: 8),
-              IconButton(
-                icon: const Icon(Icons.close_rounded, color: GamerTheme.textMuted, size: 20),
-                onPressed: () => Navigator.pop(context),
-              ),
-            ],
-          ),
-        ),
-        const Divider(color: GamerTheme.borderDark, height: 1),
+                      child: Row(
+                        children: [
+                          // Prize Pool
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                const Text(
+                                  'PRIZE POOL',
+                                  style: TextStyle(color: GamerTheme.textMuted, fontSize: 10, fontWeight: FontWeight.bold),
+                                ),
+                                const SizedBox(height: 3),
+                                Row(
+                                  children: [
+                                    const Icon(Icons.monetization_on_rounded, size: 14, color: Colors.cyanAccent),
+                                    const SizedBox(width: 3),
+                                    Flexible(
+                                      child: Text(
+                                        '${room.prize} Coins',
+                                        style: const TextStyle(
+                                          color: Colors.cyanAccent,
+                                          fontSize: 12.5,
+                                          fontWeight: FontWeight.bold,
+                                        ),
+                                        maxLines: 1,
+                                        overflow: TextOverflow.ellipsis,
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                                const SizedBox(height: 1),
+                                Text(
+                                  '(From App)',
+                                  style: TextStyle(
+                                    color: _neonGreen.withOpacity(0.9),
+                                    fontSize: 9.5,
+                                    fontWeight: FontWeight.w600,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                          Container(height: 32, width: 1, color: GamerTheme.borderDark, margin: const EdgeInsets.symmetric(horizontal: 8)),
 
-        // Scrollable Body
-        Expanded(
-          child: SingleChildScrollView(
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                // Room ID & Password Row
-                Container(
-                  padding: const EdgeInsets.all(12),
-                  decoration: BoxDecoration(
-                    color: GamerTheme.bgDark,
-                    borderRadius: BorderRadius.circular(12),
-                    border: Border.all(color: GamerTheme.borderDark),
-                  ),
-                  child: Row(
-                    children: [
-                      // Room ID Code
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            const Text(
-                              'ROOM ID',
-                              style: TextStyle(color: GamerTheme.textMuted, fontSize: 10, fontWeight: FontWeight.bold),
+                          // Entry Fee
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                const Text(
+                                  'ENTRY FEE',
+                                  style: TextStyle(color: GamerTheme.textMuted, fontSize: 10, fontWeight: FontWeight.bold),
+                                ),
+                                const SizedBox(height: 4),
+                                Container(
+                                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                                  decoration: BoxDecoration(
+                                    color: _neonGreen.withOpacity(0.15),
+                                    borderRadius: BorderRadius.circular(6),
+                                    border: Border.all(color: _neonGreen.withOpacity(0.5)),
+                                  ),
+                                  child: const Text(
+                                    'FREE',
+                                    style: TextStyle(
+                                      color: _neonGreen,
+                                      fontSize: 11,
+                                      fontWeight: FontWeight.w900,
+                                      letterSpacing: 0.5,
+                                    ),
+                                  ),
+                                ),
+                                const SizedBox(height: 2),
+                                const Text(
+                                  'No Coins Needed',
+                                  style: TextStyle(color: GamerTheme.textMuted, fontSize: 8.5),
+                                ),
+                              ],
                             ),
-                            const SizedBox(height: 4),
-                            Text(
-                              canAccess
-                                  ? (widget.room.roomIdCode.isNotEmpty ? widget.room.roomIdCode : '88453219')
-                                  : '••••••••',
-                              style: const TextStyle(
-                                color: Colors.white,
-                                fontWeight: FontWeight.bold,
-                                fontSize: 14,
-                                letterSpacing: 1,
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                      if (canAccess)
-                        IconButton(
-                          icon: const Icon(Icons.copy_rounded, color: GamerTheme.accentOrange, size: 18),
-                          tooltip: 'Copy Room ID',
-                          onPressed: () => _copyToClipboard('Room ID', widget.room.roomIdCode.isNotEmpty ? widget.room.roomIdCode : '88453219'),
-                        )
-                      else
-                        const Icon(Icons.lock_rounded, color: GamerTheme.textMuted, size: 18),
-                      Container(height: 32, width: 1, color: GamerTheme.borderDark, margin: const EdgeInsets.symmetric(horizontal: 8)),
+                          ),
+                          Container(height: 32, width: 1, color: GamerTheme.borderDark, margin: const EdgeInsets.symmetric(horizontal: 8)),
 
-                      // Password
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            const Text(
-                              'PASSWORD',
-                              style: TextStyle(color: GamerTheme.textMuted, fontSize: 10, fontWeight: FontWeight.bold),
+                          // Escrow
+                          const Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  'ESCROW',
+                                  style: TextStyle(color: GamerTheme.textMuted, fontSize: 10, fontWeight: FontWeight.bold),
+                                ),
+                                SizedBox(height: 3),
+                                Text(
+                                  '0 Coins',
+                                  style: TextStyle(color: Colors.white, fontSize: 12.5, fontWeight: FontWeight.bold),
+                                ),
+                                SizedBox(height: 1),
+                                Text(
+                                  'Free Entry',
+                                  style: TextStyle(color: GamerTheme.textMuted, fontSize: 9),
+                                ),
+                              ],
                             ),
-                            const SizedBox(height: 4),
-                            Text(
-                              canAccess
-                                  ? (isWithin10Mins || isHost || widget.room.isCompleted
-                                      ? (widget.room.password.isNotEmpty ? widget.room.password : 'pubg123')
-                                      : '••••')
-                                  : '••••',
-                              style: const TextStyle(
-                                color: Colors.white,
-                                fontWeight: FontWeight.bold,
-                                fontSize: 14,
-                                letterSpacing: 1,
-                              ),
-                            ),
-                            if (canAccess && !isWithin10Mins && !isHost && !widget.room.isCompleted)
-                              const Text(
-                                'Visible 10 mins before match',
-                                style: TextStyle(color: GamerTheme.textMuted, fontSize: 8),
-                              ),
-                          ],
-                        ),
+                          ),
+                        ],
                       ),
-                      if (canAccess && (isWithin10Mins || isHost || widget.room.isCompleted))
-                        IconButton(
-                          icon: const Icon(Icons.copy_rounded, color: GamerTheme.accentOrange, size: 18),
-                          tooltip: 'Copy Password',
-                          onPressed: () => _copyToClipboard('Password', widget.room.password.isNotEmpty ? widget.room.password : 'pubg123'),
-                        )
-                      else
-                        const Icon(Icons.lock_rounded, color: GamerTheme.textMuted, size: 18),
-                    ],
-                  ),
-                ),
+                    ),
+
+                    // Room ID & Password Row
+                    Container(
+                      padding: const EdgeInsets.all(12),
+                      decoration: BoxDecoration(
+                        color: GamerTheme.bgDark,
+                        borderRadius: BorderRadius.circular(12),
+                        border: Border.all(color: GamerTheme.borderDark),
+                      ),
+                      child: Row(
+                        children: [
+                          // Room ID Code
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                const Text(
+                                  'ROOM ID',
+                                  style: TextStyle(color: GamerTheme.textMuted, fontSize: 10, fontWeight: FontWeight.bold),
+                                ),
+                                const SizedBox(height: 4),
+                                Text(
+                                  canAccess
+                                      ? (room.roomIdCode.isNotEmpty ? room.roomIdCode : '88453219')
+                                      : '••••••••',
+                                  style: const TextStyle(
+                                    color: Colors.white,
+                                    fontWeight: FontWeight.bold,
+                                    fontSize: 14,
+                                    letterSpacing: 1,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                          if (canAccess)
+                            IconButton(
+                              icon: const Icon(Icons.copy_rounded, color: GamerTheme.accentOrange, size: 18),
+                              tooltip: 'Copy Room ID',
+                              onPressed: () => _copyToClipboard('Room ID', room.roomIdCode.isNotEmpty ? room.roomIdCode : '88453219'),
+                            )
+                          else
+                            const Icon(Icons.lock_rounded, color: GamerTheme.textMuted, size: 18),
+                          Container(height: 32, width: 1, color: GamerTheme.borderDark, margin: const EdgeInsets.symmetric(horizontal: 8)),
+
+                          // Password
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                const Text(
+                                  'PASSWORD',
+                                  style: TextStyle(color: GamerTheme.textMuted, fontSize: 10, fontWeight: FontWeight.bold),
+                                ),
+                                const SizedBox(height: 4),
+                                Text(
+                                  canAccess
+                                      ? (isWithin10Mins || isHost || room.isCompleted
+                                          ? (room.password.isNotEmpty ? room.password : 'pubg123')
+                                          : '••••')
+                                      : '••••',
+                                  style: const TextStyle(
+                                    color: Colors.white,
+                                    fontWeight: FontWeight.bold,
+                                    fontSize: 14,
+                                    letterSpacing: 1,
+                                  ),
+                                ),
+                                if (canAccess && !isWithin10Mins && !isHost && !room.isCompleted)
+                                  const Text(
+                                    'Visible 10 mins before match',
+                                    style: TextStyle(color: GamerTheme.textMuted, fontSize: 8),
+                                  ),
+                              ],
+                            ),
+                          ),
+                          if (canAccess && (isWithin10Mins || isHost || room.isCompleted))
+                            IconButton(
+                              icon: const Icon(Icons.copy_rounded, color: GamerTheme.accentOrange, size: 18),
+                              tooltip: 'Copy Password',
+                              onPressed: () => _copyToClipboard('Password', room.password.isNotEmpty ? room.password : 'pubg123'),
+                            )
+                          else
+                            const Icon(Icons.lock_rounded, color: GamerTheme.textMuted, size: 18),
+                        ],
+                      ),
+                    ),
                 const SizedBox(height: 10),
 
                 // Countdown Timer
@@ -2219,38 +2358,88 @@ class _InRoomBottomSheetContentState extends State<_InRoomBottomSheetContent> {
                                     ),
 
                                     // Host Reward Approval/Rejection buttons for win proofs
-                                    if (isHost && type == 'win_proof' && imageUrl != null && !widget.room.isCompleted) ...[
+                                    if (isHost && type == 'win_proof' && imageUrl != null) ...[
                                       const SizedBox(height: 6),
                                       Row(
                                         mainAxisAlignment: MainAxisAlignment.end,
                                         children: [
-                                          OutlinedButton(
-                                            style: OutlinedButton.styleFrom(
-                                              foregroundColor: GamerTheme.redAccent,
-                                              side: const BorderSide(color: GamerTheme.redAccent),
-                                              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                                              minimumSize: Size.zero,
-                                              tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                                          if (rewardStatus != 'sent' && rewardStatus != 'sending') ...[
+                                            OutlinedButton(
+                                              style: OutlinedButton.styleFrom(
+                                                foregroundColor: GamerTheme.redAccent,
+                                                side: const BorderSide(color: GamerTheme.redAccent),
+                                                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                                                minimumSize: Size.zero,
+                                                tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                                              ),
+                                              onPressed: () => _rejectReward(senderName),
+                                              child: const Text('Reject', style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold)),
                                             ),
-                                            onPressed: () => _rejectReward(senderName),
-                                            child: const Text('Reject', style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold)),
-                                          ),
-                                          const SizedBox(width: 8),
-                                          ElevatedButton(
-                                            style: ElevatedButton.styleFrom(
-                                              backgroundColor: _neonGreen,
-                                              foregroundColor: Colors.black,
-                                              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                                              minimumSize: Size.zero,
-                                              tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                                            const SizedBox(width: 8),
+                                          ],
+                                          if (rewardStatus == 'sent')
+                                            ElevatedButton.icon(
+                                              style: ElevatedButton.styleFrom(
+                                                backgroundColor: const Color(0xFF2A2E3D),
+                                                foregroundColor: GamerTheme.textMuted,
+                                                disabledBackgroundColor: const Color(0xFF2A2E3D),
+                                                disabledForegroundColor: GamerTheme.textMuted,
+                                                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+                                                minimumSize: Size.zero,
+                                                tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                                              ),
+                                              icon: const Icon(Icons.check_circle_rounded, color: GamerTheme.neonGreen, size: 14),
+                                              onPressed: null,
+                                              label: Text(
+                                                '✓ Reward Sent - ${room.prize} Coins to $senderName from App',
+                                                style: const TextStyle(fontSize: 11, fontWeight: FontWeight.bold),
+                                              ),
+                                            )
+                                          else if (rewardStatus == 'sending')
+                                            ElevatedButton(
+                                              style: ElevatedButton.styleFrom(
+                                                backgroundColor: GamerTheme.accentOrange,
+                                                foregroundColor: Colors.black,
+                                                disabledBackgroundColor: GamerTheme.accentOrange.withOpacity(0.8),
+                                                disabledForegroundColor: Colors.black,
+                                                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+                                                minimumSize: Size.zero,
+                                                tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                                              ),
+                                              onPressed: null,
+                                              child: const Row(
+                                                mainAxisSize: MainAxisSize.min,
+                                                children: [
+                                                  SizedBox(
+                                                    width: 12,
+                                                    height: 12,
+                                                    child: CircularProgressIndicator(strokeWidth: 2, color: Colors.black),
+                                                  ),
+                                                  SizedBox(width: 6),
+                                                  Text('Sending from App...', style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold)),
+                                                ],
+                                              ),
+                                            )
+                                          else
+                                            ElevatedButton(
+                                              style: ElevatedButton.styleFrom(
+                                                backgroundColor: _neonGreen,
+                                                foregroundColor: Colors.black,
+                                                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+                                                minimumSize: Size.zero,
+                                                tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                                              ),
+                                              onPressed: () => _approveReward(
+                                                winnerId: senderId,
+                                                winnerName: senderName,
+                                                winProofUrl: imageUrl,
+                                                room: room,
+                                              ),
+                                              child: Text(
+                                                'Approve & Send ${room.prize} Coins (From App)',
+                                                style: const TextStyle(fontSize: 11, fontWeight: FontWeight.bold),
+                                              ),
                                             ),
-                                            onPressed: () => _approveReward(
-                                              winnerId: senderId,
-                                              winnerName: senderName,
-                                              winProofUrl: imageUrl,
-                                            ),
-                                            child: const Text('Approve & Send Reward', style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold)),
-                                          ),
                                         ],
                                       ),
                                     ],
@@ -2462,13 +2651,13 @@ class _InRoomBottomSheetContentState extends State<_InRoomBottomSheetContent> {
                 ListView.separated(
                   shrinkWrap: true,
                   physics: const NeverScrollableScrollPhysics(),
-                  itemCount: widget.room.total > 0 ? widget.room.total : 2,
+                  itemCount: room.total > 0 ? room.total : 2,
                   separatorBuilder: (_, __) => const SizedBox(height: 6),
                   itemBuilder: (context, i) {
-                    final isOccupied = i < widget.room.joinedUsers.length;
+                    final isOccupied = i < room.joinedUsers.length;
                     String displayName = 'Empty';
                     if (isOccupied) {
-                      final u = widget.room.joinedUsers[i];
+                      final u = room.joinedUsers[i];
                       displayName = canAccess ? (u['name'] ?? 'Player') : '•••••';
                     }
 
@@ -2575,18 +2764,18 @@ class _InRoomBottomSheetContentState extends State<_InRoomBottomSheetContent> {
                               context: context,
                               builder: (dCtx) => AlertDialog(
                                 backgroundColor: GamerTheme.cardDark,
-                                title: Text('${widget.room.game} Match Details', style: const TextStyle(color: Colors.white)),
+                                title: Text('${room.game} Match Details', style: const TextStyle(color: Colors.white)),
                                 content: Column(
                                   mainAxisSize: MainAxisSize.min,
                                   crossAxisAlignment: CrossAxisAlignment.start,
                                   children: [
-                                    Text('Title: ${widget.room.title}', style: const TextStyle(color: Colors.white)),
+                                    Text('Title: ${room.title}', style: const TextStyle(color: Colors.white)),
                                     const SizedBox(height: 4),
-                                    Text('Map: ${widget.room.map}', style: const TextStyle(color: GamerTheme.textGray)),
+                                    Text('Map: ${room.map}', style: const TextStyle(color: GamerTheme.textGray)),
                                     const SizedBox(height: 4),
-                                    Text('Prize: ${widget.room.prize} G-Coins', style: const TextStyle(color: Colors.cyanAccent)),
+                                    Text('Prize: ${room.prize} G-Coins', style: const TextStyle(color: Colors.cyanAccent)),
                                     const SizedBox(height: 4),
-                                    Text('Entry Fee: ${widget.room.entryFee}', style: const TextStyle(color: _neonGreen)),
+                                    Text('Entry Fee: ${room.entryFee}', style: const TextStyle(color: _neonGreen)),
                                     const SizedBox(height: 8),
                                     const Text('Rules: Fair play only. Screenshot win screen and upload in chat to claim reward.', style: TextStyle(color: GamerTheme.textMuted, fontSize: 11)),
                                   ],
@@ -2612,5 +2801,7 @@ class _InRoomBottomSheetContentState extends State<_InRoomBottomSheetContent> {
         ),
       ],
     );
+  },
+);
   }
 }

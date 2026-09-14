@@ -200,8 +200,21 @@ class CoinWalletService extends ChangeNotifier {
       }
 
       int sum = 0;
+      bool hasInitialBonus = false;
       for (final tx in txMap.values) {
+        // Free entry system: ignore escrow_hold and escrow_refund
+        if (tx.type == 'escrow_hold' || tx.type == 'escrow_refund' || tx.title.toLowerCase().contains('escrow')) {
+          continue;
+        }
+        if (tx.type == 'welcome_bonus' || tx.type == 'signup_bonus' || tx.title.toLowerCase().contains('welcome')) {
+          hasInitialBonus = true;
+        }
         sum += tx.amount;
+      }
+
+      // Base welcome coins if no explicit welcome bonus tx found
+      if (!hasInitialBonus) {
+        sum += 500;
       }
 
       if (sum < 0) sum = 0;
@@ -209,6 +222,7 @@ class CoinWalletService extends ChangeNotifier {
       await firestore.collection('users').doc(userId).set({
         'gCoins': sum,
         'coins': sum,
+        'inEscrow': 0, // Free entry has zero escrow
         'lastRecalculatedAt': FieldValue.serverTimestamp(),
       }, SetOptions(merge: true));
 

@@ -172,24 +172,32 @@ class _CoinHistorySheetState extends State<CoinHistorySheet> {
                 builder: (context, txSnap) {
                   final allTxs = txSnap.data ?? [];
 
+                  // Filter out escrow transactions for free entry system
+                  final displayTxs = allTxs.where((tx) =>
+                      tx.type != 'escrow_hold' &&
+                      tx.type != 'escrow_refund' &&
+                      !tx.title.toLowerCase().contains('escrow')
+                  ).toList();
+
                   int totalAdded = 0;
                   int totalDeducted = 0;
+                  bool hasInitialBonus = false;
 
-                  for (final tx in allTxs) {
+                  for (final tx in displayTxs) {
                     if (tx.amount > 0) {
                       totalAdded += tx.amount;
+                      if (tx.type == 'welcome_bonus' || tx.type == 'signup_bonus' || tx.title.toLowerCase().contains('welcome')) {
+                        hasInitialBonus = true;
+                      }
                     } else if (tx.amount < 0) {
                       totalDeducted += tx.amount.abs();
                     }
                   }
 
-                  // If no recorded transactions yet but user has coins, treat initial coins as added
-                  if (totalAdded == 0 && currentCoins > 0) {
-                    totalAdded = currentCoins;
-                  }
-
-                  final int expectedBalance = (totalAdded - totalDeducted).clamp(0, 9999999);
-                  final bool hasMismatch = allTxs.isNotEmpty && expectedBalance != currentCoins;
+                  // Base initial coins is 500 unless user already has a welcome bonus tx
+                  final int initialCoins = hasInitialBonus ? 0 : 500;
+                  final int expectedBalance = (initialCoins + totalAdded - totalDeducted).clamp(0, 9999999);
+                  final bool hasMismatch = displayTxs.isNotEmpty && expectedBalance != currentCoins;
 
                   return Padding(
                     padding: const EdgeInsets.symmetric(horizontal: 16),
@@ -256,37 +264,38 @@ class _CoinHistorySheetState extends State<CoinHistorySheet> {
                                   ),
                                 ],
                               ),
-                              if (inEscrow > 0)
-                                Container(
-                                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-                                  decoration: BoxDecoration(
-                                    color: GamerTheme.accentOrange.withOpacity(0.12),
-                                    borderRadius: BorderRadius.circular(10),
-                                    border: Border.all(color: GamerTheme.accentOrange.withOpacity(0.4)),
-                                  ),
-                                  child: Column(
-                                    crossAxisAlignment: CrossAxisAlignment.end,
-                                    children: [
-                                      const Text(
-                                        'IN ESCROW 🔒',
-                                        style: TextStyle(
-                                          color: GamerTheme.accentOrange,
-                                          fontSize: 10,
-                                          fontWeight: FontWeight.bold,
-                                        ),
-                                      ),
-                                      const SizedBox(height: 2),
-                                      Text(
-                                        '${NumberFormat("#,###").format(inEscrow)} Coins',
-                                        style: const TextStyle(
-                                          color: Colors.white,
-                                          fontSize: 13,
-                                          fontWeight: FontWeight.bold,
-                                        ),
-                                      ),
-                                    ],
-                                  ),
+                              // IN ESCROW: 0 Coins (Free entry system)
+                              Container(
+                                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                                decoration: BoxDecoration(
+                                  color: GamerTheme.cardElevated,
+                                  borderRadius: BorderRadius.circular(10),
+                                  border: Border.all(color: GamerTheme.borderDark),
                                 ),
+                                child: const Column(
+                                  crossAxisAlignment: CrossAxisAlignment.end,
+                                  children: [
+                                    Text(
+                                      'ENTRY FREE',
+                                      style: TextStyle(
+                                        color: GamerTheme.neonGreen,
+                                        fontSize: 9.5,
+                                        fontWeight: FontWeight.bold,
+                                        letterSpacing: 0.5,
+                                      ),
+                                    ),
+                                    SizedBox(height: 2),
+                                    Text(
+                                      'IN ESCROW: 0 Coins',
+                                      style: TextStyle(
+                                        color: Colors.white70,
+                                        fontSize: 11,
+                                        fontWeight: FontWeight.bold,
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
                             ],
                           ),
                           if (hasMismatch) ...[
@@ -304,7 +313,7 @@ class _CoinHistorySheetState extends State<CoinHistorySheet> {
                                   const SizedBox(width: 8),
                                   Expanded(
                                     child: Text(
-                                      'History shows $expectedBalance Coins ($totalAdded - $totalDeducted), Profile has $currentCoins Coins.',
+                                      'Calculated: $expectedBalance Coins ($initialCoins initial + $totalAdded win - $totalDeducted), Profile has $currentCoins Coins.',
                                       style: const TextStyle(color: Colors.white, fontSize: 11),
                                     ),
                                   ),
@@ -414,7 +423,7 @@ class _CoinHistorySheetState extends State<CoinHistorySheet> {
                           ),
                           const SizedBox(height: 8),
                           Text(
-                            'Formula: Added (+${NumberFormat("#,###").format(totalAdded)}) - Deducted (-${NumberFormat("#,###").format(totalDeducted)}) = ${NumberFormat("#,###").format(expectedBalance)}',
+                            'Formula: Initial ($initialCoins) + Added (+${NumberFormat("#,###").format(totalAdded)}) - Deducted (-${NumberFormat("#,###").format(totalDeducted)}) = ${NumberFormat("#,###").format(expectedBalance)}',
                             style: TextStyle(
                               color: hasMismatch ? GamerTheme.accentOrange : GamerTheme.textMuted,
                               fontSize: 10,
@@ -481,7 +490,13 @@ class _CoinHistorySheetState extends State<CoinHistorySheet> {
                   );
                 }
 
-                List<CoinTransaction> transactions = snapshot.data ?? [];
+                List<CoinTransaction> rawTxs = snapshot.data ?? [];
+                List<CoinTransaction> transactions = rawTxs
+                    .where((tx) =>
+                        tx.type != 'escrow_hold' &&
+                        tx.type != 'escrow_refund' &&
+                        !tx.title.toLowerCase().contains('escrow'))
+                    .toList();
 
                 // Filter items
                 if (_selectedFilter == 1) {
