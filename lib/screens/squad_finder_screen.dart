@@ -2,6 +2,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import '../constants/gamer_theme.dart';
 import '../models/squad_post_model.dart';
 import '../services/gamer_auth_service.dart';
@@ -44,6 +45,47 @@ class _SquadFinderScreenState extends State<SquadFinderScreen> {
   bool _cardMicRequired = true; // ON
   String _cardLanguage = 'English'; // English
 
+  late final TextEditingController _uidController;
+  String? _uidErrorText;
+
+  @override
+  void initState() {
+    super.initState();
+    _uidController = TextEditingController();
+    _loadSavedUidForGame(_cardGame);
+  }
+
+  @override
+  void dispose() {
+    _uidController.dispose();
+    super.dispose();
+  }
+
+  Future<void> _loadSavedUidForGame(String game) async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final saved = prefs.getString('uid_$game');
+      if (saved != null && saved.isNotEmpty) {
+        _uidController.text = saved;
+      } else {
+        final profileGameId = _authService.currentGamer?.gameId ?? '';
+        if (profileGameId.isNotEmpty) {
+          _uidController.text = profileGameId;
+        } else {
+          _uidController.text = '';
+        }
+      }
+      if (mounted) setState(() {});
+    } catch (_) {}
+  }
+
+  Future<void> _saveUidForGame(String game, String uid) async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setString('uid_$game', uid);
+    } catch (_) {}
+  }
+
   final List<String> _cardGameOptions = ['PUBG Mobile', 'BGMI', 'Free Fire', 'COD Mobile', 'Valorant'];
   final List<String> _cardTierOptions = ['Ace', 'Conqueror', 'Crown', 'Diamond'];
   final List<String> _cardLangOptions = ['English', 'Hindi', 'Urdu', 'Punjabi'];
@@ -58,6 +100,31 @@ class _SquadFinderScreenState extends State<SquadFinderScreen> {
       return;
     }
 
+    final enteredUid = _uidController.text.trim();
+    if (enteredUid.isEmpty) {
+      setState(() => _uidErrorText = 'Please enter your ${_cardGame} UID');
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Please enter your ${_cardGame} UID'),
+          backgroundColor: GamerTheme.redAccent,
+        ),
+      );
+      return;
+    }
+    if (enteredUid.length < 4) {
+      setState(() => _uidErrorText = 'UID must be at least 4 digits');
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('UID must be at least 4 digits'),
+          backgroundColor: GamerTheme.redAccent,
+        ),
+      );
+      return;
+    }
+    setState(() => _uidErrorText = null);
+
+    await _saveUidForGame(_cardGame, enteredUid);
+
     final currentGamer = _authService.currentGamer;
     final String uid = authUser.uid;
     final String email = authUser.email ?? '';
@@ -70,9 +137,6 @@ class _SquadFinderScreenState extends State<SquadFinderScreen> {
     final String avatar = (currentGamer?.photoUrl.isNotEmpty == true)
         ? currentGamer!.photoUrl
         : (authUser.photoURL ?? '');
-    final String inGameId = (currentGamer?.gameId.isNotEmpty == true)
-        ? currentGamer!.gameId
-        : 'ID_${uid.substring(0, 6)}';
 
     setState(() => _isPosting = true);
 
@@ -83,7 +147,11 @@ class _SquadFinderScreenState extends State<SquadFinderScreen> {
       'id': uid,
       'postId': uid,
       'squadId': uid,
-      'leaderUid': uid,
+      'leaderUid': enteredUid,
+      'gameUid': enteredUid,
+      'inGameUid': enteredUid,
+      'bgmiUid': enteredUid,
+      'bgmiUidToCopy': enteredUid,
       'hostId': uid,
       'userId': uid,
       'ownerId': uid,
@@ -107,9 +175,6 @@ class _SquadFinderScreenState extends State<SquadFinderScreen> {
       'mode': _cardMode,
       'role': _cardRole,
       'description': desc,
-      'bgmiUid': inGameId,
-      'inGameUid': inGameId,
-      'bgmiUidToCopy': inGameId,
       'game': _cardGame,
       'isActive': true,
       'members': [uid],
@@ -133,7 +198,8 @@ class _SquadFinderScreenState extends State<SquadFinderScreen> {
           'chatId': uid,
           'postId': uid,
           'hostId': uid,
-          'leaderUid': uid,
+          'leaderUid': enteredUid,
+          'gameUid': enteredUid,
           'hostEmail': email,
           'createdAt': FieldValue.serverTimestamp(),
           'members': [uid],
@@ -161,7 +227,7 @@ class _SquadFinderScreenState extends State<SquadFinderScreen> {
       language: _cardLanguage,
       mode: _cardMode,
       description: desc,
-      inGameUid: inGameId,
+      gameUid: enteredUid,
       isActive: true,
       joinRequests: const [],
       members: [uid],
@@ -179,7 +245,7 @@ class _SquadFinderScreenState extends State<SquadFinderScreen> {
     if (mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text('🔥 Squad created for $_cardGame! Teammates can now join.'),
+          content: Text('🔥 Squad created for $_cardGame! UID: $enteredUid'),
           backgroundColor: const Color(0xFFFF6B00),
         ),
       );
@@ -870,7 +936,12 @@ class _SquadFinderScreenState extends State<SquadFinderScreen> {
                                     icon: const Icon(Icons.keyboard_arrow_down_rounded, color: Colors.white, size: 18),
                                     style: const TextStyle(color: Colors.white, fontSize: 12.5, fontWeight: FontWeight.bold),
                                     items: _cardGameOptions.map((g) => DropdownMenuItem(value: g, child: Text(g))).toList(),
-                                    onChanged: (v) => setState(() => _cardGame = v ?? _cardGame),
+                                    onChanged: (v) {
+                                      if (v != null) {
+                                        setState(() => _cardGame = v);
+                                        _loadSavedUidForGame(v);
+                                      }
+                                    },
                                   ),
                                 ),
                               ),
@@ -1060,6 +1131,71 @@ class _SquadFinderScreenState extends State<SquadFinderScreen> {
                                 items: _cardLangOptions.map((l) => DropdownMenuItem(value: l, child: Text('Lang: $l'))).toList(),
                                 onChanged: (v) => setState(() => _cardLanguage = v ?? _cardLanguage),
                               ),
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+
+                    const SizedBox(height: 12),
+
+                    // Editable Game UID Input Field
+                    Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          'Your $_cardGame UID - e.g. ${_cardGame == 'BGMI' ? 'BGMI UID' : '${_cardGame} UID'}',
+                          style: const TextStyle(
+                            color: Color(0xFF8E95A5),
+                            fontSize: 10.5,
+                            fontWeight: FontWeight.w800,
+                            letterSpacing: 0.5,
+                          ),
+                        ),
+                        const SizedBox(height: 6),
+                        TextField(
+                          controller: _uidController,
+                          keyboardType: TextInputType.number,
+                          style: const TextStyle(
+                            color: Colors.white,
+                            fontSize: 13,
+                            fontWeight: FontWeight.bold,
+                            letterSpacing: 0.8,
+                          ),
+                          onChanged: (val) {
+                            _saveUidForGame(_cardGame, val.trim());
+                            if (_uidErrorText != null && val.trim().length >= 4) {
+                              setState(() => _uidErrorText = null);
+                            }
+                          },
+                          decoration: InputDecoration(
+                            filled: true,
+                            fillColor: const Color(0xFF2A2E3A),
+                            hintText: 'Enter your UID',
+                            hintStyle: const TextStyle(color: Color(0xFF8E95A5), fontSize: 12.5),
+                            errorText: _uidErrorText,
+                            errorStyle: const TextStyle(color: Color(0xFFFF4D4D), fontSize: 11, fontWeight: FontWeight.w600),
+                            prefixIcon: const Icon(Icons.tag_rounded, color: Color(0xFFFF6B00), size: 18),
+                            contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                            border: OutlineInputBorder(
+                              borderRadius: BorderRadius.circular(10),
+                              borderSide: const BorderSide(color: Color(0xFF383E4E)),
+                            ),
+                            enabledBorder: OutlineInputBorder(
+                              borderRadius: BorderRadius.circular(10),
+                              borderSide: const BorderSide(color: Color(0xFF383E4E)),
+                            ),
+                            focusedBorder: OutlineInputBorder(
+                              borderRadius: BorderRadius.circular(10),
+                              borderSide: const BorderSide(color: Color(0xFFFF6B00), width: 1.5),
+                            ),
+                            errorBorder: OutlineInputBorder(
+                              borderRadius: BorderRadius.circular(10),
+                              borderSide: const BorderSide(color: Color(0xFFFF4D4D), width: 1.2),
+                            ),
+                            focusedErrorBorder: OutlineInputBorder(
+                              borderRadius: BorderRadius.circular(10),
+                              borderSide: const BorderSide(color: Color(0xFFFF4D4D), width: 1.5),
                             ),
                           ),
                         ),

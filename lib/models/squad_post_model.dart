@@ -5,7 +5,10 @@ class SquadPost {
   final String userId; // also accessible as ownerId
   String get ownerId => userId;
   final String ownerEmail;
-  String get bgmiUidToCopy => inGameUid;
+  final String gameUid;
+  String get inGameUid => gameUid;
+  String get bgmiUidToCopy => gameUid;
+  String get leaderUid => gameUid;
   String get ownerBgmiName => displayName;
   String get ownerTag => username;
   /// Title getter for backward compatibility with older chat screen versions
@@ -21,7 +24,6 @@ class SquadPost {
   final String language; // 'Hindi', 'English', 'Telugu', 'Tamil', 'Punjabi', 'All'
   final String mode; // 'Classic Squad', 'Rank Push', 'Payload', 'TDM Tourney'
   final String description;
-  final String inGameUid;
   final List<String> joinRequests; // userIds
   final List<String> members; // userIds in squad
   final int membersCount;
@@ -44,7 +46,7 @@ class SquadPost {
     this.language = 'Hindi',
     this.mode = 'Classic Squad',
     this.description = '',
-    this.inGameUid = '',
+    this.gameUid = '',
     this.joinRequests = const [],
     this.members = const [],
     this.membersCount = 1,
@@ -76,6 +78,14 @@ class SquadPost {
         (data['membersCount'] as num?)?.toInt() ?? 
         membersList.length;
 
+    final resolvedUid = (data['gameUid'] ??
+        data['bgmiUidToCopy'] ??
+        data['bgmiUid'] ??
+        data['inGameUid'] ??
+        data['leaderUid'] ??
+        data['gameId'] ??
+        '').toString();
+
     return SquadPost(
       id: data['squadId'] ?? data['postId'] ?? data['id'] ?? doc.id,
       userId: ownerId,
@@ -91,7 +101,7 @@ class SquadPost {
       language: data['lang'] ?? data['language'] ?? 'Hindi',
       mode: data['mode'] ?? 'Classic Squad',
       description: data['description'] ?? '',
-      inGameUid: data['bgmiUidToCopy'] ?? data['bgmiUid'] ?? data['inGameUid'] ?? data['gameId'] ?? '',
+      gameUid: resolvedUid,
       joinRequests: joinReqList,
       members: membersList,
       membersCount: count > 0 ? count : (membersList.isNotEmpty ? membersList.length : 1),
@@ -103,6 +113,7 @@ class SquadPost {
 
   Map<String, dynamic> toMap() {
     final actualMembers = members.isNotEmpty ? members : (userId.isNotEmpty ? [userId] : <String>[]);
+    final resolvedUid = gameUid.trim();
     return {
       'squadId': id,
       'postId': id,
@@ -128,9 +139,12 @@ class SquadPost {
       'lang': language,
       'language': language,
       'mode': mode,
-      'bgmiUid': inGameUid.trim(),
-      'inGameUid': inGameUid.trim(),
-      'bgmiUidToCopy': inGameUid.trim(),
+      'game': game,
+      'gameUid': resolvedUid,
+      'leaderUid': resolvedUid,
+      'bgmiUid': resolvedUid,
+      'inGameUid': resolvedUid,
+      'bgmiUidToCopy': resolvedUid,
       'description': description.trim(),
       'joinRequests': joinRequests,
       'members': actualMembers,
@@ -157,6 +171,7 @@ class SquadPost {
     String? language,
     String? mode,
     String? description,
+    String? gameUid,
     String? inGameUid,
     List<String>? joinRequests,
     List<String>? members,
@@ -180,7 +195,7 @@ class SquadPost {
       language: language ?? this.language,
       mode: mode ?? this.mode,
       description: description ?? this.description,
-      inGameUid: inGameUid ?? this.inGameUid,
+      gameUid: gameUid ?? inGameUid ?? this.gameUid,
       joinRequests: joinRequests ?? this.joinRequests,
       members: members ?? this.members,
       membersCount: membersCount ?? this.membersCount,

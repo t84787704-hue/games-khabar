@@ -3,6 +3,7 @@ import 'package:flutter/services.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:intl/intl.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'dart:math' as math;
 import '../constants/gamer_theme.dart';
 import '../models/squad_post_model.dart';
@@ -33,6 +34,172 @@ class LFGCard extends StatefulWidget {
 
 class _LFGCardState extends State<LFGCard> {
   bool _isRequesting = false;
+  String? _customGameUid;
+
+  String get effectiveUid {
+    if (_customGameUid != null && _customGameUid!.isNotEmpty) {
+      return _customGameUid!;
+    }
+    if (widget.squad.gameUid.isNotEmpty) {
+      return widget.squad.gameUid;
+    }
+    if (widget.squad.inGameUid.isNotEmpty) {
+      return widget.squad.inGameUid;
+    }
+    return '';
+  }
+
+  void _showEditUidDialog(BuildContext context, SquadPost squad) {
+    final currentVal = effectiveUid.isNotEmpty ? effectiveUid : (squad.gameUid.isNotEmpty ? squad.gameUid : squad.inGameUid);
+    final controller = TextEditingController(text: currentVal);
+    String? dialogError;
+
+    showDialog(
+      context: context,
+      builder: (dialogCtx) => StatefulBuilder(
+        builder: (context, setDialogState) {
+          final gameLabel = squad.game.isNotEmpty ? squad.game : 'Game';
+          return AlertDialog(
+            backgroundColor: GamerTheme.cardDark,
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(16),
+              border: Border.all(color: GamerTheme.borderDark),
+            ),
+            title: Row(
+              children: [
+                const Icon(Icons.edit_rounded, color: GamerTheme.accentOrange, size: 20),
+                const SizedBox(width: 8),
+                Text(
+                  'Edit $gameLabel UID',
+                  style: const TextStyle(
+                    color: Colors.white,
+                    fontSize: 16,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+              ],
+            ),
+            content: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  'Change your in-game UID for $gameLabel:',
+                  style: const TextStyle(color: GamerTheme.textMuted, fontSize: 13),
+                ),
+                const SizedBox(height: 14),
+                TextField(
+                  controller: controller,
+                  keyboardType: TextInputType.number,
+                  autofocus: true,
+                  style: const TextStyle(
+                    color: Colors.white,
+                    fontWeight: FontWeight.bold,
+                    letterSpacing: 0.8,
+                  ),
+                  decoration: InputDecoration(
+                    filled: true,
+                    fillColor: GamerTheme.cardElevated,
+                    hintText: 'Enter your UID',
+                    hintStyle: const TextStyle(color: Colors.grey, fontSize: 13),
+                    errorText: dialogError,
+                    errorStyle: const TextStyle(color: Colors.redAccent, fontSize: 11),
+                    prefixIcon: const Icon(Icons.tag_rounded, color: GamerTheme.accentOrange, size: 18),
+                    border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(10),
+                      borderSide: const BorderSide(color: GamerTheme.borderDark),
+                    ),
+                    enabledBorder: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(10),
+                      borderSide: const BorderSide(color: GamerTheme.borderDark),
+                    ),
+                    focusedBorder: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(10),
+                      borderSide: const BorderSide(color: GamerTheme.accentOrange, width: 1.5),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.of(dialogCtx).pop(),
+                child: const Text('Cancel', style: TextStyle(color: GamerTheme.textMuted)),
+              ),
+              ElevatedButton(
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: GamerTheme.accentOrange,
+                  foregroundColor: Colors.white,
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                ),
+                onPressed: () async {
+                  final newUid = controller.text.trim();
+                  if (newUid.isEmpty) {
+                    setDialogState(() => dialogError = 'UID cannot be empty');
+                    return;
+                  }
+                  if (newUid.length < 4) {
+                    setDialogState(() => dialogError = 'Min 4 digits required');
+                    return;
+                  }
+                  Navigator.of(dialogCtx).pop();
+
+                  setState(() {
+                    _customGameUid = newUid;
+                  });
+
+                  try {
+                    final prefs = await SharedPreferences.getInstance();
+                    await prefs.setString('uid_${squad.game}', newUid);
+                  } catch (_) {}
+
+                  try {
+                    final updates = {
+                      'gameUid': newUid,
+                      'leaderUid': newUid,
+                      'inGameUid': newUid,
+                      'bgmiUid': newUid,
+                      'bgmiUidToCopy': newUid,
+                      'updatedAt': FieldValue.serverTimestamp(),
+                    };
+                    await FirebaseFirestore.instance.collection('lfg_posts').doc(squad.id).set(updates, SetOptions(merge: true));
+                    try {
+                      await FirebaseFirestore.instance.collection('squads').doc(squad.id).set(updates, SetOptions(merge: true));
+                    } catch (_) {}
+                    try {
+                      await FirebaseFirestore.instance.collection('chats').doc(squad.id).set({
+                        'leaderUid': newUid,
+                        'gameUid': newUid,
+                      }, SetOptions(merge: true));
+                    } catch (_) {}
+
+                    if (context.mounted) {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        SnackBar(
+                          content: Text('✅ Updated ${squad.game} UID to $newUid'),
+                          backgroundColor: GamerTheme.accentOrange,
+                        ),
+                      );
+                    }
+                  } catch (e) {
+                    if (context.mounted) {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        SnackBar(
+                          content: Text('Failed to update UID: $e'),
+                          backgroundColor: GamerTheme.redAccent,
+                        ),
+                      );
+                    }
+                  }
+                },
+                child: const Text('SAVE', style: TextStyle(fontWeight: FontWeight.bold)),
+              ),
+            ],
+          );
+        },
+      ),
+    );
+  }
 
   String _formatTime(DateTime? dt) {
     if (dt == null) return 'recently';
@@ -401,7 +568,7 @@ class _LFGCardState extends State<LFGCard> {
           const SizedBox(height: 12),
 
           // In-Game UID Bar
-          if (squad.inGameUid.isNotEmpty)
+          if (effectiveUid.isNotEmpty)
             Container(
               margin: const EdgeInsets.symmetric(horizontal: 14),
               padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
@@ -419,7 +586,7 @@ class _LFGCardState extends State<LFGCard> {
                     style: TextStyle(color: GamerTheme.textMuted, fontSize: 12, fontWeight: FontWeight.bold),
                   ),
                   Text(
-                    squad.inGameUid,
+                    effectiveUid,
                     style: const TextStyle(
                       color: GamerTheme.textWhite,
                       fontFamily: 'monospace',
@@ -431,10 +598,10 @@ class _LFGCardState extends State<LFGCard> {
                   const Spacer(),
                   GestureDetector(
                     onTap: () {
-                      Clipboard.setData(ClipboardData(text: squad.inGameUid));
+                      Clipboard.setData(ClipboardData(text: effectiveUid));
                       ScaffoldMessenger.of(context).showSnackBar(
                         SnackBar(
-                          content: Text('Copied UID ${squad.inGameUid} to clipboard!'),
+                          content: Text('Copied UID $effectiveUid to clipboard!'),
                           duration: const Duration(seconds: 2),
                         ),
                       );
@@ -518,8 +685,8 @@ class _LFGCardState extends State<LFGCard> {
             ),
           ),
 
-          // Requester Side Info: When user is in members, show Leader UID + COPY button
-          if (isMember) ...[
+          // Leader UID + COPY button & EDIT UID button
+          if (isMember || isOwner) ...[
             Container(
               margin: const EdgeInsets.fromLTRB(14, 8, 14, 0),
               padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
@@ -533,20 +700,38 @@ class _LFGCardState extends State<LFGCard> {
                   const Icon(Icons.military_tech_rounded, size: 16, color: GamerTheme.accentOrange),
                   const SizedBox(width: 6),
                   Text(
-                    'Leader UID: ${squad.inGameUid.isNotEmpty ? squad.inGameUid : (squad.ownerId.isNotEmpty ? squad.ownerId : squad.userId)}',
+                    'Leader UID: $effectiveUid',
                     style: const TextStyle(
                       color: GamerTheme.textWhite,
                       fontSize: 11.5,
                       fontWeight: FontWeight.w600,
                     ),
                   ),
+                  const SizedBox(width: 8),
+                  InkWell(
+                    onTap: () => _showEditUidDialog(context, squad),
+                    borderRadius: BorderRadius.circular(4),
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 3),
+                      decoration: BoxDecoration(
+                        color: GamerTheme.accentOrange.withOpacity(0.18),
+                        borderRadius: BorderRadius.circular(4),
+                        border: Border.all(color: GamerTheme.accentOrange.withOpacity(0.8), width: 0.8),
+                      ),
+                      child: const Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Icon(Icons.edit_rounded, size: 11, color: GamerTheme.accentOrange),
+                          SizedBox(width: 3),
+                          Text('EDIT', style: TextStyle(color: GamerTheme.accentOrange, fontSize: 9.5, fontWeight: FontWeight.w800)),
+                        ],
+                      ),
+                    ),
+                  ),
                   const Spacer(),
                   InkWell(
                     onTap: () {
-                      final leaderUidToCopy = squad.inGameUid.isNotEmpty
-                          ? squad.inGameUid
-                          : (squad.ownerId.isNotEmpty ? squad.ownerId : squad.userId);
-                      Clipboard.setData(ClipboardData(text: leaderUidToCopy));
+                      Clipboard.setData(ClipboardData(text: effectiveUid));
                       ScaffoldMessenger.of(context).showSnackBar(
                         const SnackBar(
                           content: Text('Leader UID copied to clipboard!'),
@@ -788,7 +973,7 @@ class _LFGCardState extends State<LFGCard> {
                     ),
                     icon: const Icon(Icons.copy_rounded, size: 12, color: GamerTheme.accentOrange),
                     label: Text(
-                      'COPY UID: ${squad.bgmiUidToCopy.isNotEmpty ? squad.bgmiUidToCopy : (squad.inGameUid.isNotEmpty ? squad.inGameUid : squad.ownerId)}',
+                      'COPY UID: $effectiveUid',
                       style: const TextStyle(
                         fontWeight: FontWeight.w900,
                         fontSize: 11,
@@ -796,13 +981,10 @@ class _LFGCardState extends State<LFGCard> {
                       ),
                     ),
                     onPressed: () {
-                      final uidToCopy = squad.bgmiUidToCopy.isNotEmpty
-                          ? squad.bgmiUidToCopy
-                          : (squad.inGameUid.isNotEmpty ? squad.inGameUid : squad.ownerId);
-                      Clipboard.setData(ClipboardData(text: uidToCopy));
+                      Clipboard.setData(ClipboardData(text: effectiveUid));
                       ScaffoldMessenger.of(context).showSnackBar(
                         SnackBar(
-                          content: Text('Copied UID $uidToCopy to clipboard!'),
+                          content: Text('Copied UID $effectiveUid to clipboard!'),
                           backgroundColor: GamerTheme.accentOrange,
                           duration: const Duration(seconds: 2),
                         ),
