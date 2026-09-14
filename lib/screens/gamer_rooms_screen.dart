@@ -27,7 +27,12 @@ class _GamerRoomsScreenState extends State<GamerRoomsScreen> {
   final GamerAuthService _authService = GamerAuthService();
   final CoinWalletService _walletService = CoinWalletService();
 
+  // State to track joined rooms locally and reactively
+  final Set<String> _joinedRoomIds = <String>{};
+
   String _selectedCategory = 'All Games';
+
+  static const Color _neonGreen = Color(0xFF00FF88);
 
   static const List<String> _gameCategories = [
     'All Games',
@@ -49,9 +54,22 @@ class _GamerRoomsScreenState extends State<GamerRoomsScreen> {
 
     final uid = _authService.currentGamer?.uid ?? _authService.currentUid ?? 'guest';
     _walletService.getOrCreateWallet(uid);
+
+    // Populate joined rooms from cached rooms
+    for (final r in _tournamentService.rooms) {
+      if (r.joinedPlayers.contains(uid) || r.joinedUserIds.contains(uid) || r.hostId == uid) {
+        _joinedRoomIds.add(r.id);
+      }
+    }
   }
 
   void _onServiceChanged() {
+    final uid = _authService.currentGamer?.uid ?? _authService.currentUid ?? 'guest';
+    for (final r in _tournamentService.rooms) {
+      if (r.joinedPlayers.contains(uid) || r.joinedUserIds.contains(uid) || r.hostId == uid) {
+        _joinedRoomIds.add(r.id);
+      }
+    }
     if (mounted) setState(() {});
   }
 
@@ -65,7 +83,8 @@ class _GamerRoomsScreenState extends State<GamerRoomsScreen> {
   // Handle Joining Room
   Future<void> _handleJoinRoom(BuildContext context, TournamentRoom room) async {
     final currentGamer = _authService.currentGamer;
-    if (currentGamer == null) {
+    final currentUid = currentGamer?.uid ?? _authService.currentUid;
+    if (currentGamer == null || currentUid == null) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('Please create your Gamer ID to join rooms!')),
       );
@@ -89,17 +108,24 @@ class _GamerRoomsScreenState extends State<GamerRoomsScreen> {
         final success = await _tournamentService.joinRoom(
           roomId: room.id,
           hostUid: room.hostId,
-          playerUid: currentGamer.uid,
+          playerUid: currentUid,
           playerName: currentGamer.displayName,
         );
 
         if (context.mounted) {
           if (success) {
-            await _walletService.recordTournamentJoinedAndCheckReferral(currentGamer.uid);
+            setState(() {
+              _joinedRoomIds.add(room.id);
+            });
+            await _walletService.recordTournamentJoinedAndCheckReferral(currentUid);
             ScaffoldMessenger.of(context).showSnackBar(
               SnackBar(
-                content: Text('🎮 Slot confirmed for ${room.title}! (100% FREE Entry)'),
-                backgroundColor: GamerTheme.neonGreen,
+                content: Text(
+                  'Joined ${room.gameType} Room! Room ID will be shared at start time',
+                  style: const TextStyle(fontWeight: FontWeight.bold, color: Colors.white),
+                ),
+                backgroundColor: _neonGreen,
+                behavior: SnackBarBehavior.floating,
               ),
             );
             _showRoomCredentialsDialog(context, room);
@@ -124,11 +150,11 @@ class _GamerRoomsScreenState extends State<GamerRoomsScreen> {
         backgroundColor: GamerTheme.cardDark,
         shape: RoundedRectangleBorder(
           borderRadius: BorderRadius.circular(16),
-          side: const BorderSide(color: GamerTheme.accentBlue),
+          side: const BorderSide(color: _neonGreen),
         ),
         title: Row(
           children: [
-            const Icon(Icons.vpn_key_rounded, color: GamerTheme.accentBlue, size: 20),
+            const Icon(Icons.vpn_key_rounded, color: _neonGreen, size: 20),
             const SizedBox(width: 8),
             Expanded(
               child: Text(
@@ -177,7 +203,7 @@ class _GamerRoomsScreenState extends State<GamerRoomsScreen> {
                                   const SnackBar(content: Text('Room ID copied!'), duration: Duration(seconds: 1)),
                                 );
                               },
-                              child: const Icon(Icons.copy_rounded, size: 14, color: GamerTheme.accentOrange),
+                              child: const Icon(Icons.copy_rounded, size: 14, color: _neonGreen),
                             ),
                           ],
                         ],
@@ -209,7 +235,7 @@ class _GamerRoomsScreenState extends State<GamerRoomsScreen> {
                                   const SnackBar(content: Text('Password copied!'), duration: Duration(seconds: 1)),
                                 );
                               },
-                              child: const Icon(Icons.copy_rounded, size: 14, color: GamerTheme.accentOrange),
+                              child: const Icon(Icons.copy_rounded, size: 14, color: _neonGreen),
                             ),
                           ],
                         ],
@@ -229,7 +255,7 @@ class _GamerRoomsScreenState extends State<GamerRoomsScreen> {
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(ctx),
-            child: const Text('CLOSE', style: TextStyle(color: GamerTheme.accentBlue, fontWeight: FontWeight.bold)),
+            child: const Text('CLOSE', style: TextStyle(color: _neonGreen, fontWeight: FontWeight.bold)),
           ),
         ],
       ),
@@ -465,11 +491,14 @@ class _GamerRoomsScreenState extends State<GamerRoomsScreen> {
 
                       await _tournamentService.publishRoom(newRoom);
                       if (mounted) {
+                        setState(() {
+                          _joinedRoomIds.add(newRoom.id);
+                        });
                         Navigator.pop(ctx);
                         ScaffoldMessenger.of(context).showSnackBar(
                           SnackBar(
                             content: Text('🎉 Room "${newRoom.title}" published!'),
-                            backgroundColor: GamerTheme.neonGreen,
+                            backgroundColor: _neonGreen,
                           ),
                         );
                       }
@@ -489,12 +518,16 @@ class _GamerRoomsScreenState extends State<GamerRoomsScreen> {
   }
 
   // ==========================================
-  // Clean Room Card as specified by user
+  // Clean Room Card with Enhanced Joined State
   // ==========================================
   Widget _buildCleanRoomCard(TournamentRoom room) {
     final currentGamer = _authService.currentGamer;
     final currentUid = currentGamer?.uid ?? _authService.currentUid ?? '';
-    final isJoined = room.joinedPlayers.contains(currentUid) || room.hostId == currentUid;
+    final bool isJoined = _joinedRoomIds.contains(room.id) ||
+        room.joinedPlayers.contains(currentUid) ||
+        room.joinedUserIds.contains(currentUid) ||
+        room.hostId == currentUid;
+
     final slotsFilled = room.joinedPlayers.length;
     final totalSlots = room.maxSlots > 0 ? room.maxSlots : 1;
     final double fillRatio = (slotsFilled / totalSlots).clamp(0.0, 1.0);
@@ -502,297 +535,373 @@ class _GamerRoomsScreenState extends State<GamerRoomsScreen> {
     final initial = room.hostName.isNotEmpty ? room.hostName[0].toUpperCase() : 'G';
 
     return Container(
-      margin: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-      padding: const EdgeInsets.all(14),
-      decoration: BoxDecoration(
-        color: GamerTheme.cardDark,
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: GamerTheme.borderDark),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
+      margin: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+      child: Stack(
+        clipBehavior: Clip.none,
         children: [
-          // Row 1: Avatar, Title + Host/Map, Badge
-          Row(
-            children: [
-              CircleAvatar(
-                radius: 20, // 40 diameter
-                backgroundColor: GamerTheme.accentOrange,
-                child: Text(
-                  initial,
-                  style: const TextStyle(
-                    color: Colors.white,
-                    fontWeight: FontWeight.bold,
-                    fontSize: 16,
-                  ),
-                ),
-              ),
-              const SizedBox(width: 10),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
+          // Main Card Container
+          Container(
+            padding: const EdgeInsets.all(14),
+            decoration: BoxDecoration(
+              color: GamerTheme.cardDark,
+              borderRadius: BorderRadius.circular(16),
+              border: isJoined
+                  ? Border.all(color: _neonGreen, width: 2.0)
+                  : Border.all(color: GamerTheme.borderDark),
+              boxShadow: isJoined
+                  ? [
+                      BoxShadow(
+                        color: _neonGreen.withOpacity(0.3),
+                        blurRadius: 12,
+                        spreadRadius: 1,
+                      ),
+                    ]
+                  : null,
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                // Row 1: Avatar, Title (+ check icon if joined) + Host/Map, Badge
+                Row(
                   children: [
-                    Text(
-                      room.title,
-                      style: const TextStyle(
-                        color: GamerTheme.textWhite,
-                        fontSize: 15,
-                        fontWeight: FontWeight.bold,
+                    CircleAvatar(
+                      radius: 20, // 40 diameter
+                      backgroundColor: isJoined ? _neonGreen : GamerTheme.accentOrange,
+                      child: Text(
+                        initial,
+                        style: TextStyle(
+                          color: isJoined ? Colors.black : Colors.white,
+                          fontWeight: FontWeight.bold,
+                          fontSize: 16,
+                        ),
                       ),
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
                     ),
-                    const SizedBox(height: 2),
-                    Text(
-                      'Host: ${room.hostName} • ${room.map}',
-                      style: const TextStyle(
-                        color: GamerTheme.textGray,
-                        fontSize: 12,
+                    const SizedBox(width: 10),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Row(
+                            children: [
+                              Flexible(
+                                child: Text(
+                                  room.title,
+                                  style: const TextStyle(
+                                    color: GamerTheme.textWhite,
+                                    fontSize: 15,
+                                    fontWeight: FontWeight.bold,
+                                  ),
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                ),
+                              ),
+                              if (isJoined) ...[
+                                const SizedBox(width: 5),
+                                const Icon(
+                                  Icons.check_circle_rounded,
+                                  color: _neonGreen,
+                                  size: 16,
+                                ),
+                              ],
+                            ],
+                          ),
+                          const SizedBox(height: 2),
+                          Text(
+                            'Host: ${room.hostName} • ${room.map}',
+                            style: const TextStyle(
+                              color: GamerTheme.textGray,
+                              fontSize: 12,
+                            ),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        ],
                       ),
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
+                    ),
+                    const SizedBox(width: 8),
+                    Container(
+                      width: 85,
+                      height: 28,
+                      alignment: Alignment.center,
+                      padding: const EdgeInsets.symmetric(horizontal: 4),
+                      decoration: BoxDecoration(
+                        color: GamerTheme.surfaceDark,
+                        borderRadius: BorderRadius.circular(8),
+                        border: Border.all(color: isJoined ? _neonGreen.withOpacity(0.5) : GamerTheme.borderDark),
+                      ),
+                      child: Text(
+                        room.gameType,
+                        style: TextStyle(
+                          color: isJoined ? _neonGreen : Colors.white,
+                          fontSize: 11,
+                          fontWeight: FontWeight.w600,
+                        ),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        textAlign: TextAlign.center,
+                      ),
                     ),
                   ],
                 ),
-              ),
-              const SizedBox(width: 8),
-              Container(
-                width: 85,
-                height: 28,
-                alignment: Alignment.center,
-                padding: const EdgeInsets.symmetric(horizontal: 4),
-                decoration: BoxDecoration(
-                  color: GamerTheme.surfaceDark,
-                  borderRadius: BorderRadius.circular(8),
-                  border: Border.all(color: GamerTheme.borderDark),
-                ),
-                child: Text(
-                  room.gameType,
-                  style: const TextStyle(
-                    color: Colors.white,
-                    fontSize: 11,
-                    fontWeight: FontWeight.w600,
-                  ),
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  textAlign: TextAlign.center,
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 12),
+                const SizedBox(height: 12),
 
-          // Row 2: 3 columns with stats
-          Container(
-            decoration: BoxDecoration(
-              color: GamerTheme.bgDark.withOpacity(0.5),
-              borderRadius: BorderRadius.circular(12),
-            ),
-            padding: const EdgeInsets.all(12),
-            child: Row(
-              children: [
-                // Column 1: PRIZE POOL
-                Expanded(
-                  child: Column(
-                    mainAxisSize: MainAxisSize.min,
+                // Row 2: 3 columns with stats
+                Container(
+                  decoration: BoxDecoration(
+                    color: GamerTheme.bgDark.withOpacity(0.5),
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  padding: const EdgeInsets.all(12),
+                  child: Row(
                     children: [
-                      Row(
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          const Icon(Icons.monetization_on_rounded, size: 14, color: Colors.cyanAccent),
-                          const SizedBox(width: 3),
-                          Flexible(
-                            child: Text(
-                              '${room.prizePoolCoins > 0 ? room.prizePoolCoins : (room.escrowCoins > 0 ? room.escrowCoins : 800)} Coins',
+                      // Column 1: PRIZE POOL
+                      Expanded(
+                        child: Column(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Row(
+                              mainAxisAlignment: MainAxisAlignment.center,
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                const Icon(Icons.monetization_on_rounded, size: 14, color: Colors.cyanAccent),
+                                const SizedBox(width: 3),
+                                Flexible(
+                                  child: Text(
+                                    '${room.prizePoolCoins > 0 ? room.prizePoolCoins : (room.escrowCoins > 0 ? room.escrowCoins : 800)} Coins',
+                                    style: const TextStyle(
+                                      color: Colors.cyanAccent,
+                                      fontSize: 14,
+                                      fontWeight: FontWeight.bold,
+                                    ),
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
+                                  ),
+                                ),
+                              ],
+                            ),
+                            const SizedBox(height: 2),
+                            const Text(
+                              'PRIZE POOL',
+                              style: TextStyle(
+                                color: GamerTheme.textMuted,
+                                fontSize: 10,
+                                fontWeight: FontWeight.bold,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                      Container(height: 24, width: 1, color: GamerTheme.borderDark),
+
+                      // Column 2: ENTRY FEE
+                      Expanded(
+                        child: Column(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Text(
+                              room.entryFeeCoins == 0 ? 'FREE' : '${room.entryFeeCoins} Coins',
                               style: const TextStyle(
-                                color: Colors.cyanAccent,
+                                color: _neonGreen,
                                 fontSize: 14,
                                 fontWeight: FontWeight.bold,
                               ),
                               maxLines: 1,
                               overflow: TextOverflow.ellipsis,
                             ),
+                            const SizedBox(height: 2),
+                            const Text(
+                              'ENTRY FEE',
+                              style: TextStyle(
+                                color: GamerTheme.textMuted,
+                                fontSize: 10,
+                                fontWeight: FontWeight.bold,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                      Container(height: 24, width: 1, color: GamerTheme.borderDark),
+
+                      // Column 3: SLOTS
+                      Expanded(
+                        child: Column(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Text(
+                              '${room.joinedPlayers.length}/${room.maxSlots > 0 ? room.maxSlots : 2}',
+                              style: TextStyle(
+                                color: isJoined ? _neonGreen : Colors.white,
+                                fontSize: 14,
+                                fontWeight: FontWeight.bold,
+                              ),
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                            const SizedBox(height: 2),
+                            Text(
+                              'SLOTS',
+                              style: TextStyle(
+                                color: isJoined ? _neonGreen.withOpacity(0.8) : GamerTheme.textMuted,
+                                fontSize: 10,
+                                fontWeight: FontWeight.bold,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(height: 8),
+
+                // Stack for progress
+                Stack(
+                  children: [
+                    Container(
+                      height: 4,
+                      decoration: BoxDecoration(
+                        color: Colors.grey.withOpacity(0.3),
+                        borderRadius: BorderRadius.circular(2),
+                      ),
+                    ),
+                    FractionallySizedBox(
+                      widthFactor: fillRatio,
+                      child: Container(
+                        height: 4,
+                        decoration: BoxDecoration(
+                          color: isJoined
+                              ? _neonGreen
+                              : (isNearFull ? const Color(0xFFFF3366) : const Color(0xFFFFD700)),
+                          borderRadius: BorderRadius.circular(2),
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 6),
+
+                // Slots remaining & Starts
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    Text(
+                      '${room.availableSlots} slot${room.availableSlots == 1 ? '' : 's'} remaining',
+                      style: TextStyle(
+                        color: isJoined ? _neonGreen : GamerTheme.textMuted,
+                        fontSize: 12,
+                        fontWeight: isJoined ? FontWeight.w600 : FontWeight.normal,
+                      ),
+                    ),
+                    Text(
+                      'Starts: ${DateFormat('hh:mm a').format(room.startTime)}',
+                      style: const TextStyle(
+                        color: GamerTheme.accentOrange,
+                        fontSize: 12,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                  ],
+                ),
+                const Divider(color: GamerTheme.borderDark, height: 20),
+
+                // Status & Action button
+                Row(
+                  children: [
+                    Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Container(
+                          width: 8,
+                          height: 8,
+                          decoration: BoxDecoration(
+                            color: room.isCompleted
+                                ? Colors.amber
+                                : (room.isLive ? _neonGreen : Colors.grey),
+                            shape: BoxShape.circle,
                           ),
-                        ],
+                        ),
+                        const SizedBox(width: 6),
+                        Text(
+                          room.isCompleted ? 'COMPLETED' : 'ACTIVE MATCH',
+                          style: TextStyle(
+                            color: room.isCompleted ? Colors.amber : _neonGreen,
+                            fontSize: 12,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                      ],
+                    ),
+                    const Spacer(),
+                    ElevatedButton(
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: isJoined
+                            ? _neonGreen
+                            : (room.isFull ? GamerTheme.cardElevated : GamerTheme.accentBlue),
+                        foregroundColor: isJoined ? Colors.white : (room.isFull ? GamerTheme.textMuted : GamerTheme.bgDark),
+                        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                        elevation: 0,
                       ),
-                      const SizedBox(height: 2),
-                      const Text(
-                        'PRIZE POOL',
+                      onPressed: () {
+                        if (isJoined) {
+                          _showRoomCredentialsDialog(context, room);
+                        } else if (!room.isFull) {
+                          _handleJoinRoom(context, room);
+                        }
+                      },
+                      child: Text(
+                        isJoined
+                            ? 'JOINED ✓'
+                            : (room.isFull ? 'ROOM FULL' : 'JOIN ROOM'),
                         style: TextStyle(
-                          color: GamerTheme.textMuted,
-                          fontSize: 10,
+                          fontSize: isJoined ? 13 : 12,
                           fontWeight: FontWeight.bold,
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-                Container(height: 24, width: 1, color: GamerTheme.borderDark),
-
-                // Column 2: ENTRY FEE
-                Expanded(
-                  child: Column(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Text(
-                        room.entryFeeCoins == 0 ? 'FREE' : '${room.entryFeeCoins} Coins',
-                        style: const TextStyle(
-                          color: GamerTheme.neonGreen,
-                          fontSize: 14,
-                          fontWeight: FontWeight.bold,
-                        ),
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                      ),
-                      const SizedBox(height: 2),
-                      const Text(
-                        'ENTRY FEE',
-                        style: TextStyle(
-                          color: GamerTheme.textMuted,
-                          fontSize: 10,
-                          fontWeight: FontWeight.bold,
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-                Container(height: 24, width: 1, color: GamerTheme.borderDark),
-
-                // Column 3: SLOTS
-                Expanded(
-                  child: Column(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Text(
-                        '${room.joinedPlayers.length}/${room.maxSlots > 0 ? room.maxSlots : 2}',
-                        style: const TextStyle(
                           color: Colors.white,
-                          fontSize: 14,
-                          fontWeight: FontWeight.bold,
-                        ),
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                      ),
-                      const SizedBox(height: 2),
-                      const Text(
-                        'SLOTS',
-                        style: TextStyle(
-                          color: GamerTheme.textMuted,
-                          fontSize: 10,
-                          fontWeight: FontWeight.bold,
                         ),
                       ),
-                    ],
-                  ),
+                    ),
+                  ],
                 ),
               ],
             ),
           ),
-          const SizedBox(height: 8),
 
-          // Stack for progress
-          Stack(
-            children: [
-              Container(
-                height: 4,
+          // Top right badge: Positioned top -8 right 12
+          if (isJoined)
+            Positioned(
+              top: -8,
+              right: 12,
+              child: Container(
+                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
                 decoration: BoxDecoration(
-                  color: Colors.grey.withOpacity(0.3),
-                  borderRadius: BorderRadius.circular(2),
-                ),
-              ),
-              FractionallySizedBox(
-                widthFactor: fillRatio,
-                child: Container(
-                  height: 4,
-                  decoration: BoxDecoration(
-                    color: isNearFull ? const Color(0xFFFF3366) : const Color(0xFFFFD700),
-                    borderRadius: BorderRadius.circular(2),
-                  ),
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 6),
-
-          // Slots remaining & Starts
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              Text(
-                '${room.availableSlots} slot${room.availableSlots == 1 ? '' : 's'} remaining',
-                style: const TextStyle(
-                  color: GamerTheme.textMuted,
-                  fontSize: 12,
-                ),
-              ),
-              Text(
-                'Starts: ${DateFormat('hh:mm a').format(room.startTime)}',
-                style: const TextStyle(
-                  color: GamerTheme.accentOrange,
-                  fontSize: 12,
-                  fontWeight: FontWeight.bold,
-                ),
-              ),
-            ],
-          ),
-          const Divider(color: GamerTheme.borderDark, height: 20),
-
-          // Status & Action button
-          Row(
-            children: [
-              Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Container(
-                    width: 8,
-                    height: 8,
-                    decoration: BoxDecoration(
-                      color: room.isCompleted
-                          ? Colors.amber
-                          : (room.isLive ? GamerTheme.neonGreen : Colors.grey),
-                      shape: BoxShape.circle,
+                  color: _neonGreen,
+                  borderRadius: BorderRadius.circular(12),
+                  boxShadow: [
+                    BoxShadow(
+                      color: _neonGreen.withOpacity(0.4),
+                      blurRadius: 8,
+                      offset: const Offset(0, 2),
                     ),
-                  ),
-                  const SizedBox(width: 6),
-                  Text(
-                    room.isCompleted ? 'COMPLETED' : 'ACTIVE MATCH',
-                    style: TextStyle(
-                      color: room.isCompleted ? Colors.amber : GamerTheme.neonGreen,
-                      fontSize: 12,
-                      fontWeight: FontWeight.bold,
+                  ],
+                ),
+                child: const Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Icon(Icons.check_circle_rounded, color: Colors.white, size: 14),
+                    SizedBox(width: 4),
+                    Text(
+                      'JOINED',
+                      style: TextStyle(
+                        color: Colors.white,
+                        fontWeight: FontWeight.bold,
+                        fontSize: 11,
+                        letterSpacing: 0.5,
+                      ),
                     ),
-                  ),
-                ],
-              ),
-              const Spacer(),
-              ElevatedButton(
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: isJoined
-                      ? GamerTheme.accentOrange
-                      : (room.isFull ? GamerTheme.cardElevated : GamerTheme.accentBlue),
-                  foregroundColor: isJoined || room.isFull ? Colors.white : GamerTheme.bgDark,
-                  padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-                  elevation: 0,
-                ),
-                onPressed: () {
-                  if (isJoined) {
-                    _showRoomCredentialsDialog(context, room);
-                  } else if (!room.isFull) {
-                    _handleJoinRoom(context, room);
-                  }
-                },
-                child: Text(
-                  isJoined ? 'SLOT BOOKED' : (room.isFull ? 'ROOM FULL' : 'JOIN ROOM'),
-                  style: const TextStyle(
-                    fontSize: 12,
-                    fontWeight: FontWeight.bold,
-                  ),
+                  ],
                 ),
               ),
-            ],
-          ),
+            ),
         ],
       ),
     );
@@ -973,6 +1082,22 @@ class _GamerRoomsScreenState extends State<GamerRoomsScreen> {
                     if (_selectedCategory == 'All Games') return true;
                     return r.gameType.toLowerCase() == _selectedCategory.toLowerCase();
                   }).toList();
+
+                  // Sort: Move joined rooms to top of list automatically
+                  filtered.sort((a, b) {
+                    final aJoined = _joinedRoomIds.contains(a.id) ||
+                        a.joinedPlayers.contains(uid) ||
+                        a.joinedUserIds.contains(uid) ||
+                        a.hostId == uid;
+                    final bJoined = _joinedRoomIds.contains(b.id) ||
+                        b.joinedPlayers.contains(uid) ||
+                        b.joinedUserIds.contains(uid) ||
+                        b.hostId == uid;
+
+                    if (aJoined && !bJoined) return -1;
+                    if (!aJoined && bJoined) return 1;
+                    return b.startTime.compareTo(a.startTime);
+                  });
 
                   if (filtered.isEmpty) {
                     return Center(

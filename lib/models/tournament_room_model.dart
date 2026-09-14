@@ -84,6 +84,8 @@ class TournamentRoom {
     return uid == hostId ? 'Host' : 'Player';
   }
 
+  List<String> get joinedUserIds => joinedPlayers;
+
   int get availableSlots => (totalSlots > 0 ? totalSlots : maxSlots) - (currentSlots > 0 ? currentSlots : joinedPlayers.length);
   bool get isFull => (currentSlots > 0 ? currentSlots : joinedPlayers.length) >= (totalSlots > 0 ? totalSlots : maxSlots);
   bool get isCompleted => status.toUpperCase() == 'COMPLETED';
