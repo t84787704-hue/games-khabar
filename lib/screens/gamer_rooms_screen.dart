@@ -1747,10 +1747,10 @@ class _InRoomBottomSheetState extends State<_InRoomBottomSheet> {
                     child: TextField(
                       controller: _msgController,
                       maxLength: 200,
-                      buildCounter: (_, {currentLength, isFocused, maxLength}) => null,
                       style: const TextStyle(color: Colors.white, fontSize: 13),
                       onSubmitted: (_) => _sendMessage(),
                       decoration: const InputDecoration(
+                        counterText: '',
                         hintText: 'Type a message...',
                         hintStyle: TextStyle(color: GamerTheme.textMuted, fontSize: 12),
                         prefixIcon: Icon(Icons.sentiment_satisfied_alt_rounded, color: GamerTheme.textMuted, size: 20),
