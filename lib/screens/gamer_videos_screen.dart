@@ -99,72 +99,6 @@ class _GamerVideosScreenState extends State<GamerVideosScreen> {
             child: TikTokUploadProgressBanner(),
           ),
 
-          // Facebook-Style "Publish a Video" Quick Action Banner
-          SliverToBoxAdapter(
-            child: Container(
-              margin: const EdgeInsets.fromLTRB(14, 10, 14, 8),
-              padding: const EdgeInsets.all(12),
-              decoration: BoxDecoration(
-                color: GamerTheme.cardDark,
-                borderRadius: BorderRadius.circular(14),
-                border: Border.all(color: GamerTheme.borderDark),
-              ),
-              child: Row(
-                children: [
-                  Container(
-                    padding: const EdgeInsets.all(10),
-                    decoration: BoxDecoration(
-                      color: GamerTheme.accentOrange.withOpacity(0.15),
-                      shape: BoxShape.circle,
-                    ),
-                    child: const Icon(Icons.videocam_rounded, color: GamerTheme.accentOrange, size: 24),
-                  ),
-                  const SizedBox(width: 12),
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        const Text(
-                          'Share your best gaming moments',
-                          style: TextStyle(
-                            color: Colors.white,
-                            fontWeight: FontWeight.bold,
-                            fontSize: 13.5,
-                          ),
-                        ),
-                        const SizedBox(height: 2),
-                        Text(
-                          'Upload clips up to 3 minutes • 720p HD',
-                          style: TextStyle(
-                            color: GamerTheme.neonGreen.withOpacity(0.9),
-                            fontSize: 11.5,
-                            fontWeight: FontWeight.w600,
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                  ElevatedButton(
-                    onPressed: () {
-                      Navigator.of(context).push(
-                        MaterialPageRoute(builder: (_) => const PublishVideoScreen()),
-                      );
-                    },
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: GamerTheme.cardElevated,
-                      foregroundColor: Colors.white,
-                      elevation: 0,
-                      side: const BorderSide(color: GamerTheme.accentBlue),
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                    ),
-                    child: const Text('Upload', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12)),
-                  ),
-                ],
-              ),
-            ),
-          ),
-
           // Game Category Filter Chips
           SliverToBoxAdapter(
             child: Container(
@@ -184,18 +118,18 @@ class _GamerVideosScreenState extends State<GamerVideosScreen> {
                     child: Container(
                       padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
                       decoration: BoxDecoration(
-                        color: isSelected ? GamerTheme.accentBlue : GamerTheme.cardDark,
+                        color: isSelected? GamerTheme.accentBlue : GamerTheme.cardDark,
                         borderRadius: BorderRadius.circular(18),
                         border: Border.all(
-                          color: isSelected ? GamerTheme.accentBlue : GamerTheme.borderDark,
+                          color: isSelected? GamerTheme.accentBlue : GamerTheme.borderDark,
                         ),
                       ),
                       child: Text(
                         tag,
                         style: TextStyle(
-                          color: isSelected ? Colors.white : GamerTheme.textGray,
+                          color: isSelected? Colors.white : GamerTheme.textGray,
                           fontSize: 12,
-                          fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
+                          fontWeight: isSelected? FontWeight.bold : FontWeight.normal,
                         ),
                       ),
                     ),
@@ -208,7 +142,7 @@ class _GamerVideosScreenState extends State<GamerVideosScreen> {
           // Stream of Videos
           StreamBuilder<List<GamerPost>>(
             stream: _socialService.getVideosStream(
-              gameTag: _selectedTag == 'All' ? null : _selectedTag,
+              gameTag: _selectedTag == 'All'? null : _selectedTag,
             ),
             builder: (context, snapshot) {
               if (snapshot.connectionState == ConnectionState.waiting) {
@@ -219,7 +153,7 @@ class _GamerVideosScreenState extends State<GamerVideosScreen> {
                 );
               }
 
-              final videoPosts = snapshot.data ?? [];
+              final videoPosts = snapshot.data?? [];
 
               if (videoPosts.isEmpty) {
                 return SliverFillRemaining(
