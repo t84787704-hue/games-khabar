@@ -1006,23 +1006,32 @@ class _GamerRoomsScreenState extends State<GamerRoomsScreen> {
         child: Column(
           children: [
             // Top Bar: G-Coins + REDEEM + EARN COINS (height 36)
-            ListenableBuilder(
-              listenable: _walletService,
-              builder: (context, _) {
-                final wallet = _walletService.currentWallet ?? const CoinWallet(userId: '', coins: 700);
-
-                return Container(
-                  height: 52,
-                  padding: const EdgeInsets.symmetric(horizontal: 14),
-                  decoration: const BoxDecoration(
-                    color: GamerTheme.cardDark,
-                    border: Border(bottom: BorderSide(color: GamerTheme.borderDark)),
-                  ),
-                  child: Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: [
-                      // G-Coins button
-                      GestureDetector(
+            Container(
+              height: 52,
+              padding: const EdgeInsets.symmetric(horizontal: 14),
+              decoration: const BoxDecoration(
+                color: GamerTheme.cardDark,
+                border: Border(bottom: BorderSide(color: GamerTheme.borderDark)),
+              ),
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  // G-Coins button (Live Stream from users collection)
+                  StreamBuilder<DocumentSnapshot>(
+                    stream: FirebaseFirestore.instance
+                        .collection('users')
+                        .doc(currentUserId)
+                        .snapshots(),
+                    builder: (context, snapshot) {
+                      int coins = 0;
+                      if (snapshot.hasData && snapshot.data != null && snapshot.data!.exists) {
+                        final data = snapshot.data!.data() as Map<String, dynamic>?;
+                        if (data != null) {
+                          final raw = data['gCoins'] ?? data['coins'];
+                          if (raw is num) coins = raw.toInt();
+                        }
+                      }
+                      return GestureDetector(
                         onTap: () => CoinHistorySheet.show(context, userId: currentUserId),
                         child: Container(
                           height: 36,
@@ -1038,7 +1047,7 @@ class _GamerRoomsScreenState extends State<GamerRoomsScreen> {
                               const Text('🪙', style: TextStyle(fontSize: 15)),
                               const SizedBox(width: 6),
                               Text(
-                                '${NumberFormat("#,###").format(wallet.coins)} G-Coins',
+                                '${NumberFormat("#,###").format(coins)} G-Coins',
                                 style: const TextStyle(
                                   color: Colors.white,
                                   fontWeight: FontWeight.bold,
@@ -1048,8 +1057,10 @@ class _GamerRoomsScreenState extends State<GamerRoomsScreen> {
                             ],
                           ),
                         ),
-                      ),
-                      // Action buttons: REDEEM outline orange + EARN COINS solid orange
+                      );
+                    },
+                  ),
+                  // Action buttons: REDEEM outline orange + EARN COINS solid orange
                       Row(
                         mainAxisSize: MainAxisSize.min,
                         children: [
@@ -1548,67 +1559,139 @@ class _InRoomBottomSheetContentState extends State<_InRoomBottomSheetContent> {
     if (confirmed != true) return;
 
     try {
-      final userRef = FirebaseFirestore.instance.collection('users').doc(winnerId);
-      final walletRef = FirebaseFirestore.instance.collection('wallets').doc(winnerId);
-      final roomRef = FirebaseFirestore.instance.collection('rooms').doc(widget.room.id);
-      final rewardRef = FirebaseFirestore.instance.collection('rewards').doc();
+      final int prize = widget.room.prize;
+      final String roomId = widget.room.id;
 
-      await FirebaseFirestore.instance.runTransaction((transaction) async {
-        final userDoc = await transaction.get(userRef);
-        int currentCoins = 0;
-        if (userDoc.exists && userDoc.data()?['coins'] != null) {
-          currentCoins = (userDoc.data()!['coins'] as num).toInt();
+      // FIX 3: Ensure winnerId is correct - match joinedUsers or slot 2
+      String resolvedWinnerId = winnerId;
+      print('DEBUG: Received winnerId: "$winnerId", winnerName: "$winnerName"');
+
+      // 1. Check joinedUsers for matching user name or id
+      for (final u in widget.room.joinedUsers) {
+        final uId = (u['id'] ?? '').toString();
+        final uName = (u['name'] ?? '').toString();
+        if (uName.toLowerCase().trim() == winnerName.toLowerCase().trim() && uId.isNotEmpty && uId != 'guest' && uId != 'anonymous') {
+          resolvedWinnerId = uId;
+          break;
         }
-        final newCoins = currentCoins + widget.room.prize;
+        if (uId == winnerId && uId.isNotEmpty && uId != 'guest' && uId != 'anonymous') {
+          resolvedWinnerId = uId;
+          break;
+        }
+      }
 
-        transaction.set(userRef, {
-          'coins': newCoins,
-          'gCoins': newCoins,
-        }, SetOptions(merge: true));
+      // 2. If winnerId is still unresolved or guest, check slot 2 in joinedUsers (e.g., Slot 2 Dtive in screenshot)
+      if ((resolvedWinnerId.isEmpty || resolvedWinnerId == 'guest' || resolvedWinnerId == 'anonymous') && widget.room.joinedUsers.length > 1) {
+        final slot2Id = (widget.room.joinedUsers[1]['id'] ?? '').toString();
+        if (slot2Id.isNotEmpty && slot2Id != 'guest') {
+          resolvedWinnerId = slot2Id;
+        }
+      }
 
-        transaction.set(walletRef, {
-          'coins': newCoins,
-          'userId': winnerId,
-        }, SetOptions(merge: true));
+      // 3. If still empty, check joinedUserIds for first non-host user
+      if (resolvedWinnerId.isEmpty || resolvedWinnerId == 'guest' || resolvedWinnerId == 'anonymous') {
+        for (final uid in widget.room.joinedUserIds) {
+          if (uid != widget.room.hostId && uid.isNotEmpty && uid != 'guest') {
+            resolvedWinnerId = uid;
+            break;
+          }
+        }
+      }
 
-        transaction.update(roomRef, {
-          'status': 'completed',
-          'winnerId': winnerId,
-          'winnerName': winnerName,
-          'isLive': false,
-        });
+      // Fallback
+      if (resolvedWinnerId.isEmpty || resolvedWinnerId == 'guest' || resolvedWinnerId == 'anonymous') {
+        resolvedWinnerId = winnerId.isNotEmpty ? winnerId : widget.currentUserId;
+      }
 
-        transaction.set(rewardRef, {
-          'roomId': widget.room.id,
-          'winnerId': winnerId,
-          'winnerName': winnerName,
-          'prize': widget.room.prize,
-          'approvedBy': widget.currentUserId,
-          'winProofUrl': winProofUrl,
-          'createdAt': FieldValue.serverTimestamp(),
-        });
+      print('Approving reward for $resolvedWinnerId prize $prize');
+      final DocumentReference winnerRef = FirebaseFirestore.instance.collection('users').doc(resolvedWinnerId);
+      print('Winner ref: ${winnerRef.path}');
+
+      // FIX 1: Batch writes
+      final WriteBatch batch = FirebaseFirestore.instance.batch();
+
+      // 1. Winner coins increment (field name exactly 'gCoins' and 'coins')
+      batch.set(winnerRef, {
+        'gCoins': FieldValue.increment(prize),
+        'coins': FieldValue.increment(prize),
+        'totalWinnings': FieldValue.increment(prize),
+        'wins': FieldValue.increment(1),
+        'displayName': winnerName,
+        'lastRewardAt': FieldValue.serverTimestamp(),
+      }, SetOptions(merge: true));
+
+      // Also update wallets collection for compatibility
+      final DocumentReference walletRef = FirebaseFirestore.instance.collection('wallets').doc(resolvedWinnerId);
+      batch.set(walletRef, {
+        'coins': FieldValue.increment(prize),
+        'userId': resolvedWinnerId,
+        'lastUpdated': FieldValue.serverTimestamp(),
+      }, SetOptions(merge: true));
+
+      final DocumentReference coinWalletRef = FirebaseFirestore.instance.collection('coin_wallets').doc(resolvedWinnerId);
+      batch.set(coinWalletRef, {
+        'coins': FieldValue.increment(prize),
+        'userId': resolvedWinnerId,
+        'lastUpdated': FieldValue.serverTimestamp(),
+      }, SetOptions(merge: true));
+
+      // 2. Create transaction record
+      final DocumentReference txRef = FirebaseFirestore.instance.collection('transactions').doc();
+      batch.set(txRef, {
+        'userId': resolvedWinnerId,
+        'type': 'win_reward',
+        'amount': prize,
+        'roomId': roomId,
+        'winProofUrl': winProofUrl,
+        'status': 'completed',
+        'createdAt': FieldValue.serverTimestamp(),
       });
 
-      // Send system message
-      await FirebaseFirestore.instance
-          .collection('rooms')
-          .doc(widget.room.id)
-          .collection('messages')
-          .add({
+      // 3. Update room status
+      final DocumentReference roomRef = FirebaseFirestore.instance.collection('rooms').doc(roomId);
+      batch.update(roomRef, {
+        'status': 'completed',
+        'winnerId': resolvedWinnerId,
+        'winnerName': winnerName,
+        'completedAt': FieldValue.serverTimestamp(),
+        'isLive': false,
+      });
+
+      // 4. System message in chat
+      final DocumentReference msgRef = roomRef.collection('messages').doc();
+      batch.set(msgRef, {
+        'type': 'system_reward',
+        'message': '$winnerName won and received $prize Coins!',
+        'timestamp': FieldValue.serverTimestamp(),
         'senderId': 'system',
         'senderName': 'ROOM BOT',
-        'message': '🎉 $winnerName won and received ${widget.room.prize} Coins!',
-        'type': 'system',
-        'timestamp': FieldValue.serverTimestamp(),
         'isHost': false,
       });
 
+      await batch.commit();
+
+      // FIX 4 - TEST FLOW:
+      // After approve, immediately fetch winner doc and print new balance
+      final winnerDocAfter = await winnerRef.get();
+      int newBalance = prize;
+      if (winnerDocAfter.exists && winnerDocAfter.data() != null) {
+        final d = winnerDocAfter.data() as Map<String, dynamic>;
+        final raw = d['gCoins'] ?? d['coins'] ?? prize;
+        if (raw is num) newBalance = raw.toInt();
+      }
+      print('New balance for $winnerName ($resolvedWinnerId): $newBalance');
+
+      if (resolvedWinnerId == widget.currentUserId) {
+        CoinWalletService().getOrCreateWallet(resolvedWinnerId);
+      }
+
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Reward sent! Room marked as completed.'),
+          SnackBar(
+            content: Text('$prize Coins sent to $winnerName! New balance: $newBalance'),
             backgroundColor: _neonGreen,
             behavior: SnackBarBehavior.floating,
+            duration: const Duration(seconds: 4),
           ),
         );
       }

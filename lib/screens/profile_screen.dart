@@ -167,17 +167,20 @@ class _ProfileScreenState extends State<ProfileScreen> {
               StreamBuilder<DocumentSnapshot>(
                 stream: FirebaseAuth.instance.currentUser?.uid != null
                     ? FirebaseFirestore.instance
-                        .collection('coin_wallets')
+                        .collection('users')
                         .doc(FirebaseAuth.instance.currentUser!.uid)
                         .snapshots()
                     : const Stream.empty(),
                 builder: (context, snapshot) {
-                  int coins = 100;
-                  if (snapshot.hasData && snapshot.data!.exists) {
+                  int coins = 0;
+                  if (snapshot.hasData && snapshot.data != null && snapshot.data!.exists) {
                     final data = snapshot.data!.data() as Map<String, dynamic>? ?? {};
-                    coins = (data['coins'] as num?)?.toInt() ?? 100;
+                    final rawCoins = data['gCoins'] ?? data['coins'];
+                    if (rawCoins is num) {
+                      coins = rawCoins.toInt();
+                    }
                   } else {
-                    coins = GamerAuthService().currentGamer?.coins ?? 100;
+                    coins = GamerAuthService().currentGamer?.coins ?? 0;
                   }
                   return GestureDetector(
                     onTap: () {
@@ -198,7 +201,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                           const Text('🪙', style: TextStyle(fontSize: 13)),
                           const SizedBox(width: 4),
                           Text(
-                            'Coins: $coins',
+                            'G-Coins: $coins',
                             style: const TextStyle(
                               color: Color(0xFFFFD700),
                               fontWeight: FontWeight.w900,
@@ -586,9 +589,22 @@ class _ProfileScreenState extends State<ProfileScreen> {
                       Divider(color: borderDark, height: 1),
 
                       // GK Coins & Earn Screen Entry
-                      ValueListenableBuilder<int>(
-                        valueListenable: CoinRewardService().coinsNotifier,
-                        builder: (context, coins, _) {
+                      StreamBuilder<DocumentSnapshot>(
+                        stream: FirebaseAuth.instance.currentUser?.uid != null
+                            ? FirebaseFirestore.instance
+                                .collection('users')
+                                .doc(FirebaseAuth.instance.currentUser!.uid)
+                                .snapshots()
+                            : const Stream.empty(),
+                        builder: (context, snapshot) {
+                          int coins = 0;
+                          if (snapshot.hasData && snapshot.data != null && snapshot.data!.exists) {
+                            final data = snapshot.data!.data() as Map<String, dynamic>? ?? {};
+                            final rawCoins = data['gCoins'] ?? data['coins'];
+                            if (rawCoins is num) coins = rawCoins.toInt();
+                          } else {
+                            coins = GamerAuthService().currentGamer?.coins ?? 0;
+                          }
                           return ListTile(
                             leading: Container(
                               padding: const EdgeInsets.all(6),

@@ -907,14 +907,15 @@ class _GamerProfileScreenState extends State<GamerProfileScreen> with SingleTick
                   actions: [
                     StreamBuilder<DocumentSnapshot>(
                       stream: FirebaseFirestore.instance
-                          .collection('coin_wallets')
+                          .collection('users')
                           .doc(targetUid)
                           .snapshots(),
                       builder: (context, coinSnap) {
                         int coins = user.coins;
-                        if (coinSnap.hasData && coinSnap.data!.exists) {
+                        if (coinSnap.hasData && coinSnap.data != null && coinSnap.data!.exists) {
                           final data = coinSnap.data!.data() as Map<String, dynamic>? ?? {};
-                          coins = (data['coins'] as num?)?.toInt() ?? user.coins;
+                          final raw = data['gCoins'] ?? data['coins'];
+                          if (raw is num) coins = raw.toInt();
                         }
                         return GestureDetector(
                           onTap: () => CoinHistorySheet.show(context, userId: targetUid),
@@ -1320,14 +1321,15 @@ class _GamerProfileScreenState extends State<GamerProfileScreen> with SingleTick
                         // Gamer Coins Balance & Full History Banner (Tap to view complete history)
                         StreamBuilder<DocumentSnapshot>(
                           stream: FirebaseFirestore.instance
-                              .collection('coin_wallets')
+                              .collection('users')
                               .doc(targetUid)
                               .snapshots(),
                           builder: (context, coinSnap) {
                             int coins = user.coins;
-                            if (coinSnap.hasData && coinSnap.data!.exists) {
+                            if (coinSnap.hasData && coinSnap.data != null && coinSnap.data!.exists) {
                               final data = coinSnap.data!.data() as Map<String, dynamic>? ?? {};
-                              coins = (data['coins'] as num?)?.toInt() ?? user.coins;
+                              final raw = data['gCoins'] ?? data['coins'];
+                              if (raw is num) coins = raw.toInt();
                             }
                             return InkWell(
                               onTap: () => CoinHistorySheet.show(context, userId: targetUid),
