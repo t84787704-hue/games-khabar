@@ -1,7 +1,9 @@
 import 'dart:async';
+import 'dart:io';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:image_picker/image_picker.dart';
 import 'package:intl/intl.dart';
 import '../constants/gamer_theme.dart';
 import '../models/tournament_room_model.dart';
@@ -10,6 +12,7 @@ import '../services/gamer_auth_service.dart';
 import '../services/tournament_service.dart';
 import '../services/coin_wallet_service.dart';
 import '../services/ad_free_service.dart';
+import '../services/cloudinary_service.dart';
 import 'coin_store_screen.dart';
 import 'redeem_rewards_screen.dart';
 import '../widgets/coin_history_sheet.dart';
@@ -144,7 +147,7 @@ class _GamerRoomsScreenState extends State<GamerRoomsScreen> {
     );
   }
 
-  // Show In-Room Bottom Sheet with Live Chat, Credentials & Slots
+  // Show In-Room Bottom Sheet with Live Chat, Win Proof, Credentials & Slots
   void _showRoomDetailsSheet(BuildContext context, TournamentRoom room) {
     final currentGamer = _authService.currentGamer;
     final currentUid = currentGamer?.uid ?? _authService.currentUid ?? '';
@@ -160,26 +163,29 @@ class _GamerRoomsScreenState extends State<GamerRoomsScreen> {
       shape: const RoundedRectangleBorder(
         borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
       ),
-      builder: (ctx) => _InRoomBottomSheet(
-        room: room,
-        isJoined: isJoined,
-        currentUid: currentUid,
-        currentGamerName: currentGamer?.displayName ?? 'Gamer',
-        onLeaveRoom: () async {
-          await _tournamentService.leaveRoom(room.id, currentUid);
-          setState(() {
-            _joinedRoomIds.remove(room.id);
-          });
-          if (ctx.mounted) Navigator.pop(ctx);
-          if (mounted) {
-            ScaffoldMessenger.of(context).showSnackBar(
-              const SnackBar(
-                content: Text('You left the room.'),
-                backgroundColor: GamerTheme.redAccent,
-              ),
-            );
-          }
-        },
+      builder: (ctx) => SizedBox(
+        height: MediaQuery.of(context).size.height * 0.75,
+        child: _InRoomBottomSheet(
+          room: room,
+          isJoined: isJoined,
+          currentUid: currentUid,
+          currentGamerName: currentGamer?.displayName ?? 'Gamer',
+          onLeaveRoom: () async {
+            await _tournamentService.leaveRoom(room.id, currentUid);
+            setState(() {
+              _joinedRoomIds.remove(room.id);
+            });
+            if (ctx.mounted) Navigator.pop(ctx);
+            if (mounted) {
+              ScaffoldMessenger.of(context).showSnackBar(
+                const SnackBar(
+                  content: Text('You left the room.'),
+                  backgroundColor: GamerTheme.redAccent,
+                ),
+              );
+            }
+          },
+        ),
       ),
     );
   }
@@ -440,7 +446,7 @@ class _GamerRoomsScreenState extends State<GamerRoomsScreen> {
   }
 
   // ==========================================
-  // Clean Room Card with Enhanced Joined State
+  // Clean Room Card (Final Polished Version)
   // ==========================================
   Widget _buildCleanRoomCard(TournamentRoom room) {
     final currentGamer = _authService.currentGamer;
@@ -450,14 +456,17 @@ class _GamerRoomsScreenState extends State<GamerRoomsScreen> {
         room.joinedUserIds.contains(currentUid) ||
         room.hostId == currentUid;
 
-    final slotsFilled = room.joinedPlayers.length;
-    final totalSlots = room.maxSlots > 0 ? room.maxSlots : 1;
-    final double fillRatio = (slotsFilled / totalSlots).clamp(0.0, 1.0);
+    // Slot calculations with precise bounding (no 7/2 overflow bug)
+    final int total = room.totalSlots > 0 ? room.totalSlots : (room.maxSlots > 0 ? room.maxSlots : 2);
+    final int filled = (room.currentSlots > 0 ? room.currentSlots : room.joinedPlayers.length).clamp(0, total);
+    final int remaining = (total - filled).clamp(0, total);
+    final double fillRatio = total > 0 ? (filled / total).clamp(0.0, 1.0) : 0.0;
     final bool isNearFull = fillRatio >= 0.7;
+
     final initial = room.hostName.isNotEmpty ? room.hostName[0].toUpperCase() : 'G';
 
     return Container(
-      margin: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+      margin: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
       child: Stack(
         clipBehavior: Clip.none,
         children: [
@@ -486,7 +495,7 @@ class _GamerRoomsScreenState extends State<GamerRoomsScreen> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  // Row 1: Avatar, Title (+ check icon if joined) + Host/Map, Badge
+                  // Row 1: Avatar 40 + Title + Game badge (85x28)
                   Row(
                     children: [
                       CircleAvatar(
@@ -570,10 +579,10 @@ class _GamerRoomsScreenState extends State<GamerRoomsScreen> {
                   ),
                   const SizedBox(height: 12),
 
-                  // Row 2: 3 columns with stats
+                  // Row 2: Middle info box: bgDark 0.6, radius 12, Row 3 cols PRIZE POOL / ENTRY FEE / SLOTS with dividers
                   Container(
                     decoration: BoxDecoration(
-                      color: GamerTheme.bgDark.withOpacity(0.5),
+                      color: GamerTheme.bgDark.withOpacity(0.6),
                       borderRadius: BorderRadius.circular(12),
                     ),
                     padding: const EdgeInsets.all(12),
@@ -647,13 +656,13 @@ class _GamerRoomsScreenState extends State<GamerRoomsScreen> {
                         ),
                         Container(height: 24, width: 1, color: GamerTheme.borderDark),
 
-                        // Column 3: SLOTS
+                        // Column 3: SLOTS (Fixed filled/total display)
                         Expanded(
                           child: Column(
                             mainAxisSize: MainAxisSize.min,
                             children: [
                               Text(
-                                '${room.joinedPlayers.length}/${room.maxSlots > 0 ? room.maxSlots : 2}',
+                                '$filled/$total',
                                 style: TextStyle(
                                   color: isJoined ? _neonGreen : Colors.white,
                                   fontSize: 14,
@@ -679,7 +688,7 @@ class _GamerRoomsScreenState extends State<GamerRoomsScreen> {
                   ),
                   const SizedBox(height: 8),
 
-                  // Stack for progress
+                  // Progress bar 4px
                   Stack(
                     children: [
                       Container(
@@ -705,12 +714,12 @@ class _GamerRoomsScreenState extends State<GamerRoomsScreen> {
                   ),
                   const SizedBox(height: 6),
 
-                  // Slots remaining & Starts
+                  // Slots remaining left, Starts time right orange
                   Row(
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
                       Text(
-                        '${room.availableSlots} slot${room.availableSlots == 1 ? '' : 's'} remaining',
+                        '$remaining slot${remaining == 1 ? '' : 's'} remaining',
                         style: TextStyle(
                           color: isJoined ? _neonGreen : GamerTheme.textMuted,
                           fontSize: 12,
@@ -762,7 +771,7 @@ class _GamerRoomsScreenState extends State<GamerRoomsScreen> {
                           backgroundColor: isJoined
                               ? _neonGreen
                               : (room.isFull ? GamerTheme.cardElevated : GamerTheme.accentBlue),
-                          foregroundColor: isJoined ? Colors.white : (room.isFull ? GamerTheme.textMuted : GamerTheme.bgDark),
+                          foregroundColor: isJoined ? Colors.black : (room.isFull ? GamerTheme.textMuted : GamerTheme.bgDark),
                           padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
                           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
                           elevation: 0,
@@ -781,7 +790,7 @@ class _GamerRoomsScreenState extends State<GamerRoomsScreen> {
                           style: TextStyle(
                             fontSize: isJoined ? 13 : 12,
                             fontWeight: FontWeight.bold,
-                            color: Colors.white,
+                            color: isJoined ? Colors.black : (room.isFull ? GamerTheme.textMuted : Colors.white),
                           ),
                         ),
                       ),
@@ -813,12 +822,12 @@ class _GamerRoomsScreenState extends State<GamerRoomsScreen> {
                 child: const Row(
                   mainAxisSize: MainAxisSize.min,
                   children: [
-                    Icon(Icons.check_circle_rounded, color: Colors.white, size: 14),
+                    Icon(Icons.check_circle_rounded, color: Colors.black, size: 14),
                     SizedBox(width: 4),
                     Text(
                       'JOINED',
                       style: TextStyle(
-                        color: Colors.white,
+                        color: Colors.black,
                         fontWeight: FontWeight.bold,
                         fontSize: 11,
                         letterSpacing: 0.5,
@@ -842,7 +851,7 @@ class _GamerRoomsScreenState extends State<GamerRoomsScreen> {
       body: SafeArea(
         child: Column(
           children: [
-            // Top Header: G-Coins 400 | REDEEM (outline orange) | EARN COINS (solid orange) - all height 36 small
+            // Top Header: G-Coins | REDEEM | EARN COINS
             ListenableBuilder(
               listenable: _walletService,
               builder: (context, _) {
@@ -857,7 +866,7 @@ class _GamerRoomsScreenState extends State<GamerRoomsScreen> {
                   child: Row(
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
-                      // G-Coins Container - height 36
+                      // G-Coins Container
                       GestureDetector(
                         onTap: () => CoinHistorySheet.show(context, userId: uid),
                         child: Container(
@@ -889,7 +898,6 @@ class _GamerRoomsScreenState extends State<GamerRoomsScreen> {
                       Row(
                         mainAxisSize: MainAxisSize.min,
                         children: [
-                          // REDEEM outline orange - height 36
                           InkWell(
                             onTap: () {
                               Navigator.push(context, MaterialPageRoute(builder: (_) => const RedeemRewardsScreen()));
@@ -915,7 +923,6 @@ class _GamerRoomsScreenState extends State<GamerRoomsScreen> {
                             ),
                           ),
                           const SizedBox(width: 8),
-                          // EARN COINS orange solid - height 36
                           InkWell(
                             onTap: () {
                               Navigator.push(context, MaterialPageRoute(builder: (_) => const CoinStoreScreen()));
@@ -947,7 +954,7 @@ class _GamerRoomsScreenState extends State<GamerRoomsScreen> {
               },
             ),
 
-            // Filter chips: height 36, font 13, selected orange
+            // Filter chips
             Container(
               color: GamerTheme.bgDark,
               padding: const EdgeInsets.symmetric(vertical: 8),
@@ -1003,7 +1010,6 @@ class _GamerRoomsScreenState extends State<GamerRoomsScreen> {
                 builder: (context, snapshot) {
                   final streamRooms = snapshot.data ?? _tournamentService.rooms;
 
-                  // Filter by category
                   final filtered = streamRooms.where((r) {
                     if (_selectedCategory == 'All Games') return true;
                     return r.gameType.toLowerCase() == _selectedCategory.toLowerCase();
@@ -1076,9 +1082,9 @@ class _GamerRoomsScreenState extends State<GamerRoomsScreen> {
   }
 }
 
-// =======================================================
-// In-Room Bottom Sheet with Live Chat, Credentials & Slots
-// =======================================================
+// =========================================================================
+// In-Room Bottom Sheet (75% Height, Live Timer, Win Proof Chat, Slots)
+// =========================================================================
 class _InRoomBottomSheet extends StatefulWidget {
   final TournamentRoom room;
   final bool isJoined;
@@ -1104,6 +1110,14 @@ class _InRoomBottomSheetState extends State<_InRoomBottomSheet> {
   DateTime? _lastMessageSentTime;
   bool _isSending = false;
 
+  // Win Proof Picker & Upload state
+  File? _selectedProofImage;
+  bool _isUploadingProof = false;
+
+  // Real-time Countdown Timer
+  late Timer _countdownTimer;
+  Duration _remainingTime = Duration.zero;
+
   static const Color _neonGreen = Color(0xFF00FF88);
 
   static const List<Color> _avatarColors = [
@@ -1115,6 +1129,40 @@ class _InRoomBottomSheetState extends State<_InRoomBottomSheet> {
     Color(0xFF06B6D4),
     Color(0xFF6366F1),
   ];
+
+  @override
+  void initState() {
+    super.initState();
+    _updateRemaining();
+    _countdownTimer = Timer.periodic(const Duration(seconds: 1), (_) {
+      if (mounted) {
+        setState(() {
+          _updateRemaining();
+        });
+      }
+    });
+  }
+
+  void _updateRemaining() {
+    final now = DateTime.now();
+    if (now.isAfter(widget.room.startTime)) {
+      _remainingTime = Duration.zero;
+    } else {
+      _remainingTime = widget.room.startTime.difference(now);
+    }
+  }
+
+  String get _countdownText {
+    if (_remainingTime == Duration.zero) return 'Match Started';
+    final h = _remainingTime.inHours;
+    final m = _remainingTime.inMinutes % 60;
+    final s = _remainingTime.inSeconds % 60;
+    if (h > 0) {
+      return 'Starts in ${h}h ${m}m ${s}s';
+    } else {
+      return 'Starts in ${m}m ${s}s';
+    }
+  }
 
   Color _getColorForUser(String name) {
     if (name.isEmpty) return _avatarColors[0];
@@ -1148,22 +1196,140 @@ class _InRoomBottomSheetState extends State<_InRoomBottomSheet> {
     return '${diff.inDays}d ago';
   }
 
-  String _formatCountdown(DateTime startTime) {
-    final now = DateTime.now();
-    if (now.isAfter(startTime)) {
-      return 'Started';
+  // Pick Proof Image (Camera or Gallery)
+  Future<void> _pickImage(ImageSource source) async {
+    if (!widget.isJoined) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Join room to share win proofs!')),
+      );
+      return;
     }
-    final diff = startTime.difference(now);
-    if (diff.inHours > 0) {
-      return 'Starts in ${diff.inHours}h ${diff.inMinutes % 60}m';
-    } else if (diff.inMinutes > 0) {
-      return 'Starts in ${diff.inMinutes}m';
-    } else {
-      return 'Starts in ${diff.inSeconds}s';
+
+    try {
+      final picker = ImagePicker();
+      final picked = await picker.pickImage(source: source, imageQuality: 70, maxWidth: 1080);
+      if (picked == null) return;
+
+      final file = File(picked.path);
+      final size = await file.length();
+      if (size > 5 * 1024 * 1024) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('Image size exceeds 5MB limit. Please choose a smaller image.'),
+              backgroundColor: GamerTheme.redAccent,
+            ),
+          );
+        }
+        return;
+      }
+
+      setState(() {
+        _selectedProofImage = file;
+      });
+    } catch (e) {
+      debugPrint('Error picking image: $e');
     }
   }
 
-  Future<void> _sendMessage() async {
+  void _showMediaOptions() {
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: GamerTheme.cardElevated,
+      shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(16))),
+      builder: (ctx) => SafeArea(
+        child: Padding(
+          padding: const EdgeInsets.symmetric(vertical: 16),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const Text('SHARE WIN PROOF / SCREENSHOT', style: TextStyle(color: _neonGreen, fontWeight: FontWeight.bold, fontSize: 13)),
+              const SizedBox(height: 12),
+              ListTile(
+                leading: const Icon(Icons.photo_camera_rounded, color: Colors.white),
+                title: const Text('Take Photo / Screenshot', style: TextStyle(color: Colors.white, fontSize: 14)),
+                onTap: () {
+                  Navigator.pop(ctx);
+                  _pickImage(ImageSource.camera);
+                },
+              ),
+              ListTile(
+                leading: const Icon(Icons.photo_library_rounded, color: Colors.cyanAccent),
+                title: const Text('Choose from Gallery', style: TextStyle(color: Colors.white, fontSize: 14)),
+                onTap: () {
+                  Navigator.pop(ctx);
+                  _pickImage(ImageSource.gallery);
+                },
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  // Upload & Send Win Proof
+  Future<void> _sendWinProof() async {
+    if (_selectedProofImage == null || _isUploadingProof) return;
+
+    setState(() => _isUploadingProof = true);
+    try {
+      final url = await CloudinaryService.uploadFile(
+        file: _selectedProofImage!,
+        folder: 'win_proofs',
+      );
+
+      if (url == null || url.isEmpty) {
+        throw Exception('Cloudinary upload failed');
+      }
+
+      final isHost = widget.room.hostId == widget.currentUid;
+      final senderInitial = _getInitials(widget.currentGamerName);
+
+      await FirebaseFirestore.instance
+          .collection('rooms')
+          .doc(widget.room.id)
+          .collection('messages')
+          .add({
+        'senderId': widget.currentUid,
+        'senderName': widget.currentGamerName,
+        'senderInitial': senderInitial,
+        'message': '🏆 Shared Win Proof Screenshot',
+        'imageUrl': url,
+        'type': 'win_proof',
+        'timestamp': FieldValue.serverTimestamp(),
+        'isHost': isHost,
+      });
+
+      setState(() {
+        _selectedProofImage = null;
+      });
+
+      if (_scrollController.hasClients) {
+        _scrollController.animateTo(
+          _scrollController.position.maxScrollExtent + 200,
+          duration: const Duration(milliseconds: 300),
+          curve: Curves.easeOut,
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Failed to upload win proof. Please try again.'),
+            backgroundColor: GamerTheme.redAccent,
+          ),
+        );
+      }
+    } finally {
+      if (mounted) {
+        setState(() => _isUploadingProof = false);
+      }
+    }
+  }
+
+  // Send Text Message
+  Future<void> _sendTextMessage() async {
     if (!widget.isJoined) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
@@ -1190,7 +1356,6 @@ class _InRoomBottomSheetState extends State<_InRoomBottomSheet> {
       return;
     }
 
-    // Limit to 200 chars
     final safeText = text.length > 200 ? text.substring(0, 200) : text;
 
     setState(() => _isSending = true);
@@ -1210,11 +1375,11 @@ class _InRoomBottomSheetState extends State<_InRoomBottomSheet> {
         'senderName': widget.currentGamerName,
         'senderInitial': senderInitial,
         'message': safeText,
+        'type': 'text',
         'timestamp': FieldValue.serverTimestamp(),
         'isHost': isHost,
       });
 
-      // Scroll to bottom after sending
       if (_scrollController.hasClients) {
         _scrollController.animateTo(
           _scrollController.position.maxScrollExtent + 60,
@@ -1223,7 +1388,7 @@ class _InRoomBottomSheetState extends State<_InRoomBottomSheet> {
         );
       }
     } catch (e) {
-      debugPrint('Error sending in-room message: $e');
+      debugPrint('Error sending message: $e');
     } finally {
       if (mounted) {
         setState(() => _isSending = false);
@@ -1231,8 +1396,86 @@ class _InRoomBottomSheetState extends State<_InRoomBottomSheet> {
     }
   }
 
+  // Open Fullscreen Zoomable Image Viewer
+  void _openFullscreenImage(BuildContext context, String imageUrl) {
+    Navigator.of(context).push(
+      MaterialPageRoute(
+        builder: (ctx) => Scaffold(
+          backgroundColor: Colors.black,
+          appBar: AppBar(
+            backgroundColor: Colors.black,
+            title: const Text('Win Proof Screenshot', style: TextStyle(color: Colors.white, fontSize: 15)),
+            leading: IconButton(
+              icon: const Icon(Icons.arrow_back, color: Colors.white),
+              onPressed: () => Navigator.pop(ctx),
+            ),
+          ),
+          body: Center(
+            child: InteractiveViewer(
+              minScale: 0.8,
+              maxScale: 4.0,
+              child: Image.network(
+                imageUrl,
+                fit: BoxFit.contain,
+                loadingBuilder: (_, child, progress) {
+                  if (progress == null) return child;
+                  return const Center(child: CircularProgressIndicator(color: _neonGreen));
+                },
+                errorBuilder: (_, __, ___) => const Center(
+                  child: Text('Failed to load image', style: TextStyle(color: Colors.white)),
+                ),
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  void _showRoomRulesDialog() {
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: GamerTheme.cardDark,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        title: Row(
+          children: [
+            const Icon(Icons.info_outline_rounded, color: _neonGreen, size: 20),
+            const SizedBox(width: 8),
+            Text(widget.room.title, style: const TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.bold)),
+          ],
+        ),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text('• Game: ${widget.room.gameType}', style: const TextStyle(color: Colors.white, fontSize: 13)),
+            const SizedBox(height: 6),
+            Text('• Map: ${widget.room.map}', style: const TextStyle(color: Colors.white, fontSize: 13)),
+            const SizedBox(height: 6),
+            Text('• Mode: ${widget.room.gameMode}', style: const TextStyle(color: Colors.white, fontSize: 13)),
+            const SizedBox(height: 6),
+            Text('• Prize Pool: ${widget.room.prizePoolCoins} Coins', style: const TextStyle(color: Colors.cyanAccent, fontSize: 13, fontWeight: FontWeight.bold)),
+            const SizedBox(height: 10),
+            const Text(
+              'RULES:\n1. Hackers / emulators strictly prohibited.\n2. Submit Win Proof screenshot in room chat immediately after match.\n3. Prize coins are released upon host & admin verification.',
+              style: TextStyle(color: GamerTheme.textMuted, fontSize: 12, height: 1.4),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text('GOT IT', style: TextStyle(color: _neonGreen, fontWeight: FontWeight.bold)),
+          ),
+        ],
+      ),
+    );
+  }
+
   @override
   void dispose() {
+    _countdownTimer.cancel();
     _msgController.dispose();
     _scrollController.dispose();
     super.dispose();
@@ -1242,22 +1485,22 @@ class _InRoomBottomSheetState extends State<_InRoomBottomSheet> {
   Widget build(BuildContext context) {
     final room = widget.room;
     final isHost = room.hostId == widget.currentUid;
-    final onlineCount = room.joinedUserIds.isNotEmpty
-        ? room.joinedUserIds.length
-        : room.joinedPlayers.length;
+    final int total = room.totalSlots > 0 ? room.totalSlots : (room.maxSlots > 0 ? room.maxSlots : 2);
+    final int filled = (room.currentSlots > 0 ? room.currentSlots : room.joinedPlayers.length).clamp(0, total);
+    final onlineCount = room.joinedUserIds.isNotEmpty ? room.joinedUserIds.length : filled;
 
     return Container(
-      constraints: BoxConstraints(
-        maxHeight: MediaQuery.of(context).size.height * 0.88,
+      decoration: const BoxDecoration(
+        color: GamerTheme.cardDark,
+        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
       ),
       padding: EdgeInsets.only(
         left: 16,
         right: 16,
         top: 12,
-        bottom: MediaQuery.of(context).viewInsets.bottom + 16,
+        bottom: MediaQuery.of(context).viewInsets.bottom + 12,
       ),
       child: Column(
-        mainAxisSize: MainAxisSize.min,
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           // Drag handle
@@ -1271,49 +1514,61 @@ class _InRoomBottomSheetState extends State<_InRoomBottomSheet> {
               ),
             ),
           ),
-          const SizedBox(height: 12),
+          const SizedBox(height: 10),
 
-          // Header: Room Title, Badge, Close
+          // Header: Title + Host + JOINED badge + close X
           Row(
             children: [
-              Container(
-                width: 10,
-                height: 10,
-                decoration: const BoxDecoration(
-                  color: _neonGreen,
-                  shape: BoxShape.circle,
-                ),
-              ),
-              const SizedBox(width: 8),
               Expanded(
-                child: Text(
-                  room.title,
-                  style: const TextStyle(
-                    color: Colors.white,
-                    fontWeight: FontWeight.bold,
-                    fontSize: 16,
-                  ),
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      room.title,
+                      style: const TextStyle(
+                        color: Colors.white,
+                        fontWeight: FontWeight.bold,
+                        fontSize: 16,
+                      ),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      'Host: ${room.hostName}',
+                      style: const TextStyle(
+                        color: GamerTheme.textGray,
+                        fontSize: 12,
+                      ),
+                    ),
+                  ],
                 ),
               ),
               const SizedBox(width: 8),
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                decoration: BoxDecoration(
-                  color: GamerTheme.surfaceDark,
-                  borderRadius: BorderRadius.circular(8),
-                  border: Border.all(color: GamerTheme.borderDark),
-                ),
-                child: Text(
-                  room.gameType,
-                  style: const TextStyle(
-                    color: GamerTheme.accentOrange,
-                    fontSize: 11,
-                    fontWeight: FontWeight.bold,
+              if (widget.isJoined)
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                  decoration: BoxDecoration(
+                    color: _neonGreen.withOpacity(0.2),
+                    borderRadius: BorderRadius.circular(8),
+                    border: Border.all(color: _neonGreen),
+                  ),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      const Icon(Icons.check_circle_rounded, color: _neonGreen, size: 12),
+                      const SizedBox(width: 4),
+                      Text(
+                        isHost ? 'HOST' : 'JOINED',
+                        style: const TextStyle(
+                          color: _neonGreen,
+                          fontSize: 10,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                    ],
                   ),
                 ),
-              ),
               IconButton(
                 icon: const Icon(Icons.close_rounded, color: GamerTheme.textMuted, size: 22),
                 onPressed: () => Navigator.pop(context),
@@ -1321,305 +1576,413 @@ class _InRoomBottomSheetState extends State<_InRoomBottomSheet> {
             ],
           ),
 
-          // Starts in countdown + Map / Mode info
+          // Row: ROOM ID with COPY + PASSWORD with COPY
           Container(
-            margin: const EdgeInsets.only(bottom: 12),
-            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-            decoration: BoxDecoration(
-              color: GamerTheme.bgDark.withOpacity(0.6),
-              borderRadius: BorderRadius.circular(8),
-            ),
-            child: Row(
-              children: [
-                const Icon(Icons.timer_outlined, color: GamerTheme.accentOrange, size: 15),
-                const SizedBox(width: 6),
-                Text(
-                  _formatCountdown(room.startTime),
-                  style: const TextStyle(
-                    color: GamerTheme.accentOrange,
-                    fontWeight: FontWeight.bold,
-                    fontSize: 12,
-                  ),
-                ),
-                const Spacer(),
-                Text(
-                  'Map: ${room.map} • ${room.gameMode}',
-                  style: const TextStyle(
-                    color: GamerTheme.textMuted,
-                    fontSize: 11,
-                  ),
-                ),
-              ],
-            ),
-          ),
-
-          // Room Credentials (Room ID + Password with Copy)
-          Container(
-            padding: const EdgeInsets.all(12),
+            margin: const EdgeInsets.symmetric(vertical: 8),
+            padding: const EdgeInsets.all(10),
             decoration: BoxDecoration(
               color: GamerTheme.bgDark,
-              borderRadius: BorderRadius.circular(12),
+              borderRadius: BorderRadius.circular(10),
               border: Border.all(color: GamerTheme.borderDark),
             ),
             child: Row(
               children: [
                 // Room ID
                 Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
+                  child: Row(
                     children: [
-                      const Text(
-                        'ROOM ID',
-                        style: TextStyle(color: GamerTheme.textMuted, fontSize: 10, fontWeight: FontWeight.bold),
+                      const Text('ROOM ID: ', style: TextStyle(color: GamerTheme.textMuted, fontSize: 11, fontWeight: FontWeight.bold)),
+                      Flexible(
+                        child: Text(
+                          room.roomId.isNotEmpty ? room.roomId : 'Waiting...',
+                          style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontFamily: 'monospace', fontSize: 12),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                        ),
                       ),
-                      const SizedBox(height: 4),
-                      Row(
-                        children: [
-                          Flexible(
-                            child: Text(
-                              room.roomId.isNotEmpty ? room.roomId : 'Revealed soon...',
-                              style: const TextStyle(
-                                color: Colors.white,
-                                fontWeight: FontWeight.bold,
-                                fontFamily: 'monospace',
-                                fontSize: 13,
-                              ),
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
-                            ),
-                          ),
-                          if (room.roomId.isNotEmpty) ...[
-                            const SizedBox(width: 6),
-                            InkWell(
-                              onTap: () {
-                                Clipboard.setData(ClipboardData(text: room.roomId));
-                                ScaffoldMessenger.of(context).showSnackBar(
-                                  const SnackBar(content: Text('Room ID copied!'), duration: Duration(seconds: 1)),
-                                );
-                              },
-                              child: const Icon(Icons.copy_rounded, size: 14, color: _neonGreen),
-                            ),
-                          ],
-                        ],
-                      ),
+                      if (room.roomId.isNotEmpty) ...[
+                        const SizedBox(width: 4),
+                        InkWell(
+                          onTap: () {
+                            Clipboard.setData(ClipboardData(text: room.roomId));
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              const SnackBar(content: Text('Room ID Copied!'), duration: Duration(seconds: 1), behavior: SnackBarBehavior.floating),
+                            );
+                          },
+                          child: const Icon(Icons.copy_rounded, size: 14, color: _neonGreen),
+                        ),
+                      ],
                     ],
                   ),
                 ),
-                Container(height: 28, width: 1, color: GamerTheme.borderDark),
-                const SizedBox(width: 12),
+                Container(height: 20, width: 1, color: GamerTheme.borderDark),
+                const SizedBox(width: 8),
                 // Password
                 Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
+                  child: Row(
                     children: [
-                      const Text(
-                        'PASSWORD',
-                        style: TextStyle(color: GamerTheme.textMuted, fontSize: 10, fontWeight: FontWeight.bold),
+                      const Text('PASSWORD: ', style: TextStyle(color: GamerTheme.textMuted, fontSize: 11, fontWeight: FontWeight.bold)),
+                      Flexible(
+                        child: Text(
+                          room.password.isNotEmpty ? room.password : 'Open',
+                          style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontFamily: 'monospace', fontSize: 12),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                        ),
                       ),
-                      const SizedBox(height: 4),
-                      Row(
-                        children: [
-                          Flexible(
-                            child: Text(
-                              room.password.isNotEmpty ? room.password : 'None / Open',
-                              style: const TextStyle(
-                                color: Colors.white,
-                                fontWeight: FontWeight.bold,
-                                fontFamily: 'monospace',
-                                fontSize: 13,
-                              ),
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
-                            ),
-                          ),
-                          if (room.password.isNotEmpty) ...[
-                            const SizedBox(width: 6),
-                            InkWell(
-                              onTap: () {
-                                Clipboard.setData(ClipboardData(text: room.password));
-                                ScaffoldMessenger.of(context).showSnackBar(
-                                  const SnackBar(content: Text('Password copied!'), duration: Duration(seconds: 1)),
-                                );
-                              },
-                              child: const Icon(Icons.copy_rounded, size: 14, color: _neonGreen),
-                            ),
-                          ],
-                        ],
-                      ),
+                      if (room.password.isNotEmpty) ...[
+                        const SizedBox(width: 4),
+                        InkWell(
+                          onTap: () {
+                            Clipboard.setData(ClipboardData(text: room.password));
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              const SnackBar(content: Text('Password Copied!'), duration: Duration(seconds: 1), behavior: SnackBarBehavior.floating),
+                            );
+                          },
+                          child: const Icon(Icons.copy_rounded, size: 14, color: _neonGreen),
+                        ),
+                      ],
                     ],
                   ),
                 ),
               ],
             ),
           ),
-          const SizedBox(height: 12),
 
-          // CHAT HEADER: "Room Chat (X online)" with green dot
+          // Countdown: "Starts in 15m 32s" Timer.periodic orange
+          Container(
+            margin: const EdgeInsets.only(bottom: 8),
+            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+            decoration: BoxDecoration(
+              color: GamerTheme.accentOrange.withOpacity(0.12),
+              borderRadius: BorderRadius.circular(8),
+            ),
+            child: Row(
+              children: [
+                const Icon(Icons.timer_outlined, color: GamerTheme.accentOrange, size: 14),
+                const SizedBox(width: 6),
+                Text(
+                  _countdownText,
+                  style: const TextStyle(color: GamerTheme.accentOrange, fontWeight: FontWeight.bold, fontSize: 12),
+                ),
+                const Spacer(),
+                Text(
+                  '${room.map} • ${room.gameMode}',
+                  style: const TextStyle(color: GamerTheme.textMuted, fontSize: 11),
+                ),
+              ],
+            ),
+          ),
+
+          // CHAT HEADER: Room Chat (X online)
           Row(
             children: [
-              Container(
-                width: 8,
-                height: 8,
-                decoration: const BoxDecoration(
-                  color: _neonGreen,
-                  shape: BoxShape.circle,
-                ),
-              ),
+              Container(width: 8, height: 8, decoration: const BoxDecoration(color: _neonGreen, shape: BoxShape.circle)),
               const SizedBox(width: 6),
               Text(
                 'Room Chat ($onlineCount online)',
-                style: const TextStyle(
-                  color: Colors.white,
-                  fontWeight: FontWeight.bold,
-                  fontSize: 13,
-                ),
+                style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 12.5),
               ),
             ],
           ),
-          const SizedBox(height: 8),
+          const SizedBox(height: 6),
 
-          // CHAT MESSAGES LIST: height 200, ListView
-          Container(
-            height: 200,
-            decoration: BoxDecoration(
-              color: GamerTheme.bgDark.withOpacity(0.7),
-              borderRadius: BorderRadius.circular(12),
-              border: Border.all(color: GamerTheme.borderDark),
-            ),
-            child: StreamBuilder<QuerySnapshot>(
-              stream: FirebaseFirestore.instance
-                  .collection('rooms')
-                  .doc(room.id)
-                  .collection('messages')
-                  .orderBy('timestamp', descending: false)
-                  .snapshots(),
-              builder: (context, snapshot) {
-                if (snapshot.hasError) {
-                  return const Center(
-                    child: Text('Failed to load chat', style: TextStyle(color: GamerTheme.textMuted, fontSize: 12)),
-                  );
-                }
+          // MESSAGES LIST (Expanded inside the 75% height sheet)
+          Expanded(
+            child: Container(
+              decoration: BoxDecoration(
+                color: GamerTheme.bgDark.withOpacity(0.7),
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(color: GamerTheme.borderDark),
+              ),
+              child: StreamBuilder<QuerySnapshot>(
+                stream: FirebaseFirestore.instance
+                    .collection('rooms')
+                    .doc(room.id)
+                    .collection('messages')
+                    .orderBy('timestamp', descending: false)
+                    .snapshots(),
+                builder: (context, snapshot) {
+                  if (snapshot.hasError) {
+                    return const Center(
+                      child: Text('Failed to load chat', style: TextStyle(color: GamerTheme.textMuted, fontSize: 12)),
+                    );
+                  }
 
-                if (!snapshot.hasData) {
-                  return const Center(
-                    child: SizedBox(
-                      width: 20,
-                      height: 20,
-                      child: CircularProgressIndicator(strokeWidth: 2, color: _neonGreen),
-                    ),
-                  );
-                }
+                  if (!snapshot.hasData) {
+                    return const Center(
+                      child: SizedBox(
+                        width: 20,
+                        height: 20,
+                        child: CircularProgressIndicator(strokeWidth: 2, color: _neonGreen),
+                      ),
+                    );
+                  }
 
-                final docs = snapshot.data!.docs;
+                  final docs = snapshot.data!.docs;
 
-                if (docs.isEmpty) {
-                  return Center(
-                    child: Text(
-                      'No messages yet. Say hello to squad!',
-                      style: TextStyle(color: GamerTheme.textMuted.withOpacity(0.8), fontSize: 12),
-                    ),
-                  );
-                }
+                  if (docs.isEmpty) {
+                    return Center(
+                      child: Text(
+                        'No messages yet. Say hi or share win proof!',
+                        style: TextStyle(color: GamerTheme.textMuted.withOpacity(0.8), fontSize: 12),
+                      ),
+                    );
+                  }
 
-                return ListView.builder(
-                  controller: _scrollController,
-                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
-                  itemCount: docs.length,
-                  itemBuilder: (context, index) {
-                    final data = docs[index].data() as Map<String, dynamic>;
-                    final senderId = data['senderId'] ?? '';
-                    final senderName = data['senderName'] ?? 'Player';
-                    final senderInitial = data['senderInitial'] ?? _getInitials(senderName);
-                    final message = data['message'] ?? '';
-                    final timestamp = data['timestamp'];
-                    final msgIsHost = data['isHost'] == true || senderId == room.hostId;
-                    final isMe = senderId == widget.currentUid;
-                    final timeAgo = _formatTimeAgo(timestamp);
+                  return ListView.builder(
+                    controller: _scrollController,
+                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+                    itemCount: docs.length,
+                    itemBuilder: (context, index) {
+                      final data = docs[index].data() as Map<String, dynamic>;
+                      final senderId = data['senderId'] ?? '';
+                      final senderName = data['senderName'] ?? 'Player';
+                      final senderInitial = data['senderInitial'] ?? _getInitials(senderName);
+                      final message = data['message'] ?? '';
+                      final imageUrl = data['imageUrl'] as String?;
+                      final msgType = data['type'] ?? (imageUrl != null ? 'win_proof' : 'text');
+                      final timestamp = data['timestamp'];
+                      final msgIsHost = data['isHost'] == true || senderId == room.hostId;
+                      final isMe = senderId == widget.currentUid;
+                      final timeAgo = _formatTimeAgo(timestamp);
 
-                    // MY MESSAGES (Green avatar on right, bubble neonGreen)
-                    if (isMe) {
-                      return Padding(
-                        padding: const EdgeInsets.only(bottom: 8),
-                        child: Row(
-                          mainAxisAlignment: MainAxisAlignment.end,
-                          crossAxisAlignment: CrossAxisAlignment.end,
-                          children: [
-                            Flexible(
-                              child: Column(
-                                crossAxisAlignment: CrossAxisAlignment.end,
-                                children: [
-                                  Container(
-                                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                                    decoration: const BoxDecoration(
-                                      color: _neonGreen,
-                                      borderRadius: BorderRadius.only(
-                                        topLeft: Radius.circular(12),
-                                        topRight: Radius.circular(2),
-                                        bottomLeft: Radius.circular(12),
-                                        bottomRight: Radius.circular(12),
+                      // WIN PROOF IMAGE BUBBLE
+                      if (msgType == 'win_proof' && imageUrl != null && imageUrl.isNotEmpty) {
+                        return Padding(
+                          padding: const EdgeInsets.only(bottom: 10),
+                          child: Align(
+                            alignment: isMe ? Alignment.centerRight : Alignment.centerLeft,
+                            child: Column(
+                              crossAxisAlignment: isMe ? CrossAxisAlignment.end : CrossAxisAlignment.start,
+                              children: [
+                                Row(
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    Text(
+                                      isMe ? 'You' : senderName,
+                                      style: TextStyle(
+                                        color: isMe ? _neonGreen : (msgIsHost ? Colors.amber : GamerTheme.textGray),
+                                        fontWeight: FontWeight.bold,
+                                        fontSize: 10,
                                       ),
                                     ),
-                                    child: Text(
-                                      message,
-                                      style: const TextStyle(
-                                        color: Colors.black,
-                                        fontWeight: FontWeight.w600,
-                                        fontSize: 13,
+                                    const SizedBox(width: 4),
+                                    Text(timeAgo, style: const TextStyle(color: GamerTheme.textMuted, fontSize: 9)),
+                                  ],
+                                ),
+                                const SizedBox(height: 3),
+                                GestureDetector(
+                                  onTap: () => _openFullscreenImage(context, imageUrl),
+                                  child: Container(
+                                    decoration: BoxDecoration(
+                                      borderRadius: BorderRadius.circular(12),
+                                      border: Border.all(color: _neonGreen, width: 2),
+                                    ),
+                                    clipBehavior: Clip.antiAlias,
+                                    child: Stack(
+                                      children: [
+                                        Image.network(
+                                          imageUrl,
+                                          height: 150,
+                                          width: 200,
+                                          fit: BoxFit.cover,
+                                          loadingBuilder: (_, child, progress) {
+                                            if (progress == null) return child;
+                                            return Container(
+                                              height: 150,
+                                              width: 200,
+                                              color: GamerTheme.bgDark,
+                                              child: const Center(child: CircularProgressIndicator(color: _neonGreen, strokeWidth: 2)),
+                                            );
+                                          },
+                                          errorBuilder: (_, __, ___) => Container(
+                                            height: 150,
+                                            width: 200,
+                                            color: GamerTheme.bgDark,
+                                            child: const Center(child: Text('Proof image unavailable', style: TextStyle(color: Colors.white, fontSize: 11))),
+                                          ),
+                                        ),
+                                        Positioned(
+                                          bottom: 0,
+                                          left: 0,
+                                          right: 0,
+                                          child: Container(
+                                            padding: const EdgeInsets.symmetric(vertical: 4, horizontal: 6),
+                                            color: Colors.black.withOpacity(0.75),
+                                            child: const Row(
+                                              mainAxisAlignment: MainAxisAlignment.center,
+                                              children: [
+                                                Icon(Icons.emoji_events_rounded, color: _neonGreen, size: 12),
+                                                SizedBox(width: 4),
+                                                Text(
+                                                  'Win Proof • Tap to view full',
+                                                  style: TextStyle(color: _neonGreen, fontSize: 10, fontWeight: FontWeight.bold),
+                                                ),
+                                              ],
+                                            ),
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        );
+                      }
+
+                      // MY MESSAGES (Green avatar on right, bubble neonGreen)
+                      if (isMe) {
+                        return Padding(
+                          padding: const EdgeInsets.only(bottom: 8),
+                          child: Row(
+                            mainAxisAlignment: MainAxisAlignment.end,
+                            crossAxisAlignment: CrossAxisAlignment.end,
+                            children: [
+                              Flexible(
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.end,
+                                  children: [
+                                    Container(
+                                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                                      decoration: const BoxDecoration(
+                                        color: _neonGreen,
+                                        borderRadius: BorderRadius.only(
+                                          topLeft: Radius.circular(12),
+                                          topRight: Radius.circular(2),
+                                          bottomLeft: Radius.circular(12),
+                                          bottomRight: Radius.circular(12),
+                                        ),
+                                      ),
+                                      child: Text(
+                                        message,
+                                        style: const TextStyle(
+                                          color: Colors.black,
+                                          fontWeight: FontWeight.w600,
+                                          fontSize: 13,
+                                        ),
+                                      ),
+                                    ),
+                                    const SizedBox(height: 2),
+                                    Text(
+                                      timeAgo,
+                                      style: const TextStyle(color: GamerTheme.textMuted, fontSize: 9),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                              const SizedBox(width: 6),
+                              CircleAvatar(
+                                radius: 14,
+                                backgroundColor: _neonGreen,
+                                child: Text(
+                                  senderInitial.isNotEmpty ? senderInitial[0] : 'Y',
+                                  style: const TextStyle(color: Colors.black, fontWeight: FontWeight.bold, fontSize: 10),
+                                ),
+                              ),
+                            ],
+                          ),
+                        );
+                      }
+
+                      // HOST MESSAGE (Gold border avatar FL + green tick, bubble dark gray)
+                      if (msgIsHost) {
+                        return Padding(
+                          padding: const EdgeInsets.only(bottom: 8),
+                          child: Row(
+                            mainAxisAlignment: MainAxisAlignment.start,
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Stack(
+                                children: [
+                                  Container(
+                                    decoration: BoxDecoration(
+                                      shape: BoxShape.circle,
+                                      border: Border.all(color: Colors.amber, width: 1.5),
+                                    ),
+                                    child: CircleAvatar(
+                                      radius: 14,
+                                      backgroundColor: const Color(0xFF232D3F),
+                                      child: Text(
+                                        senderInitial,
+                                        style: const TextStyle(color: Colors.amber, fontWeight: FontWeight.bold, fontSize: 10),
                                       ),
                                     ),
                                   ),
-                                  const SizedBox(height: 2),
-                                  Text(
-                                    timeAgo,
-                                    style: const TextStyle(color: GamerTheme.textMuted, fontSize: 9),
+                                  const Positioned(
+                                    bottom: 0,
+                                    right: 0,
+                                    child: Icon(Icons.check_circle, size: 10, color: _neonGreen),
                                   ),
                                 ],
                               ),
-                            ),
-                            const SizedBox(width: 6),
-                            CircleAvatar(
-                              radius: 14,
-                              backgroundColor: _neonGreen,
-                              child: Text(
-                                senderInitial.isNotEmpty ? senderInitial[0] : 'Y',
-                                style: const TextStyle(color: Colors.black, fontWeight: FontWeight.bold, fontSize: 10),
+                              const SizedBox(width: 8),
+                              Flexible(
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Row(
+                                      mainAxisSize: MainAxisSize.min,
+                                      children: [
+                                        Text(
+                                          senderName,
+                                          style: const TextStyle(color: Colors.amber, fontWeight: FontWeight.bold, fontSize: 11),
+                                        ),
+                                        const SizedBox(width: 4),
+                                        Container(
+                                          padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 1),
+                                          decoration: BoxDecoration(
+                                            color: Colors.amber.withOpacity(0.2),
+                                            borderRadius: BorderRadius.circular(4),
+                                          ),
+                                          child: const Text('HOST', style: TextStyle(color: Colors.amber, fontSize: 8, fontWeight: FontWeight.bold)),
+                                        ),
+                                        const SizedBox(width: 6),
+                                        Text(timeAgo, style: const TextStyle(color: GamerTheme.textMuted, fontSize: 9)),
+                                      ],
+                                    ),
+                                    const SizedBox(height: 3),
+                                    Container(
+                                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                                      decoration: const BoxDecoration(
+                                        color: Color(0xFF232D3F),
+                                        borderRadius: BorderRadius.only(
+                                          topLeft: Radius.circular(2),
+                                          topRight: Radius.circular(12),
+                                          bottomLeft: Radius.circular(12),
+                                          bottomRight: Radius.circular(12),
+                                        ),
+                                      ),
+                                      child: Text(
+                                        message,
+                                        style: const TextStyle(color: Colors.white, fontSize: 13),
+                                      ),
+                                    ),
+                                  ],
+                                ),
                               ),
-                            ),
-                          ],
-                        ),
-                      );
-                    }
+                            ],
+                          ),
+                        );
+                      }
 
-                    // HOST MESSAGE (Gold border avatar FL + green tick, bubble dark gray)
-                    if (msgIsHost) {
+                      // OTHER PLAYERS (Colored avatar PX, SN, bubble dark)
+                      final avatarColor = _getColorForUser(senderName);
                       return Padding(
                         padding: const EdgeInsets.only(bottom: 8),
                         child: Row(
                           mainAxisAlignment: MainAxisAlignment.start,
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            Stack(
-                              children: [
-                                Container(
-                                  decoration: BoxDecoration(
-                                    shape: BoxShape.circle,
-                                    border: Border.all(color: Colors.amber, width: 1.5),
-                                  ),
-                                  child: CircleAvatar(
-                                    radius: 14,
-                                    backgroundColor: const Color(0xFF232D3F),
-                                    child: Text(
-                                      senderInitial,
-                                      style: const TextStyle(color: Colors.amber, fontWeight: FontWeight.bold, fontSize: 10),
-                                    ),
-                                  ),
-                                ),
-                                const Positioned(
-                                  bottom: 0,
-                                  right: 0,
-                                  child: Icon(Icons.check_circle, size: 10, color: _neonGreen),
-                                ),
-                              ],
+                            CircleAvatar(
+                              radius: 14,
+                              backgroundColor: avatarColor,
+                              child: Text(
+                                senderInitial,
+                                style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 10),
+                              ),
                             ),
                             const SizedBox(width: 8),
                             Flexible(
@@ -1631,16 +1994,7 @@ class _InRoomBottomSheetState extends State<_InRoomBottomSheet> {
                                     children: [
                                       Text(
                                         senderName,
-                                        style: const TextStyle(color: Colors.amber, fontWeight: FontWeight.bold, fontSize: 11),
-                                      ),
-                                      const SizedBox(width: 4),
-                                      Container(
-                                        padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 1),
-                                        decoration: BoxDecoration(
-                                          color: Colors.amber.withOpacity(0.2),
-                                          borderRadius: BorderRadius.circular(4),
-                                        ),
-                                        child: const Text('HOST', style: TextStyle(color: Colors.amber, fontSize: 8, fontWeight: FontWeight.bold)),
+                                        style: const TextStyle(color: GamerTheme.textGray, fontWeight: FontWeight.bold, fontSize: 11),
                                       ),
                                       const SizedBox(width: 6),
                                       Text(timeAgo, style: const TextStyle(color: GamerTheme.textMuted, fontSize: 9)),
@@ -1650,7 +2004,7 @@ class _InRoomBottomSheetState extends State<_InRoomBottomSheet> {
                                   Container(
                                     padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
                                     decoration: const BoxDecoration(
-                                      color: Color(0xFF232D3F),
+                                      color: Color(0xFF1B2332),
                                       borderRadius: BorderRadius.only(
                                         topLeft: Radius.circular(2),
                                         topRight: Radius.circular(12),
@@ -1669,74 +2023,68 @@ class _InRoomBottomSheetState extends State<_InRoomBottomSheet> {
                           ],
                         ),
                       );
-                    }
-
-                    // OTHER PLAYERS (Colored avatar PX, SN, bubble dark)
-                    final avatarColor = _getColorForUser(senderName);
-                    return Padding(
-                      padding: const EdgeInsets.only(bottom: 8),
-                      child: Row(
-                        mainAxisAlignment: MainAxisAlignment.start,
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          CircleAvatar(
-                            radius: 14,
-                            backgroundColor: avatarColor,
-                            child: Text(
-                              senderInitial,
-                              style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 10),
-                            ),
-                          ),
-                          const SizedBox(width: 8),
-                          Flexible(
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Row(
-                                  mainAxisSize: MainAxisSize.min,
-                                  children: [
-                                    Text(
-                                      senderName,
-                                      style: const TextStyle(color: GamerTheme.textGray, fontWeight: FontWeight.bold, fontSize: 11),
-                                    ),
-                                    const SizedBox(width: 6),
-                                    Text(timeAgo, style: const TextStyle(color: GamerTheme.textMuted, fontSize: 9)),
-                                  ],
-                                ),
-                                const SizedBox(height: 3),
-                                Container(
-                                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                                  decoration: const BoxDecoration(
-                                    color: Color(0xFF1B2332),
-                                    borderRadius: BorderRadius.only(
-                                      topLeft: Radius.circular(2),
-                                      topRight: Radius.circular(12),
-                                      bottomLeft: Radius.circular(12),
-                                      bottomRight: Radius.circular(12),
-                                    ),
-                                  ),
-                                  child: Text(
-                                    message,
-                                    style: const TextStyle(color: Colors.white, fontSize: 13),
-                                  ),
-                                ),
-                              ],
-                            ),
-                          ),
-                        ],
-                      ),
-                    );
-                  },
-                );
-              },
+                    },
+                  );
+                },
+              ),
             ),
           ),
-          const SizedBox(height: 8),
+          const SizedBox(height: 6),
 
-          // CHAT INPUT ROW
+          // WIN PROOF PREVIEW BOX (If an image is selected)
+          if (_selectedProofImage != null)
+            Container(
+              margin: const EdgeInsets.only(bottom: 6),
+              padding: const EdgeInsets.all(8),
+              decoration: BoxDecoration(
+                color: GamerTheme.bgDark,
+                borderRadius: BorderRadius.circular(10),
+                border: Border.all(color: _neonGreen),
+              ),
+              child: Row(
+                children: [
+                  ClipRRect(
+                    borderRadius: BorderRadius.circular(6),
+                    child: Image.file(_selectedProofImage!, width: 45, height: 45, fit: BoxFit.cover),
+                  ),
+                  const SizedBox(width: 10),
+                  const Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text('Win Proof Ready', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 12)),
+                        Text('Tap send to publish to squad', style: TextStyle(color: GamerTheme.textMuted, fontSize: 10)),
+                      ],
+                    ),
+                  ),
+                  ElevatedButton(
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: _neonGreen,
+                      foregroundColor: Colors.black,
+                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                    ),
+                    onPressed: _isUploadingProof ? null : _sendWinProof,
+                    child: _isUploadingProof
+                        ? const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.black))
+                        : const Text('SEND PROOF', style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold)),
+                  ),
+                  IconButton(
+                    icon: const Icon(Icons.close, color: GamerTheme.redAccent, size: 18),
+                    onPressed: () => setState(() => _selectedProofImage = null),
+                  ),
+                ],
+              ),
+            ),
+
+          // INPUT ROW (Camera, emoji, TextField, Send)
           if (widget.isJoined) ...[
             Row(
               children: [
+                IconButton(
+                  icon: const Icon(Icons.photo_camera_rounded, color: _neonGreen, size: 22),
+                  onPressed: _showMediaOptions,
+                ),
                 Expanded(
                   child: Container(
                     decoration: BoxDecoration(
@@ -1748,7 +2096,7 @@ class _InRoomBottomSheetState extends State<_InRoomBottomSheet> {
                       controller: _msgController,
                       maxLength: 200,
                       style: const TextStyle(color: Colors.white, fontSize: 13),
-                      onSubmitted: (_) => _sendMessage(),
+                      onSubmitted: (_) => _sendTextMessage(),
                       decoration: const InputDecoration(
                         counterText: '',
                         hintText: 'Type a message...',
@@ -1762,7 +2110,7 @@ class _InRoomBottomSheetState extends State<_InRoomBottomSheet> {
                 ),
                 const SizedBox(width: 8),
                 InkWell(
-                  onTap: _sendMessage,
+                  onTap: _sendTextMessage,
                   borderRadius: BorderRadius.circular(20),
                   child: CircleAvatar(
                     radius: 20,
@@ -1780,115 +2128,142 @@ class _InRoomBottomSheetState extends State<_InRoomBottomSheet> {
             ),
           ] else ...[
             Container(
-              padding: const EdgeInsets.symmetric(vertical: 10),
+              padding: const EdgeInsets.symmetric(vertical: 8),
               alignment: Alignment.center,
               decoration: BoxDecoration(
                 color: GamerTheme.bgDark,
-                borderRadius: BorderRadius.circular(12),
+                borderRadius: BorderRadius.circular(10),
                 border: Border.all(color: GamerTheme.borderDark),
               ),
               child: const Text(
-                'Join room to chat with squad',
+                'Join room to chat & share win proofs',
                 style: TextStyle(color: GamerTheme.textMuted, fontSize: 12, fontWeight: FontWeight.bold),
               ),
             ),
           ],
-          const SizedBox(height: 14),
+          const SizedBox(height: 8),
 
-          // SLOTS LIST (KEEP)
+          // BOTTOM: Slot List + LEAVE ROOM (red outline) + VIEW DETAILS (green)
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
               Text(
-                'SLOT LIST (${room.joinedPlayers.length}/${room.maxSlots})',
+                'SLOT LIST ($filled/$total)',
                 style: const TextStyle(color: GamerTheme.textMuted, fontSize: 11, fontWeight: FontWeight.bold),
               ),
               Text(
-                '${room.availableSlots} available',
+                '${(total - filled).clamp(0, total)} available',
                 style: const TextStyle(color: _neonGreen, fontSize: 11, fontWeight: FontWeight.bold),
               ),
             ],
           ),
-          const SizedBox(height: 8),
+          const SizedBox(height: 6),
 
-          // Players chips
-          Wrap(
-            spacing: 6,
-            runSpacing: 6,
-            children: room.joinedPlayers.map((pUid) {
-              final pName = room.getPlayerName(pUid);
-              final isPlayerHost = pUid == room.hostId;
-              final isCurrent = pUid == widget.currentUid;
-              return Container(
-                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                decoration: BoxDecoration(
-                  color: isCurrent ? _neonGreen.withOpacity(0.15) : GamerTheme.bgDark,
-                  borderRadius: BorderRadius.circular(8),
-                  border: Border.all(
-                    color: isCurrent ? _neonGreen : (isPlayerHost ? Colors.amber : GamerTheme.borderDark),
+          // Joined Players Chips
+          SizedBox(
+            height: 28,
+            child: ListView(
+              scrollDirection: Axis.horizontal,
+              children: room.joinedPlayers.map((pUid) {
+                final pName = room.getPlayerName(pUid);
+                final isPlayerHost = pUid == room.hostId;
+                final isCurrent = pUid == widget.currentUid;
+                return Container(
+                  margin: const EdgeInsets.only(right: 6),
+                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                  decoration: BoxDecoration(
+                    color: isCurrent ? _neonGreen.withOpacity(0.15) : GamerTheme.bgDark,
+                    borderRadius: BorderRadius.circular(8),
+                    border: Border.all(
+                      color: isCurrent ? _neonGreen : (isPlayerHost ? Colors.amber : GamerTheme.borderDark),
+                    ),
+                  ),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      if (isPlayerHost) ...[
+                        const Icon(Icons.shield_rounded, size: 12, color: Colors.amber),
+                        const SizedBox(width: 4),
+                      ],
+                      Text(
+                        pName,
+                        style: TextStyle(
+                          color: isCurrent ? _neonGreen : Colors.white,
+                          fontSize: 11,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                    ],
+                  ),
+                );
+              }).toList(),
+            ),
+          ),
+          const SizedBox(height: 10),
+
+          // Bottom Action Buttons: LEAVE ROOM + VIEW DETAILS
+          Row(
+            children: [
+              if (widget.isJoined && !isHost) ...[
+                Expanded(
+                  child: SizedBox(
+                    height: 38,
+                    child: OutlinedButton.icon(
+                      style: OutlinedButton.styleFrom(
+                        side: const BorderSide(color: GamerTheme.redAccent, width: 1.2),
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                      ),
+                      icon: const Icon(Icons.exit_to_app_rounded, color: GamerTheme.redAccent, size: 16),
+                      label: const Text(
+                        'LEAVE ROOM',
+                        style: TextStyle(color: GamerTheme.redAccent, fontWeight: FontWeight.bold, fontSize: 11.5),
+                      ),
+                      onPressed: () async {
+                        final confirm = await showDialog<bool>(
+                          context: context,
+                          builder: (d) => AlertDialog(
+                            backgroundColor: GamerTheme.cardDark,
+                            title: const Text('Leave Room?', style: TextStyle(color: Colors.white, fontSize: 15, fontWeight: FontWeight.bold)),
+                            content: const Text('Your slot will be given to another player.', style: TextStyle(color: GamerTheme.textMuted, fontSize: 13)),
+                            actions: [
+                              TextButton(onPressed: () => Navigator.pop(d, false), child: const Text('Cancel')),
+                              ElevatedButton(
+                                style: ElevatedButton.styleFrom(backgroundColor: GamerTheme.redAccent),
+                                onPressed: () => Navigator.pop(d, true),
+                                child: const Text('Leave', style: TextStyle(color: Colors.white)),
+                              ),
+                            ],
+                          ),
+                        );
+                        if (confirm == true) {
+                          widget.onLeaveRoom();
+                        }
+                      },
+                    ),
                   ),
                 ),
-                child: Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    if (isPlayerHost) ...[
-                      const Icon(Icons.shield_rounded, size: 12, color: Colors.amber),
-                      const SizedBox(width: 4),
-                    ],
-                    Text(
-                      pName,
-                      style: TextStyle(
-                        color: isCurrent ? _neonGreen : Colors.white,
-                        fontSize: 11,
-                        fontWeight: FontWeight.w600,
-                      ),
+                const SizedBox(width: 8),
+              ],
+              Expanded(
+                child: SizedBox(
+                  height: 38,
+                  child: ElevatedButton.icon(
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: _neonGreen,
+                      foregroundColor: Colors.black,
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
                     ),
-                  ],
-                ),
-              );
-            }).toList(),
-          ),
-          const SizedBox(height: 14),
-
-          // LEAVE ROOM BUTTON (KEEP)
-          if (widget.isJoined && !isHost) ...[
-            SizedBox(
-              width: double.infinity,
-              height: 40,
-              child: OutlinedButton.icon(
-                style: OutlinedButton.styleFrom(
-                  side: const BorderSide(color: GamerTheme.redAccent),
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-                ),
-                icon: const Icon(Icons.exit_to_app_rounded, color: GamerTheme.redAccent, size: 16),
-                label: const Text(
-                  'LEAVE ROOM',
-                  style: TextStyle(color: GamerTheme.redAccent, fontWeight: FontWeight.bold, fontSize: 12),
-                ),
-                onPressed: () async {
-                  final confirm = await showDialog<bool>(
-                    context: context,
-                    builder: (d) => AlertDialog(
-                      backgroundColor: GamerTheme.cardDark,
-                      title: const Text('Leave Room?', style: TextStyle(color: Colors.white, fontSize: 15, fontWeight: FontWeight.bold)),
-                      content: const Text('Your slot will be given to another player.', style: TextStyle(color: GamerTheme.textMuted, fontSize: 13)),
-                      actions: [
-                        TextButton(onPressed: () => Navigator.pop(d, false), child: const Text('Cancel')),
-                        ElevatedButton(
-                          style: ElevatedButton.styleFrom(backgroundColor: GamerTheme.redAccent),
-                          onPressed: () => Navigator.pop(d, true),
-                          child: const Text('Leave', style: TextStyle(color: Colors.white)),
-                        ),
-                      ],
+                    icon: const Icon(Icons.info_outline_rounded, color: Colors.black, size: 16),
+                    label: const Text(
+                      'VIEW DETAILS',
+                      style: TextStyle(color: Colors.black, fontWeight: FontWeight.bold, fontSize: 11.5),
                     ),
-                  );
-                  if (confirm == true) {
-                    widget.onLeaveRoom();
-                  }
-                },
+                    onPressed: _showRoomRulesDialog,
+                  ),
+                ),
               ),
-            ),
-          ],
+            ],
+          ),
         ],
       ),
     );
