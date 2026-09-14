@@ -46,14 +46,15 @@ class SquadPost {
     this.language = 'Hindi',
     this.mode = 'Classic Squad',
     this.description = '',
-    this.gameUid = '',
+    String? gameUid,
+    String? inGameUid,
     this.joinRequests = const [],
     this.members = const [],
     this.membersCount = 1,
     this.requestedCount = 0,
     this.isActive = true,
     this.createdAt,
-  });
+  }) : gameUid = gameUid ?? inGameUid ?? '';
 
   factory SquadPost.fromFirestore(DocumentSnapshot doc) {
     final data = doc.data() as Map<String, dynamic>? ?? {};

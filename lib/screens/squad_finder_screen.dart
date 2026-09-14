@@ -254,12 +254,6 @@ class _SquadFinderScreenState extends State<SquadFinderScreen> {
 
   String get cardTierNeeded => 'Tier';
 
-  @override
-  void initState() {
-    super.initState();
-    // Removed auto-create / auto-repair logic from initState
-  }
-
   List<SquadPost> _combineSquads(List<SquadPost> streamSquads) {
     final Map<String, SquadPost> map = {};
     for (final s in streamSquads) {

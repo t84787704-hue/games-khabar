@@ -63,7 +63,7 @@ class _LFGCardState extends State<LFGCard> {
             backgroundColor: GamerTheme.cardDark,
             shape: RoundedRectangleBorder(
               borderRadius: BorderRadius.circular(16),
-              border: Border.all(color: GamerTheme.borderDark),
+              side: const BorderSide(color: GamerTheme.borderDark),
             ),
             title: Row(
               children: [
