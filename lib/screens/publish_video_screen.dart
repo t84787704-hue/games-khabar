@@ -1,6 +1,12 @@
+import 'dart:async';
 import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
+import 'package:ffmpeg_kit_flutter_new/ffmpeg_kit.dart';
+import 'package:ffmpeg_kit_flutter_new/return_code.dart';
+import 'package:ffmpeg_kit_flutter_new/statistics.dart';
+import 'package:path_provider/path_provider.dart';
+import 'package:video_player/video_player.dart';
 import '../constants/gamer_theme.dart';
 import '../services/gamer_auth_service.dart';
 import '../services/background_upload_manager.dart';
@@ -56,84 +62,203 @@ class _PublishVideoScreenState extends State<PublishVideoScreen> {
   @override
   void dispose() {
     _captionController.dispose();
+    try {
+      if (_isCompressing) {
+        FFmpegKit.cancel();
+      }
+    } catch (_) {}
     super.dispose();
   }
 
-  /// Option B: User selects video (even 500-600MB) -> Immediately start compression
+  /// Delete old compressed files before new compression to avoid uploading 0-byte or stale file
+  Future<void> _deleteOldCompressedFiles() async {
+    try {
+      if (_compressedVideoFile != null && await _compressedVideoFile!.exists()) {
+        try {
+          await _compressedVideoFile!.delete();
+        } catch (_) {}
+      }
+      final tempDir = await getTemporaryDirectory();
+      final dir = Directory(tempDir.path);
+      if (await dir.exists()) {
+        final entities = dir.listSync();
+        for (final entity in entities) {
+          if (entity is File &&
+              entity.path.contains('compressed_') &&
+              entity.path.endsWith('.mp4')) {
+            try {
+              await entity.delete();
+            } catch (_) {}
+          }
+        }
+      }
+    } catch (e) {
+      debugPrint("Note: cleaning old compressed files: $e");
+    }
+  }
+
+  /// Option B: User selects video (even 500-600MB) -> Immediately start compression with libx264 baseline
   Future<void> _loadVideoFile(File file) async {
+    final String originalPath = file.path;
+    double originalSizeMB = 0.0;
+
     try {
       final bytes = await file.length();
-      final double mb = bytes / (1024 * 1024);
+      originalSizeMB = bytes / (1024 * 1024);
       final fileName = file.path.split(Platform.pathSeparator).last;
+
+      print("Original: ${originalSizeMB.toStringAsFixed(2)} MB at $originalPath");
 
       setState(() {
         _originalVideoFile = file;
         _compressedVideoFile = null;
-        _originalSizeMB = mb;
-        _compressedSizeMB = mb;
+        _originalSizeMB = originalSizeMB;
+        _compressedSizeMB = 0.0;
         _videoFileName = fileName;
-        _isCompressing = mb > 20.0;
+        _isCompressing = true;
         _compressionProgress = 0.05;
-        _compressionStatus = mb > 20.0
-            ? "⚡ Optimizing... 5% - Compressing from ${mb.toInt()}MB to ~80MB"
-            : "Ready for Upload (${mb.toInt()}MB • Original)";
+        _compressionStatus = "⚡ Optimizing... 5% - Compressing from ${originalSizeMB.toInt()}MB to ~80MB";
       });
 
-      // If file is already <= 20MB, ready right away
-      if (mb <= 20.0) {
-        setState(() {
-          _compressedVideoFile = file;
-          _isCompressing = false;
-          _compressionProgress = 1.0;
-          _compressionStatus = "Ready for Upload (Compressed: ${mb.toInt()}MB • 720p HD)";
-        });
-        return;
+      // 1. Delete old compressed files before new compression to avoid uploading 0-byte file
+      await _deleteOldCompressedFiles();
+
+      // 2. outputPath MUST end with .mp4 (not .tmp)
+      final tempDir = await getTemporaryDirectory();
+      final int timestamp = DateTime.now().millisecondsSinceEpoch;
+      final String outputPath = '${tempDir.path}/compressed_$timestamp.mp4';
+
+      final File targetFile = File(outputPath);
+      if (await targetFile.exists()) {
+        try {
+          await targetFile.delete();
+        } catch (_) {}
       }
 
-      // Immediately start 720p compression with 1500k bitrate
-      final compressed = await VideoUploadService.compressVideoOptionB(
-        inputFile: file,
-        estimatedDurationSeconds: 180,
-        onProgress: (p) {
-          if (!mounted) return;
-          final pct = (p * 100).toInt();
-          setState(() {
-            _compressionProgress = p;
-            _compressionStatus = "⚡ Optimizing... $pct% - Compressing from ${_originalSizeMB.toInt()}MB to ~80MB";
-          });
+      // 3. Exact ffmpeg command:
+      // -i {inputPath} -vf scale=-2:720 -c:v libx264 -profile:v baseline -level 3.0 -pix_fmt yuv420p -crf 28 -preset fast -c:a aac -b:a 128k -movflags +faststart {outputPath}.mp4
+      final List<String> ffmpegArgs = [
+        '-y',
+        '-i', originalPath,
+        '-vf', 'scale=-2:720',
+        '-c:v', 'libx264',
+        '-profile:v', 'baseline',
+        '-level', '3.0',
+        '-pix_fmt', 'yuv420p',
+        '-crf', '28',
+        '-preset', 'fast',
+        '-c:a', 'aac',
+        '-b:a', '128k',
+        '-movflags', '+faststart',
+        outputPath,
+      ];
+
+      debugPrint("🚀 [FFMPEG] Running H.264 baseline compression to $outputPath");
+      final completer = Completer<bool>();
+
+      final session = await FFmpegKit.executeWithArgumentsAsync(
+        ffmpegArgs,
+        (session) async {
+          final returnCode = await session.getReturnCode();
+          final isSuccess = ReturnCode.isSuccess(returnCode);
+          debugPrint("🎬 [FFMPEG] Finished with returnCode: $returnCode, success: $isSuccess");
+          if (!completer.isCompleted) {
+            completer.complete(isSuccess);
+          }
         },
-        onStatus: (status) {
-          if (!mounted) return;
-          setState(() {
-            _compressionStatus = status;
-          });
+        (log) {
+          final msg = log.getMessage();
+          if (msg.contains("Error") || msg.contains("failed") || msg.contains("error")) {
+            debugPrint("⚠️ [FFMPEG_LOG] $msg");
+          }
+        },
+        (Statistics stats) {
+          final timeMs = stats.getTime();
+          if (timeMs > 0 && mounted) {
+            final double p = (timeMs / (180 * 1000)).clamp(0.05, 0.95);
+            final int pct = (p * 100).toInt();
+            setState(() {
+              _compressionProgress = p;
+              _compressionStatus = "⚡ Optimizing... $pct% - Compressing from ${originalSizeMB.toInt()}MB to ~80MB";
+            });
+          }
         },
       );
 
-      final compBytes = await compressed.length();
-      final compMB = compBytes / (1024 * 1024);
+      final bool success = await completer.future.timeout(
+        const Duration(minutes: 5),
+        onTimeout: () {
+          debugPrint("⚠️ [FFMPEG] Compression timed out after 5 minutes");
+          try {
+            FFmpegKit.cancel(session.getSessionId());
+          } catch (_) {}
+          return false;
+        },
+      );
 
-      if (!mounted) return;
-      setState(() {
-        _compressedVideoFile = compressed;
-        _compressedSizeMB = compMB;
-        _isCompressing = false;
-        _compressionProgress = 1.0;
-        _compressionStatus = "Ready for Upload (Compressed: ${compMB.toInt()}MB • 720p HD)";
-      });
+      // 4. After compression, check File(compressedPath).exists() and length > 0, log size
+      final File compressedCandidate = File(outputPath);
+      final bool exists = await compressedCandidate.exists();
+      final int compLength = exists ? await compressedCandidate.length() : 0;
+      final double compressedSizeMB = compLength / (1024 * 1024);
+
+      if (success && exists && compLength > 0) {
+        print("Compressed: ${compressedSizeMB.toStringAsFixed(2)} MB at $outputPath");
+
+        // 5. Before upload, test locally: try VideoPlayerController.file(File(compressedPath)) to ensure it initializes
+        bool isPlayable = false;
+        VideoPlayerController? testController;
+        try {
+          testController = VideoPlayerController.file(compressedCandidate);
+          await testController.initialize().timeout(const Duration(seconds: 8));
+          isPlayable = testController.value.isInitialized;
+          debugPrint("✅ [LOCAL_TEST] Compressed video initialized successfully! Duration: ${testController.value.duration}");
+        } catch (playerErr) {
+          debugPrint("⚠️ [LOCAL_TEST] VideoPlayerController initialization failed: $playerErr");
+          isPlayable = false;
+        } finally {
+          try {
+            await testController?.dispose();
+          } catch (_) {}
+        }
+
+        if (isPlayable) {
+          if (!mounted) return;
+          setState(() {
+            _compressedVideoFile = compressedCandidate;
+            _compressedSizeMB = compressedSizeMB;
+            _isCompressing = false;
+            _compressionProgress = 1.0;
+            _compressionStatus = "Ready for Upload (Compressed: ${compressedSizeMB.toStringAsFixed(1)}MB • 720p HD)";
+          });
+          return;
+        } else {
+          print("⚠️ WARNING: Compressed video failed player initialization test. Falling back to original file.");
+        }
+      } else {
+        print("⚠️ WARNING: Video compression failed or compressed file length == 0. Falling back to original file.");
+      }
+
+      // Fallback to original file
+      _fallbackToOriginal(file, originalSizeMB, originalPath);
     } catch (e) {
-      if (!mounted) return;
-      setState(() {
-        _isCompressing = false;
-        _compressionStatus = "Notice: $e";
-      });
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(e.toString().replaceFirst("Exception: ", "")),
-          backgroundColor: GamerTheme.redAccent,
-        ),
-      );
+      debugPrint("⚠️ [PUBLISH_VIDEO] Compression exception: $e");
+      print("⚠️ WARNING: Video compression failed with exception ($e). Falling back to original file.");
+      _fallbackToOriginal(file, originalSizeMB, originalPath);
     }
+  }
+
+  void _fallbackToOriginal(File file, double originalSize, String originalPath) {
+    print("Original: ${originalSize.toStringAsFixed(2)} MB at $originalPath");
+    print("Compressed: ${originalSize.toStringAsFixed(2)} MB at $originalPath");
+    if (!mounted) return;
+    setState(() {
+      _compressedVideoFile = file;
+      _compressedSizeMB = originalSize;
+      _isCompressing = false;
+      _compressionProgress = 1.0;
+      _compressionStatus = "Ready for Upload (${originalSize.toStringAsFixed(1)}MB • Original)";
+    });
   }
 
   Future<void> _pickVideo(ImageSource source) async {
@@ -259,6 +384,17 @@ class _PublishVideoScreenState extends State<PublishVideoScreen> {
       );
       return;
     }
+
+    final String originalPath = _originalVideoFile?.path ?? fileToUpload.path;
+    final String compressedPath = fileToUpload.path;
+    final double originalSize = _originalSizeMB;
+    final int uploadBytes = await fileToUpload.length();
+    final double compressedSize = uploadBytes / (1024 * 1024);
+
+    // Required logs:
+    print("Original: ${originalSize.toStringAsFixed(2)} MB at $originalPath");
+    print("Compressed: ${compressedSize.toStringAsFixed(2)} MB at $compressedPath");
+    print("Uploading compressed file: $compressedPath");
 
     setState(() => _isPublishing = true);
 

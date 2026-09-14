@@ -25,15 +25,168 @@ class _SquadFinderScreenState extends State<SquadFinderScreen> {
   // Local list to immediately display created posts without waiting for Firestore stream
   final List<SquadPost> _localSquads = [];
 
+  // Top Filter bar state
+  String _filterGame = 'All';
   String _filterMode = 'All';
   String _filterTier = 'All';
-  double _filterMinKd = 0.0;
-  bool? _filterMicOn;
-  String _filterLanguage = 'All';
+  String _filterKd = 'Any';
 
-  final List<String> _modeOptions = ['All', 'Rank Push', 'Classic Squad', 'TDM Tourney', 'Payload'];
-  final List<String> _tierOptions = ['All', 'Diamond+', 'Crown+', 'Ace+', 'Conqueror'];
-  final List<String> _langOptions = ['All', 'Hindi', 'English', 'Punjabi', 'Tamil', 'Telugu'];
+  final List<String> _gameFilterOptions = ['All', 'PUBG Mobile', 'BGMI', 'Free Fire', 'COD Mobile', 'Valorant'];
+  final List<String> _modeFilterOptions = ['All', 'TPP', 'FPP', 'Rank Push', 'Classic Squad'];
+  final List<String> _tierFilterOptions = ['All', 'Ace', 'Conqueror', 'Crown', 'Diamond'];
+  final List<String> _kdFilterOptions = ['Any', '2.0+', '3.0+', '4.0+', '5.0+'];
+
+  // Create Squad Card State
+  String _cardGame = 'PUBG Mobile';
+  String _cardMode = 'TPP'; // TPP / FPP
+  String _cardTier = 'Ace'; // Ace / Conqueror / Crown
+  String _cardRole = 'Entry Fragger'; // Entry Fragger / IGL / Support
+  bool _cardMicRequired = true; // ON
+  String _cardLanguage = 'English'; // English
+
+  final List<String> _cardGameOptions = ['PUBG Mobile', 'BGMI', 'Free Fire', 'COD Mobile', 'Valorant'];
+  final List<String> _cardTierOptions = ['Ace', 'Conqueror', 'Crown', 'Diamond'];
+  final List<String> _cardLangOptions = ['English', 'Hindi', 'Urdu', 'Punjabi'];
+
+  Future<void> _createSquadFromCard() async {
+    if (_isPosting) return;
+    final authUser = FirebaseAuth.instance.currentUser;
+    if (authUser == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Please log in to create a squad!')),
+      );
+      return;
+    }
+
+    final currentGamer = _authService.currentGamer;
+    final String uid = authUser.uid;
+    final String email = authUser.email ?? '';
+    final String gamerName = (currentGamer?.displayName.isNotEmpty == true)
+        ? currentGamer!.displayName
+        : (authUser.displayName ?? 'Squad Leader');
+    final String gamerTag = (currentGamer?.username.isNotEmpty == true)
+        ? currentGamer!.username
+        : 'gamer';
+    final String avatar = (currentGamer?.photoUrl.isNotEmpty == true)
+        ? currentGamer!.photoUrl
+        : (authUser.photoURL ?? '');
+    final String inGameId = (currentGamer?.gameId.isNotEmpty == true)
+        ? currentGamer!.gameId
+        : 'ID_${uid.substring(0, 6)}';
+
+    setState(() => _isPosting = true);
+
+    const double defaultKd = 3.0;
+    final desc = 'Looking for $_cardRole in $_cardMode ($cardTierNeeded: $_cardTier). Mic: ${_cardMicRequired ? "Yes" : "No"}.';
+
+    final postData = {
+      'id': uid,
+      'postId': uid,
+      'squadId': uid,
+      'leaderUid': uid,
+      'hostId': uid,
+      'userId': uid,
+      'ownerId': uid,
+      'ownerEmail': email,
+      'hostEmail': email,
+      'username': gamerTag,
+      'ownerTag': gamerTag,
+      'displayName': gamerName,
+      'title': '$gamerName ($_cardRole)',
+      'userAvatar': avatar,
+      'avatar': avatar,
+      'userRank': _cardTier,
+      'tier': _cardTier,
+      'tierNeeded': _cardTier,
+      'kd': defaultKd,
+      'kdNeeded': defaultKd,
+      'micMandatory': _cardMicRequired,
+      'micOn': _cardMicRequired,
+      'lang': _cardLanguage,
+      'language': _cardLanguage,
+      'mode': _cardMode,
+      'role': _cardRole,
+      'description': desc,
+      'bgmiUid': inGameId,
+      'inGameUid': inGameId,
+      'bgmiUidToCopy': inGameId,
+      'game': _cardGame,
+      'isActive': true,
+      'members': [uid],
+      'memberCount': 1,
+      'membersCount': 1,
+      'requestedCount': 0,
+      'joinRequests': <String>[],
+      'createdAt': FieldValue.serverTimestamp(),
+      'updatedAt': FieldValue.serverTimestamp(),
+    };
+
+    try {
+      await FirebaseFirestore.instance.collection('lfg_posts').doc(uid).set(postData);
+      try {
+        await FirebaseFirestore.instance.collection('squads').doc(uid).set(postData);
+      } catch (_) {}
+      try {
+        final chatRef = FirebaseFirestore.instance.collection('chats').doc(uid);
+        await chatRef.set({
+          'squadId': uid,
+          'chatId': uid,
+          'postId': uid,
+          'hostId': uid,
+          'leaderUid': uid,
+          'hostEmail': email,
+          'createdAt': FieldValue.serverTimestamp(),
+          'members': [uid],
+          'isActive': true,
+          'title': gamerName,
+          'displayName': gamerName,
+        }, SetOptions(merge: true));
+      } catch (_) {}
+    } catch (e) {
+      debugPrint('[SquadFinderScreen] Error saving squad: $e');
+    }
+
+    final post = SquadPost(
+      id: uid,
+      userId: uid,
+      ownerEmail: email,
+      username: gamerTag,
+      displayName: gamerName,
+      userAvatar: avatar,
+      userRank: _cardTier,
+      game: _cardGame,
+      tierNeeded: _cardTier,
+      kdNeeded: defaultKd,
+      micOn: _cardMicRequired,
+      language: _cardLanguage,
+      mode: _cardMode,
+      description: desc,
+      inGameUid: inGameId,
+      isActive: true,
+      joinRequests: const [],
+      members: [uid],
+      membersCount: 1,
+      requestedCount: 0,
+      createdAt: DateTime.now(),
+    );
+
+    setState(() {
+      _isPosting = false;
+      _localSquads.removeWhere((p) => p.id == uid);
+      _localSquads.insert(0, post);
+    });
+
+    if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('🔥 Squad created for $_cardGame! Teammates can now join.'),
+          backgroundColor: const Color(0xFFFF6B00),
+        ),
+      );
+    }
+  }
+
+  String get cardTierNeeded => 'Tier';
 
   @override
   void initState() {
@@ -509,18 +662,61 @@ class _SquadFinderScreenState extends State<SquadFinderScreen> {
     );
   }
 
+  Widget _buildFilterPill({
+    required String label,
+    required String value,
+    required List<String> items,
+    required ValueChanged<String?> onChanged,
+  }) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+      decoration: BoxDecoration(
+        color: const Color(0xFF2A2E3A),
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(
+          color: (value != 'All' && value != 'Any') ? const Color(0xFFFF6B00) : const Color(0xFF383E4E),
+          width: 1,
+        ),
+      ),
+      child: DropdownButtonHideUnderline(
+        child: DropdownButton<String>(
+          value: items.contains(value) ? value : items.first,
+          dropdownColor: const Color(0xFF2A2E3A),
+          icon: const Padding(
+            padding: EdgeInsets.only(left: 4),
+            child: Icon(Icons.keyboard_arrow_down_rounded, color: Colors.white, size: 16),
+          ),
+          style: const TextStyle(
+            color: Colors.white,
+            fontSize: 12,
+            fontWeight: FontWeight.w600,
+          ),
+          items: items.map((item) {
+            final prefix = label.split(':')[0];
+            return DropdownMenuItem<String>(
+              value: item,
+              child: Text('$prefix: $item', style: const TextStyle(color: Colors.white, fontSize: 12)),
+            );
+          }).toList(),
+          onChanged: onChanged,
+          isDense: true,
+        ),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: GamerTheme.bgDark,
+      backgroundColor: const Color(0xFF0F1219),
       extendBody: false,
       extendBodyBehindAppBar: false,
       body: SafeArea(
         top: true,
         bottom: true,
         child: RefreshIndicator(
-        color: GamerTheme.accentOrange,
-        backgroundColor: GamerTheme.cardDark,
+        color: const Color(0xFFFF6B00),
+        backgroundColor: const Color(0xFF161A24),
         onRefresh: () async {
           debugPrint('[SquadFinderScreen] Pull-to-refresh triggered');
           final fetched = await _squadService.fetchSquadsOnce();
@@ -537,166 +733,398 @@ class _SquadFinderScreenState extends State<SquadFinderScreen> {
         child: CustomScrollView(
           physics: const AlwaysScrollableScrollPhysics(parent: BouncingScrollPhysics()),
           slivers: [
-            // Filter Header Bar
+            // Top FILTERS Bar with 4 dropdown pills
             SliverToBoxAdapter(
               child: Container(
-                padding: const EdgeInsets.fromLTRB(14, 12, 14, 8),
-                decoration: const BoxDecoration(
-                  color: GamerTheme.bgDark,
-                  border: Border(bottom: BorderSide(color: GamerTheme.borderDark, width: 0.8)),
+                padding: const EdgeInsets.fromLTRB(14, 12, 14, 10),
+                color: const Color(0xFF0F1219),
+                child: SingleChildScrollView(
+                  scrollDirection: Axis.horizontal,
+                  physics: const BouncingScrollPhysics(),
+                  child: Row(
+                    children: [
+                      _buildFilterPill(
+                        label: 'Game: $_filterGame',
+                        value: _filterGame,
+                        items: _gameFilterOptions,
+                        onChanged: (v) => setState(() => _filterGame = v ?? 'All'),
+                      ),
+                      const SizedBox(width: 8),
+                      _buildFilterPill(
+                        label: 'Mode: $_filterMode',
+                        value: _filterMode,
+                        items: _modeFilterOptions,
+                        onChanged: (v) => setState(() => _filterMode = v ?? 'All'),
+                      ),
+                      const SizedBox(width: 8),
+                      _buildFilterPill(
+                        label: 'Tier: $_filterTier',
+                        value: _filterTier,
+                        items: _tierFilterOptions,
+                        onChanged: (v) => setState(() => _filterTier = v ?? 'All'),
+                      ),
+                      const SizedBox(width: 8),
+                      _buildFilterPill(
+                        label: 'K/D: $_filterKd',
+                        value: _filterKd,
+                        items: _kdFilterOptions,
+                        onChanged: (v) => setState(() => _filterKd = v ?? 'Any'),
+                      ),
+                      if (_filterGame != 'All' || _filterMode != 'All' || _filterTier != 'All' || _filterKd != 'Any') ...[
+                        const SizedBox(width: 8),
+                        GestureDetector(
+                          onTap: () {
+                            setState(() {
+                              _filterGame = 'All';
+                              _filterMode = 'All';
+                              _filterTier = 'All';
+                              _filterKd = 'Any';
+                            });
+                          },
+                          child: Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+                            decoration: BoxDecoration(
+                              color: const Color(0xFFFF6B00).withOpacity(0.18),
+                              borderRadius: BorderRadius.circular(16),
+                            ),
+                            child: const Text('RESET', style: TextStyle(color: Color(0xFFFF6B00), fontSize: 11, fontWeight: FontWeight.w900)),
+                          ),
+                        ),
+                      ],
+                    ],
+                  ),
+                ),
+              ),
+            ),
+
+            // Card: "Create Squad - PUBG Mobile"
+            SliverToBoxAdapter(
+              child: Container(
+                margin: const EdgeInsets.fromLTRB(14, 6, 14, 16),
+                padding: const EdgeInsets.all(16),
+                decoration: BoxDecoration(
+                  color: const Color(0xFF161A24),
+                  borderRadius: BorderRadius.circular(16),
+                  border: Border.all(color: const Color(0xFF262B3A), width: 1.2),
+                  boxShadow: [
+                    BoxShadow(
+                      color: Colors.black.withOpacity(0.35),
+                      blurRadius: 10,
+                      offset: const Offset(0, 4),
+                    ),
+                  ],
                 ),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
+                    // Card Title
                     Row(
                       children: [
-                        const Icon(Icons.filter_list_rounded, color: GamerTheme.accentOrange, size: 16),
-                        const SizedBox(width: 6),
-                        const Text(
-                          'FILTERS:',
-                          style: TextStyle(color: GamerTheme.textMuted, fontSize: 11, fontWeight: FontWeight.w900),
-                        ),
-                        const Spacer(),
-                        if (_filterMode != 'All' || _filterTier != 'All' || _filterMinKd > 0 || _filterMicOn != null || _filterLanguage != 'All')
-                          GestureDetector(
-                            onTap: () {
-                              setState(() {
-                                _filterMode = 'All';
-                                _filterTier = 'All';
-                                _filterMinKd = 0.0;
-                                _filterMicOn = null;
-                                _filterLanguage = 'All';
-                              });
-                            },
-                            child: const Text('RESET', style: TextStyle(color: GamerTheme.accentOrange, fontSize: 11, fontWeight: FontWeight.w900)),
+                        Container(
+                          padding: const EdgeInsets.all(7),
+                          decoration: BoxDecoration(
+                            color: const Color(0xFFFF6B00).withOpacity(0.18),
+                            borderRadius: BorderRadius.circular(8),
                           ),
+                          child: const Icon(Icons.shield_rounded, color: Color(0xFFFF6B00), size: 18),
+                        ),
+                        const SizedBox(width: 10),
+                        Text(
+                          'Create Squad - $_cardGame',
+                          style: const TextStyle(
+                            color: Colors.white,
+                            fontSize: 16,
+                            fontWeight: FontWeight.w900,
+                            letterSpacing: 0.3,
+                          ),
+                        ),
                       ],
                     ),
-                    const SizedBox(height: 8),
+                    const SizedBox(height: 14),
 
-                    // Filter Chips Row
-                    SingleChildScrollView(
-                      scrollDirection: Axis.horizontal,
-                      child: Row(
-                        children: [
-                          // Mode dropdown
-                          Container(
-                            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 2),
-                            decoration: BoxDecoration(
-                              color: GamerTheme.cardDark,
-                              borderRadius: BorderRadius.circular(8),
-                              border: Border.all(color: _filterMode != 'All' ? GamerTheme.accentCyan : GamerTheme.borderDark),
-                            ),
-                            child: DropdownButtonHideUnderline(
-                              child: DropdownButton<String>(
-                                value: _filterMode,
-                                dropdownColor: GamerTheme.cardDark,
-                                style: TextStyle(
-                                  color: _filterMode != 'All' ? GamerTheme.accentCyan : GamerTheme.textWhite,
-                                  fontSize: 12,
-                                  fontWeight: FontWeight.bold,
+                    // Game Dropdown & Tier Dropdown
+                    Row(
+                      children: [
+                        // Game dropdown
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              const Text(
+                                'GAME',
+                                style: TextStyle(color: Color(0xFF8E95A5), fontSize: 10.5, fontWeight: FontWeight.w800, letterSpacing: 0.5),
+                              ),
+                              const SizedBox(height: 6),
+                              Container(
+                                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 2),
+                                decoration: BoxDecoration(
+                                  color: const Color(0xFF2A2E3A),
+                                  borderRadius: BorderRadius.circular(10),
+                                  border: Border.all(color: const Color(0xFF383E4E)),
                                 ),
-                                items: _modeOptions.map((m) => DropdownMenuItem(value: m, child: Text('Mode: $m'))).toList(),
-                                onChanged: (v) => setState(() => _filterMode = v ?? 'All'),
+                                child: DropdownButtonHideUnderline(
+                                  child: DropdownButton<String>(
+                                    value: _cardGame,
+                                    isExpanded: true,
+                                    dropdownColor: const Color(0xFF2A2E3A),
+                                    icon: const Icon(Icons.keyboard_arrow_down_rounded, color: Colors.white, size: 18),
+                                    style: const TextStyle(color: Colors.white, fontSize: 12.5, fontWeight: FontWeight.bold),
+                                    items: _cardGameOptions.map((g) => DropdownMenuItem(value: g, child: Text(g))).toList(),
+                                    onChanged: (v) => setState(() => _cardGame = v ?? _cardGame),
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                        const SizedBox(width: 10),
+                        // Tier dropdown
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              const Text(
+                                'TIER',
+                                style: TextStyle(color: Color(0xFF8E95A5), fontSize: 10.5, fontWeight: FontWeight.w800, letterSpacing: 0.5),
+                              ),
+                              const SizedBox(height: 6),
+                              Container(
+                                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 2),
+                                decoration: BoxDecoration(
+                                  color: const Color(0xFF2A2E3A),
+                                  borderRadius: BorderRadius.circular(10),
+                                  border: Border.all(color: const Color(0xFF383E4E)),
+                                ),
+                                child: DropdownButtonHideUnderline(
+                                  child: DropdownButton<String>(
+                                    value: _cardTier,
+                                    isExpanded: true,
+                                    dropdownColor: const Color(0xFF2A2E3A),
+                                    icon: const Icon(Icons.keyboard_arrow_down_rounded, color: Colors.white, size: 18),
+                                    style: const TextStyle(color: Colors.white, fontSize: 12.5, fontWeight: FontWeight.bold),
+                                    items: _cardTierOptions.map((t) => DropdownMenuItem(value: t, child: Text(t))).toList(),
+                                    onChanged: (v) => setState(() => _cardTier = v ?? _cardTier),
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ],
+                    ),
+
+                    const SizedBox(height: 12),
+
+                    // Mode buttons: TPP / FPP
+                    const Text(
+                      'MODE',
+                      style: TextStyle(color: Color(0xFF8E95A5), fontSize: 10.5, fontWeight: FontWeight.w800, letterSpacing: 0.5),
+                    ),
+                    const SizedBox(height: 6),
+                    Row(
+                      children: ['TPP', 'FPP'].map((mode) {
+                        final isSel = _cardMode == mode;
+                        return Expanded(
+                          child: Padding(
+                            padding: EdgeInsets.only(right: mode == 'TPP' ? 8 : 0),
+                            child: InkWell(
+                              onTap: () => setState(() => _cardMode = mode),
+                              borderRadius: BorderRadius.circular(10),
+                              child: AnimatedContainer(
+                                duration: const Duration(milliseconds: 150),
+                                alignment: Alignment.center,
+                                padding: const EdgeInsets.symmetric(vertical: 9),
+                                decoration: BoxDecoration(
+                                  color: isSel ? const Color(0xFFFF6B00) : const Color(0xFF2A2E3A),
+                                  borderRadius: BorderRadius.circular(10),
+                                  border: Border.all(
+                                    color: isSel ? const Color(0xFFFF6B00) : const Color(0xFF383E4E),
+                                  ),
+                                ),
+                                child: Text(
+                                  mode,
+                                  style: TextStyle(
+                                    color: Colors.white,
+                                    fontWeight: isSel ? FontWeight.w900 : FontWeight.w600,
+                                    fontSize: 12.5,
+                                  ),
+                                ),
                               ),
                             ),
                           ),
-                          const SizedBox(width: 8),
+                        );
+                      }).toList(),
+                    ),
 
-                          // Tier dropdown
-                          Container(
-                            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 2),
-                            decoration: BoxDecoration(
-                              color: GamerTheme.cardDark,
-                              borderRadius: BorderRadius.circular(8),
-                              border: Border.all(color: _filterTier != 'All' ? GamerTheme.accentOrange : GamerTheme.borderDark),
-                            ),
-                            child: DropdownButtonHideUnderline(
-                              child: DropdownButton<String>(
-                                value: _filterTier,
-                                dropdownColor: GamerTheme.cardDark,
-                                style: TextStyle(
-                                  color: _filterTier != 'All' ? GamerTheme.accentOrange : GamerTheme.textWhite,
-                                  fontSize: 12,
-                                  fontWeight: FontWeight.bold,
+                    const SizedBox(height: 12),
+
+                    // Role buttons: Entry Fragger / IGL / Support
+                    const Text(
+                      'ROLE',
+                      style: TextStyle(color: Color(0xFF8E95A5), fontSize: 10.5, fontWeight: FontWeight.w800, letterSpacing: 0.5),
+                    ),
+                    const SizedBox(height: 6),
+                    Row(
+                      children: ['Entry Fragger', 'IGL', 'Support'].map((role) {
+                        final isSel = _cardRole == role;
+                        return Expanded(
+                          child: Padding(
+                            padding: const EdgeInsets.symmetric(horizontal: 2.5),
+                            child: InkWell(
+                              onTap: () => setState(() => _cardRole = role),
+                              borderRadius: BorderRadius.circular(10),
+                              child: AnimatedContainer(
+                                duration: const Duration(milliseconds: 150),
+                                alignment: Alignment.center,
+                                padding: const EdgeInsets.symmetric(vertical: 9),
+                                decoration: BoxDecoration(
+                                  color: isSel ? const Color(0xFFFF6B00) : const Color(0xFF2A2E3A),
+                                  borderRadius: BorderRadius.circular(10),
+                                  border: Border.all(
+                                    color: isSel ? const Color(0xFFFF6B00) : const Color(0xFF383E4E),
+                                  ),
                                 ),
-                                items: _tierOptions.map((t) => DropdownMenuItem(value: t, child: Text('Tier: $t'))).toList(),
-                                onChanged: (v) => setState(() => _filterTier = v ?? 'All'),
+                                child: Text(
+                                  role,
+                                  textAlign: TextAlign.center,
+                                  style: TextStyle(
+                                    color: Colors.white,
+                                    fontWeight: isSel ? FontWeight.w900 : FontWeight.w600,
+                                    fontSize: 11.5,
+                                  ),
+                                ),
                               ),
                             ),
                           ),
-                          const SizedBox(width: 8),
+                        );
+                      }).toList(),
+                    ),
 
-                          // KD Filter
-                          Container(
-                            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 2),
+                    const SizedBox(height: 12),
+
+                    // Mic Required switch & Language dropdown
+                    Row(
+                      children: [
+                        // Mic Required switch
+                        Expanded(
+                          child: Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
                             decoration: BoxDecoration(
-                              color: GamerTheme.cardDark,
-                              borderRadius: BorderRadius.circular(8),
-                              border: Border.all(color: _filterMinKd > 0 ? const Color(0xFFFF2D55) : GamerTheme.borderDark),
+                              color: const Color(0xFF2A2E3A),
+                              borderRadius: BorderRadius.circular(10),
+                              border: Border.all(color: const Color(0xFF383E4E)),
+                            ),
+                            child: Row(
+                              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                              children: [
+                                const Row(
+                                  children: [
+                                    Icon(Icons.mic_rounded, color: Color(0xFFFF6B00), size: 17),
+                                    SizedBox(width: 5),
+                                    Text(
+                                      'Mic Required',
+                                      style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 11.5),
+                                    ),
+                                  ],
+                                ),
+                                Switch(
+                                  value: _cardMicRequired,
+                                  activeColor: const Color(0xFFFF6B00),
+                                  activeTrackColor: const Color(0xFFFF6B00).withOpacity(0.4),
+                                  inactiveThumbColor: Colors.grey,
+                                  inactiveTrackColor: const Color(0xFF181C26),
+                                  materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                                  onChanged: (v) => setState(() => _cardMicRequired = v),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ),
+                        const SizedBox(width: 10),
+                        // Language dropdown
+                        Expanded(
+                          child: Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                            decoration: BoxDecoration(
+                              color: const Color(0xFF2A2E3A),
+                              borderRadius: BorderRadius.circular(10),
+                              border: Border.all(color: const Color(0xFF383E4E)),
                             ),
                             child: DropdownButtonHideUnderline(
-                              child: DropdownButton<double>(
-                                value: _filterMinKd,
-                                dropdownColor: GamerTheme.cardDark,
-                                style: TextStyle(
-                                  color: _filterMinKd > 0 ? const Color(0xFFFF2D55) : GamerTheme.textWhite,
-                                  fontSize: 12,
-                                  fontWeight: FontWeight.bold,
-                                ),
-                                items: const [
-                                  DropdownMenuItem(value: 0.0, child: Text('K/D: Any')),
-                                  DropdownMenuItem(value: 2.0, child: Text('K/D: 2.0+')),
-                                  DropdownMenuItem(value: 3.0, child: Text('K/D: 3.0+')),
-                                  DropdownMenuItem(value: 4.0, child: Text('K/D: 4.0+')),
-                                  DropdownMenuItem(value: 5.0, child: Text('K/D: 5.0+')),
+                              child: DropdownButton<String>(
+                                value: _cardLanguage,
+                                isExpanded: true,
+                                dropdownColor: const Color(0xFF2A2E3A),
+                                icon: const Icon(Icons.keyboard_arrow_down_rounded, color: Colors.white, size: 18),
+                                style: const TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.bold),
+                                items: _cardLangOptions.map((l) => DropdownMenuItem(value: l, child: Text('Lang: $l'))).toList(),
+                                onChanged: (v) => setState(() => _cardLanguage = v ?? _cardLanguage),
+                              ),
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+
+                    const SizedBox(height: 16),
+
+                    // Big orange button: "CREATE SQUAD"
+                    SizedBox(
+                      width: double.infinity,
+                      height: 48,
+                      child: ElevatedButton(
+                        onPressed: _isPosting ? null : _createSquadFromCard,
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: const Color(0xFFFF6B00),
+                          foregroundColor: Colors.white,
+                          elevation: 4,
+                          shadowColor: const Color(0xFFFF6B00).withOpacity(0.5),
+                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                        ),
+                        child: _isPosting
+                            ? const SizedBox(
+                                height: 20,
+                                width: 20,
+                                child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2),
+                              )
+                            : const Row(
+                                mainAxisAlignment: MainAxisAlignment.center,
+                                children: [
+                                  Icon(Icons.flash_on_rounded, color: Colors.white, size: 19),
+                                  SizedBox(width: 8),
+                                  Text(
+                                    'CREATE SQUAD',
+                                    style: TextStyle(
+                                      color: Colors.white,
+                                      fontWeight: FontWeight.w900,
+                                      fontSize: 14.5,
+                                      letterSpacing: 1.0,
+                                    ),
+                                  ),
                                 ],
-                                onChanged: (v) => setState(() => _filterMinKd = v ?? 0.0),
                               ),
-                            ),
-                          ),
-                          const SizedBox(width: 8),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
 
-                          // Mic Filter Chip
-                          FilterChip(
-                            label: Text(
-                              _filterMicOn == true ? 'Mic Required' : 'Mic: Any',
-                              style: TextStyle(
-                                color: _filterMicOn == true ? GamerTheme.bgDark : GamerTheme.textWhite,
-                                fontSize: 11,
-                                fontWeight: FontWeight.bold,
-                              ),
-                            ),
-                            selected: _filterMicOn == true,
-                            selectedColor: GamerTheme.neonGreen,
-                            backgroundColor: GamerTheme.cardDark,
-                            onSelected: (val) => setState(() => _filterMicOn = val ? true : null),
-                          ),
-                          const SizedBox(width: 8),
-
-                          // Language dropdown
-                          Container(
-                            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 2),
-                            decoration: BoxDecoration(
-                              color: GamerTheme.cardDark,
-                              borderRadius: BorderRadius.circular(8),
-                              border: Border.all(color: _filterLanguage != 'All' ? GamerTheme.accentBlue : GamerTheme.borderDark),
-                            ),
-                            child: DropdownButtonHideUnderline(
-                              child: DropdownButton<String>(
-                                value: _filterLanguage,
-                                dropdownColor: GamerTheme.cardDark,
-                                style: TextStyle(
-                                  color: _filterLanguage != 'All' ? GamerTheme.accentBlue : GamerTheme.textWhite,
-                                  fontSize: 12,
-                                  fontWeight: FontWeight.bold,
-                                ),
-                                items: _langOptions.map((l) => DropdownMenuItem(value: l, child: Text('Lang: $l'))).toList(),
-                                onChanged: (v) => setState(() => _filterLanguage = v ?? 'All'),
-                              ),
-                            ),
-                          ),
-                        ],
+            // Section Header
+            const SliverToBoxAdapter(
+              child: Padding(
+                padding: EdgeInsets.fromLTRB(16, 4, 16, 8),
+                child: Row(
+                  children: [
+                    Icon(Icons.stream_rounded, color: Color(0xFFFF6B00), size: 16),
+                    SizedBox(width: 6),
+                    Text(
+                      'ACTIVE SQUADS (LFG)',
+                      style: TextStyle(
+                        color: Color(0xFF8E95A5),
+                        fontSize: 11.5,
+                        fontWeight: FontWeight.w900,
+                        letterSpacing: 0.6,
                       ),
                     ),
                   ],
@@ -711,7 +1139,7 @@ class _SquadFinderScreenState extends State<SquadFinderScreen> {
                 if (snapshot.connectionState == ConnectionState.waiting && _localSquads.isEmpty) {
                   return const SliverFillRemaining(
                     child: Center(
-                      child: CircularProgressIndicator(color: GamerTheme.accentOrange),
+                      child: CircularProgressIndicator(color: Color(0xFFFF6B00)),
                     ),
                   );
                 }
@@ -720,27 +1148,26 @@ class _SquadFinderScreenState extends State<SquadFinderScreen> {
                 final squads = _combineSquads(streamSquads);
 
                 // Filter in-memory for smooth instant feedback
-                // No where filter for Tier/K/D on initial load; show ALL posts including userId == currentUserId
                 final filtered = squads.where((s) {
+                  if (_filterGame != 'All' &&
+                      !s.game.toLowerCase().contains(_filterGame.toLowerCase())) {
+                    return false;
+                  }
                   if (_filterMode != 'All' &&
                       !s.mode.toLowerCase().contains(_filterMode.toLowerCase())) {
                     return false;
                   }
                   if (_filterTier != 'All' &&
-                      !s.tierNeeded.toLowerCase().contains(_filterTier.replaceAll('+', '').toLowerCase()) &&
+                      !s.tierNeeded.toLowerCase().contains(_filterTier.toLowerCase()) &&
                       s.tierNeeded != 'Any Tier') {
                     return false;
                   }
-                  if (_filterMinKd > 0 && s.kdNeeded < _filterMinKd) {
-                    return false;
+                  if (_filterKd != 'Any') {
+                    final minVal = double.tryParse(_filterKd.replaceAll('+', '').trim()) ?? 0.0;
+                    if (s.kdNeeded < minVal) {
+                      return false;
+                    }
                   }
-                  if (_filterMicOn != null && s.micOn != _filterMicOn) {
-                    return false;
-                  }
-                  if (_filterLanguage != 'All' && s.language != _filterLanguage && s.language != 'All') {
-                    return false;
-                  }
-                  // Show all posts including current user's posts
                   return true;
                 }).toList();
 
@@ -815,13 +1242,13 @@ class _SquadFinderScreenState extends State<SquadFinderScreen> {
       ),
       ),
       floatingActionButton: FloatingActionButton.extended(
-        backgroundColor: GamerTheme.accentOrange,
-        foregroundColor: GamerTheme.bgDark,
+        backgroundColor: const Color(0xFFFF6B00),
+        foregroundColor: Colors.white,
         elevation: 6,
-        icon: const Icon(Icons.group_add_rounded, color: GamerTheme.bgDark),
+        icon: const Icon(Icons.group_add_rounded, color: Colors.white),
         label: const Text(
           'NEED SQUAD',
-          style: TextStyle(fontWeight: FontWeight.w900, letterSpacing: 0.8),
+          style: TextStyle(fontWeight: FontWeight.w900, letterSpacing: 0.8, color: Colors.white),
         ),
         onPressed: _openCreateSquadSheet,
       ),

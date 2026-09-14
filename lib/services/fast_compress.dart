@@ -50,22 +50,20 @@ class FastCompressService {
       onStatus?.call("⚡ Optimizing video for upload...");
       onProgress?.call(0.1);
 
-      // Clean, robust argument list with universal aspect-ratio preserving 720p scale
-      // 720p HD, 1500k bitrate, 30fps, AAC audio (Option B)
+      // libx264 baseline, yuv420p, crf 28, faststart, aac 128k
       final arguments = [
         '-y',
         '-i', inputPath,
-        '-vf', "scale='if(gt(a,1),-2,720)':'if(gt(a,1),720,-2)'",
-        '-r', '30',
-        '-c:v', 'mpeg4',
-        '-b:v', '1500k',
-        '-maxrate', '1800k',
-        '-bufsize', '3000k',
+        '-vf', 'scale=-2:720',
+        '-c:v', 'libx264',
+        '-profile:v', 'baseline',
+        '-level', '3.0',
         '-pix_fmt', 'yuv420p',
-        '-movflags', '+faststart',
+        '-crf', '28',
+        '-preset', 'fast',
         '-c:a', 'aac',
         '-b:a', '128k',
-        '-t', '180',
+        '-movflags', '+faststart',
         outputPath,
       ];
 
@@ -91,17 +89,16 @@ class FastCompressService {
             final pass2Args = [
               '-y',
               '-i', inputPath,
-              '-vf', "scale='if(gt(a,1),-2,720)':'if(gt(a,1),720,-2)'",
-              '-r', '30',
-              '-c:v', 'mpeg4',
-              '-b:v', '1000k',
-              '-maxrate', '1200k',
-              '-bufsize', '2000k',
+              '-vf', 'scale=-2:720',
+              '-c:v', 'libx264',
+              '-profile:v', 'baseline',
+              '-level', '3.0',
               '-pix_fmt', 'yuv420p',
-              '-movflags', '+faststart',
+              '-crf', '32',
+              '-preset', 'fast',
               '-c:a', 'aac',
               '-b:a', '96k',
-              '-t', '180',
+              '-movflags', '+faststart',
               pass2Path,
             ];
             final p2Success = await _runFFmpegCommandWithArgs(

@@ -81,9 +81,10 @@ class BackgroundUploadManager {
         final originalBytes = await videoFile.length();
         final double originalMB = originalBytes / (1024 * 1024);
 
-        // Step 1: Fast optimization if > 9.5MB (Cloudinary unsigned limit is 10MB)
+        // Step 1: Fast optimization if > 9.5MB and not already compressed
         File fileToUpload = videoFile;
-        if (originalMB > 9.5) {
+        final bool alreadyCompressed = videoFile.path.contains('compressed_');
+        if (originalMB > 9.5 && !alreadyCompressed) {
           activeTask.value = activeTask.value?.copyWith(
             statusText: '⚡ Optimizing clip...',
             progress: 0.08,

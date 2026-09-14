@@ -50,8 +50,9 @@ class FastChunkedUploadService {
     debugPrint("🚀 [FAST_UPLOAD] Preparing to upload ${fileSizeMB.toStringAsFixed(1)} MB video");
     final List<String> errorLogs = [];
 
-    // If video is > 20MB (e.g. high-bitrate mobile screen recordings), optimize it before upload
-    final bool needsOptimization = fileSizeMB > 20.0;
+    // If video is > 20MB and not already compressed, optimize it before upload
+    final bool alreadyCompressed = actualFile.path.contains('compressed_');
+    final bool needsOptimization = fileSizeMB > 20.0 && !alreadyCompressed;
     if (needsOptimization) {
       debugPrint("⚡ [FAST_UPLOAD] Video is ${fileSizeMB.toStringAsFixed(1)}MB (>20MB). Optimizing before upload...");
       onStatus?.call("⚡ Optimizing video for upload...");
@@ -288,7 +289,8 @@ class FastChunkedUploadService {
         request.headers['Content-Range'] = 'bytes $start-${end - 1}/$fileSize';
 
         request.fields['upload_preset'] = uploadPreset;
-        request.fields['folder'] = 'gaming_clips';
+        request.fields['folder'] = 'gamer_videos';
+        request.fields['resource_type'] = 'video';
         if (gameTag != null && gameTag.isNotEmpty) {
           request.fields['tags'] = 'gaming,$gameTag';
         }
@@ -374,7 +376,8 @@ class FastChunkedUploadService {
           final request = http.MultipartRequest("POST", uri);
 
           request.fields['upload_preset'] = preset;
-          request.fields['folder'] = 'gaming_clips';
+          request.fields['folder'] = 'gamer_videos';
+          request.fields['resource_type'] = 'video';
           if (gameTag != null && gameTag.isNotEmpty) {
             request.fields['tags'] = 'gaming,$gameTag';
           }
