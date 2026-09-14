@@ -259,6 +259,32 @@ class _GamerRoomsScreenState extends State<GamerRoomsScreen> {
       return;
     }
 
+    int entryFeeCoins = 0;
+    if (!room.entryFee.toUpperCase().contains('FREE')) {
+      final match = RegExp(r'(\d+)').firstMatch(room.entryFee);
+      if (match != null) {
+        entryFeeCoins = int.tryParse(match.group(1) ?? '0') ?? 0;
+      }
+    }
+
+    if (entryFeeCoins > 0) {
+      final userDoc = await FirebaseFirestore.instance.collection('users').doc(uid).get();
+      final uData = userDoc.data() ?? {};
+      final currentCoins = (uData['gCoins'] ?? uData['coins'] ?? 0) as num;
+      if (currentCoins < entryFeeCoins) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text('Not enough Coins! You need $entryFeeCoins Coins to join.'),
+              backgroundColor: GamerTheme.redAccent,
+              behavior: SnackBarBehavior.floating,
+            ),
+          );
+        }
+        return;
+      }
+    }
+
     await AdFreeService().showRewardedAdForAction(
       context: context,
       actionTitle: 'Watch 1 Ad to Join Room',
@@ -303,6 +329,31 @@ class _GamerRoomsScreenState extends State<GamerRoomsScreen> {
               'joinedUsers': FieldValue.arrayUnion([newUserMap]),
               'joinedPlayerNames.$uid': name,
             });
+
+            if (entryFeeCoins > 0) {
+              final userRef = FirebaseFirestore.instance.collection('users').doc(uid);
+              transaction.update(userRef, {
+                'gCoins': FieldValue.increment(-entryFeeCoins),
+                'coins': FieldValue.increment(-entryFeeCoins),
+                'inEscrow': FieldValue.increment(entryFeeCoins),
+              });
+
+              final String txId = FirebaseFirestore.instance.collection('transactions').doc().id;
+              final Map<String, dynamic> txData = {
+                'id': txId,
+                'userId': uid,
+                'type': 'escrow_hold',
+                'amount': -entryFeeCoins,
+                'title': 'Entry Fee Escrow 🔒',
+                'description': 'Slot registration for ${room.title}',
+                'status': 'in_escrow',
+                'roomId': room.id,
+                'timestamp': FieldValue.serverTimestamp(),
+                'createdAt': FieldValue.serverTimestamp(),
+              };
+              transaction.set(FirebaseFirestore.instance.collection('transactions').doc(txId), txData);
+              transaction.set(FirebaseFirestore.instance.collection('coin_transactions').doc(txId), txData);
+            }
           });
 
           if (mounted) {
@@ -366,6 +417,14 @@ class _GamerRoomsScreenState extends State<GamerRoomsScreen> {
             final roomRef = FirebaseFirestore.instance.collection('rooms').doc(room.id);
 
             try {
+              int entryFeeCoins = 0;
+              if (!room.entryFee.toUpperCase().contains('FREE')) {
+                final match = RegExp(r'(\d+)').firstMatch(room.entryFee);
+                if (match != null) {
+                  entryFeeCoins = int.tryParse(match.group(1) ?? '0') ?? 0;
+                }
+              }
+
               // Find matching user map
               Map<String, dynamic>? matchingUser;
               for (final u in room.joinedUsers) {
@@ -387,7 +446,34 @@ class _GamerRoomsScreenState extends State<GamerRoomsScreen> {
                 updates['joinedUsers'] = FieldValue.arrayRemove([matchingUser]);
               }
 
-              await roomRef.update(updates);
+              final batch = FirebaseFirestore.instance.batch();
+              batch.update(roomRef, updates);
+
+              if (entryFeeCoins > 0) {
+                final userRef = FirebaseFirestore.instance.collection('users').doc(uid);
+                final String refundTxId = FirebaseFirestore.instance.collection('transactions').doc().id;
+                final Map<String, dynamic> refundTxData = {
+                  'id': refundTxId,
+                  'userId': uid,
+                  'type': 'escrow_refund',
+                  'amount': entryFeeCoins,
+                  'title': 'Coins Refunded ↩️',
+                  'description': 'Slot cancellation refund for ${room.title}',
+                  'status': 'refunded',
+                  'roomId': room.id,
+                  'timestamp': FieldValue.serverTimestamp(),
+                  'createdAt': FieldValue.serverTimestamp(),
+                };
+                batch.set(userRef, {
+                  'gCoins': FieldValue.increment(entryFeeCoins),
+                  'coins': FieldValue.increment(entryFeeCoins),
+                  'inEscrow': FieldValue.increment(-entryFeeCoins),
+                }, SetOptions(merge: true));
+                batch.set(FirebaseFirestore.instance.collection('transactions').doc(refundTxId), refundTxData);
+                batch.set(FirebaseFirestore.instance.collection('coin_transactions').doc(refundTxId), refundTxData);
+              }
+
+              await batch.commit();
 
               setState(() {
                 _joinedRoomIds.remove(room.id);
@@ -396,8 +482,8 @@ class _GamerRoomsScreenState extends State<GamerRoomsScreen> {
               if (ctx.mounted) Navigator.pop(ctx);
               if (mounted) {
                 ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(
-                    content: Text('You left the room.'),
+                  SnackBar(
+                    content: Text(entryFeeCoins > 0 ? 'You left the room. $entryFeeCoins Coins refunded.' : 'You left the room.'),
                     backgroundColor: GamerTheme.redAccent,
                     behavior: SnackBarBehavior.floating,
                   ),
@@ -1612,6 +1698,7 @@ class _InRoomBottomSheetContentState extends State<_InRoomBottomSheetContent> {
       batch.set(winnerRef, {
         'gCoins': FieldValue.increment(prize),
         'coins': FieldValue.increment(prize),
+        'inEscrow': FieldValue.increment(0),
         'totalWinnings': FieldValue.increment(prize),
         'wins': FieldValue.increment(1),
         'displayName': winnerName,
@@ -1633,19 +1720,49 @@ class _InRoomBottomSheetContentState extends State<_InRoomBottomSheetContent> {
         'lastUpdated': FieldValue.serverTimestamp(),
       }, SetOptions(merge: true));
 
-      // 2. Create transaction record
+      // 2. Create winner transaction record (+prize)
       final DocumentReference txRef = FirebaseFirestore.instance.collection('transactions').doc();
-      batch.set(txRef, {
+      final Map<String, dynamic> txData = {
+        'id': txRef.id,
         'userId': resolvedWinnerId,
         'type': 'win_reward',
         'amount': prize,
+        'title': 'Match Victory Reward 🏆',
+        'description': 'Won ${widget.room.game} Match: ${widget.room.title}',
         'roomId': roomId,
         'winProofUrl': winProofUrl,
         'status': 'completed',
         'createdAt': FieldValue.serverTimestamp(),
-      });
+        'timestamp': FieldValue.serverTimestamp(),
+      };
+      batch.set(txRef, txData);
+      batch.set(FirebaseFirestore.instance.collection('coin_transactions').doc(txRef.id), txData);
 
-      // 3. Update room status
+      // 3. Update host escrow balance and log release transaction
+      if (widget.room.hostId.isNotEmpty) {
+        final DocumentReference hostRef = FirebaseFirestore.instance.collection('users').doc(widget.room.hostId);
+        batch.set(hostRef, {
+          'inEscrow': FieldValue.increment(-prize),
+        }, SetOptions(merge: true));
+
+        final DocumentReference hostTxRef = FirebaseFirestore.instance.collection('transactions').doc();
+        final Map<String, dynamic> hostTxData = {
+          'id': hostTxRef.id,
+          'userId': widget.room.hostId,
+          'type': 'escrow_release',
+          'amount': -prize,
+          'title': 'Escrow Released to Winner 🏆',
+          'description': 'Transferred $prize Coins escrow prize to $winnerName (${widget.room.title})',
+          'roomId': roomId,
+          'status': 'released',
+          'createdAt': FieldValue.serverTimestamp(),
+          'timestamp': FieldValue.serverTimestamp(),
+        };
+        batch.set(hostTxRef, hostTxData);
+        batch.set(FirebaseFirestore.instance.collection('coin_transactions').doc(hostTxRef.id), hostTxData);
+      }
+
+      // 4. Update room status
       final DocumentReference roomRef = FirebaseFirestore.instance.collection('rooms').doc(roomId);
       batch.update(roomRef, {
         'status': 'completed',
@@ -1655,11 +1772,11 @@ class _InRoomBottomSheetContentState extends State<_InRoomBottomSheetContent> {
         'isLive': false,
       });
 
-      // 4. System message in chat
+      // 5. System message in chat
       final DocumentReference msgRef = roomRef.collection('messages').doc();
       batch.set(msgRef, {
         'type': 'system_reward',
-        'message': '$winnerName won and received $prize Coins!',
+        'message': '🎉 $winnerName won and received $prize Coins!',
         'timestamp': FieldValue.serverTimestamp(),
         'senderId': 'system',
         'senderName': 'ROOM BOT',

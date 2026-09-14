@@ -557,14 +557,19 @@ class CoinWalletService extends ChangeNotifier {
         await _recordTransaction(CoinTransaction(
           id: _transactionsRef.doc().id,
           userId: hostId,
-          type: 'escrow_transferred',
-          amount: 0,
+          type: 'escrow_release',
+          amount: -prizePoolCoins,
           status: 'completed',
           timestamp: now,
           title: 'Escrow Released to Winner(s) 🏆',
           description: 'Transferred $prizePoolCoins escrow prize to winning team of "$roomTitle"',
           roomId: roomId,
         ));
+        try {
+          await _firestore.collection('users').doc(hostId).set({
+            'inEscrow': FieldValue.increment(-prizePoolCoins),
+          }, SetOptions(merge: true));
+        } catch (_) {}
       }
 
       // 2. Clear escrow for any joiners if needed
@@ -884,7 +889,10 @@ class CoinWalletService extends ChangeNotifier {
 
   Future<void> _recordTransaction(CoinTransaction tx) async {
     try {
-      await _transactionsRef.doc(tx.id).set(tx.toMap());
+      final map = tx.toMap();
+      map['createdAt'] = FieldValue.serverTimestamp();
+      await _transactionsRef.doc(tx.id).set(map);
+      await _firestore.collection('transactions').doc(tx.id).set(map);
     } catch (e) {
       debugPrint('CoinWalletService recordTransaction error: $e');
     }
@@ -892,14 +900,51 @@ class CoinWalletService extends ChangeNotifier {
 
   Stream<List<CoinTransaction>> transactionsStream(String userId) {
     if (userId.isEmpty) return Stream.value([]);
-    return _transactionsRef
-        .where('userId', isEqualTo: userId)
-        .snapshots()
-        .map((snap) {
-      final list = snap.docs.map((d) => CoinTransaction.fromFirestore(d)).toList();
-      list.sort((a, b) => b.timestamp.compareTo(a.timestamp));
-      return list;
-    });
+
+    late StreamController<List<CoinTransaction>> controller;
+    StreamSubscription? sub1;
+    StreamSubscription? sub2;
+    List<CoinTransaction> list1 = [];
+    List<CoinTransaction> list2 = [];
+
+    void emitMerged() {
+      if (controller.isClosed) return;
+      final Map<String, CoinTransaction> byId = {};
+      for (final tx in [...list1, ...list2]) {
+        byId[tx.id] = tx;
+      }
+      final merged = byId.values.toList();
+      merged.sort((a, b) => b.timestamp.compareTo(a.timestamp));
+      controller.add(merged);
+    }
+
+    controller = StreamController<List<CoinTransaction>>(
+      onListen: () {
+        sub1 = _firestore
+            .collection('transactions')
+            .where('userId', isEqualTo: userId)
+            .snapshots()
+            .listen((snap) {
+          list1 = snap.docs.map((d) => CoinTransaction.fromFirestore(d)).toList();
+          emitMerged();
+        }, onError: (e) => debugPrint('tx sub1 err: $e'));
+
+        sub2 = _firestore
+            .collection('coin_transactions')
+            .where('userId', isEqualTo: userId)
+            .snapshots()
+            .listen((snap) {
+          list2 = snap.docs.map((d) => CoinTransaction.fromFirestore(d)).toList();
+          emitMerged();
+        }, onError: (e) => debugPrint('tx sub2 err: $e'));
+      },
+      onCancel: () {
+        sub1?.cancel();
+        sub2?.cancel();
+      },
+    );
+
+    return controller.stream;
   }
 
   /// Request Redeem of Skill Tournament Rewards (UC, Diamonds, Mega Gift Card)

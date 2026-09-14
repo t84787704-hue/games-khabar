@@ -32,7 +32,7 @@ class CoinTransaction {
 
   factory CoinTransaction.fromMap(Map<String, dynamic> data, [String? id]) {
     DateTime time = DateTime.now();
-    final rawTime = data['timestamp'];
+    final rawTime = data['timestamp'] ?? data['createdAt'];
     if (rawTime is Timestamp) {
       time = rawTime.toDate();
     } else if (rawTime is String) {
@@ -41,7 +41,19 @@ class CoinTransaction {
 
     final userId = data['userId'] ?? data['to'] ?? data['from'] ?? '';
     final type = data['type'] ?? 'admin_bonus';
-    final amount = (data['amount'] as num?)?.toInt() ?? 0;
+    int amount = (data['amount'] as num?)?.toInt() ?? 0;
+    String description = (data['description'] as String?)?.trim() ?? '';
+
+    // Fix for legacy escrow transfer transactions that had amount == 0
+    if (amount == 0 && (type == 'escrow_transferred' || type == 'escrow_release')) {
+      final match = RegExp(r'(\d+)').firstMatch(description);
+      if (match != null) {
+        final parsed = int.tryParse(match.group(1) ?? '0') ?? 0;
+        if (parsed > 0) {
+          amount = -parsed;
+        }
+      }
+    }
 
     String title = (data['title'] as String?)?.trim() ?? '';
     if (title.isEmpty) {
@@ -49,6 +61,16 @@ class CoinTransaction {
         case 'win_reward':
         case 'win_prize':
           title = 'Match Victory Reward 🏆';
+          break;
+        case 'escrow_release':
+        case 'escrow_transferred':
+          title = 'Escrow Released to Winner 🏆';
+          break;
+        case 'escrow_hold':
+          title = 'Entry Fee Escrow 🔒';
+          break;
+        case 'escrow_refund':
+          title = 'Escrow Refund ↩️';
           break;
         case 'room_host_hold':
           title = 'Room Prize Held 🔒';
@@ -86,9 +108,16 @@ class CoinTransaction {
       }
     }
 
-    String description = (data['description'] as String?)?.trim() ?? '';
     if (description.isEmpty) {
-      if (amount > 0) {
+      if (type == 'win_reward' || type == 'win_prize') {
+        description = 'Won match and claimed reward';
+      } else if (type == 'escrow_release' || type == 'escrow_transferred') {
+        description = 'Transferred ${amount.abs()} Coins escrow prize to winner';
+      } else if (type == 'escrow_hold') {
+        description = 'Slot registration escrow hold';
+      } else if (type == 'escrow_refund') {
+        description = 'Room slot cancelled or refunded';
+      } else if (amount > 0) {
         description = '+$amount Coins added to your wallet';
       } else if (amount < 0) {
         description = '${amount.abs()} Coins deducted from your wallet';

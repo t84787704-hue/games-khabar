@@ -598,10 +598,13 @@ class _ProfileScreenState extends State<ProfileScreen> {
                             : const Stream.empty(),
                         builder: (context, snapshot) {
                           int coins = 0;
+                          int inEscrow = 0;
                           if (snapshot.hasData && snapshot.data != null && snapshot.data!.exists) {
                             final data = snapshot.data!.data() as Map<String, dynamic>? ?? {};
                             final rawCoins = data['gCoins'] ?? data['coins'];
                             if (rawCoins is num) coins = rawCoins.toInt();
+                            final rawEscrow = data['inEscrow'];
+                            if (rawEscrow is num) inEscrow = rawEscrow.toInt();
                           } else {
                             coins = GamerAuthService().currentGamer?.coins ?? 0;
                           }
@@ -617,7 +620,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                             title: Row(
                               children: [
                                 Text(
-                                  'GK Coins',
+                                  'G-Coins Wallet',
                                   style: TextStyle(color: textWhite, fontSize: 14, fontWeight: FontWeight.bold),
                                 ),
                                 const SizedBox(width: 8),
@@ -629,7 +632,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                                     border: Border.all(color: neonGreen.withOpacity(0.6)),
                                   ),
                                   child: Text(
-                                    '$coins COINS',
+                                    '$coins Coins',
                                     style: TextStyle(
                                       color: neonGreen,
                                       fontSize: 10,
@@ -637,18 +640,35 @@ class _ProfileScreenState extends State<ProfileScreen> {
                                     ),
                                   ),
                                 ),
+                                if (inEscrow > 0) ...[
+                                  const SizedBox(width: 6),
+                                  Container(
+                                    padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                                    decoration: BoxDecoration(
+                                      color: const Color(0xFFFF8A00).withOpacity(0.15),
+                                      borderRadius: BorderRadius.circular(4),
+                                      border: Border.all(color: const Color(0xFFFF8A00).withOpacity(0.6)),
+                                    ),
+                                    child: Text(
+                                      '$inEscrow Escrow',
+                                      style: const TextStyle(
+                                        color: Color(0xFFFF8A00),
+                                        fontSize: 9,
+                                        fontWeight: FontWeight.w900,
+                                      ),
+                                    ),
+                                  ),
+                                ],
                               ],
                             ),
                             subtitle: Text(
-                              'Daily tasks & free giveaways ke liye coins kamayein',
+                              'Tap to view passbook & balance history',
                               style: TextStyle(color: textGray, fontSize: 12),
                             ),
                             trailing: Icon(Icons.arrow_forward_ios_rounded, color: textGray, size: 14),
                             onTap: () {
-                              Navigator.push(
-                                context,
-                                MaterialPageRoute(builder: (_) => const EarnScreen()),
-                              );
+                              final uid = FirebaseAuth.instance.currentUser?.uid ?? '';
+                              CoinHistorySheet.show(context, userId: uid);
                             },
                           );
                         },

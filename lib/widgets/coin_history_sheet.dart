@@ -116,11 +116,24 @@ class _CoinHistorySheetState extends State<CoinHistorySheet> {
           ),
           const SizedBox(height: 14),
 
-          // Wallet Stats & Balance Banner
-          StreamBuilder<CoinWallet>(
-            stream: _walletService.walletStream(widget.userId),
-            builder: (context, walletSnap) {
-              final wallet = walletSnap.data ?? _walletService.currentWallet ?? const CoinWallet(userId: '', coins: 0);
+          // Wallet Stats & Balance Banner (Single Source of Truth: users collection)
+          StreamBuilder<DocumentSnapshot>(
+            stream: FirebaseFirestore.instance
+                .collection('users')
+                .doc(widget.userId)
+                .snapshots(),
+            builder: (context, userSnap) {
+              int currentCoins = 0;
+              int inEscrow = 0;
+              if (userSnap.hasData && userSnap.data != null && userSnap.data!.exists) {
+                final data = userSnap.data!.data() as Map<String, dynamic>?;
+                if (data != null) {
+                  final rawCoins = data['gCoins'] ?? data['coins'];
+                  if (rawCoins is num) currentCoins = rawCoins.toInt();
+                  final rawEscrow = data['inEscrow'];
+                  if (rawEscrow is num) inEscrow = rawEscrow.toInt();
+                }
+              }
 
               return StreamBuilder<List<CoinTransaction>>(
                 stream: _walletService.transactionsStream(widget.userId),
@@ -139,8 +152,8 @@ class _CoinHistorySheetState extends State<CoinHistorySheet> {
                   }
 
                   // If no recorded transactions yet but user has coins, treat initial coins as added
-                  if (totalAdded == 0 && wallet.coins > 0) {
-                    totalAdded = wallet.coins;
+                  if (totalAdded == 0 && currentCoins > 0) {
+                    totalAdded = currentCoins;
                   }
 
                   return Padding(
@@ -179,7 +192,7 @@ class _CoinHistorySheetState extends State<CoinHistorySheet> {
                                       const Text('🪙', style: TextStyle(fontSize: 18)),
                                       const SizedBox(width: 6),
                                       Text(
-                                        '${NumberFormat("#,###").format(wallet.coins)} Coins',
+                                        '${NumberFormat("#,###").format(currentCoins)} Coins',
                                         style: const TextStyle(
                                           color: Color(0xFFFFD700),
                                           fontSize: 22,
@@ -190,7 +203,7 @@ class _CoinHistorySheetState extends State<CoinHistorySheet> {
                                   ),
                                 ],
                               ),
-                              if (wallet.escrowCoins > 0)
+                              if (inEscrow > 0)
                                 Container(
                                   padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
                                   decoration: BoxDecoration(
@@ -211,7 +224,7 @@ class _CoinHistorySheetState extends State<CoinHistorySheet> {
                                       ),
                                       const SizedBox(height: 2),
                                       Text(
-                                        '${wallet.escrowCoins} Coins',
+                                        '${NumberFormat("#,###").format(inEscrow)} Coins',
                                         style: const TextStyle(
                                           color: Colors.white,
                                           fontSize: 13,
@@ -437,8 +450,18 @@ class _CoinHistorySheetState extends State<CoinHistorySheet> {
 
   Widget _buildTransactionCard(CoinTransaction tx) {
     final isCredit = tx.amount > 0;
-    final Color badgeColor = isCredit ? GamerTheme.neonGreen : GamerTheme.redAccent;
+    final isRelease = tx.type == 'escrow_release' || tx.type == 'escrow_transferred';
+    final isEscrowHold = tx.type == 'escrow_hold';
+
+    final Color badgeColor = isCredit
+        ? GamerTheme.neonGreen
+        : (isRelease ? const Color(0xFF00E5FF) : (isEscrowHold ? GamerTheme.accentOrange : GamerTheme.redAccent));
+
     final IconData typeIcon = _getIconForType(tx.type, isCredit);
+    final String badgeText = isCredit
+        ? 'ADDED'
+        : (isRelease ? 'RELEASED' : (isEscrowHold ? 'ESCROW' : 'DEDUCTED'));
+    final String amountText = isCredit ? '+${tx.amount} Coins' : '-${tx.amount.abs()} Coins';
 
     return Container(
       decoration: BoxDecoration(
@@ -490,7 +513,7 @@ class _CoinHistorySheetState extends State<CoinHistorySheet> {
                           ),
                           const SizedBox(width: 6),
                           Text(
-                            '${isCredit ? '+' : ''}${tx.amount} Coins',
+                            amountText,
                             style: TextStyle(
                               color: badgeColor,
                               fontWeight: FontWeight.w900,
@@ -527,7 +550,7 @@ class _CoinHistorySheetState extends State<CoinHistorySheet> {
                               borderRadius: BorderRadius.circular(4),
                             ),
                             child: Text(
-                              isCredit ? 'ADDED' : 'DEDUCTED',
+                              badgeText,
                               style: TextStyle(
                                 color: badgeColor,
                                 fontSize: 9,
@@ -598,8 +621,15 @@ class _CoinHistorySheetState extends State<CoinHistorySheet> {
     switch (type) {
       case 'entry_fee':
         return Icons.sports_esports_rounded;
+      case 'escrow_hold':
       case 'room_host_hold':
         return Icons.lock_clock_rounded;
+      case 'escrow_refund':
+      case 'refund':
+        return Icons.replay_rounded;
+      case 'escrow_release':
+      case 'escrow_transferred':
+        return Icons.verified_user_rounded;
       case 'win_prize':
       case 'win_reward':
         return Icons.emoji_events_rounded;
