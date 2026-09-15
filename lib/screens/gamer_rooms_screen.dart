@@ -82,6 +82,7 @@ class GamerRoom {
 
   bool get isFull => filled >= total;
   bool get isCompleted => status.toLowerCase() == 'completed' || rewardStatus == 'sent';
+  bool get isInProgress => !isCompleted && (status.toUpperCase() == 'IN_PROGRESS' || status.toUpperCase() == 'STARTED' || status.toUpperCase() == 'MATCH_STARTED');
   bool get isActive => !isCompleted && (status.toLowerCase() == 'active' || status.toUpperCase() == 'OPEN');
 
   factory GamerRoom.fromFirestore(DocumentSnapshot doc) {
@@ -2170,6 +2171,138 @@ class _InRoomBottomSheetContentState extends State<_InRoomBottomSheetContent> {
     }
   }
 
+  bool _isStartingMatch = false;
+
+  /// Host starts the match: updates status to 'IN_PROGRESS' in Firestore & local TournamentService,
+  /// announces in room chat, and alerts all room participants.
+  Future<void> _startMatch(GamerRoom room) async {
+    if (_isStartingMatch) return;
+    setState(() {
+      _isStartingMatch = true;
+    });
+
+    try {
+      // 1. Update Firestore 'rooms' document
+      await FirebaseFirestore.instance.collection('rooms').doc(room.id).update({
+        'status': 'IN_PROGRESS',
+        'isMatchStarted': true,
+        'matchStartedAt': FieldValue.serverTimestamp(),
+      });
+
+      // 2. Also update 'tournament_rooms' collection if exists
+      try {
+        await FirebaseFirestore.instance.collection('tournament_rooms').doc(room.id).set({
+          'status': 'IN_PROGRESS',
+          'isLive': true,
+          'isMatchStarted': true,
+          'matchStartedAt': FieldValue.serverTimestamp(),
+          'updatedAt': FieldValue.serverTimestamp(),
+        }, SetOptions(merge: true));
+      } catch (_) {}
+
+      // 3. Update TournamentService local state
+      try {
+        await TournamentService().startMatch(room.id);
+      } catch (_) {}
+
+      // 4. Send system announcement in room chat
+      try {
+        await FirebaseFirestore.instance
+            .collection('rooms')
+            .doc(room.id)
+            .collection('messages')
+            .add({
+          'senderId': 'system',
+          'senderName': 'APP BOT',
+          'senderInitial': '🎮',
+          'message': '⚔️ MATCH STARTED! The host has initiated the match. Enter the game room now and good luck players! Remember to screenshot your victory screen to claim reward.',
+          'type': 'system',
+          'timestamp': FieldValue.serverTimestamp(),
+          'isHost': false,
+        });
+      } catch (_) {}
+
+      // 5. Send in-app notification to all players in the room
+      for (final uid in room.joinedUserIds) {
+        if (uid != widget.currentUserId) {
+          try {
+            await FirebaseFirestore.instance.collection('notifications').add({
+              'recipientUid': uid,
+              'senderUid': widget.currentUserId,
+              'type': 'match_started',
+              'message': 'Host started the match for "${room.title}"! Join the game now.',
+              'roomId': room.id,
+              'read': false,
+              'createdAt': FieldValue.serverTimestamp(),
+            });
+          } catch (_) {}
+        }
+      }
+
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('🔥 Match started successfully! All players have been notified.'),
+            backgroundColor: _neonGreen,
+            behavior: SnackBarBehavior.floating,
+            duration: Duration(seconds: 3),
+          ),
+        );
+      }
+    } catch (e) {
+      debugPrint('Error starting match: $e');
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Failed to start match: $e'),
+            backgroundColor: GamerTheme.redAccent,
+            behavior: SnackBarBehavior.floating,
+          ),
+        );
+      }
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isStartingMatch = false;
+        });
+      }
+    }
+  }
+
+  void _showMatchDetailsDialog(GamerRoom room) {
+    showDialog(
+      context: context,
+      builder: (dCtx) => AlertDialog(
+        backgroundColor: GamerTheme.cardDark,
+        title: Text('${room.game} Match Details', style: const TextStyle(color: Colors.white)),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text('Title: ${room.title}', style: const TextStyle(color: Colors.white)),
+            const SizedBox(height: 4),
+            Text('Map: ${room.map}', style: const TextStyle(color: GamerTheme.textGray)),
+            const SizedBox(height: 4),
+            Text('Prize: ${room.prize} G-Coins', style: const TextStyle(color: Colors.cyanAccent)),
+            const SizedBox(height: 4),
+            Text('Entry Fee: ${room.entryFee}', style: const TextStyle(color: _neonGreen)),
+            const SizedBox(height: 8),
+            const Text(
+              'Rules: Fair play only. Screenshot win screen and upload in chat to claim reward.',
+              style: TextStyle(color: GamerTheme.textMuted, fontSize: 11),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(dCtx),
+            child: const Text('Got it', style: TextStyle(color: _neonGreen)),
+          ),
+        ],
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     return StreamBuilder<DocumentSnapshot>(
@@ -2189,6 +2322,12 @@ class _InRoomBottomSheetContentState extends State<_InRoomBottomSheetContent> {
             ? room.joinedUsers.length
             : (room.joinedUserIds.isNotEmpty ? room.joinedUserIds.length : 1);
         final String rewardStatus = room.rewardStatus;
+        final bool isMatchStarted = room.isInProgress ||
+            room.status.toUpperCase() == 'IN_PROGRESS' ||
+            room.status.toUpperCase() == 'STARTED' ||
+            room.status.toUpperCase() == 'MATCH_STARTED' ||
+            (roomSnapshot.data?.data() as Map<String, dynamic>?)?['isMatchStarted'] == true;
+        final bool isCompleted = room.isCompleted;
 
         final String rawHostName = room.hostName.trim();
         const mapNames = ['Erangel', 'Miramar', 'Sanhok', 'Vikendi', 'Livik', 'Karakin', 'Nusa', 'Warehouse'];
@@ -2239,15 +2378,30 @@ class _InRoomBottomSheetContentState extends State<_InRoomBottomSheetContent> {
                   Container(
                     padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                     decoration: BoxDecoration(
-                      color: isHost
-                          ? GamerTheme.accentOrange
-                          : (isJoined ? _neonGreen : GamerTheme.cardElevated),
+                      color: isCompleted
+                          ? Colors.amber.withOpacity(0.2)
+                          : (isMatchStarted
+                              ? _neonGreen.withOpacity(0.2)
+                              : (isHost
+                                  ? GamerTheme.accentOrange
+                                  : (isJoined ? _neonGreen : GamerTheme.cardElevated))),
                       borderRadius: BorderRadius.circular(6),
+                      border: isMatchStarted
+                          ? Border.all(color: _neonGreen.withOpacity(0.6))
+                          : (isCompleted ? Border.all(color: Colors.amber.withOpacity(0.6)) : null),
                     ),
                     child: Text(
-                      isHost ? 'HOSTING' : (isJoined ? 'JOINED' : (room.isFull ? 'FULL' : 'OPEN')),
+                      isCompleted
+                          ? 'COMPLETED'
+                          : (isMatchStarted
+                              ? 'MATCH LIVE'
+                              : (isHost ? 'HOSTING' : (isJoined ? 'JOINED' : (room.isFull ? 'FULL' : 'OPEN')))),
                       style: TextStyle(
-                        color: isJoined && !isHost ? Colors.black : Colors.white,
+                        color: isCompleted
+                            ? Colors.amberAccent
+                            : (isMatchStarted
+                                ? _neonGreen
+                                : (isJoined && !isHost ? Colors.black : Colors.white)),
                         fontSize: 10,
                         fontWeight: FontWeight.bold,
                       ),
@@ -2474,24 +2628,54 @@ class _InRoomBottomSheetContentState extends State<_InRoomBottomSheetContent> {
                     ),
                 const SizedBox(height: 10),
 
-                // Countdown Timer
+                // Countdown Timer / Match Status Banner
                 Center(
                   child: Container(
                     padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
                     decoration: BoxDecoration(
-                      color: GamerTheme.accentOrange.withOpacity(0.12),
+                      color: isCompleted
+                          ? GamerTheme.cardElevated
+                          : (isMatchStarted
+                              ? _neonGreen.withOpacity(0.12)
+                              : (_remainingTime == Duration.zero || _remainingTime.isNegative
+                                  ? GamerTheme.accentOrange.withOpacity(0.15)
+                                  : GamerTheme.accentOrange.withOpacity(0.12))),
                       borderRadius: BorderRadius.circular(20),
-                      border: Border.all(color: GamerTheme.accentOrange.withOpacity(0.3)),
+                      border: Border.all(
+                        color: isCompleted
+                            ? GamerTheme.borderDark
+                            : (isMatchStarted
+                                ? _neonGreen.withOpacity(0.4)
+                                : GamerTheme.accentOrange.withOpacity(0.3)),
+                      ),
                     ),
                     child: Row(
                       mainAxisSize: MainAxisSize.min,
                       children: [
-                        const Icon(Icons.timer_outlined, color: GamerTheme.accentOrange, size: 16),
+                        Icon(
+                          isCompleted
+                              ? Icons.emoji_events_rounded
+                              : (isMatchStarted
+                                  ? Icons.sports_esports_rounded
+                                  : Icons.timer_outlined),
+                          color: isCompleted
+                              ? Colors.amberAccent
+                              : (isMatchStarted ? _neonGreen : GamerTheme.accentOrange),
+                          size: 16,
+                        ),
                         const SizedBox(width: 6),
                         Text(
-                          _formatDuration(_remainingTime),
-                          style: const TextStyle(
-                            color: GamerTheme.accentOrange,
+                          isCompleted
+                              ? 'MATCH COMPLETED'
+                              : (isMatchStarted
+                                  ? 'MATCH IN PROGRESS ⚔️'
+                                  : (_remainingTime == Duration.zero || _remainingTime.isNegative
+                                      ? (isHost ? 'READY TO START (TAP START MATCH)' : 'WAITING FOR HOST TO START')
+                                      : _formatDuration(_remainingTime))),
+                          style: TextStyle(
+                            color: isCompleted
+                                ? Colors.amberAccent
+                                : (isMatchStarted ? _neonGreen : GamerTheme.accentOrange),
                             fontWeight: FontWeight.bold,
                             fontSize: 12,
                           ),
@@ -3212,55 +3396,82 @@ class _InRoomBottomSheetContentState extends State<_InRoomBottomSheetContent> {
                       const SizedBox(width: 12),
                     ],
                     Expanded(
-                      child: ElevatedButton(
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: _neonGreen,
-                          foregroundColor: Colors.black,
-                          padding: const EdgeInsets.symmetric(vertical: 12),
-                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-                          elevation: 0,
-                        ),
-                        onPressed: () {
-                          if (isHost) {
-                            ScaffoldMessenger.of(context).showSnackBar(
-                              const SnackBar(
-                                content: Text('Room is active and ready for match!'),
-                                backgroundColor: _neonGreen,
+                      child: isCompleted
+                          ? ElevatedButton.icon(
+                              style: ElevatedButton.styleFrom(
+                                backgroundColor: GamerTheme.cardElevated,
+                                foregroundColor: GamerTheme.textMuted,
+                                padding: const EdgeInsets.symmetric(vertical: 12),
+                                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                                elevation: 0,
                               ),
-                            );
-                          } else {
-                            showDialog(
-                              context: context,
-                              builder: (dCtx) => AlertDialog(
-                                backgroundColor: GamerTheme.cardDark,
-                                title: Text('${room.game} Match Details', style: const TextStyle(color: Colors.white)),
-                                content: Column(
-                                  mainAxisSize: MainAxisSize.min,
-                                  crossAxisAlignment: CrossAxisAlignment.start,
-                                  children: [
-                                    Text('Title: ${room.title}', style: const TextStyle(color: Colors.white)),
-                                    const SizedBox(height: 4),
-                                    Text('Map: ${room.map}', style: const TextStyle(color: GamerTheme.textGray)),
-                                    const SizedBox(height: 4),
-                                    Text('Prize: ${room.prize} G-Coins', style: const TextStyle(color: Colors.cyanAccent)),
-                                    const SizedBox(height: 4),
-                                    Text('Entry Fee: ${room.entryFee}', style: const TextStyle(color: _neonGreen)),
-                                    const SizedBox(height: 8),
-                                    const Text('Rules: Fair play only. Screenshot win screen and upload in chat to claim reward.', style: TextStyle(color: GamerTheme.textMuted, fontSize: 11)),
-                                  ],
+                              onPressed: () => _showMatchDetailsDialog(room),
+                              icon: const Icon(Icons.check_circle_outline_rounded, size: 16),
+                              label: const Text('MATCH COMPLETED', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12)),
+                            )
+                          : isHost
+                              ? (isMatchStarted
+                                  ? OutlinedButton.icon(
+                                      style: OutlinedButton.styleFrom(
+                                        foregroundColor: _neonGreen,
+                                        side: const BorderSide(color: _neonGreen, width: 1.2),
+                                        backgroundColor: _neonGreen.withOpacity(0.08),
+                                        padding: const EdgeInsets.symmetric(vertical: 12),
+                                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                                      ),
+                                      onPressed: () {
+                                        ScaffoldMessenger.of(context).showSnackBar(
+                                          const SnackBar(
+                                            content: Text('🎮 Match is IN PROGRESS! Players are in game. Awaiting victory screenshot in chat.'),
+                                            backgroundColor: _neonGreen,
+                                            behavior: SnackBarBehavior.floating,
+                                            duration: Duration(seconds: 3),
+                                          ),
+                                        );
+                                      },
+                                      icon: const Icon(Icons.sports_esports_rounded, size: 16, color: _neonGreen),
+                                      label: const Text(
+                                        'MATCH IN PROGRESS',
+                                        style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12, color: _neonGreen),
+                                      ),
+                                    )
+                                  : ElevatedButton.icon(
+                                      style: ElevatedButton.styleFrom(
+                                        backgroundColor: _isStartingMatch ? GamerTheme.cardElevated : _neonGreen,
+                                        foregroundColor: Colors.black,
+                                        padding: const EdgeInsets.symmetric(vertical: 12),
+                                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                                        elevation: 0,
+                                      ),
+                                      onPressed: _isStartingMatch ? null : () => _startMatch(room),
+                                      icon: _isStartingMatch
+                                          ? const SizedBox(
+                                              width: 14,
+                                              height: 14,
+                                              child: CircularProgressIndicator(strokeWidth: 2, color: _neonGreen),
+                                            )
+                                          : const Icon(Icons.play_arrow_rounded, size: 18),
+                                      label: Text(
+                                        _isStartingMatch ? 'STARTING MATCH...' : 'START MATCH',
+                                        style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 12),
+                                      ),
+                                    ))
+                              : ElevatedButton.icon(
+                                  style: ElevatedButton.styleFrom(
+                                    backgroundColor: isMatchStarted ? _neonGreen.withOpacity(0.15) : _neonGreen,
+                                    foregroundColor: isMatchStarted ? _neonGreen : Colors.black,
+                                    side: isMatchStarted ? const BorderSide(color: _neonGreen, width: 1.2) : null,
+                                    padding: const EdgeInsets.symmetric(vertical: 12),
+                                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                                    elevation: 0,
+                                  ),
+                                  onPressed: () => _showMatchDetailsDialog(room),
+                                  icon: Icon(isMatchStarted ? Icons.sports_esports_rounded : Icons.info_outline_rounded, size: 16),
+                                  label: Text(
+                                    isMatchStarted ? 'MATCH IN PROGRESS' : 'VIEW DETAILS',
+                                    style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 12),
+                                  ),
                                 ),
-                                actions: [
-                                  TextButton(onPressed: () => Navigator.pop(dCtx), child: const Text('Got it', style: TextStyle(color: _neonGreen))),
-                                ],
-                              ),
-                            );
-                          }
-                        },
-                        child: Text(
-                          isHost ? 'START MATCH' : 'VIEW DETAILS',
-                          style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 12),
-                        ),
-                      ),
                     ),
                   ],
                 ),

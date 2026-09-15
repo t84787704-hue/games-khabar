@@ -543,6 +543,36 @@ class TournamentService extends ChangeNotifier {
     }
   }
 
+  /// Host starts the match:
+  /// Updates status to 'IN_PROGRESS', syncs local & Firestore, notifies participants
+  Future<bool> startMatch(String roomId) async {
+    try {
+      debugPrint('TournamentService: startMatch() for roomId: $roomId');
+      final index = _rooms.indexWhere((r) => r.id == roomId);
+      TournamentRoom? room;
+      if (index != -1) {
+        room = _rooms[index];
+        _rooms[index] = _rooms[index].copyWith(
+          status: 'IN_PROGRESS',
+        );
+        await _saveToLocal();
+        notifyListeners();
+      }
+
+      await _roomsRef.doc(roomId).set({
+        'status': 'IN_PROGRESS',
+        'isLive': true,
+        'matchStartedAt': FieldValue.serverTimestamp(),
+        'updatedAt': FieldValue.serverTimestamp(),
+      }, SetOptions(merge: true));
+
+      return true;
+    } catch (e) {
+      debugPrint('TournamentService: startMatch error: $e');
+      return false;
+    }
+  }
+
   Future<void> closeRoom(String roomId) async {
     try {
       _rooms.removeWhere((r) => r.id == roomId);

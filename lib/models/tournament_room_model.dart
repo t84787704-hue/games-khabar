@@ -91,6 +91,7 @@ class TournamentRoom {
   bool get isCompleted => status.toUpperCase() == 'COMPLETED';
   bool get isExpired => status.toUpperCase() == 'EXPIRED' || status.toUpperCase() == 'CANCELED';
   bool get isActive => status.toLowerCase() == 'active' || status.toUpperCase() == 'OPEN';
+  bool get isInProgress => status.toUpperCase() == 'IN_PROGRESS' || status.toUpperCase() == 'STARTED' || status.toUpperCase() == 'MATCH_STARTED';
   String get displayPrizePool => prizePool.isNotEmpty ? prizePool : (prizePoolCoins > 0 ? '💰 $prizePoolCoins Coins' : prize);
 
   String get gameIcon {
