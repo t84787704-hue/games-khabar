@@ -2,14 +2,14 @@ import 'package:flutter/material.dart';
 import '../services/theme_service.dart';
 
 class GamerTheme {
-  // Core Colors
-  static const Color bgDark = Color(0xFF0A0E17);
-  static const Color surfaceDark = Color(0xFF121824);
-  static const Color cardDark = Color(0xFF121824);
-  static const Color cardElevated = Color(0xFF182234);
-  static const Color cardHover = Color(0xFF1E2B42);
-  static const Color borderDark = Color(0xFF1F2E45);
-  static const Color borderLight = Color(0xFF2A3C5A);
+  // Core Dynamic Colors based on Day / Night Mode
+  static Color get bgDark => ThemeService.bg;
+  static Color get surfaceDark => ThemeService.card;
+  static Color get cardDark => ThemeService.card;
+  static Color get cardElevated => ThemeService.cardSecondary;
+  static Color get cardHover => ThemeService.isDarkMode ? const Color(0xFF1E2B42) : const Color(0xFFE2E8F0);
+  static Color get borderDark => ThemeService.border;
+  static Color get borderLight => ThemeService.border;
 
   // Accents: Blue & Orange
   static const Color accentBlue = Color(0xFF00D2FF);
@@ -22,10 +22,10 @@ class GamerTheme {
   static const Color neonGreen = Color(0xFF00E676);
   static const Color accentGreen = Color(0xFF00E676);
 
-  // Typography
-  static const Color textWhite = Color(0xFFF8FAFC);
-  static const Color textGray = Color(0xFF94A3B8);
-  static const Color textMuted = Color(0xFF64748B);
+  // Typography (Dynamic for Light & Dark)
+  static Color get textWhite => ThemeService.textPrimary;
+  static Color get textGray => ThemeService.textSecondary;
+  static Color get textMuted => ThemeService.isDarkMode ? const Color(0xFF64748B) : const Color(0xFF94A3B8);
 
   // Gradients
   static const LinearGradient blueOrangeGradient = LinearGradient(

@@ -1022,7 +1022,7 @@ class _GamerRoomsScreenState extends State<GamerRoomsScreen> {
                 child: Text(
                   room.game,
                   style: TextStyle(
-                    color: isJoined ? _neonGreen : Colors.white,
+                    color: isJoined ? _neonGreen : GamerTheme.textWhite,
                     fontSize: 11,
                     fontWeight: FontWeight.w600,
                   ),
@@ -1137,8 +1137,8 @@ class _GamerRoomsScreenState extends State<GamerRoomsScreen> {
                     children: [
                       Text(
                         '${room.joinedUsers.isNotEmpty ? room.joinedUsers.length : filled}/$total',
-                        style: const TextStyle(
-                          color: Colors.white,
+                        style: TextStyle(
+                          color: GamerTheme.textWhite,
                           fontSize: 13.5,
                           fontWeight: FontWeight.bold,
                         ),
@@ -1306,8 +1306,8 @@ class _GamerRoomsScreenState extends State<GamerRoomsScreen> {
                               const SizedBox(width: 6),
                               Text(
                                 '${NumberFormat("#,###").format(coins)} G-Coins',
-                                style: const TextStyle(
-                                  color: Colors.white,
+                                style: TextStyle(
+                                  color: GamerTheme.textWhite,
                                   fontWeight: FontWeight.bold,
                                   fontSize: 12.5,
                                 ),

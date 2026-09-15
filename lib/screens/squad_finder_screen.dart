@@ -731,23 +731,23 @@ class _SquadFinderScreenState extends State<SquadFinderScreen> {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
       decoration: BoxDecoration(
-        color: const Color(0xFF2A2E3A),
+        color: GamerTheme.cardElevated,
         borderRadius: BorderRadius.circular(20),
         border: Border.all(
-          color: (value != 'All' && value != 'Any') ? const Color(0xFFFF6B00) : const Color(0xFF383E4E),
+          color: (value != 'All' && value != 'Any') ? const Color(0xFFFF6B00) : GamerTheme.borderDark,
           width: 1,
         ),
       ),
       child: DropdownButtonHideUnderline(
         child: DropdownButton<String>(
           value: items.contains(value) ? value : items.first,
-          dropdownColor: const Color(0xFF2A2E3A),
-          icon: const Padding(
-            padding: EdgeInsets.only(left: 4),
-            child: Icon(Icons.keyboard_arrow_down_rounded, color: Colors.white, size: 16),
+          dropdownColor: GamerTheme.cardElevated,
+          icon: Padding(
+            padding: const EdgeInsets.only(left: 4),
+            child: Icon(Icons.keyboard_arrow_down_rounded, color: GamerTheme.textWhite, size: 16),
           ),
-          style: const TextStyle(
-            color: Colors.white,
+          style: TextStyle(
+            color: GamerTheme.textWhite,
             fontSize: 12,
             fontWeight: FontWeight.w600,
           ),
@@ -755,7 +755,7 @@ class _SquadFinderScreenState extends State<SquadFinderScreen> {
             final prefix = label.split(':')[0];
             return DropdownMenuItem<String>(
               value: item,
-              child: Text('$prefix: $item', style: const TextStyle(color: Colors.white, fontSize: 12)),
+              child: Text('$prefix: $item', style: TextStyle(color: GamerTheme.textWhite, fontSize: 12)),
             );
           }).toList(),
           onChanged: onChanged,
@@ -768,7 +768,7 @@ class _SquadFinderScreenState extends State<SquadFinderScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: const Color(0xFF0F1219),
+      backgroundColor: GamerTheme.bgDark,
       extendBody: false,
       extendBodyBehindAppBar: false,
       body: SafeArea(
@@ -776,7 +776,7 @@ class _SquadFinderScreenState extends State<SquadFinderScreen> {
         bottom: true,
         child: RefreshIndicator(
         color: const Color(0xFFFF6B00),
-        backgroundColor: const Color(0xFF161A24),
+        backgroundColor: GamerTheme.cardDark,
         onRefresh: () async {
           debugPrint('[SquadFinderScreen] Pull-to-refresh triggered');
           final fetched = await _squadService.fetchSquadsOnce();
@@ -797,7 +797,7 @@ class _SquadFinderScreenState extends State<SquadFinderScreen> {
             SliverToBoxAdapter(
               child: Container(
                 padding: const EdgeInsets.fromLTRB(14, 12, 14, 10),
-                color: const Color(0xFF0F1219),
+                color: GamerTheme.bgDark,
                 child: SingleChildScrollView(
                   scrollDirection: Axis.horizontal,
                   physics: const BouncingScrollPhysics(),
@@ -863,12 +863,12 @@ class _SquadFinderScreenState extends State<SquadFinderScreen> {
                 margin: const EdgeInsets.fromLTRB(14, 6, 14, 16),
                 padding: const EdgeInsets.all(16),
                 decoration: BoxDecoration(
-                  color: const Color(0xFF161A24),
+                  color: GamerTheme.cardDark,
                   borderRadius: BorderRadius.circular(16),
-                  border: Border.all(color: const Color(0xFF262B3A), width: 1.2),
+                  border: Border.all(color: GamerTheme.borderDark, width: 1.2),
                   boxShadow: [
                     BoxShadow(
-                      color: Colors.black.withOpacity(0.35),
+                      color: ThemeService.isDarkMode ? Colors.black.withOpacity(0.35) : Colors.black.withOpacity(0.05),
                       blurRadius: 10,
                       offset: const Offset(0, 4),
                     ),
@@ -891,8 +891,8 @@ class _SquadFinderScreenState extends State<SquadFinderScreen> {
                         const SizedBox(width: 10),
                         Text(
                           'Create Squad - $_cardGame',
-                          style: const TextStyle(
-                            color: Colors.white,
+                          style: TextStyle(
+                            color: GamerTheme.textWhite,
                             fontSize: 16,
                             fontWeight: FontWeight.w900,
                             letterSpacing: 0.3,
@@ -910,25 +910,25 @@ class _SquadFinderScreenState extends State<SquadFinderScreen> {
                           child: Column(
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
-                              const Text(
+                              Text(
                                 'GAME',
-                                style: TextStyle(color: Color(0xFF8E95A5), fontSize: 10.5, fontWeight: FontWeight.w800, letterSpacing: 0.5),
+                                style: TextStyle(color: GamerTheme.textMuted, fontSize: 10.5, fontWeight: FontWeight.w800, letterSpacing: 0.5),
                               ),
                               const SizedBox(height: 6),
                               Container(
                                 padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 2),
                                 decoration: BoxDecoration(
-                                  color: const Color(0xFF2A2E3A),
+                                  color: GamerTheme.cardElevated,
                                   borderRadius: BorderRadius.circular(10),
-                                  border: Border.all(color: const Color(0xFF383E4E)),
+                                  border: Border.all(color: GamerTheme.borderDark),
                                 ),
                                 child: DropdownButtonHideUnderline(
                                   child: DropdownButton<String>(
                                     value: _cardGame,
                                     isExpanded: true,
-                                    dropdownColor: const Color(0xFF2A2E3A),
-                                    icon: const Icon(Icons.keyboard_arrow_down_rounded, color: Colors.white, size: 18),
-                                    style: const TextStyle(color: Colors.white, fontSize: 12.5, fontWeight: FontWeight.bold),
+                                    dropdownColor: GamerTheme.cardElevated,
+                                    icon: Icon(Icons.keyboard_arrow_down_rounded, color: GamerTheme.textWhite, size: 18),
+                                    style: TextStyle(color: GamerTheme.textWhite, fontSize: 12.5, fontWeight: FontWeight.bold),
                                     items: _cardGameOptions.map((g) => DropdownMenuItem(value: g, child: Text(g))).toList(),
                                     onChanged: (v) {
                                       if (v != null) {
@@ -948,25 +948,25 @@ class _SquadFinderScreenState extends State<SquadFinderScreen> {
                           child: Column(
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
-                              const Text(
+                              Text(
                                 'TIER',
-                                style: TextStyle(color: Color(0xFF8E95A5), fontSize: 10.5, fontWeight: FontWeight.w800, letterSpacing: 0.5),
+                                style: TextStyle(color: GamerTheme.textMuted, fontSize: 10.5, fontWeight: FontWeight.w800, letterSpacing: 0.5),
                               ),
                               const SizedBox(height: 6),
                               Container(
                                 padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 2),
                                 decoration: BoxDecoration(
-                                  color: const Color(0xFF2A2E3A),
+                                  color: GamerTheme.cardElevated,
                                   borderRadius: BorderRadius.circular(10),
-                                  border: Border.all(color: const Color(0xFF383E4E)),
+                                  border: Border.all(color: GamerTheme.borderDark),
                                 ),
                                 child: DropdownButtonHideUnderline(
                                   child: DropdownButton<String>(
                                     value: _cardTier,
                                     isExpanded: true,
-                                    dropdownColor: const Color(0xFF2A2E3A),
-                                    icon: const Icon(Icons.keyboard_arrow_down_rounded, color: Colors.white, size: 18),
-                                    style: const TextStyle(color: Colors.white, fontSize: 12.5, fontWeight: FontWeight.bold),
+                                    dropdownColor: GamerTheme.cardElevated,
+                                    icon: Icon(Icons.keyboard_arrow_down_rounded, color: GamerTheme.textWhite, size: 18),
+                                    style: TextStyle(color: GamerTheme.textWhite, fontSize: 12.5, fontWeight: FontWeight.bold),
                                     items: _cardTierOptions.map((t) => DropdownMenuItem(value: t, child: Text(t))).toList(),
                                     onChanged: (v) => setState(() => _cardTier = v ?? _cardTier),
                                   ),
@@ -981,9 +981,9 @@ class _SquadFinderScreenState extends State<SquadFinderScreen> {
                     const SizedBox(height: 12),
 
                     // Mode buttons: TPP / FPP
-                    const Text(
+                    Text(
                       'MODE',
-                      style: TextStyle(color: Color(0xFF8E95A5), fontSize: 10.5, fontWeight: FontWeight.w800, letterSpacing: 0.5),
+                      style: TextStyle(color: GamerTheme.textMuted, fontSize: 10.5, fontWeight: FontWeight.w800, letterSpacing: 0.5),
                     ),
                     const SizedBox(height: 6),
                     Row(
@@ -1000,16 +1000,16 @@ class _SquadFinderScreenState extends State<SquadFinderScreen> {
                                 alignment: Alignment.center,
                                 padding: const EdgeInsets.symmetric(vertical: 9),
                                 decoration: BoxDecoration(
-                                  color: isSel ? const Color(0xFFFF6B00) : const Color(0xFF2A2E3A),
+                                  color: isSel ? const Color(0xFFFF6B00) : GamerTheme.cardElevated,
                                   borderRadius: BorderRadius.circular(10),
                                   border: Border.all(
-                                    color: isSel ? const Color(0xFFFF6B00) : const Color(0xFF383E4E),
+                                    color: isSel ? const Color(0xFFFF6B00) : GamerTheme.borderDark,
                                   ),
                                 ),
                                 child: Text(
                                   mode,
                                   style: TextStyle(
-                                    color: Colors.white,
+                                    color: isSel ? Colors.white : GamerTheme.textWhite,
                                     fontWeight: isSel ? FontWeight.w900 : FontWeight.w600,
                                     fontSize: 12.5,
                                   ),
@@ -1024,9 +1024,9 @@ class _SquadFinderScreenState extends State<SquadFinderScreen> {
                     const SizedBox(height: 12),
 
                     // Role buttons: Entry Fragger / IGL / Support
-                    const Text(
+                    Text(
                       'ROLE',
-                      style: TextStyle(color: Color(0xFF8E95A5), fontSize: 10.5, fontWeight: FontWeight.w800, letterSpacing: 0.5),
+                      style: TextStyle(color: GamerTheme.textMuted, fontSize: 10.5, fontWeight: FontWeight.w800, letterSpacing: 0.5),
                     ),
                     const SizedBox(height: 6),
                     Row(
@@ -1043,17 +1043,17 @@ class _SquadFinderScreenState extends State<SquadFinderScreen> {
                                 alignment: Alignment.center,
                                 padding: const EdgeInsets.symmetric(vertical: 9),
                                 decoration: BoxDecoration(
-                                  color: isSel ? const Color(0xFFFF6B00) : const Color(0xFF2A2E3A),
+                                  color: isSel ? const Color(0xFFFF6B00) : GamerTheme.cardElevated,
                                   borderRadius: BorderRadius.circular(10),
                                   border: Border.all(
-                                    color: isSel ? const Color(0xFFFF6B00) : const Color(0xFF383E4E),
+                                    color: isSel ? const Color(0xFFFF6B00) : GamerTheme.borderDark,
                                   ),
                                 ),
                                 child: Text(
                                   role,
                                   textAlign: TextAlign.center,
                                   style: TextStyle(
-                                    color: Colors.white,
+                                    color: isSel ? Colors.white : GamerTheme.textWhite,
                                     fontWeight: isSel ? FontWeight.w900 : FontWeight.w600,
                                     fontSize: 11.5,
                                   ),
@@ -1075,20 +1075,20 @@ class _SquadFinderScreenState extends State<SquadFinderScreen> {
                           child: Container(
                             padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
                             decoration: BoxDecoration(
-                              color: const Color(0xFF2A2E3A),
+                              color: GamerTheme.cardElevated,
                               borderRadius: BorderRadius.circular(10),
-                              border: Border.all(color: const Color(0xFF383E4E)),
+                              border: Border.all(color: GamerTheme.borderDark),
                             ),
                             child: Row(
                               mainAxisAlignment: MainAxisAlignment.spaceBetween,
                               children: [
-                                const Row(
+                                Row(
                                   children: [
-                                    Icon(Icons.mic_rounded, color: Color(0xFFFF6B00), size: 17),
-                                    SizedBox(width: 5),
+                                    const Icon(Icons.mic_rounded, color: Color(0xFFFF6B00), size: 17),
+                                    const SizedBox(width: 5),
                                     Text(
                                       'Mic Required',
-                                      style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 11.5),
+                                      style: TextStyle(color: GamerTheme.textWhite, fontWeight: FontWeight.bold, fontSize: 11.5),
                                     ),
                                   ],
                                 ),
@@ -1097,7 +1097,7 @@ class _SquadFinderScreenState extends State<SquadFinderScreen> {
                                   activeColor: const Color(0xFFFF6B00),
                                   activeTrackColor: const Color(0xFFFF6B00).withOpacity(0.4),
                                   inactiveThumbColor: Colors.grey,
-                                  inactiveTrackColor: const Color(0xFF181C26),
+                                  inactiveTrackColor: GamerTheme.borderDark,
                                   materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
                                   onChanged: (v) => setState(() => _cardMicRequired = v),
                                 ),
@@ -1111,17 +1111,17 @@ class _SquadFinderScreenState extends State<SquadFinderScreen> {
                           child: Container(
                             padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
                             decoration: BoxDecoration(
-                              color: const Color(0xFF2A2E3A),
+                              color: GamerTheme.cardElevated,
                               borderRadius: BorderRadius.circular(10),
-                              border: Border.all(color: const Color(0xFF383E4E)),
+                              border: Border.all(color: GamerTheme.borderDark),
                             ),
                             child: DropdownButtonHideUnderline(
                               child: DropdownButton<String>(
                                 value: _cardLanguage,
                                 isExpanded: true,
-                                dropdownColor: const Color(0xFF2A2E3A),
-                                icon: const Icon(Icons.keyboard_arrow_down_rounded, color: Colors.white, size: 18),
-                                style: const TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.bold),
+                                dropdownColor: GamerTheme.cardElevated,
+                                icon: Icon(Icons.keyboard_arrow_down_rounded, color: GamerTheme.textWhite, size: 18),
+                                style: TextStyle(color: GamerTheme.textWhite, fontSize: 12, fontWeight: FontWeight.bold),
                                 items: _cardLangOptions.map((l) => DropdownMenuItem(value: l, child: Text('Lang: $l'))).toList(),
                                 onChanged: (v) => setState(() => _cardLanguage = v ?? _cardLanguage),
                               ),
@@ -1139,8 +1139,8 @@ class _SquadFinderScreenState extends State<SquadFinderScreen> {
                       children: [
                         Text(
                           'Your $_cardGame UID - e.g. ${_cardGame == 'BGMI' ? 'BGMI UID' : '${_cardGame} UID'}',
-                          style: const TextStyle(
-                            color: Color(0xFF8E95A5),
+                          style: TextStyle(
+                            color: GamerTheme.textMuted,
                             fontSize: 10.5,
                             fontWeight: FontWeight.w800,
                             letterSpacing: 0.5,
@@ -1150,8 +1150,8 @@ class _SquadFinderScreenState extends State<SquadFinderScreen> {
                         TextField(
                           controller: _uidController,
                           keyboardType: TextInputType.number,
-                          style: const TextStyle(
-                            color: Colors.white,
+                          style: TextStyle(
+                            color: GamerTheme.textWhite,
                             fontSize: 13,
                             fontWeight: FontWeight.bold,
                             letterSpacing: 0.8,
@@ -1164,32 +1164,32 @@ class _SquadFinderScreenState extends State<SquadFinderScreen> {
                           },
                           decoration: InputDecoration(
                             filled: true,
-                            fillColor: const Color(0xFF2A2E3A),
+                            fillColor: GamerTheme.cardElevated,
                             hintText: 'Enter your UID',
-                            hintStyle: const TextStyle(color: Color(0xFF8E95A5), fontSize: 12.5),
+                            hintStyle: TextStyle(color: GamerTheme.textMuted, fontSize: 12.5),
                             errorText: _uidErrorText,
                             errorStyle: const TextStyle(color: Color(0xFFFF4D4D), fontSize: 11, fontWeight: FontWeight.w600),
                             prefixIcon: const Icon(Icons.tag_rounded, color: Color(0xFFFF6B00), size: 18),
                             contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
                             border: OutlineInputBorder(
                               borderRadius: BorderRadius.circular(10),
-                              borderSide: const BorderSide(color: Color(0xFF383E4E)),
+                              borderSide: BorderSide(color: GamerTheme.borderDark),
                             ),
                             enabledBorder: OutlineInputBorder(
                               borderRadius: BorderRadius.circular(10),
-                              borderSide: const BorderSide(color: Color(0xFF383E4E)),
+                              borderSide: BorderSide(color: GamerTheme.borderDark),
                             ),
-                            focusedBorder: OutlineInputBorder(
-                              borderRadius: BorderRadius.circular(10),
-                              borderSide: const BorderSide(color: Color(0xFFFF6B00), width: 1.5),
+                            focusedBorder: const OutlineInputBorder(
+                              borderRadius: BorderRadius.all(Radius.circular(10)),
+                              borderSide: BorderSide(color: Color(0xFFFF6B00), width: 1.5),
                             ),
-                            errorBorder: OutlineInputBorder(
-                              borderRadius: BorderRadius.circular(10),
-                              borderSide: const BorderSide(color: Color(0xFFFF4D4D), width: 1.2),
+                            errorBorder: const OutlineInputBorder(
+                              borderRadius: BorderRadius.all(Radius.circular(10)),
+                              borderSide: BorderSide(color: Color(0xFFFF4D4D), width: 1.2),
                             ),
-                            focusedErrorBorder: OutlineInputBorder(
-                              borderRadius: BorderRadius.circular(10),
-                              borderSide: const BorderSide(color: Color(0xFFFF4D4D), width: 1.5),
+                            focusedErrorBorder: const OutlineInputBorder(
+                              borderRadius: BorderRadius.all(Radius.circular(10)),
+                              borderSide: BorderSide(color: Color(0xFFFF4D4D), width: 1.5),
                             ),
                           ),
                         ),

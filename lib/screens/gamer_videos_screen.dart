@@ -35,14 +35,14 @@ class _GamerVideosScreenState extends State<GamerVideosScreen> {
       appBar: AppBar(
         backgroundColor: GamerTheme.surfaceDark,
         elevation: 0,
-        title: const Row(
+        title: Row(
           children: [
-            Icon(Icons.ondemand_video_rounded, color: GamerTheme.accentOrange, size: 26),
-            SizedBox(width: 8),
+            const Icon(Icons.ondemand_video_rounded, color: GamerTheme.accentOrange, size: 26),
+            const SizedBox(width: 8),
             Text(
               'Videos',
               style: TextStyle(
-                color: Colors.white,
+                color: GamerTheme.textWhite,
                 fontWeight: FontWeight.bold,
                 fontSize: 20,
               ),
@@ -178,10 +178,10 @@ class _GamerVideosScreenState extends State<GamerVideosScreen> {
                             ),
                           ),
                           const SizedBox(height: 16),
-                          const Text(
+                          Text(
                             'No Videos Published Yet',
                             style: TextStyle(
-                              color: Colors.white,
+                              color: GamerTheme.textWhite,
                               fontSize: 17,
                               fontWeight: FontWeight.bold,
                             ),
