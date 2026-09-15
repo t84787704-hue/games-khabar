@@ -15,6 +15,7 @@ import '../services/tournament_service.dart';
 import '../services/coin_wallet_service.dart';
 import '../services/ad_free_service.dart';
 import '../services/cloudinary_service.dart';
+import '../services/win_proof_validator.dart';
 import 'coin_store_screen.dart';
 import 'redeem_rewards_screen.dart';
 import '../widgets/coin_history_sheet.dart';
@@ -1644,52 +1645,39 @@ class _InRoomBottomSheetContentState extends State<_InRoomBottomSheetContent> {
     }
   }
 
-  /// ON SCREENSHOT UPLOAD - APP AUTO-READ OCR & VETO SYSTEM
-  Future<Map<String, dynamic>> autoReadProof(File imageFile, String roomId, String downloadUrl) async {
-    final inputImage = InputImage.fromFile(imageFile);
-    final recognizer = TextRecognizer(script: TextRecognitionScript.latin);
+  /// ON SCREENSHOT UPLOAD - APP AUTO-READ OCR & WIN PROOF NAME VALIDATION SYSTEM
+  Future<WinProofValidationResult> autoReadProof(
+    File imageFile,
+    String roomId,
+    String downloadUrl,
+    String accountIdName,
+  ) async {
     try {
-      final result = await recognizer.processImage(inputImage);
-      final String text = result.text.toLowerCase();
-      await recognizer.close();
+      final validationResult = await WinProofValidator.validate(
+        imageFile: imageFile,
+        userId: widget.currentUserId,
+        accountIdName: accountIdName,
+        roomId: roomId,
+      );
 
-      final bool hasWinnerKeyword = text.contains('winner winner') ||
-          text.contains('chicken dinner') ||
-          text.contains('rank #1') ||
-          text.contains('rank 1') ||
-          text.contains('team victory') ||
-          text.contains('victory') ||
-          (text.contains('winner') && text.contains('team'));
+      final String trimmedText = validationResult.fullOcrText.length > 300
+          ? validationResult.fullOcrText.substring(0, 300)
+          : validationResult.fullOcrText;
 
-      // Confidence: kam se kam 2 cheezein honi chahiye
-      int score = 0;
-      if (text.contains('winner')) score++;
-      if (text.contains('rank')) score++;
-      if (text.contains('victory') || text.contains('chicken')) score++;
-      if (text.length > 20) score++; // khali image nahi
-
-      final String ocrStatus = (hasWinnerKeyword && score >= 2) ? 'verified' : 'doubt';
-      final String trimmedText = text.length > 300 ? text.substring(0, 300) : text;
-
-      // Firestore me save - Yahi veto hai
+      // Firestore me save - App Veto + Name Match Validation
       await FirebaseFirestore.instance.collection('rooms').doc(roomId).update({
         'proofUrl': downloadUrl,
         'winProofUrl': downloadUrl,
         'ocrText': trimmedText,
-        'ocrScore': score,
-        'ocrStatus': ocrStatus, // verified ya doubt
-        'rewardStatus': ocrStatus == 'verified' ? 'pending_host' : 'rejected_by_app',
+        'ocrScore': validationResult.score,
+        'ocrStatus': validationResult.status, // 'verified', 'mismatch', or 'doubt'
+        'rewardStatus': validationResult.isVerified ? 'pending_host' : 'rejected_by_app',
+        'detectedScreenshotName': validationResult.detectedScreenshotName,
+        'accountIdName': validationResult.accountIdName,
       });
 
-      return {
-        'ocrStatus': ocrStatus,
-        'ocrScore': score,
-        'ocrText': trimmedText,
-      };
+      return validationResult;
     } catch (e) {
-      try {
-        await recognizer.close();
-      } catch (_) {}
       debugPrint('OCR Error: $e');
       final errText = 'Error reading screenshot: $e';
       await FirebaseFirestore.instance.collection('rooms').doc(roomId).update({
@@ -1700,11 +1688,17 @@ class _InRoomBottomSheetContentState extends State<_InRoomBottomSheetContent> {
         'ocrStatus': 'doubt',
         'rewardStatus': 'rejected_by_app',
       });
-      return {
-        'ocrStatus': 'doubt',
-        'ocrScore': 0,
-        'ocrText': errText,
-      };
+      return WinProofValidationResult(
+        isVerified: false,
+        score: 0,
+        status: 'doubt',
+        detectedScreenshotName: 'Unknown',
+        accountIdName: accountIdName,
+        message: '❌ App AI Check: Error reading screenshot: $e',
+        fullOcrText: errText,
+        isNameMatched: false,
+        hasVictoryKeyword: false,
+      );
     }
   }
 
@@ -1733,7 +1727,16 @@ class _InRoomBottomSheetContentState extends State<_InRoomBottomSheetContent> {
       });
 
       try {
-        // Upload to Cloudinary folder win_proofs
+        // 1. Resolve uploader's real ID name:
+        // Slot allocation name (e.g. "1083") or users collection -> bgmiName / username
+        final accountIdName = await WinProofValidator.resolveAccountIdName(
+          userId: widget.currentUserId,
+          fallbackName: widget.currentUserName,
+          joinedUsers: widget.room.joinedUsers,
+          roomId: widget.room.id,
+        );
+
+        // 2. Upload to Cloudinary folder win_proofs
         String? uploadedUrl = await CloudinaryService.uploadFile(
           file: _selectedProofImage!,
           folder: 'win_proofs',
@@ -1743,11 +1746,18 @@ class _InRoomBottomSheetContentState extends State<_InRoomBottomSheetContent> {
           throw Exception('Upload failed');
         }
 
-        // Run OCR with App Veto evaluation
-        final ocrRes = await autoReadProof(_selectedProofImage!, widget.room.id, uploadedUrl);
-        final String ocrStatus = (ocrRes['ocrStatus'] ?? 'doubt').toString();
-        final int ocrScore = (ocrRes['ocrScore'] is num) ? (ocrRes['ocrScore'] as num).toInt() : 0;
-        final String ocrText = (ocrRes['ocrText'] ?? '').toString();
+        // 3. Run OCR with Win Proof Name Match Validation
+        final valRes = await autoReadProof(
+          _selectedProofImage!,
+          widget.room.id,
+          uploadedUrl,
+          accountIdName,
+        );
+
+        final String ocrStatus = valRes.status;
+        final int ocrScore = valRes.score;
+        final String ocrText = valRes.fullOcrText;
+        final String? detectedName = valRes.detectedScreenshotName;
 
         await messagesRef.add({
           'senderId': widget.currentUserId,
@@ -1759,19 +1769,19 @@ class _InRoomBottomSheetContentState extends State<_InRoomBottomSheetContent> {
           'ocrStatus': ocrStatus,
           'ocrScore': ocrScore,
           'ocrText': ocrText,
+          'detectedName': detectedName,
+          'accountName': accountIdName,
+          'aiCheckMsg': valRes.message,
           'timestamp': FieldValue.serverTimestamp(),
           'isHost': isHost,
         });
 
-        // App AI Bot Announcement
-        final systemMsg = ocrStatus == 'verified'
-            ? '🤖 App AI Check: ✅ Verified Winner Screenshot (Score $ocrScore/4). Awaiting Host Approval.'
-            : '🤖 App AI Check: ❌ App Doubt: Not a clear winner screenshot. Reward BLOCKED by App.';
+        // 4. App AI Bot Announcement with Name Match Validation
         await messagesRef.add({
           'senderId': 'system',
           'senderName': 'APP BOT',
           'senderInitial': '🤖',
-          'message': systemMsg,
+          'message': valRes.message,
           'type': 'system',
           'timestamp': FieldValue.serverTimestamp(),
           'isHost': false,
@@ -1787,11 +1797,11 @@ class _InRoomBottomSheetContentState extends State<_InRoomBottomSheetContent> {
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(
               content: Text(
-                ocrStatus == 'verified'
-                    ? '✅ Screenshot verified by App! Waiting for host approval.'
-                    : '❌ App Doubt: Not a clear winner screenshot. Please upload a clear victory screen.',
+                valRes.isVerified
+                    ? '✅ Verified - Name Matched (Score 4/4)! Awaiting host approval.'
+                    : valRes.message,
               ),
-              backgroundColor: ocrStatus == 'verified' ? _neonGreen : GamerTheme.redAccent,
+              backgroundColor: valRes.isVerified ? _neonGreen : GamerTheme.redAccent,
               behavior: SnackBarBehavior.floating,
               duration: const Duration(seconds: 4),
             ),
@@ -2756,8 +2766,12 @@ class _InRoomBottomSheetContentState extends State<_InRoomBottomSheetContent> {
                               final msgOcrStatus = (msg['ocrStatus'] ?? (imageUrl != null ? room.ocrStatus : 'none')).toString();
                               final int msgOcrScore = (msg['ocrScore'] is num) ? (msg['ocrScore'] as num).toInt() : room.ocrScore;
                               final msgOcrText = (msg['ocrText'] ?? (imageUrl != null ? room.ocrText : '')).toString();
+                              final String? detectedName = msg['detectedName']?.toString();
+                              final String? accountName = msg['accountName']?.toString();
+                              final String? aiCheckMsg = msg['aiCheckMsg']?.toString();
                               final bool isVerified = msgOcrStatus == 'verified';
-                              final bool isDoubt = msgOcrStatus == 'doubt';
+                              final bool isMismatch = msgOcrStatus == 'mismatch';
+                              final bool isDoubt = msgOcrStatus == 'doubt' || isMismatch || msgOcrStatus == 'rejected';
 
                               // Timestamp display
                               String timeStr = 'now';
@@ -2897,8 +2911,42 @@ class _InRoomBottomSheetContentState extends State<_InRoomBottomSheetContent> {
                                                     ),
                                                   ),
 
-                                                  // APP VETO SYSTEM STATUS BADGE (Red or Green Box)
-                                                  if (isDoubt)
+                                                  // APP VETO & NAME MATCH SYSTEM STATUS BADGE (Red or Green Box)
+                                                  if (isMismatch)
+                                                    Container(
+                                                      margin: const EdgeInsets.only(top: 6),
+                                                      padding: const EdgeInsets.all(8),
+                                                      decoration: BoxDecoration(
+                                                        color: GamerTheme.redAccent.withOpacity(0.15),
+                                                        borderRadius: BorderRadius.circular(8),
+                                                        border: Border.all(color: GamerTheme.redAccent),
+                                                      ),
+                                                      child: Column(
+                                                        crossAxisAlignment: CrossAxisAlignment.start,
+                                                        children: [
+                                                          Row(
+                                                            crossAxisAlignment: CrossAxisAlignment.start,
+                                                            children: [
+                                                              const Icon(Icons.cancel_rounded, color: GamerTheme.redAccent, size: 16),
+                                                              const SizedBox(width: 6),
+                                                              Expanded(
+                                                                child: Text(
+                                                                  aiCheckMsg ??
+                                                                      '❌ App AI Check: REJECTED - Name Mismatch. Screenshot has \'${detectedName ?? 'Dtive'}\' but your ID is \'${accountName ?? senderName}\'',
+                                                                  style: const TextStyle(color: GamerTheme.redAccent, fontSize: 11, fontWeight: FontWeight.bold),
+                                                                ),
+                                                             ),
+                                                            ],
+                                                          ),
+                                                          const SizedBox(height: 4),
+                                                          const Text(
+                                                            'Reward BLOCKED by App (Score 0/4) • ID name and screenshot name must match',
+                                                            style: TextStyle(color: Colors.white70, fontSize: 10),
+                                                          ),
+                                                        ],
+                                                      ),
+                                                    )
+                                                  else if (isDoubt)
                                                     Container(
                                                       margin: const EdgeInsets.only(top: 6),
                                                       padding: const EdgeInsets.all(8),
@@ -3069,7 +3117,10 @@ class _InRoomBottomSheetContentState extends State<_InRoomBottomSheetContent> {
                                                 tapTargetSize: MaterialTapTargetSize.shrinkWrap,
                                               ),
                                               onPressed: null, // Disabled: App Veto in effect
-                                              child: const Text('Approve Blocked (App Doubt)', style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold)),
+                                              child: Text(
+                                                isMismatch ? 'Approve Blocked (Name Mismatch)' : 'Approve Blocked (App Doubt)',
+                                                style: const TextStyle(fontSize: 11, fontWeight: FontWeight.bold),
+                                              ),
                                             )
                                           else
                                             ElevatedButton(
