@@ -4,6 +4,7 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import '../constants/gamer_theme.dart';
 import '../services/gamer_auth_service.dart';
+import '../services/theme_service.dart';
 import 'gamer_feed_screen.dart';
 import 'gamer_videos_screen.dart';
 import 'squad_finder_screen.dart';
@@ -97,88 +98,108 @@ class _GamerMainNavigationScreenState extends State<GamerMainNavigationScreen> {
       if (_isAdmin) const GamerAdminDashboardScreen(),
     ];
 
-    return Scaffold(
-      backgroundColor: const Color(0xFF0B0F14),
-      extendBody: false,
-      extendBodyBehindAppBar: false,
-      body: SafeArea(
-        top: true,
-        bottom: true,
-        child: IndexedStack(
-          index: _currentIndex.clamp(0, screens.length - 1),
-          children: screens,
-        ),
-      ),
-      bottomNavigationBar: Container(
-        decoration: const BoxDecoration(
-          color: Color(0xFF10141D),
-          border: Border(
-            top: BorderSide(color: Color(0xFF1F2B3E), width: 1),
-          ),
-        ),
-        child: SafeArea(
-          top: false,
-          bottom: true,
-          child: SizedBox(
-            height: 62,
-            child: Row(
-              mainAxisAlignment: MainAxisAlignment.spaceAround,
-              children: [
-                // Tab 0: Feed
-                _buildNavItem(
-                  index: 0,
-                  icon: Icons.home_rounded,
-                  label: 'Feed',
-                  isSelected: _currentIndex == 0,
-                ),
+    return ValueListenableBuilder<ThemeMode>(
+      valueListenable: ThemeService.themeModeNotifier,
+      builder: (context, themeMode, _) {
+        final isDark = themeMode == ThemeMode.dark;
 
-                // Tab 1: Videos (Facebook Watch style Gaming Clips)
-                _buildNavItem(
-                  index: 1,
-                  icon: Icons.ondemand_video_rounded,
-                  label: 'Videos',
-                  isSelected: _currentIndex == 1,
-                  activeColor: const Color(0xFFFF7A00),
-                ),
-
-                // Tab 2: Squads (LFG System)
-                _buildNavItem(
-                  index: 2,
-                  icon: Icons.group_rounded,
-                  label: 'Squads',
-                  isSelected: _currentIndex == 2,
-                ),
-
-                // Tab 3: Rooms (Tournaments / Custom Rooms)
-                _buildNavItem(
-                  index: 3,
-                  icon: Icons.military_tech_rounded,
-                  label: 'Rooms',
-                  isSelected: _currentIndex == 3,
-                ),
-
-                // Tab 4: Profile
-                _buildNavItem(
-                  index: 4,
-                  icon: Icons.person_rounded,
-                  label: 'Profile',
-                  isSelected: _currentIndex == 4,
-                ),
-
-                // Tab 5: Admin (Visible ONLY to Admin)
-                if (_isAdmin)
-                  _buildNavItem(
-                    index: 5,
-                    icon: Icons.shield_rounded,
-                    label: 'Admin',
-                    isSelected: _currentIndex == 5,
-                    activeColor: const Color(0xFF00FF88),
-                  ),
-              ],
+        return Scaffold(
+          backgroundColor: ThemeService.bg,
+          extendBody: false,
+          extendBodyBehindAppBar: false,
+          body: SafeArea(
+            top: true,
+            bottom: true,
+            child: IndexedStack(
+              index: _currentIndex.clamp(0, screens.length - 1),
+              children: screens,
             ),
           ),
-        ),
-      ),
+          bottomNavigationBar: Container(
+            decoration: BoxDecoration(
+              color: ThemeService.bottomNavBg,
+              border: Border(
+                top: BorderSide(color: ThemeService.bottomNavBorder, width: 1),
+              ),
+              boxShadow: [
+                BoxShadow(
+                  color: isDark ? Colors.black.withOpacity(0.3) : Colors.black.withOpacity(0.06),
+                  blurRadius: 10,
+                  offset: const Offset(0, -2),
+                ),
+              ],
+            ),
+            child: SafeArea(
+              top: false,
+              bottom: true,
+              child: SizedBox(
+                height: 62,
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceAround,
+                  children: [
+                    // Tab 0: Feed
+                    _buildNavItem(
+                      index: 0,
+                      icon: Icons.home_rounded,
+                      label: 'Feed',
+                      isSelected: _currentIndex == 0,
+                      isDark: isDark,
+                    ),
+
+                    // Tab 1: Videos (Facebook Watch style Gaming Clips)
+                    _buildNavItem(
+                      index: 1,
+                      icon: Icons.ondemand_video_rounded,
+                      label: 'Videos',
+                      isSelected: _currentIndex == 1,
+                      activeColor: const Color(0xFFFF7A00),
+                      isDark: isDark,
+                    ),
+
+                    // Tab 2: Squads (LFG System)
+                    _buildNavItem(
+                      index: 2,
+                      icon: Icons.group_rounded,
+                      label: 'Squads',
+                      isSelected: _currentIndex == 2,
+                      isDark: isDark,
+                    ),
+
+                    // Tab 3: Rooms (Tournaments / Custom Rooms)
+                    _buildNavItem(
+                      index: 3,
+                      icon: Icons.military_tech_rounded,
+                      label: 'Rooms',
+                      isSelected: _currentIndex == 3,
+                      isDark: isDark,
+                    ),
+
+                    // Tab 4: Profile
+                    _buildNavItem(
+                      index: 4,
+                      icon: Icons.person_rounded,
+                      label: 'Profile',
+                      isSelected: _currentIndex == 4,
+                      isDark: isDark,
+                    ),
+
+                    // Tab 5: Admin (Visible ONLY to Admin)
+                    if (_isAdmin)
+                      _buildNavItem(
+                        index: 5,
+                        icon: Icons.shield_rounded,
+                        label: 'Admin',
+                        isSelected: _currentIndex == 5,
+                        activeColor: const Color(0xFF00FF88),
+                        isDark: isDark,
+                      ),
+                  ],
+                ),
+              ),
+            ),
+          ),
+        );
+      },
     );
   }
 
@@ -194,7 +215,10 @@ class _GamerMainNavigationScreenState extends State<GamerMainNavigationScreen> {
     required String label,
     required bool isSelected,
     Color activeColor = const Color(0xFF00E5FF),
+    bool isDark = true,
   }) {
+    final unselectedColor = isDark ? GamerTheme.textMuted : const Color(0xFF64748B);
+
     return InkWell(
       onTap: () => _onTabTapped(index),
       borderRadius: BorderRadius.circular(12),
@@ -206,13 +230,13 @@ class _GamerMainNavigationScreenState extends State<GamerMainNavigationScreen> {
             Icon(
               icon,
               size: 22,
-              color: isSelected ? activeColor : GamerTheme.textMuted,
+              color: isSelected ? activeColor : unselectedColor,
             ),
             const SizedBox(height: 3),
             Text(
               label,
               style: TextStyle(
-                color: isSelected ? activeColor : GamerTheme.textMuted,
+                color: isSelected ? activeColor : unselectedColor,
                 fontSize: 10,
                 fontWeight: isSelected ? FontWeight.w800 : FontWeight.w500,
               ),

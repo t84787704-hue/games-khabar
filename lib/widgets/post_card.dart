@@ -5,6 +5,7 @@ import 'package:cached_network_image/cached_network_image.dart';
 import 'package:video_player/video_player.dart';
 import 'package:chewie/chewie.dart';
 import '../constants/gamer_theme.dart';
+import '../services/theme_service.dart';
 import '../models/gamer_post_model.dart';
 import '../models/post_comment_model.dart';
 import '../services/gamer_auth_service.dart';
@@ -225,13 +226,21 @@ class _PostCardState extends State<PostCard> {
     final gameColor = GamerTheme.gameColors[gameTag] ?? GamerTheme.accentBlue;
     final gameEmoji = GamerTheme.gameEmojis[gameTag] ?? '🎮';
     final vUrl = videoUrl;
+    final isDark = ThemeService.isDarkMode;
 
     return Container(
       margin: const EdgeInsets.symmetric(horizontal: 14, vertical: 7),
       decoration: BoxDecoration(
-        color: GamerTheme.cardDark,
+        color: ThemeService.card,
         borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: GamerTheme.borderDark),
+        border: Border.all(color: ThemeService.border),
+        boxShadow: [
+          BoxShadow(
+            color: isDark ? Colors.black.withOpacity(0.2) : Colors.black.withOpacity(0.04),
+            blurRadius: 8,
+            offset: const Offset(0, 2),
+          ),
+        ],
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -260,8 +269,8 @@ class _PostCardState extends State<PostCard> {
                             Flexible(
                               child: Text(
                                 displayName,
-                                style: const TextStyle(
-                                  color: GamerTheme.textWhite,
+                                style: TextStyle(
+                                  color: ThemeService.textPrimary,
                                   fontWeight: FontWeight.w800,
                                   fontSize: 14,
                                 ),
@@ -359,8 +368,8 @@ class _PostCardState extends State<PostCard> {
               padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
               child: Text(
                 postText,
-                style: const TextStyle(
-                  color: GamerTheme.textWhite,
+                style: TextStyle(
+                  color: ThemeService.textPrimary,
                   fontSize: 14.5,
                   height: 1.45,
                 ),

@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../services/theme_service.dart';
 
 class GamerTheme {
   // Core Colors
@@ -122,6 +123,10 @@ class GamerTheme {
   };
 
   static ThemeData get themeData {
+    return ThemeService.isDarkMode ? darkThemeData : lightThemeData;
+  }
+
+  static ThemeData get darkThemeData {
     return ThemeData(
       brightness: Brightness.dark,
       scaffoldBackgroundColor: bgDark,
@@ -165,6 +170,63 @@ class GamerTheme {
         enabledBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(12),
           borderSide: const BorderSide(color: borderDark),
+        ),
+        focusedBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(12),
+          borderSide: const BorderSide(color: accentBlue, width: 1.5),
+        ),
+        errorBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(12),
+          borderSide: const BorderSide(color: redAccent),
+        ),
+      ),
+    );
+  }
+
+  static ThemeData get lightThemeData {
+    return ThemeData(
+      brightness: Brightness.light,
+      scaffoldBackgroundColor: const Color(0xFFF8FAFC),
+      primaryColor: accentBlue,
+      colorScheme: const ColorScheme.light(
+        primary: accentBlue,
+        secondary: accentOrange,
+        surface: Colors.white,
+        background: Color(0xFFF8FAFC),
+        error: redAccent,
+      ),
+      appBarTheme: const AppBarTheme(
+        backgroundColor: Colors.white,
+        elevation: 0.5,
+        centerTitle: false,
+        iconTheme: IconThemeData(color: Color(0xFF0F172A)),
+        titleTextStyle: TextStyle(
+          color: Color(0xFF0F172A),
+          fontSize: 18,
+          fontWeight: FontWeight.w900,
+          letterSpacing: 0.5,
+        ),
+      ),
+      bottomNavigationBarTheme: const BottomNavigationBarThemeData(
+        backgroundColor: Colors.white,
+        selectedItemColor: accentBlue,
+        unselectedItemColor: Color(0xFF64748B),
+        showUnselectedLabels: true,
+        type: BottomNavigationBarType.fixed,
+        elevation: 8,
+      ),
+      inputDecorationTheme: InputDecorationTheme(
+        filled: true,
+        fillColor: const Color(0xFFF1F5F9),
+        contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+        hintStyle: const TextStyle(color: Color(0xFF94A3B8), fontSize: 14),
+        border: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(12),
+          borderSide: const BorderSide(color: Color(0xFFE2E8F0)),
+        ),
+        enabledBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(12),
+          borderSide: const BorderSide(color: Color(0xFFE2E8F0)),
         ),
         focusedBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(12),

@@ -11,6 +11,7 @@ import 'package:share_plus/share_plus.dart';
 import '../constants/gamer_theme.dart';
 import '../models/gamer_user_model.dart';
 import '../models/gamer_post_model.dart';
+import '../services/theme_service.dart';
 import '../services/gamer_auth_service.dart';
 import '../services/gamer_social_service.dart';
 import '../widgets/gamer_avatar.dart';
@@ -952,6 +953,21 @@ class _GamerProfileScreenState extends State<GamerProfileScreen> with SingleTick
                       icon: const Icon(Icons.share_rounded, color: GamerTheme.accentBlue),
                       onPressed: () => _shareProfile(user),
                     ),
+                    // Day / Night Mode Toggle
+                    ValueListenableBuilder<ThemeMode>(
+                      valueListenable: ThemeService.themeModeNotifier,
+                      builder: (context, mode, _) {
+                        final isDark = mode == ThemeMode.dark;
+                        return IconButton(
+                          tooltip: isDark ? 'Switch to Day Mode (Default)' : 'Switch to Night Mode',
+                          icon: Icon(
+                            isDark ? Icons.light_mode_rounded : Icons.dark_mode_rounded,
+                            color: isDark ? const Color(0xFFFFD700) : const Color(0xFF6366F1),
+                          ),
+                          onPressed: () => ThemeService.toggleTheme(),
+                        );
+                      },
+                    ),
                     if (isOwnProfile) ...[
                       IconButton(
                         tooltip: 'Saved Articles & Posts',
@@ -1769,6 +1785,103 @@ class _GamerProfileScreenState extends State<GamerProfileScreen> with SingleTick
                             ),
                           ),
                         ),
+                      ),
+                      // Day / Night Mode Setting Card
+                      const SizedBox(height: 12),
+                      ValueListenableBuilder<ThemeMode>(
+                        valueListenable: ThemeService.themeModeNotifier,
+                        builder: (context, mode, _) {
+                          final isDark = mode == ThemeMode.dark;
+                          return Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                            decoration: BoxDecoration(
+                              color: isDark ? GamerTheme.cardDark : Colors.white,
+                              borderRadius: BorderRadius.circular(16),
+                              border: Border.all(
+                                color: isDark ? GamerTheme.borderDark : const Color(0xFFE2E8F0),
+                              ),
+                              boxShadow: [
+                                BoxShadow(
+                                  color: isDark ? Colors.black.withOpacity(0.2) : Colors.black.withOpacity(0.04),
+                                  blurRadius: 8,
+                                  offset: const Offset(0, 2),
+                                ),
+                              ],
+                            ),
+                            child: Row(
+                              children: [
+                                Container(
+                                  padding: const EdgeInsets.all(10),
+                                  decoration: BoxDecoration(
+                                    color: isDark ? const Color(0xFF1E293B) : const Color(0xFFFFFBEB),
+                                    borderRadius: BorderRadius.circular(12),
+                                    border: Border.all(
+                                      color: isDark ? const Color(0xFF334155) : const Color(0xFFFDE68A),
+                                    ),
+                                  ),
+                                  child: Icon(
+                                    isDark ? Icons.dark_mode_rounded : Icons.light_mode_rounded,
+                                    color: isDark ? const Color(0xFFFFD700) : const Color(0xFFF59E0B),
+                                    size: 22,
+                                  ),
+                                ),
+                                const SizedBox(width: 14),
+                                Expanded(
+                                  child: Column(
+                                    crossAxisAlignment: CrossAxisAlignment.start,
+                                    children: [
+                                      Row(
+                                        children: [
+                                          Text(
+                                            isDark ? 'Night Mode' : 'Day Mode (Default)',
+                                            style: TextStyle(
+                                              fontWeight: FontWeight.w800,
+                                              fontSize: 14,
+                                              color: isDark ? GamerTheme.textWhite : const Color(0xFF0F172A),
+                                            ),
+                                          ),
+                                          const SizedBox(width: 6),
+                                          Container(
+                                            padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                                            decoration: BoxDecoration(
+                                              color: isDark ? const Color(0xFF6366F1).withOpacity(0.2) : const Color(0xFF10B981).withOpacity(0.15),
+                                              borderRadius: BorderRadius.circular(6),
+                                            ),
+                                            child: Text(
+                                              isDark ? 'NIGHT' : 'DEFAULT',
+                                              style: TextStyle(
+                                                fontSize: 9,
+                                                fontWeight: FontWeight.w900,
+                                                color: isDark ? const Color(0xFF818CF8) : const Color(0xFF059669),
+                                              ),
+                                            ),
+                                          ),
+                                        ],
+                                      ),
+                                      const SizedBox(height: 2),
+                                      Text(
+                                        isDark
+                                            ? 'Dark aesthetic for night gaming sessions'
+                                            : 'Bright, clean interface for daytime gaming',
+                                        style: TextStyle(
+                                          color: isDark ? GamerTheme.textMuted : const Color(0xFF64748B),
+                                          fontSize: 11,
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                                Switch.adaptive(
+                                  value: isDark,
+                                  activeColor: const Color(0xFF6366F1),
+                                  onChanged: (val) {
+                                    ThemeService.setTheme(val);
+                                  },
+                                ),
+                              ],
+                            ),
+                          );
+                        },
                       ),
                     ],
                   ),

@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import '../constants/gamer_theme.dart';
+import '../services/theme_service.dart';
 import '../models/gamer_post_model.dart';
 import '../models/gaming_news_model.dart';
 import '../services/gamer_auth_service.dart';
@@ -243,137 +244,183 @@ class _GamerFeedScreenState extends State<GamerFeedScreen> {
     final currentUid = _authService.currentUid ?? '';
     final gamer = _authService.currentGamer;
 
-    return Scaffold(
-      backgroundColor: GamerTheme.bgDark,
-      extendBody: false,
-      extendBodyBehindAppBar: false,
-      appBar: AppBar(
-        titleSpacing: 16,
-        title: Row(
-          children: [
-            Container(
-              padding: const EdgeInsets.all(6),
-              decoration: const BoxDecoration(
-                gradient: GamerTheme.blueOrangeGradient,
-                shape: BoxShape.circle,
-              ),
-              child: const Icon(Icons.sports_esports_rounded, color: Colors.white, size: 20),
-            ),
-            const SizedBox(width: 10),
-            ShaderMask(
-              shaderCallback: (bounds) => GamerTheme.blueOrangeGradient.createShader(bounds),
-              child: const Text(
-                'GAMERS ID',
-                style: TextStyle(
-                  color: Colors.white,
-                  fontWeight: FontWeight.w900,
-                  fontSize: 20,
-                  letterSpacing: 1.2,
-                ),
-              ),
-            ),
-          ],
-        ),
-        actions: [
-          // Language Toggle: EN | اردو
-          ValueListenableBuilder<String>(
-            valueListenable: LanguageService.currentLanguage,
-            builder: (context, currentLang, _) {
-              final isUrdu = currentLang == 'ur';
-              return Container(
-                margin: const EdgeInsets.symmetric(vertical: 10, horizontal: 2),
-                decoration: BoxDecoration(
-                  color: isUrdu ? const Color(0xFF00FF88).withOpacity(0.12) : const Color(0xFF1E293B),
-                  borderRadius: BorderRadius.circular(18),
-                  border: Border.all(
-                    color: isUrdu ? const Color(0xFF00FF88) : const Color(0xFF334155),
-                    width: 1.2,
+    return ValueListenableBuilder<ThemeMode>(
+      valueListenable: ThemeService.themeModeNotifier,
+      builder: (context, themeMode, _) {
+        final isDark = themeMode == ThemeMode.dark;
+
+        return Scaffold(
+          backgroundColor: ThemeService.bg,
+          extendBody: false,
+          extendBodyBehindAppBar: false,
+          appBar: AppBar(
+            backgroundColor: ThemeService.appBarBg,
+            elevation: isDark ? 0 : 0.5,
+            titleSpacing: 16,
+            title: Row(
+              children: [
+                Container(
+                  padding: const EdgeInsets.all(6),
+                  decoration: const BoxDecoration(
+                    gradient: GamerTheme.blueOrangeGradient,
+                    shape: BoxShape.circle,
                   ),
+                  child: const Icon(Icons.sports_esports_rounded, color: Colors.white, size: 20),
                 ),
-                child: InkWell(
-                  borderRadius: BorderRadius.circular(18),
-                  onTap: () {
-                    LanguageService.toggleLanguage();
-                  },
-                  child: Padding(
-                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-                    child: Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Text(
-                          'EN',
-                          style: TextStyle(
-                            fontSize: 11,
-                            fontWeight: FontWeight.w900,
-                            color: !isUrdu ? const Color(0xFF00FF88) : const Color(0xFF94A3B8),
-                          ),
-                        ),
-                        const Padding(
-                          padding: EdgeInsets.symmetric(horizontal: 3),
-                          child: Text(
-                            '|',
-                            style: TextStyle(
-                              fontSize: 11,
-                              color: Color(0xFF64748B),
-                              fontWeight: FontWeight.w700,
-                            ),
-                          ),
-                        ),
-                        Text(
-                          'اردو',
-                          style: TextStyle(
-                            fontSize: 11.5,
-                            fontWeight: FontWeight.w900,
-                            color: isUrdu ? const Color(0xFF00FF88) : const Color(0xFF94A3B8),
-                          ),
-                        ),
-                      ],
+                const SizedBox(width: 10),
+                ShaderMask(
+                  shaderCallback: (bounds) => GamerTheme.blueOrangeGradient.createShader(bounds),
+                  child: const Text(
+                    'GAMERS ID',
+                    style: TextStyle(
+                      color: Colors.white,
+                      fontWeight: FontWeight.w900,
+                      fontSize: 20,
+                      letterSpacing: 1.2,
                     ),
                   ),
                 ),
-              );
-            },
-          ),
-          IconButton(
-            tooltip: 'Top 10 Leaderboard',
-            icon: const Icon(Icons.emoji_events_rounded, color: Color(0xFFFFD700), size: 22),
-            onPressed: () {
-              Navigator.of(context).push(
-                MaterialPageRoute(builder: (_) => const LeaderboardScreen()),
-              );
-            },
-          ),
-          IconButton(
-            icon: const Icon(Icons.search_rounded, color: GamerTheme.textWhite, size: 22),
-            onPressed: () {
-              Navigator.of(context).push(
-                MaterialPageRoute(builder: (_) => const GamerSearchScreen()),
-              );
-            },
-          ),
-          IconButton(
-            icon: const Icon(Icons.notifications_rounded, color: GamerTheme.textWhite, size: 22),
-            onPressed: () {
-              Navigator.of(context).push(
-                MaterialPageRoute(builder: (_) => const NotificationsScreen()),
-              );
-            },
-          ),
-          Padding(
-            padding: const EdgeInsets.only(right: 14, left: 4),
-            child: GamerAvatar(
-              photoUrl: gamer?.photoUrl ?? '',
-              displayName: gamer?.displayName ?? 'Gamer',
-              radius: 18,
-              onTap: () {
-                Navigator.of(context).push(
-                  MaterialPageRoute(builder: (_) => const GamerProfileScreen()),
-                );
-              },
+              ],
             ),
+            actions: [
+              // Language Toggle: EN | اردو
+              ValueListenableBuilder<String>(
+                valueListenable: LanguageService.currentLanguage,
+                builder: (context, currentLang, _) {
+                  final isUrdu = currentLang == 'ur';
+                  return Container(
+                    margin: const EdgeInsets.symmetric(vertical: 10, horizontal: 2),
+                    decoration: BoxDecoration(
+                      color: isUrdu ? const Color(0xFF00FF88).withOpacity(0.12) : (isDark ? const Color(0xFF1E293B) : const Color(0xFFF1F5F9)),
+                      borderRadius: BorderRadius.circular(18),
+                      border: Border.all(
+                        color: isUrdu ? const Color(0xFF00FF88) : (isDark ? const Color(0xFF334155) : const Color(0xFFCBD5E1)),
+                        width: 1.2,
+                      ),
+                    ),
+                    child: InkWell(
+                      borderRadius: BorderRadius.circular(18),
+                      onTap: () {
+                        LanguageService.toggleLanguage();
+                      },
+                      child: Padding(
+                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Text(
+                              'EN',
+                              style: TextStyle(
+                                fontSize: 11,
+                                fontWeight: FontWeight.w900,
+                                color: !isUrdu ? const Color(0xFF00FF88) : const Color(0xFF94A3B8),
+                              ),
+                            ),
+                            const Padding(
+                              padding: EdgeInsets.symmetric(horizontal: 3),
+                              child: Text(
+                                '|',
+                                style: TextStyle(
+                                  fontSize: 11,
+                                  color: Color(0xFF64748B),
+                                  fontWeight: FontWeight.w700,
+                                ),
+                              ),
+                            ),
+                            Text(
+                              'اردو',
+                              style: TextStyle(
+                                fontSize: 11.5,
+                                fontWeight: FontWeight.w900,
+                                color: isUrdu ? const Color(0xFF00FF88) : const Color(0xFF94A3B8),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                  );
+                },
+              ),
+              // Day / Night Mode Toggle
+              IconButton(
+                tooltip: isDark ? 'Switch to Day Mode (Default)' : 'Switch to Night Mode',
+                icon: Icon(
+                  isDark ? Icons.light_mode_rounded : Icons.dark_mode_rounded,
+                  color: isDark ? const Color(0xFFFFD700) : const Color(0xFF6366F1),
+                  size: 22,
+                ),
+                onPressed: () {
+                  ThemeService.toggleTheme();
+                  ScaffoldMessenger.of(context).hideCurrentSnackBar();
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(
+                      duration: const Duration(milliseconds: 1200),
+                      backgroundColor: ThemeService.card,
+                      behavior: SnackBarBehavior.floating,
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                      content: Row(
+                        children: [
+                          Icon(
+                            ThemeService.isDarkMode ? Icons.dark_mode_rounded : Icons.light_mode_rounded,
+                            color: ThemeService.isDarkMode ? const Color(0xFFFFD700) : const Color(0xFF6366F1),
+                            size: 18,
+                          ),
+                          const SizedBox(width: 10),
+                          Text(
+                            ThemeService.isDarkMode ? 'Night Mode Activated 🌙' : 'Day Mode Activated ☀️',
+                            style: TextStyle(
+                              color: ThemeService.textPrimary,
+                              fontWeight: FontWeight.bold,
+                              fontSize: 13,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  );
+                },
+              ),
+              IconButton(
+                tooltip: 'Top 10 Leaderboard',
+                icon: const Icon(Icons.emoji_events_rounded, color: Color(0xFFFFD700), size: 22),
+                onPressed: () {
+                  Navigator.of(context).push(
+                    MaterialPageRoute(builder: (_) => const LeaderboardScreen()),
+                  );
+                },
+              ),
+              IconButton(
+                icon: Icon(Icons.search_rounded, color: isDark ? GamerTheme.textWhite : const Color(0xFF0F172A), size: 22),
+                onPressed: () {
+                  Navigator.of(context).push(
+                    MaterialPageRoute(builder: (_) => const GamerSearchScreen()),
+                  );
+                },
+              ),
+              IconButton(
+                icon: Icon(Icons.notifications_rounded, color: isDark ? GamerTheme.textWhite : const Color(0xFF0F172A), size: 22),
+                onPressed: () {
+                  Navigator.of(context).push(
+                    MaterialPageRoute(builder: (_) => const NotificationsScreen()),
+                  );
+                },
+              ),
+              Padding(
+                padding: const EdgeInsets.only(right: 14, left: 4),
+                child: GamerAvatar(
+                  photoUrl: gamer?.photoUrl ?? '',
+                  displayName: gamer?.displayName ?? 'Gamer',
+                  radius: 18,
+                  onTap: () {
+                    Navigator.of(context).push(
+                      MaterialPageRoute(builder: (_) => const GamerProfileScreen()),
+                    );
+                  },
+                ),
+              ),
+            ],
           ),
-        ],
-      ),
       body: SafeArea(
         top: true,
         bottom: true,
@@ -775,6 +822,8 @@ class _GamerFeedScreenState extends State<GamerFeedScreen> {
         child: const Icon(Icons.add_rounded, size: 30),
       ),
     );
+  },
+);
   }
 
   Widget _buildEmptyAllState() {

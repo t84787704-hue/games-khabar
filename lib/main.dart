@@ -3,6 +3,7 @@ import 'package:flutter/services.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'firebase_options.dart';
 import 'constants/gamer_theme.dart';
+import 'services/theme_service.dart';
 import 'services/language_service.dart';
 import 'screens/gamer_app_root.dart';
 import 'screens/create_gamer_id_screen.dart';
@@ -19,15 +20,6 @@ void main() async {
     overlays: [SystemUiOverlay.top, SystemUiOverlay.bottom],
   );
 
-  SystemChrome.setSystemUIOverlayStyle(
-    const SystemUiOverlayStyle(
-      statusBarColor: Colors.transparent,
-      statusBarIconBrightness: Brightness.light,
-      systemNavigationBarColor: GamerTheme.cardDark,
-      systemNavigationBarIconBrightness: Brightness.light,
-    ),
-  );
-
   try {
     await Firebase.initializeApp(
       options: DefaultFirebaseOptions.currentPlatform,
@@ -38,6 +30,7 @@ void main() async {
   }
 
   await LanguageService.init();
+  await ThemeService.init();
 
   runApp(const GamersIdApp());
 }
@@ -47,29 +40,36 @@ class GamersIdApp extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return SafeArea(
-      top: true,
-      bottom: true,
-      child: MaterialApp(
-        title: 'Gamers ID',
-        debugShowCheckedModeBanner: false,
-        theme: GamerTheme.themeData,
-        builder: (context, child) {
-          return SafeArea(
-            top: true,
-            bottom: true,
-            child: child ?? const SizedBox.shrink(),
-          );
-        },
-        home: const GamerAppRoot(),
-        routes: {
-          '/auth': (context) => const GamerAuthScreen(),
-          '/create-id': (context) => const CreateGamerIdScreen(),
-          '/create-post': (context) => const CreatePostScreen(),
-          '/search': (context) => const GamerSearchScreen(),
-          '/banned': (context) => const BannedScreen(),
-        },
-      ),
+    return ValueListenableBuilder<ThemeMode>(
+      valueListenable: ThemeService.themeModeNotifier,
+      builder: (context, themeMode, _) {
+        return SafeArea(
+          top: true,
+          bottom: true,
+          child: MaterialApp(
+            title: 'Gamers ID',
+            debugShowCheckedModeBanner: false,
+            themeMode: themeMode,
+            theme: ThemeService.lightTheme,
+            darkTheme: ThemeService.darkTheme,
+            builder: (context, child) {
+              return SafeArea(
+                top: true,
+                bottom: true,
+                child: child ?? const SizedBox.shrink(),
+              );
+            },
+            home: const GamerAppRoot(),
+            routes: {
+              '/auth': (context) => const GamerAuthScreen(),
+              '/create-id': (context) => const CreateGamerIdScreen(),
+              '/create-post': (context) => const CreatePostScreen(),
+              '/search': (context) => const GamerSearchScreen(),
+              '/banned': (context) => const BannedScreen(),
+            },
+          ),
+        );
+      },
     );
   }
 }
