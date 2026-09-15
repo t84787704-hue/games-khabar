@@ -6,6 +6,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:intl/intl.dart';
+import 'package:google_mlkit_text_recognition/google_mlkit_text_recognition.dart';
 import '../constants/gamer_theme.dart';
 import '../models/tournament_room_model.dart';
 import '../models/coin_wallet_model.dart';
@@ -42,10 +43,14 @@ class GamerRoom {
   final String status;
   final DateTime createdAt;
   final DateTime startTime;
-  final String rewardStatus; // 'idle', 'sending', 'sent'
+  final String rewardStatus; // 'idle', 'sending', 'sent', 'pending_host', 'rejected_by_app'
   final String? winnerId;
   final String? winnerName;
   final String prizeSource; // 'application'
+  final String ocrStatus; // 'verified', 'doubt', 'none'
+  final String ocrText;
+  final int ocrScore;
+  final String? proofUrl;
 
   const GamerRoom({
     required this.id,
@@ -69,6 +74,10 @@ class GamerRoom {
     this.winnerId,
     this.winnerName,
     this.prizeSource = 'application',
+    this.ocrStatus = 'none',
+    this.ocrText = '',
+    this.ocrScore = 0,
+    this.proofUrl,
   });
 
   bool get isFull => filled >= total;
@@ -132,6 +141,10 @@ class GamerRoom {
     final winnerId = data['winnerId']?.toString();
     final winnerName = data['winnerName']?.toString();
     final prizeSource = (data['prizeSource'] ?? 'application').toString();
+    final ocrStatus = (data['ocrStatus'] ?? 'none').toString();
+    final ocrText = (data['ocrText'] ?? '').toString();
+    final int ocrScore = (data['ocrScore'] is num) ? (data['ocrScore'] as num).toInt() : 0;
+    final proofUrl = data['proofUrl']?.toString() ?? data['winProofUrl']?.toString();
 
     DateTime created = DateTime.now();
     if (data['createdAt'] is Timestamp) {
@@ -167,6 +180,10 @@ class GamerRoom {
       winnerId: winnerId,
       winnerName: winnerName,
       prizeSource: prizeSource,
+      ocrStatus: ocrStatus,
+      ocrText: ocrText,
+      ocrScore: ocrScore,
+      proofUrl: proofUrl,
     );
   }
 }
@@ -1447,6 +1464,70 @@ class _InRoomBottomSheetContentState extends State<_InRoomBottomSheetContent> {
     }
   }
 
+  /// ON SCREENSHOT UPLOAD - APP AUTO-READ OCR & VETO SYSTEM
+  Future<Map<String, dynamic>> autoReadProof(File imageFile, String roomId, String downloadUrl) async {
+    final inputImage = InputImage.fromFile(imageFile);
+    final recognizer = TextRecognizer(script: TextRecognitionScript.latin);
+    try {
+      final result = await recognizer.processImage(inputImage);
+      final String text = result.text.toLowerCase();
+      await recognizer.close();
+
+      final bool hasWinnerKeyword = text.contains('winner winner') ||
+          text.contains('chicken dinner') ||
+          text.contains('rank #1') ||
+          text.contains('rank 1') ||
+          text.contains('team victory') ||
+          text.contains('victory') ||
+          (text.contains('winner') && text.contains('team'));
+
+      // Confidence: kam se kam 2 cheezein honi chahiye
+      int score = 0;
+      if (text.contains('winner')) score++;
+      if (text.contains('rank')) score++;
+      if (text.contains('victory') || text.contains('chicken')) score++;
+      if (text.length > 20) score++; // khali image nahi
+
+      final String ocrStatus = (hasWinnerKeyword && score >= 2) ? 'verified' : 'doubt';
+      final String trimmedText = text.length > 300 ? text.substring(0, 300) : text;
+
+      // Firestore me save - Yahi veto hai
+      await FirebaseFirestore.instance.collection('rooms').doc(roomId).update({
+        'proofUrl': downloadUrl,
+        'winProofUrl': downloadUrl,
+        'ocrText': trimmedText,
+        'ocrScore': score,
+        'ocrStatus': ocrStatus, // verified ya doubt
+        'rewardStatus': ocrStatus == 'verified' ? 'pending_host' : 'rejected_by_app',
+      });
+
+      return {
+        'ocrStatus': ocrStatus,
+        'ocrScore': score,
+        'ocrText': trimmedText,
+      };
+    } catch (e) {
+      try {
+        await recognizer.close();
+      } catch (_) {}
+      debugPrint('OCR Error: $e');
+      final errText = 'Error reading screenshot: $e';
+      await FirebaseFirestore.instance.collection('rooms').doc(roomId).update({
+        'proofUrl': downloadUrl,
+        'winProofUrl': downloadUrl,
+        'ocrText': errText,
+        'ocrScore': 0,
+        'ocrStatus': 'doubt',
+        'rewardStatus': 'rejected_by_app',
+      });
+      return {
+        'ocrStatus': 'doubt',
+        'ocrScore': 0,
+        'ocrText': errText,
+      };
+    }
+  }
+
   // Send message or Win Proof
   Future<void> _sendMessage() async {
     if (!canAccess) return;
@@ -1482,6 +1563,12 @@ class _InRoomBottomSheetContentState extends State<_InRoomBottomSheetContent> {
           throw Exception('Upload failed');
         }
 
+        // Run OCR with App Veto evaluation
+        final ocrRes = await autoReadProof(_selectedProofImage!, widget.room.id, uploadedUrl);
+        final String ocrStatus = (ocrRes['ocrStatus'] ?? 'doubt').toString();
+        final int ocrScore = (ocrRes['ocrScore'] is num) ? (ocrRes['ocrScore'] as num).toInt() : 0;
+        final String ocrText = (ocrRes['ocrText'] ?? '').toString();
+
         await messagesRef.add({
           'senderId': widget.currentUserId,
           'senderName': widget.currentUserName,
@@ -1489,8 +1576,25 @@ class _InRoomBottomSheetContentState extends State<_InRoomBottomSheetContent> {
           'message': text.isNotEmpty ? text : 'Submitted Match Win Proof',
           'imageUrl': uploadedUrl,
           'type': 'win_proof',
+          'ocrStatus': ocrStatus,
+          'ocrScore': ocrScore,
+          'ocrText': ocrText,
           'timestamp': FieldValue.serverTimestamp(),
           'isHost': isHost,
+        });
+
+        // App AI Bot Announcement
+        final systemMsg = ocrStatus == 'verified'
+            ? '🤖 App AI Check: ✅ Verified Winner Screenshot (Score $ocrScore/4). Awaiting Host Approval.'
+            : '🤖 App AI Check: ❌ App Doubt: Not a clear winner screenshot. Reward BLOCKED by App.';
+        await messagesRef.add({
+          'senderId': 'system',
+          'senderName': 'APP BOT',
+          'senderInitial': '🤖',
+          'message': systemMsg,
+          'type': 'system',
+          'timestamp': FieldValue.serverTimestamp(),
+          'isHost': false,
         });
 
         setState(() {
@@ -1498,15 +1602,31 @@ class _InRoomBottomSheetContentState extends State<_InRoomBottomSheetContent> {
           _isUploadingProof = false;
           _msgController.clear();
         });
+
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text(
+                ocrStatus == 'verified'
+                    ? '✅ Screenshot verified by App! Waiting for host approval.'
+                    : '❌ App Doubt: Not a clear winner screenshot. Please upload a clear victory screen.',
+              ),
+              backgroundColor: ocrStatus == 'verified' ? _neonGreen : GamerTheme.redAccent,
+              behavior: SnackBarBehavior.floating,
+              duration: const Duration(seconds: 4),
+            ),
+          );
+        }
       } catch (e) {
         setState(() {
           _isUploadingProof = false;
         });
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-              content: Text('Failed to upload win proof image'),
+            SnackBar(
+              content: Text('Failed to upload win proof: $e'),
               backgroundColor: GamerTheme.redAccent,
+              behavior: SnackBarBehavior.floating,
             ),
           );
         }
@@ -1591,11 +1711,30 @@ class _InRoomBottomSheetContentState extends State<_InRoomBottomSheetContent> {
   }) async {
     final roomRef = FirebaseFirestore.instance.collection('rooms').doc(room.id);
 
-    // Check idempotency (ek hi baar)
+    // SAB SE IMPORTANT CHECK - APP KA VETO
     try {
       final freshDoc = await roomRef.get();
       final freshData = freshDoc.data() ?? {};
+      final currentOcrStatus = (freshData['ocrStatus'] ?? room.ocrStatus).toString();
+      final currentOcrText = (freshData['ocrText'] ?? room.ocrText).toString();
       final currentRewardStatus = (freshData['rewardStatus'] ?? room.rewardStatus).toString();
+
+      if (currentOcrStatus != 'verified') {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text(
+                'Blocked by App: App ko is screenshot me doubt hai (${currentOcrText.isNotEmpty ? currentOcrText : "No text detected"}), isliye reward host ke approve se bhi nahi jayega. User ko clear winner screenshot upload karne ko bolo.',
+              ),
+              backgroundColor: GamerTheme.redAccent,
+              behavior: SnackBarBehavior.floating,
+              duration: const Duration(seconds: 5),
+            ),
+          );
+        }
+        return; // YAHAN SE AAGE JAYEGA HI NAHI
+      }
+
       if (currentRewardStatus == 'sent') {
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
@@ -1708,6 +1847,9 @@ class _InRoomBottomSheetContentState extends State<_InRoomBottomSheetContent> {
         final DocumentSnapshot txRoomSnap = await transaction.get(roomRef);
 
         final txRoomData = txRoomSnap.data() as Map<String, dynamic>? ?? {};
+        if (txRoomData['ocrStatus'] != 'verified') {
+          throw 'Blocked by App: App ko is screenshot me doubt hai, reward blocked.';
+        }
         if (txRoomData['rewardStatus'] == 'sent') {
           throw 'Already sent';
         }
@@ -1747,7 +1889,7 @@ class _InRoomBottomSheetContentState extends State<_InRoomBottomSheetContent> {
           });
         }
 
-        // 2. Create transaction log
+        // 2. Create transaction log with App Veto verification status
         final DocumentReference txRef = FirebaseFirestore.instance.collection('transactions').doc();
         final String txId = txRef.id;
         final txLogData = {
@@ -1755,13 +1897,14 @@ class _InRoomBottomSheetContentState extends State<_InRoomBottomSheetContent> {
           'userId': resolvedWinnerId,
           'amount': prize, // +500
           'type': 'win_reward',
-          'from': 'application',
+          'from': 'app_verified',
           'to': resolvedWinnerId,
           'title': 'Match Victory Reward 🏆 (From App)',
           'description': 'Won ${room.game} Match: ${room.title} - Prize from App',
           'roomId': roomId,
           'approvedBy': widget.currentUserId,
           'prizeSource': 'application',
+          'ocrStatus': 'verified',
           'status': 'completed',
           'winProofUrl': winProofUrl,
           'createdAt': FieldValue.serverTimestamp(),
@@ -2241,6 +2384,11 @@ class _InRoomBottomSheetContentState extends State<_InRoomBottomSheetContent> {
                               final msgIsHost = msg['isHost'] == true || senderId == widget.room.hostId;
                               final isMe = senderId == widget.currentUserId;
                               final isSystem = type == 'system' || senderId == 'system';
+                              final msgOcrStatus = (msg['ocrStatus'] ?? (imageUrl != null ? room.ocrStatus : 'none')).toString();
+                              final int msgOcrScore = (msg['ocrScore'] is num) ? (msg['ocrScore'] as num).toInt() : room.ocrScore;
+                              final msgOcrText = (msg['ocrText'] ?? (imageUrl != null ? room.ocrText : '')).toString();
+                              final bool isVerified = msgOcrStatus == 'verified';
+                              final bool isDoubt = msgOcrStatus == 'doubt';
 
                               // Timestamp display
                               String timeStr = 'now';
@@ -2341,7 +2489,12 @@ class _InRoomBottomSheetContentState extends State<_InRoomBottomSheetContent> {
                                                         height: 140,
                                                         width: double.infinity,
                                                         decoration: BoxDecoration(
-                                                          border: Border.all(color: _neonGreen, width: 1.5),
+                                                          border: Border.all(
+                                                            color: isDoubt
+                                                                ? GamerTheme.redAccent
+                                                                : (isVerified ? _neonGreen : GamerTheme.borderDark),
+                                                            width: 1.5,
+                                                          ),
                                                           borderRadius: BorderRadius.circular(8),
                                                         ),
                                                         child: Stack(
@@ -2374,6 +2527,66 @@ class _InRoomBottomSheetContentState extends State<_InRoomBottomSheetContent> {
                                                       ),
                                                     ),
                                                   ),
+
+                                                  // APP VETO SYSTEM STATUS BADGE (Red or Green Box)
+                                                  if (isDoubt)
+                                                    Container(
+                                                      margin: const EdgeInsets.only(top: 6),
+                                                      padding: const EdgeInsets.all(8),
+                                                      decoration: BoxDecoration(
+                                                        color: GamerTheme.redAccent.withOpacity(0.15),
+                                                        borderRadius: BorderRadius.circular(8),
+                                                        border: Border.all(color: GamerTheme.redAccent),
+                                                      ),
+                                                      child: Column(
+                                                        crossAxisAlignment: CrossAxisAlignment.start,
+                                                        children: [
+                                                          const Row(
+                                                            children: [
+                                                              Icon(Icons.cancel_rounded, color: GamerTheme.redAccent, size: 16),
+                                                              SizedBox(width: 6),
+                                                              Expanded(
+                                                                child: Text(
+                                                                  '❌ App Doubt: Not a clear winner screenshot. Reward BLOCKED even if host approves.',
+                                                                  style: TextStyle(color: GamerTheme.redAccent, fontSize: 11, fontWeight: FontWeight.bold),
+                                                                ),
+                                                              ),
+                                                            ],
+                                                          ),
+                                                          if (msgOcrText.isNotEmpty) ...[
+                                                            const SizedBox(height: 4),
+                                                            Text(
+                                                              'OCR Read: "$msgOcrText"',
+                                                              style: const TextStyle(color: Colors.white70, fontSize: 10),
+                                                              maxLines: 2,
+                                                              overflow: TextOverflow.ellipsis,
+                                                            ),
+                                                          ],
+                                                        ],
+                                                      ),
+                                                    )
+                                                  else if (isVerified)
+                                                    Container(
+                                                      margin: const EdgeInsets.only(top: 6),
+                                                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+                                                      decoration: BoxDecoration(
+                                                        color: _neonGreen.withOpacity(0.15),
+                                                        borderRadius: BorderRadius.circular(8),
+                                                        border: Border.all(color: _neonGreen),
+                                                      ),
+                                                      child: Row(
+                                                        children: [
+                                                          const Icon(Icons.check_circle_rounded, color: _neonGreen, size: 16),
+                                                          const SizedBox(width: 6),
+                                                          Expanded(
+                                                            child: Text(
+                                                              '✅ App Verified: Winner Detected (Score $msgOcrScore/4)',
+                                                              style: const TextStyle(color: _neonGreen, fontSize: 11, fontWeight: FontWeight.bold),
+                                                            ),
+                                                          ),
+                                                        ],
+                                                      ),
+                                                    ),
                                                 ] else ...[
                                                   Text(
                                                     text,
@@ -2475,6 +2688,20 @@ class _InRoomBottomSheetContentState extends State<_InRoomBottomSheetContent> {
                                                 ],
                                               ),
                                             )
+                                          else if (isDoubt)
+                                            ElevatedButton(
+                                              style: ElevatedButton.styleFrom(
+                                                backgroundColor: const Color(0xFF2A2E3D),
+                                                foregroundColor: GamerTheme.textMuted,
+                                                disabledBackgroundColor: const Color(0xFF2A2E3D),
+                                                disabledForegroundColor: GamerTheme.textMuted,
+                                                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+                                                minimumSize: Size.zero,
+                                                tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                                              ),
+                                              onPressed: null, // Disabled: App Veto in effect
+                                              child: const Text('Approve Blocked (App Doubt)', style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold)),
+                                            )
                                           else
                                             ElevatedButton(
                                               style: ElevatedButton.styleFrom(
@@ -2484,12 +2711,14 @@ class _InRoomBottomSheetContentState extends State<_InRoomBottomSheetContent> {
                                                 minimumSize: Size.zero,
                                                 tapTargetSize: MaterialTapTargetSize.shrinkWrap,
                                               ),
-                                              onPressed: () => _approveReward(
-                                                winnerId: senderId,
-                                                winnerName: senderName,
-                                                winProofUrl: imageUrl,
-                                                room: room,
-                                              ),
+                                              onPressed: isVerified
+                                                  ? () => _approveReward(
+                                                        winnerId: senderId,
+                                                        winnerName: senderName,
+                                                        winProofUrl: imageUrl,
+                                                        room: room,
+                                                      )
+                                                  : null,
                                               child: Text(
                                                 'Approve & Send ${room.prize} Coins (From App)',
                                                 style: const TextStyle(fontSize: 11, fontWeight: FontWeight.bold),

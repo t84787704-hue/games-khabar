@@ -6,6 +6,7 @@ import '../constants/gamer_theme.dart';
 import '../models/coin_transaction_model.dart';
 import '../models/coin_wallet_model.dart';
 import '../services/coin_wallet_service.dart';
+import '../services/coin_reward_service.dart';
 import '../services/gamer_auth_service.dart';
 import '../screens/redeem_rewards_screen.dart';
 
@@ -487,7 +488,7 @@ class _CoinHistorySheetState extends State<CoinHistorySheet> {
                           ),
                           const SizedBox(height: 8),
                           Text(
-                            'Formula: Initial ($initialCoins) + Added (+${NumberFormat("#,###").format(totalAdded)}) - Deducted (-${NumberFormat("#,###").format(totalDeducted)}) = ${NumberFormat("#,###").format(expectedBalance)}',
+                            'Formula: Added (+${NumberFormat("#,###").format(totalAdded)}) - Deducted (-${NumberFormat("#,###").format(totalDeducted)}) = ${NumberFormat("#,###").format(expectedBalance)}',
                             style: TextStyle(
                               color: hasMismatch ? GamerTheme.accentOrange : GamerTheme.textMuted,
                               fontSize: 10,
