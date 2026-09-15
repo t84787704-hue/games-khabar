@@ -1,5 +1,6 @@
 import 'dart:io';
-import 'package:flutter/foundation.dart';
+import 'dart:ui' as ui;
+import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:google_mlkit_text_recognition/google_mlkit_text_recognition.dart';
 
@@ -48,6 +49,15 @@ class WinProofValidator {
     'reward', 'host', 'bot', 'g-coins', 'gcoins', 'rank#1', '1', '100'
   };
 
+  /// Explicit words, UI elements, network tokens, and status bar values to reject
+  static const List<String> _explicitIgnoreList = [
+    '22:37', '5g', '4g', 'lte', '78', '78%', '100%', 'erangel', 'classic', 'tpp', 'fpp',
+    'share', 'lobby', 'replay', 'rp +20', 'rp+', 'rating', 'winner', 'chicken',
+    'dinner', 'team rank', 'map:', 'mode:', 'finishes', 'survival', 'kills',
+    'damage', 'online', 'rank #1', 'rank 1', 'team victory', 'victory', 'coins',
+    'mvp', 'total', 'health', 'assists', 'revives', 'heals', 'details', 'stats'
+  ];
+
   /// Clean candidate name by stripping common prefixes and punctuation
   static String _cleanCandidateName(String text) {
     String cleaned = text.trim();
@@ -60,6 +70,7 @@ class WinProofValidator {
     cleaned = cleaned
         .replaceAll(RegExp(r'^[#@\(\[\{<]+'), '')
         .replaceAll(RegExp(r'[\)\]\}>]+$'), '')
+        .replaceAll('👑', '')
         .trim();
     return cleaned;
   }
@@ -72,6 +83,58 @@ class WinProofValidator {
     if (lower.startsWith('kd') || lower.startsWith('k/d')) return true;
     if (lower.startsWith('lv.') || lower.startsWith('exp')) return true;
     return false;
+  }
+
+  /// Validate candidate player name:
+  /// - 3 to 16 chars, letters (and numbers), not time.
+  /// - Reject time patterns like 22:37, contains ":", numbers only, status bar icons.
+  static bool _isValidPlayerName(String text, String targetAccountName) {
+    final trimmed = text.trim();
+    final lower = trimmed.toLowerCase();
+
+    // If exactly matching target account name, accept
+    if (targetAccountName.isNotEmpty && lower == targetAccountName.toLowerCase().trim()) {
+      return true;
+    }
+
+    // Length check: 3-16 chars as requested
+    if (trimmed.length < 3 || trimmed.length > 16) return false;
+
+    // Must not contain ":" (e.g. 22:37, map:, mode:, k/d:)
+    if (trimmed.contains(':')) return false;
+
+    // Ignore list check
+    for (final ignored in _explicitIgnoreList) {
+      if (lower == ignored || lower == ignored.replaceAll(' ', '')) {
+        return false;
+      }
+    }
+
+    // Regex: time pattern ^\d{1,2}:\d{2}$
+    if (RegExp(r'^\d{1,2}:\d{2}$').hasMatch(trimmed)) return false;
+
+    // Regex: numbers only ^\d+$
+    if (RegExp(r'^\d+$').hasMatch(trimmed)) return false;
+
+    // Regex: percentage / battery, e.g. 78%
+    if (RegExp(r'^\d{1,3}%$').hasMatch(trimmed)) return false;
+
+    // Regex: network signal, e.g. 5G, 4G
+    if (RegExp(r'^\d{1,2}[gG]$').hasMatch(trimmed)) return false;
+
+    // Regex: general time format like 22.37 or 10:45 am
+    if (RegExp(r'^\d{1,2}[.:]\d{2}(\s*(am|pm))?$', caseSensitive: false).hasMatch(trimmed)) {
+      return false;
+    }
+
+    // Game stopwords
+    if (_isStopword(trimmed)) return false;
+
+    // Must be valid letters/numbers with common gamer tag punctuation, containing at least one letter
+    if (!RegExp(r'^[a-zA-Z0-9_\-. ]+$').hasMatch(trimmed)) return false;
+    if (!RegExp(r'[a-zA-Z]').hasMatch(trimmed)) return false;
+
+    return true;
   }
 
   /// Resolve the uploader's real ID name:
@@ -214,73 +277,229 @@ class WinProofValidator {
 
       final bool isVictory = hasVictoryKeyword && !hasDefeatKeyword;
 
-      // 2. Extract candidate player names from OCR blocks, lines, and elements
-      final List<String> candidateNames = [];
-      for (final block in recognizedText.blocks) {
-        for (final line in block.lines) {
-          final rawLine = line.text.trim();
-          final cleanLine = _cleanCandidateName(rawLine);
-          if (cleanLine.length >= 2 && cleanLine.length <= 25 && !_isStopword(cleanLine)) {
-            candidateNames.add(cleanLine);
-          }
-          for (final elem in line.elements) {
-            final rawElem = elem.text.trim();
-            final cleanElem = _cleanCandidateName(rawElem);
-            if (cleanElem.length >= 2 && cleanElem.length <= 25 && !_isStopword(cleanElem)) {
-              candidateNames.add(cleanElem);
-            }
+      // 2. Decode image height to crop out top 15% (status bar) and bottom 20% (buttons)
+      int imgHeight = 0;
+      try {
+        final bytes = await imageFile.readAsBytes();
+        final codec = await ui.instantiateImageCodec(bytes);
+        final frameInfo = await codec.getNextFrame();
+        imgHeight = frameInfo.image.height;
+      } catch (e) {
+        debugPrint('WinProofValidator: Codec read height failed: $e');
+      }
+
+      // Fallback: estimate height from max text coordinate
+      if (imgHeight == 0) {
+        double maxBottom = 0;
+        for (final block in recognizedText.blocks) {
+          if (block.boundingBox.bottom > maxBottom) {
+            maxBottom = block.boundingBox.bottom;
           }
         }
+        if (maxBottom > 0) {
+          imgHeight = maxBottom.toInt();
+        }
+      }
+
+      // Crop coordinates:
+      // - Ignore top 15% of image (status bar with 22:37, 5G, 78% battery)
+      // - Ignore bottom 20% (SHARE, LOBBY, REPLAY buttons)
+      // - Only scan middle 65% where player name actually is
+      final double topCutoff = imgHeight > 0 ? (imgHeight * 0.15) : 0.0;
+      final double bottomCutoff = imgHeight > 0 ? (imgHeight * 0.80) : double.infinity;
+
+      bool isInMiddle65(Rect rect) {
+        if (imgHeight <= 0) return true;
+        // Ignore status bar (top 15%)
+        if (rect.top < topCutoff) return false;
+        // Ignore bottom buttons (bottom 20%)
+        if (rect.bottom > bottomCutoff) return false;
+        return true;
       }
 
       final String targetAccountName = accountIdName.trim();
       final String lowerAccountName = targetAccountName.toLowerCase();
 
-      // 3. Name comparison: case-insensitive exact check
+      // 3. Find player name correctly:
+      // (a) Look for text that is just above "ONLINE" tag (that's the player name, e.g. Dtive)
+      String? detectedOnlineName;
+
+      for (final block in recognizedText.blocks) {
+        for (int lIdx = 0; lIdx < block.lines.length; lIdx++) {
+          final line = block.lines[lIdx];
+          final lineText = line.text.trim();
+          final lineLower = lineText.toLowerCase();
+
+          if (lineLower.contains('online')) {
+            // Check if player name is before ONLINE on the same line (e.g. "Dtive ONLINE")
+            final parts = lineText.split(RegExp(r'online', caseSensitive: false));
+            if (parts.isNotEmpty) {
+              final prefix = _cleanCandidateName(parts.first);
+              if (_isValidPlayerName(prefix, targetAccountName)) {
+                detectedOnlineName = prefix;
+                break;
+              }
+            }
+
+            // Check line just above ONLINE in the same block
+            if (lIdx > 0) {
+              final prevLine = block.lines[lIdx - 1];
+              final cleanPrev = _cleanCandidateName(prevLine.text);
+              if (_isValidPlayerName(cleanPrev, targetAccountName)) {
+                detectedOnlineName = cleanPrev;
+                break;
+              }
+            }
+
+            // Check closest line vertically above ONLINE across all blocks
+            final onlineTop = line.boundingBox.top;
+            final onlineLeft = line.boundingBox.left;
+            final onlineRight = line.boundingBox.right;
+
+            TextLine? closestAboveLine;
+            double closestDistance = double.infinity;
+
+            for (final otherBlock in recognizedText.blocks) {
+              for (final otherLine in otherBlock.lines) {
+                if (otherLine == line) continue;
+                if (!isInMiddle65(otherLine.boundingBox)) continue;
+
+                final otherBottom = otherLine.boundingBox.bottom;
+                final distance = onlineTop - otherBottom;
+                if (distance >= -15 && distance <= 160) {
+                  final bool horizAligned = (otherLine.boundingBox.left <= onlineRight + 120) &&
+                      (otherLine.boundingBox.right >= onlineLeft - 120);
+                  if (horizAligned && distance < closestDistance) {
+                    final clean = _cleanCandidateName(otherLine.text);
+                    if (_isValidPlayerName(clean, targetAccountName)) {
+                      closestDistance = distance;
+                      closestAboveLine = otherLine;
+                    }
+                  }
+                }
+              }
+            }
+
+            if (closestAboveLine != null) {
+              detectedOnlineName = _cleanCandidateName(closestAboveLine.text);
+              break;
+            }
+          }
+        }
+        if (detectedOnlineName != null) break;
+      }
+
+      // (b) Look for text next to crown icon 👑 or Rank #1 / MVP
+      String? detectedCrownName;
+      for (final block in recognizedText.blocks) {
+        for (final line in block.lines) {
+          if (!isInMiddle65(line.boundingBox)) continue;
+          final t = line.text;
+          if (t.contains('👑') || t.contains('#1') || t.toLowerCase().contains('mvp')) {
+            final stripped = t
+                .replaceAll('👑', '')
+                .replaceAll('#1', '')
+                .replaceAll(RegExp(r'mvp', caseSensitive: false), '');
+            final clean = _cleanCandidateName(stripped);
+            if (_isValidPlayerName(clean, targetAccountName)) {
+              detectedCrownName = clean;
+              break;
+            }
+          }
+        }
+        if (detectedCrownName != null) break;
+      }
+
+      // (c) Collect all valid candidates in the middle 65% area
+      final List<String> middleCandidates = [];
+      for (final block in recognizedText.blocks) {
+        for (final line in block.lines) {
+          // Strictly ignore status bar (top 15%) and buttons (bottom 20%)
+          if (!isInMiddle65(line.boundingBox)) continue;
+
+          final cleanLine = _cleanCandidateName(line.text);
+          if (_isValidPlayerName(cleanLine, targetAccountName)) {
+            if (!middleCandidates.contains(cleanLine)) {
+              middleCandidates.add(cleanLine);
+            }
+          }
+
+          for (final elem in line.elements) {
+            final cleanElem = _cleanCandidateName(elem.text);
+            if (_isValidPlayerName(cleanElem, targetAccountName)) {
+              if (!middleCandidates.contains(cleanElem)) {
+                middleCandidates.add(cleanElem);
+              }
+            }
+          }
+        }
+      }
+
+      // 4. Name comparison: check if uploader's account name matches
       bool isNameMatched = false;
       String? matchedCandidate;
 
-      // Check candidate names
-      for (final candidate in candidateNames) {
-        if (candidate.toLowerCase() == lowerAccountName) {
-          isNameMatched = true;
-          matchedCandidate = candidate;
-          break;
+      // Check online tag name
+      if (detectedOnlineName != null &&
+          detectedOnlineName.toLowerCase().trim() == lowerAccountName) {
+        isNameMatched = true;
+        matchedCandidate = detectedOnlineName;
+      }
+
+      // Check crown name
+      if (!isNameMatched &&
+          detectedCrownName != null &&
+          detectedCrownName.toLowerCase().trim() == lowerAccountName) {
+        isNameMatched = true;
+        matchedCandidate = detectedCrownName;
+      }
+
+      // Check middle candidates
+      if (!isNameMatched) {
+        for (final candidate in middleCandidates) {
+          if (candidate.toLowerCase().trim() == lowerAccountName) {
+            isNameMatched = true;
+            matchedCandidate = candidate;
+            break;
+          }
         }
       }
 
-      // Check full text for token/word boundary match
+      // Check middle 65% text for token/word boundary match
       if (!isNameMatched && lowerAccountName.isNotEmpty) {
         final escaped = RegExp.escape(lowerAccountName);
         final wordRegex = RegExp(r'(^|[^\w])' + escaped + r'([^\w]|$)', caseSensitive: false);
-        if (wordRegex.hasMatch(lowerFullText)) {
-          isNameMatched = true;
-          matchedCandidate = targetAccountName;
+
+        for (final block in recognizedText.blocks) {
+          for (final line in block.lines) {
+            if (isInMiddle65(line.boundingBox)) {
+              if (wordRegex.hasMatch(line.text.toLowerCase())) {
+                isNameMatched = true;
+                matchedCandidate = targetAccountName;
+                break;
+              }
+            }
+          }
+          if (isNameMatched) break;
         }
       }
 
-      // Determine the detected name on screenshot
+      // 5. Determine detected screenshot name
       String detectedScreenshotName;
       if (isNameMatched) {
         detectedScreenshotName = matchedCandidate ?? targetAccountName;
+      } else if (detectedOnlineName != null && detectedOnlineName.isNotEmpty) {
+        detectedScreenshotName = detectedOnlineName;
+      } else if (detectedCrownName != null && detectedCrownName.isNotEmpty) {
+        detectedScreenshotName = detectedCrownName;
+      } else if (middleCandidates.isNotEmpty) {
+        detectedScreenshotName = middleCandidates.first;
       } else {
-        // Pick the first non-stopword candidate found on the screenshot
-        if (candidateNames.isNotEmpty) {
-          detectedScreenshotName = candidateNames.firstWhere(
-            (c) => !RegExp(r'^\d+$').hasMatch(c),
-            orElse: () => candidateNames.first,
-          );
-        } else {
-          // Fallback: extract first word from OCR that is not a game keyword
-          final words = fullText.split(RegExp(r'\s+'));
-          detectedScreenshotName = words.firstWhere(
-            (w) => w.length >= 2 && !_isStopword(w),
-            orElse: () => 'Unknown',
-          );
-        }
+        // Fallback: search for first valid name in middle area
+        detectedScreenshotName = 'Unknown';
       }
 
-      // 4. Comparison logic & Decision
+      // 6. Final Decision & Rejection/Approval formatting
       final String sName = detectedScreenshotName.toLowerCase().trim();
       final String aName = lowerAccountName;
 
