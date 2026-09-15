@@ -45,7 +45,7 @@ class WinProofValidator {
     'duo', 'solo', 'erangel', 'livik', 'miramar', 'sanhok', 'vikendi',
     'karakin', 'nusa', 'tdm', 'room', 'custom', 'id', 'pass', 'password',
     'slot', 'slots', 'all', 'alive', 'killed', 'finish', 'finishes', 'finishs',
-    'reward', 'host', 'bot', 'coins', 'g-coins', 'gcoins', 'rank#1', '1', '100'
+    'reward', 'host', 'bot', 'g-coins', 'gcoins', 'rank#1', '1', '100'
   };
 
   /// Clean candidate name by stripping common prefixes and punctuation
