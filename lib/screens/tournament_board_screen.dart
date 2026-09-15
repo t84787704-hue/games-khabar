@@ -172,7 +172,7 @@ class _TournamentBoardScreenState extends State<TournamentBoardScreen> with Sing
   // ... rest of file unchanged until _buildRoomCard
 
   Widget _buildRoomCard(TournamentRoom room) {
-    final currentGamer = _authService.currentGamer;
+    final currentGamer = _auth_service.currentGamer;
     final currentUid = currentGamer?.uid ?? '';
     final isJoined = room.joinedPlayers.contains(currentUid);
     final isHost = room.hostId == currentUid;
