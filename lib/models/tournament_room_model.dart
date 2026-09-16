@@ -35,6 +35,10 @@ class TournamentRoom {
   final bool isLive;
   final bool isRoomRevealed; // reveal Room ID/Pass to joined players
   final DateTime? createdAt;
+  final String? winProofUrl;
+  final DateTime? winProofUploadedAt;
+  final String rewardStatus; // 'idle', 'pending', 'sent'
+  final DateTime? completedAt;
 
   const TournamentRoom({
     required this.id,
@@ -70,6 +74,10 @@ class TournamentRoom {
     this.isLive = true,
     this.isRoomRevealed = false,
     this.createdAt,
+    this.winProofUrl,
+    this.winProofUploadedAt,
+    this.rewardStatus = 'idle',
+    this.completedAt,
   });
 
   String getPlayerName(String uid) {
@@ -88,10 +96,20 @@ class TournamentRoom {
 
   int get availableSlots => (totalSlots > 0 ? totalSlots : maxSlots) - (currentSlots > 0 ? currentSlots : joinedPlayers.length);
   bool get isFull => (currentSlots > 0 ? currentSlots : joinedPlayers.length) >= (totalSlots > 0 ? totalSlots : maxSlots);
-  bool get isCompleted => status.toUpperCase() == 'COMPLETED';
+  bool get isCompleted => status.toLowerCase() == 'completed' || rewardStatus.toLowerCase() == 'sent';
+  bool get isRewardWaiting =>
+      !isCompleted &&
+      (status.toLowerCase() == 'reward_waiting' ||
+          rewardStatus.toLowerCase() == 'pending' ||
+          rewardStatus.toLowerCase() == 'pending_host' ||
+          (winProofUrl != null && winProofUrl!.isNotEmpty));
   bool get isExpired => status.toUpperCase() == 'EXPIRED' || status.toUpperCase() == 'CANCELED';
-  bool get isActive => status.toLowerCase() == 'active' || status.toUpperCase() == 'OPEN';
-  bool get isInProgress => status.toUpperCase() == 'IN_PROGRESS' || status.toUpperCase() == 'STARTED' || status.toUpperCase() == 'MATCH_STARTED';
+  bool get isActive => !isCompleted && !isRewardWaiting && (status.toLowerCase() == 'active' || status.toUpperCase() == 'OPEN');
+  bool get isInProgress => !isCompleted && !isRewardWaiting && (status.toUpperCase() == 'IN_PROGRESS' || status.toUpperCase() == 'STARTED' || status.toUpperCase() == 'MATCH_STARTED');
+  bool get isExpiredCompleted {
+    if (!isCompleted || completedAt == null) return false;
+    return DateTime.now().difference(completedAt!).inMinutes >= 5;
+  }
   String get displayPrizePool => prizePool.isNotEmpty ? prizePool : (prizePoolCoins > 0 ? '💰 $prizePoolCoins Coins' : prize);
 
   String get gameIcon {
@@ -229,6 +247,22 @@ class TournamentRoom {
     final tSlots = (data['totalSlots'] as num?)?.toInt() ?? (data['maxSlots'] as num?)?.toInt() ?? 2;
     final pPool = data['prizePool']?.toString() ?? cleanPrize;
     final statusStr = (data['status']?.toString() ?? 'active');
+    final winProofUrl = data['winProofUrl']?.toString() ?? data['proofUrl']?.toString();
+    DateTime? winProofUploadedAt;
+    final rawWinProofAt = data['winProofUploadedAt'];
+    if (rawWinProofAt is Timestamp) {
+      winProofUploadedAt = rawWinProofAt.toDate();
+    } else if (rawWinProofAt is String) {
+      winProofUploadedAt = DateTime.tryParse(rawWinProofAt);
+    }
+    final rewardStatus = (data['rewardStatus'] ?? (statusStr.toLowerCase() == 'completed' ? 'sent' : 'idle')).toString();
+    DateTime? completedAt;
+    final rawCompletedAt = data['completedAt'];
+    if (rawCompletedAt is Timestamp) {
+      completedAt = rawCompletedAt.toDate();
+    } else if (rawCompletedAt is String) {
+      completedAt = DateTime.tryParse(rawCompletedAt);
+    }
 
     return TournamentRoom(
       id: data['id'] ?? doc.id,
@@ -264,6 +298,10 @@ class TournamentRoom {
       isLive: data['isLive'] ?? true,
       isRoomRevealed: data['isRoomRevealed'] == true,
       createdAt: created,
+      winProofUrl: winProofUrl,
+      winProofUploadedAt: winProofUploadedAt,
+      rewardStatus: rewardStatus,
+      completedAt: completedAt,
     );
   }
 
@@ -304,6 +342,10 @@ class TournamentRoom {
       'isLive': isLive,
       'isRoomRevealed': isRoomRevealed,
       'createdAt': createdAt != null ? Timestamp.fromDate(createdAt!) : FieldValue.serverTimestamp(),
+      'winProofUrl': winProofUrl,
+      'winProofUploadedAt': winProofUploadedAt != null ? Timestamp.fromDate(winProofUploadedAt!) : null,
+      'rewardStatus': rewardStatus,
+      'completedAt': completedAt != null ? Timestamp.fromDate(completedAt!) : null,
     };
   }
 
@@ -343,6 +385,10 @@ class TournamentRoom {
       'isLive': isLive,
       'isRoomRevealed': isRoomRevealed,
       'createdAt': createdAt?.toIso8601String(),
+      'winProofUrl': winProofUrl,
+      'winProofUploadedAt': winProofUploadedAt?.toIso8601String(),
+      'rewardStatus': rewardStatus,
+      'completedAt': completedAt?.toIso8601String(),
     };
   }
 
@@ -405,6 +451,10 @@ class TournamentRoom {
       isLive: json['isLive'] ?? true,
       isRoomRevealed: json['isRoomRevealed'] == true,
       createdAt: created,
+      winProofUrl: json['winProofUrl'] ?? json['proofUrl'],
+      winProofUploadedAt: json['winProofUploadedAt'] != null ? DateTime.tryParse(json['winProofUploadedAt']) : null,
+      rewardStatus: json['rewardStatus'] ?? 'idle',
+      completedAt: json['completedAt'] != null ? DateTime.tryParse(json['completedAt']) : null,
     );
   }
 
@@ -442,6 +492,10 @@ class TournamentRoom {
     bool? isLive,
     bool? isRoomRevealed,
     DateTime? createdAt,
+    String? winProofUrl,
+    DateTime? winProofUploadedAt,
+    String? rewardStatus,
+    DateTime? completedAt,
   }) {
     return TournamentRoom(
       id: id ?? this.id,
@@ -477,6 +531,10 @@ class TournamentRoom {
       isLive: isLive ?? this.isLive,
       isRoomRevealed: isRoomRevealed ?? this.isRoomRevealed,
       createdAt: createdAt ?? this.createdAt,
+      winProofUrl: winProofUrl ?? this.winProofUrl,
+      winProofUploadedAt: winProofUploadedAt ?? this.winProofUploadedAt,
+      rewardStatus: rewardStatus ?? this.rewardStatus,
+      completedAt: completedAt ?? this.completedAt,
     );
   }
 }

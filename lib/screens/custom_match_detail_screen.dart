@@ -65,19 +65,31 @@ class _CustomMatchDetailScreenState extends State<CustomMatchDetailScreen> {
 
       final roomRef = FirebaseFirestore.instance.collection('rooms').doc(widget.roomId);
 
-      // 3. Update room document
+      // 3. Update room document: Set status to reward_waiting & rewardStatus to pending
       await roomRef.update({
+        'status': 'reward_waiting',
         'proofUrl': uploadedUrl,
         'winProofUrl': uploadedUrl,
+        'winProofUploadedAt': FieldValue.serverTimestamp(),
         'ocrStatus': validationResult.status,
         'ocrScore': validationResult.score,
         'ocrText': validationResult.fullOcrText.length > 300
             ? validationResult.fullOcrText.substring(0, 300)
             : validationResult.fullOcrText,
-        'rewardStatus': validationResult.isVerified ? 'pending_host' : 'rejected_by_app',
+        'rewardStatus': 'pending',
         'detectedScreenshotName': validationResult.detectedScreenshotName,
         'accountIdName': validationResult.accountIdName,
       });
+
+      // Sync to tournament_rooms collection
+      try {
+        await FirebaseFirestore.instance.collection('tournament_rooms').doc(widget.roomId).set({
+          'status': 'reward_waiting',
+          'winProofUrl': uploadedUrl,
+          'winProofUploadedAt': FieldValue.serverTimestamp(),
+          'rewardStatus': 'pending',
+        }, SetOptions(merge: true));
+      } catch (_) {}
 
       // 4. Add win proof message to room chat
       await roomRef.collection('messages').add({

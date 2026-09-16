@@ -52,6 +52,9 @@ class GamerRoom {
   final String ocrText;
   final int ocrScore;
   final String? proofUrl;
+  final String? winProofUrl;
+  final DateTime? winProofUploadedAt;
+  final DateTime? completedAt;
 
   const GamerRoom({
     required this.id,
@@ -79,12 +82,25 @@ class GamerRoom {
     this.ocrText = '',
     this.ocrScore = 0,
     this.proofUrl,
+    this.winProofUrl,
+    this.winProofUploadedAt,
+    this.completedAt,
   });
 
   bool get isFull => filled >= total;
-  bool get isCompleted => status.toLowerCase() == 'completed' || rewardStatus == 'sent';
-  bool get isInProgress => !isCompleted && (status.toUpperCase() == 'IN_PROGRESS' || status.toUpperCase() == 'STARTED' || status.toUpperCase() == 'MATCH_STARTED');
-  bool get isActive => !isCompleted && (status.toLowerCase() == 'active' || status.toUpperCase() == 'OPEN');
+  bool get isCompleted => status.toLowerCase() == 'completed' || rewardStatus.toLowerCase() == 'sent';
+  bool get isRewardWaiting =>
+      !isCompleted &&
+      (status.toLowerCase() == 'reward_waiting' ||
+          rewardStatus.toLowerCase() == 'pending' ||
+          rewardStatus.toLowerCase() == 'pending_host' ||
+          ((proofUrl != null && proofUrl!.isNotEmpty) || (winProofUrl != null && winProofUrl!.isNotEmpty)));
+  bool get isInProgress => !isCompleted && !isRewardWaiting && (status.toUpperCase() == 'IN_PROGRESS' || status.toUpperCase() == 'STARTED' || status.toUpperCase() == 'MATCH_STARTED');
+  bool get isActive => !isCompleted && !isRewardWaiting && (status.toLowerCase() == 'active' || status.toUpperCase() == 'OPEN');
+  bool get isExpiredCompleted {
+    if (!isCompleted || completedAt == null) return false;
+    return DateTime.now().difference(completedAt!).inMinutes >= 5;
+  }
 
   factory GamerRoom.fromFirestore(DocumentSnapshot doc) {
     final data = doc.data() as Map<String, dynamic>? ?? {};
@@ -146,7 +162,22 @@ class GamerRoom {
     final ocrStatus = (data['ocrStatus'] ?? 'none').toString();
     final ocrText = (data['ocrText'] ?? '').toString();
     final int ocrScore = (data['ocrScore'] is num) ? (data['ocrScore'] as num).toInt() : 0;
-    final proofUrl = data['proofUrl']?.toString() ?? data['winProofUrl']?.toString();
+    final winProofUrl = data['winProofUrl']?.toString() ?? data['proofUrl']?.toString();
+    final proofUrl = data['proofUrl']?.toString() ?? winProofUrl;
+
+    DateTime? winProofUploadedAt;
+    if (data['winProofUploadedAt'] is Timestamp) {
+      winProofUploadedAt = (data['winProofUploadedAt'] as Timestamp).toDate();
+    } else if (data['winProofUploadedAt'] is String) {
+      winProofUploadedAt = DateTime.tryParse(data['winProofUploadedAt']);
+    }
+
+    DateTime? completedAt;
+    if (data['completedAt'] is Timestamp) {
+      completedAt = (data['completedAt'] as Timestamp).toDate();
+    } else if (data['completedAt'] is String) {
+      completedAt = DateTime.tryParse(data['completedAt']);
+    }
 
     DateTime created = DateTime.now();
     if (data['createdAt'] is Timestamp) {
@@ -186,6 +217,9 @@ class GamerRoom {
       ocrText: ocrText,
       ocrScore: ocrScore,
       proofUrl: proofUrl,
+      winProofUrl: winProofUrl,
+      winProofUploadedAt: winProofUploadedAt,
+      completedAt: completedAt,
     );
   }
 }
@@ -258,11 +292,30 @@ class _GamerRoomsScreenState extends State<GamerRoomsScreen> {
       _authService.currentGamer?.photoUrl ??
       '';
 
+  Timer? _cleanupTimer;
+
+  String _getCompletedDeleteRemainingText(GamerRoom room) {
+    if (room.completedAt == null) return 'COMPLETED';
+    final elapsedSec = DateTime.now().difference(room.completedAt!).inSeconds;
+    final remainingSec = (300 - elapsedSec).clamp(0, 300);
+    if (remainingSec <= 0) return 'AUTO-DELETING...';
+    final mins = remainingSec ~/ 60;
+    final secs = remainingSec % 60;
+    return 'COMPLETED (${mins}m ${secs.toString().padLeft(2, '0')}s)';
+  }
+
   @override
   void initState() {
     super.initState();
     _walletService.getOrCreateWallet(currentUserId);
     _walletService.addListener(_onWalletChanged);
+
+    // Check every 10 seconds to refresh UI countdown and delete expired completed rooms
+    _cleanupTimer = Timer.periodic(const Duration(seconds: 10), (_) {
+      if (!mounted) return;
+      setState(() {});
+      _purgeExpiredCompletedRooms();
+    });
   }
 
   void _onWalletChanged() {
@@ -271,17 +324,60 @@ class _GamerRoomsScreenState extends State<GamerRoomsScreen> {
 
   @override
   void dispose() {
+    _cleanupTimer?.cancel();
     _walletService.removeListener(_onWalletChanged);
     super.dispose();
   }
 
-  /// Real-time stream for rooms from Firestore
+  Future<void> _purgeExpiredCompletedRooms() async {
+    try {
+      final now = DateTime.now();
+      final snap = await FirebaseFirestore.instance
+          .collection('rooms')
+          .where('status', isEqualTo: 'completed')
+          .get();
+
+      for (final doc in snap.docs) {
+        final data = doc.data();
+        DateTime? completedAt;
+        if (data['completedAt'] is Timestamp) {
+          completedAt = (data['completedAt'] as Timestamp).toDate();
+        } else if (data['completedAt'] is String) {
+          completedAt = DateTime.tryParse(data['completedAt']);
+        }
+        if (completedAt != null && now.difference(completedAt).inMinutes >= 5) {
+          await doc.reference.delete().catchError((_) {});
+          FirebaseFirestore.instance
+              .collection('tournament_rooms')
+              .doc(doc.id)
+              .delete()
+              .catchError((_) {});
+          debugPrint('Auto-deleted completed room ${doc.id} after 5 minutes');
+        }
+      }
+    } catch (_) {}
+  }
+
+  /// Real-time stream for rooms from Firestore with auto-deletion after 5 minutes
   Stream<List<GamerRoom>> _getRoomsStream() {
     return FirebaseFirestore.instance
         .collection('rooms')
         .snapshots()
         .map((snapshot) {
-      final list = snapshot.docs.map((doc) => GamerRoom.fromFirestore(doc)).toList();
+      final list = <GamerRoom>[];
+      for (final doc in snapshot.docs) {
+        final room = GamerRoom.fromFirestore(doc);
+        if (room.isExpiredCompleted) {
+          doc.reference.delete().catchError((_) {});
+          FirebaseFirestore.instance
+              .collection('tournament_rooms')
+              .doc(room.id)
+              .delete()
+              .catchError((_) {});
+          continue;
+        }
+        list.add(room);
+      }
       // Sort newest first
       list.sort((a, b) => b.createdAt.compareTo(a.createdAt));
       return list;
@@ -1182,29 +1278,95 @@ class _GamerRoomsScreenState extends State<GamerRoomsScreen> {
           ),
           const SizedBox(height: 12),
 
-          // Bottom Row: ACTIVE MATCH dot + Spacer + Action Button
+          // Bottom Row: Status dot + Spacer + Action Button
           Row(
             children: [
               Container(
                 width: 8,
                 height: 8,
                 decoration: BoxDecoration(
-                  color: room.isCompleted ? Colors.amber : _neonGreen,
+                  color: room.isCompleted
+                      ? Colors.tealAccent
+                      : (room.isRewardWaiting ? Colors.amberAccent : (room.isInProgress ? const Color(0xFFFF9900) : _neonGreen)),
                   shape: BoxShape.circle,
                 ),
               ),
               const SizedBox(width: 6),
               Text(
-                room.isCompleted ? 'COMPLETED' : 'ACTIVE MATCH',
+                room.isCompleted
+                    ? 'COMPLETED'
+                    : (room.isRewardWaiting
+                        ? 'REWARD WAITING'
+                        : (room.isInProgress ? 'MATCH LIVE' : 'ACTIVE MATCH')),
                 style: TextStyle(
-                  color: room.isCompleted ? Colors.amber : _neonGreen,
+                  color: room.isCompleted
+                      ? Colors.tealAccent
+                      : (room.isRewardWaiting
+                          ? Colors.amberAccent
+                          : (room.isInProgress ? const Color(0xFFFF9900) : _neonGreen)),
                   fontSize: 12,
                   fontWeight: FontWeight.bold,
                 ),
               ),
               const Spacer(),
               // Button logic
-              if (room.isFull && !isJoined && !isHost)
+              if (room.isCompleted)
+                InkWell(
+                  onTap: () => _showRoomBottomSheet(room),
+                  borderRadius: BorderRadius.circular(8),
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                    decoration: BoxDecoration(
+                      color: Colors.teal.withOpacity(0.18),
+                      borderRadius: BorderRadius.circular(8),
+                      border: Border.all(color: Colors.tealAccent.withOpacity(0.7), width: 1.2),
+                    ),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        const Icon(Icons.check_circle_rounded, size: 13, color: Colors.tealAccent),
+                        const SizedBox(width: 4),
+                        Text(
+                          _getCompletedDeleteRemainingText(room),
+                          style: const TextStyle(
+                            color: Colors.tealAccent,
+                            fontWeight: FontWeight.bold,
+                            fontSize: 11,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                )
+              else if (room.isRewardWaiting)
+                InkWell(
+                  onTap: () => _showRoomBottomSheet(room),
+                  borderRadius: BorderRadius.circular(8),
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                    decoration: BoxDecoration(
+                      color: Colors.amber.withOpacity(0.18),
+                      borderRadius: BorderRadius.circular(8),
+                      border: Border.all(color: Colors.amberAccent.withOpacity(0.8), width: 1.2),
+                    ),
+                    child: const Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Icon(Icons.hourglass_top_rounded, size: 13, color: Colors.amberAccent),
+                        SizedBox(width: 4),
+                        Text(
+                          'REWARD WAITING',
+                          style: TextStyle(
+                            color: Colors.amberAccent,
+                            fontWeight: FontWeight.bold,
+                            fontSize: 11,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                )
+              else if (room.isFull && !isJoined && !isHost)
                 ElevatedButton(
                   style: ElevatedButton.styleFrom(
                     backgroundColor: GamerTheme.cardElevated,
@@ -1664,29 +1826,42 @@ class _InRoomBottomSheetContentState extends State<_InRoomBottomSheetContent> {
           ? validationResult.fullOcrText.substring(0, 300)
           : validationResult.fullOcrText;
 
-      // Firestore me save - App Veto + Name Match Validation
+      // Firestore me save - App Veto + Status becomes 'reward_waiting' & rewardStatus becomes 'pending'
       await FirebaseFirestore.instance.collection('rooms').doc(roomId).update({
+        'status': 'reward_waiting',
         'proofUrl': downloadUrl,
         'winProofUrl': downloadUrl,
+        'winProofUploadedAt': FieldValue.serverTimestamp(),
         'ocrText': trimmedText,
         'ocrScore': validationResult.score,
         'ocrStatus': validationResult.status, // 'verified', 'mismatch', or 'doubt'
-        'rewardStatus': validationResult.isVerified ? 'pending_host' : 'rejected_by_app',
+        'rewardStatus': 'pending',
         'detectedScreenshotName': validationResult.detectedScreenshotName,
         'accountIdName': validationResult.accountIdName,
       });
+
+      try {
+        await FirebaseFirestore.instance.collection('tournament_rooms').doc(roomId).set({
+          'status': 'reward_waiting',
+          'winProofUrl': downloadUrl,
+          'winProofUploadedAt': FieldValue.serverTimestamp(),
+          'rewardStatus': 'pending',
+        }, SetOptions(merge: true));
+      } catch (_) {}
 
       return validationResult;
     } catch (e) {
       debugPrint('OCR Error: $e');
       final errText = 'Error reading screenshot: $e';
       await FirebaseFirestore.instance.collection('rooms').doc(roomId).update({
+        'status': 'reward_waiting',
         'proofUrl': downloadUrl,
         'winProofUrl': downloadUrl,
+        'winProofUploadedAt': FieldValue.serverTimestamp(),
         'ocrText': errText,
         'ocrScore': 0,
         'ocrStatus': 'doubt',
-        'rewardStatus': 'rejected_by_app',
+        'rewardStatus': 'pending',
       });
       return WinProofValidationResult(
         isVerified: false,
@@ -2130,6 +2305,17 @@ class _InRoomBottomSheetContentState extends State<_InRoomBottomSheetContent> {
         });
       });
 
+      try {
+        await FirebaseFirestore.instance.collection('tournament_rooms').doc(roomId).set({
+          'status': 'completed',
+          'rewardStatus': 'sent',
+          'winnerId': resolvedWinnerId,
+          'winnerName': winnerName,
+          'completedAt': FieldValue.serverTimestamp(),
+          'isLive': false,
+        }, SetOptions(merge: true));
+      } catch (_) {}
+
       debugPrint('REWARD SUCCESS: $prize to $resolvedWinnerId');
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -2313,6 +2499,16 @@ class _InRoomBottomSheetContentState extends State<_InRoomBottomSheetContent> {
     );
   }
 
+  String _getCompletedDeleteRemainingText(GamerRoom room) {
+    if (room.completedAt == null) return 'COMPLETED';
+    final elapsedSec = DateTime.now().difference(room.completedAt!).inSeconds;
+    final remainingSec = (300 - elapsedSec).clamp(0, 300);
+    if (remainingSec <= 0) return 'AUTO-DELETING...';
+    final mins = remainingSec ~/ 60;
+    final secs = remainingSec % 60;
+    return 'COMPLETED (${mins}m ${secs.toString().padLeft(2, '0')}s)';
+  }
+
   @override
   Widget build(BuildContext context) {
     return StreamBuilder<DocumentSnapshot>(
@@ -2389,29 +2585,39 @@ class _InRoomBottomSheetContentState extends State<_InRoomBottomSheetContent> {
                     padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                     decoration: BoxDecoration(
                       color: isCompleted
-                          ? Colors.amber.withOpacity(0.2)
-                          : (isMatchStarted
-                              ? _neonGreen.withOpacity(0.2)
-                              : (isHost
-                                  ? GamerTheme.accentOrange
-                                  : (isJoined ? _neonGreen : GamerTheme.cardElevated))),
+                          ? Colors.teal.withOpacity(0.2)
+                          : (room.isRewardWaiting
+                              ? Colors.amber.withOpacity(0.2)
+                              : (isMatchStarted
+                                  ? _neonGreen.withOpacity(0.2)
+                                  : (isHost
+                                      ? GamerTheme.accentOrange
+                                      : (isJoined ? _neonGreen : GamerTheme.cardElevated)))),
                       borderRadius: BorderRadius.circular(6),
-                      border: isMatchStarted
-                          ? Border.all(color: _neonGreen.withOpacity(0.6))
-                          : (isCompleted ? Border.all(color: Colors.amber.withOpacity(0.6)) : null),
+                      border: isCompleted
+                          ? Border.all(color: Colors.tealAccent.withOpacity(0.6))
+                          : (room.isRewardWaiting
+                              ? Border.all(color: Colors.amberAccent.withOpacity(0.8))
+                              : (isMatchStarted
+                                  ? Border.all(color: _neonGreen.withOpacity(0.6))
+                                  : null)),
                     ),
                     child: Text(
                       isCompleted
                           ? 'COMPLETED'
-                          : (isMatchStarted
-                              ? 'MATCH LIVE'
-                              : (isHost ? 'HOSTING' : (isJoined ? 'JOINED' : (room.isFull ? 'FULL' : 'OPEN')))),
+                          : (room.isRewardWaiting
+                              ? 'REWARD WAITING'
+                              : (isMatchStarted
+                                  ? 'MATCH LIVE'
+                                  : (isHost ? 'HOSTING' : (isJoined ? 'JOINED' : (room.isFull ? 'FULL' : 'OPEN'))))),
                       style: TextStyle(
                         color: isCompleted
-                            ? Colors.amberAccent
-                            : (isMatchStarted
-                                ? _neonGreen
-                                : (isJoined && !isHost ? Colors.black : Colors.white)),
+                            ? Colors.tealAccent
+                            : (room.isRewardWaiting
+                                ? Colors.amberAccent
+                                : (isMatchStarted
+                                    ? _neonGreen
+                                    : (isJoined && !isHost ? Colors.black : Colors.white))),
                         fontSize: 10,
                         fontWeight: FontWeight.bold,
                       ),
@@ -2434,6 +2640,79 @@ class _InRoomBottomSheetContentState extends State<_InRoomBottomSheetContent> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
+                    // Status Alert Banner (COMPLETED / REWARD WAITING)
+                    if (isCompleted)
+                      Container(
+                        margin: const EdgeInsets.only(bottom: 12),
+                        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                        decoration: BoxDecoration(
+                          color: Colors.teal.withOpacity(0.12),
+                          borderRadius: BorderRadius.circular(10),
+                          border: Border.all(color: Colors.tealAccent.withOpacity(0.5)),
+                        ),
+                        child: Row(
+                          children: [
+                            const Icon(Icons.check_circle_rounded, color: Colors.tealAccent, size: 20),
+                            const SizedBox(width: 10),
+                            Expanded(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  const Text(
+                                    'MATCH COMPLETED & REWARD SENT',
+                                    style: TextStyle(
+                                      color: Colors.tealAccent,
+                                      fontSize: 12,
+                                      fontWeight: FontWeight.bold,
+                                    ),
+                                  ),
+                                  const SizedBox(height: 2),
+                                  Text(
+                                    'Reward has been sent to the winner. This room will auto-delete 5 minutes after completion. (${_getCompletedDeleteRemainingText(room)})',
+                                    style: TextStyle(color: Colors.tealAccent.withOpacity(0.85), fontSize: 10.5),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ],
+                        ),
+                      )
+                    else if (room.isRewardWaiting)
+                      Container(
+                        margin: const EdgeInsets.only(bottom: 12),
+                        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                        decoration: BoxDecoration(
+                          color: Colors.amber.withOpacity(0.12),
+                          borderRadius: BorderRadius.circular(10),
+                          border: Border.all(color: Colors.amberAccent.withOpacity(0.6)),
+                        ),
+                        child: const Row(
+                          children: [
+                            Icon(Icons.hourglass_top_rounded, color: Colors.amberAccent, size: 20),
+                            SizedBox(width: 10),
+                            Expanded(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text(
+                                    'STATUS: REWARD WAITING',
+                                    style: TextStyle(
+                                      color: Colors.amberAccent,
+                                      fontSize: 12,
+                                      fontWeight: FontWeight.bold,
+                                    ),
+                                  ),
+                                  SizedBox(height: 2),
+                                  Text(
+                                    'Winner has uploaded victory screenshot proof. Awaiting reward confirmation. Once reward is sent, room will complete and auto-delete after 5 minutes.',
+                                    style: TextStyle(color: Colors.white70, fontSize: 10.5),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
                     // MATCH STATS BANNER: PRIZE POOL (FROM APP) + ENTRY FEE (FREE) + ESCROW
                     Container(
                       margin: const EdgeInsets.only(bottom: 12),
@@ -3450,17 +3729,32 @@ class _InRoomBottomSheetContentState extends State<_InRoomBottomSheetContent> {
                       child: isCompleted
                           ? ElevatedButton.icon(
                               style: ElevatedButton.styleFrom(
-                                backgroundColor: GamerTheme.cardElevated,
-                                foregroundColor: GamerTheme.textMuted,
+                                backgroundColor: Colors.teal.withOpacity(0.18),
+                                foregroundColor: Colors.tealAccent,
+                                side: const BorderSide(color: Colors.tealAccent, width: 1.2),
                                 padding: const EdgeInsets.symmetric(vertical: 12),
                                 shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
                                 elevation: 0,
                               ),
                               onPressed: () => _showMatchDetailsDialog(room),
                               icon: const Icon(Icons.check_circle_outline_rounded, size: 16),
-                              label: const Text('MATCH COMPLETED', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12)),
+                              label: Text(_getCompletedDeleteRemainingText(room), style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 12)),
                             )
-                          : isHost
+                          : room.isRewardWaiting
+                              ? ElevatedButton.icon(
+                                  style: ElevatedButton.styleFrom(
+                                    backgroundColor: Colors.amber.withOpacity(0.18),
+                                    foregroundColor: Colors.amberAccent,
+                                    side: const BorderSide(color: Colors.amberAccent, width: 1.2),
+                                    padding: const EdgeInsets.symmetric(vertical: 12),
+                                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                                    elevation: 0,
+                                  ),
+                                  onPressed: () => _showMatchDetailsDialog(room),
+                                  icon: const Icon(Icons.hourglass_top_rounded, size: 16, color: Colors.amberAccent),
+                                  label: const Text('REWARD WAITING', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12, color: Colors.amberAccent)),
+                                )
+                              : isHost
                               ? (isMatchStarted
                                   ? OutlinedButton.icon(
                                       style: OutlinedButton.styleFrom(

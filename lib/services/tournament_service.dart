@@ -162,12 +162,22 @@ class TournamentService extends ChangeNotifier {
 
       final firestoreRooms = snap.docs.map((d) => TournamentRoom.fromFirestore(d)).toList();
 
-      // Deduplicate by ID
+      // Deduplicate by ID and auto-delete completed rooms older than 5 minutes
       final Map<String, TournamentRoom> roomMap = {};
       for (final r in _rooms) {
+        if (r.isExpiredCompleted) {
+          _roomsRef.doc(r.id).delete().catchError((_) {});
+          FirebaseFirestore.instance.collection('rooms').doc(r.id).delete().catchError((_) {});
+          continue;
+        }
         if (r.isLive) roomMap[r.id] = r;
       }
       for (final r in firestoreRooms) {
+        if (r.isExpiredCompleted) {
+          _roomsRef.doc(r.id).delete().catchError((_) {});
+          FirebaseFirestore.instance.collection('rooms').doc(r.id).delete().catchError((_) {});
+          continue;
+        }
         roomMap[r.id] = r;
       }
 
@@ -196,9 +206,16 @@ class TournamentService extends ChangeNotifier {
           final streamRooms = snap.docs.map((d) => TournamentRoom.fromFirestore(d)).toList();
           final Map<String, TournamentRoom> map = {};
           for (final r in _rooms) {
-            map[r.id] = r;
+            if (!r.isExpiredCompleted) {
+              map[r.id] = r;
+            }
           }
           for (final sr in streamRooms) {
+            if (sr.isExpiredCompleted) {
+              _roomsRef.doc(sr.id).delete().catchError((_) {});
+              FirebaseFirestore.instance.collection('rooms').doc(sr.id).delete().catchError((_) {});
+              continue;
+            }
             map[sr.id] = sr;
           }
           _rooms = map.values.toList();
@@ -434,11 +451,14 @@ class TournamentService extends ChangeNotifier {
 
       // 3. Mark room as COMPLETED in memory & Firestore
       final roomIdx = _rooms.indexWhere((r) => r.id == roomId);
+      final now = DateTime.now();
       if (roomIdx != -1) {
         _rooms[roomIdx] = _rooms[roomIdx].copyWith(
-          status: 'COMPLETED',
+          status: 'completed',
+          rewardStatus: 'sent',
           winnerUid: combinedWinnerUid,
           winnerName: combinedWinnerName,
+          completedAt: now,
           isLive: false,
         );
         await _saveToLocal();
@@ -447,11 +467,23 @@ class TournamentService extends ChangeNotifier {
 
       try {
         await _roomsRef.doc(roomId).set({
-          'status': 'COMPLETED',
+          'status': 'completed',
+          'rewardStatus': 'sent',
           'winnerUid': combinedWinnerUid,
           'winnerName': combinedWinnerName,
+          'completedAt': FieldValue.serverTimestamp(),
           'isLive': false,
           'updatedAt': FieldValue.serverTimestamp(),
+        }, SetOptions(merge: true));
+
+        await FirebaseFirestore.instance.collection('rooms').doc(roomId).set({
+          'status': 'completed',
+          'rewardStatus': 'sent',
+          'winnerId': combinedWinnerUid,
+          'winnerName': combinedWinnerName,
+          'completedAt': FieldValue.serverTimestamp(),
+          'isCompleted': true,
+          'isLive': false,
         }, SetOptions(merge: true));
       } catch (e) {
         debugPrint('TournamentService Firestore update error: $e');
@@ -461,6 +493,52 @@ class TournamentService extends ChangeNotifier {
     } catch (e) {
       debugPrint('TournamentService finishMatchWithWinner error: $e');
       return false;
+    }
+  }
+
+  /// Mark Room as REWARD WAITING:
+  /// When winner uploads match screenshot proof, set status to 'reward_waiting' & rewardStatus to 'pending'
+  Future<void> markRewardWaiting({
+    required String roomId,
+    required String winProofUrl,
+    String? winnerUid,
+    String? winnerName,
+  }) async {
+    final now = DateTime.now();
+    final roomIdx = _rooms.indexWhere((r) => r.id == roomId);
+    if (roomIdx != -1) {
+      _rooms[roomIdx] = _rooms[roomIdx].copyWith(
+        status: 'reward_waiting',
+        rewardStatus: 'pending',
+        winProofUrl: winProofUrl,
+        winProofUploadedAt: now,
+        winnerUid: winnerUid,
+        winnerName: winnerName,
+      );
+      await _saveToLocal();
+      notifyListeners();
+    }
+    try {
+      await _roomsRef.doc(roomId).set({
+        'status': 'reward_waiting',
+        'rewardStatus': 'pending',
+        'winProofUrl': winProofUrl,
+        'winProofUploadedAt': FieldValue.serverTimestamp(),
+        if (winnerUid != null) 'winnerUid': winnerUid,
+        if (winnerName != null) 'winnerName': winnerName,
+        'updatedAt': FieldValue.serverTimestamp(),
+      }, SetOptions(merge: true));
+
+      await FirebaseFirestore.instance.collection('rooms').doc(roomId).set({
+        'status': 'reward_waiting',
+        'rewardStatus': 'pending',
+        'winProofUrl': winProofUrl,
+        'winProofUploadedAt': FieldValue.serverTimestamp(),
+        if (winnerUid != null) 'winnerId': winnerUid,
+        if (winnerName != null) 'winnerName': winnerName,
+      }, SetOptions(merge: true));
+    } catch (e) {
+      debugPrint('TournamentService markRewardWaiting error: $e');
     }
   }
 
