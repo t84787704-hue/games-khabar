@@ -36,6 +36,16 @@ class CoinWallet {
     return diff.isNegative ? Duration.zero : diff;
   }
 
+  factory CoinWallet.empty(String userId) {
+    return CoinWallet(
+      userId: userId,
+      coins: 1000,
+      escrowCoins: 0,
+      lifetimeEarned: 1000,
+      trustScore: 100,
+    );
+  }
+
   factory CoinWallet.fromFirestore(DocumentSnapshot doc) {
     final data = doc.data() as Map<String, dynamic>? ?? {};
     return CoinWallet.fromMap(data, doc.id);

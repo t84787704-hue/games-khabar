@@ -1099,6 +1099,14 @@ class CoinWalletService extends ChangeNotifier {
     }
   }
 
+  /// Get or derive deterministic referral code for user
+  String getReferralCode(String userId) {
+    if (userId.isEmpty) return 'GK1000';
+    final clean = userId.replaceAll(RegExp(r'[^a-zA-Z0-9]'), '').toUpperCase();
+    if (clean.length <= 6) return 'GK${clean.padRight(6, 'X')}';
+    return 'GK${clean.substring(0, 6)}';
+  }
+
   Future<void> _saveToLocal(CoinWallet wallet) async {
     try {
       final prefs = await SharedPreferences.getInstance();
