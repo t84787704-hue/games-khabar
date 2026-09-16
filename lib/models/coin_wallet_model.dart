@@ -36,6 +36,7 @@ class CoinWallet {
     return diff.isNegative ? Duration.zero : diff;
   }
 
+  // Empty fallback wallet instance for initial UI rendering
   factory CoinWallet.empty(String userId) {
     return CoinWallet(
       userId: userId,

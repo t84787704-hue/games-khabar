@@ -1099,7 +1099,7 @@ class CoinWalletService extends ChangeNotifier {
     }
   }
 
-  /// Get or derive deterministic referral code for user
+  /// Get or derive deterministic referral code for user (GK + 6 uppercase alphanumeric)
   String getReferralCode(String userId) {
     if (userId.isEmpty) return 'GK1000';
     final clean = userId.replaceAll(RegExp(r'[^a-zA-Z0-9]'), '').toUpperCase();
