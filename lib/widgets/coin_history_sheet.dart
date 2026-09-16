@@ -8,7 +8,7 @@ import '../models/coin_wallet_model.dart';
 import '../services/coin_wallet_service.dart';
 import '../services/coin_reward_service.dart';
 import '../services/gamer_auth_service.dart';
-import '../screens/redeem_rewards_screen.dart';
+import '../screens/coin_store_screen.dart';
 
 class CoinHistorySheet extends StatefulWidget {
   final String userId;
@@ -505,16 +505,16 @@ class _CoinHistorySheetState extends State<CoinHistorySheet> {
                                 foregroundColor: Colors.black,
                                 shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
                               ),
-                              icon: const Icon(Icons.card_giftcard_rounded, size: 16),
+                              icon: const Icon(Icons.storefront_rounded, size: 16),
                               label: const Text(
-                                'REDEEM REWARDS (UC, DIAMONDS, GIFT CARDS) 🎁',
+                                'OPEN COIN STORE 🛒',
                                 style: TextStyle(fontWeight: FontWeight.w900, fontSize: 11),
                               ),
                               onPressed: () {
                                 Navigator.pop(context);
                                 Navigator.push(
                                   context,
-                                  MaterialPageRoute(builder: (_) => const RedeemRewardsScreen()),
+                                  MaterialPageRoute(builder: (_) => const CoinStoreScreen()),
                                 );
                               },
                             ),

@@ -559,7 +559,7 @@ class AutoNewsScraper {
       RegExp(r'\brelease date\b', caseSensitive: false): 'Release Date & Launch Info',
       RegExp(r'\bnew update\b', caseSensitive: false): 'Naya Big Update',
       RegExp(r'\bpatch notes\b', caseSensitive: false): 'Patch Notes Aur Badlao',
-      RegExp(r'\bredeem code\b', caseSensitive: false): 'Redeem Code Aur Free Rewards',
+      RegExp(r'\breward code\b', caseSensitive: false): 'Reward Code Aur Free Perks',
       RegExp(r'\bleaks\b', caseSensitive: false): 'Leaked Details Aur Khabar',
       RegExp(r'\bfeatures\b', caseSensitive: false): 'Naye Features',
       RegExp(r'\beverything you need to know\b', caseSensitive: false): 'Puri Tafseel Aur Details',

@@ -75,7 +75,7 @@ class DemoAccountsService {
       'coins': 3200,
       'level': 42,
       'daysAgo': 28,
-      'recruitmentPost': '🔥 GHOST_ELITE Guild recruiting top rushers for CS Rank Season 24! Need Grandmaster or Master tier. Daily custom rooms with cash prizes! 💎',
+      'recruitmentPost': '🔥 GHOST_ELITE Guild recruiting top rushers for CS Rank Season 24! Need Grandmaster or Master tier. Daily custom rooms with coin prizes! 🏆',
       'achievementPost': 'Unlocked Grandmaster with 85% Win Rate in Free Fire CS Ranked! 🏆 Double AWM gameplay highlights coming soon.',
       'achievementImage': 'https://images.unsplash.com/photo-1538481199705-c710c4e965fc?w=800&auto=format&fit=crop&q=80',
       'clipTitle': '1v3 Double AWM Quick Switch Headshot Montage ⚡',

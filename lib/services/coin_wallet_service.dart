@@ -954,21 +954,14 @@ class CoinWalletService extends ChangeNotifier {
     return controller.stream;
   }
 
-  /// Request Redeem of Skill Tournament Rewards (UC, Diamonds, Mega Gift Card)
-  /// Enforces KYC verification data and checks strict balance thresholds:
-  /// - 10,000 Coins = 60 BGMI UC
-  /// - 15,000 Coins = 100 Free Fire Diamonds
-  /// - 1,000,000 Coins = $100 Mega Gift Card
-  /// - 2,000,000 Coins = $200 Mega Gift Card
-  Future<Map<String, dynamic>> requestRedeemReward({
+  /// Purchase In-App Store Items (Profile Frames, Badges, Feed Boost, VIP Pass, Spotlight, Chat Colors)
+  Future<Map<String, dynamic>> purchaseStoreItem({
     required String userId,
-    required String rewardType,
-    required String rewardTitle,
+    required String itemId,
+    required String itemName,
+    required String category, // 'frame', 'badge', 'feed_boost', 'vip_pass', 'spotlight', 'chat_color'
     required int costCoins,
-    required String legalName,
-    required String govtIdNumber,
-    required String deliveryDetails,
-    required String contactNumber,
+    Map<String, dynamic>? metadata,
   }) async {
     final wallet = await getOrCreateWallet(userId);
     if (wallet.coins < costCoins) {
@@ -978,7 +971,7 @@ class CoinWalletService extends ChangeNotifier {
       };
     }
 
-    final newCoins = wallet.coins - costCoins;
+    final newCoins = (wallet.coins - costCoins).clamp(0, 9999999);
     final now = DateTime.now();
     final updated = wallet.copyWith(
       coins: newCoins,
@@ -989,72 +982,71 @@ class CoinWalletService extends ChangeNotifier {
     notifyListeners();
     _saveToLocal(updated);
 
-    final requestId = _firestore.collection('redeem_requests').doc().id;
-
     try {
       // 1. Deduct coins from wallet & user profile
-      await _walletsRef.doc(userId).update({
+      await _walletsRef.doc(userId).set({
         'coins': newCoins,
+        'gCoins': newCoins,
         'updatedAt': FieldValue.serverTimestamp(),
-      });
+      }, SetOptions(merge: true));
       _syncToUserDocAndNotifiers(userId, newCoins);
 
-      // 2. Save KYC and Redeem request
-      await _firestore.collection('redeem_requests').doc(requestId).set({
-        'id': requestId,
-        'userId': userId,
-        'rewardType': rewardType,
-        'rewardTitle': rewardTitle,
-        'costCoins': costCoins,
-        'legalName': legalName.trim(),
-        'govtIdNumber': govtIdNumber.trim(),
-        'deliveryDetails': deliveryDetails.trim(),
-        'contactNumber': contactNumber.trim(),
-        'status': 'pending_verification',
-        'createdAt': FieldValue.serverTimestamp(),
-        'updatedAt': FieldValue.serverTimestamp(),
-      });
+      // 2. Update user profile perks based on category
+      final userRef = _firestore.collection('users').doc(userId);
+      final Map<String, dynamic> userPerks = {
+        'lastStorePurchaseAt': FieldValue.serverTimestamp(),
+      };
 
-      // 3. Record transaction with Play Store safe words
+      if (category == 'frame') {
+        userPerks['activeFrame'] = itemId;
+        userPerks['unlockedFrames'] = FieldValue.arrayUnion([itemId]);
+      } else if (category == 'badge') {
+        userPerks['activeBadge'] = itemId;
+        userPerks['unlockedBadges'] = FieldValue.arrayUnion([itemId]);
+      } else if (category == 'chat_color') {
+        userPerks['chatColor'] = metadata?['colorHex'] ?? '#00FF66';
+        userPerks['unlockedChatColors'] = FieldValue.arrayUnion([metadata?['colorHex'] ?? '#00FF66']);
+      } else if (category == 'vip_pass') {
+        final days = (metadata?['durationDays'] as num?)?.toInt() ?? 7;
+        final expiresAt = now.add(Duration(days: days));
+        userPerks['vipTournamentPassUntil'] = Timestamp.fromDate(expiresAt);
+        userPerks['isVipMember'] = true;
+      } else if (category == 'spotlight') {
+        final hours = (metadata?['durationHours'] as num?)?.toInt() ?? 24;
+        final expiresAt = now.add(Duration(hours: hours));
+        userPerks['leaderboardSpotlightUntil'] = Timestamp.fromDate(expiresAt);
+      } else if (category == 'feed_boost') {
+        final postId = metadata?['postId'] as String?;
+        if (postId != null && postId.isNotEmpty) {
+          final hours = (metadata?['durationHours'] as num?)?.toInt() ?? 24;
+          final expiresAt = now.add(Duration(hours: hours));
+          await _firestore.collection('posts').doc(postId).set({
+            'isBoosted': true,
+            'boostExpiresAt': Timestamp.fromDate(expiresAt),
+            'boostScore': FieldValue.increment(100),
+          }, SetOptions(merge: true));
+        }
+      }
+
+      await userRef.set(userPerks, SetOptions(merge: true));
+
+      // 3. Record transaction
       await _recordTransaction(CoinTransaction(
         id: _transactionsRef.doc().id,
         userId: userId,
-        type: 'redeem_reward',
+        type: 'store_purchase',
         amount: -costCoins,
-        status: 'pending',
+        status: 'completed',
         timestamp: now,
-        title: '$rewardTitle Claimed 🎁',
-        description: 'KYC Verification ID: $govtIdNumber • Delivery: $deliveryDetails',
+        title: '$itemName Unlocked! ✨',
+        description: 'Purchased in Coin Store ($category)',
       ));
 
-      return {
-        'success': true,
-        'requestId': requestId,
-      };
+      return {'success': true};
     } catch (e) {
-      debugPrint('CoinWalletService requestRedeemReward error: $e');
-      return {
-        'success': true,
-        'requestId': requestId,
-      };
+      debugPrint('CoinWalletService purchaseStoreItem error: $e');
+      return {'success': true};
     }
-  }
-
-  /// Stream of user's submitted redeem requests
-  Stream<List<Map<String, dynamic>>> getRedeemRequestsStream(String userId) {
-    return _firestore
-        .collection('redeem_requests')
-        .where('userId', isEqualTo: userId)
-        .snapshots()
-        .map((snap) {
-      final list = snap.docs.map((d) => d.data()).toList();
-      list.sort((a, b) {
-        final aTime = (a['createdAt'] as Timestamp?)?.toDate() ?? DateTime.now();
-        final bTime = (b['createdAt'] as Timestamp?)?.toDate() ?? DateTime.now();
-        return bTime.compareTo(aTime);
-      });
-      return list;
-    });
   }
 
   /// Track tournament participation and award referral bonus only after 5 matches

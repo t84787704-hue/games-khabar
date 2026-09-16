@@ -49,7 +49,7 @@ class StreakBannerWidget extends StatelessWidget {
                   const SizedBox(width: 10),
                   Expanded(
                     child: Text(
-                      '${data.daysUntilGiveaway} more days to enter the Rs. 5,000 Steam / PSN Gift Card Giveaway!',
+                      '${data.daysUntilGiveaway} more days to enter the Pro Gamer Pass & Epic Badges Giveaway!',
                       style: TextStyle(color: textWhite, fontSize: 12, fontWeight: FontWeight.bold),
                     ),
                   ),

@@ -111,7 +111,7 @@ class AboutUsScreen extends StatelessWidget {
                     border: Border.all(color: borderDark),
                   ),
                   child: Text(
-                    'Games Khabar is dedicated to bringing passionate gamers the fastest, most reliable, and up-to-date gaming news, tournament coverage, daily redeem codes, and patch updates in one unified, modern experience.',
+                    'Games Khabar is dedicated to bringing passionate gamers the fastest, most reliable, and up-to-date gaming news, tournament coverage, daily reward codes, and patch updates in one unified, modern experience.',
                     style: TextStyle(
                       color: textWhite,
                       fontSize: 14,
@@ -139,7 +139,7 @@ class AboutUsScreen extends StatelessWidget {
                 _buildGameCategoryCard(
                   icon: Icons.local_fire_department_rounded,
                   title: 'Free Fire & Free Fire MAX',
-                  description: 'Daily redeem codes, OB updates, gun skin releases, and event rewards.',
+                  description: 'Daily reward codes, OB updates, gun skin releases, and event rewards.',
                 ),
                 _buildGameCategoryCard(
                   icon: Icons.military_tech_rounded,
@@ -153,8 +153,8 @@ class AboutUsScreen extends StatelessWidget {
                 ),
                 _buildGameCategoryCard(
                   icon: Icons.confirmation_number_rounded,
-                  title: 'Daily Redeem Codes & Free Rewards',
-                  description: 'Verified active redeem codes and giveaways updated every single day.',
+                  title: 'Daily Promo Codes & Free Rewards',
+                  description: 'Verified active promo codes and giveaways updated every single day.',
                 ),
 
                 const SizedBox(height: 20),

@@ -17,7 +17,6 @@ import '../services/ad_free_service.dart';
 import '../services/cloudinary_service.dart';
 import '../services/win_proof_validator.dart';
 import 'coin_store_screen.dart';
-import 'redeem_rewards_screen.dart';
 import '../widgets/coin_history_sheet.dart';
 
 // Backwards compatibility across older navigators
@@ -308,6 +307,144 @@ class _GamerRoomsScreenState extends State<GamerRoomsScreen> {
 
   final Set<String> _joinedRoomIds = <String>{};
   String _selectedCategory = 'All Games';
+  bool _isWatchingAdFromRooms = false;
+
+  void _watchRewardedAdForCoins() {
+    if (_isWatchingAdFromRooms) return;
+    final uid = currentUserId;
+    if (uid.isEmpty) return;
+
+    setState(() => _isWatchingAdFromRooms = true);
+    int remainingSeconds = 5;
+    Timer? adTimer;
+
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (dialogCtx) => StatefulBuilder(
+        builder: (context, setDialogState) {
+          adTimer ??= Timer.periodic(const Duration(seconds: 1), (t) {
+            if (remainingSeconds > 1) {
+              setDialogState(() => remainingSeconds--);
+            } else {
+              t.cancel();
+              Navigator.pop(dialogCtx);
+              CoinWalletService().rewardAdCoins(uid);
+              if (mounted) {
+                setState(() => _isWatchingAdFromRooms = false);
+                ScaffoldMessenger.of(this.context).showSnackBar(
+                  const SnackBar(
+                    backgroundColor: GamerTheme.accentOrange,
+                    content: Row(
+                      children: [
+                        Text('💰', style: TextStyle(fontSize: 20)),
+                        SizedBox(width: 10),
+                        Text(
+                          '+50 G-Coins added for watching sponsored ad!',
+                          style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
+                        ),
+                      ],
+                    ),
+                    duration: Duration(seconds: 3),
+                  ),
+                );
+              }
+            }
+          });
+
+          return AlertDialog(
+            backgroundColor: GamerTheme.bgDark,
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(20),
+              side: const BorderSide(color: GamerTheme.accentOrange, width: 2),
+            ),
+            title: Row(
+              children: [
+                Container(
+                  padding: const EdgeInsets.all(6),
+                  decoration: BoxDecoration(
+                    color: GamerTheme.accentOrange.withOpacity(0.2),
+                    shape: BoxShape.circle,
+                  ),
+                  child: const Icon(Icons.play_arrow_rounded, color: GamerTheme.accentOrange, size: 20),
+                ),
+                const SizedBox(width: 10),
+                const Expanded(
+                  child: Text(
+                    'REWARDED SPONSOR AD',
+                    style: TextStyle(
+                      color: GamerTheme.accentOrange,
+                      fontSize: 13,
+                      fontWeight: FontWeight.w900,
+                      letterSpacing: 0.8,
+                    ),
+                  ),
+                ),
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                  decoration: BoxDecoration(
+                    color: Colors.white10,
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  child: Text(
+                    '${remainingSeconds}s',
+                    style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 12),
+                  ),
+                ),
+              ],
+            ),
+            content: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Container(
+                  height: 130,
+                  width: double.infinity,
+                  decoration: BoxDecoration(
+                    gradient: const LinearGradient(
+                      colors: [Color(0xFF1E293B), Color(0xFF0F172A)],
+                      begin: Alignment.topLeft,
+                      end: Alignment.bottomRight,
+                    ),
+                    borderRadius: BorderRadius.circular(16),
+                    border: Border.all(color: GamerTheme.borderLight),
+                  ),
+                  child: const Center(
+                    child: Column(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        Icon(Icons.sports_esports_rounded, color: GamerTheme.accentBlue, size: 44),
+                        SizedBox(height: 8),
+                        Text(
+                          'Sponsored Gaming Partner',
+                          style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 13),
+                        ),
+                        SizedBox(height: 4),
+                        Text(
+                          'Watch 5s ad to earn +50 G-Coins...',
+                          style: TextStyle(color: GamerTheme.textMuted, fontSize: 11),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 12),
+                LinearProgressIndicator(
+                  value: (5 - remainingSeconds) / 5.0,
+                  backgroundColor: GamerTheme.borderDark,
+                  color: GamerTheme.accentOrange,
+                  minHeight: 6,
+                  borderRadius: BorderRadius.circular(3),
+                ),
+              ],
+            ),
+          );
+        },
+      ),
+    ).then((_) {
+      adTimer?.cancel();
+      if (mounted) setState(() => _isWatchingAdFromRooms = false);
+    });
+  }
 
   // Cache for host usernames fetched from Firestore 'users' collection to avoid repeated reads
   final Map<String, String> _hostNameCache = {};
@@ -1750,7 +1887,7 @@ class _GamerRoomsScreenState extends State<GamerRoomsScreen> {
       body: SafeArea(
         child: Column(
           children: [
-            // Top Bar: G-Coins + REDEEM + EARN COINS (height 36)
+            // Top Bar: G-Coins + STORE + EARN COINS (height 36)
             Container(
               height: 52,
               padding: const EdgeInsets.symmetric(horizontal: 14),
@@ -1805,35 +1942,10 @@ class _GamerRoomsScreenState extends State<GamerRoomsScreen> {
                       );
                     },
                   ),
-                  // Action buttons: REDEEM outline orange + EARN COINS solid orange
+                  // Action buttons: STORE outline + EARN COINS (Rewarded Ad)
                       Row(
                         mainAxisSize: MainAxisSize.min,
                         children: [
-                          InkWell(
-                            onTap: () {
-                              Navigator.push(context, MaterialPageRoute(builder: (_) => const RedeemRewardsScreen()));
-                            },
-                            borderRadius: BorderRadius.circular(8),
-                            child: Container(
-                              height: 36,
-                              padding: const EdgeInsets.symmetric(horizontal: 12),
-                              alignment: Alignment.center,
-                              decoration: BoxDecoration(
-                                color: Colors.transparent,
-                                borderRadius: BorderRadius.circular(8),
-                                border: Border.all(color: GamerTheme.accentOrange, width: 1.2),
-                              ),
-                              child: const Text(
-                                'REDEEM',
-                                style: TextStyle(
-                                  color: GamerTheme.accentOrange,
-                                  fontWeight: FontWeight.bold,
-                                  fontSize: 11.5,
-                                ),
-                              ),
-                            ),
-                          ),
-                          const SizedBox(width: 8),
                           InkWell(
                             onTap: () {
                               Navigator.push(context, MaterialPageRoute(builder: (_) => const CoinStoreScreen()));
@@ -1841,19 +1953,56 @@ class _GamerRoomsScreenState extends State<GamerRoomsScreen> {
                             borderRadius: BorderRadius.circular(8),
                             child: Container(
                               height: 36,
-                              padding: const EdgeInsets.symmetric(horizontal: 12),
+                              padding: const EdgeInsets.symmetric(horizontal: 10),
+                              alignment: Alignment.center,
+                              decoration: BoxDecoration(
+                                color: Colors.transparent,
+                                borderRadius: BorderRadius.circular(8),
+                                border: Border.all(color: GamerTheme.accentOrange, width: 1.2),
+                              ),
+                              child: const Row(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  Icon(Icons.storefront_rounded, color: GamerTheme.accentOrange, size: 14),
+                                  SizedBox(width: 4),
+                                  Text(
+                                    'STORE',
+                                    style: TextStyle(
+                                      color: GamerTheme.accentOrange,
+                                      fontWeight: FontWeight.bold,
+                                      fontSize: 11.5,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ),
+                          const SizedBox(width: 8),
+                          InkWell(
+                            onTap: _watchRewardedAdForCoins,
+                            borderRadius: BorderRadius.circular(8),
+                            child: Container(
+                              height: 36,
+                              padding: const EdgeInsets.symmetric(horizontal: 10),
                               alignment: Alignment.center,
                               decoration: BoxDecoration(
                                 color: GamerTheme.accentOrange,
                                 borderRadius: BorderRadius.circular(8),
                               ),
-                              child: const Text(
-                                'EARN COINS',
-                                style: TextStyle(
-                                  color: Colors.white,
-                                  fontWeight: FontWeight.bold,
-                                  fontSize: 11.5,
-                                ),
+                              child: const Row(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  Icon(Icons.play_circle_fill_rounded, color: Colors.white, size: 14),
+                                  SizedBox(width: 4),
+                                  Text(
+                                    'EARN COINS',
+                                    style: TextStyle(
+                                      color: Colors.white,
+                                      fontWeight: FontWeight.bold,
+                                      fontSize: 11.5,
+                                    ),
+                                  ),
+                                ],
                               ),
                             ),
                           ),
@@ -2493,7 +2642,7 @@ class _InRoomBottomSheetContentState extends State<_InRoomBottomSheetContent> {
         'senderId': 'system',
         'senderName': 'ROOM BOT',
         'senderInitial': 'ℹ️',
-        'message': '🗑️ Dispute proof was withdrawn by ${widget.currentUserName}. Match returned to awaiting confirmation.',
+        'message': '🗑️ Dispute proof was removed by ${widget.currentUserName}. Match returned to awaiting confirmation.',
         'type': 'system',
         'timestamp': FieldValue.serverTimestamp(),
         'isHost': false,

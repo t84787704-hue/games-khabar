@@ -94,7 +94,7 @@ class PrivacyPolicyScreen extends StatelessWidget {
                 _buildSection(
                   title: '2. No Personal Data Collection',
                   content:
-                      'Games Khabar is purely an informational gaming news application. We DO NOT collect, store, or sell any personal identifiable information (PII) such as your real name, phone number, physical address, or contacts. You can read news, redeem codes, and esports updates completely anonymously without creating a personal user account.',
+                      'Games Khabar is purely an informational gaming news application. We DO NOT collect, store, or sell any personal identifiable information (PII) such as your real name, phone number, physical address, or contacts. You can read news, reward codes, and esports updates completely anonymously without creating a personal user account.',
                 ),
 
                 _buildSection(
@@ -112,7 +112,7 @@ class PrivacyPolicyScreen extends StatelessWidget {
                 _buildSection(
                   title: '5. Bookmarks and Local Storage',
                   content:
-                      'Any news articles or redeem codes that you save/bookmark are stored locally on your own device using local storage (SharedPreferences). This data stays entirely on your phone and is never uploaded to our servers.',
+                      'Any news articles or reward codes that you save/bookmark are stored locally on your own device using local storage (SharedPreferences). This data stays entirely on your phone and is never uploaded to our servers.',
                 ),
 
                 _buildSection(

@@ -281,7 +281,7 @@ class EarnScreen extends StatelessWidget {
                     ],
                   ),
                   const SizedBox(height: 10),
-                  _buildPerkItem('🎁 Weekly Rs. 5,000 Steam / PSN Gift Card Giveaways'),
+                  _buildPerkItem('🎁 Weekly Pro Gamer Pass & Epic Badges Giveaway'),
                   const SizedBox(height: 6),
                   _buildPerkItem('👑 VIP Golden Gamer Badge on Community Wall'),
                   const SizedBox(height: 6),

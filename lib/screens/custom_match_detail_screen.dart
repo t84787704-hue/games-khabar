@@ -464,7 +464,7 @@ class _CustomMatchDetailScreenState extends State<CustomMatchDetailScreen> {
     );
   }
 
-  // Loser can withdraw their dispute proof
+  // Loser can remove their dispute proof
   Future<void> _removeDisputeProof({required String disputedBy}) async {
     if (disputedBy != widget.currentUserId) {
       if (mounted) {
@@ -509,7 +509,7 @@ class _CustomMatchDetailScreenState extends State<CustomMatchDetailScreen> {
         'senderId': 'system',
         'senderName': 'APP BOT',
         'senderInitial': '🤖',
-        'message': '🗑️ Dispute proof was withdrawn by ${widget.currentUserName}. 15-minute countdown resumed.',
+        'message': '🗑️ Dispute proof was removed by ${widget.currentUserName}. 15-minute countdown resumed.',
         'type': 'system',
         'timestamp': FieldValue.serverTimestamp(),
         'isHost': false,
@@ -518,7 +518,7 @@ class _CustomMatchDetailScreenState extends State<CustomMatchDetailScreen> {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
-            content: Text('🗑️ Dispute proof withdrawn. Countdown resumed.'),
+            content: Text('🗑️ Dispute proof removed. Countdown resumed.'),
             backgroundColor: GamerTheme.cardElevated,
           ),
         );
@@ -526,7 +526,7 @@ class _CustomMatchDetailScreenState extends State<CustomMatchDetailScreen> {
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Failed to withdraw dispute: $e'), backgroundColor: GamerTheme.redAccent),
+          SnackBar(content: Text('Failed to remove dispute: $e'), backgroundColor: GamerTheme.redAccent),
         );
       }
     }
@@ -968,7 +968,7 @@ class _CustomMatchDetailScreenState extends State<CustomMatchDetailScreen> {
                         ),
                         onPressed: () => _removeDisputeProof(disputedBy: data['disputedBy']),
                         icon: const Icon(Icons.delete_outline_rounded, size: 18, color: GamerTheme.redAccent),
-                        label: const Text('🗑️ Withdraw / Remove Dispute Proof', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
+                        label: const Text('🗑️ Remove Dispute Proof', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
                       ),
                     ] else ...[
                       Container(
