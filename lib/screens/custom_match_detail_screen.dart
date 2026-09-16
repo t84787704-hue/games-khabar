@@ -77,6 +77,8 @@ class _CustomMatchDetailScreenState extends State<CustomMatchDetailScreen> {
         'autoApproveAt': autoApproveAt,
         'winnerId': widget.currentUserId,
         'winnerName': widget.currentUserName,
+        'proofUploadedBy': widget.currentUserId,
+        'proofUploadedByName': widget.currentUserName,
         'ocrStatus': validationResult.status,
         'ocrScore': validationResult.score,
         'ocrText': validationResult.fullOcrText.length > 300
@@ -96,6 +98,8 @@ class _CustomMatchDetailScreenState extends State<CustomMatchDetailScreen> {
           'autoApproveAt': autoApproveAt,
           'winnerId': widget.currentUserId,
           'winnerName': widget.currentUserName,
+          'proofUploadedBy': widget.currentUserId,
+          'proofUploadedByName': widget.currentUserName,
           'rewardStatus': 'pending',
         }, SetOptions(merge: true));
       } catch (_) {}
@@ -163,28 +167,349 @@ class _CustomMatchDetailScreenState extends State<CustomMatchDetailScreen> {
   }
 
   Future<void> _disputeResult() async {
+    File? disputeImage;
+    final reasonController = TextEditingController();
+    bool isSubmitting = false;
+
+    await showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: GamerTheme.surfaceDark,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      builder: (sheetContext) {
+        return StatefulBuilder(
+          builder: (context, setSheetState) {
+            return Padding(
+              padding: EdgeInsets.only(
+                left: 20,
+                right: 20,
+                top: 20,
+                bottom: MediaQuery.of(context).viewInsets.bottom + 24,
+              ),
+              child: SingleChildScrollView(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      children: [
+                        const Icon(Icons.warning_amber_rounded, color: GamerTheme.redAccent, size: 24),
+                        const SizedBox(width: 8),
+                        const Text(
+                          'Raise Dispute & Upload Proof',
+                          style: TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.bold),
+                        ),
+                        const Spacer(),
+                        IconButton(
+                          icon: const Icon(Icons.close, color: Colors.white54),
+                          onPressed: () => Navigator.pop(sheetContext),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 6),
+                    const Text(
+                      'If you lost the match or the winner screenshot is fake/wrong, submit your own screenshot proof.',
+                      style: TextStyle(color: Colors.white70, fontSize: 12),
+                    ),
+                    const SizedBox(height: 16),
+                    if (disputeImage == null)
+                      InkWell(
+                        onTap: isSubmitting
+                            ? null
+                            : () async {
+                                final picker = ImagePicker();
+                                final picked = await picker.pickImage(
+                                  source: ImageSource.gallery,
+                                  imageQuality: 85,
+                                  maxWidth: 1080,
+                                );
+                                if (picked != null) {
+                                  setSheetState(() {
+                                    disputeImage = File(picked.path);
+                                  });
+                                }
+                              },
+                        borderRadius: BorderRadius.circular(10),
+                        child: Container(
+                          width: double.infinity,
+                          height: 110,
+                          decoration: BoxDecoration(
+                            color: GamerTheme.cardDark,
+                            borderRadius: BorderRadius.circular(10),
+                            border: Border.all(color: GamerTheme.redAccent.withOpacity(0.6)),
+                          ),
+                          child: const Column(
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            children: [
+                              Icon(Icons.add_photo_alternate_rounded, color: GamerTheme.redAccent, size: 32),
+                              SizedBox(height: 6),
+                              Text(
+                                '📷 Upload Your Result / Defeat Screenshot',
+                                style: TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.bold),
+                              ),
+                              SizedBox(height: 2),
+                              Text(
+                                'Select image showing match end or scoreboard',
+                                style: TextStyle(color: Colors.white54, fontSize: 10),
+                              ),
+                            ],
+                          ),
+                        ),
+                      )
+                    else
+                      Stack(
+                        children: [
+                          ClipRRect(
+                            borderRadius: BorderRadius.circular(10),
+                            child: Image.file(
+                              disputeImage!,
+                              height: 140,
+                              width: double.infinity,
+                              fit: BoxFit.cover,
+                            ),
+                          ),
+                          Positioned(
+                            top: 8,
+                            right: 8,
+                            child: CircleAvatar(
+                              radius: 14,
+                              backgroundColor: Colors.black.withOpacity(0.7),
+                              child: IconButton(
+                                padding: EdgeInsets.zero,
+                                icon: const Icon(Icons.close, color: Colors.white, size: 16),
+                                onPressed: isSubmitting
+                                    ? null
+                                    : () {
+                                        setSheetState(() {
+                                          disputeImage = null;
+                                        });
+                                      },
+                              ),
+                            ),
+                          ),
+                          Positioned(
+                            bottom: 8,
+                            left: 8,
+                            child: Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                              decoration: BoxDecoration(
+                                color: Colors.black.withOpacity(0.7),
+                                borderRadius: BorderRadius.circular(4),
+                              ),
+                              child: const Row(
+                                children: [
+                                  Icon(Icons.check_circle, color: GamerTheme.redAccent, size: 12),
+                                  SizedBox(width: 4),
+                                  Text('Dispute Proof Selected', style: TextStyle(color: Colors.white, fontSize: 10)),
+                                ],
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                    const SizedBox(height: 14),
+                    const Text(
+                      'Reason for Dispute (Optional):',
+                      style: TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.bold),
+                    ),
+                    const SizedBox(height: 6),
+                    TextField(
+                      controller: reasonController,
+                      enabled: !isSubmitting,
+                      style: const TextStyle(color: Colors.white, fontSize: 13),
+                      decoration: InputDecoration(
+                        hintText: 'e.g. Winner screenshot is fake / from different match',
+                        hintStyle: const TextStyle(color: Colors.white38, fontSize: 12),
+                        filled: true,
+                        fillColor: GamerTheme.cardDark,
+                        contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                        border: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(8),
+                          borderSide: BorderSide(color: GamerTheme.borderDark),
+                        ),
+                        focusedBorder: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(8),
+                          borderSide: const BorderSide(color: GamerTheme.redAccent),
+                        ),
+                      ),
+                    ),
+                    const SizedBox(height: 18),
+                    SizedBox(
+                      width: double.infinity,
+                      child: ElevatedButton(
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: GamerTheme.redAccent,
+                          foregroundColor: Colors.white,
+                          padding: const EdgeInsets.symmetric(vertical: 14),
+                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                        ),
+                        onPressed: isSubmitting
+                            ? null
+                            : () async {
+                                if (disputeImage == null) {
+                                  ScaffoldMessenger.of(context).showSnackBar(
+                                    const SnackBar(
+                                      content: Text('⚠️ Please select a dispute screenshot proof first!'),
+                                      backgroundColor: GamerTheme.redAccent,
+                                    ),
+                                  );
+                                  return;
+                                }
+
+                                setSheetState(() {
+                                  isSubmitting = true;
+                                });
+
+                                try {
+                                  final disputeUrl = await CloudinaryService.uploadFile(
+                                    file: disputeImage!,
+                                    folder: 'dispute_proofs',
+                                  );
+
+                                  if (disputeUrl == null || disputeUrl.isEmpty) {
+                                    throw Exception('Dispute image upload failed');
+                                  }
+
+                                  final reason = reasonController.text.trim().isNotEmpty
+                                      ? reasonController.text.trim()
+                                      : 'Loser claims winner screenshot is fake/wrong';
+
+                                  final roomRef = FirebaseFirestore.instance.collection('rooms').doc(widget.roomId);
+                                  await roomRef.update({
+                                    'status': 'disputed',
+                                    'disputed': true,
+                                    'disputedBy': widget.currentUserId,
+                                    'disputedByName': widget.currentUserName,
+                                    'disputeProofUrl': disputeUrl,
+                                    'disputeReason': reason,
+                                    'disputedAt': FieldValue.serverTimestamp(),
+                                  });
+
+                                  try {
+                                    await FirebaseFirestore.instance.collection('tournament_rooms').doc(widget.roomId).set({
+                                      'status': 'disputed',
+                                      'disputed': true,
+                                      'disputedBy': widget.currentUserId,
+                                      'disputedByName': widget.currentUserName,
+                                      'disputeProofUrl': disputeUrl,
+                                      'disputeReason': reason,
+                                      'disputedAt': FieldValue.serverTimestamp(),
+                                    }, SetOptions(merge: true));
+                                  } catch (_) {}
+
+                                  // Add dispute proof message into chat
+                                  await roomRef.collection('messages').add({
+                                    'senderId': widget.currentUserId,
+                                    'senderName': widget.currentUserName,
+                                    'senderInitial': widget.currentUserName.isNotEmpty ? widget.currentUserName[0].toUpperCase() : 'L',
+                                    'message': reason,
+                                    'imageUrl': disputeUrl,
+                                    'type': 'dispute_proof',
+                                    'timestamp': FieldValue.serverTimestamp(),
+                                    'isHost': false,
+                                  });
+
+                                  // System announcement
+                                  await roomRef.collection('messages').add({
+                                    'senderId': 'system',
+                                    'senderName': 'APP BOT',
+                                    'senderInitial': '🤖',
+                                    'message': '⚠️ Dispute raised by ${widget.currentUserName} with evidence screenshot! Auto-approval paused. Under Admin Review.',
+                                    'type': 'system',
+                                    'timestamp': FieldValue.serverTimestamp(),
+                                    'isHost': false,
+                                  });
+
+                                  if (context.mounted) {
+                                    Navigator.pop(sheetContext);
+                                    ScaffoldMessenger.of(context).showSnackBar(
+                                      const SnackBar(
+                                        content: Text('⚠️ Dispute submitted with proof screenshot. Admin will review.'),
+                                        backgroundColor: GamerTheme.redAccent,
+                                      ),
+                                    );
+                                  }
+                                } catch (e) {
+                                  setSheetState(() {
+                                    isSubmitting = false;
+                                  });
+                                  if (context.mounted) {
+                                    ScaffoldMessenger.of(context).showSnackBar(
+                                      SnackBar(
+                                        content: Text('Failed to submit dispute: $e'),
+                                        backgroundColor: GamerTheme.redAccent,
+                                      ),
+                                    );
+                                  }
+                                }
+                              },
+                        child: isSubmitting
+                            ? const SizedBox(
+                                height: 20,
+                                width: 20,
+                                child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
+                              )
+                            : const Text('Submit Dispute Proof', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14)),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            );
+          },
+        );
+      },
+    );
+  }
+
+  // Loser can withdraw their dispute proof
+  Future<void> _removeDisputeProof({required String disputedBy}) async {
+    if (disputedBy != widget.currentUserId) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('⚠️ You cannot delete someone else\'s dispute proof!'),
+            backgroundColor: GamerTheme.redAccent,
+          ),
+        );
+      }
+      return;
+    }
+
     try {
+      final autoApproveTime = DateTime.now().add(const Duration(minutes: 15));
       final roomRef = FirebaseFirestore.instance.collection('rooms').doc(widget.roomId);
       await roomRef.update({
-        'status': 'disputed',
-        'rewardStatus': 'disputed',
-        'disputedAt': FieldValue.serverTimestamp(),
-        'disputedBy': widget.currentUserId,
-        'disputedByName': widget.currentUserName,
+        'status': 'reward_waiting',
+        'disputed': false,
+        'disputedBy': FieldValue.delete(),
+        'disputedByName': FieldValue.delete(),
+        'disputeProofUrl': FieldValue.delete(),
+        'disputeReason': FieldValue.delete(),
+        'disputedAt': FieldValue.delete(),
+        'autoApproveAt': Timestamp.fromDate(autoApproveTime),
       });
 
       try {
         await FirebaseFirestore.instance.collection('tournament_rooms').doc(widget.roomId).update({
-          'status': 'disputed',
-          'rewardStatus': 'disputed',
+          'status': 'reward_waiting',
+          'disputed': false,
+          'disputedBy': FieldValue.delete(),
+          'disputedByName': FieldValue.delete(),
+          'disputeProofUrl': FieldValue.delete(),
+          'disputeReason': FieldValue.delete(),
+          'disputedAt': FieldValue.delete(),
+          'autoApproveAt': Timestamp.fromDate(autoApproveTime),
         });
       } catch (_) {}
 
       await roomRef.collection('messages').add({
         'senderId': 'system',
-        'senderName': 'DISPUTE BOT',
-        'senderInitial': '⚠️',
-        'message': '⚠️ Dispute Raised by ${widget.currentUserName}! Under review by Admin. Loser claims winner screenshot is fake/wrong.',
+        'senderName': 'APP BOT',
+        'senderInitial': '🤖',
+        'message': '🗑️ Dispute proof was withdrawn by ${widget.currentUserName}. 15-minute countdown resumed.',
         'type': 'system',
         'timestamp': FieldValue.serverTimestamp(),
         'isHost': false,
@@ -193,21 +518,34 @@ class _CustomMatchDetailScreenState extends State<CustomMatchDetailScreen> {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
-            content: Text('⚠️ Dispute raised! Match result is now under review by Admin.'),
-            backgroundColor: GamerTheme.redAccent,
+            content: Text('🗑️ Dispute proof withdrawn. Countdown resumed.'),
+            backgroundColor: GamerTheme.cardElevated,
           ),
         );
       }
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Failed to raise dispute: $e'), backgroundColor: GamerTheme.redAccent),
+          SnackBar(content: Text('Failed to withdraw dispute: $e'), backgroundColor: GamerTheme.redAccent),
         );
       }
     }
   }
 
-  Future<void> _removeProof() async {
+  // Remove win proof: ONLY the person who uploaded this win proof can remove it!
+  Future<void> _removeProof({required String proofUploaderId}) async {
+    if (proofUploaderId != widget.currentUserId) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('⚠️ You cannot delete someone else\'s win proof!'),
+            backgroundColor: GamerTheme.redAccent,
+          ),
+        );
+      }
+      return;
+    }
+
     try {
       final roomRef = FirebaseFirestore.instance.collection('rooms').doc(widget.roomId);
       await roomRef.update({
@@ -218,6 +556,8 @@ class _CustomMatchDetailScreenState extends State<CustomMatchDetailScreen> {
         'autoApproveAt': FieldValue.delete(),
         'winnerId': FieldValue.delete(),
         'winnerName': FieldValue.delete(),
+        'proofUploadedBy': FieldValue.delete(),
+        'proofUploadedByName': FieldValue.delete(),
         'ocrStatus': FieldValue.delete(),
         'ocrScore': 0,
         'ocrText': FieldValue.delete(),
@@ -234,6 +574,8 @@ class _CustomMatchDetailScreenState extends State<CustomMatchDetailScreen> {
           'autoApproveAt': FieldValue.delete(),
           'winnerId': FieldValue.delete(),
           'winnerName': FieldValue.delete(),
+          'proofUploadedBy': FieldValue.delete(),
+          'proofUploadedByName': FieldValue.delete(),
           'rewardStatus': 'idle',
         });
       } catch (_) {}
@@ -243,7 +585,7 @@ class _CustomMatchDetailScreenState extends State<CustomMatchDetailScreen> {
         'senderId': 'system',
         'senderName': 'APP BOT',
         'senderInitial': '🤖',
-        'message': '🗑️ Rejected win proof was removed. You can now upload a new screenshot.',
+        'message': '🗑️ Win proof was removed by ${widget.currentUserName}. You can now upload a fresh screenshot.',
         'type': 'system',
         'timestamp': FieldValue.serverTimestamp(),
         'isHost': false,
@@ -252,7 +594,7 @@ class _CustomMatchDetailScreenState extends State<CustomMatchDetailScreen> {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
-            content: Text('🗑️ Rejected proof removed. You can upload a new screenshot now.'),
+            content: Text('🗑️ Win proof removed. You can upload a new screenshot now.'),
             backgroundColor: GamerTheme.cardElevated,
             behavior: SnackBarBehavior.floating,
           ),
@@ -344,6 +686,12 @@ class _CustomMatchDetailScreenState extends State<CustomMatchDetailScreen> {
               }
             }
           }
+
+          final proofUploadedBy = (data['proofUploadedBy'] ?? data['winnerId'] ?? '').toString();
+          final bool isMyWinProof = proofUploadedBy.isNotEmpty
+              ? (proofUploadedBy == widget.currentUserId)
+              : (winnerId == widget.currentUserId);
+          final bool isMyDispute = isDisputed && data['disputedBy'] == widget.currentUserId;
 
           return SingleChildScrollView(
             padding: const EdgeInsets.all(16),
@@ -552,41 +900,94 @@ class _CustomMatchDetailScreenState extends State<CustomMatchDetailScreen> {
                     ],
                   ),
                 ),
+
                 const SizedBox(height: 20),
                 if (hasProof && !isCompleted) ...[
-                  Row(
-                    children: [
-                      Expanded(
-                        child: OutlinedButton.icon(
-                          style: OutlinedButton.styleFrom(
-                            foregroundColor: Colors.white,
-                            side: const BorderSide(color: GamerTheme.redAccent),
-                            padding: const EdgeInsets.symmetric(vertical: 12),
-                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                  if (isMyWinProof) ...[
+                    Row(
+                      children: [
+                        Expanded(
+                          child: OutlinedButton.icon(
+                            style: OutlinedButton.styleFrom(
+                              foregroundColor: Colors.white,
+                              side: const BorderSide(color: GamerTheme.redAccent),
+                              padding: const EdgeInsets.symmetric(vertical: 12),
+                              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                            ),
+                            onPressed: () => _removeProof(proofUploaderId: proofUploadedBy),
+                            icon: const Icon(Icons.delete_outline_rounded, size: 18, color: GamerTheme.redAccent),
+                            label: const Text('🗑️ Remove Proof', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12)),
                           ),
-                          onPressed: _removeProof,
-                          icon: const Icon(Icons.delete_outline_rounded, size: 18, color: GamerTheme.redAccent),
-                          label: const Text('🗑️ Remove Proof', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12)),
+                        ),
+                        const SizedBox(width: 10),
+                        Expanded(
+                          child: ElevatedButton.icon(
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor: _neonGreen,
+                              foregroundColor: Colors.black,
+                              padding: const EdgeInsets.symmetric(vertical: 12),
+                              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                            ),
+                            onPressed: _isUploadingProof ? null : () => _pickAndUploadWinProof(slotName),
+                            icon: _isUploadingProof
+                                ? const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.black))
+                                : const Icon(Icons.camera_alt_rounded, size: 18, color: Colors.black),
+                            label: const Text('📷 Upload New', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12)),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ] else ...[
+                    // Non-winner (Loser / Opponent) view:
+                    if (isRewardWaiting && !isDisputed) ...[
+                      ElevatedButton.icon(
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: GamerTheme.redAccent,
+                          foregroundColor: Colors.white,
+                          minimumSize: const Size.fromHeight(48),
+                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                        ),
+                        onPressed: _disputeResult,
+                        icon: const Icon(Icons.warning_amber_rounded, size: 20, color: Colors.white),
+                        label: const Text('⚠️ Raise Dispute (Upload Your Proof)', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
+                      ),
+                      const SizedBox(height: 6),
+                      const Center(
+                        child: Text(
+                          '15-minute dispute window active. You cannot delete the winner\'s proof.',
+                          style: TextStyle(color: Colors.white54, fontSize: 11),
                         ),
                       ),
-                      const SizedBox(width: 10),
-                      Expanded(
-                        child: ElevatedButton.icon(
-                          style: ElevatedButton.styleFrom(
-                            backgroundColor: _neonGreen,
-                            foregroundColor: Colors.black,
-                            padding: const EdgeInsets.symmetric(vertical: 12),
-                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                    ] else if (isMyDispute) ...[
+                      OutlinedButton.icon(
+                        style: OutlinedButton.styleFrom(
+                          foregroundColor: Colors.white,
+                          side: const BorderSide(color: GamerTheme.redAccent),
+                          minimumSize: const Size.fromHeight(48),
+                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                        ),
+                        onPressed: () => _removeDisputeProof(disputedBy: data['disputedBy']),
+                        icon: const Icon(Icons.delete_outline_rounded, size: 18, color: GamerTheme.redAccent),
+                        label: const Text('🗑️ Withdraw / Remove Dispute Proof', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
+                      ),
+                    ] else ...[
+                      Container(
+                        width: double.infinity,
+                        padding: const EdgeInsets.all(12),
+                        decoration: BoxDecoration(
+                          color: GamerTheme.cardDark,
+                          borderRadius: BorderRadius.circular(8),
+                          border: Border.all(color: GamerTheme.borderDark),
+                        ),
+                        child: const Center(
+                          child: Text(
+                            'Win proof is under review. Only the uploader can remove or re-upload it.',
+                            style: TextStyle(color: Colors.white70, fontSize: 12),
                           ),
-                          onPressed: _isUploadingProof ? null : () => _pickAndUploadWinProof(slotName),
-                          icon: _isUploadingProof
-                              ? const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.black))
-                              : const Icon(Icons.camera_alt_rounded, size: 18, color: Colors.black),
-                          label: const Text('📷 Upload New', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12)),
                         ),
                       ),
                     ],
-                  ),
+                  ],
                 ] else ...[
                   ElevatedButton.icon(
                     style: ElevatedButton.styleFrom(
