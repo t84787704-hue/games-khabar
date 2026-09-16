@@ -65,9 +65,12 @@ class _CustomMatchDetailScreenState extends State<CustomMatchDetailScreen> {
 
       final roomRef = FirebaseFirestore.instance.collection('rooms').doc(widget.roomId);
 
-      // 3. Update room document: Set status to reward_waiting & rewardStatus to pending
+      final newStatus = validationResult.isVerified ? 'reward_waiting' : 'proof_rejected';
+      final newRewardStatus = validationResult.isVerified ? 'pending' : 'rejected_by_app';
+
+      // 3. Update room document: Set status to reward_waiting (if verified) or proof_rejected (if rejected)
       await roomRef.update({
-        'status': 'reward_waiting',
+        'status': newStatus,
         'proofUrl': uploadedUrl,
         'winProofUrl': uploadedUrl,
         'winProofUploadedAt': FieldValue.serverTimestamp(),
@@ -76,7 +79,7 @@ class _CustomMatchDetailScreenState extends State<CustomMatchDetailScreen> {
         'ocrText': validationResult.fullOcrText.length > 300
             ? validationResult.fullOcrText.substring(0, 300)
             : validationResult.fullOcrText,
-        'rewardStatus': 'pending',
+        'rewardStatus': newRewardStatus,
         'detectedScreenshotName': validationResult.detectedScreenshotName,
         'accountIdName': validationResult.accountIdName,
       });
@@ -84,10 +87,10 @@ class _CustomMatchDetailScreenState extends State<CustomMatchDetailScreen> {
       // Sync to tournament_rooms collection
       try {
         await FirebaseFirestore.instance.collection('tournament_rooms').doc(widget.roomId).set({
-          'status': 'reward_waiting',
+          'status': newStatus,
           'winProofUrl': uploadedUrl,
           'winProofUploadedAt': FieldValue.serverTimestamp(),
-          'rewardStatus': 'pending',
+          'rewardStatus': newRewardStatus,
         }, SetOptions(merge: true));
       } catch (_) {}
 
@@ -153,6 +156,64 @@ class _CustomMatchDetailScreenState extends State<CustomMatchDetailScreen> {
     }
   }
 
+  Future<void> _removeProof() async {
+    try {
+      final roomRef = FirebaseFirestore.instance.collection('rooms').doc(widget.roomId);
+      await roomRef.update({
+        'status': 'IN_PROGRESS',
+        'proofUrl': FieldValue.delete(),
+        'winProofUrl': FieldValue.delete(),
+        'winProofUploadedAt': FieldValue.delete(),
+        'ocrStatus': FieldValue.delete(),
+        'ocrScore': 0,
+        'ocrText': FieldValue.delete(),
+        'detectedScreenshotName': FieldValue.delete(),
+        'accountIdName': FieldValue.delete(),
+        'rewardStatus': 'idle',
+      });
+
+      try {
+        await FirebaseFirestore.instance.collection('tournament_rooms').doc(widget.roomId).update({
+          'status': 'IN_PROGRESS',
+          'winProofUrl': FieldValue.delete(),
+          'winProofUploadedAt': FieldValue.delete(),
+          'rewardStatus': 'idle',
+        });
+      } catch (_) {}
+
+      // Add system message
+      await roomRef.collection('messages').add({
+        'senderId': 'system',
+        'senderName': 'APP BOT',
+        'senderInitial': '🤖',
+        'message': '🗑️ Rejected win proof was removed. You can now upload a new screenshot.',
+        'type': 'system',
+        'timestamp': FieldValue.serverTimestamp(),
+        'isHost': false,
+      });
+
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('🗑️ Rejected proof removed. You can upload a new screenshot now.'),
+            backgroundColor: GamerTheme.cardElevated,
+            behavior: SnackBarBehavior.floating,
+          ),
+        );
+      }
+    } catch (e) {
+      debugPrint('Error removing proof: $e');
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Failed to remove proof: $e'),
+            backgroundColor: GamerTheme.redAccent,
+          ),
+        );
+      }
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -174,7 +235,20 @@ class _CustomMatchDetailScreenState extends State<CustomMatchDetailScreen> {
 
           final data = snapshot.data!.data() as Map<String, dynamic>? ?? {};
           final title = data['title'] ?? 'Custom Match';
-          final status = data['status'] ?? 'OPEN';
+          final status = (data['status'] ?? 'OPEN').toString();
+          final rewardStatus = (data['rewardStatus'] ?? 'idle').toString();
+          final ocrStatus = (data['ocrStatus'] ?? '').toString();
+          final isCompleted = status.toLowerCase() == 'completed' || rewardStatus.toLowerCase() == 'sent';
+          final isProofRejected = !isCompleted &&
+              (status.toLowerCase() == 'proof_rejected' ||
+                  rewardStatus.toLowerCase() == 'rejected_by_app' ||
+                  ocrStatus.toLowerCase() == 'mismatch' ||
+                  ocrStatus.toLowerCase() == 'rejected');
+          final isRewardWaiting = !isCompleted && !isProofRejected &&
+              (status.toLowerCase() == 'reward_waiting' ||
+                  rewardStatus.toLowerCase() == 'pending' ||
+                  ((data['proofUrl'] != null && (data['proofUrl'] as String).isNotEmpty) ||
+                      (data['winProofUrl'] != null && (data['winProofUrl'] as String).isNotEmpty)));
           final joinedUsers = (data['joinedUsers'] as List?)
                   ?.map((e) => Map<String, dynamic>.from(e as Map))
                   .toList() ??
@@ -197,10 +271,85 @@ class _CustomMatchDetailScreenState extends State<CustomMatchDetailScreen> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(title, style: const TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.bold)),
-                const SizedBox(height: 8),
-                Text('Status: $status', style: const TextStyle(color: _neonGreen, fontSize: 14)),
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    Expanded(
+                      child: Text(title, style: const TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.bold)),
+                    ),
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                      decoration: BoxDecoration(
+                        color: isCompleted
+                            ? Colors.teal.withOpacity(0.2)
+                            : (isProofRejected
+                                ? GamerTheme.redAccent.withOpacity(0.2)
+                                : (isRewardWaiting ? Colors.amber.withOpacity(0.2) : _neonGreen.withOpacity(0.2))),
+                        borderRadius: BorderRadius.circular(6),
+                        border: Border.all(
+                          color: isCompleted
+                              ? Colors.tealAccent
+                              : (isProofRejected
+                                  ? GamerTheme.redAccent
+                                  : (isRewardWaiting ? Colors.amberAccent : _neonGreen)),
+                        ),
+                      ),
+                      child: Text(
+                        isCompleted
+                            ? 'COMPLETED'
+                            : (isProofRejected
+                                ? '❌ PROOF REJECTED'
+                                : (isRewardWaiting ? 'REWARD WAITING' : status.toUpperCase())),
+                        style: TextStyle(
+                          color: isCompleted
+                              ? Colors.tealAccent
+                              : (isProofRejected
+                                  ? GamerTheme.redAccent
+                                  : (isRewardWaiting ? Colors.amberAccent : _neonGreen)),
+                          fontSize: 11,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
                 const SizedBox(height: 12),
+                if (isProofRejected)
+                  Container(
+                    margin: const EdgeInsets.only(bottom: 14),
+                    padding: const EdgeInsets.all(12),
+                    decoration: BoxDecoration(
+                      color: GamerTheme.redAccent.withOpacity(0.12),
+                      borderRadius: BorderRadius.circular(10),
+                      border: Border.all(color: GamerTheme.redAccent.withOpacity(0.6)),
+                    ),
+                    child: const Row(
+                      children: [
+                        Icon(Icons.cancel_rounded, color: GamerTheme.redAccent, size: 22),
+                        SizedBox(width: 10),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                'PROOF REJECTED - NAME MISMATCH',
+                                style: TextStyle(
+                                  color: GamerTheme.redAccent,
+                                  fontSize: 12,
+                                  fontWeight: FontWeight.bold,
+                                ),
+                              ),
+                              SizedBox(height: 2),
+                              Text(
+                                'Uploaded screenshot does not match player ID. Please remove the rejected proof or upload a new valid screenshot.',
+                                style: TextStyle(color: Colors.white70, fontSize: 11),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
                 Container(
                   padding: const EdgeInsets.all(12),
                   decoration: BoxDecoration(
@@ -217,19 +366,55 @@ class _CustomMatchDetailScreenState extends State<CustomMatchDetailScreen> {
                   ),
                 ),
                 const SizedBox(height: 20),
-                ElevatedButton.icon(
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: _neonGreen,
-                    foregroundColor: Colors.black,
-                    minimumSize: const Size.fromHeight(48),
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                if (isProofRejected) ...[
+                  Row(
+                    children: [
+                      Expanded(
+                        child: OutlinedButton.icon(
+                          style: OutlinedButton.styleFrom(
+                            foregroundColor: Colors.white,
+                            side: const BorderSide(color: GamerTheme.redAccent),
+                            padding: const EdgeInsets.symmetric(vertical: 12),
+                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                          ),
+                          onPressed: _removeProof,
+                          icon: const Icon(Icons.delete_outline_rounded, size: 18, color: GamerTheme.redAccent),
+                          label: const Text('🗑️ Remove Proof', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12)),
+                        ),
+                      ),
+                      const SizedBox(width: 10),
+                      Expanded(
+                        child: ElevatedButton.icon(
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: _neonGreen,
+                            foregroundColor: Colors.black,
+                            padding: const EdgeInsets.symmetric(vertical: 12),
+                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                          ),
+                          onPressed: _isUploadingProof ? null : () => _pickAndUploadWinProof(slotName),
+                          icon: _isUploadingProof
+                              ? const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.black))
+                              : const Icon(Icons.camera_alt_rounded, size: 18, color: Colors.black),
+                          label: const Text('📷 Upload New', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12)),
+                        ),
+                      ),
+                    ],
                   ),
-                  onPressed: _isUploadingProof ? null : () => _pickAndUploadWinProof(slotName),
-                  icon: _isUploadingProof
-                      ? const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.black))
-                      : const Icon(Icons.upload_file_rounded),
-                  label: Text(_isUploadingProof ? 'Validating Proof...' : 'Upload Win Proof Screenshot'),
-                ),
+                ] else ...[
+                  ElevatedButton.icon(
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: _neonGreen,
+                      foregroundColor: Colors.black,
+                      minimumSize: const Size.fromHeight(48),
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                    ),
+                    onPressed: _isUploadingProof ? null : () => _pickAndUploadWinProof(slotName),
+                    icon: _isUploadingProof
+                        ? const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.black))
+                        : const Icon(Icons.upload_file_rounded),
+                    label: Text(_isUploadingProof ? 'Validating Proof...' : 'Upload Win Proof Screenshot'),
+                  ),
+                ],
               ],
             ),
           );

@@ -97,15 +97,21 @@ class TournamentRoom {
   int get availableSlots => (totalSlots > 0 ? totalSlots : maxSlots) - (currentSlots > 0 ? currentSlots : joinedPlayers.length);
   bool get isFull => (currentSlots > 0 ? currentSlots : joinedPlayers.length) >= (totalSlots > 0 ? totalSlots : maxSlots);
   bool get isCompleted => status.toLowerCase() == 'completed' || rewardStatus.toLowerCase() == 'sent';
+  bool get isProofRejected =>
+      !isCompleted &&
+      (status.toLowerCase() == 'proof_rejected' ||
+          rewardStatus.toLowerCase() == 'rejected_by_app' ||
+          rewardStatus.toLowerCase() == 'rejected');
   bool get isRewardWaiting =>
       !isCompleted &&
+      !isProofRejected &&
       (status.toLowerCase() == 'reward_waiting' ||
           rewardStatus.toLowerCase() == 'pending' ||
           rewardStatus.toLowerCase() == 'pending_host' ||
           (winProofUrl != null && winProofUrl!.isNotEmpty));
   bool get isExpired => status.toUpperCase() == 'EXPIRED' || status.toUpperCase() == 'CANCELED';
-  bool get isActive => !isCompleted && !isRewardWaiting && (status.toLowerCase() == 'active' || status.toUpperCase() == 'OPEN');
-  bool get isInProgress => !isCompleted && !isRewardWaiting && (status.toUpperCase() == 'IN_PROGRESS' || status.toUpperCase() == 'STARTED' || status.toUpperCase() == 'MATCH_STARTED');
+  bool get isActive => !isCompleted && !isRewardWaiting && !isProofRejected && (status.toLowerCase() == 'active' || status.toUpperCase() == 'OPEN');
+  bool get isInProgress => !isCompleted && !isRewardWaiting && !isProofRejected && (status.toUpperCase() == 'IN_PROGRESS' || status.toUpperCase() == 'STARTED' || status.toUpperCase() == 'MATCH_STARTED');
   bool get isExpiredCompleted {
     if (!isCompleted || completedAt == null) return false;
     return DateTime.now().difference(completedAt!).inMinutes >= 5;

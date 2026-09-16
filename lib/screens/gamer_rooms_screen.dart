@@ -89,14 +89,27 @@ class GamerRoom {
 
   bool get isFull => filled >= total;
   bool get isCompleted => status.toLowerCase() == 'completed' || rewardStatus.toLowerCase() == 'sent';
+  bool get isProofRejected {
+    if (isCompleted) return false;
+    final st = status.toLowerCase();
+    final rst = rewardStatus.toLowerCase();
+    final ost = ocrStatus.toLowerCase();
+    return st == 'proof_rejected' ||
+        rst == 'rejected_by_app' ||
+        rst == 'rejected' ||
+        ost == 'mismatch' ||
+        ost == 'rejected' ||
+        (ost == 'doubt' && ocrScore == 0);
+  }
   bool get isRewardWaiting =>
       !isCompleted &&
+      !isProofRejected &&
       (status.toLowerCase() == 'reward_waiting' ||
           rewardStatus.toLowerCase() == 'pending' ||
           rewardStatus.toLowerCase() == 'pending_host' ||
           ((proofUrl != null && proofUrl!.isNotEmpty) || (winProofUrl != null && winProofUrl!.isNotEmpty)));
-  bool get isInProgress => !isCompleted && !isRewardWaiting && (status.toUpperCase() == 'IN_PROGRESS' || status.toUpperCase() == 'STARTED' || status.toUpperCase() == 'MATCH_STARTED');
-  bool get isActive => !isCompleted && !isRewardWaiting && (status.toLowerCase() == 'active' || status.toUpperCase() == 'OPEN');
+  bool get isInProgress => !isCompleted && !isRewardWaiting && !isProofRejected && (status.toUpperCase() == 'IN_PROGRESS' || status.toUpperCase() == 'STARTED' || status.toUpperCase() == 'MATCH_STARTED');
+  bool get isActive => !isCompleted && !isRewardWaiting && !isProofRejected && (status.toLowerCase() == 'active' || status.toUpperCase() == 'OPEN');
   bool get isExpiredCompleted {
     if (!isCompleted || completedAt == null) return false;
     return DateTime.now().difference(completedAt!).inMinutes >= 5;
@@ -1287,7 +1300,9 @@ class _GamerRoomsScreenState extends State<GamerRoomsScreen> {
                 decoration: BoxDecoration(
                   color: room.isCompleted
                       ? Colors.tealAccent
-                      : (room.isRewardWaiting ? Colors.amberAccent : (room.isInProgress ? const Color(0xFFFF9900) : _neonGreen)),
+                      : (room.isProofRejected
+                          ? GamerTheme.redAccent
+                          : (room.isRewardWaiting ? Colors.amberAccent : (room.isInProgress ? const Color(0xFFFF9900) : _neonGreen))),
                   shape: BoxShape.circle,
                 ),
               ),
@@ -1295,15 +1310,19 @@ class _GamerRoomsScreenState extends State<GamerRoomsScreen> {
               Text(
                 room.isCompleted
                     ? 'COMPLETED'
-                    : (room.isRewardWaiting
-                        ? 'REWARD WAITING'
-                        : (room.isInProgress ? 'MATCH LIVE' : 'ACTIVE MATCH')),
+                    : (room.isProofRejected
+                        ? 'PROOF REJECTED'
+                        : (room.isRewardWaiting
+                            ? 'REWARD WAITING'
+                            : (room.isInProgress ? 'MATCH LIVE' : 'ACTIVE MATCH'))),
                 style: TextStyle(
                   color: room.isCompleted
                       ? Colors.tealAccent
-                      : (room.isRewardWaiting
-                          ? Colors.amberAccent
-                          : (room.isInProgress ? const Color(0xFFFF9900) : _neonGreen)),
+                      : (room.isProofRejected
+                          ? GamerTheme.redAccent
+                          : (room.isRewardWaiting
+                              ? Colors.amberAccent
+                              : (room.isInProgress ? const Color(0xFFFF9900) : _neonGreen))),
                   fontSize: 12,
                   fontWeight: FontWeight.bold,
                 ),
@@ -1330,6 +1349,34 @@ class _GamerRoomsScreenState extends State<GamerRoomsScreen> {
                           _getCompletedDeleteRemainingText(room),
                           style: const TextStyle(
                             color: Colors.tealAccent,
+                            fontWeight: FontWeight.bold,
+                            fontSize: 11,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                )
+              else if (room.isProofRejected)
+                InkWell(
+                  onTap: () => _showRoomBottomSheet(room),
+                  borderRadius: BorderRadius.circular(8),
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                    decoration: BoxDecoration(
+                      color: GamerTheme.redAccent.withOpacity(0.18),
+                      borderRadius: BorderRadius.circular(8),
+                      border: Border.all(color: GamerTheme.redAccent.withOpacity(0.8), width: 1.2),
+                    ),
+                    child: const Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Icon(Icons.cancel_rounded, size: 13, color: GamerTheme.redAccent),
+                        SizedBox(width: 4),
+                        Text(
+                          'PROOF REJECTED',
+                          style: TextStyle(
+                            color: GamerTheme.redAccent,
                             fontWeight: FontWeight.bold,
                             fontSize: 11,
                           ),
@@ -1826,26 +1873,29 @@ class _InRoomBottomSheetContentState extends State<_InRoomBottomSheetContent> {
           ? validationResult.fullOcrText.substring(0, 300)
           : validationResult.fullOcrText;
 
-      // Firestore me save - App Veto + Status becomes 'reward_waiting' & rewardStatus becomes 'pending'
+      final newStatus = validationResult.isVerified ? 'reward_waiting' : 'proof_rejected';
+      final newRewardStatus = validationResult.isVerified ? 'pending' : 'rejected_by_app';
+
+      // Firestore update: status becomes 'reward_waiting' if verified or 'proof_rejected' if rejected
       await FirebaseFirestore.instance.collection('rooms').doc(roomId).update({
-        'status': 'reward_waiting',
+        'status': newStatus,
         'proofUrl': downloadUrl,
         'winProofUrl': downloadUrl,
         'winProofUploadedAt': FieldValue.serverTimestamp(),
         'ocrText': trimmedText,
         'ocrScore': validationResult.score,
         'ocrStatus': validationResult.status, // 'verified', 'mismatch', or 'doubt'
-        'rewardStatus': 'pending',
+        'rewardStatus': newRewardStatus,
         'detectedScreenshotName': validationResult.detectedScreenshotName,
         'accountIdName': validationResult.accountIdName,
       });
 
       try {
         await FirebaseFirestore.instance.collection('tournament_rooms').doc(roomId).set({
-          'status': 'reward_waiting',
+          'status': newStatus,
           'winProofUrl': downloadUrl,
           'winProofUploadedAt': FieldValue.serverTimestamp(),
-          'rewardStatus': 'pending',
+          'rewardStatus': newRewardStatus,
         }, SetOptions(merge: true));
       } catch (_) {}
 
@@ -1854,14 +1904,14 @@ class _InRoomBottomSheetContentState extends State<_InRoomBottomSheetContent> {
       debugPrint('OCR Error: $e');
       final errText = 'Error reading screenshot: $e';
       await FirebaseFirestore.instance.collection('rooms').doc(roomId).update({
-        'status': 'reward_waiting',
+        'status': 'proof_rejected',
         'proofUrl': downloadUrl,
         'winProofUrl': downloadUrl,
         'winProofUploadedAt': FieldValue.serverTimestamp(),
         'ocrText': errText,
         'ocrScore': 0,
         'ocrStatus': 'doubt',
-        'rewardStatus': 'pending',
+        'rewardStatus': 'rejected_by_app',
       });
       return WinProofValidationResult(
         isVerified: false,
@@ -1874,6 +1924,217 @@ class _InRoomBottomSheetContentState extends State<_InRoomBottomSheetContent> {
         isNameMatched: false,
         hasVictoryKeyword: false,
       );
+    }
+  }
+
+  // Remove rejected win proof and reset status so user can re-upload
+  Future<void> _removeProof({required String msgDocId, required GamerRoom room}) async {
+    try {
+      // 1. Clear Firestore proof fields and reset status
+      await FirebaseFirestore.instance.collection('rooms').doc(room.id).update({
+        'status': 'IN_PROGRESS',
+        'proofUrl': FieldValue.delete(),
+        'winProofUrl': FieldValue.delete(),
+        'winProofUploadedAt': FieldValue.delete(),
+        'ocrStatus': FieldValue.delete(),
+        'ocrScore': 0,
+        'ocrText': FieldValue.delete(),
+        'detectedScreenshotName': FieldValue.delete(),
+        'accountIdName': FieldValue.delete(),
+        'rewardStatus': 'idle',
+      });
+
+      try {
+        await FirebaseFirestore.instance.collection('tournament_rooms').doc(room.id).update({
+          'status': 'IN_PROGRESS',
+          'winProofUrl': FieldValue.delete(),
+          'winProofUploadedAt': FieldValue.delete(),
+          'rewardStatus': 'idle',
+        });
+      } catch (_) {}
+
+      // 2. Delete the rejected message
+      await FirebaseFirestore.instance
+          .collection('rooms')
+          .doc(room.id)
+          .collection('messages')
+          .doc(msgDocId)
+          .delete()
+          .catchError((_) {});
+
+      // 3. Post a clean notification in chat
+      await FirebaseFirestore.instance
+          .collection('rooms')
+          .doc(room.id)
+          .collection('messages')
+          .add({
+        'senderId': 'system',
+        'senderName': 'APP BOT',
+        'senderInitial': '🤖',
+        'message': '🗑️ Rejected win proof was removed. You can now upload a new screenshot.',
+        'type': 'system',
+        'timestamp': FieldValue.serverTimestamp(),
+        'isHost': false,
+      });
+
+      // 4. Reset local state
+      setState(() {
+        _selectedProofImage = null;
+        _isUploadingProof = false;
+      });
+
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('🗑️ Rejected proof removed. You can upload a new screenshot now.'),
+            backgroundColor: GamerTheme.cardElevated,
+            behavior: SnackBarBehavior.floating,
+          ),
+        );
+      }
+    } catch (e) {
+      debugPrint('Error removing proof: $e');
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Failed to remove proof: $e'),
+            backgroundColor: GamerTheme.redAccent,
+          ),
+        );
+      }
+    }
+  }
+
+  // Re-upload win proof directly
+  Future<void> _reuploadProof({required String msgDocId, required GamerRoom room}) async {
+    try {
+      final picker = ImagePicker();
+      final picked = await picker.pickImage(
+        source: ImageSource.gallery,
+        imageQuality: 85,
+        maxWidth: 1080,
+      );
+      if (picked == null) return;
+
+      final file = File(picked.path);
+      final sizeBytes = await file.length();
+      if (sizeBytes > 5 * 1024 * 1024) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('Image size must be less than 5MB'),
+              backgroundColor: GamerTheme.redAccent,
+            ),
+          );
+        }
+        return;
+      }
+
+      setState(() {
+        _isUploadingProof = true;
+      });
+
+      // 1. Delete old rejected message from chat
+      await FirebaseFirestore.instance
+          .collection('rooms')
+          .doc(room.id)
+          .collection('messages')
+          .doc(msgDocId)
+          .delete()
+          .catchError((_) {});
+
+      // 2. Resolve accountIdName
+      final accountIdName = await WinProofValidator.resolveAccountIdName(
+        userId: widget.currentUserId,
+        fallbackName: widget.currentUserName,
+        joinedUsers: room.joinedUsers,
+        roomId: room.id,
+      );
+
+      // 3. Upload new image
+      final uploadedUrl = await CloudinaryService.uploadFile(
+        file: file,
+        folder: 'win_proofs',
+      );
+
+      if (uploadedUrl == null || uploadedUrl.isEmpty) {
+        throw Exception('Image upload failed');
+      }
+
+      // 4. Run validation & OCR
+      final valRes = await autoReadProof(
+        file,
+        room.id,
+        uploadedUrl,
+        accountIdName,
+      );
+
+      // 5. Add new win_proof message
+      await FirebaseFirestore.instance
+          .collection('rooms')
+          .doc(room.id)
+          .collection('messages')
+          .add({
+        'senderId': widget.currentUserId,
+        'senderName': widget.currentUserName,
+        'senderInitial': widget.currentUserName.isNotEmpty ? widget.currentUserName[0].toUpperCase() : 'G',
+        'message': 'Submitted Match Win Proof',
+        'imageUrl': uploadedUrl,
+        'type': 'win_proof',
+        'ocrStatus': valRes.status,
+        'ocrScore': valRes.score,
+        'ocrText': valRes.fullOcrText,
+        'detectedName': valRes.detectedScreenshotName,
+        'accountName': accountIdName,
+        'aiCheckMsg': valRes.message,
+        'timestamp': FieldValue.serverTimestamp(),
+        'isHost': false,
+      });
+
+      // 6. Add system check message
+      await FirebaseFirestore.instance
+          .collection('rooms')
+          .doc(room.id)
+          .collection('messages')
+          .add({
+        'senderId': 'system',
+        'senderName': 'APP BOT',
+        'senderInitial': '🤖',
+        'message': valRes.message,
+        'type': 'system',
+        'timestamp': FieldValue.serverTimestamp(),
+        'isHost': false,
+      });
+
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              valRes.isVerified
+                  ? '✅ Win Proof Verified! Awaiting reward.'
+                  : valRes.message,
+            ),
+            backgroundColor: valRes.isVerified ? _neonGreen : GamerTheme.redAccent,
+            behavior: SnackBarBehavior.floating,
+          ),
+        );
+      }
+    } catch (e) {
+      debugPrint('Error re-uploading proof: $e');
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Failed to re-upload proof: $e'),
+            backgroundColor: GamerTheme.redAccent,
+          ),
+        );
+      }
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isUploadingProof = false;
+        });
+      }
     }
   }
 
@@ -2586,38 +2847,46 @@ class _InRoomBottomSheetContentState extends State<_InRoomBottomSheetContent> {
                     decoration: BoxDecoration(
                       color: isCompleted
                           ? Colors.teal.withOpacity(0.2)
-                          : (room.isRewardWaiting
-                              ? Colors.amber.withOpacity(0.2)
-                              : (isMatchStarted
-                                  ? _neonGreen.withOpacity(0.2)
-                                  : (isHost
-                                      ? GamerTheme.accentOrange
-                                      : (isJoined ? _neonGreen : GamerTheme.cardElevated)))),
+                          : (room.isProofRejected
+                              ? GamerTheme.redAccent.withOpacity(0.2)
+                              : (room.isRewardWaiting
+                                  ? Colors.amber.withOpacity(0.2)
+                                  : (isMatchStarted
+                                      ? _neonGreen.withOpacity(0.2)
+                                      : (isHost
+                                          ? GamerTheme.accentOrange
+                                          : (isJoined ? _neonGreen : GamerTheme.cardElevated))))),
                       borderRadius: BorderRadius.circular(6),
                       border: isCompleted
                           ? Border.all(color: Colors.tealAccent.withOpacity(0.6))
-                          : (room.isRewardWaiting
-                              ? Border.all(color: Colors.amberAccent.withOpacity(0.8))
-                              : (isMatchStarted
-                                  ? Border.all(color: _neonGreen.withOpacity(0.6))
-                                  : null)),
+                          : (room.isProofRejected
+                              ? Border.all(color: GamerTheme.redAccent.withOpacity(0.8), width: 1.2)
+                              : (room.isRewardWaiting
+                                  ? Border.all(color: Colors.amberAccent.withOpacity(0.8))
+                                  : (isMatchStarted
+                                      ? Border.all(color: _neonGreen.withOpacity(0.6))
+                                      : null))),
                     ),
                     child: Text(
                       isCompleted
                           ? 'COMPLETED'
-                          : (room.isRewardWaiting
-                              ? 'REWARD WAITING'
-                              : (isMatchStarted
-                                  ? 'MATCH LIVE'
-                                  : (isHost ? 'HOSTING' : (isJoined ? 'JOINED' : (room.isFull ? 'FULL' : 'OPEN'))))),
+                          : (room.isProofRejected
+                              ? '❌ PROOF REJECTED'
+                              : (room.isRewardWaiting
+                                  ? 'REWARD WAITING'
+                                  : (isMatchStarted
+                                      ? 'MATCH LIVE'
+                                      : (isHost ? 'HOSTING' : (isJoined ? 'JOINED' : (room.isFull ? 'FULL' : 'OPEN')))))),
                       style: TextStyle(
                         color: isCompleted
                             ? Colors.tealAccent
-                            : (room.isRewardWaiting
-                                ? Colors.amberAccent
-                                : (isMatchStarted
-                                    ? _neonGreen
-                                    : (isJoined && !isHost ? Colors.black : Colors.white))),
+                            : (room.isProofRejected
+                                ? GamerTheme.redAccent
+                                : (room.isRewardWaiting
+                                    ? Colors.amberAccent
+                                    : (isMatchStarted
+                                        ? _neonGreen
+                                        : (isJoined && !isHost ? Colors.black : Colors.white)))),
                         fontSize: 10,
                         fontWeight: FontWeight.bold,
                       ),
@@ -2670,6 +2939,42 @@ class _InRoomBottomSheetContentState extends State<_InRoomBottomSheetContent> {
                                   Text(
                                     'Reward has been sent to the winner. This room will auto-delete 5 minutes after completion. (${_getCompletedDeleteRemainingText(room)})',
                                     style: TextStyle(color: Colors.tealAccent.withOpacity(0.85), fontSize: 10.5),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ],
+                        ),
+                      )
+                    else if (room.isProofRejected)
+                      Container(
+                        margin: const EdgeInsets.only(bottom: 12),
+                        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                        decoration: BoxDecoration(
+                          color: GamerTheme.redAccent.withOpacity(0.12),
+                          borderRadius: BorderRadius.circular(10),
+                          border: Border.all(color: GamerTheme.redAccent.withOpacity(0.6)),
+                        ),
+                        child: const Row(
+                          children: [
+                            Icon(Icons.cancel_rounded, color: GamerTheme.redAccent, size: 20),
+                            SizedBox(width: 10),
+                            Expanded(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text(
+                                    'STATUS: PROOF REJECTED',
+                                    style: TextStyle(
+                                      color: GamerTheme.redAccent,
+                                      fontSize: 12,
+                                      fontWeight: FontWeight.bold,
+                                    ),
+                                  ),
+                                  SizedBox(height: 2),
+                                  Text(
+                                    'Uploaded screenshot does not match player ID. Please remove the rejected proof or upload a new valid screenshot.',
+                                    style: TextStyle(color: Colors.white70, fontSize: 10.5),
                                   ),
                                 ],
                               ),
@@ -3050,7 +3355,11 @@ class _InRoomBottomSheetContentState extends State<_InRoomBottomSheetContent> {
                               final String? aiCheckMsg = msg['aiCheckMsg']?.toString();
                               final bool isVerified = msgOcrStatus == 'verified';
                               final bool isMismatch = msgOcrStatus == 'mismatch';
-                              final bool isDoubt = msgOcrStatus == 'doubt' || isMismatch || msgOcrStatus == 'rejected';
+                              final bool isDoubt = msgOcrStatus == 'doubt';
+                              final bool isRejectedProof = isMismatch ||
+                                  msgOcrStatus == 'rejected' ||
+                                  isDoubt ||
+                                  (!isVerified && (msgOcrScore == 0 || room.isProofRejected));
 
                               // Timestamp display
                               String timeStr = 'now';
@@ -3283,6 +3592,79 @@ class _InRoomBottomSheetContentState extends State<_InRoomBottomSheetContent> {
                                                         ],
                                                       ),
                                                     ),
+                                                  // Action Buttons on Rejected Proof: [🗑️ Remove Proof] [📷 Upload New Proof]
+                                                  if (isRejectedProof && (isMe || isHost)) ...[
+                                                    const SizedBox(height: 8),
+                                                    Row(
+                                                      children: [
+                                                        Expanded(
+                                                          child: InkWell(
+                                                            onTap: () => _removeProof(
+                                                              msgDocId: docs[index].id,
+                                                              room: room,
+                                                            ),
+                                                            borderRadius: BorderRadius.circular(8),
+                                                            child: Container(
+                                                              padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 7),
+                                                              decoration: BoxDecoration(
+                                                                color: Colors.black.withOpacity(0.55),
+                                                                borderRadius: BorderRadius.circular(8),
+                                                                border: Border.all(color: GamerTheme.redAccent.withOpacity(0.9), width: 1.1),
+                                                              ),
+                                                              child: const Row(
+                                                                mainAxisAlignment: MainAxisAlignment.center,
+                                                                children: [
+                                                                  Icon(Icons.delete_outline_rounded, size: 13, color: GamerTheme.redAccent),
+                                                                  SizedBox(width: 4),
+                                                                  Text(
+                                                                    'Remove Proof',
+                                                                    style: TextStyle(
+                                                                      color: Colors.white,
+                                                                      fontSize: 11,
+                                                                      fontWeight: FontWeight.bold,
+                                                                    ),
+                                                                  ),
+                                                                ],
+                                                             ),
+                                                            ),
+                                                          ),
+                                                        ),
+                                                        const SizedBox(width: 6),
+                                                        Expanded(
+                                                          child: InkWell(
+                                                            onTap: () => _reuploadProof(
+                                                              msgDocId: docs[index].id,
+                                                              room: room,
+                                                            ),
+                                                            borderRadius: BorderRadius.circular(8),
+                                                            child: Container(
+                                                              padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 7),
+                                                              decoration: BoxDecoration(
+                                                                color: Colors.black.withOpacity(0.85),
+                                                                borderRadius: BorderRadius.circular(8),
+                                                                border: Border.all(color: _neonGreen, width: 1.2),
+                                                              ),
+                                                              child: const Row(
+                                                                mainAxisAlignment: MainAxisAlignment.center,
+                                                                children: [
+                                                                  Icon(Icons.camera_alt_rounded, size: 13, color: _neonGreen),
+                                                                  SizedBox(width: 4),
+                                                                  Text(
+                                                                    'Upload New Proof',
+                                                                    style: TextStyle(
+                                                                      color: _neonGreen,
+                                                                      fontSize: 11,
+                                                                      fontWeight: FontWeight.bold,
+                                                                    ),
+                                                                  ),
+                                                                ],
+                                                              ),
+                                                            ),
+                                                          ),
+                                                        ),
+                                                      ],
+                                                    ),
+                                                  ],
                                                 ] else ...[
                                                   Text(
                                                     text,
@@ -3740,6 +4122,20 @@ class _InRoomBottomSheetContentState extends State<_InRoomBottomSheetContent> {
                               icon: const Icon(Icons.check_circle_outline_rounded, size: 16),
                               label: Text(_getCompletedDeleteRemainingText(room), style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 12)),
                             )
+                          : room.isProofRejected
+                              ? ElevatedButton.icon(
+                                  style: ElevatedButton.styleFrom(
+                                    backgroundColor: GamerTheme.redAccent.withOpacity(0.18),
+                                    foregroundColor: GamerTheme.redAccent,
+                                    side: const BorderSide(color: GamerTheme.redAccent, width: 1.2),
+                                    padding: const EdgeInsets.symmetric(vertical: 12),
+                                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                                    elevation: 0,
+                                  ),
+                                  onPressed: () => _showMatchDetailsDialog(room),
+                                  icon: const Icon(Icons.cancel_rounded, size: 16, color: GamerTheme.redAccent),
+                                  label: const Text('PROOF REJECTED', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12, color: GamerTheme.redAccent)),
+                                )
                           : room.isRewardWaiting
                               ? ElevatedButton.icon(
                                   style: ElevatedButton.styleFrom(

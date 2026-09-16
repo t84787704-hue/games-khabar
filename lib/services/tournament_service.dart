@@ -542,6 +542,80 @@ class TournamentService extends ChangeNotifier {
     }
   }
 
+  /// When winner proof is rejected by AI check (e.g. name mismatch or doubt)
+  Future<void> markProofRejected({
+    required String roomId,
+    required String winProofUrl,
+    String? reason,
+  }) async {
+    final roomIdx = _rooms.indexWhere((r) => r.id == roomId);
+    if (roomIdx != -1) {
+      _rooms[roomIdx] = _rooms[roomIdx].copyWith(
+        status: 'proof_rejected',
+        rewardStatus: 'rejected_by_app',
+        winProofUrl: winProofUrl,
+      );
+      await _saveToLocal();
+      notifyListeners();
+    }
+    try {
+      await _roomsRef.doc(roomId).set({
+        'status': 'proof_rejected',
+        'rewardStatus': 'rejected_by_app',
+        'winProofUrl': winProofUrl,
+        'updatedAt': FieldValue.serverTimestamp(),
+      }, SetOptions(merge: true));
+
+      await FirebaseFirestore.instance.collection('rooms').doc(roomId).set({
+        'status': 'proof_rejected',
+        'rewardStatus': 'rejected_by_app',
+        'winProofUrl': winProofUrl,
+      }, SetOptions(merge: true));
+    } catch (e) {
+      debugPrint('TournamentService markProofRejected error: $e');
+    }
+  }
+
+  /// Remove rejected win proof and reset room status to IN_PROGRESS so user can re-upload
+  Future<void> clearWinProof({
+    required String roomId,
+  }) async {
+    final roomIdx = _rooms.indexWhere((r) => r.id == roomId);
+    if (roomIdx != -1) {
+      _rooms[roomIdx] = _rooms[roomIdx].copyWith(
+        status: 'IN_PROGRESS',
+        rewardStatus: 'idle',
+        winProofUrl: null,
+      );
+      await _saveToLocal();
+      notifyListeners();
+    }
+    try {
+      await _roomsRef.doc(roomId).update({
+        'status': 'IN_PROGRESS',
+        'rewardStatus': 'idle',
+        'winProofUrl': FieldValue.delete(),
+        'winProofUploadedAt': FieldValue.delete(),
+        'updatedAt': FieldValue.serverTimestamp(),
+      });
+
+      await FirebaseFirestore.instance.collection('rooms').doc(roomId).update({
+        'status': 'IN_PROGRESS',
+        'rewardStatus': 'idle',
+        'proofUrl': FieldValue.delete(),
+        'winProofUrl': FieldValue.delete(),
+        'winProofUploadedAt': FieldValue.delete(),
+        'ocrStatus': FieldValue.delete(),
+        'ocrScore': 0,
+        'ocrText': FieldValue.delete(),
+        'detectedScreenshotName': FieldValue.delete(),
+        'accountIdName': FieldValue.delete(),
+      });
+    } catch (e) {
+      debugPrint('TournamentService clearWinProof error: $e');
+    }
+  }
+
   /// Cancel or Expire Room:
   /// Refunds prizePoolCoins to host, refunds entry fees to joiners, and marks status EXPIRED
   Future<void> cancelOrExpireRoom(String roomId) async {
