@@ -65,21 +65,24 @@ class _CustomMatchDetailScreenState extends State<CustomMatchDetailScreen> {
 
       final roomRef = FirebaseFirestore.instance.collection('rooms').doc(widget.roomId);
 
-      final newStatus = validationResult.isVerified ? 'reward_waiting' : 'proof_rejected';
-      final newRewardStatus = validationResult.isVerified ? 'pending' : 'rejected_by_app';
+      final now = DateTime.now();
+      final autoApproveAt = Timestamp.fromDate(now.add(const Duration(minutes: 15)));
 
-      // 3. Update room document: Set status to reward_waiting (if verified) or proof_rejected (if rejected)
+      // 3. Update room document: Status always goes to reward_waiting (never auto block on mismatch)
       await roomRef.update({
-        'status': newStatus,
+        'status': 'reward_waiting',
         'proofUrl': uploadedUrl,
         'winProofUrl': uploadedUrl,
         'winProofUploadedAt': FieldValue.serverTimestamp(),
+        'autoApproveAt': autoApproveAt,
+        'winnerId': widget.currentUserId,
+        'winnerName': widget.currentUserName,
         'ocrStatus': validationResult.status,
         'ocrScore': validationResult.score,
         'ocrText': validationResult.fullOcrText.length > 300
             ? validationResult.fullOcrText.substring(0, 300)
             : validationResult.fullOcrText,
-        'rewardStatus': newRewardStatus,
+        'rewardStatus': 'pending',
         'detectedScreenshotName': validationResult.detectedScreenshotName,
         'accountIdName': validationResult.accountIdName,
       });
@@ -87,10 +90,13 @@ class _CustomMatchDetailScreenState extends State<CustomMatchDetailScreen> {
       // Sync to tournament_rooms collection
       try {
         await FirebaseFirestore.instance.collection('tournament_rooms').doc(widget.roomId).set({
-          'status': newStatus,
+          'status': 'reward_waiting',
           'winProofUrl': uploadedUrl,
           'winProofUploadedAt': FieldValue.serverTimestamp(),
-          'rewardStatus': newRewardStatus,
+          'autoApproveAt': autoApproveAt,
+          'winnerId': widget.currentUserId,
+          'winnerName': widget.currentUserName,
+          'rewardStatus': 'pending',
         }, SetOptions(merge: true));
       } catch (_) {}
 
@@ -156,6 +162,51 @@ class _CustomMatchDetailScreenState extends State<CustomMatchDetailScreen> {
     }
   }
 
+  Future<void> _disputeResult() async {
+    try {
+      final roomRef = FirebaseFirestore.instance.collection('rooms').doc(widget.roomId);
+      await roomRef.update({
+        'status': 'disputed',
+        'rewardStatus': 'disputed',
+        'disputedAt': FieldValue.serverTimestamp(),
+        'disputedBy': widget.currentUserId,
+        'disputedByName': widget.currentUserName,
+      });
+
+      try {
+        await FirebaseFirestore.instance.collection('tournament_rooms').doc(widget.roomId).update({
+          'status': 'disputed',
+          'rewardStatus': 'disputed',
+        });
+      } catch (_) {}
+
+      await roomRef.collection('messages').add({
+        'senderId': 'system',
+        'senderName': 'DISPUTE BOT',
+        'senderInitial': '⚠️',
+        'message': '⚠️ Dispute Raised by ${widget.currentUserName}! Under review by Admin. Loser claims winner screenshot is fake/wrong.',
+        'type': 'system',
+        'timestamp': FieldValue.serverTimestamp(),
+        'isHost': false,
+      });
+
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('⚠️ Dispute raised! Match result is now under review by Admin.'),
+            backgroundColor: GamerTheme.redAccent,
+          ),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Failed to raise dispute: $e'), backgroundColor: GamerTheme.redAccent),
+        );
+      }
+    }
+  }
+
   Future<void> _removeProof() async {
     try {
       final roomRef = FirebaseFirestore.instance.collection('rooms').doc(widget.roomId);
@@ -164,6 +215,9 @@ class _CustomMatchDetailScreenState extends State<CustomMatchDetailScreen> {
         'proofUrl': FieldValue.delete(),
         'winProofUrl': FieldValue.delete(),
         'winProofUploadedAt': FieldValue.delete(),
+        'autoApproveAt': FieldValue.delete(),
+        'winnerId': FieldValue.delete(),
+        'winnerName': FieldValue.delete(),
         'ocrStatus': FieldValue.delete(),
         'ocrScore': 0,
         'ocrText': FieldValue.delete(),
@@ -177,6 +231,9 @@ class _CustomMatchDetailScreenState extends State<CustomMatchDetailScreen> {
           'status': 'IN_PROGRESS',
           'winProofUrl': FieldValue.delete(),
           'winProofUploadedAt': FieldValue.delete(),
+          'autoApproveAt': FieldValue.delete(),
+          'winnerId': FieldValue.delete(),
+          'winnerName': FieldValue.delete(),
           'rewardStatus': 'idle',
         });
       } catch (_) {}
@@ -238,21 +295,43 @@ class _CustomMatchDetailScreenState extends State<CustomMatchDetailScreen> {
           final status = (data['status'] ?? 'OPEN').toString();
           final rewardStatus = (data['rewardStatus'] ?? 'idle').toString();
           final ocrStatus = (data['ocrStatus'] ?? '').toString();
+          final isDisputed = status.toLowerCase() == 'disputed' || rewardStatus.toLowerCase() == 'disputed';
           final isCompleted = status.toLowerCase() == 'completed' || rewardStatus.toLowerCase() == 'sent';
-          final isProofRejected = !isCompleted &&
+          final isProofRejected = !isCompleted && !isDisputed &&
               (status.toLowerCase() == 'proof_rejected' ||
-                  rewardStatus.toLowerCase() == 'rejected_by_app' ||
-                  ocrStatus.toLowerCase() == 'mismatch' ||
-                  ocrStatus.toLowerCase() == 'rejected');
-          final isRewardWaiting = !isCompleted && !isProofRejected &&
+                  rewardStatus.toLowerCase() == 'rejected_by_app');
+          final hasProof = (data['proofUrl'] != null && (data['proofUrl'] as String).isNotEmpty) ||
+              (data['winProofUrl'] != null && (data['winProofUrl'] as String).isNotEmpty);
+          final isRewardWaiting = !isCompleted && !isDisputed && !isProofRejected &&
               (status.toLowerCase() == 'reward_waiting' ||
                   rewardStatus.toLowerCase() == 'pending' ||
-                  ((data['proofUrl'] != null && (data['proofUrl'] as String).isNotEmpty) ||
-                      (data['winProofUrl'] != null && (data['winProofUrl'] as String).isNotEmpty)));
+                  hasProof);
+          final autoApproveAt = (data['autoApproveAt'] as Timestamp?)?.toDate();
+          final winnerId = (data['winnerId'] ?? '').toString();
+
           final joinedUsers = (data['joinedUsers'] as List?)
                   ?.map((e) => Map<String, dynamic>.from(e as Map))
                   .toList() ??
               [];
+
+          // Resolve host name
+          String hostName = (data['hostName'] ?? '').toString().trim();
+          if (hostName.isEmpty || hostName.toLowerCase() == 'host') {
+            final hostId = (data['hostId'] ?? '').toString();
+            for (final u in joinedUsers) {
+              if (u['id'] == hostId || u['isHost'] == true) {
+                final n = u['name']?.toString().trim();
+                if (n != null && n.isNotEmpty && n != 'Player' && n != 'Host') {
+                  hostName = n;
+                  break;
+                }
+              }
+            }
+          }
+          if (hostName.isEmpty || hostName.toLowerCase() == 'host') {
+            hostName = 'yas';
+          }
+          final mapName = data['map'] ?? 'Erangel';
 
           // Resolve uploader's slot allocation name
           String slotName = widget.currentUserName;
@@ -282,30 +361,38 @@ class _CustomMatchDetailScreenState extends State<CustomMatchDetailScreen> {
                       decoration: BoxDecoration(
                         color: isCompleted
                             ? Colors.teal.withOpacity(0.2)
-                            : (isProofRejected
+                            : (isDisputed
                                 ? GamerTheme.redAccent.withOpacity(0.2)
-                                : (isRewardWaiting ? Colors.amber.withOpacity(0.2) : _neonGreen.withOpacity(0.2))),
+                                : (isProofRejected
+                                    ? GamerTheme.redAccent.withOpacity(0.2)
+                                    : (isRewardWaiting ? Colors.amber.withOpacity(0.2) : _neonGreen.withOpacity(0.2)))),
                         borderRadius: BorderRadius.circular(6),
                         border: Border.all(
                           color: isCompleted
                               ? Colors.tealAccent
-                              : (isProofRejected
+                              : (isDisputed
                                   ? GamerTheme.redAccent
-                                  : (isRewardWaiting ? Colors.amberAccent : _neonGreen)),
+                                  : (isProofRejected
+                                      ? GamerTheme.redAccent
+                                      : (isRewardWaiting ? Colors.amberAccent : _neonGreen))),
                         ),
                       ),
                       child: Text(
                         isCompleted
                             ? 'COMPLETED'
-                            : (isProofRejected
-                                ? '❌ PROOF REJECTED'
-                                : (isRewardWaiting ? 'REWARD WAITING' : status.toUpperCase())),
+                            : (isDisputed
+                                ? '⚠️ DISPUTED'
+                                : (isProofRejected
+                                    ? '❌ PROOF REJECTED'
+                                    : (isRewardWaiting ? 'REWARD WAITING' : status.toUpperCase()))),
                         style: TextStyle(
                           color: isCompleted
                               ? Colors.tealAccent
-                              : (isProofRejected
+                              : (isDisputed
                                   ? GamerTheme.redAccent
-                                  : (isRewardWaiting ? Colors.amberAccent : _neonGreen)),
+                                  : (isProofRejected
+                                      ? GamerTheme.redAccent
+                                      : (isRewardWaiting ? Colors.amberAccent : _neonGreen))),
                           fontSize: 11,
                           fontWeight: FontWeight.bold,
                         ),
@@ -313,7 +400,48 @@ class _CustomMatchDetailScreenState extends State<CustomMatchDetailScreen> {
                     ),
                   ],
                 ),
+                const SizedBox(height: 6),
+                Text(
+                  'Host: $hostName • $mapName',
+                  style: const TextStyle(color: Colors.white70, fontSize: 12),
+                ),
                 const SizedBox(height: 12),
+                if (isDisputed)
+                  Container(
+                    margin: const EdgeInsets.only(bottom: 14),
+                    padding: const EdgeInsets.all(12),
+                    decoration: BoxDecoration(
+                      color: GamerTheme.redAccent.withOpacity(0.12),
+                      borderRadius: BorderRadius.circular(10),
+                      border: Border.all(color: GamerTheme.redAccent.withOpacity(0.6)),
+                    ),
+                    child: const Row(
+                      children: [
+                        Icon(Icons.warning_amber_rounded, color: GamerTheme.redAccent, size: 22),
+                        SizedBox(width: 10),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                '⚠️ DISPUTE RAISED - UNDER REVIEW',
+                                style: TextStyle(
+                                  color: GamerTheme.redAccent,
+                                  fontSize: 12,
+                                  fontWeight: FontWeight.bold,
+                                ),
+                              ),
+                              SizedBox(height: 2),
+                              Text(
+                                'Dispute Raised! Under review by Admin. Loser claims winner screenshot is fake/wrong.',
+                                style: TextStyle(color: Colors.white70, fontSize: 11),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
                 if (isProofRejected)
                   Container(
                     margin: const EdgeInsets.only(bottom: 14),
@@ -350,6 +478,65 @@ class _CustomMatchDetailScreenState extends State<CustomMatchDetailScreen> {
                       ],
                     ),
                   ),
+                if (isRewardWaiting)
+                  Container(
+                    margin: const EdgeInsets.only(bottom: 14),
+                    padding: const EdgeInsets.all(12),
+                    decoration: BoxDecoration(
+                      color: Colors.amber.withOpacity(0.12),
+                      borderRadius: BorderRadius.circular(10),
+                      border: Border.all(color: Colors.amber.withOpacity(0.6)),
+                    ),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Row(
+                          children: [
+                            const Icon(Icons.hourglass_top_rounded, color: Colors.amber, size: 18),
+                            const SizedBox(width: 8),
+                            Expanded(
+                              child: Text(
+                                autoApproveAt != null
+                                    ? () {
+                                        final remaining = autoApproveAt.difference(DateTime.now());
+                                        if (remaining.isNegative) return 'Auto-Approving Reward...';
+                                        final mins = remaining.inMinutes;
+                                        final secs = remaining.inSeconds % 60;
+                                        return 'Auto-Approve in ${mins.toString().padLeft(2, '0')}:${secs.toString().padLeft(2, '0')}';
+                                      }()
+                                    : 'Awaiting Reward Confirmation',
+                                style: const TextStyle(color: Colors.amber, fontSize: 12, fontWeight: FontWeight.bold),
+                              ),
+                            ),
+                            if (!isDisputed && widget.currentUserId != winnerId)
+                              ElevatedButton(
+                                style: ElevatedButton.styleFrom(
+                                  backgroundColor: GamerTheme.redAccent,
+                                  foregroundColor: Colors.white,
+                                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                                  minimumSize: Size.zero,
+                                  tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                                ),
+                                onPressed: _disputeResult,
+                                child: const Row(
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    Icon(Icons.warning_amber_rounded, size: 12, color: Colors.white),
+                                    SizedBox(width: 4),
+                                    Text('⚠️ Dispute', style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold)),
+                                  ],
+                                ),
+                              ),
+                          ],
+                        ),
+                        const SizedBox(height: 6),
+                        const Text(
+                          'Winner has uploaded proof. Awaiting confirmation. Once reward sent, room will complete and auto delete in 5 mins.',
+                          style: TextStyle(color: Colors.white70, fontSize: 11),
+                        ),
+                      ],
+                    ),
+                  ),
                 Container(
                   padding: const EdgeInsets.all(12),
                   decoration: BoxDecoration(
@@ -366,7 +553,7 @@ class _CustomMatchDetailScreenState extends State<CustomMatchDetailScreen> {
                   ),
                 ),
                 const SizedBox(height: 20),
-                if (isProofRejected) ...[
+                if (hasProof && !isCompleted) ...[
                   Row(
                     children: [
                       Expanded(

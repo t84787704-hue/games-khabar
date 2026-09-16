@@ -39,6 +39,13 @@ class TournamentRoom {
   final DateTime? winProofUploadedAt;
   final String rewardStatus; // 'idle', 'pending', 'sent'
   final DateTime? completedAt;
+  final DateTime? autoApproveAt;
+  final bool disputed;
+  final String? disputedBy;
+  final String? disputedByName;
+  final String? disputeReason;
+  final String? disputeProofUrl;
+  final DateTime? disputedAt;
 
   const TournamentRoom({
     required this.id,
@@ -78,6 +85,13 @@ class TournamentRoom {
     this.winProofUploadedAt,
     this.rewardStatus = 'idle',
     this.completedAt,
+    this.autoApproveAt,
+    this.disputed = false,
+    this.disputedBy,
+    this.disputedByName,
+    this.disputeReason,
+    this.disputeProofUrl,
+    this.disputedAt,
   });
 
   String getPlayerName(String uid) {
@@ -97,6 +111,8 @@ class TournamentRoom {
   int get availableSlots => (totalSlots > 0 ? totalSlots : maxSlots) - (currentSlots > 0 ? currentSlots : joinedPlayers.length);
   bool get isFull => (currentSlots > 0 ? currentSlots : joinedPlayers.length) >= (totalSlots > 0 ? totalSlots : maxSlots);
   bool get isCompleted => status.toLowerCase() == 'completed' || rewardStatus.toLowerCase() == 'sent';
+  bool get isDisputed => disputed || status.toLowerCase() == 'disputed' || status.toLowerCase() == 'under_review';
+  bool get isUnderReview => status.toLowerCase() == 'under_review' || isDisputed;
   bool get isProofRejected =>
       !isCompleted &&
       (status.toLowerCase() == 'proof_rejected' ||
@@ -105,6 +121,7 @@ class TournamentRoom {
   bool get isRewardWaiting =>
       !isCompleted &&
       !isProofRejected &&
+      !isDisputed &&
       (status.toLowerCase() == 'reward_waiting' ||
           rewardStatus.toLowerCase() == 'pending' ||
           rewardStatus.toLowerCase() == 'pending_host' ||
@@ -270,10 +287,40 @@ class TournamentRoom {
       completedAt = DateTime.tryParse(rawCompletedAt);
     }
 
+    DateTime? autoApproveAt;
+    final rawAutoApproveAt = data['autoApproveAt'];
+    if (rawAutoApproveAt is Timestamp) {
+      autoApproveAt = rawAutoApproveAt.toDate();
+    } else if (rawAutoApproveAt is String) {
+      autoApproveAt = DateTime.tryParse(rawAutoApproveAt);
+    }
+
+    final bool disputed = data['disputed'] == true || statusStr.toLowerCase() == 'disputed' || statusStr.toLowerCase() == 'under_review';
+    final String? disputedBy = data['disputedBy']?.toString();
+    final String? disputedByName = data['disputedByName']?.toString();
+    final String? disputeReason = data['disputeReason']?.toString();
+    final String? disputeProofUrl = data['disputeProofUrl']?.toString();
+    DateTime? disputedAt;
+    final rawDisputedAt = data['disputedAt'];
+    if (rawDisputedAt is Timestamp) {
+      disputedAt = rawDisputedAt.toDate();
+    } else if (rawDisputedAt is String) {
+      disputedAt = DateTime.tryParse(rawDisputedAt);
+    }
+
+    String resolvedHostName = (data['hostName'] ?? data['host'] ?? data['hostUsername'] ?? '').toString().trim();
+    if (resolvedHostName.isEmpty || resolvedHostName.toLowerCase() == 'host') {
+      final hId = (data['hostId'] ?? '').toString();
+      if (pNames.containsKey(hId) && pNames[hId]!.trim().isNotEmpty && pNames[hId]!.trim().toLowerCase() != 'host') {
+        resolvedHostName = pNames[hId]!.trim();
+      }
+    }
+    if (resolvedHostName.isEmpty) resolvedHostName = 'Host';
+
     return TournamentRoom(
       id: data['id'] ?? doc.id,
       hostId: data['hostId'] ?? '',
-      hostName: data['hostName'] ?? 'Host',
+      hostName: resolvedHostName,
       hostAvatar: data['hostAvatar'] ?? '',
       gameType: gType,
       gameMode: gMode,
@@ -308,6 +355,13 @@ class TournamentRoom {
       winProofUploadedAt: winProofUploadedAt,
       rewardStatus: rewardStatus,
       completedAt: completedAt,
+      autoApproveAt: autoApproveAt,
+      disputed: disputed,
+      disputedBy: disputedBy,
+      disputedByName: disputedByName,
+      disputeReason: disputeReason,
+      disputeProofUrl: disputeProofUrl,
+      disputedAt: disputedAt,
     );
   }
 
@@ -352,6 +406,13 @@ class TournamentRoom {
       'winProofUploadedAt': winProofUploadedAt != null ? Timestamp.fromDate(winProofUploadedAt!) : null,
       'rewardStatus': rewardStatus,
       'completedAt': completedAt != null ? Timestamp.fromDate(completedAt!) : null,
+      'autoApproveAt': autoApproveAt != null ? Timestamp.fromDate(autoApproveAt!) : null,
+      'disputed': disputed,
+      'disputedBy': disputedBy,
+      'disputedByName': disputedByName,
+      'disputeReason': disputeReason,
+      'disputeProofUrl': disputeProofUrl,
+      'disputedAt': disputedAt != null ? Timestamp.fromDate(disputedAt!) : null,
     };
   }
 

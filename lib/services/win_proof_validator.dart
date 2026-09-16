@@ -53,9 +53,10 @@ class WinProofValidator {
   static const List<String> _explicitIgnoreList = [
     '22:37', '5g', '4g', 'lte', '78', '78%', '100%', 'erangel', 'classic', 'tpp', 'fpp',
     'share', 'lobby', 'replay', 'rp +20', 'rp+', 'rating', 'winner', 'chicken',
-    'dinner', 'team rank', 'map:', 'mode:', 'finishes', 'survival', 'kills',
-    'damage', 'online', 'rank #1', 'rank 1', 'team victory', 'victory', 'coins',
-    'mvp', 'total', 'health', 'assists', 'revives', 'heals', 'details', 'stats'
+    'dinner', 'team rank', 'map:', 'mode:', 'finishes', 'survival', 'survival time',
+    'kills', 'damage', 'online', 'rank #1', 'rank 1', 'team victory', 'victory', 'coins',
+    'mvp', 'total', 'health', 'assists', 'revives', 'heals', 'details', 'stats',
+    'lvl', 'lvl.', 'lvl:', 'lvl 3', 'lvl3', 'level', '3'
   ];
 
   /// Clean candidate name by stripping common prefixes and punctuation
@@ -302,17 +303,17 @@ class WinProofValidator {
       }
 
       // Crop coordinates:
-      // - Ignore top 15% of image (status bar with 22:37, 5G, 78% battery)
-      // - Ignore bottom 20% (SHARE, LOBBY, REPLAY buttons)
-      // - Only scan middle 65% where player name actually is
-      final double topCutoff = imgHeight > 0 ? (imgHeight * 0.15) : 0.0;
-      final double bottomCutoff = imgHeight > 0 ? (imgHeight * 0.80) : double.infinity;
+      // - Pre-crop top 12% (status bar with 22:37, 5G, 78% battery)
+      // - Pre-crop bottom 18% (SHARE, LOBBY, REPLAY buttons)
+      // - Scan middle 70% where player name and ONLINE badge are located
+      final double topCutoff = imgHeight > 0 ? (imgHeight * 0.12) : 0.0;
+      final double bottomCutoff = imgHeight > 0 ? (imgHeight * 0.82) : double.infinity;
 
-      bool isInMiddle65(Rect rect) {
+      bool isInMiddle70(Rect rect) {
         if (imgHeight <= 0) return true;
-        // Ignore status bar (top 15%)
+        // Ignore top 12%
         if (rect.top < topCutoff) return false;
-        // Ignore bottom buttons (bottom 20%)
+        // Ignore bottom 18%
         if (rect.bottom > bottomCutoff) return false;
         return true;
       }
@@ -321,8 +322,8 @@ class WinProofValidator {
       final String lowerAccountName = targetAccountName.toLowerCase();
 
       // 3. Find player name correctly:
-      // (a) Look for text that is just above "ONLINE" tag (that's the player name, e.g. Dtive)
-      String? detectedOnlineName;
+      // (a) Candidates near "ONLINE" badge (e.g. Dtive)
+      final List<Map<String, dynamic>> onlineCandidates = [];
 
       for (final block in recognizedText.blocks) {
         for (int lIdx = 0; lIdx < block.lines.length; lIdx++) {
@@ -336,8 +337,11 @@ class WinProofValidator {
             if (parts.isNotEmpty) {
               final prefix = _cleanCandidateName(parts.first);
               if (_isValidPlayerName(prefix, targetAccountName)) {
-                detectedOnlineName = prefix;
-                break;
+                onlineCandidates.add({
+                  'name': prefix,
+                  'height': line.boundingBox.height,
+                  'distance': 0.0,
+                });
               }
             }
 
@@ -346,54 +350,59 @@ class WinProofValidator {
               final prevLine = block.lines[lIdx - 1];
               final cleanPrev = _cleanCandidateName(prevLine.text);
               if (_isValidPlayerName(cleanPrev, targetAccountName)) {
-                detectedOnlineName = cleanPrev;
-                break;
+                onlineCandidates.add({
+                  'name': cleanPrev,
+                  'height': prevLine.boundingBox.height,
+                  'distance': 10.0,
+                });
               }
             }
 
-            // Check closest line vertically above ONLINE across all blocks
+            // Check candidate lines vertically above or near ONLINE within middle area
             final onlineTop = line.boundingBox.top;
             final onlineLeft = line.boundingBox.left;
             final onlineRight = line.boundingBox.right;
 
-            TextLine? closestAboveLine;
-            double closestDistance = double.infinity;
-
             for (final otherBlock in recognizedText.blocks) {
               for (final otherLine in otherBlock.lines) {
                 if (otherLine == line) continue;
-                if (!isInMiddle65(otherLine.boundingBox)) continue;
+                if (!isInMiddle70(otherLine.boundingBox)) continue;
 
                 final otherBottom = otherLine.boundingBox.bottom;
                 final distance = onlineTop - otherBottom;
-                if (distance >= -15 && distance <= 160) {
-                  final bool horizAligned = (otherLine.boundingBox.left <= onlineRight + 120) &&
-                      (otherLine.boundingBox.right >= onlineLeft - 120);
-                  if (horizAligned && distance < closestDistance) {
+                if (distance >= -20 && distance <= 180) {
+                  final bool horizAligned = (otherLine.boundingBox.left <= onlineRight + 150) &&
+                      (otherLine.boundingBox.right >= onlineLeft - 150);
+                  if (horizAligned) {
                     final clean = _cleanCandidateName(otherLine.text);
                     if (_isValidPlayerName(clean, targetAccountName)) {
-                      closestDistance = distance;
-                      closestAboveLine = otherLine;
+                      onlineCandidates.add({
+                        'name': clean,
+                        'height': otherLine.boundingBox.height,
+                        'distance': distance.abs(),
+                      });
                     }
                   }
                 }
               }
             }
-
-            if (closestAboveLine != null) {
-              detectedOnlineName = _cleanCandidateName(closestAboveLine.text);
-              break;
-            }
           }
         }
-        if (detectedOnlineName != null) break;
       }
 
-      // (b) Look for text next to crown icon 👑 or Rank #1 / MVP
-      String? detectedCrownName;
+      // Sort online candidates: pick the BIGGEST text (highest bounding box height / font size)
+      onlineCandidates.sort((a, b) {
+        final double hA = (a['height'] as num?)?.toDouble() ?? 0.0;
+        final double hB = (b['height'] as num?)?.toDouble() ?? 0.0;
+        return hB.compareTo(hA);
+      });
+      final String? detectedOnlineName = onlineCandidates.isNotEmpty ? onlineCandidates.first['name'] as String : null;
+
+      // (b) Candidates next to crown icon 👑 or Rank #1 / MVP
+      final List<Map<String, dynamic>> crownCandidates = [];
       for (final block in recognizedText.blocks) {
         for (final line in block.lines) {
-          if (!isInMiddle65(line.boundingBox)) continue;
+          if (!isInMiddle70(line.boundingBox)) continue;
           final t = line.text;
           if (t.contains('👑') || t.contains('#1') || t.toLowerCase().contains('mvp')) {
             final stripped = t
@@ -402,77 +411,104 @@ class WinProofValidator {
                 .replaceAll(RegExp(r'mvp', caseSensitive: false), '');
             final clean = _cleanCandidateName(stripped);
             if (_isValidPlayerName(clean, targetAccountName)) {
-              detectedCrownName = clean;
-              break;
+              crownCandidates.add({
+                'name': clean,
+                'height': line.boundingBox.height,
+              });
             }
           }
         }
-        if (detectedCrownName != null) break;
       }
+      crownCandidates.sort((a, b) {
+        final double hA = (a['height'] as num?)?.toDouble() ?? 0.0;
+        final double hB = (b['height'] as num?)?.toDouble() ?? 0.0;
+        return hB.compareTo(hA);
+      });
+      final String? detectedCrownName = crownCandidates.isNotEmpty ? crownCandidates.first['name'] as String : null;
 
-      // (c) Collect all valid candidates in the middle 65% area
-      final List<String> middleCandidates = [];
+      // (c) Collect all valid candidates in the middle 70% area with their height
+      final List<Map<String, dynamic>> middleCandidates = [];
       for (final block in recognizedText.blocks) {
         for (final line in block.lines) {
-          // Strictly ignore status bar (top 15%) and buttons (bottom 20%)
-          if (!isInMiddle65(line.boundingBox)) continue;
+          // Strictly ignore status bar (top 12%) and buttons (bottom 18%)
+          if (!isInMiddle70(line.boundingBox)) continue;
 
           final cleanLine = _cleanCandidateName(line.text);
           if (_isValidPlayerName(cleanLine, targetAccountName)) {
-            if (!middleCandidates.contains(cleanLine)) {
-              middleCandidates.add(cleanLine);
+            if (!middleCandidates.any((m) => m['name'] == cleanLine)) {
+              middleCandidates.add({
+                'name': cleanLine,
+                'height': line.boundingBox.height,
+              });
             }
           }
 
           for (final elem in line.elements) {
             final cleanElem = _cleanCandidateName(elem.text);
             if (_isValidPlayerName(cleanElem, targetAccountName)) {
-              if (!middleCandidates.contains(cleanElem)) {
-                middleCandidates.add(cleanElem);
+              if (!middleCandidates.any((m) => m['name'] == cleanElem)) {
+                middleCandidates.add({
+                  'name': cleanElem,
+                  'height': elem.boundingBox.height,
+                });
               }
             }
           }
         }
       }
+      // Sort middle candidates by biggest text size
+      middleCandidates.sort((a, b) {
+        final double hA = (a['height'] as num?)?.toDouble() ?? 0.0;
+        final double hB = (b['height'] as num?)?.toDouble() ?? 0.0;
+        return hB.compareTo(hA);
+      });
 
       // 4. Name comparison: check if uploader's account name matches
       bool isNameMatched = false;
       String? matchedCandidate;
 
-      // Check online tag name
-      if (detectedOnlineName != null &&
-          detectedOnlineName.toLowerCase().trim() == lowerAccountName) {
-        isNameMatched = true;
-        matchedCandidate = detectedOnlineName;
+      // Check online tag name candidates
+      for (final oc in onlineCandidates) {
+        final cName = (oc['name'] as String).toLowerCase().trim();
+        if (cName == lowerAccountName) {
+          isNameMatched = true;
+          matchedCandidate = oc['name'] as String;
+          break;
+        }
       }
 
-      // Check crown name
-      if (!isNameMatched &&
-          detectedCrownName != null &&
-          detectedCrownName.toLowerCase().trim() == lowerAccountName) {
-        isNameMatched = true;
-        matchedCandidate = detectedCrownName;
-      }
-
-      // Check middle candidates
+      // Check crown name candidates
       if (!isNameMatched) {
-        for (final candidate in middleCandidates) {
-          if (candidate.toLowerCase().trim() == lowerAccountName) {
+        for (final cc in crownCandidates) {
+          final cName = (cc['name'] as String).toLowerCase().trim();
+          if (cName == lowerAccountName) {
             isNameMatched = true;
-            matchedCandidate = candidate;
+            matchedCandidate = cc['name'] as String;
             break;
           }
         }
       }
 
-      // Check middle 65% text for token/word boundary match
+      // Check middle candidates
+      if (!isNameMatched) {
+        for (final mc in middleCandidates) {
+          final cName = (mc['name'] as String).toLowerCase().trim();
+          if (cName == lowerAccountName) {
+            isNameMatched = true;
+            matchedCandidate = mc['name'] as String;
+            break;
+          }
+        }
+      }
+
+      // Check middle 70% text for token/word boundary match
       if (!isNameMatched && lowerAccountName.isNotEmpty) {
         final escaped = RegExp.escape(lowerAccountName);
         final wordRegex = RegExp(r'(^|[^\w])' + escaped + r'([^\w]|$)', caseSensitive: false);
 
         for (final block in recognizedText.blocks) {
           for (final line in block.lines) {
-            if (isInMiddle65(line.boundingBox)) {
+            if (isInMiddle70(line.boundingBox)) {
               if (wordRegex.hasMatch(line.text.toLowerCase())) {
                 isNameMatched = true;
                 matchedCandidate = targetAccountName;
@@ -484,7 +520,7 @@ class WinProofValidator {
         }
       }
 
-      // 5. Determine detected screenshot name
+      // 5. Determine detected screenshot name (largest candidate near ONLINE badge or Crown or middle)
       String detectedScreenshotName;
       if (isNameMatched) {
         detectedScreenshotName = matchedCandidate ?? targetAccountName;
@@ -493,54 +529,36 @@ class WinProofValidator {
       } else if (detectedCrownName != null && detectedCrownName.isNotEmpty) {
         detectedScreenshotName = detectedCrownName;
       } else if (middleCandidates.isNotEmpty) {
-        detectedScreenshotName = middleCandidates.first;
+        detectedScreenshotName = middleCandidates.first['name'] as String;
       } else {
-        // Fallback: search for first valid name in middle area
         detectedScreenshotName = 'Unknown';
       }
 
-      // 6. Final Decision & Rejection/Approval formatting
+      // 6. Final Decision & Message formatting
       final String sName = detectedScreenshotName.toLowerCase().trim();
       final String aName = lowerAccountName;
 
       if (!isNameMatched || sName != aName) {
-        // REJECT - Name Mismatch
-        final String rejectMsg =
-            "❌ App AI Check: REJECTED - Name Mismatch. Screenshot has '$detectedScreenshotName' but your ID is '$targetAccountName'";
+        // Mismatch warning: NEVER block, provide warning message
+        final String mismatchMsg =
+            "App AI Check: ⚠️ Mismatch: Detected '$detectedScreenshotName' vs '$targetAccountName'";
 
         return WinProofValidationResult(
           isVerified: false,
-          score: 0,
+          score: 2,
           status: 'mismatch',
           detectedScreenshotName: detectedScreenshotName,
           accountIdName: targetAccountName,
-          message: rejectMsg,
+          message: mismatchMsg,
           fullOcrText: fullText,
           isNameMatched: false,
           hasVictoryKeyword: isVictory,
         );
       }
 
-      // If name matched, verify victory keyword
-      if (!isVictory) {
-        const String doubtMsg =
-            '🤖 App AI Check: ❌ App Doubt: Not a clear winner screenshot. Reward BLOCKED by App.';
-        return WinProofValidationResult(
-          isVerified: false,
-          score: 0,
-          status: 'doubt',
-          detectedScreenshotName: detectedScreenshotName,
-          accountIdName: targetAccountName,
-          message: doubtMsg,
-          fullOcrText: fullText,
-          isNameMatched: true,
-          hasVictoryKeyword: false,
-        );
-      }
-
-      // APPROVE - Name Matched and Victory Verified
-      const String approveMsg =
-          '🤖 App AI Check: ✅ Verified - Name Matched (Score 4/4). Awaiting Host Approval.';
+      // Verified: Name matched
+      final String approveMsg =
+          "App AI Check: 🔍 Detected: '$detectedScreenshotName' | Expected: '$targetAccountName' -> ✅ Verified (4/4)";
 
       return WinProofValidationResult(
         isVerified: true,
