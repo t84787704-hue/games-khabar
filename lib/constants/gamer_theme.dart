@@ -105,6 +105,19 @@ class GamerTheme {
     'Roblox': '🤖',
     'Clash of Clans': '👑',
     'Elden Ring': '💍',
+    'BGMI (Battlegrounds Mobile India)': '🎖️',
+    'PUBG Mobile': '🪂',
+    'Call of Duty Mobile (COD)': '🎯',
+    'Valorant Mobile': '⚡',
+    'Clash Royale': '👑',
+    'Pokémon Unite': '⚡',
+    'Mobile Legends': '⚔️',
+    'Genshin Impact': '✨',
+    'Fortnite Mobile': '⛏️',
+    'Apex Legends Mobile': '🏆',
+    'New State Mobile': '🚀',
+    'PES / eFootball': '⚽',
+    'Asphalt 9': '🏎️',
   };
 
   static const Map<String, String> gameBadgeEmoji = gameEmojis;
@@ -129,6 +142,20 @@ class GamerTheme {
     'PC Games': Color(0xFF6366F1),
     'Mobile Games': Color(0xFF14B8A6),
     'Trending': Color(0xFFF97316),
+    'BGMI (Battlegrounds Mobile India)': Color(0xFFFF9900),
+    'PUBG Mobile': Color(0xFFF59E0B),
+    'Call of Duty Mobile (COD)': Color(0xFF00D2FF),
+    'Valorant Mobile': Color(0xFFFF4655),
+    'Clash of Clans': Color(0xFFFFCC00),
+    'Clash Royale': Color(0xFF3B82F6),
+    'Pokémon Unite': Color(0xFFF59E0B),
+    'Mobile Legends': Color(0xFF8B5CF6),
+    'Genshin Impact': Color(0xFF38BDF8),
+    'Fortnite Mobile': Color(0xFFA855F7),
+    'Apex Legends Mobile': Color(0xFFEF4444),
+    'New State Mobile': Color(0xFF06B6D4),
+    'PES / eFootball': Color(0xFF10B981),
+    'Asphalt 9': Color(0xFFEC4899),
   };
 
   static ThemeData get themeData {

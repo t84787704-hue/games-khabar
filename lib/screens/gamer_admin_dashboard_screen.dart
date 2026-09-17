@@ -4,6 +4,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:intl/intl.dart';
 import '../constants/gamer_theme.dart';
+import '../constants/mobile_games_rank_data.dart';
 import '../models/gamer_user_model.dart';
 import '../widgets/gamer_avatar.dart';
 import '../widgets/rank_badge_widget.dart';
@@ -865,7 +866,7 @@ class _GamerAdminDashboardScreenState extends State<GamerAdminDashboardScreen>
                 scrollDirection: Axis.horizontal,
                 child: Row(
                   children: [
-                    for (final game in ['All', 'BGMI', 'Free Fire', 'PUBG Mobile', 'COD Mobile', 'Valorant']) ...[
+                    for (final game in ['All', ...MobileGamesRankData.games]) ...[
                       Padding(
                         padding: const EdgeInsets.only(right: 6),
                         child: ChoiceChip(
@@ -954,7 +955,9 @@ class _GamerAdminDashboardScreenState extends State<GamerAdminDashboardScreen>
                       : (rankStatus == 'rejected' ? 'rejected' : 'pending');
                   final primaryGame = UserGameRank(
                     id: 'primary_${user.uid}',
-                    gameName: user.favoriteGame.isNotEmpty ? user.favoriteGame : 'BGMI',
+                    gameName: user.selectedGame.isNotEmpty
+                        ? user.selectedGame
+                        : (user.favoriteGame.isNotEmpty ? user.favoriteGame : 'BGMI'),
                     gameId: user.gameId.isNotEmpty ? user.gameId : 'N/A',
                     claimedRank: user.rank,
                     verifiedRank: (user.isRankApproved || rankStatus == 'verified') ? user.rank : '',
@@ -1424,6 +1427,8 @@ class _GamerAdminDashboardScreenState extends State<GamerAdminDashboardScreen>
       final Map<String, dynamic> updateData = {
         'rank': item.game.claimedRank,
         'tier': item.game.claimedRank,
+        'selectedGame': item.game.gameName,
+        'selectedRank': item.game.claimedRank,
         'isRankVerified': true,
         'rankStatus': 'Verified',
         'rankVerifiedBy': currentAdmin,

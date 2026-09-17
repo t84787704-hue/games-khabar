@@ -6,6 +6,7 @@ import 'package:cached_network_image/cached_network_image.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../constants/gamer_theme.dart';
+import '../constants/mobile_games_rank_data.dart';
 import '../models/gamer_user_model.dart';
 import '../services/gamer_auth_service.dart';
 import '../widgets/gamer_avatar.dart';
@@ -36,6 +37,7 @@ class _CreateGamerIdScreenState extends State<CreateGamerIdScreen> {
   final _gameIdController = TextEditingController();
 
   String _selectedGame = 'BGMI';
+  String _selectedRankGame = 'BGMI (Battlegrounds Mobile India)';
   String _photoUrl = '';
   String _coverUrl = '';
   File? _pickedImageFile;
@@ -101,23 +103,9 @@ class _CreateGamerIdScreenState extends State<CreateGamerIdScreen> {
     },
   ];
 
-  // Dynamic Ranks strictly per selected game
+  // Dynamic Ranks strictly per selected mobile game
   List<String> get _dynamicRanks {
-    switch (_selectedGame) {
-      case 'BGMI':
-      case 'PUBG Mobile':
-        return const ['Ace', 'Conqueror', 'Ace Master', 'Ace Dominator'];
-      case 'Free Fire':
-      case 'Free Fire Max':
-        return const ['Heroic', 'Grandmaster'];
-      case 'Valorant':
-        return const ['Radiant', 'Immortal', 'Diamond'];
-      case 'Call of Duty Mobile':
-      case 'COD Mobile':
-        return const ['Legendary', 'Master', 'Grandmaster'];
-      default:
-        return const ['Ace', 'Conqueror', 'Ace Master', 'Ace Dominator'];
-    }
+    return MobileGamesRankData.getRanksForGame(_selectedRankGame);
   }
 
   @override
@@ -129,7 +117,11 @@ class _CreateGamerIdScreenState extends State<CreateGamerIdScreen> {
       _displayNameController.text = u.displayName;
       _bioController.text = u.bio;
       _selectedGame = GamerTheme.favoriteGames.contains(u.favoriteGame) ? u.favoriteGame : 'BGMI';
-      _rankController.text = (u.rank.isNotEmpty && u.rank != 'None' && u.rank != 'Skip') ? u.rank : '';
+      _selectedRankGame = MobileGamesRankData.resolveGameName(
+        u.selectedGame.isNotEmpty ? u.selectedGame : u.favoriteGame,
+      );
+      final rawUserRank = u.selectedRank.isNotEmpty ? u.selectedRank : u.rank;
+      _rankController.text = (rawUserRank.isNotEmpty && rawUserRank != 'None' && rawUserRank != 'Skip') ? rawUserRank : '';
       _gameIdController.text = u.gameId.isNotEmpty ? u.gameId : '12345';
       _photoUrl = u.photoUrl;
       _coverUrl = u.coverUrl;
@@ -465,6 +457,8 @@ class _CreateGamerIdScreenState extends State<CreateGamerIdScreen> {
         coverUrl: finalCoverUrl.isNotEmpty ? finalCoverUrl : (widget.existingUser?.coverUrl ?? ''),
         bio: _bioController.text.trim(),
         favoriteGame: _selectedGame,
+        selectedGame: _selectedRankGame,
+        selectedRank: finalRank,
         rank: finalRank,
         rankScreenshot: finalRankScreenshot,
         rankStatus: finalRankStatus,
@@ -1279,29 +1273,31 @@ class _CreateGamerIdScreenState extends State<CreateGamerIdScreen> {
 
                       const SizedBox(height: 20),
 
-                      // 4. DYNAMIC RANK SYSTEM & SCREENSHOT VERIFICATION
+                      // 4. MOBILE GAMES RANK / TIER & SCREENSHOT VERIFICATION
                       Row(
                         mainAxisAlignment: MainAxisAlignment.spaceBetween,
                         children: [
-                          Row(
+                          const Row(
                             children: [
+                              Icon(Icons.military_tech_rounded, color: Color(0xFFFF8A00), size: 18),
+                              SizedBox(width: 6),
                               Text(
-                                '$_selectedGame RANK / TIER',
-                                style: const TextStyle(
+                                'MOBILE GAMES RANK / TIER',
+                                style: TextStyle(
                                   color: GamerTheme.textGray,
                                   fontSize: 12,
                                   fontWeight: FontWeight.w800,
                                   letterSpacing: 0.8,
                                 ),
                               ),
-                              const SizedBox(width: 8),
+                              SizedBox(width: 8),
                               Container(
-                                padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                                padding: EdgeInsets.symmetric(horizontal: 6, vertical: 2),
                                 decoration: BoxDecoration(
                                   color: Colors.white10,
-                                  borderRadius: BorderRadius.circular(6),
+                                  borderRadius: BorderRadius.all(Radius.circular(6)),
                                 ),
-                                child: const Text(
+                                child: Text(
                                   'Optional / اختیاری',
                                   style: TextStyle(color: GamerTheme.textMuted, fontSize: 10, fontWeight: FontWeight.bold),
                                 ),
@@ -1342,43 +1338,110 @@ class _CreateGamerIdScreenState extends State<CreateGamerIdScreen> {
                         ],
                       ),
                       const SizedBox(height: 8),
-                      TextFormField(
-                        controller: _rankController,
-                        style: const TextStyle(color: GamerTheme.textWhite),
-                        decoration: InputDecoration(
-                          prefixIcon: const Icon(Icons.military_tech_rounded, color: GamerTheme.accentOrange),
-                          hintText: 'Select or enter your $_selectedGame rank (Optional)',
-                          suffixIcon: _rankController.text.trim().isNotEmpty
-                              ? IconButton(
-                                  icon: const Icon(Icons.clear, color: GamerTheme.textMuted, size: 16),
-                                  onPressed: () {
-                                    setState(() {
-                                      _rankController.clear();
-                                      _pickedRankScreenshot = null;
-                                    });
-                                  },
-                                )
-                              : null,
+
+                      // 1. GAME SELECTION DROPDOWN (15 Major Mobile Games)
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 2),
+                        decoration: BoxDecoration(
+                          color: GamerTheme.cardElevated,
+                          borderRadius: BorderRadius.circular(12),
+                          border: Border.all(color: GamerTheme.borderLight),
                         ),
-                        onChanged: (_) => setState(() {}),
-                        validator: null, // Optional / Skippable!
+                        child: DropdownButtonHideUnderline(
+                          child: DropdownButton<String>(
+                            value: MobileGamesRankData.games.contains(_selectedRankGame)
+                                ? _selectedRankGame
+                                : MobileGamesRankData.games.first,
+                            isExpanded: true,
+                            dropdownColor: const Color(0xFF161B26),
+                            icon: const Icon(Icons.keyboard_arrow_down_rounded, color: Color(0xFF00FF88)),
+                            items: MobileGamesRankData.games.map((game) {
+                              final emoji = MobileGamesRankData.getGameEmoji(game);
+                              final color = MobileGamesRankData.getGameColor(game);
+                              return DropdownMenuItem<String>(
+                                value: game,
+                                child: Row(
+                                  children: [
+                                    Text(emoji, style: const TextStyle(fontSize: 18)),
+                                    const SizedBox(width: 10),
+                                    Expanded(
+                                      child: Text(
+                                        game,
+                                        style: TextStyle(
+                                          color: color,
+                                          fontWeight: FontWeight.bold,
+                                          fontSize: 13.5,
+                                        ),
+                                        overflow: TextOverflow.ellipsis,
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              );
+                            }).toList(),
+                            onChanged: (val) {
+                              if (val != null) {
+                                setState(() {
+                                  _selectedRankGame = val;
+                                  _selectedGame = val;
+                                  final ranks = _dynamicRanks;
+                                  if (_rankController.text.trim().isNotEmpty && !ranks.contains(_rankController.text.trim())) {
+                                    _rankController.clear();
+                                    _pickedRankScreenshot = null;
+                                    _rankScreenshotUrl = '';
+                                  }
+                                });
+                              }
+                            },
+                          ),
+                        ),
+                      ),
+
+                      const SizedBox(height: 12),
+
+                      // 2. RANK SELECTION (Top 10 Ranks for selected game)
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: [
+                          const Text(
+                            'SELECT RANK / رینک منتخب کریں (Top 10)',
+                            style: TextStyle(
+                              color: GamerTheme.textGray,
+                              fontSize: 11,
+                              fontWeight: FontWeight.w800,
+                              letterSpacing: 0.6,
+                            ),
+                          ),
+                          Text(
+                            _selectedRankGame.length > 20 ? '${_selectedRankGame.substring(0, 20)}...' : _selectedRankGame,
+                            style: TextStyle(
+                              color: MobileGamesRankData.getGameColor(_selectedRankGame),
+                              fontSize: 11,
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
+                        ],
                       ),
                       const SizedBox(height: 8),
+
+                      // Top 10 Dynamic Rank Chips & Skip Option
                       Wrap(
                         spacing: 8,
                         runSpacing: 8,
                         children: [
-                          // Skip / None chip
+                          // Skip / No Rank chip
                           InkWell(
                             onTap: () {
                               setState(() {
                                 _rankController.clear();
                                 _pickedRankScreenshot = null;
+                                _rankScreenshotUrl = '';
+                                _rankStatus = 'None';
                               });
                             },
                             borderRadius: BorderRadius.circular(12),
                             child: Container(
-                              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
                               decoration: BoxDecoration(
                                 color: _rankController.text.trim().isEmpty
                                     ? GamerTheme.accentBlue.withOpacity(0.2)
@@ -1397,7 +1460,7 @@ class _CreateGamerIdScreenState extends State<CreateGamerIdScreen> {
                                     const SizedBox(width: 4),
                                   ],
                                   Text(
-                                    'Skip / No Rank',
+                                    'Skip / No Rank (چھوڑ دیں)',
                                     style: TextStyle(
                                       color: _rankController.text.trim().isEmpty ? GamerTheme.accentBlue : Colors.white70,
                                       fontSize: 12,
@@ -1408,9 +1471,10 @@ class _CreateGamerIdScreenState extends State<CreateGamerIdScreen> {
                               ),
                             ),
                           ),
-                          // Dynamic rank chips
+                          // Top 10 dynamic ranks for selected game
                           ..._dynamicRanks.map((rank) {
                             final isSelected = _rankController.text.trim() == rank;
+                            final gameColor = MobileGamesRankData.getGameColor(_selectedRankGame);
                             return InkWell(
                               onTap: () {
                                 setState(() {
@@ -1419,12 +1483,12 @@ class _CreateGamerIdScreenState extends State<CreateGamerIdScreen> {
                               },
                               borderRadius: BorderRadius.circular(12),
                               child: Container(
-                                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
                                 decoration: BoxDecoration(
-                                  color: isSelected ? GamerTheme.accentOrange.withOpacity(0.2) : GamerTheme.cardElevated,
+                                  color: isSelected ? gameColor.withOpacity(0.2) : GamerTheme.cardElevated,
                                   borderRadius: BorderRadius.circular(12),
                                   border: Border.all(
-                                    color: isSelected ? GamerTheme.accentOrange : GamerTheme.borderLight,
+                                    color: isSelected ? gameColor : GamerTheme.borderLight,
                                     width: isSelected ? 1.5 : 1,
                                   ),
                                 ),
@@ -1432,13 +1496,13 @@ class _CreateGamerIdScreenState extends State<CreateGamerIdScreen> {
                                   mainAxisSize: MainAxisSize.min,
                                   children: [
                                     if (isSelected) ...[
-                                      const Icon(Icons.check, color: GamerTheme.accentOrange, size: 12),
+                                      Icon(Icons.check, color: gameColor, size: 12),
                                       const SizedBox(width: 4),
                                     ],
                                     Text(
                                       rank,
                                       style: TextStyle(
-                                        color: isSelected ? GamerTheme.accentOrange : Colors.white70,
+                                        color: isSelected ? gameColor : Colors.white70,
                                         fontSize: 12,
                                         fontWeight: isSelected ? FontWeight.w900 : FontWeight.w700,
                                       ),

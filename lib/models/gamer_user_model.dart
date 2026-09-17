@@ -137,7 +137,9 @@ class GamerUser {
   final String coverUrl;
   final String bio;
   final String favoriteGame;
+  final String selectedGame;
   final String rank;
+  final String selectedRank;
   final double kdRatio;
   final RankBadgeType rankBadgeType;
   final int followersCount;
@@ -188,7 +190,9 @@ class GamerUser {
     this.coverUrl = '',
     this.bio = '',
     this.favoriteGame = 'BGMI',
+    this.selectedGame = '',
     this.rank = 'Bronze',
+    this.selectedRank = '',
     this.kdRatio = 0.0,
     this.rankBadgeType = RankBadgeType.none,
     this.followersCount = 0,
@@ -459,7 +463,9 @@ class GamerUser {
       coverUrl: data['coverUrl'] ?? '',
       bio: data['bio'] ?? '',
       favoriteGame: data['favoriteGame'] ?? 'BGMI',
+      selectedGame: data['selectedGame']?.toString() ?? data['favoriteGame']?.toString() ?? 'BGMI',
       rank: resolvedRank,
+      selectedRank: data['selectedRank']?.toString() ?? resolvedRank,
       kdRatio: (data['kd'] as num?)?.toDouble() ?? (data['kdRatio'] as num?)?.toDouble() ?? 0.0,
       rankBadgeType: _parseRankBadgeType(data['rankBadgeType']?.toString()),
       followersCount: (data['followersCount'] as num?)?.toInt() ?? 0,
@@ -518,7 +524,9 @@ class GamerUser {
       'coverUrl': coverUrl,
       'bio': bio.trim(),
       'favoriteGame': favoriteGame,
+      'selectedGame': selectedGame.isNotEmpty ? selectedGame : favoriteGame,
       'rank': rank.trim(),
+      'selectedRank': selectedRank.isNotEmpty ? selectedRank : rank.trim(),
       'tier': rank.trim(),
       'kdRatio': kdRatio,
       'kd': kdRatio,
@@ -589,7 +597,9 @@ class GamerUser {
     String? coverUrl,
     String? bio,
     String? favoriteGame,
+    String? selectedGame,
     String? rank,
+    String? selectedRank,
     double? kdRatio,
     RankBadgeType? rankBadgeType,
     int? followersCount,
@@ -640,7 +650,9 @@ class GamerUser {
       coverUrl: coverUrl ?? this.coverUrl,
       bio: bio ?? this.bio,
       favoriteGame: favoriteGame ?? this.favoriteGame,
+      selectedGame: selectedGame ?? this.selectedGame,
       rank: rank ?? this.rank,
+      selectedRank: selectedRank ?? this.selectedRank,
       kdRatio: kdRatio ?? this.kdRatio,
       rankBadgeType: rankBadgeType ?? this.rankBadgeType,
       followersCount: followersCount ?? this.followersCount,
