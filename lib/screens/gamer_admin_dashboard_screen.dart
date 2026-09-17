@@ -2429,6 +2429,7 @@ class _AdminCoinsVaultTabState extends State<_AdminCoinsVaultTab> {
                 children: [
                   GamerAvatar(
                     photoUrl: (_foundUser!['photoUrl'] ?? _foundUser!['avatar'] ?? '').toString(),
+                    displayName: (_foundUser!['displayName'] ?? _foundUser!['bgmiName'] ?? _foundUser!['username'] ?? 'User').toString(),
                     radius: 22,
                     frameId: (_foundUser!['activeFrame'] ?? '').toString(),
                   ),
