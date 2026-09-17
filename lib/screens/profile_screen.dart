@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:easy_localization/easy_localization.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:url_launcher/url_launcher.dart';
 import '../utils/admin_security.dart';
 import '../services/bookmark_service.dart';
 import '../services/theme_service.dart';
@@ -14,6 +15,7 @@ import 'saved_news_screen.dart';
 import 'about_us_screen.dart';
 import 'contact_us_screen.dart';
 import 'privacy_policy_screen.dart';
+import 'follow_us_screen.dart';
 import '../services/gamer_auth_service.dart';
 import '../models/gamer_user_model.dart';
 import 'verification_screen.dart';
@@ -828,6 +830,27 @@ class _ProfileScreenState extends State<ProfileScreen> {
                           Navigator.push(
                             context,
                             MaterialPageRoute(builder: (_) => const PrivacyPolicyScreen()),
+                          );
+                        },
+                      ),
+                      Divider(color: borderDark, height: 1),
+
+                      // Follow Us
+                      ListTile(
+                        leading: Icon(Icons.share_rounded, color: neonGreen, size: 22),
+                        title: Text(
+                          'follow_us'.tr(),
+                          style: TextStyle(color: textWhite, fontSize: 14, fontWeight: FontWeight.bold),
+                        ),
+                        subtitle: Text(
+                          'follow_us_sub'.tr(),
+                          style: TextStyle(color: textGray, fontSize: 12),
+                        ),
+                        trailing: Icon(Icons.arrow_forward_ios_rounded, color: textGray, size: 14),
+                        onTap: () {
+                          Navigator.push(
+                            context,
+                            MaterialPageRoute(builder: (_) => const FollowUsScreen()),
                           );
                         },
                       ),
