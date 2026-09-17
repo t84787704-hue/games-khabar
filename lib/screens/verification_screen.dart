@@ -476,7 +476,7 @@ class _VerificationScreenState extends State<VerificationScreen> {
                 Navigator.pop(ctx);
                 await _authService.updateProfile(
                   rank: selectedRank,
-                  ifKd: kd,
+                  kdRatio: kd,
                 );
                 _refreshData();
               },
