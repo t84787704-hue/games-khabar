@@ -637,6 +637,7 @@ class _GamerProfileScreenState extends State<GamerProfileScreen> with SingleTick
                         photoUrl: targetUser.photoUrl,
                         displayName: targetUser.displayName,
                         radius: 18,
+                        frameId: targetUser.activeFrame,
                       ),
                       const SizedBox(width: 10),
                       Expanded(
@@ -1142,6 +1143,7 @@ class _GamerProfileScreenState extends State<GamerProfileScreen> with SingleTick
                               radius: 46,
                               hasGlow: true,
                               borderColor: const Color(0xFFFF8A00),
+                              frameId: user.activeFrame,
                             ),
                           ),
                         ),
@@ -1177,6 +1179,10 @@ class _GamerProfileScreenState extends State<GamerProfileScreen> with SingleTick
                               size: 16,
                               showLabel: true,
                             ),
+                            if (user.activeBadge.isNotEmpty) ...[
+                              const SizedBox(width: 6),
+                              GamerBadgeWidget(badgeId: user.activeBadge, scale: 1.0),
+                            ],
                             if (user.hasBlueTick) ...[
                               const SizedBox(width: 5),
                               const Icon(Icons.verified, color: Color(0xFF1D9BF0), size: 18),

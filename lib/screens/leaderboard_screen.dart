@@ -238,13 +238,27 @@ class _LeaderboardScreenState extends State<LeaderboardScreen> with SingleTicker
                 itemBuilder: (context, index) {
                   final player = restOfPlayers[index];
                   final rankNumber = index + 4;
+                  final isSpotlight = player.leaderboardSpotlightUntil != null &&
+                      player.leaderboardSpotlightUntil!.isAfter(DateTime.now());
 
                   return Container(
                     margin: const EdgeInsets.only(bottom: 8),
                     decoration: BoxDecoration(
-                      color: GamerTheme.cardDark,
+                      color: isSpotlight ? const Color(0xFF261D08) : GamerTheme.cardDark,
                       borderRadius: BorderRadius.circular(12),
-                      border: Border.all(color: GamerTheme.borderDark),
+                      border: Border.all(
+                        color: isSpotlight ? Colors.amber.withOpacity(0.8) : GamerTheme.borderDark,
+                        width: isSpotlight ? 1.5 : 1.0,
+                      ),
+                      boxShadow: isSpotlight
+                          ? [
+                              BoxShadow(
+                                color: Colors.amber.withOpacity(0.2),
+                                blurRadius: 8,
+                                spreadRadius: 1,
+                              ),
+                            ]
+                          : null,
                     ),
                     child: ListTile(
                       contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
@@ -273,6 +287,7 @@ class _LeaderboardScreenState extends State<LeaderboardScreen> with SingleTicker
                             photoUrl: player.photoUrl,
                             displayName: player.displayName,
                             radius: 18,
+                            frameId: player.activeFrame,
                           ),
                         ],
                       ),
@@ -290,6 +305,29 @@ class _LeaderboardScreenState extends State<LeaderboardScreen> with SingleTicker
                             ),
                           ),
                           RankBadgeWidget(badge: player.getRankBadge(), size: 12),
+                          if (player.activeBadge.isNotEmpty) ...[
+                            const SizedBox(width: 4),
+                            GamerBadgeWidget(badgeId: player.activeBadge, scale: 0.8),
+                          ],
+                          if (isSpotlight) ...[
+                            const SizedBox(width: 4),
+                            Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1.5),
+                              decoration: BoxDecoration(
+                                color: Colors.amber.withOpacity(0.2),
+                                borderRadius: BorderRadius.circular(4),
+                                border: Border.all(color: Colors.amber, width: 0.8),
+                              ),
+                              child: const Text(
+                                '⭐ SPOTLIGHT',
+                                style: TextStyle(
+                                  color: Colors.amber,
+                                  fontSize: 8.5,
+                                  fontWeight: FontWeight.w900,
+                                ),
+                              ),
+                            ),
+                          ],
                         ],
                       ),
                       subtitle: Text(
@@ -372,6 +410,7 @@ class _LeaderboardScreenState extends State<LeaderboardScreen> with SingleTicker
                 photoUrl: user.photoUrl,
                 displayName: user.displayName,
                 radius: isFirst ? 26 : 21,
+                frameId: user.activeFrame,
               ),
             ),
 
@@ -389,6 +428,11 @@ class _LeaderboardScreenState extends State<LeaderboardScreen> with SingleTicker
               overflow: TextOverflow.ellipsis,
               textAlign: TextAlign.center,
             ),
+
+            if (user.activeBadge.isNotEmpty) ...[
+              const SizedBox(height: 3),
+              GamerBadgeWidget(badgeId: user.activeBadge, scale: 0.8),
+            ],
 
             // Metric
             Container(

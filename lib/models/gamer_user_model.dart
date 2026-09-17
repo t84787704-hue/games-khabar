@@ -166,6 +166,15 @@ class GamerUser {
   final List<UserGameRank> games;
   final Map<String, dynamic>? verificationProgress;
   final DateTime? createdAt;
+  final String activeFrame;
+  final List<String> unlockedFrames;
+  final String activeBadge;
+  final List<String> unlockedBadges;
+  final String chatColor;
+  final List<String> unlockedChatColors;
+  final bool isVipMember;
+  final DateTime? vipTournamentPassUntil;
+  final DateTime? leaderboardSpotlightUntil;
 
   const GamerUser({
     required this.uid,
@@ -204,6 +213,15 @@ class GamerUser {
     this.games = const [],
     this.verificationProgress,
     this.createdAt,
+    this.activeFrame = '',
+    this.unlockedFrames = const [],
+    this.activeBadge = '',
+    this.unlockedBadges = const [],
+    this.chatColor = '#00FF66',
+    this.unlockedChatColors = const [],
+    this.isVipMember = false,
+    this.vipTournamentPassUntil,
+    this.leaderboardSpotlightUntil,
   });
 
   bool get isPendingVerification => verificationStatus == 'pending' || blueTickStatus == 'pending';
@@ -402,6 +420,25 @@ class GamerUser {
     final String rawRank = data['tier']?.toString() ?? data['rank']?.toString() ?? '';
     final String resolvedRank = rawRank.isNotEmpty ? rawRank : 'Bronze';
 
+    DateTime? vipPassExpires;
+    final rawVip = data['vipTournamentPassUntil'];
+    if (rawVip is Timestamp) {
+      vipPassExpires = rawVip.toDate();
+    } else if (rawVip is String) {
+      vipPassExpires = DateTime.tryParse(rawVip);
+    }
+
+    DateTime? spotlightExpires;
+    final rawSpotlight = data['leaderboardSpotlightUntil'];
+    if (rawSpotlight is Timestamp) {
+      spotlightExpires = rawSpotlight.toDate();
+    } else if (rawSpotlight is String) {
+      spotlightExpires = DateTime.tryParse(rawSpotlight);
+    }
+
+    final bool isVip = data['isVipMember'] == true ||
+        (vipPassExpires != null && vipPassExpires.isAfter(DateTime.now()));
+
     return GamerUser(
       uid: data['uid'] ?? doc.id,
       username: data['tag'] ?? data['username'] ?? '',
@@ -441,6 +478,15 @@ class GamerUser {
           ? Map<String, dynamic>.from(data['verificationProgress'])
           : null,
       createdAt: created,
+      activeFrame: data['activeFrame']?.toString() ?? '',
+      unlockedFrames: List<String>.from(data['unlockedFrames'] ?? []),
+      activeBadge: data['activeBadge']?.toString() ?? '',
+      unlockedBadges: List<String>.from(data['unlockedBadges'] ?? []),
+      chatColor: data['chatColor']?.toString() ?? '#00FF66',
+      unlockedChatColors: List<String>.from(data['unlockedChatColors'] ?? []),
+      isVipMember: isVip,
+      vipTournamentPassUntil: vipPassExpires,
+      leaderboardSpotlightUntil: spotlightExpires,
     );
   }
 
@@ -488,6 +534,15 @@ class GamerUser {
       'level': level,
       'appPoints': appPoints,
       'appRank': appRank,
+      'activeFrame': activeFrame,
+      'unlockedFrames': unlockedFrames,
+      'activeBadge': activeBadge,
+      'unlockedBadges': unlockedBadges,
+      'chatColor': chatColor,
+      'unlockedChatColors': unlockedChatColors,
+      'isVipMember': isVipMember,
+      if (vipTournamentPassUntil != null) 'vipTournamentPassUntil': Timestamp.fromDate(vipTournamentPassUntil!),
+      if (leaderboardSpotlightUntil != null) 'leaderboardSpotlightUntil': Timestamp.fromDate(leaderboardSpotlightUntil!),
       'games': games.map((g) => g.toMap()).toList(),
       'verificationProgress': {
         'postsCount': postsCount,
@@ -543,6 +598,15 @@ class GamerUser {
     List<UserGameRank>? games,
     Map<String, dynamic>? verificationProgress,
     DateTime? createdAt,
+    String? activeFrame,
+    List<String>? unlockedFrames,
+    String? activeBadge,
+    List<String>? unlockedBadges,
+    String? chatColor,
+    List<String>? unlockedChatColors,
+    bool? isVipMember,
+    DateTime? vipTournamentPassUntil,
+    DateTime? leaderboardSpotlightUntil,
   }) {
     return GamerUser(
       uid: uid ?? this.uid,
@@ -581,6 +645,15 @@ class GamerUser {
       games: games ?? this.games,
       verificationProgress: verificationProgress ?? this.verificationProgress,
       createdAt: createdAt ?? this.createdAt,
+      activeFrame: activeFrame ?? this.activeFrame,
+      unlockedFrames: unlockedFrames ?? this.unlockedFrames,
+      activeBadge: activeBadge ?? this.activeBadge,
+      unlockedBadges: unlockedBadges ?? this.unlockedBadges,
+      chatColor: chatColor ?? this.chatColor,
+      unlockedChatColors: unlockedChatColors ?? this.unlockedChatColors,
+      isVipMember: isVipMember ?? this.isVipMember,
+      vipTournamentPassUntil: vipTournamentPassUntil ?? this.vipTournamentPassUntil,
+      leaderboardSpotlightUntil: leaderboardSpotlightUntil ?? this.leaderboardSpotlightUntil,
     );
   }
 }

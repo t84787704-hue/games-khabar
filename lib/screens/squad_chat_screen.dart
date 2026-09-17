@@ -307,6 +307,9 @@ class _SquadChatScreenState extends State<SquadChatScreen> {
         'senderName': senderName,
         'senderUsername': senderUsername,
         'senderAvatar': senderAvatar,
+        'senderFrame': user?.activeFrame ?? '',
+        'senderBadge': user?.activeBadge ?? '',
+        'senderChatColor': user?.chatColor ?? '',
         'text': text,
         'type': 'text',
         'createdAt': FieldValue.serverTimestamp(),
@@ -1640,6 +1643,9 @@ class _SquadChatScreenState extends State<SquadChatScreen> {
                           final senderUid = (data['senderId'] ?? data['senderUid']) as String? ?? '';
                           final senderName = data['senderName'] as String? ?? 'Gamer';
                           final senderAvatar = data['senderAvatar'] as String? ?? '';
+                          final senderFrame = data['senderFrame'] as String? ?? '';
+                          final senderBadge = data['senderBadge'] as String? ?? '';
+                          final senderChatColorHex = data['senderChatColor'] as String? ?? '';
                           final text = data['text'] as String? ?? '';
                           final type = data['type'] as String? ?? 'text';
                           final isMe = senderUid == currentUid;
@@ -1700,6 +1706,7 @@ class _SquadChatScreenState extends State<SquadChatScreen> {
                                     photoUrl: senderAvatar,
                                     displayName: senderName,
                                     radius: 14,
+                                    frameId: senderFrame,
                                   ),
                                   const SizedBox(width: 8),
                                 ],
@@ -1732,23 +1739,41 @@ class _SquadChatScreenState extends State<SquadChatScreen> {
                                         if (!isMe)
                                           Padding(
                                             padding: const EdgeInsets.only(bottom: 4),
-                                            child: Text(
-                                              senderName,
-                                              style: const TextStyle(
-                                                color: GamerTheme.accentOrange,
-                                                fontSize: 11,
-                                                fontWeight: FontWeight.bold,
-                                              ),
+                                            child: Row(
+                                              mainAxisSize: MainAxisSize.min,
+                                              children: [
+                                                Text(
+                                                  senderName,
+                                                  style: const TextStyle(
+                                                    color: GamerTheme.accentOrange,
+                                                    fontSize: 11,
+                                                    fontWeight: FontWeight.bold,
+                                                  ),
+                                                ),
+                                                if (senderBadge.isNotEmpty) ...[
+                                                  const SizedBox(width: 4),
+                                                  GamerBadgeWidget(badgeId: senderBadge, scale: 0.75),
+                                                ],
+                                              ],
                                             ),
                                           ),
-                                        Text(
-                                          text,
-                                          style: const TextStyle(
-                                            color: GamerTheme.textWhite,
-                                            fontSize: 13.5,
-                                            height: 1.3,
-                                          ),
-                                        ),
+                                        () {
+                                          Color msgColor = GamerTheme.textWhite;
+                                          if (senderChatColorHex.isNotEmpty) {
+                                            try {
+                                              final hex = senderChatColorHex.replaceAll('#', '');
+                                              msgColor = Color(int.parse('FF$hex', radix: 16));
+                                            } catch (_) {}
+                                          }
+                                          return Text(
+                                            text,
+                                            style: TextStyle(
+                                              color: msgColor,
+                                              fontSize: 13.5,
+                                              height: 1.3,
+                                            ),
+                                          );
+                                        }(),
                                       ],
                                     ),
                                   ),
