@@ -9,6 +9,9 @@ import '../widgets/gamer_avatar.dart';
 import '../widgets/rank_badge_widget.dart';
 import '../utils/admin_security.dart';
 import '../services/demo_accounts_service.dart';
+import '../services/coin_wallet_service.dart';
+import '../services/gamer_auth_service.dart';
+import '../services/coin_reward_service.dart';
 
 class GamerAdminDashboardScreen extends StatefulWidget {
   const GamerAdminDashboardScreen({super.key});
@@ -352,7 +355,8 @@ class _GamerAdminDashboardScreenState extends State<GamerAdminDashboardScreen>
         if (userSnap.hasData) {
           for (final doc in userSnap.data!.docs) {
             final data = doc.data() as Map<String, dynamic>;
-            totalCoins += (data['coins'] as num?)?.toInt() ?? 0;
+            final raw = data['coins'] ?? data['gCoins'];
+            totalCoins += (raw as num?)?.toInt() ?? 0;
           }
         }
 
@@ -394,7 +398,7 @@ class _GamerAdminDashboardScreenState extends State<GamerAdminDashboardScreen>
                     ),
                     _buildStatCard(
                       title: 'Coins Distributed',
-                      value: '${totalCoins > 0 ? totalCoins : 400} 🪙',
+                      value: '$totalCoins 🪙',
                       icon: Icons.monetization_on_rounded,
                       color: const Color(0xFFFFD700),
                     ),
@@ -1886,14 +1890,399 @@ class _GamerAdminDashboardScreenState extends State<GamerAdminDashboardScreen>
 
   // ===================== TAB 5: COINS =====================
   Widget _buildCoinsTab() {
-    final coinUserController = TextEditingController(text: 'fua');
-    final coinAmountController = TextEditingController(text: '100');
+    return const _AdminCoinsVaultTab();
+  }
+}
 
+class _AdminCoinsVaultTab extends StatefulWidget {
+  const _AdminCoinsVaultTab();
+
+  @override
+  State<_AdminCoinsVaultTab> createState() => _AdminCoinsVaultTabState();
+}
+
+class _AdminCoinsVaultTabState extends State<_AdminCoinsVaultTab> {
+  final TextEditingController _targetController = TextEditingController();
+  final TextEditingController _amountController = TextEditingController(text: '100');
+
+  bool _isSearching = false;
+  bool _isAwarding = false;
+  Map<String, dynamic>? _foundUser;
+  String? _foundDocId;
+  String? _errorMessage;
+  String? _successMessage;
+
+  @override
+  void dispose() {
+    _targetController.dispose();
+    _amountController.dispose();
+    super.dispose();
+  }
+
+  /// Searches for a user in Firestore across:
+  /// 1. Document ID (UID)
+  /// 2. 'uid' field
+  /// 3. 'username' field (case-insensitive, strips '@')
+  /// 4. 'tag' field
+  /// 5. 'email' field
+  /// 6. Comprehensive in-memory fallback scan across users collection
+  Future<Map<String, dynamic>?> _findUser(String input) async {
+    final raw = input.trim();
+    if (raw.isEmpty) return null;
+
+    final firestore = FirebaseFirestore.instance;
+
+    // 1. Direct document ID (UID) lookup
+    try {
+      final docSnap = await firestore.collection('users').doc(raw).get();
+      if (docSnap.exists && docSnap.data() != null) {
+        final d = Map<String, dynamic>.from(docSnap.data()!);
+        d['docId'] = docSnap.id;
+        return d;
+      }
+    } catch (_) {}
+
+    // 2. Query by 'uid' field
+    try {
+      final qUid = await firestore.collection('users').where('uid', isEqualTo: raw).limit(1).get();
+      if (qUid.docs.isNotEmpty) {
+        final d = Map<String, dynamic>.from(qUid.docs.first.data());
+        d['docId'] = qUid.docs.first.id;
+        return d;
+      }
+    } catch (_) {}
+
+    final clean = raw.toLowerCase().replaceAll('@', '').trim();
+
+    // 3. Query by 'username'
+    try {
+      final qUser = await firestore.collection('users').where('username', isEqualTo: clean).limit(1).get();
+      if (qUser.docs.isNotEmpty) {
+        final d = Map<String, dynamic>.from(qUser.docs.first.data());
+        d['docId'] = qUser.docs.first.id;
+        return d;
+      }
+    } catch (_) {}
+
+    // 4. Query by 'tag'
+    try {
+      final qTag = await firestore.collection('users').where('tag', isEqualTo: clean).limit(1).get();
+      if (qTag.docs.isNotEmpty) {
+        final d = Map<String, dynamic>.from(qTag.docs.first.data());
+        d['docId'] = qTag.docs.first.id;
+        return d;
+      }
+    } catch (_) {}
+
+    // 5. Query by 'email' (lowercase)
+    final cleanEmail = raw.toLowerCase().trim();
+    try {
+      final qEmail = await firestore.collection('users').where('email', isEqualTo: cleanEmail).limit(1).get();
+      if (qEmail.docs.isNotEmpty) {
+        final d = Map<String, dynamic>.from(qEmail.docs.first.data());
+        d['docId'] = qEmail.docs.first.id;
+        return d;
+      }
+    } catch (_) {}
+
+    // 6. Query by 'email' (raw)
+    try {
+      final qEmailRaw = await firestore.collection('users').where('email', isEqualTo: raw).limit(1).get();
+      if (qEmailRaw.docs.isNotEmpty) {
+        final d = Map<String, dynamic>.from(qEmailRaw.docs.first.data());
+        d['docId'] = qEmailRaw.docs.first.id;
+        return d;
+      }
+    } catch (_) {}
+
+    // 7. Comprehensive in-memory fallback scan across all users
+    try {
+      final allUsersSnap = await firestore.collection('users').limit(200).get();
+      for (final doc in allUsersSnap.docs) {
+        final data = doc.data();
+        final docId = doc.id;
+        final uUid = (data['uid'] ?? docId).toString().trim();
+        final uName = (data['username'] ?? data['tag'] ?? '').toString().toLowerCase().trim();
+        final uEmail = (data['email'] ?? '').toString().toLowerCase().trim();
+        final uDisplay = (data['displayName'] ?? data['bgmiName'] ?? '').toString().toLowerCase().trim();
+        final inGameId = (data['gameId'] ?? data['bgmiUid'] ?? '').toString().trim();
+
+        if (docId == raw ||
+            uUid == raw ||
+            uName == clean ||
+            uEmail == cleanEmail ||
+            uDisplay == clean ||
+            inGameId == raw ||
+            (clean.length >= 3 && (uName.contains(clean) || uEmail.contains(clean) || uDisplay.contains(clean)))) {
+          final d = Map<String, dynamic>.from(data);
+          d['docId'] = docId;
+          return d;
+        }
+      }
+    } catch (_) {}
+
+    return null;
+  }
+
+  Future<void> _handleSearch() async {
+    final target = _targetController.text.trim();
+    if (target.isEmpty) {
+      setState(() {
+        _errorMessage = 'براہ کرم تلاش کے لیے Username، UID یا Email درج کریں';
+        _successMessage = null;
+        _foundUser = null;
+        _foundDocId = null;
+      });
+      return;
+    }
+
+    setState(() {
+      _isSearching = true;
+      _errorMessage = null;
+      _successMessage = null;
+    });
+
+    final user = await _findUser(target);
+
+    if (!mounted) return;
+
+    setState(() {
+      _isSearching = false;
+      if (user != null) {
+        _foundUser = user;
+        _foundDocId = user['docId'] as String?;
+        _errorMessage = null;
+      } else {
+        _foundUser = null;
+        _foundDocId = null;
+        _errorMessage = 'صارف نہیں ملا! براہ کرم درست Username، UID یا Email درج کریں۔';
+      }
+    });
+
+    if (user == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Row(
+            children: [
+              const Icon(Icons.error_outline_rounded, color: Colors.white, size: 20),
+              const SizedBox(width: 8),
+              Expanded(
+                child: Text(
+                  'صارف نہیں ملا ("$target")',
+                  style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13),
+                ),
+              ),
+            ],
+          ),
+          backgroundColor: const Color(0xFFFF4655),
+          behavior: SnackBarBehavior.floating,
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+        ),
+      );
+    }
+  }
+
+  Future<void> _awardCoins() async {
+    final target = _targetController.text.trim();
+    if (target.isEmpty) {
+      setState(() => _errorMessage = 'براہ کرم Target Username، UID یا Email درج کریں');
+      return;
+    }
+
+    final amountText = _amountController.text.trim();
+    final amount = int.tryParse(amountText);
+    if (amount == null || amount <= 0) {
+      setState(() => _errorMessage = 'براہ کرم 1 یا اس سے زیادہ سکے کی درست تعداد درج کریں');
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('براہ کرم 1 یا اس سے زیادہ سکے کی درست تعداد درج کریں'),
+          backgroundColor: Color(0xFFFF4655),
+        ),
+      );
+      return;
+    }
+
+    setState(() {
+      _isAwarding = true;
+      _errorMessage = null;
+      _successMessage = null;
+    });
+
+    try {
+      // 1. Resolve user if not yet resolved or if query input changed
+      Map<String, dynamic>? user = _foundUser;
+      String? docId = _foundDocId;
+
+      if (user == null || docId == null) {
+        user = await _findUser(target);
+        if (user != null) {
+          docId = user['docId'] as String?;
+        }
+      }
+
+      // If user still not found: show RED ERROR MESSAGE and STOP!
+      if (user == null || docId == null || docId.isEmpty) {
+        if (!mounted) return;
+        setState(() {
+          _isAwarding = false;
+          _foundUser = null;
+          _foundDocId = null;
+          _errorMessage = 'صارف نہیں ملا! براہ کرم درست Username، UID یا Email درج کریں۔';
+        });
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Row(
+              children: [
+                Icon(Icons.cancel_rounded, color: Colors.white, size: 20),
+                SizedBox(width: 8),
+                Expanded(
+                  child: Text(
+                    'صارف نہیں ملا! سکے نہیں بھیجے جا سکے۔',
+                    style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13),
+                  ),
+                ),
+              ],
+            ),
+            backgroundColor: Color(0xFFFF4655),
+            behavior: SnackBarBehavior.floating,
+          ),
+        );
+        return;
+      }
+
+      final targetDocId = docId;
+      final targetDisplayName = (user['displayName'] ?? user['bgmiName'] ?? user['username'] ?? user['tag'] ?? 'صارف').toString();
+      final targetUsername = (user['username'] ?? user['tag'] ?? '').toString();
+
+      final firestore = FirebaseFirestore.instance;
+      final currentAdmin = FirebaseAuth.instance.currentUser;
+      final adminEmail = currentAdmin?.email ?? 'Admin';
+      final adminUid = currentAdmin?.uid ?? 'admin';
+
+      // 2. Atomic updates across users, wallets, and coin_wallets
+      final batch = firestore.batch();
+
+      // users collection update (immediate database save)
+      final userRef = firestore.collection('users').doc(targetDocId);
+      batch.set(userRef, {
+        'coins': FieldValue.increment(amount),
+        'gCoins': FieldValue.increment(amount),
+        'updatedAt': FieldValue.serverTimestamp(),
+        'lastRewardAt': FieldValue.serverTimestamp(),
+      }, SetOptions(merge: true));
+
+      // wallets collection update
+      final walletRef = firestore.collection('wallets').doc(targetDocId);
+      batch.set(walletRef, {
+        'coins': FieldValue.increment(amount),
+        'gCoins': FieldValue.increment(amount),
+        'userId': targetDocId,
+        'updatedAt': FieldValue.serverTimestamp(),
+      }, SetOptions(merge: true));
+
+      // coin_wallets collection update
+      final coinWalletRef = firestore.collection('coin_wallets').doc(targetDocId);
+      batch.set(coinWalletRef, {
+        'coins': FieldValue.increment(amount),
+        'gCoins': FieldValue.increment(amount),
+        'lifetimeEarned': FieldValue.increment(amount),
+        'userId': targetDocId,
+        'updatedAt': FieldValue.serverTimestamp(),
+      }, SetOptions(merge: true));
+
+      // 3. Write transaction to both 'transactions' & 'coin_transactions' collections
+      // Required log format: "Admin ne [تعداد] coins دیے" with timestamp
+      final txRef = firestore.collection('transactions').doc();
+      final String txId = txRef.id;
+      final String formattedDate = DateFormat('yyyy-MM-dd HH:mm').format(DateTime.now());
+
+      final txData = {
+        'id': txId,
+        'userId': targetDocId,
+        'amount': amount,
+        'type': 'admin_grant',
+        'title': 'Admin Award 🪙',
+        'description': 'Admin ne $amount coins diye',
+        'status': 'completed',
+        'adminUid': adminUid,
+        'adminEmail': adminEmail,
+        'createdAt': FieldValue.serverTimestamp(),
+        'timestamp': FieldValue.serverTimestamp(),
+        'date': formattedDate,
+      };
+
+      batch.set(txRef, txData);
+      batch.set(firestore.collection('coin_transactions').doc(txId), txData);
+
+      await batch.commit();
+
+      // 4. Update local in-memory state if this device is the user
+      final currentGamer = GamerAuthService().currentGamer;
+      if (currentGamer != null && (currentGamer.uid == targetDocId || targetDocId.isEmpty)) {
+        final newBal = currentGamer.coins + amount;
+        GamerAuthService().currentGamerNotifier.value = currentGamer.copyWith(coins: newBal);
+        CoinRewardService().coinsNotifier.value = newBal;
+      }
+
+      // 5. Refresh user state in preview
+      final updatedSnap = await firestore.collection('users').doc(targetDocId).get();
+      if (updatedSnap.exists && updatedSnap.data() != null) {
+        final d = Map<String, dynamic>.from(updatedSnap.data()!);
+        d['docId'] = updatedSnap.id;
+        user = d;
+      }
+
+      final successText = 'کامیابی! $targetDisplayName کو $amount سکے بھیج دیے گئے';
+
+      if (!mounted) return;
+      setState(() {
+        _isAwarding = false;
+        _foundUser = user;
+        _foundDocId = targetDocId;
+        _errorMessage = null;
+        _successMessage = successText;
+      });
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Row(
+            children: [
+              const Icon(Icons.check_circle_rounded, color: Colors.black, size: 20),
+              const SizedBox(width: 8),
+              Expanded(
+                child: Text(
+                  successText,
+                  style: const TextStyle(color: Colors.black, fontWeight: FontWeight.bold, fontSize: 13.5),
+                ),
+              ),
+            ],
+          ),
+          backgroundColor: const Color(0xFF00FF88),
+          behavior: SnackBarBehavior.floating,
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+          duration: const Duration(seconds: 4),
+        ),
+      );
+    } catch (e) {
+      if (!mounted) return;
+      setState(() {
+        _isAwarding = false;
+        _errorMessage = 'سکے بھیجنے میں خرابی: $e';
+      });
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('خرابی: $e'), backgroundColor: const Color(0xFFFF4655)),
+      );
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
     return SingleChildScrollView(
       padding: const EdgeInsets.all(16),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
+          // Header Card
           Container(
             padding: const EdgeInsets.all(16),
             decoration: BoxDecoration(
@@ -1926,7 +2315,7 @@ class _GamerAdminDashboardScreenState extends State<GamerAdminDashboardScreen>
                       ),
                       SizedBox(height: 2),
                       Text(
-                        'Grant or distribute rewards to players directly',
+                        'Grant coins to players by Username, UID, or Email',
                         style: TextStyle(color: Color(0xFF8B949E), fontSize: 12),
                       ),
                     ],
@@ -1936,93 +2325,434 @@ class _GamerAdminDashboardScreenState extends State<GamerAdminDashboardScreen>
             ),
           ),
           const SizedBox(height: 20),
+
           const Text(
             'Grant Coins to Player',
             style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 15),
           ),
-          const SizedBox(height: 10),
-          TextField(
-            controller: coinUserController,
-            style: const TextStyle(color: Colors.white),
-            decoration: InputDecoration(
-              labelText: 'Target Username or UID',
-              labelStyle: const TextStyle(color: Color(0xFF8B949E)),
-              filled: true,
-              fillColor: const Color(0xFF10141D),
-              border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
-            ),
+          const SizedBox(height: 4),
+          const Text(
+            'صارف کو Username، UID یا Email سے تلاش کر کے سکے بھیجیں',
+            style: TextStyle(color: Color(0xFF8B949E), fontSize: 12),
           ),
           const SizedBox(height: 12),
+
+          // Target Username or UID input field with search button
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Expanded(
+                child: TextField(
+                  controller: _targetController,
+                  style: const TextStyle(color: Colors.white),
+                  onChanged: (val) {
+                    if (_foundUser != null && _foundDocId != val.trim()) {
+                      setState(() {
+                        _foundUser = null;
+                        _foundDocId = null;
+                        _errorMessage = null;
+                        _successMessage = null;
+                      });
+                    }
+                  },
+                  onSubmitted: (_) => _handleSearch(),
+                  decoration: InputDecoration(
+                    labelText: 'Target Username or UID',
+                    hintText: 'e.g. fua, @user, UID, or email',
+                    hintStyle: const TextStyle(color: Color(0xFF555E6D), fontSize: 13),
+                    labelStyle: const TextStyle(color: Color(0xFF8B949E)),
+                    prefixIcon: const Icon(Icons.person_search_rounded, color: Color(0xFF38BDF8)),
+                    suffixIcon: _targetController.text.isNotEmpty
+                        ? IconButton(
+                            icon: const Icon(Icons.clear, color: Colors.white54, size: 18),
+                            onPressed: () {
+                              _targetController.clear();
+                              setState(() {
+                                _foundUser = null;
+                                _foundDocId = null;
+                                _errorMessage = null;
+                                _successMessage = null;
+                              });
+                            },
+                          )
+                        : null,
+                    filled: true,
+                    fillColor: const Color(0xFF10141D),
+                    border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+                    focusedBorder: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(12),
+                      borderSide: const BorderSide(color: Color(0xFFFFD700)),
+                    ),
+                  ),
+                ),
+              ),
+              const SizedBox(width: 8),
+              SizedBox(
+                height: 56,
+                child: ElevatedButton(
+                  onPressed: _isSearching ? null : _handleSearch,
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: const Color(0xFF1F2B3E),
+                    foregroundColor: const Color(0xFF38BDF8),
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                    padding: const EdgeInsets.symmetric(horizontal: 14),
+                  ),
+                  child: _isSearching
+                      ? const SizedBox(
+                          width: 20,
+                          height: 20,
+                          child: CircularProgressIndicator(color: Color(0xFF38BDF8), strokeWidth: 2),
+                        )
+                      : const Column(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            Icon(Icons.search_rounded, size: 20),
+                            Text('تلاش کریں', style: TextStyle(fontSize: 10, fontWeight: FontWeight.bold)),
+                          ],
+                        ),
+                ),
+              ),
+            ],
+          ),
+
+          // Found User Preview Card
+          if (_foundUser != null) ...[
+            const SizedBox(height: 12),
+            Container(
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: const Color(0xFF0D2319),
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(color: const Color(0xFF00FF88).withOpacity(0.5)),
+              ),
+              child: Row(
+                children: [
+                  GamerAvatar(
+                    photoUrl: (_foundUser!['photoUrl'] ?? _foundUser!['avatar'] ?? '').toString(),
+                    radius: 22,
+                    frameId: (_foundUser!['activeFrame'] ?? '').toString(),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Row(
+                          children: [
+                            Flexible(
+                              child: Text(
+                                (_foundUser!['displayName'] ?? _foundUser!['bgmiName'] ?? _foundUser!['username'] ?? 'User').toString(),
+                                style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 14),
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                            ),
+                            const SizedBox(width: 6),
+                            Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                              decoration: BoxDecoration(
+                                color: const Color(0xFF00FF88).withOpacity(0.2),
+                                borderRadius: BorderRadius.circular(6),
+                              ),
+                              child: const Row(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  Icon(Icons.check_circle_rounded, color: Color(0xFF00FF88), size: 12),
+                                  SizedBox(width: 3),
+                                  Text(
+                                    'صارف مل گیا',
+                                    style: TextStyle(color: Color(0xFF00FF88), fontSize: 10, fontWeight: FontWeight.bold),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 2),
+                        Text(
+                          '@${_foundUser!['username'] ?? _foundUser!['tag'] ?? ''} • ${_foundUser!['email'] ?? _foundDocId ?? ''}',
+                          style: const TextStyle(color: Color(0xFF8B949E), fontSize: 11),
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                        const SizedBox(height: 4),
+                        Row(
+                          children: [
+                            const Text(
+                              'موجودہ بیلنس: ',
+                              style: TextStyle(color: Colors.white70, fontSize: 11),
+                            ),
+                            Text(
+                              '${(_foundUser!['coins'] ?? _foundUser!['gCoins'] ?? 0)} 🪙',
+                              style: const TextStyle(color: Color(0xFFFFD700), fontWeight: FontWeight.bold, fontSize: 12),
+                            ),
+                          ],
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
+
+          const SizedBox(height: 14),
+
+          // Coins Amount Input Field
           TextField(
-            controller: coinAmountController,
+            controller: _amountController,
             keyboardType: TextInputType.number,
             style: const TextStyle(color: Colors.white),
             decoration: InputDecoration(
               labelText: 'Coins Amount',
               labelStyle: const TextStyle(color: Color(0xFF8B949E)),
               prefixIcon: const Icon(Icons.monetization_on_rounded, color: Color(0xFFFFD700)),
+              helperText: 'کوئی حد نہیں — ایڈمن جتنی چاہے سکے بھیج سکتا ہے',
+              helperStyle: const TextStyle(color: Color(0xFF8B949E), fontSize: 11),
               filled: true,
               fillColor: const Color(0xFF10141D),
               border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+              focusedBorder: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(12),
+                borderSide: const BorderSide(color: Color(0xFFFFD700)),
+              ),
             ),
           ),
-          const SizedBox(height: 16),
+          const SizedBox(height: 8),
+
+          // Quick Amount Selection Chips
+          SingleChildScrollView(
+            scrollDirection: Axis.horizontal,
+            child: Row(
+              children: [100, 500, 1000, 5000, 10000, 50000].map((amt) {
+                return Padding(
+                  padding: const EdgeInsets.only(right: 6),
+                  child: ActionChip(
+                    label: Text(
+                      '+$amt 🪙',
+                      style: const TextStyle(fontSize: 11, fontWeight: FontWeight.bold),
+                    ),
+                    backgroundColor: const Color(0xFF1A2130),
+                    labelStyle: const TextStyle(color: Color(0xFFFFD700)),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(8),
+                      side: const BorderSide(color: Color(0xFF26354D)),
+                    ),
+                    onPressed: () {
+                      _amountController.text = amt.toString();
+                    },
+                  ),
+                );
+              }).toList(),
+            ),
+          ),
+          const SizedBox(height: 14),
+
+          // Red Error Message Banner
+          if (_errorMessage != null) ...[
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+              decoration: BoxDecoration(
+                color: const Color(0xFF2D1216),
+                borderRadius: BorderRadius.circular(10),
+                border: Border.all(color: const Color(0xFFFF4655).withOpacity(0.6)),
+              ),
+              child: Row(
+                children: [
+                  const Icon(Icons.error_outline_rounded, color: Color(0xFFFF4655), size: 20),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: Text(
+                      _errorMessage!,
+                      style: const TextStyle(color: Color(0xFFFF7080), fontSize: 13, fontWeight: FontWeight.w600),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(height: 12),
+          ],
+
+          // Green Success Message Banner
+          if (_successMessage != null) ...[
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+              decoration: BoxDecoration(
+                color: const Color(0xFF0E281C),
+                borderRadius: BorderRadius.circular(10),
+                border: Border.all(color: const Color(0xFF00FF88).withOpacity(0.6)),
+              ),
+              child: Row(
+                children: [
+                  const Icon(Icons.check_circle_rounded, color: Color(0xFF00FF88), size: 20),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: Text(
+                      _successMessage!,
+                      style: const TextStyle(color: Color(0xFF80FFC0), fontSize: 13, fontWeight: FontWeight.w600),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(height: 12),
+          ],
+
+          // "Award Coins Now" Button
           SizedBox(
             width: double.infinity,
+            height: 50,
             child: ElevatedButton.icon(
-              onPressed: () async {
-                final target = coinUserController.text.trim();
-                final amount = int.tryParse(coinAmountController.text.trim()) ?? 100;
-                if (target.isEmpty) return;
-
-                try {
-                  // Find user by tag or uid
-                  final query = await FirebaseFirestore.instance
-                      .collection('users')
-                      .where('username', isEqualTo: target.toLowerCase().replaceAll('@', ''))
-                      .limit(1)
-                      .get();
-
-                  String? docId;
-                  if (query.docs.isNotEmpty) {
-                    docId = query.docs.first.id;
-                  } else {
-                    docId = FirebaseAuth.instance.currentUser?.uid;
-                  }
-
-                  if (docId != null) {
-                    await FirebaseFirestore.instance.collection('users').doc(docId).set({
-                      'coins': FieldValue.increment(amount),
-                      'updatedAt': FieldValue.serverTimestamp(),
-                    }, SetOptions(merge: true));
-
-                    if (context.mounted) {
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        SnackBar(
-                          content: Text('Successfully awarded $amount Coins to @$target!'),
-                          backgroundColor: const Color(0xFF00FF88),
-                        ),
-                      );
-                    }
-                  }
-                } catch (e) {
-                  if (context.mounted) {
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      SnackBar(content: Text('Error granting coins: $e'), backgroundColor: const Color(0xFFFF4655)),
-                    );
-                  }
-                }
-              },
+              onPressed: _isAwarding ? null : _awardCoins,
               style: ElevatedButton.styleFrom(
                 backgroundColor: const Color(0xFFFFD700),
                 foregroundColor: Colors.black,
-                padding: const EdgeInsets.symmetric(vertical: 14),
+                disabledBackgroundColor: const Color(0xFF554400),
                 shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
               ),
-              icon: const Icon(Icons.send_rounded, size: 18),
-              label: const Text('Award Coins Now', style: TextStyle(fontWeight: FontWeight.w900, fontSize: 14)),
+              icon: _isAwarding
+                  ? const SizedBox(
+                      width: 18,
+                      height: 18,
+                      child: CircularProgressIndicator(color: Colors.black, strokeWidth: 2.2),
+                    )
+                  : const Icon(Icons.send_rounded, size: 20),
+              label: Text(
+                _isAwarding ? 'سکے بھیجے جا رہے ہیں...' : 'Award Coins Now',
+                style: const TextStyle(fontWeight: FontWeight.w900, fontSize: 15),
+              ),
             ),
           ),
+          const SizedBox(height: 28),
+
+          // Live Recent Coin Grants History
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              const Text(
+                'Recent Coin Awards History',
+                style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 14),
+              ),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                decoration: BoxDecoration(
+                  color: const Color(0xFFFFD700).withOpacity(0.15),
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: const Row(
+                  children: [
+                    Icon(Icons.history_rounded, color: Color(0xFFFFD700), size: 12),
+                    SizedBox(width: 4),
+                    Text(
+                      'Live Logs',
+                      style: TextStyle(color: Color(0xFFFFD700), fontSize: 11, fontWeight: FontWeight.bold),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 10),
+
+          StreamBuilder<QuerySnapshot>(
+            stream: FirebaseFirestore.instance
+                .collection('transactions')
+                .where('type', isEqualTo: 'admin_grant')
+                .limit(10)
+                .snapshots(),
+            builder: (context, snap) {
+              if (snap.hasError) {
+                return Text('Error loading history: ${snap.error}', style: const TextStyle(color: Colors.red, fontSize: 12));
+              }
+              final docs = snap.data?.docs ?? [];
+              if (docs.isEmpty) {
+                return Container(
+                  padding: const EdgeInsets.all(16),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFF10141D),
+                    borderRadius: BorderRadius.circular(12),
+                    border: Border.all(color: const Color(0xFF1F2B3E)),
+                  ),
+                  child: const Center(
+                    child: Text(
+                      'کوئی حالیہ ٹرانزیکشن نہیں ملی',
+                      style: TextStyle(color: Color(0xFF8B949E), fontSize: 12),
+                    ),
+                  ),
+                );
+              }
+
+              // Sort locally in case composite index is not built
+              final sorted = List<QueryDocumentSnapshot>.from(docs);
+              sorted.sort((a, b) {
+                final da = a.data() as Map<String, dynamic>;
+                final db = b.data() as Map<String, dynamic>;
+                final ta = da['createdAt'] as Timestamp? ?? Timestamp.now();
+                final tb = db['createdAt'] as Timestamp? ?? Timestamp.now();
+                return tb.compareTo(ta);
+              });
+
+              return ListView.separated(
+                shrinkWrap: true,
+                physics: const NeverScrollableScrollPhysics(),
+                itemCount: sorted.length,
+                separatorBuilder: (_, __) => const SizedBox(height: 8),
+                itemBuilder: (context, index) {
+                  final data = sorted[index].data() as Map<String, dynamic>;
+                  final amount = (data['amount'] as num?)?.toInt() ?? 0;
+                  final description = data['description'] ?? 'Admin ne $amount coins diye';
+                  final date = data['date']?.toString() ?? '';
+                  final targetUserId = (data['userId'] ?? '').toString();
+
+                  return Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFF10141D),
+                      borderRadius: BorderRadius.circular(10),
+                      border: Border.all(color: const Color(0xFF1F2B3E)),
+                    ),
+                    child: Row(
+                      children: [
+                        Container(
+                          padding: const EdgeInsets.all(8),
+                          decoration: BoxDecoration(
+                            color: const Color(0xFFFFD700).withOpacity(0.12),
+                            borderRadius: BorderRadius.circular(8),
+                          ),
+                          child: const Icon(Icons.monetization_on_rounded, color: Color(0xFFFFD700), size: 18),
+                        ),
+                        const SizedBox(width: 10),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                description,
+                                style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 12.5),
+                              ),
+                              const SizedBox(height: 2),
+                              Text(
+                                'UID: $targetUserId ${date.isNotEmpty ? '• $date' : ''}',
+                                style: const TextStyle(color: Color(0xFF8B949E), fontSize: 10.5),
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                            ],
+                          ),
+                        ),
+                        Text(
+                          '+$amount 🪙',
+                          style: const TextStyle(
+                            color: Color(0xFF00FF88),
+                            fontWeight: FontWeight.w900,
+                            fontSize: 13,
+                          ),
+                        ),
+                      ],
+                    ),
+                  );
+                },
+              );
+            },
+          ),
+          const SizedBox(height: 20),
         ],
       ),
     );
