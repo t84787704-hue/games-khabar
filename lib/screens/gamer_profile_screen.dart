@@ -1173,7 +1173,7 @@ class _GamerProfileScreenState extends State<GamerProfileScreen> with SingleTick
                                 overflow: TextOverflow.ellipsis,
                               ),
                             ),
-                            if (user.isRankApproved && user.rank.isNotEmpty && user.rank.toLowerCase() != 'none') ...[
+                            if (!user.isOwnerUser && user.isRankApproved && user.rank.isNotEmpty && user.rank.toLowerCase() != 'none') ...[
                               const SizedBox(width: 6),
                               RankBadgeWidget(
                                 badge: user.getRankBadge(),
@@ -1188,6 +1188,40 @@ class _GamerProfileScreenState extends State<GamerProfileScreen> with SingleTick
                             if (user.hasBlueTick) ...[
                               const SizedBox(width: 5),
                               const Icon(Icons.verified, color: Color(0xFF1D9BF0), size: 18),
+                            ],
+                            if (user.isOwnerUser) ...[
+                              const SizedBox(width: 6),
+                              Container(
+                                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                                decoration: BoxDecoration(
+                                  gradient: const LinearGradient(
+                                    colors: [Color(0xFFFFD700), Color(0xFFFF8A00)],
+                                  ),
+                                  borderRadius: BorderRadius.circular(12),
+                                  boxShadow: [
+                                    BoxShadow(
+                                      color: const Color(0xFFFFD700).withOpacity(0.4),
+                                      blurRadius: 6,
+                                    ),
+                                  ],
+                                ),
+                                child: const Row(
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    Text('👑', style: TextStyle(fontSize: 11)),
+                                    SizedBox(width: 3),
+                                    Text(
+                                      'LEGEND',
+                                      style: TextStyle(
+                                        color: Colors.black,
+                                        fontSize: 10.5,
+                                        fontWeight: FontWeight.w900,
+                                        letterSpacing: 0.8,
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
                             ],
                           ],
                         ),
@@ -1224,33 +1258,64 @@ class _GamerProfileScreenState extends State<GamerProfileScreen> with SingleTick
                           runSpacing: 6,
                           crossAxisAlignment: WrapCrossAlignment.center,
                           children: [
-                            // Favorite Game Badge
-                            Container(
-                              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
-                              decoration: BoxDecoration(
-                                color: gameColor.withOpacity(0.15),
-                                borderRadius: BorderRadius.circular(8),
-                                border: Border.all(color: gameColor.withOpacity(0.6)),
-                              ),
-                              child: Row(
-                                mainAxisSize: MainAxisSize.min,
-                                children: [
-                                  Text(gameEmoji, style: const TextStyle(fontSize: 13)),
-                                  const SizedBox(width: 6),
-                                  Text(
-                                    user.favoriteGame,
-                                    style: TextStyle(
-                                      color: gameColor,
-                                      fontWeight: FontWeight.w900,
-                                      fontSize: 12,
-                                    ),
+                            // Owner Legend Badge Chip
+                            if (user.isOwnerUser) ...[
+                              Container(
+                                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+                                decoration: BoxDecoration(
+                                  gradient: const LinearGradient(
+                                    colors: [Color(0xFF2A1C0A), Color(0xFF3F2B12)],
                                   ),
-                                ],
+                                  borderRadius: BorderRadius.circular(8),
+                                  border: Border.all(color: const Color(0xFFFFD700), width: 1.2),
+                                ),
+                                child: const Row(
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    Text('👑', style: TextStyle(fontSize: 13)),
+                                    SizedBox(width: 5),
+                                    Text(
+                                      'VERIFIED OWNER & CREATOR',
+                                      style: TextStyle(
+                                        color: Color(0xFFFFD700),
+                                        fontWeight: FontWeight.w900,
+                                        fontSize: 11.5,
+                                        letterSpacing: 0.5,
+                                      ),
+                                    ),
+                                  ],
+                                ),
                               ),
-                            ),
+                            ],
 
-                            // Rank Badge with Verification Status (Only verified or pending from user selection)
-                            if (user.rank.isNotEmpty && user.rank.toLowerCase() != 'none' && user.rank.toLowerCase() != 'skip') ...[
+                            // Favorite Game Badge
+                            if (!user.isOwnerUser && user.favoriteGame.isNotEmpty)
+                              Container(
+                                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+                                decoration: BoxDecoration(
+                                  color: gameColor.withOpacity(0.15),
+                                  borderRadius: BorderRadius.circular(8),
+                                  border: Border.all(color: gameColor.withOpacity(0.6)),
+                                ),
+                                child: Row(
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    Text(gameEmoji, style: const TextStyle(fontSize: 13)),
+                                    const SizedBox(width: 6),
+                                    Text(
+                                      user.favoriteGame,
+                                      style: TextStyle(
+                                        color: gameColor,
+                                        fontWeight: FontWeight.w900,
+                                        fontSize: 12,
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+
+                            // Rank Badge with Verification Status (Only for non-owner: verified or pending)
+                            if (!user.isOwnerUser && user.rank.isNotEmpty && user.rank.toLowerCase() != 'none' && user.rank.toLowerCase() != 'skip') ...[
                               if (user.isRankApproved) ...[
                                 Container(
                                   padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
@@ -1348,10 +1413,11 @@ class _GamerProfileScreenState extends State<GamerProfileScreen> with SingleTick
                               ],
                             ],
 
-                            // Verified Game Ranks Badges
-                            ...user.games
-                                .where((g) => g.isVerified || g.status == 'approved')
-                                .map((g) {
+                            // Verified Game Ranks Badges (Only for non-owner)
+                            if (!user.isOwnerUser)
+                              ...user.games
+                                  .where((g) => g.isVerified || g.status == 'approved')
+                                  .map((g) {
                               final gColor = _getGameAccentColor(g.gameName);
                               return Container(
                                 padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 5),

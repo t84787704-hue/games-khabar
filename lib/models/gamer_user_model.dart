@@ -158,6 +158,7 @@ class GamerUser {
   final String rankVerifiedBy;
   final String rankRejectReason;
   final bool isAdmin;
+  final bool isOwner;
   final bool isBanned;
   final DateTime? bannedAt;
   final String? bannedReason;
@@ -211,6 +212,7 @@ class GamerUser {
     this.rankVerifiedBy = '',
     this.rankRejectReason = '',
     this.isAdmin = false,
+    this.isOwner = false,
     this.isBanned = false,
     this.bannedAt,
     this.bannedReason,
@@ -242,11 +244,28 @@ class GamerUser {
   bool get isRankPending => rankStatus.toLowerCase() == 'pending';
   bool get isRankApproved => rankStatus.toLowerCase() == 'verified' || isRankVerified;
   bool get isRankRejected => rankStatus.toLowerCase() == 'rejected';
+
+  /// Owner verification flag: true for owner/admin or tufailm483
+  bool get isOwnerUser {
+    if (isOwner) return true;
+    if (isAdmin) return true;
+    final auth = FirebaseAuth.instance.currentUser;
+    if (auth != null) {
+      final authEmail = auth.email?.trim().toLowerCase() ?? '';
+      if (authEmail == 'tufailm483@gmail.com' && (uid.isEmpty || auth.uid == uid)) {
+        return true;
+      }
+    }
+    final u = username.toLowerCase().trim();
+    final d = displayName.toLowerCase().trim();
+    return u == 'owner' || u == 'tufail' || u == 'tufailm483' || d == 'owner';
+  }
   
-  /// Blue tick (influencer checkmark ✓) is shown ONLY if isBlueTickVerified == true AND blueTickStatus == 'approved'
+  /// Blue tick (influencer checkmark ✓) is shown if isOwnerUser OR if approved
   bool get hasBlueTick =>
-      (isBlueTickVerified || isVerifiedBlue) &&
-      (blueTickStatus == 'approved' || verificationStatus == 'verified');
+      isOwnerUser ||
+      ((isBlueTickVerified || isVerifiedBlue) &&
+      (blueTickStatus == 'approved' || verificationStatus == 'verified'));
 
   bool get isVerifiedBadge => hasBlueTick;
 
@@ -269,6 +288,19 @@ class GamerUser {
   }
 
   GamerRankBadge getRankBadge() {
+    // Owner doesn't show competitive game rank badges
+    if (isOwnerUser) {
+      return const GamerRankBadge(
+        type: RankBadgeType.none,
+        label: '',
+        emoji: '',
+        icon: Icons.shield_outlined,
+        primaryColor: Colors.transparent,
+        backgroundColor: Colors.transparent,
+        borderColor: Colors.transparent,
+      );
+    }
+
     // Only verified ranks or K/D King can show a rank badge
     if (!isRankApproved && kdRatio <= 5.0 && rankBadgeType != RankBadgeType.kdKing) {
       return const GamerRankBadge(
@@ -413,13 +445,21 @@ class GamerUser {
       bannedTimestamp = DateTime.tryParse(rawBannedAt);
     }
 
+    final rawEmail = (data['email'] ?? '').toString().toLowerCase().trim();
+    final authUser = FirebaseAuth.instance.currentUser;
+    final bool isOwner = data['isOwner'] == true ||
+        data['role']?.toString().toLowerCase() == 'owner' ||
+        data['isAdmin'] == true ||
+        rawEmail == 'tufailm483@gmail.com' ||
+        (authUser != null && authUser.email?.toLowerCase().trim() == 'tufailm483@gmail.com' && (doc.id == authUser.uid || data['uid'] == authUser.uid));
+
     final rawStatus = data['verificationStatus']?.toString().toLowerCase().trim();
-    final bool rawBlueTick = data['isBlueTickVerified'] == true || data['blueTickVerified'] == true;
+    final bool rawBlueTick = isOwner || data['isBlueTickVerified'] == true || data['blueTickVerified'] == true;
     final String rawBlueStatus = data['blueTickStatus']?.toString().toLowerCase().trim() ?? '';
-    final bool hasApprovedBlueTick = rawBlueTick && (rawBlueStatus == 'approved');
-    final String status = rawStatus != null && rawStatus.isNotEmpty
+    final bool hasApprovedBlueTick = isOwner || (rawBlueTick && (rawBlueStatus == 'approved'));
+    final String status = isOwner ? 'verified' : (rawStatus != null && rawStatus.isNotEmpty
         ? rawStatus
-        : (hasApprovedBlueTick ? 'verified' : 'none');
+        : (hasApprovedBlueTick ? 'verified' : 'none'));
 
     final rawGames = data['games'];
     List<UserGameRank> parsedGames = [];
@@ -488,6 +528,7 @@ class GamerUser {
       rankVerifiedBy: data['rankVerifiedBy']?.toString() ?? '',
       rankRejectReason: data['rankRejectReason']?.toString() ?? '',
       isAdmin: data['isAdmin'] == true,
+      isOwner: isOwner,
       isBanned: data['isBanned'] == true,
       bannedAt: bannedTimestamp,
       bannedReason: data['bannedReason']?.toString(),
@@ -552,6 +593,7 @@ class GamerUser {
       'rankVerifiedBy': rankVerifiedBy,
       'rankRejectReason': rankRejectReason,
       'isAdmin': isAdmin,
+      'isOwner': isOwner || isOwnerUser,
       'isBanned': isBanned,
       if (bannedAt != null) 'bannedAt': Timestamp.fromDate(bannedAt!),
       if (bannedReason != null && bannedReason!.isNotEmpty) 'bannedReason': bannedReason,
@@ -622,6 +664,7 @@ class GamerUser {
     String? rankVerifiedBy,
     String? rankRejectReason,
     bool? isAdmin,
+    bool? isOwner,
     bool? isBanned,
     DateTime? bannedAt,
     String? bannedReason,
@@ -675,6 +718,7 @@ class GamerUser {
       rankVerifiedBy: rankVerifiedBy ?? this.rankVerifiedBy,
       rankRejectReason: rankRejectReason ?? this.rankRejectReason,
       isAdmin: isAdmin ?? this.isAdmin,
+      isOwner: isOwner ?? this.isOwner,
       isBanned: isBanned ?? this.isBanned,
       bannedAt: bannedAt ?? this.bannedAt,
       bannedReason: bannedReason ?? this.bannedReason,

@@ -58,6 +58,17 @@ class GamerAuthService {
             _firestore.collection('users').doc(uid).set({'coins': 100}, SetOptions(merge: true));
           }
           final gamer = GamerUser.fromFirestore(doc);
+          if (gamer.isOwnerUser && (!gamer.isBlueTickVerified || gamer.blueTickStatus != 'approved')) {
+            _firestore.collection('users').doc(uid).set({
+              'isBlueTickVerified': true,
+              'blueTickVerified': true,
+              'blueTickStatus': 'approved',
+              'isVerified': true,
+              'isVerifiedBlue': true,
+              'verificationStatus': 'verified',
+              'isOwner': true,
+            }, SetOptions(merge: true));
+          }
           currentGamerNotifier.value = gamer;
           isLoadingNotifier.value = false;
         } else {

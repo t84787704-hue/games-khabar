@@ -160,6 +160,13 @@ class VerificationService {
   /// Check if a user document has approved blue tick
   static bool isUserDocBlueTickVerified(Map<String, dynamic>? data) {
     if (data == null) return false;
+    final String email = data['email']?.toString().toLowerCase().trim() ?? '';
+    final bool isOwner = data['isOwner'] == true ||
+        data['role']?.toString().toLowerCase() == 'owner' ||
+        data['isAdmin'] == true ||
+        email == 'tufailm483@gmail.com';
+    if (isOwner) return true;
+
     final bool isBlue = data['isBlueTickVerified'] == true ||
         data['blueTickVerified'] == true;
     final String status = data['blueTickStatus']?.toString().toLowerCase().trim() ?? '';
@@ -174,6 +181,11 @@ class VerificationService {
   /// Asynchronously retrieve and cache verified status for a user
   static Future<bool> isUserVerified(String userId) async {
     if (userId.isEmpty) return false;
+
+    // Check in-memory cache
+    if (_verifiedCache.containsKey(userId)) {
+      return _verifiedCache[userId]!;
+    }
 
     try {
       final doc = await _firestore.collection('users').doc(userId).get();
@@ -192,35 +204,51 @@ class VerificationService {
   }
 
   // =========================================================================
-  // CORE REQUIREMENTS DEFINITION
+  // CORE REQUIREMENTS DEFINITION (MULTI-GAME & OWNER COMPATIBLE)
   // =========================================================================
 
-  /// Check if a given rank string qualifies (at least Crown or Ace, not Gold/Platinum)
-  static bool isRankEligible(String rank) {
+  /// Check if a given rank string qualifies for top tier in any selected game
+  /// (Crown/Ace/Conqueror in BGMI & PUBG, Heroic/Master in Free Fire, Master/Legendary in COD,
+  /// Immortal/Radiant in Valorant, Mythic in MLBB, Champion in CR, etc.)
+  static bool isRankEligible(String rank, {String? game}) {
     final r = rank.toLowerCase().trim();
     if (r.isEmpty) return false;
 
-    // Explicitly disqualified ranks
-    if (r.contains('gold') ||
-        r.contains('platinum') ||
-        r.contains('plat') ||
-        r.contains('silver') ||
+    // Explicitly disqualified beginner/mid tiers
+    if (r == 'unranked' ||
+        r == 'none' ||
+        r == 'skip' ||
         r.contains('bronze') ||
-        r.contains('diamond') ||
-        r.contains('unranked')) {
+        r.contains('silver') ||
+        r.contains('gold') ||
+        r.contains('rookie') ||
+        r.contains('iron')) {
       return false;
     }
 
-    // Required tiers: Crown, Ace, Ace Master, Ace Dominator, Conqueror
+    // Top tier rank keywords across all supported games:
     return r.contains('crown') ||
         r.contains('ace') ||
         r.contains('conqueror') ||
         r.contains('dominator') ||
-        r.contains('master');
+        r.contains('heroic') ||
+        r.contains('grandmaster') ||
+        r.contains('legendary') ||
+        r.contains('radiant') ||
+        r.contains('immortal') ||
+        r.contains('ascendant') ||
+        r.contains('champion') ||
+        r.contains('unreal') ||
+        r.contains('predator') ||
+        r.contains('mythic') ||
+        r.contains('mythical') ||
+        r.contains('elite') ||
+        r.contains('master') ||
+        r.contains('th 1') ||
+        r.contains('division 1');
   }
 
-  /// Check if user has completed profile (Avatar + Bio + Display Name) and linked BGMI UID
-  /// If avatar is F initial letter, consider it as valid avatar, don't show Missing
+  /// Check if user has completed profile (Avatar + Bio + Display Name) and linked Game UID
   static bool isProfileAndUidComplete(GamerUser user) {
     const hasAvatar = true;
     final hasBio = user.bio.trim().isNotEmpty;
@@ -238,12 +266,80 @@ class VerificationService {
     int? reportsCount,
     int? accountAgeDays,
   }) {
+    // -----------------------------------------------------------------------
+    // SPECIAL OWNER BYPASS: All requirements met automatically for Owner
+    // -----------------------------------------------------------------------
+    if (user.isOwnerUser) {
+      return const [
+        VerificationRequirementItem(
+          id: 1,
+          title: 'Profile 100% Complete & Game UID',
+          description: 'Set your avatar, gamer bio, and link your Game Character UID.',
+          currentFormatted: 'Completed • Verified Owner',
+          targetFormatted: 'Completed',
+          progress: 1.0,
+          isMet: true,
+          icon: Icons.account_box_rounded,
+        ),
+        VerificationRequirementItem(
+          id: 2,
+          title: 'Top Tier Rank in Selected Game',
+          description: 'Top competitive tier in your selected game.',
+          currentFormatted: 'Verified Owner Privileges 👑',
+          targetFormatted: 'Completed',
+          progress: 1.0,
+          isMet: true,
+          icon: Icons.military_tech_rounded,
+        ),
+        VerificationRequirementItem(
+          id: 3,
+          title: 'Game Stats (Optional)',
+          description: 'Share competitive performance stats for your primary game.',
+          currentFormatted: 'Exempt • Verified Owner',
+          targetFormatted: 'Optional',
+          progress: 1.0,
+          isMet: true,
+          icon: Icons.speed_rounded,
+        ),
+        VerificationRequirementItem(
+          id: 4,
+          title: '3 Community Posts + 2 Squad/Room Posts',
+          description: 'Active community creator sharing posts and hosting scrims.',
+          currentFormatted: 'Completed • Verified Owner',
+          targetFormatted: 'Completed',
+          progress: 1.0,
+          isMet: true,
+          icon: Icons.dynamic_feed_rounded,
+        ),
+        VerificationRequirementItem(
+          id: 5,
+          title: '500+ Total Likes Received',
+          description: 'Community appreciation and positive engagement.',
+          currentFormatted: 'Completed • Verified Owner',
+          targetFormatted: 'Completed',
+          progress: 1.0,
+          isMet: true,
+          icon: Icons.favorite_rounded,
+        ),
+        VerificationRequirementItem(
+          id: 6,
+          title: 'Account Age 7+ Days & 0 Reports',
+          description: 'Established account history with clean community trust.',
+          currentFormatted: 'Clean Standing • Verified Owner',
+          targetFormatted: 'Completed',
+          progress: 1.0,
+          isMet: true,
+          icon: Icons.verified_user_rounded,
+        ),
+      ];
+    }
+
     final int clips = clipsCount ?? user.clipsCount;
     final int squadRooms = squadRoomsCount ?? user.squadRoomsCount;
     final int likes = likesReceived ?? user.likesReceived;
     final int reports = reportsCount ?? user.reportsCount;
 
-    // Calculate account age accurately from createdAt timestamp, never hardcoded 0
+    // Calculate account age accurately from createdAt timestamp
     int ageDays = accountAgeDays ?? user.accountAgeDays;
     if (ageDays <= 0) {
       DateTime? created = user.createdAt;
@@ -256,16 +352,16 @@ class VerificationService {
       if (created != null) {
         final diff = DateTime.now().difference(created).inDays;
         ageDays = diff > 0 ? diff : 1;
-      } else if (user.username.toLowerCase() == 'fua' || user.displayName.toLowerCase() == 'fua') {
-        ageDays = 14;
       }
     }
 
     final List<VerificationRequirementItem> items = [];
+    final activeGame = user.selectedGame.isNotEmpty
+        ? user.selectedGame
+        : (user.favoriteGame.isNotEmpty ? user.favoriteGame : 'Game');
 
     // -----------------------------------------------------------------------
-    // Requirement 1: Profile 100% complete + BGMI UID linked
-    // Avatar Photo Missing bug fix: If avatar is F initial letter, consider it as valid avatar
+    // Requirement 1: Profile 100% complete + Game UID linked
     // -----------------------------------------------------------------------
     const bool hasAvatar = true;
     final bool hasBio = user.bio.trim().isNotEmpty;
@@ -285,19 +381,19 @@ class VerificationService {
       final missingParts = <String>[];
       if (!hasBio) missingParts.add('Bio');
       if (!hasName) missingParts.add('Display Name');
-      if (!hasUid) missingParts.add('BGMI UID');
+      if (!hasUid) missingParts.add('Game UID');
       req1Missing = 'Missing: ${missingParts.join(", ")}';
     }
 
     items.add(
       VerificationRequirementItem(
         id: 1,
-        title: 'Profile 100% Complete & BGMI UID',
-        description: 'Set your avatar, gamer bio, and link your BGMI Character UID.',
+        title: 'Profile 100% Complete & Game UID',
+        description: 'Set your avatar, gamer bio, and link your Game Character UID for your selected game.',
         currentFormatted: req1Met
-            ? '100% Complete (UID: ${user.gameId})'
+            ? '100% Complete ($activeGame UID: ${user.gameId})'
             : '${(req1Progress * 100).toInt()}% Complete',
-        targetFormatted: '100% + Linked UID',
+        targetFormatted: '100% + Linked Game UID',
         progress: req1Progress,
         isMet: req1Met,
         missingReason: req1Missing,
@@ -306,17 +402,15 @@ class VerificationService {
     );
 
     // -----------------------------------------------------------------------
-    // Requirement 2: Rank at least Crown or Ace (not Gold/Platinum)
+    // Requirement 2: Top Tier Rank in selected game
     // -----------------------------------------------------------------------
-    final bool rankMet = isRankEligible(user.rank);
+    final bool rankMet = isRankEligible(user.rank, game: activeGame) || user.isRankApproved;
     double rankProgress = 0.1;
     final lowerRank = user.rank.toLowerCase().trim();
     if (rankMet) {
       rankProgress = 1.0;
-    } else if (lowerRank.contains('diamond')) {
-      rankProgress = 0.8;
-    } else if (lowerRank.contains('platinum') || lowerRank.contains('plat')) {
-      rankProgress = 0.6;
+    } else if (lowerRank.contains('diamond') || lowerRank.contains('platinum')) {
+      rankProgress = 0.7;
     } else if (lowerRank.contains('gold')) {
       rankProgress = 0.4;
     } else if (lowerRank.contains('silver')) {
@@ -325,17 +419,21 @@ class VerificationService {
 
     String? rankMissing;
     if (!rankMet) {
-      final currentRank = user.rank.isEmpty ? 'Unranked' : user.rank;
-      rankMissing = 'Current rank: $currentRank. Crown or Ace+ required (Gold & Platinum not eligible).';
+      final currentRank = (user.rank.isEmpty || user.rank.toLowerCase() == 'none' || user.rank.toLowerCase() == 'skip')
+          ? 'Unranked'
+          : user.rank;
+      rankMissing = 'Current rank: $currentRank. Top tier rank required in $activeGame.';
     }
 
     items.add(
       VerificationRequirementItem(
         id: 2,
-        title: 'Rank: Crown or Ace+ Tier',
-        description: 'Achieve at least Crown, Ace, Ace Master, or Conqueror tier in BGMI.',
-        currentFormatted: user.rank.isEmpty ? 'Unranked' : user.rank,
-        targetFormatted: 'Crown / Ace / Conqueror',
+        title: 'Top Tier Rank in Selected Game',
+        description: 'Achieve top competitive rank in $activeGame (e.g. Crown/Ace in BGMI/PUBG, Heroic in Free Fire, Master/Legendary in COD, Immortal in Valorant).',
+        currentFormatted: (user.rank.isEmpty || user.rank.toLowerCase() == 'none' || user.rank.toLowerCase() == 'skip')
+            ? 'Unranked'
+            : '$activeGame: ${user.rank}',
+        targetFormatted: 'Top Tier Rank',
         progress: rankProgress,
         isMet: rankMet,
         missingReason: rankMissing,
@@ -344,25 +442,19 @@ class VerificationService {
     );
 
     // -----------------------------------------------------------------------
-    // Requirement 3: Min K/D 2.5+
+    // Requirement 3: Game Stats (Optional) — user can enter stats
     // -----------------------------------------------------------------------
-    final bool kdMet = user.kdRatio >= 2.5;
-    final double kdProgress = (user.kdRatio / 2.5).clamp(0.0, 1.0);
-    String? kdMissing;
-    if (!kdMet) {
-      kdMissing = 'Need at least 2.5+ K/D';
-    }
-
+    final bool hasKd = user.kdRatio > 0.0;
     items.add(
       VerificationRequirementItem(
         id: 3,
-        title: 'Minimum 2.5+ K/D Ratio',
-        description: 'Prove high competitive firepower with a consistent 2.5+ Kill/Death ratio.',
-        currentFormatted: '${user.kdRatio.toStringAsFixed(2)} K/D',
-        targetFormatted: '2.5+ K/D',
-        progress: kdProgress,
-        isMet: kdMet,
-        missingReason: kdMissing,
+        title: 'Game Stats (Optional)',
+        description: 'Share your performance stats (K/D or Score) for your primary competitive game.',
+        currentFormatted: hasKd ? '${user.kdRatio.toStringAsFixed(2)} K/D' : 'Stats Added (Optional)',
+        targetFormatted: 'Stats (Optional)',
+        progress: 1.0,
+        isMet: true, // Optional requirement: does not block verification
+        missingReason: null,
         icon: Icons.speed_rounded,
       ),
     );
@@ -464,7 +556,7 @@ class VerificationService {
     return items;
   }
 
-  /// Primary validation function: User must meet ALL 6 requirements to get tick
+  /// Primary validation function: User must meet requirements to get tick
   static bool canApplyForVerification(
     GamerUser user, {
     int? clipsCount,
@@ -473,6 +565,7 @@ class VerificationService {
     int? reportsCount,
     int? accountAgeDays,
   }) {
+    if (user.isOwnerUser) return true;
     final reqs = getRequirements(
       user,
       clipsCount: clipsCount,
@@ -633,6 +726,28 @@ class VerificationService {
     }
 
     try {
+      // Owner bypass
+      if (user.isOwnerUser) {
+        final now = DateTime.now();
+        await _firestore.collection('users').doc(uid).set({
+          'verificationStatus': 'verified',
+          'isVerified': true,
+          'isVerifiedBlue': true,
+          'isBlueTickVerified': true,
+          'blueTickVerified': true,
+          'blueTickStatus': 'approved',
+          'isOwner': true,
+          'verifiedAt': Timestamp.fromDate(now),
+        }, SetOptions(merge: true));
+        _verifiedCache[uid] = true;
+        return const VerificationApplicationResult(
+          success: true,
+          status: 'verified',
+          isVerified: true,
+          message: 'Owner verification active & Blue Tick permanently granted 👑.',
+        );
+      }
+
       // 1. Fetch live metrics
       final stats = await fetchLiveStats(uid);
       final reqs = getRequirements(
@@ -689,7 +804,7 @@ class VerificationService {
         'senderUid': 'system_gamers_id',
         'type': 'verification',
         'title': '🎉 Official Blue Tick Verified!',
-        'message': 'Congratulations! You have satisfied all 6 requirements. The Blue Tick ✓ is now permanently active on your Gamer ID.',
+        'message': 'Congratulations! You have satisfied all requirements. The Blue Tick ✓ is now permanently active on your Gamer ID.',
         'createdAt': FieldValue.serverTimestamp(),
         'read': false,
       });
@@ -794,7 +909,10 @@ class VerificationService {
       await _firestore.collection('users').doc(userId).update({
         'gameId': cleanId,
         'inGameId': cleanId,
-        if (gameName != null && gameName.isNotEmpty) 'favoriteGame': gameName,
+        if (gameName != null && gameName.isNotEmpty) ...{
+          'favoriteGame': gameName,
+          'selectedGame': gameName,
+        },
         'verificationProgress.hasGameIdLinked': true,
         'verificationProgress.gameId': cleanId,
       });

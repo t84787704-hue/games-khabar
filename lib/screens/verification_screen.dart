@@ -207,7 +207,7 @@ class _VerificationScreenState extends State<VerificationScreen> {
             ),
             const SizedBox(height: 10),
             const Text(
-              'All 6 BGMI integrity & competitive requirements have been validated. Your official Blue Tick ✓ is now live on your Gamer ID and all posts!',
+              'All competitive gaming integrity requirements have been validated. Your official Blue Tick ✓ is now live on your Gamer ID and all posts!',
               style: TextStyle(
                 color: GamerTheme.textGray,
                 fontSize: 13,
@@ -238,84 +238,22 @@ class _VerificationScreenState extends State<VerificationScreen> {
     );
   }
 
-  void _showLinkBgmiUidDialog(GamerUser user) {
-    final controller = TextEditingController(text: user.gameId);
-    showDialog(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        backgroundColor: GamerTheme.cardElevated,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-        title: const Row(
-          children: [
-            Icon(Icons.sports_esports_rounded, color: GamerTheme.accentBlue, size: 22),
-            SizedBox(width: 8),
-            Text('Link BGMI UID', style: TextStyle(color: GamerTheme.textWhite, fontSize: 18, fontWeight: FontWeight.bold)),
-          ],
-        ),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            const Text(
-              'Requirement 1: Enter your BGMI in-game Character ID or UID (e.g. 5129384729):',
-              style: TextStyle(color: GamerTheme.textGray, fontSize: 12),
-            ),
-            const SizedBox(height: 14),
-            TextField(
-              controller: controller,
-              style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
-              decoration: InputDecoration(
-                hintText: 'e.g. 5129384729',
-                hintStyle: const TextStyle(color: GamerTheme.textMuted),
-                filled: true,
-                fillColor: GamerTheme.cardDark,
-                prefixIcon: const Icon(Icons.tag_rounded, color: GamerTheme.accentBlue),
-                border: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(10),
-                  borderSide: const BorderSide(color: GamerTheme.borderDark),
-                ),
-              ),
-            ),
-          ],
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(ctx),
-            child: const Text('Cancel', style: TextStyle(color: GamerTheme.textMuted)),
-          ),
-          ElevatedButton(
-            style: ElevatedButton.styleFrom(backgroundColor: GamerTheme.accentBlue),
-            onPressed: () async {
-              final val = controller.text.trim();
-              if (val.isNotEmpty) {
-                Navigator.pop(ctx);
-                await VerificationService.linkGameId(userId: user.uid, gameId: val, gameName: 'BGMI');
-                _refreshData();
-              }
-            },
-            child: const Text('Save & Link', style: TextStyle(color: GamerTheme.bgDark, fontWeight: FontWeight.bold)),
-          ),
-        ],
-      ),
-    );
-  }
-
-  void _showQuickRankKdDialog(GamerUser user) {
-    String selectedRank = user.rank.isEmpty ? 'Ace' : user.rank;
-    final kdController = TextEditingController(text: user.kdRatio > 0 ? user.kdRatio.toString() : '3.5');
-
-    const ranksList = [
-      'Bronze',
-      'Silver',
-      'Gold',
-      'Platinum',
-      'Diamond',
-      'Crown',
-      'Ace',
-      'Ace Master',
-      'Ace Dominator',
-      'Conqueror',
+  void _showLinkGameUidDialog(GamerUser user) {
+    String selectedGame = user.selectedGame.isNotEmpty
+        ? user.selectedGame
+        : (user.favoriteGame.isNotEmpty ? user.favoriteGame : 'BGMI');
+    final supportedGames = [
+      'BGMI',
+      'PUBG Mobile',
+      'Free Fire',
+      'COD Mobile',
+      'Valorant',
+      'Other',
     ];
+    if (!supportedGames.contains(selectedGame)) {
+      selectedGame = 'Other';
+    }
+    final controller = TextEditingController(text: user.gameId);
 
     showDialog(
       context: context,
@@ -325,9 +263,9 @@ class _VerificationScreenState extends State<VerificationScreen> {
           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
           title: const Row(
             children: [
-              Icon(Icons.military_tech_rounded, color: GamerTheme.flameOrange, size: 22),
+              Icon(Icons.sports_esports_rounded, color: GamerTheme.accentBlue, size: 22),
               SizedBox(width: 8),
-              Text('Update Rank & K/D', style: TextStyle(color: GamerTheme.textWhite, fontSize: 18, fontWeight: FontWeight.bold)),
+              Text('Link Game UID', style: TextStyle(color: GamerTheme.textWhite, fontSize: 18, fontWeight: FontWeight.bold)),
             ],
           ),
           content: Column(
@@ -335,11 +273,11 @@ class _VerificationScreenState extends State<VerificationScreen> {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               const Text(
-                'Select your official BGMI Season Rank and Kill/Death (K/D) ratio:',
+                'Requirement 1: Select your game and enter your in-game Character ID / UID:',
                 style: TextStyle(color: GamerTheme.textGray, fontSize: 12),
               ),
-              const SizedBox(height: 16),
-              const Text('BGMI RANK (Must be Crown/Ace+)', style: TextStyle(color: GamerTheme.textMuted, fontSize: 11, fontWeight: FontWeight.bold)),
+              const SizedBox(height: 14),
+              const Text('SELECT GAME', style: TextStyle(color: GamerTheme.textMuted, fontSize: 11, fontWeight: FontWeight.bold)),
               const SizedBox(height: 6),
               Container(
                 padding: const EdgeInsets.symmetric(horizontal: 12),
@@ -350,51 +288,33 @@ class _VerificationScreenState extends State<VerificationScreen> {
                 ),
                 child: DropdownButtonHideUnderline(
                   child: DropdownButton<String>(
-                    value: ranksList.contains(selectedRank) ? selectedRank : 'Ace',
+                    value: selectedGame,
                     isExpanded: true,
                     dropdownColor: GamerTheme.cardElevated,
-                    items: ranksList.map((r) {
-                      final isEligible = VerificationService.isRankEligible(r);
+                    items: supportedGames.map((g) {
                       return DropdownMenuItem<String>(
-                        value: r,
-                        child: Row(
-                          children: [
-                            Icon(
-                              isEligible ? Icons.check_circle_rounded : Icons.cancel_rounded,
-                              size: 16,
-                              color: isEligible ? GamerTheme.neonGreen : GamerTheme.redAccent,
-                            ),
-                            const SizedBox(width: 8),
-                            Text(
-                              r,
-                              style: TextStyle(
-                                color: isEligible ? GamerTheme.textWhite : GamerTheme.textMuted,
-                                fontWeight: isEligible ? FontWeight.bold : FontWeight.normal,
-                              ),
-                            ),
-                          ],
-                        ),
+                        value: g,
+                        child: Text(g, style: const TextStyle(color: GamerTheme.textWhite)),
                       );
                     }).toList(),
                     onChanged: (v) {
-                      if (v != null) setDlgState(() => selectedRank = v);
+                      if (v != null) setDlgState(() => selectedGame = v);
                     },
                   ),
                 ),
               ),
               const SizedBox(height: 14),
-              const Text('K/D RATIO (Min 2.5+ required)', style: TextStyle(color: GamerTheme.textMuted, fontSize: 11, fontWeight: FontWeight.bold)),
+              const Text('GAME CHARACTER UID', style: TextStyle(color: GamerTheme.textMuted, fontSize: 11, fontWeight: FontWeight.bold)),
               const SizedBox(height: 6),
               TextField(
-                controller: kdController,
-                keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                controller: controller,
                 style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
                 decoration: InputDecoration(
-                  hintText: 'e.g. 3.50',
+                  hintText: 'e.g. 5129384729 or Player#1234',
                   hintStyle: const TextStyle(color: GamerTheme.textMuted),
                   filled: true,
                   fillColor: GamerTheme.cardDark,
-                  prefixIcon: const Icon(Icons.speed_rounded, color: GamerTheme.flameOrange),
+                  prefixIcon: const Icon(Icons.tag_rounded, color: GamerTheme.accentBlue),
                   border: OutlineInputBorder(
                     borderRadius: BorderRadius.circular(10),
                     borderSide: const BorderSide(color: GamerTheme.borderDark),
@@ -409,17 +329,156 @@ class _VerificationScreenState extends State<VerificationScreen> {
               child: const Text('Cancel', style: TextStyle(color: GamerTheme.textMuted)),
             ),
             ElevatedButton(
+              style: ElevatedButton.styleFrom(backgroundColor: GamerTheme.accentBlue),
+              onPressed: () async {
+                final val = controller.text.trim();
+                if (val.isNotEmpty) {
+                  Navigator.pop(ctx);
+                  await VerificationService.linkGameId(
+                    userId: user.uid,
+                    gameId: val,
+                    gameName: selectedGame,
+                  );
+                  _refreshData();
+                }
+              },
+              child: const Text('Save & Link', style: TextStyle(color: GamerTheme.bgDark, fontWeight: FontWeight.bold)),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  void _showQuickRankKdDialog(GamerUser user) {
+    String selectedGame = user.selectedGame.isNotEmpty
+        ? user.selectedGame
+        : (user.favoriteGame.isNotEmpty ? user.favoriteGame : 'BGMI');
+    String selectedRank = user.rank.isEmpty ? 'Ace' : user.rank;
+    final kdController = TextEditingController(text: user.kdRatio > 0 ? user.kdRatio.toString() : '3.5');
+
+    final ranksList = [
+      'Bronze',
+      'Silver',
+      'Gold',
+      'Platinum',
+      'Diamond',
+      'Crown',
+      'Ace',
+      'Ace Master',
+      'Ace Dominator',
+      'Conqueror',
+      'Heroic',
+      'Grandmaster',
+      'Legendary',
+      'Immortal',
+      'Radiant',
+      'Champion',
+    ];
+
+    showDialog(
+      context: context,
+      builder: (ctx) => StatefulBuilder(
+        builder: (ctx, setDlgState) => AlertDialog(
+          backgroundColor: GamerTheme.cardElevated,
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+          title: const Row(
+            children: [
+              Icon(Icons.military_tech_rounded, color: GamerTheme.flameOrange, size: 22),
+              SizedBox(width: 8),
+              Text('Update Rank & Stats', style: TextStyle(color: GamerTheme.textWhite, fontSize: 18, fontWeight: FontWeight.bold)),
+            ],
+          ),
+          content: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  'Select your competitive rank and stats in $selectedGame:',
+                  style: const TextStyle(color: GamerTheme.textGray, fontSize: 12),
+                ),
+                const SizedBox(height: 16),
+                const Text('GAME RANK (Top Tier Required)', style: TextStyle(color: GamerTheme.textMuted, fontSize: 11, fontWeight: FontWeight.bold)),
+                const SizedBox(height: 6),
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 12),
+                  decoration: BoxDecoration(
+                    color: GamerTheme.cardDark,
+                    borderRadius: BorderRadius.circular(10),
+                    border: Border.all(color: GamerTheme.borderDark),
+                  ),
+                  child: DropdownButtonHideUnderline(
+                    child: DropdownButton<String>(
+                      value: ranksList.contains(selectedRank) ? selectedRank : ranksList.first,
+                      isExpanded: true,
+                      dropdownColor: GamerTheme.cardElevated,
+                      items: ranksList.map((r) {
+                        final isEligible = VerificationService.isRankEligible(r);
+                        return DropdownMenuItem<String>(
+                          value: r,
+                          child: Row(
+                            children: [
+                              Icon(
+                                isEligible ? Icons.check_circle_rounded : Icons.cancel_rounded,
+                                size: 16,
+                                color: isEligible ? GamerTheme.neonGreen : GamerTheme.redAccent,
+                              ),
+                              const SizedBox(width: 8),
+                              Text(
+                                r,
+                                style: TextStyle(
+                                  color: isEligible ? GamerTheme.textWhite : GamerTheme.textMuted,
+                                  fontWeight: isEligible ? FontWeight.bold : FontWeight.normal,
+                                ),
+                              ),
+                            ],
+                          ),
+                        );
+                      }).toList(),
+                      onChanged: (v) {
+                        if (v != null) setDlgState(() => selectedRank = v);
+                      },
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 14),
+                const Text('GAME STATS / K/D (Optional)', style: TextStyle(color: GamerTheme.textMuted, fontSize: 11, fontWeight: FontWeight.bold)),
+                const SizedBox(height: 6),
+                TextField(
+                  controller: kdController,
+                  keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                  style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
+                  decoration: InputDecoration(
+                    hintText: 'e.g. 3.50 (Optional)',
+                    hintStyle: const TextStyle(color: GamerTheme.textMuted),
+                    filled: true,
+                    fillColor: GamerTheme.cardDark,
+                    prefixIcon: const Icon(Icons.speed_rounded, color: GamerTheme.flameOrange),
+                    border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(10),
+                      borderSide: const BorderSide(color: GamerTheme.borderDark),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(ctx),
+              child: const Text('Cancel', style: TextStyle(color: GamerTheme.textMuted)),
+            ),
+            ElevatedButton(
               style: ElevatedButton.styleFrom(backgroundColor: GamerTheme.flameOrange),
               onPressed: () async {
                 final double? kd = double.tryParse(kdController.text.trim());
                 Navigator.pop(ctx);
-                if (kd != null) {
-                  await _authService.updateProfile(
-                    rank: selectedRank,
-                    kdRatio: kd,
-                  );
-                  _refreshData();
-                }
+                await _authService.updateProfile(
+                  rank: selectedRank,
+                  ifKd: kd,
+                );
+                _refreshData();
               },
               child: const Text('Update Rank', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
             ),
@@ -560,6 +619,81 @@ class _VerificationScreenState extends State<VerificationScreen> {
     required int metCount,
     required int totalCount,
   }) {
+    // Special Owner Header
+    if (user.isOwnerUser) {
+      return Container(
+        width: double.infinity,
+        padding: const EdgeInsets.all(20),
+        decoration: BoxDecoration(
+          gradient: const LinearGradient(
+            colors: [Color(0xFF2A1C0A), Color(0xFF4A3410), Color(0xFF1B1204)],
+            begin: Alignment.topLeft,
+            end: Alignment.bottomRight,
+          ),
+          borderRadius: BorderRadius.circular(18),
+          border: Border.all(color: const Color(0xFFFFD700), width: 2),
+          boxShadow: [
+            BoxShadow(
+              color: const Color(0xFFFFD700).withOpacity(0.3),
+              blurRadius: 18,
+              spreadRadius: 2,
+            ),
+          ],
+        ),
+        child: Column(
+          children: [
+            Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Container(
+                  padding: const EdgeInsets.all(12),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFFFFD700).withOpacity(0.2),
+                    shape: BoxShape.circle,
+                    border: Border.all(color: const Color(0xFFFFD700), width: 1.5),
+                  ),
+                  child: const Icon(Icons.workspace_premium_rounded, color: Color(0xFFFFD700), size: 40),
+                ),
+                const SizedBox(width: 12),
+                Container(
+                  padding: const EdgeInsets.all(12),
+                  decoration: BoxDecoration(
+                    color: Colors.blue.withOpacity(0.2),
+                    shape: BoxShape.circle,
+                    border: Border.all(color: Colors.blue, width: 1.5),
+                  ),
+                  child: const Icon(Icons.verified_rounded, color: Colors.blue, size: 40),
+                ),
+              ],
+            ),
+            const SizedBox(height: 14),
+            const Text(
+              'OFFICIAL OWNER & CREATOR 👑',
+              style: TextStyle(
+                color: Color(0xFFFFD700),
+                fontSize: 20,
+                fontWeight: FontWeight.w900,
+                letterSpacing: 1.2,
+              ),
+              textAlign: TextAlign.center,
+            ),
+            const SizedBox(height: 6),
+            const Text(
+              'LEGEND Badge 👑 • Official Blue Tick Verified ✅',
+              style: TextStyle(color: Colors.white, fontSize: 13.5, fontWeight: FontWeight.bold),
+              textAlign: TextAlign.center,
+            ),
+            const SizedBox(height: 4),
+            Text(
+              '@${user.username} has permanent verified owner privileges across all supported games on Gamers ID Network.',
+              style: const TextStyle(color: GamerTheme.textGray, fontSize: 12.5, height: 1.35),
+              textAlign: TextAlign.center,
+            ),
+          ],
+        ),
+      );
+    }
+
     if (isVerified) {
       return Container(
         width: double.infinity,
@@ -601,7 +735,7 @@ class _VerificationScreenState extends State<VerificationScreen> {
             ),
             const SizedBox(height: 6),
             Text(
-              '@${user.username} is an officially verified competitive BGMI player. All community integrity, K/D, and rank benchmarks are satisfied.',
+              '@${user.username} is an officially verified competitive gamer. All community integrity and competitive benchmarks are satisfied.',
               style: const TextStyle(color: GamerTheme.textGray, fontSize: 13, height: 1.35),
               textAlign: TextAlign.center,
             ),
@@ -1022,8 +1156,8 @@ class _VerificationScreenState extends State<VerificationScreen> {
                     shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
                   ),
                   icon: const Icon(Icons.sports_esports_rounded, color: GamerTheme.accentBlue, size: 16),
-                  label: const Text('Link BGMI UID', style: TextStyle(color: GamerTheme.accentBlue, fontSize: 12, fontWeight: FontWeight.bold)),
-                  onPressed: () => _showLinkBgmiUidDialog(user),
+                  label: const Text('Link Game UID', style: TextStyle(color: GamerTheme.accentBlue, fontSize: 12, fontWeight: FontWeight.bold)),
+                  onPressed: () => _showLinkGameUidDialog(user),
                 ),
               ),
               const SizedBox(width: 8),
@@ -1035,7 +1169,7 @@ class _VerificationScreenState extends State<VerificationScreen> {
                     shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
                   ),
                   icon: const Icon(Icons.military_tech_rounded, color: GamerTheme.flameOrange, size: 16),
-                  label: const Text('Set Rank & K/D', style: TextStyle(color: GamerTheme.flameOrange, fontSize: 12, fontWeight: FontWeight.bold)),
+                  label: const Text('Set Game Rank', style: TextStyle(color: GamerTheme.flameOrange, fontSize: 12, fontWeight: FontWeight.bold)),
                   onPressed: () => _showQuickRankKdDialog(user),
                 ),
               ),
