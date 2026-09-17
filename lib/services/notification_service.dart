@@ -532,4 +532,30 @@ class NotificationService {
       );
     } catch (_) {}
   }
+
+  /// Create and store an in-app notification in Firestore
+  Future<void> createNotification({
+    required String userId,
+    required String title,
+    required String body,
+    String type = 'general',
+    Map<String, dynamic>? additionalData,
+  }) async {
+    try {
+      await FirebaseFirestore.instance.collection('notifications').add({
+        'recipientUid': userId,
+        'userId': userId,
+        'title': title,
+        'body': body,
+        'message': body,
+        'type': type,
+        'read': false,
+        'createdAt': FieldValue.serverTimestamp(),
+        'timestamp': FieldValue.serverTimestamp(),
+        if (additionalData != null) ...additionalData,
+      });
+    } catch (e) {
+      debugPrint('Error creating in-app notification: $e');
+    }
+  }
 }
