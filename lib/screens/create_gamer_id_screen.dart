@@ -1277,11 +1277,11 @@ class _CreateGamerIdScreenState extends State<CreateGamerIdScreen> {
                       Row(
                         mainAxisAlignment: MainAxisAlignment.spaceBetween,
                         children: [
-                          const Row(
+                          Row(
                             children: [
-                              Icon(Icons.military_tech_rounded, color: Color(0xFFFF8A00), size: 18),
-                              SizedBox(width: 6),
-                              Text(
+                              const Icon(Icons.military_tech_rounded, color: Color(0xFFFF8A00), size: 18),
+                              const SizedBox(width: 6),
+                              const Text(
                                 'MOBILE GAMES RANK / TIER',
                                 style: TextStyle(
                                   color: GamerTheme.textGray,
@@ -1290,14 +1290,14 @@ class _CreateGamerIdScreenState extends State<CreateGamerIdScreen> {
                                   letterSpacing: 0.8,
                                 ),
                               ),
-                              SizedBox(width: 8),
+                              const SizedBox(width: 8),
                               Container(
-                                padding: EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                                decoration: BoxDecoration(
+                                padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                                decoration: const BoxDecoration(
                                   color: Colors.white10,
                                   borderRadius: BorderRadius.all(Radius.circular(6)),
                                 ),
-                                child: Text(
+                                child: const Text(
                                   'Optional / اختیاری',
                                   style: TextStyle(color: GamerTheme.textMuted, fontSize: 10, fontWeight: FontWeight.bold),
                                 ),

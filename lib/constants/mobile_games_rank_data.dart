@@ -220,6 +220,28 @@ class MobileGamesRankData {
     ],
   };
 
+  static String getGameEmoji(String gameName) {
+    if (gameIcons.containsKey(gameName)) return gameIcons[gameName]!;
+    for (final entry in gameIcons.entries) {
+      if (entry.key.toLowerCase().contains(gameName.toLowerCase()) ||
+          gameName.toLowerCase().contains(entry.key.toLowerCase())) {
+        return entry.value;
+      }
+    }
+    return '🎮';
+  }
+
+  static Color getGameColor(String gameName) {
+    if (gameColors.containsKey(gameName)) return gameColors[gameName]!;
+    for (final entry in gameColors.entries) {
+      if (entry.key.toLowerCase().contains(gameName.toLowerCase()) ||
+          gameName.toLowerCase().contains(entry.key.toLowerCase())) {
+        return entry.value;
+      }
+    }
+    return const Color(0xFFFF8A00);
+  }
+
   static List<String> getRanksForGame(String gameName) {
     if (ranksByGame.containsKey(gameName)) {
       return ranksByGame[gameName]!;
