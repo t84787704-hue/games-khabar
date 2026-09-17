@@ -151,6 +151,10 @@ class GamerUser {
   final bool isBlueTickVerified;
   final String blueTickStatus; // 'none', 'pending', 'approved', 'rejected'
   final bool isRankVerified;
+  final String rankScreenshot;
+  final String rankStatus; // 'None', 'Pending', 'Verified', 'Rejected'
+  final String rankVerifiedBy;
+  final String rankRejectReason;
   final bool isAdmin;
   final bool isBanned;
   final DateTime? bannedAt;
@@ -198,6 +202,10 @@ class GamerUser {
     this.isBlueTickVerified = false,
     this.blueTickStatus = 'none',
     this.isRankVerified = false,
+    this.rankScreenshot = '',
+    this.rankStatus = 'None',
+    this.rankVerifiedBy = '',
+    this.rankRejectReason = '',
     this.isAdmin = false,
     this.isBanned = false,
     this.bannedAt,
@@ -226,6 +234,10 @@ class GamerUser {
 
   bool get isPendingVerification => verificationStatus == 'pending' || blueTickStatus == 'pending';
   bool get isRejectedVerification => verificationStatus == 'rejected' || blueTickStatus == 'rejected';
+
+  bool get isRankPending => rankStatus.toLowerCase() == 'pending';
+  bool get isRankApproved => rankStatus.toLowerCase() == 'verified' || isRankVerified;
+  bool get isRankRejected => rankStatus.toLowerCase() == 'rejected';
   
   /// Blue tick (influencer checkmark ✓) is shown ONLY if isBlueTickVerified == true AND blueTickStatus == 'approved'
   bool get hasBlueTick =>
@@ -460,7 +472,11 @@ class GamerUser {
       isVerifiedBlue: hasApprovedBlueTick,
       isBlueTickVerified: rawBlueTick,
       blueTickStatus: rawBlueStatus.isNotEmpty ? rawBlueStatus : (hasApprovedBlueTick ? 'approved' : 'none'),
-      isRankVerified: rawRankVerified,
+      isRankVerified: rawRankVerified || (data['rankStatus']?.toString().toLowerCase() == 'verified'),
+      rankScreenshot: data['rankScreenshot']?.toString() ?? '',
+      rankStatus: data['rankStatus']?.toString() ?? (rawRankVerified ? 'Verified' : 'None'),
+      rankVerifiedBy: data['rankVerifiedBy']?.toString() ?? '',
+      rankRejectReason: data['rankRejectReason']?.toString() ?? '',
       isAdmin: data['isAdmin'] == true,
       isBanned: data['isBanned'] == true,
       bannedAt: bannedTimestamp,
@@ -518,7 +534,11 @@ class GamerUser {
       'isBlueTickVerified': isBlueTickVerified,
       'blueTickVerified': isBlueTickVerified,
       'blueTickStatus': blueTickStatus,
-      'isRankVerified': isRankVerified,
+      'isRankVerified': isRankApproved,
+      'rankScreenshot': rankScreenshot,
+      'rankStatus': rankStatus,
+      'rankVerifiedBy': rankVerifiedBy,
+      'rankRejectReason': rankRejectReason,
       'isAdmin': isAdmin,
       'isBanned': isBanned,
       if (bannedAt != null) 'bannedAt': Timestamp.fromDate(bannedAt!),
@@ -583,6 +603,10 @@ class GamerUser {
     bool? isBlueTickVerified,
     String? blueTickStatus,
     bool? isRankVerified,
+    String? rankScreenshot,
+    String? rankStatus,
+    String? rankVerifiedBy,
+    String? rankRejectReason,
     bool? isAdmin,
     bool? isBanned,
     DateTime? bannedAt,
@@ -630,6 +654,10 @@ class GamerUser {
       isBlueTickVerified: isBlueTickVerified ?? this.isBlueTickVerified,
       blueTickStatus: blueTickStatus ?? this.blueTickStatus,
       isRankVerified: isRankVerified ?? this.isRankVerified,
+      rankScreenshot: rankScreenshot ?? this.rankScreenshot,
+      rankStatus: rankStatus ?? this.rankStatus,
+      rankVerifiedBy: rankVerifiedBy ?? this.rankVerifiedBy,
+      rankRejectReason: rankRejectReason ?? this.rankRejectReason,
       isAdmin: isAdmin ?? this.isAdmin,
       isBanned: isBanned ?? this.isBanned,
       bannedAt: bannedAt ?? this.bannedAt,

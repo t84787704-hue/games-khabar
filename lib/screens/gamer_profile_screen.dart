@@ -1247,30 +1247,128 @@ class _GamerProfileScreenState extends State<GamerProfileScreen> with SingleTick
                               ),
                             ),
 
-                            // Rank Badge
-                            Container(
-                              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
-                              decoration: BoxDecoration(
-                                color: GamerTheme.cardElevated,
-                                borderRadius: BorderRadius.circular(8),
-                                border: Border.all(color: GamerTheme.borderLight),
-                              ),
-                              child: Row(
-                                mainAxisSize: MainAxisSize.min,
-                                children: [
-                                  const Icon(Icons.military_tech_rounded, color: GamerTheme.flameOrange, size: 16),
-                                  const SizedBox(width: 4),
-                                  Text(
-                                    user.rank,
-                                    style: const TextStyle(
-                                      color: GamerTheme.flameOrange,
-                                      fontWeight: FontWeight.w800,
-                                      fontSize: 12,
-                                    ),
+                            // Rank Badge with Verification Status
+                            if (user.rank.isNotEmpty && user.rank.toLowerCase() != 'none' && user.rank.toLowerCase() != 'skip') ...[
+                              if (user.isRankApproved) ...[
+                                Container(
+                                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+                                  decoration: BoxDecoration(
+                                    color: const Color(0xFF00FF88).withOpacity(0.12),
+                                    borderRadius: BorderRadius.circular(8),
+                                    border: Border.all(color: const Color(0xFF00FF88).withOpacity(0.5)),
                                   ),
-                                ],
-                              ),
-                            ),
+                                  child: Row(
+                                    mainAxisSize: MainAxisSize.min,
+                                    children: [
+                                      const Icon(Icons.military_tech_rounded, color: Color(0xFF00FF88), size: 16),
+                                      const SizedBox(width: 4),
+                                      Text(
+                                        user.rank,
+                                        style: const TextStyle(
+                                          color: Color(0xFF00FF88),
+                                          fontWeight: FontWeight.w800,
+                                          fontSize: 12,
+                                        ),
+                                      ),
+                                      const SizedBox(width: 5),
+                                      const Icon(Icons.verified_rounded, color: Color(0xFF00FF88), size: 14),
+                                      const SizedBox(width: 2),
+                                      const Text(
+                                        'Verified',
+                                        style: TextStyle(
+                                          color: Color(0xFF00FF88),
+                                          fontWeight: FontWeight.w900,
+                                          fontSize: 11,
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                              ] else if (user.isRankPending) ...[
+                                Container(
+                                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+                                  decoration: BoxDecoration(
+                                    color: const Color(0xFFFFD700).withOpacity(0.14),
+                                    borderRadius: BorderRadius.circular(8),
+                                    border: Border.all(color: const Color(0xFFFFD700).withOpacity(0.6)),
+                                  ),
+                                  child: Row(
+                                    mainAxisSize: MainAxisSize.min,
+                                    children: [
+                                      const Icon(Icons.military_tech_rounded, color: Color(0xFFFFD700), size: 16),
+                                      const SizedBox(width: 4),
+                                      Text(
+                                        user.rank,
+                                        style: const TextStyle(
+                                          color: Color(0xFFFFD700),
+                                          fontWeight: FontWeight.w800,
+                                          fontSize: 12,
+                                        ),
+                                      ),
+                                      const SizedBox(width: 6),
+                                      const Icon(Icons.hourglass_top_rounded, color: Color(0xFFFFD700), size: 13),
+                                      const SizedBox(width: 3),
+                                      const Text(
+                                        'Rank Verification Pending',
+                                        style: TextStyle(
+                                          color: Color(0xFFFFD700),
+                                          fontWeight: FontWeight.w800,
+                                          fontSize: 11,
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                              ] else if (user.isRankRejected) ...[
+                                Container(
+                                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+                                  decoration: BoxDecoration(
+                                    color: const Color(0xFFFF4655).withOpacity(0.12),
+                                    borderRadius: BorderRadius.circular(8),
+                                    border: Border.all(color: const Color(0xFFFF4655).withOpacity(0.5)),
+                                  ),
+                                  child: Row(
+                                    mainAxisSize: MainAxisSize.min,
+                                    children: [
+                                      const Icon(Icons.error_outline_rounded, color: Color(0xFFFF4655), size: 15),
+                                      const SizedBox(width: 4),
+                                      Text(
+                                        '${user.rank} (Rejected)',
+                                        style: const TextStyle(
+                                          color: Color(0xFFFF4655),
+                                          fontWeight: FontWeight.w800,
+                                          fontSize: 12,
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                              ] else ...[
+                                Container(
+                                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+                                  decoration: BoxDecoration(
+                                    color: GamerTheme.cardElevated,
+                                    borderRadius: BorderRadius.circular(8),
+                                    border: Border.all(color: GamerTheme.borderLight),
+                                  ),
+                                  child: Row(
+                                    mainAxisSize: MainAxisSize.min,
+                                    children: [
+                                      const Icon(Icons.military_tech_rounded, color: GamerTheme.flameOrange, size: 16),
+                                      const SizedBox(width: 4),
+                                      Text(
+                                        user.rank,
+                                        style: const TextStyle(
+                                          color: GamerTheme.flameOrange,
+                                          fontWeight: FontWeight.w800,
+                                          fontSize: 12,
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                              ],
+                            ],
 
                             // App Rank Badge (Auto points calculation)
                             Container(
@@ -2466,6 +2564,11 @@ class _AddVerifyGameRankSheetState extends State<AddVerifyGameRankSheet> {
       await docRef.set({
         'games': gamesList,
         if (widget.user.gameId.isEmpty) 'gameId': _gameIdController.text.trim(),
+        'rank': _selectedRank,
+        'rankScreenshot': downloadUrl,
+        'rankStatus': 'Pending',
+        'isRankVerified': false,
+        'rankRejectReason': '',
         'updatedAt': FieldValue.serverTimestamp(),
       }, SetOptions(merge: true));
 

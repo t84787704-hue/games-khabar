@@ -40,6 +40,10 @@ class _CreateGamerIdScreenState extends State<CreateGamerIdScreen> {
   String _coverUrl = '';
   File? _pickedImageFile;
   File? _pickedCoverFile;
+  File? _pickedRankScreenshot;
+  String _rankScreenshotUrl = '';
+  String _rankStatus = 'None';
+  String _rankRejectReason = '';
   bool _isSaving = false;
 
   // Store perks: Profile Frame & Badge
@@ -125,10 +129,13 @@ class _CreateGamerIdScreenState extends State<CreateGamerIdScreen> {
       _displayNameController.text = u.displayName;
       _bioController.text = u.bio;
       _selectedGame = GamerTheme.favoriteGames.contains(u.favoriteGame) ? u.favoriteGame : 'BGMI';
-      _rankController.text = u.rank.isNotEmpty ? u.rank : _dynamicRanks.first;
+      _rankController.text = (u.rank.isNotEmpty && u.rank != 'None' && u.rank != 'Skip') ? u.rank : '';
       _gameIdController.text = u.gameId.isNotEmpty ? u.gameId : '12345';
       _photoUrl = u.photoUrl;
       _coverUrl = u.coverUrl;
+      _rankScreenshotUrl = u.rankScreenshot;
+      _rankStatus = u.rankStatus;
+      _rankRejectReason = u.rankRejectReason;
       _isUsernameAvailable = true;
       _selectedFrame = u.activeFrame;
       _unlockedFrames = List<String>.from(u.unlockedFrames);
@@ -142,7 +149,7 @@ class _CreateGamerIdScreenState extends State<CreateGamerIdScreen> {
           _photoUrl = fbUser.photoURL!;
         }
       }
-      _rankController.text = _dynamicRanks.first;
+      _rankController.text = '';
       _gameIdController.text = '12345';
     }
     _loadStorePerks();
@@ -290,6 +297,87 @@ class _CreateGamerIdScreenState extends State<CreateGamerIdScreen> {
     }
   }
 
+  Future<void> _pickRankScreenshot(ImageSource source) async {
+    try {
+      final picker = ImagePicker();
+      final picked = await picker.pickImage(
+        source: source,
+        maxWidth: 1600,
+        maxHeight: 1600,
+        imageQuality: 85,
+      );
+
+      if (picked != null) {
+        setState(() {
+          _pickedRankScreenshot = File(picked.path);
+        });
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Could not pick screenshot: $e'),
+            backgroundColor: GamerTheme.redAccent,
+          ),
+        );
+      }
+    }
+  }
+
+  void _showRankScreenshotPickerSheet() {
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: const Color(0xFF10141D),
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      builder: (ctx) => SafeArea(
+        child: Padding(
+          padding: const EdgeInsets.symmetric(vertical: 20, horizontal: 16),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Text(
+                'Upload Rank Screenshot Proof',
+                style: TextStyle(
+                  color: Colors.white,
+                  fontWeight: FontWeight.bold,
+                  fontSize: 16,
+                ),
+              ),
+              const SizedBox(height: 6),
+              const Text(
+                'اسکرین شاٹ میں گیم کی اصل ID اور Rank صاف نظر آنا چاہیے',
+                style: TextStyle(
+                  color: Color(0xFF8B949E),
+                  fontSize: 12,
+                ),
+              ),
+              const SizedBox(height: 16),
+              ListTile(
+                leading: const Icon(Icons.photo_library_rounded, color: Color(0xFF00FF88)),
+                title: const Text('Choose from Gallery / گیلری سے منتخب کریں', style: TextStyle(color: Colors.white, fontSize: 13.5)),
+                onTap: () {
+                  Navigator.pop(ctx);
+                  _pickRankScreenshot(ImageSource.gallery);
+                },
+              ),
+              ListTile(
+                leading: const Icon(Icons.camera_alt_rounded, color: Color(0xFF38BDF8)),
+                title: const Text('Take Photo / کیمرہ سے تصویر لیں', style: TextStyle(color: Colors.white, fontSize: 13.5)),
+                onTap: () {
+                  Navigator.pop(ctx);
+                  _pickRankScreenshot(ImageSource.camera);
+                },
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
   Future<void> _saveGamerId() async {
     if (!_formKey.currentState!.validate()) return;
 
@@ -328,6 +416,45 @@ class _CreateGamerIdScreenState extends State<CreateGamerIdScreen> {
         finalCoverUrl = await GamerAuthService().uploadCoverPhoto(_pickedCoverFile!, uid);
       }
 
+      // Rank & Screenshot verification logic
+      final enteredRank = _rankController.text.trim();
+      String finalRank = '';
+      String finalRankScreenshot = _rankScreenshotUrl;
+      String finalRankStatus = _rankStatus;
+      String finalRankVerifiedBy = widget.existingUser?.rankVerifiedBy ?? '';
+      String finalRankRejectReason = widget.existingUser?.rankRejectReason ?? '';
+      bool isRankVerified = widget.existingUser?.isRankVerified ?? false;
+
+      if (enteredRank.isNotEmpty && enteredRank.toLowerCase() != 'none' && enteredRank.toLowerCase() != 'skip') {
+        if (_pickedRankScreenshot != null) {
+          // Upload new screenshot proof
+          finalRankScreenshot = await GamerAuthService().uploadRankScreenshot(_pickedRankScreenshot!, uid);
+          finalRank = enteredRank;
+          finalRankStatus = 'Pending'; // Mark Pending for Admin
+          finalRankRejectReason = '';
+          isRankVerified = false;
+        } else if (finalRankScreenshot.isNotEmpty) {
+          finalRank = enteredRank;
+          if (enteredRank != widget.existingUser?.rank) {
+            finalRankStatus = 'Pending';
+            isRankVerified = false;
+          }
+        } else {
+          // User chose a rank but didn't upload a screenshot:
+          // Rule 3: Rank is not saved and left Optional
+          finalRank = '';
+          finalRankStatus = 'None';
+          finalRankScreenshot = '';
+          isRankVerified = false;
+        }
+      } else {
+        // Skipped
+        finalRank = '';
+        finalRankStatus = 'None';
+        finalRankScreenshot = '';
+        isRankVerified = false;
+      }
+
       final gamerUser = GamerUser(
         uid: uid,
         username: rawUsername,
@@ -338,7 +465,12 @@ class _CreateGamerIdScreenState extends State<CreateGamerIdScreen> {
         coverUrl: finalCoverUrl.isNotEmpty ? finalCoverUrl : (widget.existingUser?.coverUrl ?? ''),
         bio: _bioController.text.trim(),
         favoriteGame: _selectedGame,
-        rank: _rankController.text.trim().isNotEmpty ? _rankController.text.trim() : _dynamicRanks.first,
+        rank: finalRank,
+        rankScreenshot: finalRankScreenshot,
+        rankStatus: finalRankStatus,
+        rankVerifiedBy: finalRankVerifiedBy,
+        rankRejectReason: finalRankRejectReason,
+        isRankVerified: isRankVerified,
         followersCount: widget.existingUser?.followersCount ?? 0,
         followingCount: widget.existingUser?.followingCount ?? 0,
         postsCount: widget.existingUser?.postsCount ?? 0,
@@ -1134,9 +1266,8 @@ class _CreateGamerIdScreenState extends State<CreateGamerIdScreen> {
                               if (val != null) {
                                 setState(() {
                                   _selectedGame = val;
-                                  // Update to dynamic ranks for selected game
                                   final ranks = _dynamicRanks;
-                                  if (!ranks.contains(_rankController.text.trim())) {
+                                  if (_rankController.text.trim().isNotEmpty && !ranks.contains(_rankController.text.trim())) {
                                     _rankController.text = ranks.first;
                                   }
                                 });
@@ -1148,27 +1279,66 @@ class _CreateGamerIdScreenState extends State<CreateGamerIdScreen> {
 
                       const SizedBox(height: 20),
 
-                      // 4. DYNAMIC RANK SYSTEM:
-                      // When FAVORITE GAME = BGMI, show ranks: Ace, Conqueror, Ace Master, Ace Dominator.
-                      // When = Free Fire, show Heroic, Grandmaster.
-                      // When = Valorant, show Radiant, Immortal, Diamond.
-                      // Don't show all ranks mixed.
+                      // 4. DYNAMIC RANK SYSTEM & SCREENSHOT VERIFICATION
                       Row(
                         mainAxisAlignment: MainAxisAlignment.spaceBetween,
                         children: [
-                          Text(
-                            '$_selectedGame RANK / TIER',
-                            style: const TextStyle(
-                              color: GamerTheme.textGray,
-                              fontSize: 12,
-                              fontWeight: FontWeight.w800,
-                              letterSpacing: 0.8,
+                          Row(
+                            children: [
+                              Text(
+                                '$_selectedGame RANK / TIER',
+                                style: const TextStyle(
+                                  color: GamerTheme.textGray,
+                                  fontSize: 12,
+                                  fontWeight: FontWeight.w800,
+                                  letterSpacing: 0.8,
+                                ),
+                              ),
+                              const SizedBox(width: 8),
+                              Container(
+                                padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                                decoration: BoxDecoration(
+                                  color: Colors.white10,
+                                  borderRadius: BorderRadius.circular(6),
+                                ),
+                                child: const Text(
+                                  'Optional / اختیاری',
+                                  style: TextStyle(color: GamerTheme.textMuted, fontSize: 10, fontWeight: FontWeight.bold),
+                                ),
+                              ),
+                            ],
+                          ),
+                          if (_rankController.text.trim().isNotEmpty)
+                            InkWell(
+                              onTap: () {
+                                setState(() {
+                                  _rankController.clear();
+                                  _pickedRankScreenshot = null;
+                                  _rankScreenshotUrl = '';
+                                  _rankStatus = 'None';
+                                });
+                              },
+                              borderRadius: BorderRadius.circular(8),
+                              child: Container(
+                                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                                decoration: BoxDecoration(
+                                  color: GamerTheme.cardElevated,
+                                  borderRadius: BorderRadius.circular(8),
+                                  border: Border.all(color: GamerTheme.borderLight),
+                                ),
+                                child: const Row(
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    Icon(Icons.close_rounded, size: 12, color: GamerTheme.textMuted),
+                                    SizedBox(width: 4),
+                                    Text(
+                                      'Skip / چھوڑ دیں',
+                                      style: TextStyle(color: GamerTheme.textMuted, fontSize: 11, fontWeight: FontWeight.w700),
+                                    ),
+                                  ],
+                                ),
+                              ),
                             ),
-                          ),
-                          Text(
-                            'Dynamic for $_selectedGame',
-                            style: const TextStyle(color: GamerTheme.accentOrange, fontSize: 11, fontWeight: FontWeight.bold),
-                          ),
                         ],
                       ),
                       const SizedBox(height: 8),
@@ -1177,57 +1347,357 @@ class _CreateGamerIdScreenState extends State<CreateGamerIdScreen> {
                         style: const TextStyle(color: GamerTheme.textWhite),
                         decoration: InputDecoration(
                           prefixIcon: const Icon(Icons.military_tech_rounded, color: GamerTheme.accentOrange),
-                          hintText: 'Select or enter your $_selectedGame rank',
+                          hintText: 'Select or enter your $_selectedGame rank (Optional)',
+                          suffixIcon: _rankController.text.trim().isNotEmpty
+                              ? IconButton(
+                                  icon: const Icon(Icons.clear, color: GamerTheme.textMuted, size: 16),
+                                  onPressed: () {
+                                    setState(() {
+                                      _rankController.clear();
+                                      _pickedRankScreenshot = null;
+                                    });
+                                  },
+                                )
+                              : null,
                         ),
-                        validator: (val) {
-                          if ((val ?? '').trim().isEmpty) return 'Rank/Level is required';
-                          return null;
-                        },
+                        onChanged: (_) => setState(() {}),
+                        validator: null, // Optional / Skippable!
                       ),
                       const SizedBox(height: 8),
                       Wrap(
                         spacing: 8,
                         runSpacing: 8,
-                        children: _dynamicRanks.map((rank) {
-                          final isSelected = _rankController.text.trim() == rank;
-                          return InkWell(
+                        children: [
+                          // Skip / None chip
+                          InkWell(
                             onTap: () {
                               setState(() {
-                                _rankController.text = rank;
+                                _rankController.clear();
+                                _pickedRankScreenshot = null;
                               });
                             },
                             borderRadius: BorderRadius.circular(12),
                             child: Container(
                               padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
                               decoration: BoxDecoration(
-                                color: isSelected ? GamerTheme.accentOrange.withOpacity(0.2) : GamerTheme.cardElevated,
+                                color: _rankController.text.trim().isEmpty
+                                    ? GamerTheme.accentBlue.withOpacity(0.2)
+                                    : GamerTheme.cardElevated,
                                 borderRadius: BorderRadius.circular(12),
                                 border: Border.all(
-                                  color: isSelected ? GamerTheme.accentOrange : GamerTheme.borderLight,
-                                  width: isSelected ? 1.5 : 1,
+                                  color: _rankController.text.trim().isEmpty ? GamerTheme.accentBlue : GamerTheme.borderLight,
+                                  width: _rankController.text.trim().isEmpty ? 1.5 : 1,
                                 ),
                               ),
                               child: Row(
                                 mainAxisSize: MainAxisSize.min,
                                 children: [
-                                  if (isSelected) ...[
-                                    const Icon(Icons.check, color: GamerTheme.accentOrange, size: 12),
+                                  if (_rankController.text.trim().isEmpty) ...[
+                                    const Icon(Icons.check, color: GamerTheme.accentBlue, size: 12),
                                     const SizedBox(width: 4),
                                   ],
                                   Text(
-                                    rank,
+                                    'Skip / No Rank',
                                     style: TextStyle(
-                                      color: isSelected ? GamerTheme.accentOrange : Colors.white70,
+                                      color: _rankController.text.trim().isEmpty ? GamerTheme.accentBlue : Colors.white70,
                                       fontSize: 12,
-                                      fontWeight: isSelected ? FontWeight.w900 : FontWeight.w700,
+                                      fontWeight: _rankController.text.trim().isEmpty ? FontWeight.w900 : FontWeight.w700,
                                     ),
                                   ),
                                 ],
                               ),
                             ),
-                          );
-                        }).toList(),
+                          ),
+                          // Dynamic rank chips
+                          ..._dynamicRanks.map((rank) {
+                            final isSelected = _rankController.text.trim() == rank;
+                            return InkWell(
+                              onTap: () {
+                                setState(() {
+                                  _rankController.text = rank;
+                                });
+                              },
+                              borderRadius: BorderRadius.circular(12),
+                              child: Container(
+                                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                                decoration: BoxDecoration(
+                                  color: isSelected ? GamerTheme.accentOrange.withOpacity(0.2) : GamerTheme.cardElevated,
+                                  borderRadius: BorderRadius.circular(12),
+                                  border: Border.all(
+                                    color: isSelected ? GamerTheme.accentOrange : GamerTheme.borderLight,
+                                    width: isSelected ? 1.5 : 1,
+                                  ),
+                                ),
+                                child: Row(
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    if (isSelected) ...[
+                                      const Icon(Icons.check, color: GamerTheme.accentOrange, size: 12),
+                                      const SizedBox(width: 4),
+                                    ],
+                                    Text(
+                                      rank,
+                                      style: TextStyle(
+                                        color: isSelected ? GamerTheme.accentOrange : Colors.white70,
+                                        fontSize: 12,
+                                        fontWeight: isSelected ? FontWeight.w900 : FontWeight.w700,
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            );
+                          }),
+                        ],
                       ),
+
+                      // SCREENSHOT PROOF UPLOAD (Mandatory when Rank is selected)
+                      if (_rankController.text.trim().isNotEmpty) ...[
+                        const SizedBox(height: 14),
+                        Container(
+                          padding: const EdgeInsets.all(14),
+                          decoration: BoxDecoration(
+                            color: const Color(0xFF10141D),
+                            borderRadius: BorderRadius.circular(16),
+                            border: Border.all(
+                              color: (_pickedRankScreenshot != null || _rankScreenshotUrl.isNotEmpty)
+                                  ? const Color(0xFF00FF88).withOpacity(0.4)
+                                  : const Color(0xFFFF8A00).withOpacity(0.4),
+                            ),
+                          ),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              // Status Banner if previously reviewed or pending
+                              if (_rankStatus.toLowerCase() == 'pending') ...[
+                                Container(
+                                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                                  decoration: BoxDecoration(
+                                    color: const Color(0xFF332B00),
+                                    borderRadius: BorderRadius.circular(10),
+                                    border: Border.all(color: const Color(0xFFFFD700)),
+                                  ),
+                                  child: const Row(
+                                    children: [
+                                      Icon(Icons.hourglass_top_rounded, color: Color(0xFFFFD700), size: 16),
+                                      SizedBox(width: 8),
+                                      Expanded(
+                                        child: Text(
+                                          'Rank Verification Pending ⏳ (تصدیق کے لیے زیر التواء)',
+                                          style: TextStyle(color: Color(0xFFFFD700), fontWeight: FontWeight.bold, fontSize: 11.5),
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                                const SizedBox(height: 10),
+                              ] else if (_rankStatus.toLowerCase() == 'verified') ...[
+                                Container(
+                                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                                  decoration: BoxDecoration(
+                                    color: const Color(0xFF0D2818),
+                                    borderRadius: BorderRadius.circular(10),
+                                    border: Border.all(color: const Color(0xFF00FF88)),
+                                  ),
+                                  child: const Row(
+                                    children: [
+                                      Icon(Icons.verified_rounded, color: Color(0xFF00FF88), size: 16),
+                                      SizedBox(width: 8),
+                                      Expanded(
+                                        child: Text(
+                                          'Verified ✓ (آپ کا رینک تصدیق شدہ ہے)',
+                                          style: TextStyle(color: Color(0xFF00FF88), fontWeight: FontWeight.bold, fontSize: 11.5),
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                                const SizedBox(height: 10),
+                              ] else if (_rankStatus.toLowerCase() == 'rejected') ...[
+                                Container(
+                                  padding: const EdgeInsets.all(10),
+                                  decoration: BoxDecoration(
+                                    color: const Color(0xFF3A0D11),
+                                    borderRadius: BorderRadius.circular(10),
+                                    border: Border.all(color: const Color(0xFFFF4655)),
+                                  ),
+                                  child: Column(
+                                    crossAxisAlignment: CrossAxisAlignment.start,
+                                    children: [
+                                      const Row(
+                                        children: [
+                                          Icon(Icons.error_outline_rounded, color: Color(0xFFFF4655), size: 16),
+                                          SizedBox(width: 8),
+                                          Expanded(
+                                            child: Text(
+                                              'آپ کا اسکرین شاٹ درست نہیں ہے، دوبارہ اپلوڈ کریں',
+                                              style: TextStyle(color: Color(0xFFFF4655), fontWeight: FontWeight.bold, fontSize: 12),
+                                            ),
+                                          ),
+                                        ],
+                                      ),
+                                      if (_rankRejectReason.isNotEmpty) ...[
+                                        const SizedBox(height: 4),
+                                        Text(
+                                          'وجہ: $_rankRejectReason',
+                                          style: const TextStyle(color: Colors.white70, fontSize: 11),
+                                        ),
+                                      ],
+                                    ],
+                                  ),
+                                ),
+                                const SizedBox(height: 10),
+                              ],
+
+                              // Instructions notice
+                              Container(
+                                padding: const EdgeInsets.all(10),
+                                decoration: BoxDecoration(
+                                  color: const Color(0xFF161B26),
+                                  borderRadius: BorderRadius.circular(10),
+                                  border: Border.all(color: const Color(0xFF2E384D)),
+                                ),
+                                child: const Row(
+                                  children: [
+                                    Icon(Icons.info_outline_rounded, color: Color(0xFF38BDF8), size: 16),
+                                    SizedBox(width: 8),
+                                    Expanded(
+                                      child: Text(
+                                        'اسکرین شاٹ میں گیم کی اصل ID اور Rank صاف نظر آنا چاہیے',
+                                        style: TextStyle(color: Color(0xFF38BDF8), fontSize: 11.5, fontWeight: FontWeight.w600),
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                              const SizedBox(height: 12),
+
+                              // Image Preview or Upload Prompt
+                              if (_pickedRankScreenshot != null) ...[
+                                ClipRRect(
+                                  borderRadius: BorderRadius.circular(10),
+                                  child: Stack(
+                                    children: [
+                                      Image.file(
+                                        _pickedRankScreenshot!,
+                                        height: 140,
+                                        width: double.infinity,
+                                        fit: BoxFit.cover,
+                                      ),
+                                      Positioned(
+                                        top: 6,
+                                        right: 6,
+                                        child: CircleAvatar(
+                                          radius: 14,
+                                          backgroundColor: Colors.black.withOpacity(0.7),
+                                          child: IconButton(
+                                            padding: EdgeInsets.zero,
+                                            icon: const Icon(Icons.close, size: 14, color: Colors.white),
+                                            onPressed: () => setState(() => _pickedRankScreenshot = null),
+                                          ),
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                                const SizedBox(height: 8),
+                                Row(
+                                  children: [
+                                    Expanded(
+                                      child: OutlinedButton.icon(
+                                        onPressed: _showRankScreenshotPickerSheet,
+                                        icon: const Icon(Icons.edit_rounded, size: 14, color: Color(0xFF00FF88)),
+                                        label: const Text('تصویر تبدیل کریں (Change Screenshot)', style: TextStyle(color: Color(0xFF00FF88), fontSize: 11.5)),
+                                        style: OutlinedButton.styleFrom(
+                                          side: const BorderSide(color: Color(0xFF00FF88)),
+                                          padding: const EdgeInsets.symmetric(vertical: 8),
+                                        ),
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ] else if (_rankScreenshotUrl.isNotEmpty) ...[
+                                ClipRRect(
+                                  borderRadius: BorderRadius.circular(10),
+                                  child: CachedNetworkImage(
+                                    imageUrl: _rankScreenshotUrl,
+                                    height: 140,
+                                    width: double.infinity,
+                                    fit: BoxFit.cover,
+                                    placeholder: (_, __) => Container(
+                                      height: 140,
+                                      color: const Color(0xFF161B26),
+                                      child: const Center(child: CircularProgressIndicator(color: Color(0xFF00FF88), strokeWidth: 2)),
+                                    ),
+                                    errorWidget: (_, __, ___) => Container(
+                                      height: 140,
+                                      color: const Color(0xFF161B26),
+                                      child: const Center(child: Icon(Icons.broken_image, color: Colors.white38)),
+                                    ),
+                                  ),
+                                ),
+                                const SizedBox(height: 8),
+                                Row(
+                                  children: [
+                                    Expanded(
+                                      child: OutlinedButton.icon(
+                                        onPressed: _showRankScreenshotPickerSheet,
+                                        icon: const Icon(Icons.refresh_rounded, size: 14, color: Color(0xFF00FF88)),
+                                        label: const Text('نیا اسکرین شاٹ اپلوڈ کریں (Replace)', style: TextStyle(color: Color(0xFF00FF88), fontSize: 11.5)),
+                                        style: OutlinedButton.styleFrom(
+                                          side: const BorderSide(color: Color(0xFF00FF88)),
+                                          padding: const EdgeInsets.symmetric(vertical: 8),
+                                        ),
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ] else ...[
+                                InkWell(
+                                  onTap: _showRankScreenshotPickerSheet,
+                                  borderRadius: BorderRadius.circular(12),
+                                  child: Container(
+                                    width: double.infinity,
+                                    padding: const EdgeInsets.symmetric(vertical: 22, horizontal: 16),
+                                    decoration: BoxDecoration(
+                                      color: const Color(0xFF161B26),
+                                      borderRadius: BorderRadius.circular(12),
+                                      border: Border.all(
+                                        color: const Color(0xFFFF8A00).withOpacity(0.6),
+                                        style: BorderStyle.solid,
+                                        width: 1.5,
+                                      ),
+                                    ),
+                                    child: const Column(
+                                      children: [
+                                        Icon(Icons.add_photo_alternate_rounded, color: Color(0xFFFF8A00), size: 36),
+                                        SizedBox(height: 8),
+                                        Text(
+                                          'اسکرین شاٹ اپلوڈ کریں (Upload Screenshot)',
+                                          style: TextStyle(
+                                            color: Colors.white,
+                                            fontWeight: FontWeight.bold,
+                                            fontSize: 13,
+                                          ),
+                                        ),
+                                        SizedBox(height: 4),
+                                        Text(
+                                          'رینک محفوظ کرنے کے لیے اسکرین شاٹ لازمی ہے',
+                                          style: TextStyle(
+                                            color: Color(0xFFFF8A00),
+                                            fontSize: 11,
+                                            fontWeight: FontWeight.w600,
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                  ),
+                                ),
+                              ],
+                            ],
+                          ),
+                        ),
+                      ],
 
                       const SizedBox(height: 20),
 

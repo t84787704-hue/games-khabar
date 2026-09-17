@@ -934,6 +934,38 @@ class _GamerAdminDashboardScreenState extends State<GamerAdminDashboardScreen>
                   final game = user.games[i];
                   allItems.add(_RankQueueItem(user: user, game: game, gameIndex: i));
                 }
+
+                // Also include user's primary rank if submitted with screenshot or pending
+                final bool hasGameForRank = user.games.any(
+                  (g) => g.claimedRank.toLowerCase() == user.rank.toLowerCase(),
+                );
+                if (!hasGameForRank &&
+                    user.rank.isNotEmpty &&
+                    user.rank.toLowerCase() != 'none' &&
+                    user.rank.toLowerCase() != 'skip' &&
+                    (user.rankStatus.toLowerCase() == 'pending' ||
+                        user.rankStatus.toLowerCase() == 'verified' ||
+                        user.rankStatus.toLowerCase() == 'rejected' ||
+                        user.rankScreenshot.isNotEmpty)) {
+                  final rankStatus = user.rankStatus.toLowerCase();
+                  final normalizedStatus = rankStatus == 'verified'
+                      ? 'approved'
+                      : (rankStatus == 'rejected' ? 'rejected' : 'pending');
+                  final primaryGame = UserGameRank(
+                    id: 'primary_${user.uid}',
+                    gameName: user.favoriteGame.isNotEmpty ? user.favoriteGame : 'BGMI',
+                    gameId: user.gameId.isNotEmpty ? user.gameId : 'N/A',
+                    claimedRank: user.rank,
+                    verifiedRank: (user.isRankApproved || rankStatus == 'verified') ? user.rank : '',
+                    isVerified: user.isRankApproved || rankStatus == 'verified',
+                    screenshotUrl: user.rankScreenshot,
+                    status: normalizedStatus,
+                    submittedAt: user.createdAt,
+                    rejectReason: user.rankRejectReason,
+                    ownerUid: user.uid,
+                  );
+                  allItems.add(_RankQueueItem(user: user, game: primaryGame, gameIndex: -1));
+                }
               }
 
               // Apply Filters
@@ -1386,29 +1418,46 @@ class _GamerAdminDashboardScreenState extends State<GamerAdminDashboardScreen>
   Future<void> _approveRankVerification(_RankQueueItem item) async {
     try {
       final targetDocId = item.game.ownerUid.isNotEmpty ? item.game.ownerUid : item.user.uid;
-      final updatedGames = List<UserGameRank>.from(item.user.games);
-      final approvedGame = item.game.copyWith(
-        isVerified: true,
-        verifiedRank: item.game.claimedRank,
-        status: 'approved',
-        ownerUid: targetDocId,
-      );
-      updatedGames[item.gameIndex] = approvedGame;
+      final currentAdmin = GamerAuthService().currentUser?.displayName ?? 'Admin';
 
-      // Update user's main display rank if this approved rank has higher weight
-      String newMainRank = item.user.rank;
-      if (_getRankWeight(item.game.claimedRank) > _getRankWeight(item.user.rank) ||
-          item.user.rank.toLowerCase() == 'bronze' ||
-          item.user.rank.isEmpty) {
-        newMainRank = item.game.claimedRank;
+      final Map<String, dynamic> updateData = {
+        'rank': item.game.claimedRank,
+        'tier': item.game.claimedRank,
+        'isRankVerified': true,
+        'rankStatus': 'Verified',
+        'rankVerifiedBy': currentAdmin,
+        'rankRejectReason': '',
+        'updatedAt': FieldValue.serverTimestamp(),
+      };
+
+      if (item.gameIndex >= 0 && item.gameIndex < item.user.games.length) {
+        final updatedGames = List<UserGameRank>.from(item.user.games);
+        final approvedGame = item.game.copyWith(
+          isVerified: true,
+          verifiedRank: item.game.claimedRank,
+          status: 'approved',
+          ownerUid: targetDocId,
+        );
+        updatedGames[item.gameIndex] = approvedGame;
+        updateData['games'] = updatedGames.map((g) => g.toMap()).toList();
       }
 
-      await FirebaseFirestore.instance.collection('users').doc(targetDocId).set({
-        'games': updatedGames.map((g) => g.toMap()).toList(),
-        'rank': newMainRank,
-        'tier': newMainRank,
-        'updatedAt': FieldValue.serverTimestamp(),
-      }, SetOptions(merge: true));
+      await FirebaseFirestore.instance.collection('users').doc(targetDocId).set(
+        updateData,
+        SetOptions(merge: true),
+      );
+
+      // Send in-app notification to user
+      try {
+        await NotificationService().createNotification(
+          userId: targetDocId,
+          title: 'Rank Verified! 🎉',
+          body: 'آپ کا ${item.game.claimedRank} (${item.game.gameName}) رینک ایڈمن کی طرف سے منظور ہو گیا ہے۔',
+          type: 'rank_verified',
+        );
+      } catch (e) {
+        debugPrint('Notification notice: $e');
+      }
 
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -1432,19 +1481,47 @@ class _GamerAdminDashboardScreenState extends State<GamerAdminDashboardScreen>
   Future<void> _rejectRankVerification(_RankQueueItem item, String reason) async {
     try {
       final targetDocId = item.game.ownerUid.isNotEmpty ? item.game.ownerUid : item.user.uid;
-      final updatedGames = List<UserGameRank>.from(item.user.games);
-      final rejectedGame = item.game.copyWith(
-        isVerified: false,
-        status: 'rejected',
-        rejectReason: reason.trim().isNotEmpty ? reason.trim() : 'Screenshot does not verify Game ID and Rank',
-        ownerUid: targetDocId,
-      );
-      updatedGames[item.gameIndex] = rejectedGame;
+      final currentAdmin = GamerAuthService().currentUser?.displayName ?? 'Admin';
+      const defaultUrduMsg = 'آپ کا اسکرین شاٹ درست نہیں ہے، دوبارہ اپلوڈ کریں';
+      final finalReason = reason.trim().isNotEmpty ? reason.trim() : defaultUrduMsg;
 
-      await FirebaseFirestore.instance.collection('users').doc(targetDocId).set({
-        'games': updatedGames.map((g) => g.toMap()).toList(),
+      final Map<String, dynamic> updateData = {
+        'isRankVerified': false,
+        'rankStatus': 'Rejected',
+        'rankRejectReason': finalReason,
+        'rankVerifiedBy': currentAdmin,
         'updatedAt': FieldValue.serverTimestamp(),
-      }, SetOptions(merge: true));
+      };
+
+      if (item.gameIndex >= 0 && item.gameIndex < item.user.games.length) {
+        final updatedGames = List<UserGameRank>.from(item.user.games);
+        final rejectedGame = item.game.copyWith(
+          isVerified: false,
+          status: 'rejected',
+          rejectReason: finalReason,
+          ownerUid: targetDocId,
+        );
+        updatedGames[item.gameIndex] = rejectedGame;
+        updateData['games'] = updatedGames.map((g) => g.toMap()).toList();
+      }
+
+      await FirebaseFirestore.instance.collection('users').doc(targetDocId).set(
+        updateData,
+        SetOptions(merge: true),
+      );
+
+      // Per user explicit instruction (Rule 7):
+      // "اگر ایڈمن Reject کرے، تو صارف کو پیغام جائے: 'آپ کا اسکرین شاٹ درست نہیں ہے، دوبارہ اپلوڈ کریں'۔"
+      try {
+        await NotificationService().createNotification(
+          userId: targetDocId,
+          title: 'Rank Verification Notice ⚠️',
+          body: defaultUrduMsg,
+          type: 'rank_rejected',
+        );
+      } catch (e) {
+        debugPrint('Notification notice: $e');
+      }
 
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -1997,7 +2074,7 @@ class _AdminCoinsVaultTabState extends State<_AdminCoinsVaultTab> {
 
     // 7. Comprehensive in-memory fallback scan across all users
     try {
-      final allUsersSnap = await firestore.collection('users').limit(200).get();
+      final allUsersSnap = await firestore.collection('users').get();
       for (final doc in allUsersSnap.docs) {
         final data = doc.data();
         final docId = doc.id;
@@ -2008,18 +2085,28 @@ class _AdminCoinsVaultTabState extends State<_AdminCoinsVaultTab> {
         final inGameId = (data['gameId'] ?? data['bgmiUid'] ?? '').toString().trim();
 
         if (docId == raw ||
+            docId.toLowerCase() == clean ||
             uUid == raw ||
+            uUid.toLowerCase() == clean ||
             uName == clean ||
             uEmail == cleanEmail ||
+            uEmail == clean ||
             uDisplay == clean ||
             inGameId == raw ||
-            (clean.length >= 3 && (uName.contains(clean) || uEmail.contains(clean) || uDisplay.contains(clean)))) {
+            inGameId.toLowerCase() == clean ||
+            (clean.length >= 2 &&
+                (uName.contains(clean) ||
+                    uEmail.contains(clean) ||
+                    uDisplay.contains(clean) ||
+                    uUid.contains(clean)))) {
           final d = Map<String, dynamic>.from(data);
           d['docId'] = docId;
           return d;
         }
       }
-    } catch (_) {}
+    } catch (e) {
+      debugPrint('Error searching users in admin dashboard: $e');
+    }
 
     return null;
   }
@@ -2028,7 +2115,7 @@ class _AdminCoinsVaultTabState extends State<_AdminCoinsVaultTab> {
     final target = _targetController.text.trim();
     if (target.isEmpty) {
       setState(() {
-        _errorMessage = 'براہ کرم تلاش کے لیے Username، UID یا Email درج کریں';
+        _errorMessage = 'صارف نہیں ملا';
         _successMessage = null;
         _foundUser = null;
         _foundDocId = null;
@@ -2055,7 +2142,7 @@ class _AdminCoinsVaultTabState extends State<_AdminCoinsVaultTab> {
       } else {
         _foundUser = null;
         _foundDocId = null;
-        _errorMessage = 'صارف نہیں ملا! براہ کرم درست Username، UID یا Email درج کریں۔';
+        _errorMessage = 'صارف نہیں ملا';
       }
     });
 
@@ -2085,7 +2172,7 @@ class _AdminCoinsVaultTabState extends State<_AdminCoinsVaultTab> {
   Future<void> _awardCoins() async {
     final target = _targetController.text.trim();
     if (target.isEmpty) {
-      setState(() => _errorMessage = 'براہ کرم Target Username، UID یا Email درج کریں');
+      setState(() => _errorMessage = 'صارف نہیں ملا');
       return;
     }
 
@@ -2127,7 +2214,7 @@ class _AdminCoinsVaultTabState extends State<_AdminCoinsVaultTab> {
           _isAwarding = false;
           _foundUser = null;
           _foundDocId = null;
-          _errorMessage = 'صارف نہیں ملا! براہ کرم درست Username، UID یا Email درج کریں۔';
+          _errorMessage = 'صارف نہیں ملا';
         });
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
@@ -2137,7 +2224,7 @@ class _AdminCoinsVaultTabState extends State<_AdminCoinsVaultTab> {
                 SizedBox(width: 8),
                 Expanded(
                   child: Text(
-                    'صارف نہیں ملا! سکے نہیں بھیجے جا سکے۔',
+                    'صارف نہیں ملا',
                     style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13),
                   ),
                 ),
@@ -2153,49 +2240,80 @@ class _AdminCoinsVaultTabState extends State<_AdminCoinsVaultTab> {
       final targetDocId = docId;
       final targetDisplayName = (user['displayName'] ?? user['bgmiName'] ?? user['username'] ?? user['tag'] ?? 'صارف').toString();
       final targetUsername = (user['username'] ?? user['tag'] ?? '').toString();
+      final targetUid = (user['uid'] ?? targetDocId).toString().trim();
 
       final firestore = FirebaseFirestore.instance;
       final currentAdmin = FirebaseAuth.instance.currentUser;
       final adminEmail = currentAdmin?.email ?? 'Admin';
       final adminUid = currentAdmin?.uid ?? 'admin';
 
-      // 2. Atomic updates across users, wallets, and coin_wallets
-      final batch = firestore.batch();
+      // 2. Fetch fresh user data from database to calculate exact current balance
+      int currentCoins = 0;
+      final freshSnap = await firestore.collection('users').doc(targetDocId).get();
+      if (freshSnap.exists && freshSnap.data() != null) {
+        final rawVal = freshSnap.data()!['coins'] ?? freshSnap.data()!['gCoins'];
+        if (rawVal is num) {
+          currentCoins = rawVal.toInt();
+        } else if (rawVal is String) {
+          currentCoins = int.tryParse(rawVal) ?? 0;
+        }
+      } else {
+        final rawVal = user['coins'] ?? user['gCoins'];
+        if (rawVal is num) {
+          currentCoins = rawVal.toInt();
+        } else if (rawVal is String) {
+          currentCoins = int.tryParse(rawVal) ?? 0;
+        }
+      }
 
-      // users collection update (immediate database save)
-      final userRef = firestore.collection('users').doc(targetDocId);
-      batch.set(userRef, {
-        'coins': FieldValue.increment(amount),
-        'gCoins': FieldValue.increment(amount),
+      final newTotalCoins = currentCoins + amount;
+
+      // 3. Immediately save new coins to users collection in Firestore
+      await firestore.collection('users').doc(targetDocId).set({
+        'coins': newTotalCoins,
+        'gCoins': newTotalCoins,
         'updatedAt': FieldValue.serverTimestamp(),
         'lastRewardAt': FieldValue.serverTimestamp(),
       }, SetOptions(merge: true));
 
-      // wallets collection update
-      final walletRef = firestore.collection('wallets').doc(targetDocId);
-      batch.set(walletRef, {
-        'coins': FieldValue.increment(amount),
-        'gCoins': FieldValue.increment(amount),
-        'userId': targetDocId,
-        'updatedAt': FieldValue.serverTimestamp(),
-      }, SetOptions(merge: true));
+      // Also ensure if targetUid is a different doc ID, it is kept in sync
+      if (targetUid.isNotEmpty && targetUid != targetDocId) {
+        try {
+          await firestore.collection('users').doc(targetUid).set({
+            'coins': newTotalCoins,
+            'gCoins': newTotalCoins,
+            'updatedAt': FieldValue.serverTimestamp(),
+          }, SetOptions(merge: true));
+        } catch (_) {}
+      }
 
-      // coin_wallets collection update
-      final coinWalletRef = firestore.collection('coin_wallets').doc(targetDocId);
-      batch.set(coinWalletRef, {
-        'coins': FieldValue.increment(amount),
-        'gCoins': FieldValue.increment(amount),
-        'lifetimeEarned': FieldValue.increment(amount),
-        'userId': targetDocId,
-        'updatedAt': FieldValue.serverTimestamp(),
-      }, SetOptions(merge: true));
+      // 4. Update wallets & coin_wallets safely
+      try {
+        await firestore.collection('wallets').doc(targetDocId).set({
+          'coins': newTotalCoins,
+          'gCoins': newTotalCoins,
+          'userId': targetDocId,
+          'updatedAt': FieldValue.serverTimestamp(),
+        }, SetOptions(merge: true));
+      } catch (wErr) {
+        debugPrint('Wallet save note: $wErr');
+      }
 
-      // 3. Write transaction to both 'transactions' & 'coin_transactions' collections
-      // Required log format: "Admin ne [تعداد] coins دیے" with timestamp
-      final txRef = firestore.collection('transactions').doc();
-      final String txId = txRef.id;
-      final String formattedDate = DateFormat('yyyy-MM-dd HH:mm').format(DateTime.now());
+      try {
+        await firestore.collection('coin_wallets').doc(targetDocId).set({
+          'coins': newTotalCoins,
+          'gCoins': newTotalCoins,
+          'lifetimeEarned': FieldValue.increment(amount),
+          'userId': targetDocId,
+          'updatedAt': FieldValue.serverTimestamp(),
+        }, SetOptions(merge: true));
+      } catch (cwErr) {
+        debugPrint('Coin wallet save note: $cwErr');
+      }
 
+      // 5. Log transaction
+      final txId = firestore.collection('transactions').doc().id;
+      final formattedDate = DateFormat('yyyy-MM-dd HH:mm').format(DateTime.now());
       final txData = {
         'id': txId,
         'userId': targetDocId,
@@ -2211,28 +2329,44 @@ class _AdminCoinsVaultTabState extends State<_AdminCoinsVaultTab> {
         'date': formattedDate,
       };
 
-      batch.set(txRef, txData);
-      batch.set(firestore.collection('coin_transactions').doc(txId), txData);
-
-      await batch.commit();
-
-      // 4. Update local in-memory state if this device is the user
-      final currentGamer = GamerAuthService().currentGamer;
-      if (currentGamer != null && (currentGamer.uid == targetDocId || targetDocId.isEmpty)) {
-        final newBal = currentGamer.coins + amount;
-        GamerAuthService().currentGamerNotifier.value = currentGamer.copyWith(coins: newBal);
-        CoinRewardService().coinsNotifier.value = newBal;
+      try {
+        await firestore.collection('transactions').doc(txId).set(txData);
+        await firestore.collection('coin_transactions').doc(txId).set(txData);
+      } catch (txErr) {
+        debugPrint('Transaction log note: $txErr');
       }
 
-      // 5. Refresh user state in preview
+      // 6. Send user in-app notification
+      try {
+        await NotificationService().createNotification(
+          userId: targetDocId,
+          title: '🪙 Coins Awarded!',
+          body: 'ایڈمن کی طرف سے آپ کے اکاؤنٹ میں $amount سکے شامل کر دیے گئے ہیں! کل سکے: $newTotalCoins',
+          type: 'coin_grant',
+        );
+      } catch (notifErr) {
+        debugPrint('Notification notice: $notifErr');
+      }
+
+      // 7. Update local in-memory state if this device is the user
+      final currentGamer = GamerAuthService().currentGamer;
+      if (currentGamer != null && (currentGamer.uid == targetDocId || currentGamer.uid == targetUid)) {
+        GamerAuthService().currentGamerNotifier.value = currentGamer.copyWith(coins: newTotalCoins);
+        CoinRewardService().coinsNotifier.value = newTotalCoins;
+      }
+
+      // 8. Refresh user state in preview
       final updatedSnap = await firestore.collection('users').doc(targetDocId).get();
       if (updatedSnap.exists && updatedSnap.data() != null) {
         final d = Map<String, dynamic>.from(updatedSnap.data()!);
         d['docId'] = updatedSnap.id;
         user = d;
+      } else {
+        user['coins'] = newTotalCoins;
+        user['gCoins'] = newTotalCoins;
       }
 
-      final successText = 'کامیابی! $targetDisplayName کو $amount سکے بھیج دیے گئے';
+      final successText = 'کامیابی! $targetDisplayName کو $amount سکے بھیج دیے گئے (کل سکے: $newTotalCoins)';
 
       if (!mounted) return;
       setState(() {

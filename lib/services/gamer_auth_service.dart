@@ -268,6 +268,37 @@ class GamerAuthService {
     }
   }
 
+  /// Uploads rank proof screenshot to Cloudinary, Firebase Storage, or Base64
+  Future<String> uploadRankScreenshot(File imageFile, String uid) async {
+    try {
+      final url = await CloudinaryService.uploadFile(file: imageFile, folder: 'rank_proofs');
+      if (url != null && url.isNotEmpty) {
+        return url;
+      }
+    } catch (e) {
+      debugPrint('Cloudinary rank screenshot upload notice: $e');
+    }
+
+    try {
+      final timestamp = DateTime.now().millisecondsSinceEpoch;
+      final ref = _storage.ref().child('rank_proofs').child(uid).child('rank_$timestamp.jpg');
+      final metadata = SettableMetadata(contentType: 'image/jpeg');
+      final uploadTask = await ref.putFile(imageFile, metadata);
+      final downloadUrl = await uploadTask.ref.getDownloadURL();
+      return downloadUrl;
+    } catch (e) {
+      debugPrint('Storage rank screenshot upload failed: $e');
+      try {
+        final bytes = await imageFile.readAsBytes();
+        final base64String = base64Encode(bytes);
+        return 'data:image/jpeg;base64,$base64String';
+      } catch (b64Error) {
+        debugPrint('Base64 fallback failed: $b64Error');
+        return '';
+      }
+    }
+  }
+
   /// Creates or updates `users/{uid}` document
   Future<void> saveGamerProfile(GamerUser user) async {
     final docRef = _firestore.collection('users').doc(user.uid);
