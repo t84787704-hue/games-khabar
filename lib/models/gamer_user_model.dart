@@ -250,35 +250,39 @@ class GamerUser {
 
   bool get isVerifiedBadge => hasBlueTick;
 
-  // App Rank (auto) calculation: appPoints = (level * 100) + coins + (posts * 10)
-  // 0-999 Bronze, 1000-1999 Silver, 2000-2999 Gold, 3000-3699 Platinum, 3700-4199 Diamond, 4200-4699 Crown, 4700-4999 ACE, 5000+ Conqueror
+  // App Rank (auto) calculation: removed per user directive.
+  // User ranks are strictly based on user selection and Admin verification.
   int get appPoints => (level * 100) + coins + (postsCount * 10);
 
-  static String calculateAppRank(int points) {
-    if (points >= 5000) return 'Conqueror';
-    if (points >= 4700) return 'ACE';
-    if (points >= 4200) return 'Crown';
-    if (points >= 3700) return 'Diamond';
-    if (points >= 3000) return 'Platinum';
-    if (points >= 2000) return 'Gold';
-    if (points >= 1000) return 'Silver';
-    return 'Bronze';
-  }
+  static String calculateAppRank(int points) => '';
 
-  String get appRank => calculateAppRank(appPoints);
+  String get appRank => isRankApproved ? (selectedRank.isNotEmpty ? selectedRank : rank) : '';
 
-  /// Returns highest verified game rank if any exists, else appRank or rank
+  /// Returns highest verified game rank if any exists, else verified rank
   String get verifiedOrAppRank {
     final verifiedGames = games.where((g) => g.isVerified || g.status == 'approved').toList();
     if (verifiedGames.isNotEmpty) {
       final top = verifiedGames.first;
       return top.verifiedRank.isNotEmpty ? top.verifiedRank : top.claimedRank;
     }
-    return rank.isNotEmpty && rank.toLowerCase() != 'bronze' ? rank : appRank;
+    return isRankApproved ? (selectedRank.isNotEmpty ? selectedRank : rank) : '';
   }
 
   GamerRankBadge getRankBadge() {
-    final lowerRank = rank.toLowerCase().trim();
+    // Only verified ranks or K/D King can show a rank badge
+    if (!isRankApproved && kdRatio <= 5.0 && rankBadgeType != RankBadgeType.kdKing) {
+      return const GamerRankBadge(
+        type: RankBadgeType.none,
+        label: '',
+        emoji: '',
+        icon: Icons.shield_outlined,
+        primaryColor: Colors.transparent,
+        backgroundColor: Colors.transparent,
+        borderColor: Colors.transparent,
+      );
+    }
+
+    final lowerRank = (selectedRank.isNotEmpty ? selectedRank : rank).toLowerCase().trim();
     if (kdRatio > 5.0 || rankBadgeType == RankBadgeType.kdKing || lowerRank.contains('kd king') || lowerRank.contains('5+')) {
       return const GamerRankBadge(
         type: RankBadgeType.kdKing,
@@ -318,7 +322,7 @@ class GamerUser {
     if (lowerRank.contains('crown') || lowerRank.contains('master') || lowerRank.contains('heroic') || lowerRank.contains('legendary')) {
       return GamerRankBadge(
         type: RankBadgeType.ace,
-        label: rank,
+        label: selectedRank.isNotEmpty ? selectedRank : rank,
         emoji: '🎖️',
         icon: Icons.workspace_premium_rounded,
         primaryColor: const Color(0xFFFF8A00),
@@ -328,8 +332,8 @@ class GamerUser {
     }
 
     return GamerRankBadge(
-      type: RankBadgeType.none,
-      label: rank,
+      type: isRankApproved ? RankBadgeType.none : RankBadgeType.none,
+      label: selectedRank.isNotEmpty ? selectedRank : rank,
       emoji: '🛡️',
       icon: Icons.shield_outlined,
       primaryColor: const Color(0xFF00E5FF),

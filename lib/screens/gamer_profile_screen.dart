@@ -1173,12 +1173,14 @@ class _GamerProfileScreenState extends State<GamerProfileScreen> with SingleTick
                                 overflow: TextOverflow.ellipsis,
                               ),
                             ),
-                            const SizedBox(width: 6),
-                            RankBadgeWidget(
-                              badge: user.getRankBadge(),
-                              size: 16,
-                              showLabel: true,
-                            ),
+                            if (user.isRankApproved && user.rank.isNotEmpty && user.rank.toLowerCase() != 'none') ...[
+                              const SizedBox(width: 6),
+                              RankBadgeWidget(
+                                badge: user.getRankBadge(),
+                                size: 16,
+                                showLabel: true,
+                              ),
+                            ],
                             if (user.activeBadge.isNotEmpty) ...[
                               const SizedBox(width: 6),
                               GamerBadgeWidget(badgeId: user.activeBadge, scale: 1.0),
@@ -1247,7 +1249,7 @@ class _GamerProfileScreenState extends State<GamerProfileScreen> with SingleTick
                               ),
                             ),
 
-                            // Rank Badge with Verification Status
+                            // Rank Badge with Verification Status (Only verified or pending from user selection)
                             if (user.rank.isNotEmpty && user.rank.toLowerCase() != 'none' && user.rank.toLowerCase() != 'skip') ...[
                               if (user.isRankApproved) ...[
                                 Container(
@@ -1263,7 +1265,7 @@ class _GamerProfileScreenState extends State<GamerProfileScreen> with SingleTick
                                       const Icon(Icons.military_tech_rounded, color: Color(0xFF00FF88), size: 16),
                                       const SizedBox(width: 4),
                                       Text(
-                                        user.rank,
+                                        user.selectedGame.isNotEmpty ? '${user.selectedGame}: ${user.rank}' : user.rank,
                                         style: const TextStyle(
                                           color: Color(0xFF00FF88),
                                           fontWeight: FontWeight.w800,
@@ -1284,7 +1286,7 @@ class _GamerProfileScreenState extends State<GamerProfileScreen> with SingleTick
                                     ],
                                   ),
                                 ),
-                              ] else if (user.isRankPending) ...[
+                              ] else if (user.isRankPending || user.rankStatus.toLowerCase() == 'pending') ...[
                                 Container(
                                   padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
                                   decoration: BoxDecoration(
@@ -1298,7 +1300,7 @@ class _GamerProfileScreenState extends State<GamerProfileScreen> with SingleTick
                                       const Icon(Icons.military_tech_rounded, color: Color(0xFFFFD700), size: 16),
                                       const SizedBox(width: 4),
                                       Text(
-                                        user.rank,
+                                        user.selectedGame.isNotEmpty ? '${user.selectedGame}: ${user.rank}' : user.rank,
                                         style: const TextStyle(
                                           color: Color(0xFFFFD700),
                                           fontWeight: FontWeight.w800,
@@ -1333,7 +1335,7 @@ class _GamerProfileScreenState extends State<GamerProfileScreen> with SingleTick
                                       const Icon(Icons.error_outline_rounded, color: Color(0xFFFF4655), size: 15),
                                       const SizedBox(width: 4),
                                       Text(
-                                        '${user.rank} (Rejected)',
+                                        user.selectedGame.isNotEmpty ? '${user.selectedGame}: ${user.rank} (Rejected)' : '${user.rank} (Rejected)',
                                         style: const TextStyle(
                                           color: Color(0xFFFF4655),
                                           fontWeight: FontWeight.w800,
@@ -1343,66 +1345,8 @@ class _GamerProfileScreenState extends State<GamerProfileScreen> with SingleTick
                                     ],
                                   ),
                                 ),
-                              ] else ...[
-                                Container(
-                                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
-                                  decoration: BoxDecoration(
-                                    color: GamerTheme.cardElevated,
-                                    borderRadius: BorderRadius.circular(8),
-                                    border: Border.all(color: GamerTheme.borderLight),
-                                  ),
-                                  child: Row(
-                                    mainAxisSize: MainAxisSize.min,
-                                    children: [
-                                      const Icon(Icons.military_tech_rounded, color: GamerTheme.flameOrange, size: 16),
-                                      const SizedBox(width: 4),
-                                      Text(
-                                        user.rank,
-                                        style: const TextStyle(
-                                          color: GamerTheme.flameOrange,
-                                          fontWeight: FontWeight.w800,
-                                          fontSize: 12,
-                                        ),
-                                      ),
-                                    ],
-                                  ),
-                                ),
                               ],
                             ],
-
-                            // App Rank Badge (Auto points calculation)
-                            Container(
-                              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
-                              decoration: BoxDecoration(
-                                color: const Color(0xFF00E5FF).withOpacity(0.12),
-                                borderRadius: BorderRadius.circular(8),
-                                border: Border.all(color: const Color(0xFF00E5FF).withOpacity(0.4)),
-                              ),
-                              child: Row(
-                                mainAxisSize: MainAxisSize.min,
-                                children: [
-                                  const Icon(Icons.auto_awesome_rounded, color: Color(0xFF00E5FF), size: 14),
-                                  const SizedBox(width: 4),
-                                  Text(
-                                    'App Rank: ${user.appRank}',
-                                    style: const TextStyle(
-                                      color: Color(0xFF00E5FF),
-                                      fontWeight: FontWeight.w800,
-                                      fontSize: 12,
-                                    ),
-                                  ),
-                                  const SizedBox(width: 3),
-                                  const Text(
-                                    '(auto)',
-                                    style: TextStyle(
-                                      color: Color(0xFF8B949E),
-                                      fontSize: 10.5,
-                                      fontWeight: FontWeight.w600,
-                                    ),
-                                  ),
-                                ],
-                              ),
-                            ),
 
                             // Verified Game Ranks Badges
                             ...user.games
@@ -1774,19 +1718,20 @@ class _GamerProfileScreenState extends State<GamerProfileScreen> with SingleTick
                         color: gameColor,
                       ),
                       const SizedBox(height: 12),
-                      _buildAboutCard(
-                        icon: Icons.military_tech_outlined,
-                        title: 'Competitive Tier',
-                        value: user.rank,
-                        color: GamerTheme.flameOrange,
-                      ),
-                      const SizedBox(height: 12),
-                      _buildAboutCard(
-                        icon: Icons.auto_awesome_rounded,
-                        title: 'App Rank (Auto)',
-                        value: '${user.appRank} (${user.appPoints} pts • Level ${user.level})',
-                        color: const Color(0xFF00E5FF),
-                      ),
+                      if (user.rank.isNotEmpty &&
+                          user.rank.toLowerCase() != 'none' &&
+                          user.rank.toLowerCase() != 'skip' &&
+                          (user.isRankApproved || user.isRankPending || user.rankStatus.toLowerCase() == 'pending')) ...[
+                        _buildAboutCard(
+                          icon: Icons.military_tech_outlined,
+                          title: 'Competitive Rank',
+                          value: user.isRankApproved
+                              ? '${user.selectedGame.isNotEmpty ? "${user.selectedGame}: " : ""}${user.rank} (Verified ✓)'
+                              : '${user.selectedGame.isNotEmpty ? "${user.selectedGame}: " : ""}${user.rank} (Pending Verification)',
+                          color: user.isRankApproved ? const Color(0xFF00FF88) : const Color(0xFFFFD700),
+                        ),
+                        const SizedBox(height: 12),
+                      ],
                       const SizedBox(height: 12),
                       _buildAboutCard(
                         icon: Icons.calendar_today_outlined,

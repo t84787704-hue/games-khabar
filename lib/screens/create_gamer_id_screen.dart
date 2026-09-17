@@ -457,7 +457,7 @@ class _CreateGamerIdScreenState extends State<CreateGamerIdScreen> {
         coverUrl: finalCoverUrl.isNotEmpty ? finalCoverUrl : (widget.existingUser?.coverUrl ?? ''),
         bio: _bioController.text.trim(),
         favoriteGame: _selectedGame,
-        selectedGame: _selectedRankGame,
+        selectedGame: finalRank.isNotEmpty ? _selectedRankGame : '',
         selectedRank: finalRank,
         rank: finalRank,
         rankScreenshot: finalRankScreenshot,
@@ -498,7 +498,11 @@ class _CreateGamerIdScreenState extends State<CreateGamerIdScreen> {
 
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text(widget.isEditing ? 'Gamer ID updated!' : 'Welcome to Gamers ID, @$rawUsername! 🎮'),
+          content: Text(
+            enteredRank.isNotEmpty && finalRank.isEmpty
+                ? 'Profile updated. Note: Rank was skipped because screenshot proof was not uploaded.'
+                : (widget.isEditing ? 'Gamer ID updated!' : 'Welcome to Gamers ID, @$rawUsername! 🎮'),
+          ),
           backgroundColor: GamerTheme.neonGreen,
         ),
       );
