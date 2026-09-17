@@ -16,6 +16,7 @@ import 'about_us_screen.dart';
 import 'contact_us_screen.dart';
 import 'privacy_policy_screen.dart';
 import 'follow_us_screen.dart';
+import '../constants/gamer_theme.dart';
 import '../services/gamer_auth_service.dart';
 import '../models/gamer_user_model.dart';
 import 'verification_screen.dart';

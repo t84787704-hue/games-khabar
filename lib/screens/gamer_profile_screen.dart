@@ -2014,100 +2014,106 @@ class _GamerProfileScreenState extends State<GamerProfileScreen> with SingleTick
                       ),
                       // Follow Us Social Card
                       const SizedBox(height: 12),
-                      Material(
-                        color: Colors.transparent,
-                        child: InkWell(
-                          borderRadius: BorderRadius.circular(16),
-                          onTap: () {
-                            Navigator.push(
-                              context,
-                              MaterialPageRoute(builder: (_) => const FollowUsScreen()),
-                            );
-                          },
-                          child: Container(
-                            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
-                            decoration: BoxDecoration(
-                              color: isDark ? GamerTheme.cardDark : Colors.white,
+                      ValueListenableBuilder<ThemeMode>(
+                        valueListenable: ThemeService.themeModeNotifier,
+                        builder: (context, mode, _) {
+                          final isDark = mode == ThemeMode.dark;
+                          return Material(
+                            color: Colors.transparent,
+                            child: InkWell(
                               borderRadius: BorderRadius.circular(16),
-                              border: Border.all(
-                                color: isDark ? GamerTheme.borderDark : const Color(0xFFE2E8F0),
-                              ),
-                              boxShadow: [
-                                BoxShadow(
-                                  color: isDark ? Colors.black.withOpacity(0.2) : Colors.black.withOpacity(0.04),
-                                  blurRadius: 8,
-                                  offset: const Offset(0, 2),
-                                ),
-                              ],
-                            ),
-                            child: Row(
-                              children: [
-                                Container(
-                                  padding: const EdgeInsets.all(10),
-                                  decoration: BoxDecoration(
-                                    color: const Color(0xFF00FF88).withOpacity(0.12),
-                                    borderRadius: BorderRadius.circular(12),
+                              onTap: () {
+                                Navigator.push(
+                                  context,
+                                  MaterialPageRoute(builder: (_) => const FollowUsScreen()),
+                                );
+                              },
+                              child: Container(
+                                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+                                decoration: BoxDecoration(
+                                  color: isDark ? GamerTheme.cardDark : Colors.white,
+                                  borderRadius: BorderRadius.circular(16),
+                                  border: Border.all(
+                                    color: isDark ? GamerTheme.borderDark : const Color(0xFFE2E8F0),
                                   ),
-                                  child: const Icon(
-                                    Icons.share_rounded,
-                                    color: Color(0xFF00FF88),
-                                    size: 22,
-                                  ),
+                                  boxShadow: [
+                                    BoxShadow(
+                                      color: isDark ? Colors.black.withOpacity(0.2) : Colors.black.withOpacity(0.04),
+                                      blurRadius: 8,
+                                      offset: const Offset(0, 2),
+                                    ),
+                                  ],
                                 ),
-                                const SizedBox(width: 14),
-                                Expanded(
-                                  child: Column(
-                                    crossAxisAlignment: CrossAxisAlignment.start,
-                                    children: [
-                                      Row(
+                                child: Row(
+                                  children: [
+                                    Container(
+                                      padding: const EdgeInsets.all(10),
+                                      decoration: BoxDecoration(
+                                        color: const Color(0xFF00FF88).withOpacity(0.12),
+                                        borderRadius: BorderRadius.circular(12),
+                                      ),
+                                      child: const Icon(
+                                        Icons.share_rounded,
+                                        color: Color(0xFF00FF88),
+                                        size: 22,
+                                      ),
+                                    ),
+                                    const SizedBox(width: 14),
+                                    Expanded(
+                                      child: Column(
+                                        crossAxisAlignment: CrossAxisAlignment.start,
                                         children: [
-                                          Text(
-                                            'Follow Us',
-                                            style: TextStyle(
-                                              fontWeight: FontWeight.w800,
-                                              fontSize: 14,
-                                              color: isDark ? GamerTheme.textWhite : const Color(0xFF0F172A),
-                                            ),
-                                          ),
-                                          const SizedBox(width: 6),
-                                          Container(
-                                            padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                                            decoration: BoxDecoration(
-                                              color: const Color(0xFF00FF88).withOpacity(0.15),
-                                              borderRadius: BorderRadius.circular(6),
-                                            ),
-                                            child: const Text(
-                                              'OFFICIAL',
-                                              style: TextStyle(
-                                                fontSize: 9,
-                                                fontWeight: FontWeight.w900,
-                                                color: Color(0xFF00FF88),
+                                          Row(
+                                            children: [
+                                              Text(
+                                                'Follow Us',
+                                                style: TextStyle(
+                                                  fontWeight: FontWeight.w800,
+                                                  fontSize: 14,
+                                                  color: isDark ? GamerTheme.textWhite : const Color(0xFF0F172A),
+                                                ),
                                               ),
+                                              const SizedBox(width: 6),
+                                              Container(
+                                                padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                                                decoration: BoxDecoration(
+                                                  color: const Color(0xFF00FF88).withOpacity(0.15),
+                                                  borderRadius: BorderRadius.circular(6),
+                                                ),
+                                                child: const Text(
+                                                  'OFFICIAL',
+                                                  style: TextStyle(
+                                                    fontSize: 9,
+                                                    fontWeight: FontWeight.w900,
+                                                    color: Color(0xFF00FF88),
+                                                  ),
+                                                ),
+                                              ),
+                                            ],
+                                          ),
+                                          const SizedBox(height: 2),
+                                          Text(
+                                            'YouTube, Instagram, TikTok & Facebook channels',
+                                            style: TextStyle(
+                                              color: isDark ? GamerTheme.textMuted : const Color(0xFF64748B),
+                                              fontSize: 11,
                                             ),
                                           ),
                                         ],
                                       ),
-                                      const SizedBox(height: 2),
-                                      Text(
-                                        'YouTube, Instagram, TikTok & Facebook channels',
-                                        style: TextStyle(
-                                          color: isDark ? GamerTheme.textMuted : const Color(0xFF64748B),
-                                          fontSize: 11,
-                                        ),
-                                      ),
-                                    ],
-                                  ),
+                                    ),
+                                    const SizedBox(width: 8),
+                                    Icon(
+                                      Icons.arrow_forward_ios_rounded,
+                                      color: isDark ? GamerTheme.textMuted : const Color(0xFF94A3B8),
+                                      size: 14,
+                                    ),
+                                  ],
                                 ),
-                                const SizedBox(width: 8),
-                                Icon(
-                                  Icons.arrow_forward_ios_rounded,
-                                  color: isDark ? GamerTheme.textMuted : const Color(0xFF94A3B8),
-                                  size: 14,
-                                ),
-                              ],
+                              ),
                             ),
-                          ),
-                        ),
+                          );
+                        },
                       ),
                     ],
                   ),
