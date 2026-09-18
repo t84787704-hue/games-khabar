@@ -7,7 +7,7 @@ import '../services/gamer_auth_service.dart';
 import '../services/theme_service.dart';
 import 'gamer_feed_screen.dart';
 import 'gamer_videos_screen.dart';
-import 'squad_finder_screen.dart';
+import 'teams_screen.dart';
 import 'gamer_rooms_screen.dart';
 import 'gamer_profile_screen.dart';
 import 'create_gamer_id_screen.dart';
@@ -87,12 +87,12 @@ class _GamerMainNavigationScreenState extends State<GamerMainNavigationScreen> {
 
   @override
   Widget build(BuildContext context) {
-    // 5 Core tabs: Feed, Videos, Squads, Rooms, Profile
+    // 5 Core tabs: Feed, Videos, Teams, Rooms, Profile
     // Admin tab: Admin (shield icon) visible ONLY to admin
     final screens = <Widget>[
       const GamerFeedScreen(),
       const GamerVideosScreen(),
-      const SquadFinderScreen(),
+      const TeamsScreen(),
       const GamerRoomsScreen(),
       const GamerProfileScreen(),
       if (_isAdmin) const GamerAdminDashboardScreen(),
@@ -156,11 +156,11 @@ class _GamerMainNavigationScreenState extends State<GamerMainNavigationScreen> {
                       isDark: isDark,
                     ),
 
-                    // Tab 2: Squads (LFG System)
+                    // Tab 2: Teams
                     _buildNavItem(
                       index: 2,
-                      icon: Icons.group_rounded,
-                      label: 'Squads',
+                      icon: Icons.shield_rounded,
+                      label: 'Teams',
                       isSelected: _currentIndex == 2,
                       isDark: isDark,
                     ),
