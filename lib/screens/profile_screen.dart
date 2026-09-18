@@ -12,6 +12,8 @@ import '../services/coin_reward_service.dart';
 import 'earn_screen.dart';
 import 'admin_login_screen.dart';
 import 'saved_news_screen.dart';
+import 'package:share_plus/share_plus.dart';
+import 'create_gamer_id_screen.dart';
 import 'about_us_screen.dart';
 import 'contact_us_screen.dart';
 import 'privacy_policy_screen.dart';
@@ -553,6 +555,77 @@ class _ProfileScreenState extends State<ProfileScreen> {
                             context,
                             onLanguageChanged: () {
                               if (mounted) setState(() {});
+                            },
+                          );
+                        },
+                      ),
+                      Divider(color: borderDark, height: 1),
+
+                      // Edit Gamer Profile
+                      ValueListenableBuilder<GamerUser?>(
+                        valueListenable: GamerAuthService().currentGamerNotifier,
+                        builder: (context, gamer, _) {
+                          return ListTile(
+                            leading: Container(
+                              padding: const EdgeInsets.all(6),
+                              decoration: BoxDecoration(
+                                color: GamerTheme.accentBlue.withOpacity(0.12),
+                                borderRadius: BorderRadius.circular(8),
+                              ),
+                              child: const Icon(Icons.edit_rounded, color: GamerTheme.accentBlue, size: 20),
+                            ),
+                            title: Text(
+                              'Edit Gamer Profile',
+                              style: TextStyle(color: textWhite, fontSize: 14, fontWeight: FontWeight.bold),
+                            ),
+                            subtitle: Text(
+                              'Update avatar, banner, bio & gaming IDs',
+                              style: TextStyle(color: textGray, fontSize: 12),
+                            ),
+                            trailing: Icon(Icons.arrow_forward_ios_rounded, color: textGray, size: 14),
+                            onTap: () {
+                              Navigator.of(context).push(
+                                MaterialPageRoute(
+                                  builder: (_) => CreateGamerIdScreen(isEditing: true, existingUser: gamer),
+                                ),
+                              );
+                            },
+                          );
+                        },
+                      ),
+                      Divider(color: borderDark, height: 1),
+
+                      // Share Profile
+                      ValueListenableBuilder<GamerUser?>(
+                        valueListenable: GamerAuthService().currentGamerNotifier,
+                        builder: (context, gamer, _) {
+                          return ListTile(
+                            leading: Container(
+                              padding: const EdgeInsets.all(6),
+                              decoration: BoxDecoration(
+                                color: GamerTheme.accentOrange.withOpacity(0.12),
+                                borderRadius: BorderRadius.circular(8),
+                              ),
+                              child: const Icon(Icons.share_rounded, color: GamerTheme.accentOrange, size: 20),
+                            ),
+                            title: Text(
+                              'Share Gamer Profile',
+                              style: TextStyle(color: textWhite, fontSize: 14, fontWeight: FontWeight.bold),
+                            ),
+                            subtitle: Text(
+                              'Invite friends to your Gamers ID network',
+                              style: TextStyle(color: textGray, fontSize: 12),
+                            ),
+                            trailing: Icon(Icons.arrow_forward_ios_rounded, color: textGray, size: 14),
+                            onTap: () {
+                              final name = gamer?.displayName ?? 'Gamer';
+                              final handle = gamer?.username ?? 'user';
+                              final game = gamer?.favoriteGame ?? 'BGMI';
+                              final text = '🎮 Check out $name\'s Gamer ID on Gamers ID Network!\n\n'
+                                  'Handle: @$handle\n'
+                                  'Game: $game\n\n'
+                                  'Join the Mini Facebook for Gamers!';
+                              Share.share(text);
                             },
                           );
                         },
