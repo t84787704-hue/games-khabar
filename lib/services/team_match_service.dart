@@ -422,6 +422,29 @@ class TeamMatchService {
           });
         });
       }
+      // Also synchronize wins, losses, draws, points with teams collection
+      try {
+        final teamDocRef = _firestore.collection('teams').doc(teamId);
+        final teamSnap = await teamDocRef.get();
+        if (teamSnap.exists) {
+          final tData = teamSnap.data() as Map<String, dynamic>? ?? {};
+          int curWins = (tData['wins'] as num?)?.toInt() ?? 0;
+          int curLosses = (tData['losses'] as num?)?.toInt() ?? 0;
+          int curDraws = (tData['draws'] as num?)?.toInt() ?? 0;
+          if (isWin) curWins++;
+          if (isLoss) curLosses++;
+          if (isDraw) curDraws++;
+          final curPoints = (curWins * 3) + curDraws;
+          await teamDocRef.update({
+            'wins': curWins,
+            'losses': curLosses,
+            'draws': curDraws,
+            'points': curPoints,
+          });
+        }
+      } catch (e) {
+        debugPrint('[TeamMatchService] Error syncing team doc record: $e');
+      }
     } catch (e) {
       debugPrint('[TeamMatchService] Error recording ranking: $e');
     }
