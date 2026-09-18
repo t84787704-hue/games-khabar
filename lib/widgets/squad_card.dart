@@ -20,6 +20,7 @@ import '../screens/gamer_profile_screen.dart';
 import '../screens/chat_screen.dart';
 import '../screens/requests_screen.dart';
 import '../services/lfg_service.dart';
+import '../widgets/send_team_challenge_dialog.dart';
 
 typedef SquadCard = LFGCard;
 
@@ -1048,6 +1049,56 @@ class _LFGCardState extends State<LFGCard> {
                   ),
 
                   const Spacer(),
+
+                  // "Challenge Team" button (Red/Orange)
+                  OutlinedButton.icon(
+                    style: OutlinedButton.styleFrom(
+                      foregroundColor: const Color(0xFFFF4655),
+                      side: const BorderSide(color: Color(0xFFFF4655), width: 1.2),
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                      minimumSize: const Size(0, 32),
+                    ),
+                    icon: const Icon(Icons.flash_on_rounded, size: 14, color: Color(0xFFFF4655)),
+                    label: const Text(
+                      'Challenge',
+                      style: TextStyle(
+                        fontWeight: FontWeight.w900,
+                        fontSize: 11.5,
+                        color: Color(0xFFFF4655),
+                      ),
+                    ),
+                    onPressed: () async {
+                      final currentUid = FirebaseAuth.instance.currentUser?.uid;
+                      if (currentUid == null) {
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          const SnackBar(content: Text('Please login to challenge teams')),
+                        );
+                        return;
+                      }
+                      // Fetch my squads to choose which team sends the challenge
+                      final mySquads = await SquadService().fetchSquadsOnce();
+                      final myOwnSquads = mySquads.where((s) => s.ownerId == currentUid || s.userId == currentUid).toList();
+                      if (context.mounted) {
+                        SendTeamChallengeDialog.show(
+                          context,
+                          opponentSquad: squad,
+                          mySquads: myOwnSquads.isNotEmpty ? myOwnSquads : [
+                            // Fallback pseudo-squad for solo leader
+                            SquadPost(
+                              id: currentUid,
+                              userId: currentUid,
+                              username: GamerAuthService().currentGamer?.username ?? 'leader',
+                              displayName: GamerAuthService().currentGamer?.displayName ?? 'My Team',
+                              userAvatar: GamerAuthService().currentGamer?.photoUrl ?? '',
+                              members: [currentUid],
+                            )
+                          ],
+                        );
+                      }
+                    },
+                  ),
+                  const SizedBox(width: 8),
 
                   // "Join" button (Orange)
                   ElevatedButton.icon(

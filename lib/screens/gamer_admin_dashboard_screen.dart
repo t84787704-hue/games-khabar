@@ -14,6 +14,7 @@ import '../services/coin_wallet_service.dart';
 import '../services/gamer_auth_service.dart';
 import '../services/coin_reward_service.dart';
 import '../services/notification_service.dart';
+import 'admin/admin_team_matches_screen.dart';
 
 class GamerAdminDashboardScreen extends StatefulWidget {
   const GamerAdminDashboardScreen({super.key});
@@ -39,7 +40,7 @@ class _GamerAdminDashboardScreenState extends State<GamerAdminDashboardScreen>
   @override
   void initState() {
     super.initState();
-    _tabController = TabController(length: 6, vsync: this);
+    _tabController = TabController(length: 7, vsync: this);
     _ensureSampleQueueExists();
   }
 
@@ -183,6 +184,7 @@ class _GamerAdminDashboardScreenState extends State<GamerAdminDashboardScreen>
                       _buildRankVerifyTabTitle(),
                       const Tab(text: 'Blue Tick Requests (3 pending)'),
                       const Tab(text: 'Posts Moderation'),
+                      const Tab(text: 'Team Matches ⚔️'),
                       const Tab(text: 'Reports'),
                       const Tab(text: 'Coins'),
                     ],
@@ -198,6 +200,7 @@ class _GamerAdminDashboardScreenState extends State<GamerAdminDashboardScreen>
               _buildRankVerifyTab(),
               _buildBlueTickRequestsTab(),
               _buildPostsModerationTab(),
+              const AdminTeamMatchesScreen(),
               _buildReportsTab(),
               _buildCoinsTab(),
             ],

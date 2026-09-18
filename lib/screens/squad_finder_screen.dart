@@ -9,6 +9,8 @@ import '../models/squad_post_model.dart';
 import '../services/gamer_auth_service.dart';
 import '../services/squad_service.dart';
 import '../widgets/squad_card.dart';
+import 'my_team_matches_screen.dart';
+import 'team_leaderboard_screen.dart';
 
 class SquadFinderScreen extends StatefulWidget {
   const SquadFinderScreen({super.key});
@@ -794,6 +796,82 @@ class _SquadFinderScreenState extends State<SquadFinderScreen> {
         child: CustomScrollView(
           physics: const AlwaysScrollableScrollPhysics(parent: BouncingScrollPhysics()),
           slivers: [
+            // Top Team vs Team Action Bar
+            SliverToBoxAdapter(
+              child: Container(
+                padding: const EdgeInsets.fromLTRB(14, 10, 14, 4),
+                color: GamerTheme.bgDark,
+                child: Row(
+                  children: [
+                    Expanded(
+                      child: InkWell(
+                        onTap: () {
+                          Navigator.push(
+                            context,
+                            MaterialPageRoute(builder: (_) => const MyTeamMatchesScreen()),
+                          );
+                        },
+                        borderRadius: BorderRadius.circular(10),
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+                          decoration: BoxDecoration(
+                            gradient: const LinearGradient(
+                              colors: [Color(0xFF261928), Color(0xFF1B2032)],
+                            ),
+                            borderRadius: BorderRadius.circular(10),
+                            border: Border.all(color: const Color(0xFFFF4655).withOpacity(0.5)),
+                          ),
+                          child: const Row(
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            children: [
+                              Text('⚔️', style: TextStyle(fontSize: 14)),
+                              SizedBox(width: 6),
+                              Text(
+                                'Team Matches',
+                                style: TextStyle(color: Colors.white, fontWeight: FontWeight.w900, fontSize: 12),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: 10),
+                    Expanded(
+                      child: InkWell(
+                        onTap: () {
+                          Navigator.push(
+                            context,
+                            MaterialPageRoute(builder: (_) => const TeamLeaderboardScreen()),
+                          );
+                        },
+                        borderRadius: BorderRadius.circular(10),
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+                          decoration: BoxDecoration(
+                            gradient: const LinearGradient(
+                              colors: [Color(0xFF242217), Color(0xFF1B2032)],
+                            ),
+                            borderRadius: BorderRadius.circular(10),
+                            border: Border.all(color: const Color(0xFFFFD700).withOpacity(0.5)),
+                          ),
+                          child: const Row(
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            children: [
+                              Text('🏆', style: TextStyle(fontSize: 14)),
+                              SizedBox(width: 6),
+                              Text(
+                                'Leaderboard',
+                                style: TextStyle(color: Colors.white, fontWeight: FontWeight.w900, fontSize: 12),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
             // Top FILTERS Bar with 4 dropdown pills
             SliverToBoxAdapter(
               child: Container(
