@@ -1,7 +1,10 @@
+import 'dart:io';
 import 'package:flutter/material.dart';
+import 'package:image_picker/image_picker.dart';
 import '../constants/gamer_theme.dart';
 import '../services/gamer_auth_service.dart';
 import '../services/gamer_social_service.dart';
+import '../services/supabase_service.dart';
 import '../widgets/gamer_avatar.dart';
 
 class CreatePostScreen extends StatefulWidget {
@@ -15,9 +18,12 @@ class _CreatePostScreenState extends State<CreatePostScreen> {
   final _textController = TextEditingController();
   final GamerAuthService _authService = GamerAuthService();
   final GamerSocialService _socialService = GamerSocialService();
+  final ImagePicker _picker = ImagePicker();
 
   String _selectedGameTag = 'BGMI';
   bool _isPosting = false;
+  File? _selectedImage;
+  bool _isUploadingImage = false;
 
   final List<String> _quickTips = [
     'Looking for BGMI squad 🎖️',
@@ -42,11 +48,27 @@ class _CreatePostScreenState extends State<CreatePostScreen> {
     super.dispose();
   }
 
+  Future<void> _pickImage() async {
+    try {
+      final picked = await _picker.pickImage(
+        source: ImageSource.gallery,
+        maxWidth: 1600,
+        maxHeight: 1600,
+        imageQuality: 85,
+      );
+      if (picked != null) {
+        setState(() => _selectedImage = File(picked.path));
+      }
+    } catch (e) {
+      debugPrint('Error picking image: $e');
+    }
+  }
+
   Future<void> _submitPost() async {
     final text = _textController.text.trim();
-    if (text.isEmpty) {
+    if (text.isEmpty && _selectedImage == null) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Please write something!'), backgroundColor: GamerTheme.redAccent),
+        const SnackBar(content: Text('Please write something or attach a photo!'), backgroundColor: GamerTheme.redAccent),
       );
       return;
     }
@@ -63,6 +85,22 @@ class _CreatePostScreenState extends State<CreatePostScreen> {
     setState(() => _isPosting = true);
 
     try {
+      String? uploadedImageUrl;
+      if (_selectedImage != null) {
+        setState(() => _isUploadingImage = true);
+        try {
+          uploadedImageUrl = await SupabaseService.uploadFile(
+            file: _selectedImage!,
+            folder: 'post_media',
+            bucket: SupabaseService.bucketPosts,
+          );
+        } catch (uploadErr) {
+          debugPrint('Supabase upload notice: $uploadErr');
+        } finally {
+          if (mounted) setState(() => _isUploadingImage = false);
+        }
+      }
+
       await _socialService.createPost(
         userId: uid,
         username: user.username,
@@ -70,6 +108,7 @@ class _CreatePostScreenState extends State<CreatePostScreen> {
         userPhoto: user.photoUrl,
         text: text,
         gameTag: _selectedGameTag,
+        imageUrl: uploadedImageUrl,
       );
 
       // Refresh local user stats
@@ -228,6 +267,69 @@ class _CreatePostScreenState extends State<CreatePostScreen> {
                   focusedBorder: InputBorder.none,
                   filled: false,
                 ),
+              ),
+
+              // Selected Image Preview
+              if (_selectedImage != null) ...[
+                const SizedBox(height: 12),
+                Stack(
+                  children: [
+                    ClipRRect(
+                      borderRadius: BorderRadius.circular(12),
+                      child: Image.file(
+                        _selectedImage!,
+                        height: 200,
+                        width: double.infinity,
+                        fit: BoxFit.cover,
+                      ),
+                    ),
+                    Positioned(
+                      top: 8,
+                      right: 8,
+                      child: GestureDetector(
+                        onTap: () => setState(() => _selectedImage = null),
+                        child: Container(
+                          padding: const EdgeInsets.all(6),
+                          decoration: const BoxDecoration(
+                            color: Colors.black54,
+                            shape: BoxShape.circle,
+                          ),
+                          child: const Icon(Icons.close, color: Colors.white, size: 18),
+                        ),
+                      ),
+                    ),
+                    if (_isUploadingImage)
+                      Positioned.fill(
+                        child: Container(
+                          color: Colors.black54,
+                          child: const Center(
+                            child: CircularProgressIndicator(color: GamerTheme.accentBlue),
+                          ),
+                        ),
+                      ),
+                  ],
+                ),
+              ],
+
+              const SizedBox(height: 12),
+
+              // Attach Photo Action Bar
+              Row(
+                children: [
+                  OutlinedButton.icon(
+                    onPressed: _isPosting ? null : _pickImage,
+                    icon: const Icon(Icons.add_photo_alternate_rounded, size: 18, color: GamerTheme.accentBlue),
+                    label: Text(
+                      _selectedImage == null ? 'Add Photo' : 'Change Photo',
+                      style: const TextStyle(color: GamerTheme.accentBlue, fontSize: 12, fontWeight: FontWeight.bold),
+                    ),
+                    style: OutlinedButton.styleFrom(
+                      side: BorderSide(color: GamerTheme.accentBlue.withOpacity(0.4)),
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+                    ),
+                  ),
+                ],
               ),
 
               const SizedBox(height: 16),

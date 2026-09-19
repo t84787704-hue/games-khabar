@@ -179,60 +179,74 @@ class GamerSocialService {
     String? imageUrl,
     String? mediaUrl,
     String? videoUrl,
+    String? content,
+    String? game,
   }) async {
-    final postRef = _firestore.collection('posts').doc();
-    final userRef = _firestore.collection('users').doc(userId);
+    final postContent = text.isNotEmpty ? text : (content ?? '');
+    final finalGame = (gameTag.isNotEmpty && gameTag != 'BGMI') ? gameTag : (game ?? gameTag);
+    final finalMedia = imageUrl ?? mediaUrl ?? videoUrl;
+    final mediaType = (videoUrl != null && videoUrl.isNotEmpty) ? 'video' : (finalMedia != null ? 'image' : 'text');
+    final postDocId = 'p_${DateTime.now().millisecondsSinceEpoch}_${userId.length > 5 ? userId.substring(0, 5) : userId}';
 
-    bool isVerified = false;
+    // 1. Direct Primary Save to Supabase 'posts' table
     try {
-      final userSnap = await userRef.get();
-      isVerified = userSnap.data()?['isVerified'] == true;
-    } catch (_) {}
-
-    final post = GamerPost(
-      postId: postRef.id,
-      userId: userId,
-      username: username,
-      displayName: displayName,
-      userPhoto: userPhoto,
-      text: text,
-      gameTag: gameTag,
-      imageUrl: imageUrl,
-      videoUrl: videoUrl ?? mediaUrl,
-      likesCount: 0,
-      commentsCount: 0,
-      isVerified: isVerified,
-      createdAt: DateTime.now(),
-    );
-
-    final batch = _firestore.batch();
-    batch.set(postRef, post.toMap());
-    batch.update(userRef, {
-      'postsCount': FieldValue.increment(1),
-    });
-
-    await batch.commit();
-
-    // Sync to Supabase public.posts
-    try {
-      await SupabaseService.savePost({
-        'post_id': postRef.id,
+      final supabaseSuccess = await SupabaseService.savePost({
+        'post_id': postDocId,
         'user_id': userId,
         'username': username,
         'user_avatar': userPhoto,
-        'content': text,
-        'media_url': imageUrl ?? videoUrl ?? mediaUrl,
-        'media_type': (videoUrl != null && videoUrl.isNotEmpty) ? 'video' : 'image',
-        'game': gameTag,
+        'content': postContent,
+        'media_url': finalMedia,
+        'media_type': mediaType,
+        'game': finalGame,
         'likes_count': 0,
         'comments_count': 0,
         'created_at': DateTime.now().toIso8601String(),
       });
+      debugPrint('[GamerSocialService] Supabase savePost result: $supabaseSuccess');
     } catch (e) {
-      debugPrint('[GamerSocialService] Supabase savePost notice: $e');
+      debugPrint('[GamerSocialService] Supabase savePost error: $e');
     }
 
-    return postRef.id;
+    // 2. Also persist to Firestore for feed stream & profile counter sync
+    try {
+      final postRef = _firestore.collection('posts').doc(postDocId);
+      final userRef = _firestore.collection('users').doc(userId);
+
+      bool isVerified = false;
+      try {
+        final userSnap = await userRef.get();
+        isVerified = userSnap.data()?['isVerified'] == true;
+      } catch (_) {}
+
+      final post = GamerPost(
+        postId: postDocId,
+        userId: userId,
+        username: username,
+        displayName: displayName,
+        userPhoto: userPhoto,
+        text: postContent,
+        gameTag: finalGame,
+        imageUrl: imageUrl ?? (mediaType == 'image' ? finalMedia : null),
+        videoUrl: videoUrl ?? (mediaType == 'video' ? finalMedia : null),
+        likesCount: 0,
+        commentsCount: 0,
+        isVerified: isVerified,
+        createdAt: DateTime.now(),
+      );
+
+      final batch = _firestore.batch();
+      batch.set(postRef, post.toMap());
+      batch.update(userRef, {
+        'postsCount': FieldValue.increment(1),
+      });
+
+      await batch.commit();
+    } catch (e) {
+      debugPrint('[GamerSocialService] Firestore sync notice: $e');
+    }
+
+    return postDocId;
   }
 
   Future<void> deletePost({
