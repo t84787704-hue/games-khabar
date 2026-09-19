@@ -1,5 +1,6 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import '../models/challenge_model.dart';
+import 'supabase_service.dart';
 
 class ChallengeService {
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
@@ -23,6 +24,16 @@ class ChallengeService {
         'read': false,
         'createdAt': FieldValue.serverTimestamp(),
       });
+
+      // Sync notification to Supabase
+      try {
+        await SupabaseService.sendNotification({
+          'userId': challenge.challengedId,
+          'title': '⚔️ 1v1 Battle Challenge',
+          'message': 'challenged you to a 1v1 Battle (${challenge.mode}, ${challenge.weaponRule})!',
+          'type': 'challenge',
+        });
+      } catch (_) {}
     } catch (e) {
       // Fallback
     }
@@ -44,6 +55,16 @@ class ChallengeService {
           'read': false,
           'createdAt': FieldValue.serverTimestamp(),
         });
+
+        // Sync notification to Supabase
+        try {
+          await SupabaseService.sendNotification({
+            'userId': challengerUid,
+            'title': '✅ 1v1 Challenge Accepted',
+            'message': '${responderName ?? "Opponent"} accepted your 1v1 challenge! Room is ON.',
+            'type': 'challenge_accepted',
+          });
+        } catch (_) {}
       }
     } catch (_) {}
   }

@@ -1357,6 +1357,28 @@ class _GamerRoomsScreenState extends State<GamerRoomsScreen> {
 
                               await docRef.set(newRoomData);
 
+                              // Sync room to Supabase rooms and room_members table
+                              try {
+                                await SupabaseService.saveRoom({
+                                  'room_id': docRef.id,
+                                  'title': newRoomData['title']?.toString() ?? '$selectedGame Match',
+                                  'game': selectedGame,
+                                  'mode': selectedMap,
+                                  'host_id': uid,
+                                  'host_name': name,
+                                  'max_players': maxSlots,
+                                  'current_players': 1,
+                                  'status': 'active',
+                                  'created_at': DateTime.now().toIso8601String(),
+                                });
+                                await SupabaseService.addRoomMember({
+                                  'room_id': docRef.id,
+                                  'user_id': uid,
+                                  'username': name,
+                                  'joined_at': DateTime.now().toIso8601String(),
+                                });
+                              } catch (_) {}
+
                               if (mounted) {
                                 setState(() {
                                   _joinedRoomIds.add(docRef.id);

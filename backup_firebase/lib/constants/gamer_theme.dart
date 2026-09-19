@@ -1,0 +1,278 @@
+import 'package:flutter/material.dart';
+import '../services/theme_service.dart';
+
+class GamerTheme {
+  // Core Colors
+  static const Color bgDark = Color(0xFF0A0E17);
+  static const Color surfaceDark = Color(0xFF121824);
+  static const Color cardDark = Color(0xFF121824);
+  static const Color cardElevated = Color(0xFF182234);
+  static const Color cardHover = Color(0xFF1E2B42);
+  static const Color borderDark = Color(0xFF1F2E45);
+  static const Color borderLight = Color(0xFF2A3C5A);
+
+  // Accents: Blue & Orange
+  static const Color accentBlue = Color(0xFF00D2FF);
+  static const Color accentCyan = Color(0xFF00D2FF);
+  static const Color electricBlue = Color(0xFF2563EB);
+  static const Color deepBlue = Color(0xFF0F172A);
+  static const Color accentOrange = Color(0xFFFF6B00);
+  static const Color flameOrange = Color(0xFFFF8A00);
+  static const Color redAccent = Color(0xFFFF3366);
+  static const Color neonGreen = Color(0xFF00E676);
+  static const Color accentGreen = Color(0xFF00E676);
+
+  // Typography
+  static const Color textWhite = Color(0xFFF8FAFC);
+  static const Color textGray = Color(0xFF94A3B8);
+  static const Color textMuted = Color(0xFF64748B);
+
+  // Dynamic Helpers for components that want Day/Night adaptive colors
+  static Color get dynamicBg => ThemeService.bg;
+  static Color get dynamicCard => ThemeService.card;
+  static Color get dynamicCardElevated => ThemeService.cardSecondary;
+  static Color get dynamicBorder => ThemeService.border;
+  static Color get dynamicTextPrimary => ThemeService.textPrimary;
+  static Color get dynamicTextSecondary => ThemeService.textSecondary;
+  static bool get isDarkMode => ThemeService.isDarkMode;
+
+  // Gradients
+  static const LinearGradient blueOrangeGradient = LinearGradient(
+    colors: [Color(0xFF00D2FF), Color(0xFFFF6B00)],
+    begin: Alignment.topLeft,
+    end: Alignment.bottomRight,
+  );
+
+  static const LinearGradient electricBlueGradient = LinearGradient(
+    colors: [Color(0xFF00D2FF), Color(0xFF0066FF)],
+    begin: Alignment.topLeft,
+    end: Alignment.bottomRight,
+  );
+
+  static const LinearGradient flameOrangeGradient = LinearGradient(
+    colors: [Color(0xFFFF8A00), Color(0xFFFF4500)],
+    begin: Alignment.topLeft,
+    end: Alignment.bottomRight,
+  );
+
+  static const LinearGradient cardGradient = LinearGradient(
+    colors: [Color(0xFF141C2B), Color(0xFF0F1522)],
+    begin: Alignment.topCenter,
+    end: Alignment.bottomCenter,
+  );
+
+  static const List<String> favoriteGames = [
+    'PUBG',
+    'Free Fire',
+    'COD',
+    'BGMI',
+    'GTA',
+    'Valorant',
+    'Fortnite',
+    'Minecraft',
+    'MLBB',
+    'FIFA',
+    'PC Games',
+    'Mobile Games',
+  ];
+
+  static const Map<String, String> gameEmojis = {
+    'PUBG': '🪂',
+    'Free Fire': '🔥',
+    'COD': '🎯',
+    'BGMI': '🎖️',
+    'GTA': '🚗',
+    'Valorant': '⚡',
+    'Fortnite': '⛏️',
+    'Minecraft': '🧱',
+    'MLBB': '⚔️',
+    'FIFA': '⚽',
+    'Racing': '🏎️',
+    'Forza': '🏁',
+    'PC Games': '💻',
+    'Mobile Games': '📱',
+    'Trending': '🔥',
+    'News': '📰',
+    'Genshin': '✨',
+    'Apex': '🏆',
+    'CS2': '💣',
+    'LOL': '🧙',
+    'Dota 2': '🛡️',
+    'God of War': '🪓',
+    'Zelda': '🗡️',
+    'Spider-Man': '🕷️',
+    'Last of Us': '🌿',
+    'Roblox': '🤖',
+    'Clash of Clans': '👑',
+    'Elden Ring': '💍',
+    'BGMI (Battlegrounds Mobile India)': '🎖️',
+    'PUBG Mobile': '🪂',
+    'Call of Duty Mobile (COD)': '🎯',
+    'Valorant Mobile': '⚡',
+    'Clash Royale': '👑',
+    'Pokémon Unite': '⚡',
+    'Mobile Legends': '⚔️',
+    'Genshin Impact': '✨',
+    'Fortnite Mobile': '⛏️',
+    'Apex Legends Mobile': '🏆',
+    'New State Mobile': '🚀',
+    'PES / eFootball': '⚽',
+    'Asphalt 9': '🏎️',
+  };
+
+  static const Map<String, String> gameBadgeEmoji = gameEmojis;
+
+  static Color getGameColor(String game) {
+    return gameColors[game] ?? accentOrange;
+  }
+
+  static const Map<String, Color> gameColors = {
+    'PUBG': Color(0xFFF59E0B),
+    'Free Fire': Color(0xFFFF3B30),
+    'COD': Color(0xFF00D2FF),
+    'BGMI': Color(0xFFFF9900),
+    'GTA': Color(0xFF10B981),
+    'Valorant': Color(0xFFFF4655),
+    'Fortnite': Color(0xFF8B5CF6),
+    'Minecraft': Color(0xFF22C55E),
+    'MLBB': Color(0xFF3B82F6),
+    'FIFA': Color(0xFF06B6D4),
+    'Racing': Color(0xFFEC4899),
+    'Forza': Color(0xFFF43F5E),
+    'PC Games': Color(0xFF6366F1),
+    'Mobile Games': Color(0xFF14B8A6),
+    'Trending': Color(0xFFF97316),
+    'BGMI (Battlegrounds Mobile India)': Color(0xFFFF9900),
+    'PUBG Mobile': Color(0xFFF59E0B),
+    'Call of Duty Mobile (COD)': Color(0xFF00D2FF),
+    'Valorant Mobile': Color(0xFFFF4655),
+    'Clash of Clans': Color(0xFFFFCC00),
+    'Clash Royale': Color(0xFF3B82F6),
+    'Pokémon Unite': Color(0xFFF59E0B),
+    'Mobile Legends': Color(0xFF8B5CF6),
+    'Genshin Impact': Color(0xFF38BDF8),
+    'Fortnite Mobile': Color(0xFFA855F7),
+    'Apex Legends Mobile': Color(0xFFEF4444),
+    'New State Mobile': Color(0xFF06B6D4),
+    'PES / eFootball': Color(0xFF10B981),
+    'Asphalt 9': Color(0xFFEC4899),
+  };
+
+  static ThemeData get themeData {
+    return ThemeService.isDarkMode ? darkThemeData : lightThemeData;
+  }
+
+  static ThemeData get darkThemeData {
+    return ThemeData(
+      brightness: Brightness.dark,
+      scaffoldBackgroundColor: bgDark,
+      primaryColor: accentBlue,
+      colorScheme: const ColorScheme.dark(
+        primary: accentBlue,
+        secondary: accentOrange,
+        surface: cardDark,
+        background: bgDark,
+        error: redAccent,
+      ),
+      appBarTheme: const AppBarTheme(
+        backgroundColor: cardDark,
+        elevation: 0,
+        centerTitle: false,
+        iconTheme: IconThemeData(color: textWhite),
+        titleTextStyle: TextStyle(
+          color: textWhite,
+          fontSize: 18,
+          fontWeight: FontWeight.w900,
+          letterSpacing: 0.5,
+        ),
+      ),
+      bottomNavigationBarTheme: const BottomNavigationBarThemeData(
+        backgroundColor: cardDark,
+        selectedItemColor: accentBlue,
+        unselectedItemColor: textMuted,
+        showUnselectedLabels: true,
+        type: BottomNavigationBarType.fixed,
+        elevation: 8,
+      ),
+      inputDecorationTheme: InputDecorationTheme(
+        filled: true,
+        fillColor: cardDark,
+        contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+        hintStyle: const TextStyle(color: textMuted, fontSize: 14),
+        border: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(12),
+          borderSide: const BorderSide(color: borderDark),
+        ),
+        enabledBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(12),
+          borderSide: const BorderSide(color: borderDark),
+        ),
+        focusedBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(12),
+          borderSide: const BorderSide(color: accentBlue, width: 1.5),
+        ),
+        errorBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(12),
+          borderSide: const BorderSide(color: redAccent),
+        ),
+      ),
+    );
+  }
+
+  static ThemeData get lightThemeData {
+    return ThemeData(
+      brightness: Brightness.light,
+      scaffoldBackgroundColor: const Color(0xFFF8FAFC),
+      primaryColor: accentBlue,
+      colorScheme: const ColorScheme.light(
+        primary: accentBlue,
+        secondary: accentOrange,
+        surface: Colors.white,
+        background: Color(0xFFF8FAFC),
+        error: redAccent,
+      ),
+      appBarTheme: const AppBarTheme(
+        backgroundColor: Colors.white,
+        elevation: 0.5,
+        centerTitle: false,
+        iconTheme: IconThemeData(color: Color(0xFF0F172A)),
+        titleTextStyle: TextStyle(
+          color: Color(0xFF0F172A),
+          fontSize: 18,
+          fontWeight: FontWeight.w900,
+          letterSpacing: 0.5,
+        ),
+      ),
+      bottomNavigationBarTheme: const BottomNavigationBarThemeData(
+        backgroundColor: Colors.white,
+        selectedItemColor: accentBlue,
+        unselectedItemColor: Color(0xFF64748B),
+        showUnselectedLabels: true,
+        type: BottomNavigationBarType.fixed,
+        elevation: 8,
+      ),
+      inputDecorationTheme: InputDecorationTheme(
+        filled: true,
+        fillColor: const Color(0xFFF1F5F9),
+        contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+        hintStyle: const TextStyle(color: Color(0xFF94A3B8), fontSize: 14),
+        border: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(12),
+          borderSide: const BorderSide(color: Color(0xFFE2E8F0)),
+        ),
+        enabledBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(12),
+          borderSide: const BorderSide(color: Color(0xFFE2E8F0)),
+        ),
+        focusedBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(12),
+          borderSide: const BorderSide(color: accentBlue, width: 1.5),
+        ),
+        errorBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(12),
+          borderSide: const BorderSide(color: redAccent),
+        ),
+      ),
+    );
+  }
+}

@@ -1,0 +1,246 @@
+import 'package:flutter/material.dart';
+import '../constants/gamer_theme.dart';
+import '../models/gamer_post_model.dart';
+import '../services/gamer_social_service.dart';
+import '../widgets/post_card.dart';
+import '../widgets/tiktok_upload_progress_banner.dart';
+import 'publish_video_screen.dart';
+
+/// Dedicated Facebook Watch-Style Gaming Videos Screen
+class GamerVideosScreen extends StatefulWidget {
+  const GamerVideosScreen({super.key});
+
+  @override
+  State<GamerVideosScreen> createState() => _GamerVideosScreenState();
+}
+
+class _GamerVideosScreenState extends State<GamerVideosScreen> {
+  final GamerSocialService _socialService = GamerSocialService();
+  String _selectedTag = 'All';
+
+  final List<String> _filterTags = [
+    'All',
+    'BGMI',
+    'Free Fire',
+    'COD Mobile',
+    'Valorant',
+    'GTA V',
+    'General',
+  ];
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      backgroundColor: GamerTheme.bgDark,
+      appBar: AppBar(
+        backgroundColor: GamerTheme.surfaceDark,
+        elevation: 0,
+        title: Row(
+          children: [
+            const Icon(Icons.ondemand_video_rounded, color: GamerTheme.accentOrange, size: 26),
+            const SizedBox(width: 8),
+            Text(
+              'Videos',
+              style: TextStyle(
+                color: GamerTheme.textWhite,
+                fontWeight: FontWeight.bold,
+                fontSize: 20,
+              ),
+            ),
+          ],
+        ),
+      ),
+      floatingActionButton: Container(
+        decoration: BoxDecoration(
+          color: GamerTheme.accentBlue,
+          borderRadius: BorderRadius.circular(20),
+          boxShadow: [
+            BoxShadow(
+              color: GamerTheme.accentBlue.withOpacity(0.4),
+              blurRadius: 8,
+              offset: const Offset(0, 3),
+            ),
+          ],
+        ),
+        child: Material(
+          color: Colors.transparent,
+          child: InkWell(
+            onTap: () {
+              Navigator.of(context).push(
+                MaterialPageRoute(builder: (_) => const PublishVideoScreen()),
+              );
+            },
+            borderRadius: BorderRadius.circular(20),
+            child: const Padding(
+              padding: EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Icon(Icons.video_call_rounded, color: Colors.white, size: 16),
+                  SizedBox(width: 6),
+                  Text(
+                    'Post Video (Max 3m)',
+                    style: TextStyle(
+                      color: Colors.white,
+                      fontWeight: FontWeight.bold,
+                      fontSize: 12,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ),
+      ),
+      body: CustomScrollView(
+        slivers: [
+          // Background Upload Progress Banner (TikTok style)
+          const SliverToBoxAdapter(
+            child: TikTokUploadProgressBanner(),
+          ),
+
+          // Game Category Filter Chips
+          SliverToBoxAdapter(
+            child: Container(
+              height: 38,
+              margin: const EdgeInsets.symmetric(vertical: 6),
+              child: ListView.separated(
+                scrollDirection: Axis.horizontal,
+                padding: const EdgeInsets.symmetric(horizontal: 14),
+                itemCount: _filterTags.length,
+                separatorBuilder: (_, __) => const SizedBox(width: 8),
+                itemBuilder: (context, index) {
+                  final tag = _filterTags[index];
+                  final isSelected = _selectedTag == tag;
+                  return InkWell(
+                    onTap: () => setState(() => _selectedTag = tag),
+                    borderRadius: BorderRadius.circular(18),
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+                      decoration: BoxDecoration(
+                        color: isSelected? GamerTheme.accentBlue : GamerTheme.cardDark,
+                        borderRadius: BorderRadius.circular(18),
+                        border: Border.all(
+                          color: isSelected? GamerTheme.accentBlue : GamerTheme.borderDark,
+                        ),
+                      ),
+                      child: Text(
+                        tag,
+                        style: TextStyle(
+                          color: isSelected? Colors.white : GamerTheme.textGray,
+                          fontSize: 12,
+                          fontWeight: isSelected? FontWeight.bold : FontWeight.normal,
+                        ),
+                      ),
+                    ),
+                  );
+                },
+              ),
+            ),
+          ),
+
+          // Stream of Videos
+          StreamBuilder<List<GamerPost>>(
+            stream: _socialService.getVideosStream(
+              gameTag: _selectedTag == 'All'? null : _selectedTag,
+            ),
+            builder: (context, snapshot) {
+              if (snapshot.connectionState == ConnectionState.waiting) {
+                return const SliverFillRemaining(
+                  child: Center(
+                    child: CircularProgressIndicator(color: GamerTheme.accentBlue),
+                  ),
+                );
+              }
+
+              final videoPosts = snapshot.data?? [];
+
+              if (videoPosts.isEmpty) {
+                return SliverFillRemaining(
+                  hasScrollBody: false,
+                  child: Center(
+                    child: Padding(
+                      padding: const EdgeInsets.all(24),
+                      child: Column(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          Container(
+                            padding: const EdgeInsets.all(20),
+                            decoration: BoxDecoration(
+                              color: GamerTheme.cardDark,
+                              shape: BoxShape.circle,
+                              border: Border.all(color: GamerTheme.borderDark),
+                            ),
+                            child: const Icon(
+                              Icons.ondemand_video_rounded,
+                              size: 48,
+                              color: GamerTheme.textMuted,
+                            ),
+                          ),
+                          const SizedBox(height: 16),
+                          Text(
+                            'No Videos Published Yet',
+                            style: TextStyle(
+                              color: GamerTheme.textWhite,
+                              fontSize: 17,
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
+                          const SizedBox(height: 6),
+                          const Text(
+                            'Publish your first gaming clutch or funny clip!\nMaximum duration: 3 minutes.',
+                            textAlign: TextAlign.center,
+                            style: TextStyle(
+                              color: GamerTheme.textMuted,
+                              fontSize: 13,
+                              height: 1.4,
+                            ),
+                          ),
+                          const SizedBox(height: 20),
+                          ElevatedButton.icon(
+                            onPressed: () {
+                              Navigator.of(context).push(
+                                MaterialPageRoute(builder: (_) => const PublishVideoScreen()),
+                              );
+                            },
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor: GamerTheme.accentBlue,
+                              foregroundColor: Colors.white,
+                              padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+                              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                            ),
+                            icon: const Icon(Icons.video_call_rounded, size: 20),
+                            label: const Text(
+                              'Publish Video Now',
+                              style: TextStyle(fontWeight: FontWeight.bold),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                );
+              }
+
+              return SliverList(
+                delegate: SliverChildBuilderDelegate(
+                  (context, index) {
+                    final post = videoPosts[index];
+                    return Padding(
+                      padding: const EdgeInsets.only(bottom: 6),
+                      child: PostCard(
+                        key: ValueKey('video_${post.postId}'),
+                        post: post,
+                      ),
+                    );
+                  },
+                  childCount: videoPosts.length,
+                ),
+              );
+            },
+          ),
+        ],
+      ),
+    );
+  }
+}

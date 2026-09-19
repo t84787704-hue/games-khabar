@@ -3,6 +3,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/foundation.dart';
 import '../models/gamer_post_model.dart';
+import 'supabase_service.dart';
 
 /// Model for an item displayed in the Gamer Profile Posts tab.
 class ProfileFeedItem {
@@ -37,6 +38,30 @@ class ProfileFeedItem {
     this.createdAt,
     this.originalPost,
   });
+
+  factory ProfileFeedItem.fromMap(Map<String, dynamic> data, [String? id]) {
+    DateTime? created;
+    final rawCreated = data['created_at'] ?? data['createdAt'];
+    if (rawCreated is String) {
+      created = DateTime.tryParse(rawCreated);
+    }
+
+    return ProfileFeedItem(
+      id: id ?? data['post_id']?.toString() ?? data['id']?.toString() ?? '',
+      userId: data['user_id']?.toString() ?? data['userId']?.toString() ?? '',
+      username: data['username']?.toString() ?? 'gamer',
+      displayName: data['display_name']?.toString() ?? data['displayName']?.toString() ?? data['username']?.toString() ?? 'Gamer',
+      userPhoto: data['user_avatar']?.toString() ?? data['userPhoto']?.toString() ?? '',
+      text: data['content']?.toString() ?? data['text']?.toString() ?? '',
+      mediaUrl: data['media_url']?.toString() ?? data['mediaUrl']?.toString() ?? '',
+      gameTag: data['game']?.toString() ?? data['gameTag']?.toString() ?? 'PUBG Mobile',
+      likesCount: (data['likes_count'] as num?)?.toInt() ?? (data['likesCount'] as num?)?.toInt() ?? 0,
+      commentsCount: (data['comments_count'] as num?)?.toInt() ?? (data['commentsCount'] as num?)?.toInt() ?? 0,
+      sharesCount: (data['shares_count'] as num?)?.toInt() ?? (data['sharesCount'] as num?)?.toInt() ?? 0,
+      isVerified: data['is_verified'] == true || data['isVerified'] == true,
+      createdAt: created,
+    );
+  }
 
   factory ProfileFeedItem.fromFirestoreDoc(DocumentSnapshot doc) {
     final data = doc.data() as Map<String, dynamic>? ?? {};
@@ -80,6 +105,21 @@ class ProfileService {
   static final ProfileService _instance = ProfileService._internal();
   factory ProfileService() => _instance;
   ProfileService._internal();
+
+  /// Fetch user posts directly from Supabase posts table
+  Future<List<ProfileFeedItem>> getUserPostsFromSupabase(String userId) async {
+    try {
+      final rows = await SupabaseService.query(
+        'posts',
+        filters: {'user_id': 'eq.$userId'},
+        order: 'created_at.desc',
+      );
+      return rows.map((r) => ProfileFeedItem.fromMap(r)).toList();
+    } catch (e) {
+      debugPrint('ProfileService getUserPostsFromSupabase error: $e');
+      return [];
+    }
+  }
 
   Future<({String uid, String rawUsername, String atUsername})> _resolveUserIdentifiers({
     String? userId,

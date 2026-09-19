@@ -115,10 +115,20 @@ class GamerAuthService {
     }
   }
 
-  /// Checks live if a username is available in Firestore
+  /// Checks live if a username is available in Firestore & Supabase
   Future<bool> isUsernameAvailable(String username, {String? currentUid}) async {
     final clean = username.toLowerCase().trim();
     if (clean.length < 3) return false;
+
+    try {
+      final sbUsers = await SupabaseService.query('users', filters: {'username': 'eq.$clean'}, limit: 1);
+      if (sbUsers.isNotEmpty) {
+        if (currentUid != null && sbUsers.first['uid'] == currentUid) {
+          return true;
+        }
+        return false;
+      }
+    } catch (_) {}
 
     try {
       final query = await _firestore
@@ -428,11 +438,19 @@ class GamerAuthService {
         }
         return GamerUser.fromFirestore(doc);
       }
-      return null;
     } catch (e) {
-      debugPrint('Error getting user profile $uid: $e');
-      return null;
+      debugPrint('Firestore get user profile $uid notice: $e');
     }
+
+    try {
+      final sbUser = await SupabaseService.getUser(uid);
+      if (sbUser != null) {
+        return GamerUser.fromMap(sbUser);
+      }
+    } catch (e) {
+      debugPrint('Supabase get user profile $uid error: $e');
+    }
+    return null;
   }
 
   /// Alias for getUserProfile
@@ -466,6 +484,23 @@ class GamerAuthService {
       } catch (e) {
         debugPrint('Error updating user profile $uid: $e');
       }
+
+      // Sync updates to Supabase users table
+      try {
+        final Map<String, dynamic> sbUpdates = {};
+        if (rank != null) sbUpdates['gamer_rank'] = rank;
+        if (gameId != null) sbUpdates['game_id'] = gameId;
+        if (bio != null) sbUpdates['bio'] = bio;
+        if (displayName != null) sbUpdates['display_name'] = displayName;
+        if (photoUrl != null) sbUpdates['avatar_url'] = photoUrl;
+        if (verificationStatus != null) sbUpdates['is_verified'] = verificationStatus == 'verified';
+        if (sbUpdates.isNotEmpty) {
+          sbUpdates['updated_at'] = DateTime.now().toIso8601String();
+          await SupabaseService.update('users', sbUpdates, filters: {'uid': 'eq.$uid'});
+        }
+      } catch (e) {
+        debugPrint('Supabase updateProfile sync notice: $e');
+      }
     }
   }
 
@@ -479,11 +514,14 @@ class GamerAuthService {
   }
 
   /// Complete Logout / Sign Out
-  /// Signs out from FirebaseAuth, GoogleSignIn, and calls GoogleSignIn().disconnect()
+  /// Signs out from FirebaseAuth, Supabase, GoogleSignIn, and calls GoogleSignIn().disconnect()
   /// to ensure Google account chooser is displayed when logging in with another account.
   Future<void> logout() async {
     _userDocSubscription?.cancel();
     _userDocSubscription = null;
+    try {
+      await SupabaseService.signOut();
+    } catch (_) {}
     try {
       await _auth.signOut();
     } catch (e) {

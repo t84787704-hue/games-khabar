@@ -1,0 +1,1162 @@
+import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
+import 'package:firebase_auth/firebase_auth.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:intl/intl.dart';
+import 'package:shared_preferences/shared_preferences.dart';
+import 'dart:math' as math;
+import '../constants/gamer_theme.dart';
+import '../models/squad_post_model.dart';
+import '../models/squad_request_model.dart';
+import '../models/gamer_user_model.dart';
+import '../services/gamer_auth_service.dart';
+import '../services/squad_service.dart';
+import '../widgets/gamer_avatar.dart';
+import '../widgets/rank_badge_widget.dart';
+import '../widgets/blue_tick_badge.dart';
+import '../widgets/requests_bottom_sheet.dart';
+import '../widgets/squad_members_bottom_sheet.dart';
+import '../screens/gamer_profile_screen.dart';
+import '../screens/chat_screen.dart';
+import '../screens/requests_screen.dart';
+import '../services/lfg_service.dart';
+import '../widgets/send_team_challenge_dialog.dart';
+
+typedef SquadCard = LFGCard;
+
+class LFGCard extends StatefulWidget {
+  final SquadPost squad;
+
+  const LFGCard({super.key, required this.squad});
+
+  @override
+  State<LFGCard> createState() => _LFGCardState();
+}
+
+class _LFGCardState extends State<LFGCard> {
+  bool _isRequesting = false;
+  String? _customGameUid;
+
+  String get effectiveUid {
+    if (_customGameUid != null && _customGameUid!.isNotEmpty) {
+      return _customGameUid!;
+    }
+    if (widget.squad.gameUid.isNotEmpty) {
+      return widget.squad.gameUid;
+    }
+    if (widget.squad.inGameUid.isNotEmpty) {
+      return widget.squad.inGameUid;
+    }
+    return '';
+  }
+
+  void _showEditUidDialog(BuildContext context, SquadPost squad) {
+    final currentVal = effectiveUid.isNotEmpty ? effectiveUid : (squad.gameUid.isNotEmpty ? squad.gameUid : squad.inGameUid);
+    final controller = TextEditingController(text: currentVal);
+    String? dialogError;
+
+    showDialog(
+      context: context,
+      builder: (dialogCtx) => StatefulBuilder(
+        builder: (context, setDialogState) {
+          final gameLabel = squad.game.isNotEmpty ? squad.game : 'Game';
+          return AlertDialog(
+            backgroundColor: GamerTheme.cardDark,
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(16),
+              side: const BorderSide(color: GamerTheme.borderDark),
+            ),
+            title: Row(
+              children: [
+                const Icon(Icons.edit_rounded, color: GamerTheme.accentOrange, size: 20),
+                const SizedBox(width: 8),
+                Text(
+                  'Edit $gameLabel UID',
+                  style: const TextStyle(
+                    color: Colors.white,
+                    fontSize: 16,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+              ],
+            ),
+            content: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  'Change your in-game UID for $gameLabel:',
+                  style: const TextStyle(color: GamerTheme.textMuted, fontSize: 13),
+                ),
+                const SizedBox(height: 14),
+                TextField(
+                  controller: controller,
+                  keyboardType: TextInputType.number,
+                  autofocus: true,
+                  style: const TextStyle(
+                    color: Colors.white,
+                    fontWeight: FontWeight.bold,
+                    letterSpacing: 0.8,
+                  ),
+                  decoration: InputDecoration(
+                    filled: true,
+                    fillColor: GamerTheme.cardElevated,
+                    hintText: 'Enter your UID',
+                    hintStyle: const TextStyle(color: Colors.grey, fontSize: 13),
+                    errorText: dialogError,
+                    errorStyle: const TextStyle(color: Colors.redAccent, fontSize: 11),
+                    prefixIcon: const Icon(Icons.tag_rounded, color: GamerTheme.accentOrange, size: 18),
+                    border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(10),
+                      borderSide: const BorderSide(color: GamerTheme.borderDark),
+                    ),
+                    enabledBorder: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(10),
+                      borderSide: const BorderSide(color: GamerTheme.borderDark),
+                    ),
+                    focusedBorder: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(10),
+                      borderSide: const BorderSide(color: GamerTheme.accentOrange, width: 1.5),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.of(dialogCtx).pop(),
+                child: const Text('Cancel', style: TextStyle(color: GamerTheme.textMuted)),
+              ),
+              ElevatedButton(
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: GamerTheme.accentOrange,
+                  foregroundColor: Colors.white,
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                ),
+                onPressed: () async {
+                  final newUid = controller.text.trim();
+                  if (newUid.isEmpty) {
+                    setDialogState(() => dialogError = 'UID cannot be empty');
+                    return;
+                  }
+                  if (newUid.length < 4) {
+                    setDialogState(() => dialogError = 'Min 4 digits required');
+                    return;
+                  }
+                  Navigator.of(dialogCtx).pop();
+
+                  setState(() {
+                    _customGameUid = newUid;
+                  });
+
+                  try {
+                    final prefs = await SharedPreferences.getInstance();
+                    await prefs.setString('uid_${squad.game}', newUid);
+                  } catch (_) {}
+
+                  try {
+                    final updates = {
+                      'gameUid': newUid,
+                      'leaderUid': newUid,
+                      'inGameUid': newUid,
+                      'bgmiUid': newUid,
+                      'bgmiUidToCopy': newUid,
+                      'updatedAt': FieldValue.serverTimestamp(),
+                    };
+                    await FirebaseFirestore.instance.collection('lfg_posts').doc(squad.id).set(updates, SetOptions(merge: true));
+                    try {
+                      await FirebaseFirestore.instance.collection('squads').doc(squad.id).set(updates, SetOptions(merge: true));
+                    } catch (_) {}
+                    try {
+                      await FirebaseFirestore.instance.collection('chats').doc(squad.id).set({
+                        'leaderUid': newUid,
+                        'gameUid': newUid,
+                      }, SetOptions(merge: true));
+                    } catch (_) {}
+
+                    if (context.mounted) {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        SnackBar(
+                          content: Text('✅ Updated ${squad.game} UID to $newUid'),
+                          backgroundColor: GamerTheme.accentOrange,
+                        ),
+                      );
+                    }
+                  } catch (e) {
+                    if (context.mounted) {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        SnackBar(
+                          content: Text('Failed to update UID: $e'),
+                          backgroundColor: GamerTheme.redAccent,
+                        ),
+                      );
+                    }
+                  }
+                },
+                child: const Text('SAVE', style: TextStyle(fontWeight: FontWeight.bold)),
+              ),
+            ],
+          );
+        },
+      ),
+    );
+  }
+
+  String _formatTime(DateTime? dt) {
+    if (dt == null) return 'recently';
+    final diff = DateTime.now().difference(dt);
+    if (diff.inMinutes < 1) return 'just now';
+    if (diff.inMinutes < 60) return '${diff.inMinutes}m ago';
+    if (diff.inHours < 24) return '${diff.inHours}h ago';
+    return DateFormat('dd MMM').format(dt);
+  }
+
+  void _confirmDelete(BuildContext context, SquadPost squad) {
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: GamerTheme.cardDark,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        title: const Text(
+          'Permanently delete this squad?',
+          style: TextStyle(color: GamerTheme.textWhite, fontWeight: FontWeight.bold, fontSize: 16),
+        ),
+        content: const Text(
+          'Chat will also be deleted and cannot be undone.',
+          style: TextStyle(color: GamerTheme.textMuted, fontSize: 13),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text('Cancel', style: TextStyle(color: GamerTheme.textMuted)),
+          ),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(
+              backgroundColor: Colors.redAccent,
+              foregroundColor: Colors.white,
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+            ),
+            onPressed: () async {
+              Navigator.pop(ctx);
+              try {
+                await LfgService().deletePermanently(
+                  squad.id,
+                  squad.ownerId.isNotEmpty ? squad.ownerId : squad.userId,
+                );
+                if (context.mounted) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(content: Text('Squad deleted permanently')),
+                  );
+                }
+              } catch (e) {
+                if (context.mounted) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(content: Text('Delete failed: $e'), backgroundColor: Colors.redAccent),
+                  );
+                }
+              }
+            },
+            child: const Text('Delete', style: TextStyle(fontWeight: FontWeight.bold)),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Future<void> _sendJoinRequest(BuildContext context) async {
+    final authUser = FirebaseAuth.instance.currentUser;
+    final currentGamer = GamerAuthService().currentGamer;
+    final currentUserId = authUser?.uid ?? GamerAuthService().currentUid ?? currentGamer?.uid ?? '';
+
+    if (currentUserId.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Please log in to join squads!')),
+      );
+      return;
+    }
+
+    if (widget.squad.ownerId == currentUserId || widget.squad.userId == currentUserId) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text("You cannot join your own squad"),
+          backgroundColor: Colors.redAccent,
+        ),
+      );
+      return;
+    }
+
+    if (widget.squad.members.contains(currentUserId)) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text("Already in squad"),
+          backgroundColor: Colors.redAccent,
+        ),
+      );
+      return;
+    }
+
+    if (widget.squad.joinRequests.contains(currentUserId)) {
+      return;
+    }
+
+    setState(() => _isRequesting = true);
+    try {
+      final effectiveName = currentGamer?.displayName.isNotEmpty == true
+          ? currentGamer!.displayName
+          : (authUser?.displayName ?? 'Gamer');
+      final effectiveUsername = currentGamer?.username ?? '';
+      final effectiveAvatar = currentGamer?.photoUrl ?? authUser?.photoURL ?? '';
+      final effectiveTier = currentGamer?.rank ?? 'Ace';
+      final effectiveKd = currentGamer?.kdRatio ?? 3.0;
+      final effectiveGameId = currentGamer?.gameId ?? '';
+
+      await LfgService().joinRequest(
+        postId: widget.squad.id,
+        currentUserId: currentUserId,
+        leaderUid: widget.squad.userId.isNotEmpty ? widget.squad.userId : widget.squad.ownerId,
+        applicantData: {
+          'id': currentUserId,
+          'userId': currentUserId,
+          'applicantUid': currentUserId,
+          'name': effectiveName,
+          'displayName': effectiveName,
+          'username': effectiveUsername,
+          'userAvatar': effectiveAvatar,
+          'photoUrl': effectiveAvatar,
+          'tier': effectiveTier,
+          'userRank': effectiveTier,
+          'kd': effectiveKd,
+          'kdRatio': effectiveKd,
+          'inGameUid': effectiveGameId,
+          'gameId': effectiveGameId,
+          'status': 'pending',
+          'createdAt': FieldValue.serverTimestamp(),
+        },
+      );
+
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Squad request sent to ${widget.squad.displayName}!'),
+            backgroundColor: GamerTheme.accentOrange,
+          ),
+        );
+      }
+    } catch (e) {
+      debugPrint("Error sending join request: $e");
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(e.toString().replaceAll('Exception: ', '')),
+            backgroundColor: Colors.redAccent,
+          ),
+        );
+      }
+    } finally {
+      if (mounted) {
+        setState(() => _isRequesting = false);
+      }
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final squad = widget.squad;
+    final authService = GamerAuthService();
+    final authUser = FirebaseAuth.instance.currentUser;
+    final currentGamer = authService.currentGamer;
+    final currentUid = authUser?.uid ?? authService.currentUid ?? currentGamer?.uid ?? '';
+
+    // bool isOwner = post.ownerId == currentUser.uid
+    final bool isOwner = currentUid.isNotEmpty &&
+        (squad.ownerId == currentUid || squad.userId == currentUid);
+
+    // Check if current user is already a member
+    final bool isMember = currentUid.isNotEmpty && squad.members.contains(currentUid);
+
+    // Requester check: currentUid present in joinRequests
+    final bool hasRequested = currentUid.isNotEmpty && squad.joinRequests.contains(currentUid);
+
+    // Rank badge for squad leader
+    final leaderBadge = GamerRankBadge(
+      type: squad.userRank.toLowerCase().contains('conqueror')
+          ? RankBadgeType.conqueror
+          : squad.userRank.toLowerCase().contains('ace')
+              ? RankBadgeType.ace
+              : RankBadgeType.none,
+      label: squad.userRank,
+      emoji: squad.userRank.toLowerCase().contains('conqueror') ? '👑' : '⭐',
+      icon: Icons.star_rounded,
+      primaryColor: squad.userRank.toLowerCase().contains('conqueror')
+          ? const Color(0xFFFF334B)
+          : const Color(0xFFFF9500),
+      backgroundColor: const Color(0x33FF9500),
+      borderColor: const Color(0x88FF9500),
+    );
+
+    return Container(
+      margin: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+      decoration: BoxDecoration(
+        color: GamerTheme.cardDark,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(
+          color: isOwner ? GamerTheme.accentOrange.withOpacity(0.7) : GamerTheme.borderDark,
+          width: isOwner ? 1.5 : 1.2,
+        ),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.4),
+            blurRadius: 10,
+            offset: const Offset(0, 4),
+          ),
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          // Header: Leader info + Mode badge
+          Padding(
+            padding: const EdgeInsets.all(12),
+            child: Row(
+              children: [
+                GestureDetector(
+                  onTap: () {
+                    if (squad.userId.isNotEmpty) {
+                      Navigator.of(context).push(
+                        MaterialPageRoute(builder: (_) => GamerProfileScreen(userId: squad.userId)),
+                      );
+                    }
+                  },
+                  child: GamerAvatar(
+                    photoUrl: squad.userAvatar,
+                    displayName: squad.displayName,
+                    radius: 20,
+                  ),
+                ),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Row(
+                        children: [
+                          Flexible(
+                            child: Text(
+                              squad.displayName,
+                              style: const TextStyle(
+                                color: GamerTheme.textWhite,
+                                fontWeight: FontWeight.w800,
+                                fontSize: 14,
+                              ),
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                          ),
+                          RankBadgeWidget(badge: leaderBadge, size: 12),
+                          UserBlueTickBadge(userId: squad.ownerId.isNotEmpty ? squad.ownerId : squad.userId, size: 14),
+                          if (isOwner) ...[
+                            const SizedBox(width: 6),
+                            Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                              decoration: BoxDecoration(
+                                color: GamerTheme.accentOrange.withOpacity(0.2),
+                                borderRadius: BorderRadius.circular(6),
+                                border: Border.all(color: GamerTheme.accentOrange, width: 1.2),
+                              ),
+                              child: const Text(
+                                'Your Post',
+                                style: TextStyle(
+                                  color: GamerTheme.accentOrange,
+                                  fontSize: 10,
+                                  fontWeight: FontWeight.w900,
+                                  letterSpacing: 0.3,
+                                ),
+                              ),
+                            ),
+                          ],
+                        ],
+                      ),
+                      const SizedBox(height: 2),
+                      Row(
+                        children: [
+                          Text(
+                            '@${squad.username}',
+                            style: const TextStyle(
+                              color: GamerTheme.accentOrange,
+                              fontSize: 11,
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
+                          const SizedBox(width: 6),
+                          const Text('•', style: TextStyle(color: GamerTheme.textMuted, fontSize: 10)),
+                          const SizedBox(width: 6),
+                          Text(
+                            _formatTime(squad.createdAt),
+                            style: const TextStyle(color: GamerTheme.textMuted, fontSize: 11),
+                          ),
+                        ],
+                      ),
+                    ],
+                  ),
+                ),
+                // Mode chip
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                  decoration: BoxDecoration(
+                    color: GamerTheme.accentBlue.withOpacity(0.12),
+                    borderRadius: BorderRadius.circular(8),
+                    border: Border.all(color: GamerTheme.accentBlue.withOpacity(0.3)),
+                  ),
+                  child: Text(
+                    squad.mode,
+                    style: const TextStyle(
+                      color: GamerTheme.accentBlue,
+                      fontSize: 11,
+                      fontWeight: FontWeight.w900,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+
+          // Description if present
+          if (squad.description.isNotEmpty)
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 4),
+              child: Text(
+                squad.description,
+                style: const TextStyle(
+                  color: GamerTheme.textWhite,
+                  fontSize: 13,
+                  height: 1.35,
+                ),
+              ),
+            ),
+
+          const SizedBox(height: 8),
+
+          // Requirement Badges Row: Tier Needed, KD Needed, Mic, Language
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 14),
+            child: Wrap(
+              spacing: 8,
+              runSpacing: 8,
+              children: [
+                _buildRequirementChip(
+                  icon: Icons.military_tech_rounded,
+                  label: 'Min: ${squad.tierNeeded}',
+                  color: const Color(0xFFFF9500),
+                ),
+                _buildRequirementChip(
+                  icon: Icons.speed_rounded,
+                  label: '${squad.kdNeeded.toStringAsFixed(1)}+ K/D',
+                  color: const Color(0xFFFF2D55),
+                ),
+                _buildRequirementChip(
+                  icon: squad.micOn ? Icons.mic_rounded : Icons.mic_off_rounded,
+                  label: squad.micOn ? 'Mic Mandatory' : 'Mic Optional',
+                  color: squad.micOn ? GamerTheme.neonGreen : GamerTheme.textMuted,
+                ),
+                _buildRequirementChip(
+                  icon: Icons.language_rounded,
+                  label: squad.language,
+                  color: GamerTheme.accentBlue,
+                ),
+              ],
+            ),
+          ),
+
+          const SizedBox(height: 12),
+
+          // In-Game UID Bar
+          if (effectiveUid.isNotEmpty)
+            Container(
+              margin: const EdgeInsets.symmetric(horizontal: 14),
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+              decoration: BoxDecoration(
+                color: GamerTheme.bgDark.withOpacity(0.6),
+                borderRadius: BorderRadius.circular(10),
+                border: Border.all(color: GamerTheme.borderLight.withOpacity(0.2)),
+              ),
+              child: Row(
+                children: [
+                  const Icon(Icons.tag_rounded, color: GamerTheme.accentOrange, size: 16),
+                  const SizedBox(width: 6),
+                  const Text(
+                    'UID: ',
+                    style: TextStyle(color: GamerTheme.textMuted, fontSize: 12, fontWeight: FontWeight.bold),
+                  ),
+                  Text(
+                    effectiveUid,
+                    style: const TextStyle(
+                      color: GamerTheme.textWhite,
+                      fontFamily: 'monospace',
+                      fontWeight: FontWeight.bold,
+                      fontSize: 12.5,
+                      letterSpacing: 0.8,
+                    ),
+                  ),
+                  const Spacer(),
+                  GestureDetector(
+                    onTap: () {
+                      Clipboard.setData(ClipboardData(text: effectiveUid));
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        SnackBar(
+                          content: Text('Copied UID $effectiveUid to clipboard!'),
+                          duration: const Duration(seconds: 2),
+                        ),
+                      );
+                    },
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                      decoration: BoxDecoration(
+                        color: GamerTheme.cardElevated,
+                        borderRadius: BorderRadius.circular(6),
+                        border: Border.all(color: GamerTheme.borderLight),
+                      ),
+                      child: const Row(
+                        children: [
+                          Icon(Icons.copy_rounded, color: GamerTheme.accentOrange, size: 12),
+                          SizedBox(width: 4),
+                          Text('COPY', style: TextStyle(color: GamerTheme.accentOrange, fontSize: 10.5, fontWeight: FontWeight.w900)),
+                        ],
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+
+          // Squad Members Slots (4 Slots: Leader + Accepted Members) - Tappable to open Member List Bottom Sheet
+          InkWell(
+            onTap: () => SquadMembersBottomSheet.show(context, squad),
+            borderRadius: BorderRadius.circular(10),
+            child: Container(
+              margin: const EdgeInsets.fromLTRB(14, 8, 14, 0),
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+              decoration: BoxDecoration(
+                color: GamerTheme.bgDark.withOpacity(0.4),
+                borderRadius: BorderRadius.circular(10),
+                border: Border.all(color: GamerTheme.borderLight.withOpacity(0.15)),
+              ),
+              child: Row(
+                children: [
+                  const Icon(Icons.shield_outlined, color: GamerTheme.accentCyan, size: 15),
+                  const SizedBox(width: 6),
+                  Text(
+                    'Squad Members (${squad.members.isNotEmpty ? squad.members.length : 1}/4):',
+                    style: const TextStyle(
+                      color: GamerTheme.textMuted,
+                      fontSize: 11.5,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                  const Spacer(),
+                  // 4 squad slot dots / avatars
+                  Row(
+                    children: List.generate(4, (index) {
+                      final memberCount = squad.members.isNotEmpty ? squad.members.length : 1;
+                      final isFilled = index < memberCount;
+                      return Container(
+                        margin: const EdgeInsets.only(left: 6),
+                        width: 20,
+                        height: 20,
+                        decoration: BoxDecoration(
+                          color: isFilled ? GamerTheme.accentCyan.withOpacity(0.25) : GamerTheme.cardElevated,
+                          shape: BoxShape.circle,
+                          border: Border.all(
+                            color: isFilled ? GamerTheme.accentCyan : GamerTheme.borderLight.withOpacity(0.4),
+                            width: 1.2,
+                          ),
+                        ),
+                        child: Center(
+                          child: Icon(
+                            isFilled ? (index == 0 ? Icons.star_rounded : Icons.person_rounded) : Icons.add_rounded,
+                            size: 12,
+                            color: isFilled ? GamerTheme.accentCyan : GamerTheme.textMuted.withOpacity(0.5),
+                          ),
+                        ),
+                      );
+                    }),
+                  ),
+                  const SizedBox(width: 6),
+                  const Icon(Icons.arrow_forward_ios_rounded, size: 10, color: GamerTheme.accentCyan),
+                ],
+              ),
+            ),
+          ),
+
+          // Leader UID + COPY button & EDIT UID button
+          if (isMember || isOwner) ...[
+            Container(
+              margin: const EdgeInsets.fromLTRB(14, 8, 14, 0),
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
+              decoration: BoxDecoration(
+                color: GamerTheme.cardElevated,
+                borderRadius: BorderRadius.circular(8),
+                border: Border.all(color: GamerTheme.neonGreen.withOpacity(0.4)),
+              ),
+              child: Row(
+                children: [
+                  const Icon(Icons.military_tech_rounded, size: 16, color: GamerTheme.accentOrange),
+                  const SizedBox(width: 6),
+                  Text(
+                    'Leader UID: $effectiveUid',
+                    style: const TextStyle(
+                      color: GamerTheme.textWhite,
+                      fontSize: 11.5,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  InkWell(
+                    onTap: () => _showEditUidDialog(context, squad),
+                    borderRadius: BorderRadius.circular(4),
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 3),
+                      decoration: BoxDecoration(
+                        color: GamerTheme.accentOrange.withOpacity(0.18),
+                        borderRadius: BorderRadius.circular(4),
+                        border: Border.all(color: GamerTheme.accentOrange.withOpacity(0.8), width: 0.8),
+                      ),
+                      child: const Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Icon(Icons.edit_rounded, size: 11, color: GamerTheme.accentOrange),
+                          SizedBox(width: 3),
+                          Text('EDIT', style: TextStyle(color: GamerTheme.accentOrange, fontSize: 9.5, fontWeight: FontWeight.w800)),
+                        ],
+                      ),
+                    ),
+                  ),
+                  const Spacer(),
+                  InkWell(
+                    onTap: () {
+                      Clipboard.setData(ClipboardData(text: effectiveUid));
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        const SnackBar(
+                          content: Text('Leader UID copied to clipboard!'),
+                          backgroundColor: GamerTheme.neonGreen,
+                          duration: Duration(seconds: 2),
+                        ),
+                      );
+                    },
+                    borderRadius: BorderRadius.circular(4),
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                      decoration: BoxDecoration(
+                        color: GamerTheme.neonGreen.withOpacity(0.15),
+                        borderRadius: BorderRadius.circular(4),
+                        border: Border.all(color: GamerTheme.neonGreen, width: 0.8),
+                      ),
+                      child: const Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Icon(Icons.copy_rounded, size: 11, color: GamerTheme.neonGreen),
+                          SizedBox(width: 3),
+                          Text(
+                            'COPY',
+                            style: TextStyle(
+                              color: GamerTheme.neonGreen,
+                              fontSize: 10,
+                              fontWeight: FontWeight.w900,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
+
+          const SizedBox(height: 12),
+
+          // Divider and Footer Action
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+            decoration: const BoxDecoration(
+              border: Border(top: BorderSide(color: GamerTheme.borderDark)),
+            ),
+            child: Row(
+              children: [
+                if (isOwner) ...[
+                  // Owner View: Real-Time Clickable "X requested VIEW" Button + Close LFG + Red Delete button
+                  StreamBuilder<DocumentSnapshot>(
+                    stream: FirebaseFirestore.instance.collection('lfg_posts').doc(squad.id).snapshots(),
+                    builder: (context, docSnap) {
+                      List<dynamic> liveRequests = squad.joinRequests;
+                      int liveReqCount = squad.requestedCount;
+                      if (docSnap.hasData && docSnap.data!.exists) {
+                        final data = docSnap.data!.data() as Map<String, dynamic>? ?? {};
+                        liveRequests = List.from(data['joinRequests'] ?? []);
+                        liveReqCount = (data['requestedCount'] as num?)?.toInt() ?? liveRequests.length;
+                      }
+                      final count = math.max(liveRequests.length, liveReqCount);
+                      final hasRequests = count > 0;
+
+                      return Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Icon(
+                            Icons.people_alt_rounded,
+                            size: 15,
+                            color: hasRequests ? GamerTheme.accentOrange : GamerTheme.textMuted,
+                          ),
+                          const SizedBox(width: 5),
+                          Text(
+                            '$count requested',
+                            style: TextStyle(
+                              color: hasRequests ? GamerTheme.accentOrange : GamerTheme.textMuted,
+                              fontSize: 12,
+                              fontWeight: hasRequests ? FontWeight.bold : FontWeight.w500,
+                            ),
+                          ),
+                          if (hasRequests) ...[
+                            const SizedBox(width: 6),
+                            ElevatedButton(
+                              style: ElevatedButton.styleFrom(
+                                backgroundColor: GamerTheme.accentOrange,
+                                foregroundColor: GamerTheme.bgDark,
+                                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(6)),
+                                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                                minimumSize: const Size(0, 26),
+                                elevation: 0,
+                              ),
+                              onPressed: () {
+                                Navigator.push(
+                                  context,
+                                  MaterialPageRoute(
+                                    builder: (_) => RequestsScreen(postId: squad.id, squad: squad),
+                                  ),
+                                );
+                              },
+                              child: const Text(
+                                'VIEW',
+                                style: TextStyle(
+                                  color: GamerTheme.bgDark,
+                                  fontSize: 9.5,
+                                  fontWeight: FontWeight.w900,
+                                  letterSpacing: 0.5,
+                                ),
+                              ),
+                            ),
+                          ],
+                        ],
+                      );
+                    },
+                  ),
+
+                  const Spacer(),
+
+                  // Owner Action: Squad Chat (if squad has members)
+                  if (squad.members.length > 1 || squad.membersCount > 1) ...[
+                    OutlinedButton.icon(
+                      style: OutlinedButton.styleFrom(
+                        foregroundColor: GamerTheme.accentCyan,
+                        side: const BorderSide(color: GamerTheme.accentCyan, width: 1),
+                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                        minimumSize: const Size(0, 32),
+                        tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                      ),
+                      icon: const Icon(Icons.forum_rounded, size: 14),
+                      label: const Text('Chat', style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold)),
+                      onPressed: () {
+                        Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                            builder: (_) => ChatScreen(postId: squad.id, squad: squad),
+                          ),
+                        );
+                      },
+                    ),
+                    const SizedBox(width: 4),
+                  ],
+
+                  // Owner Action: Close LFG
+                  TextButton.icon(
+                    style: TextButton.styleFrom(
+                      foregroundColor: GamerTheme.textMuted,
+                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                      minimumSize: const Size(0, 32),
+                    ),
+                    icon: const Icon(Icons.close_rounded, size: 15),
+                    label: const Text('Close LFG', style: TextStyle(fontSize: 12)),
+                    onPressed: () async {
+                      await LfgService().closeLfg(squad.id);
+                      if (context.mounted) {
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          const SnackBar(content: Text('LFG Closed')),
+                        );
+                      }
+                    },
+                  ),
+
+                  // Permanent Delete Button (Red)
+                  IconButton(
+                    style: IconButton.styleFrom(
+                      foregroundColor: Colors.redAccent,
+                      padding: const EdgeInsets.all(6),
+                      minimumSize: const Size(32, 32),
+                    ),
+                    icon: const Icon(Icons.delete_outline_rounded, size: 18, color: Colors.redAccent),
+                    onPressed: () => _confirmDelete(context, squad),
+                  ),
+                ] else if (isMember) ...[
+                  // Member View: Left "In Squad" green badge. Right: "Open Chat" orange + "COPY UID"
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 5),
+                    decoration: BoxDecoration(
+                      color: GamerTheme.cardElevated,
+                      borderRadius: BorderRadius.circular(8),
+                      border: Border.all(color: GamerTheme.neonGreen.withOpacity(0.5)),
+                    ),
+                    child: const Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Icon(Icons.check_circle_rounded, size: 14, color: GamerTheme.neonGreen),
+                        SizedBox(width: 4),
+                        Text(
+                          'In Squad',
+                          style: TextStyle(
+                            fontWeight: FontWeight.w900,
+                            fontSize: 11,
+                            color: GamerTheme.neonGreen,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+
+                  const Spacer(),
+
+                  // "Open Chat" orange button
+                  ElevatedButton.icon(
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: GamerTheme.accentOrange,
+                      foregroundColor: GamerTheme.bgDark,
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                      minimumSize: const Size(0, 32),
+                      elevation: 0,
+                    ),
+                    icon: const Icon(Icons.forum_rounded, size: 14, color: GamerTheme.bgDark),
+                    label: const Text(
+                      'Open Chat',
+                      style: TextStyle(
+                        fontWeight: FontWeight.w900,
+                        fontSize: 11.5,
+                        color: GamerTheme.bgDark,
+                      ),
+                    ),
+                    onPressed: () {
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (_) => ChatScreen(postId: squad.id, squad: squad),
+                        ),
+                      );
+                    },
+                  ),
+                  const SizedBox(width: 6),
+
+                  // "COPY UID: ${post['bgmiUidToCopy']}"
+                  ElevatedButton.icon(
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: GamerTheme.cardElevated,
+                      foregroundColor: GamerTheme.accentOrange,
+                      side: const BorderSide(color: GamerTheme.accentOrange, width: 1),
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
+                      minimumSize: const Size(0, 32),
+                      elevation: 0,
+                    ),
+                    icon: const Icon(Icons.copy_rounded, size: 12, color: GamerTheme.accentOrange),
+                    label: Text(
+                      'COPY UID: $effectiveUid',
+                      style: const TextStyle(
+                        fontWeight: FontWeight.w900,
+                        fontSize: 11,
+                        color: GamerTheme.accentOrange,
+                      ),
+                    ),
+                    onPressed: () {
+                      Clipboard.setData(ClipboardData(text: effectiveUid));
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        SnackBar(
+                          content: Text('Copied UID $effectiveUid to clipboard!'),
+                          backgroundColor: GamerTheme.accentOrange,
+                          duration: const Duration(seconds: 2),
+                        ),
+                      );
+                    },
+                  ),
+                ] else if (hasRequested) ...[
+                  // Requester View: Non-owner who has already requested
+                  Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      const Icon(Icons.people_outline_rounded, size: 15, color: GamerTheme.textMuted),
+                      const SizedBox(width: 5),
+                      Text(
+                        '${math.max(0, squad.requestedCount > 0 ? squad.requestedCount : squad.joinRequests.length)} requested',
+                        style: const TextStyle(color: GamerTheme.textMuted, fontSize: 12),
+                      ),
+                    ],
+                  ),
+
+                  const Spacer(),
+
+                  // Green "Requested" badge (disabled)
+                  ElevatedButton.icon(
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: GamerTheme.neonGreen.withOpacity(0.18),
+                      foregroundColor: GamerTheme.neonGreen,
+                      disabledBackgroundColor: GamerTheme.neonGreen.withOpacity(0.18),
+                      disabledForegroundColor: GamerTheme.neonGreen,
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(8),
+                        side: BorderSide(color: GamerTheme.neonGreen.withOpacity(0.5)),
+                      ),
+                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                      minimumSize: const Size(0, 32),
+                      elevation: 0,
+                    ),
+                    icon: const Icon(Icons.check_rounded, size: 15, color: GamerTheme.neonGreen),
+                    label: const Text(
+                      'Requested',
+                      style: TextStyle(
+                        fontWeight: FontWeight.w900,
+                        fontSize: 12,
+                        color: GamerTheme.neonGreen,
+                      ),
+                    ),
+                    onPressed: null,
+                  ),
+                ] else ...[
+                  // Other Users: Non-owner who has not requested yet
+                  Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      const Icon(Icons.people_outline_rounded, size: 15, color: GamerTheme.textMuted),
+                      const SizedBox(width: 5),
+                      Text(
+                        '${math.max(0, squad.requestedCount > 0 ? squad.requestedCount : squad.joinRequests.length)} requested',
+                        style: const TextStyle(color: GamerTheme.textMuted, fontSize: 12),
+                      ),
+                    ],
+                  ),
+
+                  const Spacer(),
+
+                  // "Challenge Team" button (Red/Orange)
+                  OutlinedButton.icon(
+                    style: OutlinedButton.styleFrom(
+                      foregroundColor: const Color(0xFFFF4655),
+                      side: const BorderSide(color: Color(0xFFFF4655), width: 1.2),
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                      minimumSize: const Size(0, 32),
+                    ),
+                    icon: const Icon(Icons.flash_on_rounded, size: 14, color: Color(0xFFFF4655)),
+                    label: const Text(
+                      'Challenge',
+                      style: TextStyle(
+                        fontWeight: FontWeight.w900,
+                        fontSize: 11.5,
+                        color: Color(0xFFFF4655),
+                      ),
+                    ),
+                    onPressed: () async {
+                      final currentUid = FirebaseAuth.instance.currentUser?.uid;
+                      if (currentUid == null) {
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          const SnackBar(content: Text('Please login to challenge teams')),
+                        );
+                        return;
+                      }
+                      // Fetch my squads to choose which team sends the challenge
+                      final mySquads = await SquadService().fetchSquadsOnce();
+                      final myOwnSquads = mySquads.where((s) => s.ownerId == currentUid || s.userId == currentUid).toList();
+                      if (context.mounted) {
+                        SendTeamChallengeDialog.show(
+                          context,
+                          opponentSquad: squad,
+                          mySquads: myOwnSquads.isNotEmpty ? myOwnSquads : [
+                            // Fallback pseudo-squad for solo leader
+                            SquadPost(
+                              id: currentUid,
+                              userId: currentUid,
+                              username: GamerAuthService().currentGamer?.username ?? 'leader',
+                              displayName: GamerAuthService().currentGamer?.displayName ?? 'My Team',
+                              userAvatar: GamerAuthService().currentGamer?.photoUrl ?? '',
+                              members: [currentUid],
+                            )
+                          ],
+                        );
+                      }
+                    },
+                  ),
+                  const SizedBox(width: 8),
+
+                  // "Join" button (Orange)
+                  ElevatedButton.icon(
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: GamerTheme.accentOrange,
+                      foregroundColor: GamerTheme.bgDark,
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
+                      minimumSize: const Size(0, 32),
+                      elevation: 0,
+                    ),
+                    icon: const Icon(Icons.group_add_rounded, size: 15, color: GamerTheme.bgDark),
+                    label: const Text(
+                      'Join',
+                      style: TextStyle(
+                        fontWeight: FontWeight.w900,
+                        fontSize: 12,
+                        color: GamerTheme.bgDark,
+                      ),
+                    ),
+                    onPressed: _isRequesting ? null : () => _sendJoinRequest(context),
+                  ),
+                ],
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildRequirementChip({
+    required IconData icon,
+    required String label,
+    required Color color,
+  }) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+      decoration: BoxDecoration(
+        color: color.withOpacity(0.12),
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: color.withOpacity(0.35)),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(icon, size: 13, color: color),
+          const SizedBox(width: 4),
+          Text(
+            label,
+            style: TextStyle(
+              color: color,
+              fontSize: 11,
+              fontWeight: FontWeight.w800,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}

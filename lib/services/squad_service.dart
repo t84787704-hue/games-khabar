@@ -5,6 +5,7 @@ import 'package:flutter/foundation.dart';
 import '../models/squad_post_model.dart';
 import '../models/squad_request_model.dart';
 import 'gamer_auth_service.dart';
+import 'supabase_service.dart';
 
 class SquadService {
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
@@ -123,6 +124,28 @@ class SquadService {
       } catch (_) {}
       try {
         await FirebaseFirestore.instance.collection('lfg_posts').doc(sId).set(docData);
+      } catch (_) {}
+
+      // Sync room to Supabase rooms and room_members table
+      try {
+        await SupabaseService.saveRoom({
+          'room_id': sId,
+          'title': title ?? post?.displayName ?? "${post?.username ?? 'Gamer'}'s Squad",
+          'game': 'PUBG Mobile',
+          'mode': mode ?? post?.mode ?? 'Classic Squad',
+          'host_id': user.uid,
+          'host_name': post?.username ?? 'gamer',
+          'max_players': 4,
+          'current_players': 1,
+          'status': 'Open',
+          'created_at': DateTime.now().toIso8601String(),
+        });
+        await SupabaseService.addRoomMember({
+          'room_id': sId,
+          'user_id': user.uid,
+          'username': post?.username ?? 'gamer',
+          'joined_at': DateTime.now().toIso8601String(),
+        });
       } catch (_) {}
 
       // 3. Uske BAAD messages ka subcollection banao

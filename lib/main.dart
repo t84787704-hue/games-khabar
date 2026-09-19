@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import 'package:firebase_core/firebase_core.dart';
-import 'firebase_options.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 import 'constants/gamer_theme.dart';
 import 'services/theme_service.dart';
 import 'services/language_service.dart';
@@ -21,12 +20,12 @@ void main() async {
   );
 
   try {
-    await Firebase.initializeApp(
-      options: DefaultFirebaseOptions.currentPlatform,
+    await Supabase.initialize(
+      url: 'https://dxdkitnroypbblazblja.supabase.co',
+      anonKey: 'sb_publishable_gL8ImGd6TS-gdPOr92leHQ_Cwjiw25Y',
     );
   } catch (e) {
-    // Fallback initialize if options fail
-    await Firebase.initializeApp();
+    debugPrint('Supabase initialize error: $e');
   }
 
   await LanguageService.init();

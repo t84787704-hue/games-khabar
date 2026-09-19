@@ -431,7 +431,10 @@ class GamerUser {
   }
 
   factory GamerUser.fromFirestore(DocumentSnapshot doc) {
-    final data = doc.data() as Map<String, dynamic>? ?? {};
+    return GamerUser.fromMap(doc.data() as Map<String, dynamic>? ?? {}, doc.id);
+  }
+
+  factory GamerUser.fromMap(Map<String, dynamic> data, [String? fallbackUid]) {
     DateTime? created;
     final rawCreated = data['createdAt'];
     if (rawCreated is Timestamp) {
@@ -462,7 +465,7 @@ class GamerUser {
         data['role']?.toString().toLowerCase() == 'owner' ||
         data['isAdmin'] == true ||
         rawEmail == 'tufailm483@gmail.com' ||
-        (authUser != null && authUser.email?.toLowerCase().trim() == 'tufailm483@gmail.com' && (doc.id == authUser.uid || data['uid'] == authUser.uid));
+        (authUser != null && authUser.email?.toLowerCase().trim() == 'tufailm483@gmail.com' && ((fallbackUid ?? '') == authUser.uid || data['uid'] == authUser.uid));
 
     final rawStatus = data['verificationStatus']?.toString().toLowerCase().trim();
     final bool rawBlueTick = isOwner || data['isBlueTickVerified'] == true || data['blueTickVerified'] == true;
@@ -511,14 +514,14 @@ class GamerUser {
         (vipPassExpires != null && vipPassExpires.isAfter(DateTime.now()));
 
     return GamerUser(
-      uid: data['uid'] ?? doc.id,
+      uid: data['uid'] ?? data['id'] ?? fallbackUid ?? '',
       username: data['tag'] ?? data['username'] ?? '',
       displayName: data['bgmiName'] ?? data['displayName'] ?? '',
-      photoUrl: data['avatar'] ?? data['photoUrl'] ?? '',
-      coverUrl: data['coverUrl'] ?? '',
+      photoUrl: data['avatar'] ?? data['photoUrl'] ?? data['avatar_url'] ?? '',
+      coverUrl: data['coverUrl'] ?? data['cover_url'] ?? '',
       bio: data['bio'] ?? '',
-      favoriteGame: data['favoriteGame'] ?? 'BGMI',
-      selectedGame: data['selectedGame']?.toString() ?? data['favoriteGame']?.toString() ?? 'BGMI',
+      favoriteGame: data['favoriteGame'] ?? data['game'] ?? 'BGMI',
+      selectedGame: data['selectedGame']?.toString() ?? data['favoriteGame']?.toString() ?? data['game']?.toString() ?? 'BGMI',
       rank: resolvedRank,
       selectedRank: data['selectedRank']?.toString() ?? resolvedRank,
       kdRatio: (data['kd'] as num?)?.toDouble() ?? (data['kdRatio'] as num?)?.toDouble() ?? 0.0,

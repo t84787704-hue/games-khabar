@@ -4,6 +4,7 @@ import '../models/gamer_user_model.dart';
 import '../models/gamer_post_model.dart';
 import '../models/post_comment_model.dart';
 import 'gaming_news_service.dart';
+import 'supabase_service.dart';
 
 class GamerSocialService {
   static final GamerSocialService _instance = GamerSocialService._internal();
@@ -211,6 +212,26 @@ class GamerSocialService {
     });
 
     await batch.commit();
+
+    // Sync to Supabase public.posts
+    try {
+      await SupabaseService.savePost({
+        'post_id': postRef.id,
+        'user_id': userId,
+        'username': username,
+        'user_avatar': userPhoto,
+        'content': text,
+        'media_url': imageUrl ?? videoUrl ?? mediaUrl,
+        'media_type': (videoUrl != null && videoUrl.isNotEmpty) ? 'video' : 'image',
+        'game': gameTag,
+        'likes_count': 0,
+        'comments_count': 0,
+        'created_at': DateTime.now().toIso8601String(),
+      });
+    } catch (e) {
+      debugPrint('[GamerSocialService] Supabase savePost notice: $e');
+    }
+
     return postRef.id;
   }
 
@@ -228,6 +249,11 @@ class GamerSocialService {
     });
 
     await batch.commit();
+
+    // Sync deletion to Supabase
+    try {
+      await SupabaseService.delete('posts', filters: {'post_id': 'eq.$postId'});
+    } catch (_) {}
   }
 
   Stream<bool> isPostLikedStream(String postId, String userId) {
@@ -246,6 +272,13 @@ class GamerSocialService {
     required String userId,
     required String postAuthorId,
   }) async {
+    // Sync toggleLike to Supabase
+    try {
+      await SupabaseService.toggleLike(postId: postId, userId: userId);
+    } catch (e) {
+      debugPrint('[GamerSocialService] Supabase toggleLike notice: $e');
+    }
+
     final likeRef = _firestore.collection('posts').doc(postId).collection('likes').doc(userId);
     final postRef = _firestore.collection('posts').doc(postId);
 
@@ -400,6 +433,19 @@ class GamerSocialService {
     }
 
     await batch.commit();
+
+    // Sync to Supabase public.comments
+    try {
+      await SupabaseService.addComment(
+        postId: postId,
+        userId: userId,
+        username: username,
+        userAvatar: userPhoto,
+        content: text,
+      );
+    } catch (e) {
+      debugPrint('[GamerSocialService] Supabase addComment notice: $e');
+    }
   }
 
   // ==========================================
