@@ -216,20 +216,31 @@ class _AdminTeamMatchesScreenState extends State<AdminTeamMatchesScreen> {
       builder: (ctx) => AlertDialog(
         backgroundColor: const Color(0xFF161F2E),
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-        title: const Text('Reject Team Match', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 16)),
+        title: Row(
+          children: const [
+            Icon(Icons.cancel_outlined, color: Color(0xFFFF4655), size: 22),
+            SizedBox(width: 8),
+            Text('Reject Match / Proof', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 16)),
+          ],
+        ),
         content: Column(
           mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            const Text(
-              'کیا آپ واقعی اس میچ کو مسترد کرنا چاہتے ہیں؟ (مثلاً جعلی اسکرین شاٹ یا بدعنوانی کی وجہ سے)',
-              style: TextStyle(color: Color(0xFF8B949E), fontSize: 12.5),
+            Text(
+              match.proofAttempts >= 1
+                  ? 'یہ اس میچ کا ${match.proofAttempts + 1}واں ثبوت مسترد ہو گا۔ اگر یہ دوسرا مسترد ہوا تو میچ مستقل طور پر Rejected ہو جائے گا۔'
+                  : 'کیا آپ واقعی اس ثبوت کو مسترد کرنا چاہتے ہیں؟ ٹیم کے تمام ممبران کو وجہ کے ساتھ نوٹیفکیشن جائے گا۔',
+              style: const TextStyle(color: Color(0xFF8B949E), fontSize: 12.5),
             ),
             const SizedBox(height: 12),
             TextField(
               controller: reasonController,
               style: const TextStyle(color: Colors.white, fontSize: 13),
               decoration: const InputDecoration(
-                labelText: 'Reason for Rejection',
+                labelText: 'مسترد کرنے کی وجہ (Reason)',
+                hintText: 'مثلاً: اسکرین شاٹ میں ID صاف نہیں ہے',
+                hintStyle: TextStyle(color: Colors.white38, fontSize: 12),
                 labelStyle: TextStyle(color: Color(0xFF8B949E), fontSize: 12),
                 filled: true,
                 fillColor: Color(0xFF10141D),
@@ -248,19 +259,96 @@ class _AdminTeamMatchesScreenState extends State<AdminTeamMatchesScreen> {
               foregroundColor: Colors.white,
             ),
             onPressed: () async {
+              final reason = reasonController.text.trim().isEmpty
+                  ? 'اسکرین شاٹ میں ID یا نتیجہ صاف نہیں ہے'
+                  : reasonController.text.trim();
               Navigator.pop(ctx);
               await _matchService.adminRejectMatch(
                 match.matchId,
                 'Admin',
-                reason: reasonController.text.trim(),
+                reason: reason,
               );
               if (context.mounted) {
                 ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(content: Text('Match rejected'), backgroundColor: Color(0xFFFF4655)),
+                  const SnackBar(
+                    content: Text('⚠️ میچ ثبوت مسترد کر دیا گیا اور ٹیم ممبران کو اطلاع بھیج دی گئی!'),
+                    backgroundColor: Color(0xFFFF4655),
+                  ),
                 );
               }
             },
-            child: const Text('Reject Match', style: TextStyle(fontWeight: FontWeight.bold)),
+            child: const Text('Reject Proof', style: TextStyle(fontWeight: FontWeight.bold)),
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _showRequestNewProofDialog(BuildContext context, TeamMatch match) {
+    final reasonController = TextEditingController(text: 'اسکرین شاٹ میں ID اور نتیجہ صاف نہیں ہے، براہ کرم نیا ثبوت اپلوڈ کریں۔');
+
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: const Color(0xFF161F2E),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        title: Row(
+          children: const [
+            Icon(Icons.replay_rounded, color: Color(0xFFFF6B00), size: 22),
+            SizedBox(width: 8),
+            Text('Request New Proof', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 16)),
+          ],
+        ),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Text(
+              'ٹیم کو اطلاع جائے گی: "ایڈمن نے نیا ثبوت مانگا ہے، براہ کرم دوبارہ اپلوڈ کریں"۔ میچ دوبارہ Disputed/Active ہو جائے گا اور ٹیم نیا اسکرین شاٹ اپلوڈ کر سکے گی۔',
+              style: TextStyle(color: Color(0xFF8B949E), fontSize: 12.5),
+            ),
+            const SizedBox(height: 12),
+            TextField(
+              controller: reasonController,
+              maxLines: 2,
+              style: const TextStyle(color: Colors.white, fontSize: 13),
+              decoration: const InputDecoration(
+                labelText: 'نیا ثبوت مانگنے کی وجہ (Reason)',
+                labelStyle: TextStyle(color: Color(0xFF8B949E), fontSize: 12),
+                filled: true,
+                fillColor: Color(0xFF10141D),
+              ),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text('Cancel', style: TextStyle(color: Colors.grey)),
+          ),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(
+              backgroundColor: const Color(0xFFFF6B00),
+              foregroundColor: Colors.black,
+            ),
+            onPressed: () async {
+              final reason = reasonController.text.trim();
+              Navigator.pop(ctx);
+              await _matchService.adminRequestNewProof(
+                match.matchId,
+                'Admin',
+                reason: reason,
+              );
+              if (context.mounted) {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(
+                    content: Text('📸 ٹیم کو نیا ثبوت اپلوڈ کرنے کی درخواست بھیج دی گئی!'),
+                    backgroundColor: Color(0xFFFF6B00),
+                  ),
+                );
+              }
+            },
+            child: const Text('Send Request 📸', style: TextStyle(fontWeight: FontWeight.bold)),
           ),
         ],
       ),
@@ -430,7 +518,62 @@ class _AdminTeamMatchesScreenState extends State<AdminTeamMatchesScreen> {
                           style: const TextStyle(color: Color(0xFF8B949E), fontSize: 11.5),
                         ),
 
-                        if (match.disputeReason.isNotEmpty) ...[
+                        if (match.proofAttempts > 0) ...[
+                          const SizedBox(height: 6),
+                          Row(
+                            children: [
+                              Container(
+                                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                                decoration: BoxDecoration(
+                                  color: (match.proofAttempts >= 2 ? const Color(0xFFFF4655) : const Color(0xFFFFB020)).withOpacity(0.18),
+                                  borderRadius: BorderRadius.circular(6),
+                                  border: Border.all(
+                                    color: match.proofAttempts >= 2 ? const Color(0xFFFF4655) : const Color(0xFFFFB020),
+                                  ),
+                                ),
+                                child: Text(
+                                  'ثبوت کی کوششیں: ${match.proofAttempts}/2 ${match.proofAttempts >= 2 ? "(حد ختم)" : ""}',
+                                  style: TextStyle(
+                                    color: match.proofAttempts >= 2 ? const Color(0xFFFF4655) : const Color(0xFFFFB020),
+                                    fontSize: 10.5,
+                                    fontWeight: FontWeight.bold,
+                                  ),
+                                ),
+                              ),
+                              if (match.rejectedAt != null) ...[
+                                const SizedBox(width: 8),
+                                Text(
+                                  'Rejected on: ${DateFormat('dd MMM, hh:mm a').format(match.rejectedAt!)}',
+                                  style: const TextStyle(color: Color(0xFF8B949E), fontSize: 10.5),
+                                ),
+                              ],
+                            ],
+                          ),
+                        ],
+
+                        if (match.rejectReason != null && match.rejectReason!.isNotEmpty) ...[
+                          const SizedBox(height: 6),
+                          Container(
+                            padding: const EdgeInsets.all(8),
+                            decoration: BoxDecoration(
+                              color: const Color(0xFFFF4655).withOpacity(0.15),
+                              borderRadius: BorderRadius.circular(8),
+                              border: Border.all(color: const Color(0xFFFF4655).withOpacity(0.4)),
+                            ),
+                            child: Row(
+                              children: [
+                                const Icon(Icons.cancel_outlined, color: Color(0xFFFF4655), size: 16),
+                                const SizedBox(width: 6),
+                                Expanded(
+                                  child: Text(
+                                    'Reject Reason: ${match.rejectReason}',
+                                    style: const TextStyle(color: Color(0xFFFF4655), fontSize: 11, fontWeight: FontWeight.bold),
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ] else if (match.disputeReason.isNotEmpty) ...[
                           const SizedBox(height: 6),
                           Container(
                             padding: const EdgeInsets.all(8),
@@ -521,16 +664,17 @@ class _AdminTeamMatchesScreenState extends State<AdminTeamMatchesScreen> {
                               },
                             ),
 
-                            // Verify & Reject Actions
+                            // Verify, Request New Proof & Reject Actions
                             Row(
                               mainAxisSize: MainAxisSize.min,
                               children: [
+                                // 1. Reject Button
                                 if (!match.isRejected) ...[
                                   OutlinedButton(
                                     style: OutlinedButton.styleFrom(
                                       foregroundColor: const Color(0xFFFF4655),
                                       side: const BorderSide(color: Color(0xFFFF4655)),
-                                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                                       minimumSize: const Size(0, 30),
                                     ),
                                     onPressed: () => _showRejectDialog(context, match),
@@ -538,6 +682,24 @@ class _AdminTeamMatchesScreenState extends State<AdminTeamMatchesScreen> {
                                   ),
                                   const SizedBox(width: 6),
                                 ],
+
+                                // 2. Request New Proof Button
+                                if (!match.isVerified && match.proofAttempts < 2) ...[
+                                  OutlinedButton.icon(
+                                    style: OutlinedButton.styleFrom(
+                                      foregroundColor: const Color(0xFFFF6B00),
+                                      side: const BorderSide(color: Color(0xFFFF6B00)),
+                                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                                      minimumSize: const Size(0, 30),
+                                    ),
+                                    icon: const Icon(Icons.replay_rounded, size: 13),
+                                    label: const Text('Request New Proof', style: TextStyle(fontSize: 10.5, fontWeight: FontWeight.bold)),
+                                    onPressed: () => _showRequestNewProofDialog(context, match),
+                                  ),
+                                  const SizedBox(width: 6),
+                                ],
+
+                                // 3. Verify Winner Button
                                 if (!match.isVerified) ...[
                                   ElevatedButton(
                                     style: ElevatedButton.styleFrom(

@@ -7,6 +7,7 @@ import '../services/gamer_social_service.dart';
 import '../widgets/gamer_avatar.dart';
 import '../services/challenge_service.dart';
 import 'gamer_profile_screen.dart';
+import 'team_match_room_screen.dart';
 
 class NotificationsScreen extends StatelessWidget {
   const NotificationsScreen({super.key});
@@ -102,7 +103,16 @@ class NotificationsScreen extends StatelessWidget {
 
               IconData iconData;
               Color iconColor;
-              if (type == 'challenge' || type == 'challenge_accepted') {
+              if (type == 'proof_rejected') {
+                iconData = Icons.cancel_rounded;
+                iconColor = const Color(0xFFFF4655);
+              } else if (type == 'request_new_proof') {
+                iconData = Icons.camera_alt_rounded;
+                iconColor = const Color(0xFFFF6B00);
+              } else if (type == 'match_verified') {
+                iconData = Icons.emoji_events_rounded;
+                iconColor = const Color(0xFF00FF88);
+              } else if (type == 'challenge' || type == 'challenge_accepted' || type == 'team_challenge') {
                 iconData = Icons.flash_on_rounded;
                 iconColor = const Color(0xFFFF2D55);
               } else if (type == 'follow') {
@@ -116,11 +126,14 @@ class NotificationsScreen extends StatelessWidget {
                 iconColor = GamerTheme.accentOrange;
               }
 
+              final title = data['title'] as String?;
+              final matchId = data['matchId'] as String?;
+
               return FutureBuilder(
-                future: GamerAuthService().getUserProfile(senderUid),
+                future: senderUid.isNotEmpty && senderUid != 'admin' ? GamerAuthService().getUserProfile(senderUid) : Future.value(null),
                 builder: (context, userSnap) {
                   final sender = userSnap.data;
-                  final senderName = sender?.displayName ?? 'A Gamer';
+                  final senderName = senderUid == 'admin' ? '🛡️ Admin / System' : (sender?.displayName ?? (data['senderName'] ?? 'A Gamer'));
                   final senderPhoto = sender?.photoUrl ?? '';
 
                   return ListTile(
@@ -132,7 +145,7 @@ class NotificationsScreen extends StatelessWidget {
                           displayName: senderName,
                           radius: 20,
                           onTap: () {
-                            if (senderUid.isNotEmpty) {
+                            if (senderUid.isNotEmpty && senderUid != 'admin') {
                               Navigator.of(context).push(
                                 MaterialPageRoute(builder: (_) => GamerProfileScreen(userId: senderUid)),
                               );
@@ -153,20 +166,37 @@ class NotificationsScreen extends StatelessWidget {
                         ),
                       ],
                     ),
-                    title: RichText(
-                      text: TextSpan(
-                        style: const TextStyle(color: GamerTheme.textWhite, fontSize: 13.5),
-                        children: [
-                          TextSpan(
-                            text: senderName,
-                            style: const TextStyle(fontWeight: FontWeight.w800),
+                    title: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        if (title != null && title.isNotEmpty) ...[
+                          Text(
+                            title,
+                            style: TextStyle(
+                              color: iconColor,
+                              fontSize: 13,
+                              fontWeight: FontWeight.w900,
+                            ),
                           ),
-                          TextSpan(
-                            text: ' $message',
-                            style: TextStyle(color: isRead ? GamerTheme.textGray : GamerTheme.textWhite),
-                          ),
+                          const SizedBox(height: 2),
                         ],
-                      ),
+                        RichText(
+                          text: TextSpan(
+                            style: const TextStyle(color: GamerTheme.textWhite, fontSize: 13),
+                            children: [
+                              if (title == null || title.isEmpty)
+                                TextSpan(
+                                  text: '$senderName ',
+                                  style: const TextStyle(fontWeight: FontWeight.w800),
+                                ),
+                              TextSpan(
+                                text: message,
+                                style: TextStyle(color: isRead ? GamerTheme.textGray : GamerTheme.textWhite),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ],
                     ),
                     subtitle: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
@@ -178,6 +208,26 @@ class NotificationsScreen extends StatelessWidget {
                             style: const TextStyle(color: GamerTheme.textMuted, fontSize: 11),
                           ),
                         ),
+                        if (matchId != null && matchId.isNotEmpty) ...[
+                          const SizedBox(height: 6),
+                          OutlinedButton.icon(
+                            style: OutlinedButton.styleFrom(
+                              side: BorderSide(color: iconColor),
+                              foregroundColor: iconColor,
+                              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                              minimumSize: Size.zero,
+                            ),
+                            icon: const Icon(Icons.open_in_new_rounded, size: 12),
+                            label: const Text('Open Match Room', style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold)),
+                            onPressed: () {
+                              docs[index].reference.update({'read': true});
+                              Navigator.of(context).push(
+                                MaterialPageRoute(builder: (_) => TeamMatchRoomScreen(matchId: matchId)),
+                              );
+                            },
+                          ),
+                        ],
                         if (type == 'challenge' && data['challengeId'] != null) ...[
                           const SizedBox(height: 8),
                           Row(
@@ -236,7 +286,12 @@ class NotificationsScreen extends StatelessWidget {
                           )
                         : null,
                     onTap: () {
-                      if (senderUid.isNotEmpty) {
+                      docs[index].reference.update({'read': true});
+                      if (matchId != null && matchId.isNotEmpty) {
+                        Navigator.of(context).push(
+                          MaterialPageRoute(builder: (_) => TeamMatchRoomScreen(matchId: matchId)),
+                        );
+                      } else if (senderUid.isNotEmpty && senderUid != 'admin') {
                         Navigator.of(context).push(
                           MaterialPageRoute(builder: (_) => GamerProfileScreen(userId: senderUid)),
                         );

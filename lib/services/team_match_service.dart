@@ -261,24 +261,40 @@ class TeamMatchService {
   }
 
   /// 5. Upload Win Proof Screenshot (Winning or Disputing team)
-  Future<bool> submitProof({
+  Future<Map<String, dynamic>> submitProof({
     required String matchId,
     required bool isTeam1,
     required File imageFile,
     required String claim, // 'win' or 'loss'
   }) async {
     try {
+      final doc = await _matchesRef.doc(matchId).get();
+      if (!doc.exists) {
+        return {'success': false, 'error': 'میچ نہیں ملا'};
+      }
+      final current = TeamMatch.fromFirestore(doc);
+
+      // Check max proof attempts (limit to 2)
+      if (current.proofAttempts >= 2) {
+        return {
+          'success': false,
+          'error': 'آپ اس میچ میں ثبوت اپلوڈ کرنے کی زیادہ سے زیادہ حد (2 بار) پوری کر چکے ہیں۔',
+        };
+      }
+
       final imageUrl = await CloudinaryService.uploadFile(
         file: imageFile,
         folder: 'team_match_proofs',
       );
-      if (imageUrl == null || imageUrl.isEmpty) return false;
+      if (imageUrl == null || imageUrl.isEmpty) {
+        return {'success': false, 'error': 'تصویر اپلوڈ نہیں ہو سکی'};
+      }
 
-      final doc = await _matchesRef.doc(matchId).get();
-      if (!doc.exists) return false;
-      final current = TeamMatch.fromFirestore(doc);
+      final newAttempts = current.proofAttempts + 1;
+      final Map<String, dynamic> updateData = {
+        'proofAttempts': newAttempts,
+      };
 
-      final Map<String, dynamic> updateData = {};
       if (isTeam1) {
         updateData['team1Proof'] = imageUrl;
         updateData['team1Claim'] = claim;
@@ -300,10 +316,13 @@ class TeamMatchService {
       }
 
       await _matchesRef.doc(matchId).update(updateData);
-      return true;
+      return {
+        'success': true,
+        'attempts': newAttempts,
+      };
     } catch (e) {
       debugPrint('[TeamMatchService] Error submitting proof: $e');
-      return false;
+      return {'success': false, 'error': e.toString()};
     }
   }
 
@@ -442,18 +461,115 @@ class TeamMatchService {
     }
   }
 
-  /// Admin Reject Match
-  Future<bool> adminRejectMatch(String matchId, String adminIdentifier, {String reason = ''}) async {
+  /// Admin Reject Match / Proof
+  /// 1. If proofAttempts >= 2: permanently rejected
+  /// 2. If proofAttempts < 2: rejected or disputed allowing resubmission
+  /// 3. Sends notification to all members of both teams with reason and match details
+  Future<bool> adminRejectMatch(
+    String matchId,
+    String adminIdentifier, {
+    String reason = '',
+  }) async {
     try {
+      final doc = await _matchesRef.doc(matchId).get();
+      if (!doc.exists) return false;
+      final match = TeamMatch.fromFirestore(doc);
+
+      final finalReason = reason.isNotEmpty ? reason : 'ثبوت غیر واضح یا مسترد کر دیا گیا ہے';
+      final isFinalReject = match.proofAttempts >= 2;
+
       await _matchesRef.doc(matchId).update({
         'status': 'Rejected',
-        'verifiedBy': adminIdentifier,
-        'verifiedAt': FieldValue.serverTimestamp(),
-        'disputeReason': reason.isNotEmpty ? reason : 'Proof invalid or rejected by Admin',
+        'rejectReason': finalReason,
+        'rejectedBy': adminIdentifier,
+        'rejectedAt': FieldValue.serverTimestamp(),
+        'disputeReason': finalReason,
       });
+
+      // Gather all members from team 1 and team 2
+      final Set<String> allMemberUids = {
+        if (match.team1LeaderId.isNotEmpty) match.team1LeaderId,
+        ...match.team1Members.where((m) => m.isNotEmpty),
+        if (match.team2LeaderId.isNotEmpty) match.team2LeaderId,
+        ...match.team2Members.where((m) => m.isNotEmpty),
+      };
+
+      final notificationTitle = isFinalReject
+          ? '❌ میچ ثبوت حتمی طور پر مسترد'
+          : '⚠️ آپ کا Win Proof مسترد کر دیا گیا ہے';
+
+      final notificationMessage = isFinalReject
+          ? 'میچ (${match.team1Name} بمقابلہ ${match.team2Name} - ${match.game}) کا ثبوت دوسری بار بھی مسترد کر دیا گیا ہے۔ میچ مستقل طور پر Cancel/Rejected ہو گیا ہے۔ وجہ: $finalReason'
+          : 'میچ (${match.team1Name} بمقابلہ ${match.team2Name} - ${match.game}) کا ثبوت مسترد کر دیا گیا ہے۔ وجہ: $finalReason۔ آپ ایک بار دوبارہ ثبوت اپلوڈ کر سکتے ہیں۔';
+
+      for (final uid in allMemberUids) {
+        await _notificationsRef.add({
+          'recipientUid': uid,
+          'senderUid': 'admin',
+          'type': 'proof_rejected',
+          'title': notificationTitle,
+          'message': notificationMessage,
+          'matchId': matchId,
+          'read': false,
+          'createdAt': FieldValue.serverTimestamp(),
+        });
+      }
+
       return true;
     } catch (e) {
       debugPrint('[TeamMatchService] Error rejecting match by admin: $e');
+      return false;
+    }
+  }
+
+  /// Admin Request New Proof (without permanently rejecting)
+  /// Sets status to Disputed or Live so team can re-upload screenshot
+  Future<bool> adminRequestNewProof(
+    String matchId,
+    String adminIdentifier, {
+    String reason = '',
+  }) async {
+    try {
+      final doc = await _matchesRef.doc(matchId).get();
+      if (!doc.exists) return false;
+      final match = TeamMatch.fromFirestore(doc);
+
+      final requestReason = reason.isNotEmpty
+          ? reason
+          : 'ایڈمن نے نیا ثبوت مانگا ہے، براہ کرم واضح اسکرین شاٹ دوبارہ اپلوڈ کریں';
+
+      await _matchesRef.doc(matchId).update({
+        'status': 'Disputed',
+        'rejectReason': requestReason,
+        'disputeReason': requestReason,
+        'rejectedBy': adminIdentifier,
+        'rejectedAt': FieldValue.serverTimestamp(),
+      });
+
+      // Notify all members of both teams
+      final Set<String> allMemberUids = {
+        if (match.team1LeaderId.isNotEmpty) match.team1LeaderId,
+        ...match.team1Members.where((m) => m.isNotEmpty),
+        if (match.team2LeaderId.isNotEmpty) match.team2LeaderId,
+        ...match.team2Members.where((m) => m.isNotEmpty),
+      };
+
+      for (final uid in allMemberUids) {
+        await _notificationsRef.add({
+          'recipientUid': uid,
+          'senderUid': 'admin',
+          'type': 'request_new_proof',
+          'title': '📸 ایڈمن نے نیا ثبوت مانگا ہے',
+          'message': 'میچ (${match.team1Name} بمقابلہ ${match.team2Name} - ${match.game}): ایڈمن نے نیا ثبوت مانگا ہے۔ وجہ: $requestReason۔ براہ کرم دوبارہ اسکرین شاٹ اپلوڈ کریں۔',
+          'matchId': matchId,
+          'read': false,
+          'createdAt': FieldValue.serverTimestamp(),
+        });
+      }
+
+      return true;
+    } catch (e) {
+      debugPrint('[TeamMatchService] Error requesting new proof: $e');
       return false;
     }
   }

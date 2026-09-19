@@ -321,6 +321,88 @@ class _MyTeamMatchesScreenState extends State<MyTeamMatchesScreen>
                     ),
                   ],
                 ),
+
+                // History & Dispute Details (Winner, Loser, Proof Attempts, Rejection Reason)
+                if (match.isHistory || match.proofAttempts > 0 || (match.rejectReason != null && match.rejectReason!.isNotEmpty)) ...[
+                  const SizedBox(height: 10),
+                  Container(
+                    width: double.infinity,
+                    padding: const EdgeInsets.all(10),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFF0F141E),
+                      borderRadius: BorderRadius.circular(10),
+                      border: Border.all(
+                        color: match.isVerified
+                            ? const Color(0xFF00FF88).withOpacity(0.3)
+                            : (match.isRejected ? const Color(0xFFFF4655).withOpacity(0.3) : const Color(0xFF2A3447)),
+                      ),
+                    ),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        // Winner & Loser if verified
+                        if (match.isVerified && match.winnerName != null) ...[
+                          Row(
+                            children: [
+                              const Icon(Icons.emoji_events_rounded, color: Color(0xFF00FF88), size: 16),
+                              const SizedBox(width: 6),
+                              Text(
+                                'Winner: ${match.winnerName}',
+                                style: const TextStyle(color: Color(0xFF00FF88), fontWeight: FontWeight.bold, fontSize: 12),
+                              ),
+                              const SizedBox(width: 8),
+                              Text(
+                                '• Loser: ${match.winnerId == match.team1Id ? match.team2Name : match.team1Name}',
+                                style: const TextStyle(color: Color(0xFF8B949E), fontSize: 11),
+                              ),
+                            ],
+                          ),
+                        ],
+
+                        // Attempts row
+                        if (match.proofAttempts > 0) ...[
+                          const SizedBox(height: 4),
+                          Row(
+                            children: [
+                              Icon(
+                                Icons.camera_alt_outlined,
+                                size: 13,
+                                color: match.proofAttempts >= 2 ? const Color(0xFFFF4655) : const Color(0xFFFFB020),
+                              ),
+                              const SizedBox(width: 5),
+                              Text(
+                                'Proof Attempts: ${match.proofAttempts}/2 ${match.proofAttempts >= 2 ? "(Max limit reached)" : ""}',
+                                style: TextStyle(
+                                  color: match.proofAttempts >= 2 ? const Color(0xFFFF4655) : const Color(0xFFFFB020),
+                                  fontSize: 11,
+                                  fontWeight: FontWeight.bold,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ],
+
+                        // Admin Decision / Reject reason
+                        if (match.rejectReason != null && match.rejectReason!.isNotEmpty) ...[
+                          const SizedBox(height: 4),
+                          Row(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              const Icon(Icons.info_outline, size: 14, color: Color(0xFFFF4655)),
+                              const SizedBox(width: 5),
+                              Expanded(
+                                child: Text(
+                                  'Admin Note: ${match.rejectReason}',
+                                  style: const TextStyle(color: Color(0xFFFF4655), fontSize: 11),
+                                ),
+                              ),
+                            ],
+                          ),
+                        ],
+                      ],
+                    ),
+                  ),
+                ],
                 const SizedBox(height: 12),
 
                 // Footer Row: Match Time & Buttons

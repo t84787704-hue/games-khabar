@@ -101,7 +101,7 @@ class _TeamMatchRoomScreenState extends State<TeamMatchRoomScreen> with SingleTi
 
     setState(() => _isUploadingProof = true);
 
-    final success = await _matchService.submitProof(
+    final result = await _matchService.submitProof(
       matchId: match.matchId,
       isTeam1: isTeam1,
       imageFile: File(picked.path),
@@ -111,18 +111,20 @@ class _TeamMatchRoomScreenState extends State<TeamMatchRoomScreen> with SingleTi
     setState(() => _isUploadingProof = false);
 
     if (mounted) {
-      if (success) {
+      if (result['success'] == true) {
+        final attempts = result['attempts'] ?? 1;
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('✅ اسکرین شاٹ کامیابی سے اپلوڈ ہو گیا! ایڈمن جائزہ لے گا۔'),
-            backgroundColor: Color(0xFF00FF88),
+          SnackBar(
+            content: Text('✅ اسکرین شاٹ کامیابی سے اپلوڈ ہو گیا! (کوشش $attempts/2) ایڈمن جائزہ لے گا۔'),
+            backgroundColor: const Color(0xFF00FF88),
           ),
         );
       } else {
+        final errorMsg = result['error']?.toString() ?? 'اسکرین شاٹ اپلوڈ کرنے میں ناکامی۔ دوبارہ کوشش کریں۔';
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('اسکرین شاٹ اپلوڈ کرنے میں ناکامی۔ دوبارہ کوشش کریں۔'),
-            backgroundColor: Color(0xFFFF4655),
+          SnackBar(
+            content: Text(errorMsg),
+            backgroundColor: const Color(0xFFFF4655),
           ),
         );
       }
@@ -1121,38 +1123,136 @@ class _TeamMatchRoomScreenState extends State<TeamMatchRoomScreen> with SingleTi
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           // Header info
-          const Text(
-            'جیت کا ثبوت (WIN PROOF)',
-            style: TextStyle(color: Colors.white, fontWeight: FontWeight.w900, fontSize: 16),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              const Text(
+                'جیت کا ثبوت (WIN PROOF)',
+                style: TextStyle(color: Colors.white, fontWeight: FontWeight.w900, fontSize: 16),
+              ),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                decoration: BoxDecoration(
+                  color: (match.proofAttempts >= 2 ? const Color(0xFFFF4655) : const Color(0xFFFF6B00)).withOpacity(0.18),
+                  borderRadius: BorderRadius.circular(8),
+                  border: Border.all(
+                    color: match.proofAttempts >= 2 ? const Color(0xFFFF4655) : const Color(0xFFFF6B00),
+                  ),
+                ),
+                child: Text(
+                  'کوششیں: ${match.proofAttempts}/2',
+                  style: TextStyle(
+                    color: match.proofAttempts >= 2 ? const Color(0xFFFF4655) : const Color(0xFFFF6B00),
+                    fontSize: 11,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+              ),
+            ],
           ),
           const SizedBox(height: 4),
           const Text(
-            'میچ ختم ہونے پر اسکرین شاٹ اپلوڈ کریں جس میں Score / Victory صاف نظر آئے۔ ایڈمن جائزہ لے کر تصدیق کرے گا۔',
+            'میچ ختم ہونے پر اسکرین شاٹ اپلوڈ کریں جس میں Score / Victory صاف نظر آئے۔ (زیادہ سے زیادہ 2 بار اپلوڈ کرنے کی اجازت ہے)',
             style: TextStyle(color: Color(0xFF8B949E), fontSize: 12.5),
           ),
-          const SizedBox(height: 16),
+          const SizedBox(height: 14),
 
-          // Upload Proof Action Button
-          if (isTeam1Member || isTeam2Member) ...[
-            SizedBox(
-              width: double.infinity,
-              child: ElevatedButton.icon(
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: const Color(0xFFFF6B00),
-                  foregroundColor: Colors.black,
-                  padding: const EdgeInsets.symmetric(vertical: 14),
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                ),
-                icon: _isUploadingProof
-                    ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.black))
-                    : const Icon(Icons.upload_file_rounded, color: Colors.black),
-                label: Text(
-                  _isUploadingProof ? 'Uploading Proof...' : 'UPLOAD RESULT SCREENSHOT 📸',
-                  style: const TextStyle(fontWeight: FontWeight.w900, fontSize: 13.5),
-                ),
-                onPressed: _isUploadingProof ? null : () => _handleUploadProof(match, isTeam1Member),
+          // Rejection Banner if match was rejected or has rejectReason
+          if (match.rejectReason != null && match.rejectReason!.isNotEmpty) ...[
+            Container(
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: const Color(0xFFFF4655).withOpacity(0.15),
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(color: const Color(0xFFFF4655)),
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    children: [
+                      const Icon(Icons.cancel_outlined, color: Color(0xFFFF4655), size: 18),
+                      const SizedBox(width: 8),
+                      Text(
+                        match.isPermanentlyRejected
+                            ? 'میچ مستقل طور پر مسترد ہو گیا (Rejected)'
+                            : 'آپ کا Win Proof مسترد کر دیا گیا ہے',
+                        style: const TextStyle(color: Color(0xFFFF4655), fontWeight: FontWeight.w900, fontSize: 13),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 6),
+                  Text(
+                    'ایڈمن کی وجہ: ${match.rejectReason}',
+                    style: const TextStyle(color: Colors.white, fontSize: 12.5),
+                  ),
+                  if (match.canUploadNewProof) ...[
+                    const SizedBox(height: 6),
+                    const Text(
+                      '💡 آپ کے پاس دوبارہ ثبوت جمع کرانے کا ایک اور موقع ہے۔ براہ کرم نیچے دیئے گئے بٹن سے نیا ثبوت اپلوڈ کریں۔',
+                      style: TextStyle(color: Color(0xFF00FF88), fontSize: 11.5, fontWeight: FontWeight.bold),
+                    ),
+                  ] else ...[
+                    const SizedBox(height: 6),
+                    const Text(
+                      '🚫 ثبوت اپلوڈ کرنے کی 2 بار کی حد ختم ہو چکی ہے۔ اب مزید ثبوت جمع نہیں کرایا جا سکتا۔',
+                      style: TextStyle(color: Colors.white54, fontSize: 11.5),
+                    ),
+                  ],
+                ],
               ),
             ),
+            const SizedBox(height: 14),
+          ],
+
+          // Upload / Upload New Proof Action Button
+          if ((isTeam1Member || isTeam2Member) && !match.isVerified) ...[
+            if (match.canUploadNewProof) ...[
+              SizedBox(
+                width: double.infinity,
+                child: ElevatedButton.icon(
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: match.proofAttempts > 0 ? const Color(0xFF00FF88) : const Color(0xFFFF6B00),
+                    foregroundColor: Colors.black,
+                    padding: const EdgeInsets.symmetric(vertical: 14),
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                  ),
+                  icon: _isUploadingProof
+                      ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.black))
+                      : Icon(match.proofAttempts > 0 ? Icons.replay_rounded : Icons.upload_file_rounded, color: Colors.black),
+                  label: Text(
+                    _isUploadingProof
+                        ? 'Uploading Proof...'
+                        : (match.proofAttempts > 0
+                            ? 'UPLOAD NEW PROOF (دوبارہ نیا ثبوت اپلوڈ کریں) 📸'
+                            : 'UPLOAD RESULT SCREENSHOT 📸'),
+                    style: const TextStyle(fontWeight: FontWeight.w900, fontSize: 13),
+                  ),
+                  onPressed: _isUploadingProof ? null : () => _handleUploadProof(match, isTeam1Member),
+                ),
+              ),
+            ] else ...[
+              Container(
+                width: double.infinity,
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: Colors.white10,
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(color: Colors.white24),
+                ),
+                child: const Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    Icon(Icons.block_rounded, color: Colors.white54, size: 18),
+                    SizedBox(width: 8),
+                    Text(
+                      'ثبوت اپلوڈ کرنے کی حد (2 بار) ختم ہو چکی ہے',
+                      style: TextStyle(color: Colors.white70, fontSize: 12, fontWeight: FontWeight.bold),
+                    ),
+                  ],
+                ),
+              ),
+            ],
             const SizedBox(height: 20),
           ],
 
