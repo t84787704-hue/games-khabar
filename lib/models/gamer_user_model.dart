@@ -269,6 +269,17 @@ class GamerUser {
 
   bool get isVerifiedBadge => hasBlueTick;
 
+  String get avatarUrl => photoUrl;
+  String get gameName => favoriteGame.isNotEmpty ? favoriteGame : selectedGame;
+  String get gamerRank => rank.isNotEmpty ? rank : selectedRank;
+  String get email {
+    final auth = FirebaseAuth.instance.currentUser;
+    if (auth != null && (uid.isEmpty || auth.uid == uid) && auth.email != null) {
+      return auth.email!;
+    }
+    return '';
+  }
+
   // App Rank (auto) calculation: removed per user directive.
   // User ranks are strictly based on user selection and Admin verification.
   int get appPoints => (level * 100) + coins + (postsCount * 10);

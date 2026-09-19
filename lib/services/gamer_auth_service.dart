@@ -395,12 +395,13 @@ class GamerAuthService {
 
     // Synchronize user profile with Supabase public.users table
     try {
+      final userEmail = userMap['email']?.toString() ?? user.email;
       final supabaseUser = {
         'uid': user.uid,
         'username': user.username,
-        'email': user.email,
+        'email': userEmail,
         'display_name': user.displayName,
-        'avatar_url': user.avatarUrl,
+        'avatar_url': user.photoUrl,
         'cover_url': user.coverUrl,
         'bio': user.bio,
         'game_id': user.gameId,
