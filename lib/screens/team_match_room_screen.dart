@@ -266,10 +266,66 @@ class _TeamMatchRoomScreenState extends State<TeamMatchRoomScreen> with SingleTi
       case 'Disputed':
         return const Color(0xFFFF4655);
       case 'Rejected':
+      case 'Cancelled':
         return Colors.grey;
       default:
         return const Color(0xFFFF6B00);
     }
+  }
+
+  void _showCancelChallengeDialog(TeamMatch match, String currentUid) {
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: const Color(0xFF161F2E),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        title: const Row(
+          children: [
+            Icon(Icons.warning_amber_rounded, color: Color(0xFFFF4655), size: 22),
+            SizedBox(width: 8),
+            Text('چیلنج منسوخ (Cancel) کریں؟', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 16)),
+          ],
+        ),
+        content: Text(
+          'کیا آپ واقعی ${match.team2Name} کو بھیجا گیا چیلنج واپس لینا چاہتے ہیں؟ اس کے بعد آپ دوبارہ نیا چیلنج بھیج سکیں گے۔',
+          style: const TextStyle(color: Color(0xFF8B949E), fontSize: 13),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text('نہیں (Back)', style: TextStyle(color: Colors.grey)),
+          ),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(
+              backgroundColor: const Color(0xFFFF4655),
+              foregroundColor: Colors.white,
+            ),
+            onPressed: () async {
+              Navigator.pop(ctx);
+              final success = await _matchService.cancelChallenge(match.matchId, cancelledByUid: currentUid);
+              if (mounted) {
+                if (success) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(
+                      content: Text('چیلنج کامیابی سے Cancel کر دیا گیا!'),
+                      backgroundColor: Color(0xFFFF6B00),
+                    ),
+                  );
+                } else {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(
+                      content: Text('چیلنج منسوخ کرنے میں خرابی ہوئی'),
+                      backgroundColor: Color(0xFFFF4655),
+                    ),
+                  );
+                }
+              }
+            },
+            child: const Text('ہاں، Cancel کریں', style: TextStyle(fontWeight: FontWeight.bold)),
+          ),
+        ],
+      ),
+    );
   }
 
   @override
@@ -454,6 +510,53 @@ class _TeamMatchRoomScreenState extends State<TeamMatchRoomScreen> with SingleTi
                         ),
                       ),
                     ],
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(height: 16),
+          ],
+
+          // Pending Challenge Banner for Team 1 Leader (Allowing Cancel Challenge)
+          if (match.isPending && isTeam1Leader) ...[
+            Container(
+              padding: const EdgeInsets.all(14),
+              decoration: BoxDecoration(
+                color: const Color(0xFFFFB020).withOpacity(0.12),
+                borderRadius: BorderRadius.circular(14),
+                border: Border.all(color: const Color(0xFFFFB020)),
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const Row(
+                    children: [
+                      Icon(Icons.hourglass_top_rounded, color: Color(0xFFFFB020), size: 20),
+                      SizedBox(width: 8),
+                      Text(
+                        'چیلنج جواب کا منتظر ہے (Pending)',
+                        style: TextStyle(color: Color(0xFFFFB020), fontWeight: FontWeight.w900, fontSize: 14.5),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 6),
+                  Text(
+                    'آپ نے ${match.team2Name} کو چیلنج بھیجا ہوا ہے۔ اگر آپ اس چیلنج کو واپس لینا چاہتے ہیں تو منسوخ کر سکتے ہیں۔',
+                    style: const TextStyle(color: Colors.white70, fontSize: 12.5),
+                  ),
+                  const SizedBox(height: 12),
+                  SizedBox(
+                    width: double.infinity,
+                    child: OutlinedButton.icon(
+                      onPressed: () => _showCancelChallengeDialog(match, currentUid),
+                      style: OutlinedButton.styleFrom(
+                        foregroundColor: const Color(0xFFFF4655),
+                        side: const BorderSide(color: Color(0xFFFF4655)),
+                        padding: const EdgeInsets.symmetric(vertical: 10),
+                      ),
+                      icon: const Icon(Icons.close_rounded, size: 18),
+                      label: const Text('CANCEL CHALLENGE (چیلنج منسوخ کریں)', style: TextStyle(fontWeight: FontWeight.bold)),
+                    ),
                   ),
                 ],
               ),

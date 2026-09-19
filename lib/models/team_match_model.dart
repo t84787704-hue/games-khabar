@@ -8,6 +8,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 /// 'Verified' - Admin reviewed proof and declared official winner
 /// 'Disputed' - Both teams claimed win or disputed outcome; waiting for Admin
 /// 'Rejected' - Challenge declined or match rejected by Admin
+/// 'Cancelled' - Challenge cancelled by the challenging team leader
 class TeamMatch {
   final String matchId;
   final String team1Id;
@@ -99,6 +100,11 @@ class TeamMatch {
   bool get isVerified => status == 'Verified';
   bool get isDisputed => status == 'Disputed';
   bool get isRejected => status == 'Rejected';
+  bool get isCancelled => status == 'Cancelled';
+
+  bool get isActive =>
+      isPending || isAccepted || isLive || isProofSubmitted || isDisputed;
+  bool get isHistory => isVerified || isRejected || isCancelled;
 
   bool isMemberOfMatch(String userId) {
     return team1LeaderId == userId ||

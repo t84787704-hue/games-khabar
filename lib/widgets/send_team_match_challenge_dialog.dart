@@ -153,7 +153,7 @@ class _SendTeamMatchChallengeDialogState extends State<SendTeamMatchChallengeDia
       _selectedTime.minute,
     );
 
-    final matchId = await _matchService.sendChallenge(
+    final result = await _matchService.sendChallenge(
       team1Id: myTeam.id,
       team1Name: myTeam.name,
       team1LeaderId: myTeam.leaderId,
@@ -175,8 +175,11 @@ class _SendTeamMatchChallengeDialogState extends State<SendTeamMatchChallengeDia
     setState(() => _isSending = false);
 
     if (mounted) {
-      Navigator.pop(context);
-      if (matchId != null) {
+      final isSuccess = result['success'] == true;
+      final errorMsg = result['error'] as String? ?? 'چیلنج بھیجنے میں خرابی پیش آئی';
+
+      if (isSuccess) {
+        Navigator.pop(context);
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text(
@@ -188,10 +191,23 @@ class _SendTeamMatchChallengeDialogState extends State<SendTeamMatchChallengeDia
           ),
         );
       } else {
+        // Show the specific error (e.g. already active challenge)
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('چیلنج بھیجنے میں خرابی پیش آئی'),
-            backgroundColor: Color(0xFFFF4655),
+          SnackBar(
+            content: Row(
+              children: [
+                const Icon(Icons.warning_amber_rounded, color: Colors.white, size: 20),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Text(
+                    errorMsg,
+                    style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 13),
+                  ),
+                ),
+              ],
+            ),
+            backgroundColor: const Color(0xFFFF4655),
+            duration: const Duration(seconds: 5),
           ),
         );
       }

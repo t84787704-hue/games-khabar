@@ -16,8 +16,42 @@ class TeamMatchService {
   CollectionReference get _rankingsRef => _firestore.collection('team_rankings');
   CollectionReference get _notificationsRef => _firestore.collection('notifications');
 
+  /// Check if there is already an active match/challenge between two teams
+  /// (Pending, Accepted, Live, Proof Submitted, Disputed)
+  Future<TeamMatch?> getActiveMatchBetweenTeams(String teamAId, String teamBId) async {
+    try {
+      // Query where team1 is A and team2 is B
+      final query1 = await _matchesRef
+          .where('team1Id', isEqualTo: teamAId)
+          .where('team2Id', isEqualTo: teamBId)
+          .get();
+
+      for (var doc in query1.docs) {
+        final match = TeamMatch.fromFirestore(doc);
+        if (match.isActive) return match;
+      }
+
+      // Query where team1 is B and team2 is A
+      final query2 = await _matchesRef
+          .where('team1Id', isEqualTo: teamBId)
+          .where('team2Id', isEqualTo: teamAId)
+          .get();
+
+      for (var doc in query2.docs) {
+        final match = TeamMatch.fromFirestore(doc);
+        if (match.isActive) return match;
+      }
+
+      return null;
+    } catch (e) {
+      debugPrint('[TeamMatchService] Error checking active match between teams: $e');
+      return null;
+    }
+  }
+
   /// 1. Create a challenge from Team 1 to Team 2
-  Future<String?> sendChallenge({
+  /// Returns a map with 'success', 'matchId', and 'error' message.
+  Future<Map<String, dynamic>> sendChallenge({
     required String team1Id,
     required String team1Name,
     required String team1LeaderId,
@@ -36,6 +70,16 @@ class TeamMatchService {
     String entryFee = 'Free',
   }) async {
     try {
+      // Check if there is already an active match/challenge between these teams
+      final existingActive = await getActiveMatchBetweenTeams(team1Id, team2Id);
+      if (existingActive != null) {
+        return {
+          'success': false,
+          'error': 'آپ نے پہلے ہی اس ٹیم کو چیلنج بھیجا ہوا ہے۔ پہلے اسے مکمل یا Cancel کریں۔',
+          'matchId': existingActive.matchId,
+        };
+      }
+
       final matchDoc = _matchesRef.doc();
       final match = TeamMatch(
         matchId: matchDoc.id,
@@ -75,10 +119,16 @@ class TeamMatchService {
         'createdAt': FieldValue.serverTimestamp(),
       });
 
-      return matchDoc.id;
+      return {
+        'success': true,
+        'matchId': matchDoc.id,
+      };
     } catch (e) {
       debugPrint('[TeamMatchService] Error sending challenge: $e');
-      return null;
+      return {
+        'success': false,
+        'error': 'چیلنج بھیجنے میں خرابی پیش آئی: $e',
+      };
     }
   }
 
@@ -149,6 +199,47 @@ class TeamMatchService {
       return true;
     } catch (e) {
       debugPrint('[TeamMatchService] Error rejecting challenge: $e');
+      return false;
+    }
+  }
+
+  /// 3b. Cancel Challenge (by Team 1 Leader or either team when status is Pending)
+  Future<bool> cancelChallenge(String matchId, {String cancelledByUid = ''}) async {
+    try {
+      final doc = await _matchesRef.doc(matchId).get();
+      if (!doc.exists) return false;
+      final match = TeamMatch.fromFirestore(doc);
+
+      // Can only cancel if match is in Pending status
+      if (!match.isPending) return false;
+
+      await _matchesRef.doc(matchId).update({
+        'status': 'Cancelled',
+        'cancelledAt': FieldValue.serverTimestamp(),
+        'cancelledBy': cancelledByUid,
+        'disputeReason': 'Challenge cancelled by team leader',
+      });
+
+      // Notify the opponent team leader
+      final notifyUid = (cancelledByUid == match.team1LeaderId)
+          ? match.team2LeaderId
+          : match.team1LeaderId;
+      if (notifyUid.isNotEmpty) {
+        await _notificationsRef.add({
+          'recipientUid': notifyUid,
+          'senderUid': cancelledByUid,
+          'type': 'team_challenge_cancelled',
+          'title': '🚫 Challenge Cancelled',
+          'message': 'ٹیم چیلنج واپس (Cancel) لے لیا گیا ہے۔',
+          'matchId': matchId,
+          'read': false,
+          'createdAt': FieldValue.serverTimestamp(),
+        });
+      }
+
+      return true;
+    } catch (e) {
+      debugPrint('[TeamMatchService] Error cancelling challenge: $e');
       return false;
     }
   }
