@@ -21,7 +21,11 @@ class _GamerAppRootState extends State<GamerAppRoot> {
   @override
   void initState() {
     super.initState();
-    _authService.init();
+    try {
+      _authService.init();
+    } catch (e) {
+      debugPrint('Auth service init error: $e');
+    }
   }
 
   @override
@@ -29,6 +33,11 @@ class _GamerAppRootState extends State<GamerAppRoot> {
     return StreamBuilder<User?>(
       stream: _authService.authStateChanges,
       builder: (context, authSnapshot) {
+        if (authSnapshot.hasError) {
+          debugPrint('Auth snapshot error: ${authSnapshot.error}');
+          return const GamerAuthScreen();
+        }
+
         if (authSnapshot.connectionState == ConnectionState.waiting) {
           return const _GamerLoadingScreen();
         }

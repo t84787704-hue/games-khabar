@@ -50,6 +50,15 @@ class GamerAuthService {
 
   void _listenToUserDoc(String uid) {
     _userDocSubscription?.cancel();
+
+    // Safety timeout: Never allow loading screen to hang forever
+    Future.delayed(const Duration(seconds: 4), () {
+      if (isLoadingNotifier.value) {
+        debugPrint('[AuthService] Loading safety timeout triggered.');
+        isLoadingNotifier.value = false;
+      }
+    });
+
     _userDocSubscription = _firestore.collection('users').doc(uid).snapshots().listen(
       (doc) {
         if (doc.exists && doc.data() != null) {
