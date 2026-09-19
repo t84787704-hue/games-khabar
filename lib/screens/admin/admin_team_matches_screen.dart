@@ -236,10 +236,11 @@ class _AdminTeamMatchesScreenState extends State<AdminTeamMatchesScreen> {
             const SizedBox(height: 12),
             TextField(
               controller: reasonController,
+              maxLines: 2,
               style: const TextStyle(color: Colors.white, fontSize: 13),
               decoration: const InputDecoration(
-                labelText: 'مسترد کرنے کی وجہ (Reason)',
-                hintText: 'مثلاً: اسکرین شاٹ میں ID صاف نہیں ہے',
+                labelText: 'نیا Admin Note لکھیں (Reason)',
+                hintText: 'مثلاً: اسکرین شاٹ میں ID یا نتیجہ واضح نہیں ہے',
                 hintStyle: TextStyle(color: Colors.white38, fontSize: 12),
                 labelStyle: TextStyle(color: Color(0xFF8B949E), fontSize: 12),
                 filled: true,
@@ -285,7 +286,7 @@ class _AdminTeamMatchesScreenState extends State<AdminTeamMatchesScreen> {
   }
 
   void _showRequestNewProofDialog(BuildContext context, TeamMatch match) {
-    final reasonController = TextEditingController(text: 'اسکرین شاٹ میں ID اور نتیجہ صاف نہیں ہے، براہ کرم نیا ثبوت اپلوڈ کریں۔');
+    final reasonController = TextEditingController();
 
     showDialog(
       context: context,
@@ -313,7 +314,9 @@ class _AdminTeamMatchesScreenState extends State<AdminTeamMatchesScreen> {
               maxLines: 2,
               style: const TextStyle(color: Colors.white, fontSize: 13),
               decoration: const InputDecoration(
-                labelText: 'نیا ثبوت مانگنے کی وجہ (Reason)',
+                labelText: 'نیا Admin Note لکھیں (Reason)',
+                hintText: 'مثلاً: اسکرین شاٹ میں ID اور نتیجہ صاف نہیں ہے، براہ کرم نیا ثبوت اپلوڈ کریں۔',
+                hintStyle: TextStyle(color: Colors.white38, fontSize: 12),
                 labelStyle: TextStyle(color: Color(0xFF8B949E), fontSize: 12),
                 filled: true,
                 fillColor: Color(0xFF10141D),
@@ -523,7 +526,7 @@ class _AdminTeamMatchesScreenState extends State<AdminTeamMatchesScreen> {
                           Row(
                             children: [
                               Container(
-                                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
                                 decoration: BoxDecoration(
                                   color: (match.proofAttempts >= 2 ? const Color(0xFFFF4655) : const Color(0xFFFFB020)).withOpacity(0.18),
                                   borderRadius: BorderRadius.circular(6),
@@ -531,16 +534,33 @@ class _AdminTeamMatchesScreenState extends State<AdminTeamMatchesScreen> {
                                     color: match.proofAttempts >= 2 ? const Color(0xFFFF4655) : const Color(0xFFFFB020),
                                   ),
                                 ),
-                                child: Text(
-                                  'ثبوت کی کوششیں: ${match.proofAttempts}/2 ${match.proofAttempts >= 2 ? "(حد ختم)" : ""}',
-                                  style: TextStyle(
-                                    color: match.proofAttempts >= 2 ? const Color(0xFFFF4655) : const Color(0xFFFFB020),
-                                    fontSize: 10.5,
-                                    fontWeight: FontWeight.bold,
-                                  ),
+                                child: Row(
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    Icon(
+                                      Icons.camera_alt_outlined,
+                                      size: 13,
+                                      color: match.proofAttempts >= 2 ? const Color(0xFFFF4655) : const Color(0xFFFFB020),
+                                    ),
+                                    const SizedBox(width: 4),
+                                    Text(
+                                      'Attempt ${match.proofAttempts}/2',
+                                      style: TextStyle(
+                                        color: match.proofAttempts >= 2 ? const Color(0xFFFF4655) : const Color(0xFFFFB020),
+                                        fontSize: 11,
+                                        fontWeight: FontWeight.w900,
+                                      ),
+                                    ),
+                                  ],
                                 ),
                               ),
-                              if (match.rejectedAt != null) ...[
+                              if (match.lastProofAt != null) ...[
+                                const SizedBox(width: 8),
+                                Text(
+                                  'Submitted: ${DateFormat('dd MMM, hh:mm a').format(match.lastProofAt!)}',
+                                  style: const TextStyle(color: Color(0xFF8B949E), fontSize: 10.5),
+                                ),
+                              ] else if (match.rejectedAt != null && !match.isProofSubmitted) ...[
                                 const SizedBox(width: 8),
                                 Text(
                                   'Rejected on: ${DateFormat('dd MMM, hh:mm a').format(match.rejectedAt!)}',
@@ -551,7 +571,33 @@ class _AdminTeamMatchesScreenState extends State<AdminTeamMatchesScreen> {
                           ),
                         ],
 
-                        if (match.rejectReason != null && match.rejectReason!.isNotEmpty) ...[
+                        // New proof submitted indicator (waiting for admin review, old note is cleared)
+                        if (match.isProofSubmitted) ...[
+                          const SizedBox(height: 6),
+                          Container(
+                            padding: const EdgeInsets.all(8),
+                            decoration: BoxDecoration(
+                              color: const Color(0xFF38BDF8).withOpacity(0.15),
+                              borderRadius: BorderRadius.circular(8),
+                              border: Border.all(color: const Color(0xFF38BDF8).withOpacity(0.4)),
+                            ),
+                            child: Row(
+                              children: [
+                                const Icon(Icons.mark_email_unread_rounded, color: Color(0xFF38BDF8), size: 16),
+                                const SizedBox(width: 6),
+                                Expanded(
+                                  child: Text(
+                                    match.proofAttempts >= 2
+                                        ? 'نیا ثبوت موصول ہو چکا ہے (Attempt 2/2) - جائزہ لے کر Verify یا Reject کریں'
+                                        : 'ثبوت موصول ہو چکا ہے (Proof Submitted) - جائزہ لے کر Verify یا Reject کریں',
+                                    style: const TextStyle(color: Color(0xFF38BDF8), fontSize: 11, fontWeight: FontWeight.bold),
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ] else if (match.adminNote != null && match.adminNote!.isNotEmpty) ...[
+                          // Only show Admin Note if NOT in 'Proof Submitted' state (old note hidden when new proof uploaded)
                           const SizedBox(height: 6),
                           Container(
                             padding: const EdgeInsets.all(8),
@@ -566,7 +612,7 @@ class _AdminTeamMatchesScreenState extends State<AdminTeamMatchesScreen> {
                                 const SizedBox(width: 6),
                                 Expanded(
                                   child: Text(
-                                    'Reject Reason: ${match.rejectReason}',
+                                    'Admin Note: ${match.adminNote}',
                                     style: const TextStyle(color: Color(0xFFFF4655), fontSize: 11, fontWeight: FontWeight.bold),
                                   ),
                                 ),
@@ -625,8 +671,17 @@ class _AdminTeamMatchesScreenState extends State<AdminTeamMatchesScreen> {
                                   minimumSize: const Size(0, 30),
                                 ),
                                 icon: const Icon(Icons.image_outlined, size: 14),
-                                label: Text('${match.team1Name} Proof', style: const TextStyle(fontSize: 11)),
-                                onPressed: () => _showImageDialog(context, match.team1Proof!, '${match.team1Name} Proof'),
+                                label: Text(
+                                  match.proofAttempts > 0
+                                      ? '${match.team1Name} Proof (Attempt ${match.proofAttempts}/2)'
+                                      : '${match.team1Name} Proof',
+                                  style: const TextStyle(fontSize: 11),
+                                ),
+                                onPressed: () => _showImageDialog(
+                                  context,
+                                  match.team1Proof!,
+                                  '${match.team1Name} Proof (Attempt ${match.proofAttempts}/2)',
+                                ),
                               ),
                             ],
 
@@ -640,8 +695,17 @@ class _AdminTeamMatchesScreenState extends State<AdminTeamMatchesScreen> {
                                   minimumSize: const Size(0, 30),
                                 ),
                                 icon: const Icon(Icons.image_outlined, size: 14),
-                                label: Text('${match.team2Name} Proof', style: const TextStyle(fontSize: 11)),
-                                onPressed: () => _showImageDialog(context, match.team2Proof!, '${match.team2Name} Proof'),
+                                label: Text(
+                                  match.proofAttempts > 0
+                                      ? '${match.team2Name} Proof (Attempt ${match.proofAttempts}/2)'
+                                      : '${match.team2Name} Proof',
+                                  style: const TextStyle(fontSize: 11),
+                                ),
+                                onPressed: () => _showImageDialog(
+                                  context,
+                                  match.team2Proof!,
+                                  '${match.team2Name} Proof (Attempt ${match.proofAttempts}/2)',
+                                ),
                               ),
                             ],
 

@@ -323,7 +323,7 @@ class _MyTeamMatchesScreenState extends State<MyTeamMatchesScreen>
                 ),
 
                 // History & Dispute Details (Winner, Loser, Proof Attempts, Rejection Reason)
-                if (match.isHistory || match.proofAttempts > 0 || (match.rejectReason != null && match.rejectReason!.isNotEmpty)) ...[
+                if (match.isHistory || match.proofAttempts > 0 || (match.adminNote != null && match.adminNote!.isNotEmpty && !match.isProofSubmitted)) ...[
                   const SizedBox(height: 10),
                   Container(
                     width: double.infinity,
@@ -382,9 +382,45 @@ class _MyTeamMatchesScreenState extends State<MyTeamMatchesScreen>
                           ),
                         ],
 
-                        // Admin Decision / Reject reason
-                        if (match.rejectReason != null && match.rejectReason!.isNotEmpty) ...[
-                          const SizedBox(height: 4),
+                        // New proof submitted banner (waiting for admin)
+                        if (match.isProofSubmitted) ...[
+                          const SizedBox(height: 5),
+                          Row(
+                            children: [
+                              const Icon(Icons.hourglass_top_rounded, size: 13, color: Color(0xFF38BDF8)),
+                              const SizedBox(width: 5),
+                              Expanded(
+                                child: Text(
+                                  match.proofAttempts >= 2
+                                      ? 'آپ کا نیا ثبوت ایڈمن کے پاس چلا گیا ہے، براہ کرم انتظار کریں'
+                                      : 'آپ کا ثبوت ایڈمن کے پاس چلا گیا ہے، براہ کرم انتظار کریں',
+                                  style: const TextStyle(color: Color(0xFF38BDF8), fontSize: 11, fontWeight: FontWeight.bold),
+                                ),
+                              ),
+                            ],
+                          ),
+                        ],
+
+                        // If permanently rejected (2/2 rejected)
+                        if (match.isPermanentlyRejected) ...[
+                          const SizedBox(height: 5),
+                          const Row(
+                            children: [
+                              Icon(Icons.cancel_outlined, size: 13, color: Color(0xFFFF4655)),
+                              SizedBox(width: 5),
+                              Expanded(
+                                child: Text(
+                                  'آپ کے دونوں ثبوت مسترد ہو گئے ہیں، یہ میچ ختم ہو گیا',
+                                  style: TextStyle(color: Color(0xFFFF4655), fontSize: 11, fontWeight: FontWeight.bold),
+                                ),
+                              ),
+                            ],
+                          ),
+                        ],
+
+                        // Admin Decision / Reject reason (Only show if NOT in Proof Submitted state)
+                        if (match.adminNote != null && match.adminNote!.isNotEmpty && !match.isProofSubmitted) ...[
+                          const SizedBox(height: 5),
                           Row(
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
@@ -392,7 +428,7 @@ class _MyTeamMatchesScreenState extends State<MyTeamMatchesScreen>
                               const SizedBox(width: 5),
                               Expanded(
                                 child: Text(
-                                  'Admin Note: ${match.rejectReason}',
+                                  'Admin Note: ${match.adminNote}',
                                   style: const TextStyle(color: Color(0xFFFF4655), fontSize: 11),
                                 ),
                               ),

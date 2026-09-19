@@ -274,8 +274,18 @@ class TeamMatchService {
       }
       final current = TeamMatch.fromFirestore(doc);
 
+      int currentAttempts = current.proofAttempts;
+      // Fallback: If proof was previously uploaded or admin note exists, treat as attempt 1
+      if (currentAttempts == 0 &&
+          (current.team1Proof != null ||
+              current.team2Proof != null ||
+              current.rejectReason != null ||
+              current.adminNote != null)) {
+        currentAttempts = 1;
+      }
+
       // Check max proof attempts (limit to 2)
-      if (current.proofAttempts >= 2) {
+      if (currentAttempts >= 2) {
         return {
           'success': false,
           'error': 'آپ اس میچ میں ثبوت اپلوڈ کرنے کی زیادہ سے زیادہ حد (2 بار) پوری کر چکے ہیں۔',
@@ -290,9 +300,16 @@ class TeamMatchService {
         return {'success': false, 'error': 'تصویر اپلوڈ نہیں ہو سکی'};
       }
 
-      final newAttempts = current.proofAttempts + 1;
+      final newAttempts = currentAttempts + 1; // 1 -> 2
       final Map<String, dynamic> updateData = {
         'proofAttempts': newAttempts,
+        'lastProofAt': FieldValue.serverTimestamp(),
+        'status': 'Proof Submitted',
+        'adminNote': null,        // 1.1 پرانا Admin Note فوراً ہٹا دیا جائے
+        'rejectReason': null,     // 1.1 پرانا rejectReason فوراً ہٹا دیا جائے
+        'disputeReason': '',
+        'rejectedBy': null,
+        'rejectedAt': null,
       };
 
       if (isTeam1) {
@@ -305,17 +322,27 @@ class TeamMatchService {
         updateData['team2ProofUploadedAt'] = FieldValue.serverTimestamp();
       }
 
-      // Check if both claimed 'win' -> Mark Disputed
-      final otherClaim = isTeam1 ? current.team2Claim : current.team1Claim;
-      if (claim == 'win' && otherClaim == 'win') {
-        updateData['status'] = 'Disputed';
-        updateData['disputeReason'] = 'دونوں ٹیموں نے جیت کا دعویٰ کیا ہے۔ ایڈمن تصدیق کرے گا۔';
-      } else {
-        // Otherwise set to Proof Submitted
-        updateData['status'] = 'Proof Submitted';
+      await _matchesRef.doc(matchId).update(updateData);
+
+      // 2.1 نئے ثبوت کی اطلاع ایڈمن کو جائے
+      try {
+        final uploaderName = isTeam1 ? current.team1Name : current.team2Name;
+        final opponentName = isTeam1 ? current.team2Name : current.team1Name;
+        await _notificationsRef.add({
+          'recipientUid': 'admin',
+          'senderUid': isTeam1 ? current.team1LeaderId : current.team2LeaderId,
+          'senderName': uploaderName,
+          'type': 'new_proof_submitted',
+          'title': newAttempts >= 2 ? '📸 نیا ثبوت موصول (Attempt 2/2)' : '📸 ثبوت موصول (Proof Submitted)',
+          'message': 'ٹیم "$uploaderName" نے میچ ($uploaderName بمقابلہ $opponentName - ${current.game}) کے لیے نیا Win Proof اپلوڈ کیا ہے۔ (کوشش $newAttempts/2)',
+          'matchId': matchId,
+          'read': false,
+          'createdAt': FieldValue.serverTimestamp(),
+        });
+      } catch (err) {
+        debugPrint('[TeamMatchService] Error notifying admin: $err');
       }
 
-      await _matchesRef.doc(matchId).update(updateData);
       return {
         'success': true,
         'attempts': newAttempts,
@@ -478,13 +505,20 @@ class TeamMatchService {
       final finalReason = reason.isNotEmpty ? reason : 'ثبوت غیر واضح یا مسترد کر دیا گیا ہے';
       final isFinalReject = match.proofAttempts >= 2;
 
-      await _matchesRef.doc(matchId).update({
+      final Map<String, dynamic> updateData = {
         'status': 'Rejected',
+        'adminNote': finalReason,
         'rejectReason': finalReason,
         'rejectedBy': adminIdentifier,
         'rejectedAt': FieldValue.serverTimestamp(),
         'disputeReason': finalReason,
-      });
+      };
+
+      if (isFinalReject) {
+        updateData['proofAttempts'] = 2;
+      }
+
+      await _matchesRef.doc(matchId).update(updateData);
 
       // Gather all members from team 1 and team 2
       final Set<String> allMemberUids = {
@@ -495,12 +529,12 @@ class TeamMatchService {
       };
 
       final notificationTitle = isFinalReject
-          ? '❌ میچ ثبوت حتمی طور پر مسترد'
+          ? '❌ میچ ختم - دونوں ثبوت مسترد'
           : '⚠️ آپ کا Win Proof مسترد کر دیا گیا ہے';
 
       final notificationMessage = isFinalReject
-          ? 'میچ (${match.team1Name} بمقابلہ ${match.team2Name} - ${match.game}) کا ثبوت دوسری بار بھی مسترد کر دیا گیا ہے۔ میچ مستقل طور پر Cancel/Rejected ہو گیا ہے۔ وجہ: $finalReason'
-          : 'میچ (${match.team1Name} بمقابلہ ${match.team2Name} - ${match.game}) کا ثبوت مسترد کر دیا گیا ہے۔ وجہ: $finalReason۔ آپ ایک بار دوبارہ ثبوت اپلوڈ کر سکتے ہیں۔';
+          ? 'میچ (${match.team1Name} بمقابلہ ${match.team2Name} - ${match.game}): آپ کے دونوں ثبوت مسترد ہو گئے ہیں، یہ میچ ختم ہو گیا۔ وجہ: $finalReason'
+          : 'میچ (${match.team1Name} بمقابلہ ${match.team2Name} - ${match.game}) کا ثبوت مسترد کر دیا گیا ہے۔ وجہ: $finalReason۔ آپ ایک بار دوبارہ نیا ثبوت اپلوڈ کر سکتے ہیں۔';
 
       for (final uid in allMemberUids) {
         await _notificationsRef.add({
@@ -523,7 +557,7 @@ class TeamMatchService {
   }
 
   /// Admin Request New Proof (without permanently rejecting)
-  /// Sets status to Disputed or Live so team can re-upload screenshot
+  /// Sets status to Disputed so team can re-upload screenshot
   Future<bool> adminRequestNewProof(
     String matchId,
     String adminIdentifier, {
@@ -540,6 +574,7 @@ class TeamMatchService {
 
       await _matchesRef.doc(matchId).update({
         'status': 'Disputed',
+        'adminNote': requestReason,
         'rejectReason': requestReason,
         'disputeReason': requestReason,
         'rejectedBy': adminIdentifier,

@@ -113,10 +113,25 @@ class _TeamMatchRoomScreenState extends State<TeamMatchRoomScreen> with SingleTi
     if (mounted) {
       if (result['success'] == true) {
         final attempts = result['attempts'] ?? 1;
+        final message = attempts >= 2
+            ? 'آپ کا نیا ثبوت ایڈمن کے پاس چلا گیا ہے، براہ کرم انتظار کریں'
+            : 'آپ کا ثبوت ایڈمن کے پاس چلا گیا ہے، براہ کرم انتظار کریں';
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text('✅ اسکرین شاٹ کامیابی سے اپلوڈ ہو گیا! (کوشش $attempts/2) ایڈمن جائزہ لے گا۔'),
+            content: Row(
+              children: [
+                const Icon(Icons.check_circle_outline_rounded, color: Colors.black, size: 20),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Text(
+                    message,
+                    style: const TextStyle(color: Colors.black, fontWeight: FontWeight.bold, fontSize: 13),
+                  ),
+                ),
+              ],
+            ),
             backgroundColor: const Color(0xFF00FF88),
+            duration: const Duration(seconds: 4),
           ),
         );
       } else {
@@ -1157,8 +1172,35 @@ class _TeamMatchRoomScreenState extends State<TeamMatchRoomScreen> with SingleTi
           ),
           const SizedBox(height: 14),
 
-          // Rejection Banner if match was rejected or has rejectReason
-          if (match.rejectReason != null && match.rejectReason!.isNotEmpty) ...[
+          // 1. Proof Submitted Banner (waiting for admin review)
+          if (match.isProofSubmitted) ...[
+            Container(
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: const Color(0xFF38BDF8).withOpacity(0.15),
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(color: const Color(0xFF38BDF8)),
+              ),
+              child: Row(
+                children: [
+                  const Icon(Icons.hourglass_top_rounded, color: Color(0xFF38BDF8), size: 20),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: Text(
+                      match.proofAttempts >= 2
+                          ? 'آپ کا نیا ثبوت ایڈمن کے پاس چلا گیا ہے، براہ کرم انتظار کریں'
+                          : 'آپ کا ثبوت ایڈمن کے پاس چلا گیا ہے، براہ کرم انتظار کریں',
+                      style: const TextStyle(color: Color(0xFF38BDF8), fontWeight: FontWeight.bold, fontSize: 13),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(height: 14),
+          ],
+
+          // 2. Permanently Rejected Banner (Attempt 2/2 rejected)
+          if (match.isPermanentlyRejected) ...[
             Container(
               padding: const EdgeInsets.all(12),
               decoration: BoxDecoration(
@@ -1169,21 +1211,56 @@ class _TeamMatchRoomScreenState extends State<TeamMatchRoomScreen> with SingleTi
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Row(
+                  const Row(
                     children: [
-                      const Icon(Icons.cancel_outlined, color: Color(0xFFFF4655), size: 18),
-                      const SizedBox(width: 8),
+                      Icon(Icons.cancel_rounded, color: Color(0xFFFF4655), size: 20),
+                      SizedBox(width: 8),
+                      Expanded(
+                        child: Text(
+                          'آپ کے دونوں ثبوت مسترد ہو گئے ہیں، یہ میچ ختم ہو گیا',
+                          style: TextStyle(color: Color(0xFFFF4655), fontWeight: FontWeight.w900, fontSize: 13),
+                        ),
+                      ),
+                    ],
+                  ),
+                  if (match.adminNote != null && match.adminNote!.isNotEmpty) ...[
+                    const SizedBox(height: 6),
+                    Text(
+                      'ایڈمن کی وجہ: ${match.adminNote}',
+                      style: const TextStyle(color: Colors.white, fontSize: 12),
+                    ),
+                  ],
+                ],
+              ),
+            ),
+            const SizedBox(height: 14),
+          ],
+
+          // 3. Admin Note / Rejection Banner (Only show when NOT in Proof Submitted or Permanently Rejected state)
+          if (!match.isProofSubmitted && !match.isPermanentlyRejected && match.adminNote != null && match.adminNote!.isNotEmpty) ...[
+            Container(
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: const Color(0xFFFF4655).withOpacity(0.15),
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(color: const Color(0xFFFF4655)),
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const Row(
+                    children: [
+                      Icon(Icons.cancel_outlined, color: Color(0xFFFF4655), size: 18),
+                      SizedBox(width: 8),
                       Text(
-                        match.isPermanentlyRejected
-                            ? 'میچ مستقل طور پر مسترد ہو گیا (Rejected)'
-                            : 'آپ کا Win Proof مسترد کر دیا گیا ہے',
-                        style: const TextStyle(color: Color(0xFFFF4655), fontWeight: FontWeight.w900, fontSize: 13),
+                        'آپ کا Win Proof مسترد کر دیا گیا ہے',
+                        style: TextStyle(color: Color(0xFFFF4655), fontWeight: FontWeight.w900, fontSize: 13),
                       ),
                     ],
                   ),
                   const SizedBox(height: 6),
                   Text(
-                    'ایڈمن کی وجہ: ${match.rejectReason}',
+                    'ایڈمن کی وجہ: ${match.adminNote}',
                     style: const TextStyle(color: Colors.white, fontSize: 12.5),
                   ),
                   if (match.canUploadNewProof) ...[
@@ -1191,12 +1268,6 @@ class _TeamMatchRoomScreenState extends State<TeamMatchRoomScreen> with SingleTi
                     const Text(
                       '💡 آپ کے پاس دوبارہ ثبوت جمع کرانے کا ایک اور موقع ہے۔ براہ کرم نیچے دیئے گئے بٹن سے نیا ثبوت اپلوڈ کریں۔',
                       style: TextStyle(color: Color(0xFF00FF88), fontSize: 11.5, fontWeight: FontWeight.bold),
-                    ),
-                  ] else ...[
-                    const SizedBox(height: 6),
-                    const Text(
-                      '🚫 ثبوت اپلوڈ کرنے کی 2 بار کی حد ختم ہو چکی ہے۔ اب مزید ثبوت جمع نہیں کرایا جا سکتا۔',
-                      style: TextStyle(color: Colors.white54, fontSize: 11.5),
                     ),
                   ],
                 ],
@@ -1206,8 +1277,29 @@ class _TeamMatchRoomScreenState extends State<TeamMatchRoomScreen> with SingleTi
           ],
 
           // Upload / Upload New Proof Action Button
-          if ((isTeam1Member || isTeam2Member) && !match.isVerified) ...[
-            if (match.canUploadNewProof) ...[
+          if ((isTeam1Member || isTeam2Member) && !match.isVerified && !match.isPermanentlyRejected) ...[
+            if (match.isProofSubmitted) ...[
+              Container(
+                width: double.infinity,
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: const Color(0xFF38BDF8).withOpacity(0.12),
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(color: const Color(0xFF38BDF8).withOpacity(0.4)),
+                ),
+                child: const Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    Icon(Icons.access_time_filled_rounded, color: Color(0xFF38BDF8), size: 18),
+                    SizedBox(width: 8),
+                    Text(
+                      'نیا ثبوت زیرِ جائزہ ہے (Under Admin Review)',
+                      style: TextStyle(color: Color(0xFF38BDF8), fontSize: 12, fontWeight: FontWeight.bold),
+                    ),
+                  ],
+                ),
+              ),
+            ] else if (match.canUploadNewProof) ...[
               SizedBox(
                 width: double.infinity,
                 child: ElevatedButton.icon(

@@ -55,9 +55,11 @@ class TeamMatch {
   final DateTime createdAt;
   final String disputeReason;
 
-  // Rejection & Resubmission Tracking
+  // Admin Note, Proof Tracking & Resubmission
+  final String? adminNote;
   final String? rejectReason;
-  final int proofAttempts; // How many times proof has been uploaded (max 2)
+  final int proofAttempts; // 1 or 2
+  final DateTime? lastProofAt;
   final String? rejectedBy;
   final DateTime? rejectedAt;
 
@@ -97,8 +99,10 @@ class TeamMatch {
     this.team2Confirmed = false,
     required this.createdAt,
     this.disputeReason = '',
+    this.adminNote,
     this.rejectReason,
     this.proofAttempts = 0,
+    this.lastProofAt,
     this.rejectedBy,
     this.rejectedAt,
   });
@@ -112,12 +116,12 @@ class TeamMatch {
   bool get isRejected => status == 'Rejected';
   bool get isCancelled => status == 'Cancelled';
 
-  bool get canUploadNewProof => proofAttempts < 2 && !isVerified && !isCancelled;
+  bool get canUploadNewProof => proofAttempts < 2 && !isVerified && !isCancelled && !isPermanentlyRejected;
   bool get isPermanentlyRejected => isRejected && proofAttempts >= 2;
 
   bool get isActive =>
       isPending || isAccepted || isLive || isProofSubmitted || (isDisputed && !isPermanentlyRejected) || (isRejected && canUploadNewProof);
-  bool get isHistory => isVerified || isCancelled || (isRejected && !canUploadNewProof);
+  bool get isHistory => isVerified || isCancelled || isPermanentlyRejected || (isRejected && !canUploadNewProof);
 
   bool isMemberOfMatch(String userId) {
     return team1LeaderId == userId ||
@@ -160,6 +164,19 @@ class TeamMatch {
     if (data['rejectedAt'] != null) {
       rejTime = parseTime(data['rejectedAt']);
     }
+    DateTime? lastProofTime;
+    if (data['lastProofAt'] != null) {
+      lastProofTime = parseTime(data['lastProofAt']);
+    }
+
+    final adminNoteVal = data['adminNote'] as String?;
+    final rejectReasonVal = data['rejectReason'] as String?;
+    final effectiveNote = adminNoteVal ?? rejectReasonVal;
+
+    int pAttempts = (data['proofAttempts'] as num?)?.toInt() ?? 0;
+    if (pAttempts == 0 && (data['team1Proof'] != null || data['team2Proof'] != null || effectiveNote != null)) {
+      pAttempts = 1;
+    }
 
     return TeamMatch(
       matchId: data['matchId'] ?? doc.id,
@@ -197,8 +214,10 @@ class TeamMatch {
       team2Confirmed: data['team2Confirmed'] == true,
       createdAt: cTime,
       disputeReason: (data['disputeReason'] ?? '').toString(),
-      rejectReason: data['rejectReason'] as String?,
-      proofAttempts: (data['proofAttempts'] as num?)?.toInt() ?? 0,
+      adminNote: adminNoteVal,
+      rejectReason: effectiveNote,
+      proofAttempts: pAttempts,
+      lastProofAt: lastProofTime,
       rejectedBy: data['rejectedBy'] as String?,
       rejectedAt: rejTime,
     );
@@ -241,8 +260,10 @@ class TeamMatch {
       'team2Confirmed': team2Confirmed,
       'createdAt': Timestamp.fromDate(createdAt),
       'disputeReason': disputeReason,
-      'rejectReason': rejectReason,
+      'adminNote': adminNote,
+      'rejectReason': rejectReason ?? adminNote,
       'proofAttempts': proofAttempts,
+      'lastProofAt': lastProofAt != null ? Timestamp.fromDate(lastProofAt!) : null,
       'rejectedBy': rejectedBy,
       'rejectedAt': rejectedAt != null ? Timestamp.fromDate(rejectedAt!) : null,
     };
