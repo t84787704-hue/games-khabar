@@ -252,7 +252,7 @@ class GamerSocialService {
 
     // Sync deletion to Supabase
     try {
-      await SupabaseService.delete('posts', filters: {'post_id': 'eq.$postId'});
+      await SupabaseService.delete('posts', 'post_id', postId);
     } catch (_) {}
   }
 

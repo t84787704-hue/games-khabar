@@ -267,9 +267,22 @@ class SupabaseService {
   }
 
   /// Update records in a table
-  static Future<bool> update(String table, Map<String, dynamic> row, String column, String value) async {
+  static Future<bool> update(
+    String table,
+    Map<String, dynamic> row, [
+    String? column,
+    String? value,
+    Map<String, String>? filters,
+  ]) async {
     try {
-      final uri = Uri.parse('$supabaseUrl/rest/v1/$table?$column=eq.$value');
+      String queryParams = '';
+      if (column != null && value != null) {
+        queryParams = '$column=eq.$value';
+      } else if (filters != null && filters.isNotEmpty) {
+        queryParams = filters.entries.map((e) => '${e.key}=${e.value}').join('&');
+      }
+
+      final uri = Uri.parse('$supabaseUrl/rest/v1/$table?$queryParams');
       final response = await http.patch(
         uri,
         headers: {
@@ -324,9 +337,21 @@ class SupabaseService {
   // --------------------------------------------------------------------------
 
   /// Delete records from a table
-  static Future<bool> delete(String table, String column, String value) async {
+  static Future<bool> delete(
+    String table, [
+    String? column,
+    String? value,
+    Map<String, String>? filters,
+  ]) async {
     try {
-      final uri = Uri.parse('$supabaseUrl/rest/v1/$table?$column=eq.$value');
+      String queryParams = '';
+      if (column != null && value != null) {
+        queryParams = '$column=eq.$value';
+      } else if (filters != null && filters.isNotEmpty) {
+        queryParams = filters.entries.map((e) => '${e.key}=${e.value}').join('&');
+      }
+
+      final uri = Uri.parse('$supabaseUrl/rest/v1/$table?$queryParams');
       final response = await http.delete(
         uri,
         headers: _headers,

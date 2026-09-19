@@ -496,7 +496,7 @@ class GamerAuthService {
         if (verificationStatus != null) sbUpdates['is_verified'] = verificationStatus == 'verified';
         if (sbUpdates.isNotEmpty) {
           sbUpdates['updated_at'] = DateTime.now().toIso8601String();
-          await SupabaseService.update('users', sbUpdates, filters: {'uid': 'eq.$uid'});
+          await SupabaseService.update('users', sbUpdates, 'uid', uid);
         }
       } catch (e) {
         debugPrint('Supabase updateProfile sync notice: $e');
