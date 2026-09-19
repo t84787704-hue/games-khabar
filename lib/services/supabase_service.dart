@@ -4,7 +4,7 @@ import 'dart:io';
 import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
-import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:supabase/supabase.dart';
 
 /// Supabase Service for GAMERS ID NETWORK
 /// Handles Supabase Storage (image/proof uploads), Auth (login/signup),
@@ -13,8 +13,15 @@ class SupabaseService {
   static const String supabaseUrl = 'https://dxdkitnroypbblazblja.supabase.co';
   static const String supabaseAnonKey = 'sb_publishable_gL8ImGd6TS-gdPOr92leHQ_Cwjiw25Y';
 
-  /// Official Supabase Flutter client instance
-  static SupabaseClient get client => Supabase.instance.client;
+  /// Official Supabase client instance
+  static final SupabaseClient client = SupabaseClient(
+    supabaseUrl,
+    supabaseAnonKey,
+  );
+
+  static Future<void> init() async {
+    // Client initialized
+  }
 
   // Storage Buckets (matches user's Supabase buckets exactly)
   static const String bucketAvatars = 'avatars';

@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import 'package:supabase_flutter/supabase_flutter.dart';
+import 'services/supabase_service.dart';
 import 'constants/gamer_theme.dart';
 import 'services/theme_service.dart';
 import 'services/language_service.dart';
@@ -20,10 +20,7 @@ void main() async {
   );
 
   try {
-    await Supabase.initialize(
-      url: 'https://dxdkitnroypbblazblja.supabase.co',
-      anonKey: 'sb_publishable_gL8ImGd6TS-gdPOr92leHQ_Cwjiw25Y',
-    );
+    await SupabaseService.init();
   } catch (e) {
     debugPrint('Supabase initialize error: $e');
   }

@@ -3,12 +3,31 @@ allprojects {
         google()
         mavenCentral()
     }
+    ext {
+        compileSdkVersion = 35
+        minSdkVersion = 24
+        targetSdkVersion = 35
+    }
 }
 
 rootProject.buildDir = "../build"
 
 subprojects {
     project.buildDir = "${rootProject.buildDir}/${project.name}"
+    project.ext {
+        compileSdkVersion = 35
+        minSdkVersion = 24
+        targetSdkVersion = 35
+    }
+    afterEvaluate { project ->
+        if (project.hasProperty("android")) {
+            try {
+                if (project.android.hasProperty("compileSdkVersion") && project.android.compileSdkVersion == null) {
+                    project.android.compileSdkVersion = 35
+                }
+            } catch (_) {}
+        }
+    }
 }
 
 subprojects {
