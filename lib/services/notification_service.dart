@@ -8,6 +8,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:http/http.dart' as http;
 import '../models/news_model.dart';
 import 'firestore_service.dart';
+import 'supabase_service.dart';
 
 /// Top-level background message handler for FCM
 @pragma('vm:entry-point')
@@ -554,6 +555,19 @@ class NotificationService {
         'timestamp': FieldValue.serverTimestamp(),
         if (additionalData != null) ...additionalData,
       });
+
+      // Sync notification to Supabase notifications table
+      try {
+        await SupabaseService.sendNotification({
+          'userId': userId,
+          'title': title,
+          'body': body,
+          'type': type,
+          if (additionalData != null) 'data': additionalData,
+        });
+      } catch (e) {
+        debugPrint('Error syncing notification to Supabase: $e');
+      }
     } catch (e) {
       debugPrint('Error creating in-app notification: $e');
     }

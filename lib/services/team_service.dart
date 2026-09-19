@@ -32,7 +32,7 @@ class TeamService {
         logoUrl = await SupabaseService.uploadFile(
               file: logoFile,
               folder: 'team_logos',
-              bucket: SupabaseService.bucketUploads,
+              bucket: SupabaseService.bucketTeamLogos,
             ) ??
             '';
       }
@@ -68,6 +68,31 @@ class TeamService {
       );
 
       await docRef.set(team.toMap());
+
+      // Sync to Supabase teams and team_members tables
+      try {
+        await SupabaseService.saveTeam({
+          'team_id': docRef.id,
+          'name': name.trim(),
+          'tag': tag.trim().toUpperCase(),
+          'logo_url': logoUrl,
+          'leader_id': leaderId,
+          'leader_name': leaderName,
+          'game': game,
+          'bio': description.trim(),
+          'member_count': 1,
+          'created_at': DateTime.now().toIso8601String(),
+        });
+        await SupabaseService.addTeamMember(
+          teamId: docRef.id,
+          userId: leaderId,
+          username: leaderName,
+          role: 'Leader',
+        );
+      } catch (e) {
+        debugPrint('[TeamService] Supabase sync notice: $e');
+      }
+
       return docRef.id;
     } catch (e) {
       debugPrint('[TeamService] Error creating team: $e');
@@ -133,6 +158,24 @@ class TeamService {
         'createdAt': FieldValue.serverTimestamp(),
       });
 
+      // Sync join request & notification to Supabase
+      try {
+        await SupabaseService.createTeamJoinRequest(
+          teamId: teamId,
+          teamName: team.name,
+          userId: userId,
+          username: userName,
+        );
+        await SupabaseService.sendNotification({
+          'userId': team.leaderId,
+          'title': '🛡️ New Team Join Request',
+          'message': '$userName نے آپ کی ٹیم "${team.name}" میں شامل ہونے کی درخواست کی ہے۔',
+          'type': 'team_join_request',
+        });
+      } catch (e) {
+        debugPrint('[TeamService] Supabase join request sync notice: $e');
+      }
+
       return true;
     } catch (e) {
       debugPrint('[TeamService] Error sending join request: $e');
@@ -173,6 +216,25 @@ class TeamService {
         'createdAt': FieldValue.serverTimestamp(),
       });
 
+      // Sync accept status to Supabase team_join_requests and team_members
+      try {
+        await SupabaseService.updateTeamJoinRequestStatus(teamId, userId, 'accepted');
+        await SupabaseService.addTeamMember(
+          teamId: teamId,
+          userId: userId,
+          username: userName,
+          role: 'Member',
+        );
+        await SupabaseService.sendNotification({
+          'userId': userId,
+          'title': '🎉 Welcome to the Team!',
+          'message': 'آپ کی ٹیم جوائن کرنے کی درخواست قبول کر لی گئی ہے!',
+          'type': 'team_join_accepted',
+        });
+      } catch (e) {
+        debugPrint('[TeamService] Supabase accept sync notice: $e');
+      }
+
       return true;
     } catch (e) {
       debugPrint('[TeamService] Error accepting join request: $e');
@@ -189,6 +251,14 @@ class TeamService {
       await _teamsRef.doc(teamId).update({
         'pendingJoinRequests': FieldValue.arrayRemove([userId]),
       });
+
+      // Sync reject status to Supabase team_join_requests
+      try {
+        await SupabaseService.updateTeamJoinRequestStatus(teamId, userId, 'rejected');
+      } catch (e) {
+        debugPrint('[TeamService] Supabase reject sync notice: $e');
+      }
+
       return true;
     } catch (e) {
       debugPrint('[TeamService] Error rejecting join request: $e');

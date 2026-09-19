@@ -12,11 +12,14 @@ class SupabaseService {
   static const String supabaseUrl = 'https://dxdkitnroypbblazblja.supabase.co';
   static const String supabaseAnonKey = 'sb_publishable_gL8ImGd6TS-gdPOr92leHQ_Cwjiw25Y';
 
-  // Standard Storage Buckets
-  static const String bucketUploads = 'gamers_uploads';
-  static const String bucketMatchProofs = 'match_proofs';
-  static const String bucketAvatars = 'user_avatars';
-  static const String bucketCovers = 'user_covers';
+  // Storage Buckets (matches user's Supabase buckets exactly)
+  static const String bucketAvatars = 'avatars';
+  static const String bucketCovers = 'covers';
+  static const String bucketPosts = 'posts';
+  static const String bucketTeamLogos = 'team-logos';
+  static const String bucketScreenshots = 'screenshots';
+  static const String bucketUploads = 'posts';
+  static const String bucketMatchProofs = 'screenshots';
 
   static final Map<String, String> _headers = {
     'apikey': supabaseAnonKey,
@@ -305,6 +308,26 @@ class SupabaseService {
     return [];
   }
 
+  // --------------------------------------------------------------------------
+  // 3. SUPABASE DATABASE CRUD FOR ALL 13 TABLES
+  // --------------------------------------------------------------------------
+
+  /// Delete records from a table
+  static Future<bool> delete(String table, String column, String value) async {
+    try {
+      final uri = Uri.parse('$supabaseUrl/rest/v1/$table?$column=eq.$value');
+      final response = await http.delete(
+        uri,
+        headers: _headers,
+      );
+      return response.statusCode == 200 || response.statusCode == 204;
+    } catch (e) {
+      debugPrint('Supabase delete error in $table: $e');
+      return false;
+    }
+  }
+
+  // --- 1. USERS TABLE ---
   /// Upsert a user in public.users
   static Future<bool> upsertUser(Map<String, dynamic> userData) async {
     try {
@@ -325,50 +348,213 @@ class SupabaseService {
     }
   }
 
-  /// Send a chat message in public.chat_messages
-  static Future<bool> sendChatMessage({
-    String? roomId,
-    String? matchId,
-    required String senderId,
-    required String senderName,
-    String? senderAvatar,
-    required String message,
-    String? imageUrl,
-    String messageType = 'text',
-  }) async {
-    return await insert('chat_messages', {
-      if (roomId != null) 'room_id': roomId,
-      if (matchId != null) 'match_id': matchId,
-      'sender_id': senderId,
-      'sender_name': senderName,
-      'sender_avatar': senderAvatar ?? '',
-      'message': message,
-      if (imageUrl != null) 'image_url': imageUrl,
-      'message_type': messageType,
-      'created_at': DateTime.now().toIso8601String(),
-    });
+  /// Get user by UID
+  static Future<Map<String, dynamic>?> getUser(String uid) async {
+    final list = await query('users', filters: {'uid': 'eq.$uid'}, limit: 1);
+    return list.isNotEmpty ? list.first : null;
   }
 
-  /// Record an in-game coin transaction in public.coin_transactions (Strictly virtual coins, no real cash)
-  static Future<bool> recordCoinTransaction({
+  // --- 2. POSTS TABLE ---
+  /// Save a post in public.posts
+  static Future<bool> savePost(Map<String, dynamic> postData) async {
+    try {
+      final uri = Uri.parse('$supabaseUrl/rest/v1/posts');
+      final response = await http.post(
+        uri,
+        headers: {
+          ..._headers,
+          'Content-Type': 'application/json',
+          'Prefer': 'resolution=merge-duplicates,return=representation',
+        },
+        body: jsonEncode(postData),
+      );
+      return response.statusCode == 201 || response.statusCode == 200;
+    } catch (e) {
+      debugPrint('Supabase savePost error: $e');
+      return false;
+    }
+  }
+
+  /// Fetch posts from public.posts
+  static Future<List<Map<String, dynamic>>> getPosts({int limit = 50, String? gameFilter}) async {
+    final Map<String, String> filters = {};
+    if (gameFilter != null && gameFilter != 'All' && gameFilter != 'All Games') {
+      filters['game'] = 'eq.$gameFilter';
+    }
+    return await query('posts', filters: filters.isNotEmpty ? filters : null, order: 'created_at.desc', limit: limit);
+  }
+
+  // --- 3. LIKES TABLE ---
+  /// Toggle like on a post in public.likes
+  static Future<bool> toggleLike({required String postId, required String userId, String? username}) async {
+    try {
+      final existing = await query('likes', filters: {'post_id': 'eq.$postId', 'user_id': 'eq.$userId'}, limit: 1);
+      if (existing.isNotEmpty) {
+        // Unlike
+        final delUri = Uri.parse('$supabaseUrl/rest/v1/likes?post_id=eq.$postId&user_id=eq.$userId');
+        await http.delete(delUri, headers: _headers);
+        return false;
+      } else {
+        // Like
+        await insert('likes', {
+          'post_id': postId,
+          'user_id': userId,
+          if (username != null) 'username': username,
+          'created_at': DateTime.now().toIso8601String(),
+        });
+        return true;
+      }
+    } catch (e) {
+      debugPrint('Supabase toggleLike error: $e');
+      return false;
+    }
+  }
+
+  /// Check if post is liked by user
+  static Future<bool> isPostLiked(String postId, String userId) async {
+    final existing = await query('likes', filters: {'post_id': 'eq.$postId', 'user_id': 'eq.$userId'}, limit: 1);
+    return existing.isNotEmpty;
+  }
+
+  // --- 4. COMMENTS TABLE ---
+  /// Add comment in public.comments
+  static Future<bool> addComment({
+    required String postId,
     required String userId,
-    required int amount,
-    required String type,
-    String? description,
-    int? balanceAfter,
-    String? referenceId,
+    required String username,
+    String? userAvatar,
+    required String content,
   }) async {
-    return await insert('coin_transactions', {
+    return await insert('comments', {
+      'comment_id': 'c_${DateTime.now().millisecondsSinceEpoch}',
+      'post_id': postId,
       'user_id': userId,
-      'amount': amount,
-      'type': type,
-      'description': description ?? '',
-      if (balanceAfter != null) 'balance_after': balanceAfter,
-      if (referenceId != null) 'reference_id': referenceId,
+      'username': username,
+      'user_avatar': userAvatar ?? '',
+      'content': content,
       'created_at': DateTime.now().toIso8601String(),
     });
   }
 
+  /// Get comments for a post
+  static Future<List<Map<String, dynamic>>> getComments(String postId) async {
+    return await query('comments', filters: {'post_id': 'eq.$postId'}, order: 'created_at.asc');
+  }
+
+  // --- 5. TEAMS TABLE ---
+  /// Save a team in public.teams
+  static Future<bool> saveTeam(Map<String, dynamic> teamData) async {
+    try {
+      final uri = Uri.parse('$supabaseUrl/rest/v1/teams');
+      final response = await http.post(
+        uri,
+        headers: {
+          ..._headers,
+          'Content-Type': 'application/json',
+          'Prefer': 'resolution=merge-duplicates,return=representation',
+        },
+        body: jsonEncode(teamData),
+      );
+      return response.statusCode == 201 || response.statusCode == 200;
+    } catch (e) {
+      debugPrint('Supabase saveTeam error: $e');
+      return false;
+    }
+  }
+
+  /// Get teams from public.teams
+  static Future<List<Map<String, dynamic>>> getTeams({String? gameFilter}) async {
+    final Map<String, String> filters = {};
+    if (gameFilter != null && gameFilter != 'All') {
+      filters['game'] = 'eq.$gameFilter';
+    }
+    return await query('teams', filters: filters.isNotEmpty ? filters : null, order: 'created_at.desc');
+  }
+
+  /// Get a single team
+  static Future<Map<String, dynamic>?> getTeam(String teamId) async {
+    final list = await query('teams', filters: {'team_id': 'eq.$teamId'}, limit: 1);
+    return list.isNotEmpty ? list.first : null;
+  }
+
+  // --- 6. TEAM MEMBERS TABLE ---
+  /// Add member to team in public.team_members
+  static Future<bool> addTeamMember({
+    required String teamId,
+    required String userId,
+    required String username,
+    String role = 'Member',
+  }) async {
+    return await insert('team_members', {
+      'team_id': teamId,
+      'user_id': userId,
+      'username': username,
+      'role': role,
+      'joined_at': DateTime.now().toIso8601String(),
+    });
+  }
+
+  /// Remove member from team
+  static Future<bool> removeTeamMember(String teamId, String userId) async {
+    try {
+      final uri = Uri.parse('$supabaseUrl/rest/v1/team_members?team_id=eq.$teamId&user_id=eq.$userId');
+      final resp = await http.delete(uri, headers: _headers);
+      return resp.statusCode == 200 || resp.statusCode == 204;
+    } catch (e) {
+      return false;
+    }
+  }
+
+  /// Get members of a team
+  static Future<List<Map<String, dynamic>>> getTeamMembers(String teamId) async {
+    return await query('team_members', filters: {'team_id': 'eq.$teamId'}, order: 'joined_at.asc');
+  }
+
+  // --- 7. TEAM JOIN REQUESTS TABLE ---
+  /// Create a join request in public.team_join_requests
+  static Future<bool> createTeamJoinRequest({
+    required String teamId,
+    String? teamName,
+    required String userId,
+    required String username,
+    String? userAvatar,
+  }) async {
+    return await insert('team_join_requests', {
+      'request_id': 'req_${teamId}_$userId',
+      'team_id': teamId,
+      if (teamName != null) 'team_name': teamName,
+      'user_id': userId,
+      'username': username,
+      if (userAvatar != null) 'user_avatar': userAvatar,
+      'status': 'pending',
+      'created_at': DateTime.now().toIso8601String(),
+    });
+  }
+
+  /// Update join request status
+  static Future<bool> updateTeamJoinRequestStatus(String teamId, String userId, String status) async {
+    try {
+      final uri = Uri.parse('$supabaseUrl/rest/v1/team_join_requests?team_id=eq.$teamId&user_id=eq.$userId');
+      final resp = await http.patch(
+        uri,
+        headers: {
+          ..._headers,
+          'Content-Type': 'application/json',
+        },
+        body: jsonEncode({'status': status}),
+      );
+      return resp.statusCode == 200 || resp.statusCode == 204;
+    } catch (e) {
+      return false;
+    }
+  }
+
+  /// Get join requests for a team
+  static Future<List<Map<String, dynamic>>> getTeamJoinRequests(String teamId) async {
+    return await query('team_join_requests', filters: {'team_id': 'eq.$teamId', 'status': 'eq.pending'});
+  }
+
+  // --- 8. TEAM MATCHES TABLE ---
   /// Upsert a team match in public.team_matches
   static Future<bool> upsertTeamMatch(Map<String, dynamic> matchData) async {
     try {
@@ -389,16 +575,165 @@ class SupabaseService {
     }
   }
 
+  /// Get team matches
+  static Future<List<Map<String, dynamic>>> getTeamMatches({String? status}) async {
+    final Map<String, String> filters = {};
+    if (status != null && status != 'All') {
+      filters['status'] = 'eq.$status';
+    }
+    return await query('team_matches', filters: filters.isNotEmpty ? filters : null, order: 'match_time.desc');
+  }
+
+  /// Get single team match
+  static Future<Map<String, dynamic>?> getTeamMatch(String matchId) async {
+    final list = await query('team_matches', filters: {'match_id': 'eq.$matchId'}, limit: 1);
+    return list.isNotEmpty ? list.first : null;
+  }
+
+  // --- 9. MATCH CHAT TABLE ---
+  /// Send chat message in public.match_chat
+  static Future<bool> sendMatchChatMessage({
+    required String matchId,
+    String? roomId,
+    required String senderId,
+    required String senderName,
+    String? senderAvatar,
+    required String message,
+    String? imageUrl,
+    String messageType = 'text',
+  }) async {
+    return await insert('match_chat', {
+      'match_id': matchId,
+      if (roomId != null) 'room_id': roomId,
+      'sender_id': senderId,
+      'sender_name': senderName,
+      'sender_avatar': senderAvatar ?? '',
+      'message': message,
+      if (imageUrl != null && imageUrl.isNotEmpty) 'image_url': imageUrl,
+      'message_type': messageType,
+      'created_at': DateTime.now().toIso8601String(),
+    });
+  }
+
+  /// Get chat messages for a match
+  static Future<List<Map<String, dynamic>>> getMatchChat(String matchId, {int limit = 50}) async {
+    return await query('match_chat', filters: {'match_id': 'eq.$matchId'}, order: 'created_at.asc', limit: limit);
+  }
+
+  // --- 10. ROOMS TABLE ---
+  /// Save room in public.rooms
+  static Future<bool> saveRoom(Map<String, dynamic> roomData) async {
+    try {
+      final uri = Uri.parse('$supabaseUrl/rest/v1/rooms');
+      final response = await http.post(
+        uri,
+        headers: {
+          ..._headers,
+          'Content-Type': 'application/json',
+          'Prefer': 'resolution=merge-duplicates,return=representation',
+        },
+        body: jsonEncode(roomData),
+      );
+      return response.statusCode == 201 || response.statusCode == 200;
+    } catch (e) {
+      debugPrint('Supabase saveRoom error: $e');
+      return false;
+    }
+  }
+
+  /// Get rooms
+  static Future<List<Map<String, dynamic>>> getRooms({String? status, String? gameFilter}) async {
+    final Map<String, String> filters = {};
+    if (status != null && status != 'All') {
+      filters['status'] = 'eq.$status';
+    }
+    if (gameFilter != null && gameFilter != 'All') {
+      filters['game'] = 'eq.$gameFilter';
+    }
+    return await query('rooms', filters: filters.isNotEmpty ? filters : null, order: 'created_at.desc');
+  }
+
+  // --- 11. ROOM MEMBERS TABLE ---
+  /// Add member to custom room in public.room_members
+  static Future<bool> addRoomMember(Map<String, dynamic> memberData) async {
+    try {
+      final uri = Uri.parse('$supabaseUrl/rest/v1/room_members');
+      final response = await http.post(
+        uri,
+        headers: {
+          ..._headers,
+          'Content-Type': 'application/json',
+          'Prefer': 'resolution=merge-duplicates,return=representation',
+        },
+        body: jsonEncode(memberData),
+      );
+      return response.statusCode == 201 || response.statusCode == 200;
+    } catch (e) {
+      debugPrint('Supabase addRoomMember error: $e');
+      return false;
+    }
+  }
+
+  /// Get members of a room
+  static Future<List<Map<String, dynamic>>> getRoomMembers(String roomId) async {
+    return await query('room_members', filters: {'room_id': 'eq.$roomId'}, order: 'joined_at.asc');
+  }
+
+  // --- 12. COIN TRANSACTIONS TABLE (Virtual Coins Only) ---
+  /// Record in-game coin transaction in public.coin_transactions (Strictly virtual coins, no real cash)
+  static Future<bool> recordCoinTransaction({
+    required String userId,
+    required int amount,
+    required String type,
+    String? description,
+    int? balanceAfter,
+    String? referenceId,
+  }) async {
+    return await insert('coin_transactions', {
+      'user_id': userId,
+      'amount': amount,
+      'type': type,
+      'description': description ?? '',
+      if (balanceAfter != null) 'balance_after': balanceAfter,
+      if (referenceId != null) 'reference_id': referenceId,
+      'created_at': DateTime.now().toIso8601String(),
+    });
+  }
+
+  /// Get user's coin transaction history
+  static Future<List<Map<String, dynamic>>> getUserCoinTransactions(String userId, {int limit = 50}) async {
+    return await query('coin_transactions', filters: {'user_id': 'eq.$userId'}, order: 'created_at.desc', limit: limit);
+  }
+
+  // --- 13. NOTIFICATIONS TABLE ---
+  /// Save notification in public.notifications
+  static Future<bool> sendNotification(Map<String, dynamic> notifData) async {
+    return await insert('notifications', {
+      'user_id': notifData['userId'] ?? notifData['recipientUid'] ?? '',
+      'title': notifData['title'] ?? '',
+      'body': notifData['body'] ?? notifData['message'] ?? '',
+      'type': notifData['type'] ?? 'general',
+      if (notifData['data'] != null) 'data': notifData['data'],
+      'is_read': false,
+      'created_at': DateTime.now().toIso8601String(),
+    });
+  }
+
+  /// Get user notifications
+  static Future<List<Map<String, dynamic>>> getUserNotifications(String userId, {int limit = 50}) async {
+    return await query('notifications', filters: {'user_id': 'eq.$userId'}, order: 'created_at.desc', limit: limit);
+  }
+
   // --------------------------------------------------------------------------
   // 4. REALTIME UPDATES (Chat & Matches)
   // --------------------------------------------------------------------------
 
-  /// Stream of new chat messages for a room/match with active polling fallback
-  static Stream<List<Map<String, dynamic>>> getChatMessagesStream(String roomId) async* {
+  /// Stream of new chat messages for a match/room with active polling fallback
+  static Stream<List<Map<String, dynamic>>> getMatchChatStream(String matchId) async* {
     while (true) {
       final messages = await query(
-        'chat_messages',
-        filters: {'room_id': 'eq.$roomId'},
+        'match_chat',
+        filters: {'match_id': 'eq.$matchId'},
         order: 'created_at.asc',
         limit: 50,
       );
@@ -406,6 +741,9 @@ class SupabaseService {
       await Future.delayed(const Duration(seconds: 3));
     }
   }
+
+  /// Backward compatible alias for room/match chat stream
+  static Stream<List<Map<String, dynamic>>> getChatMessagesStream(String roomId) => getMatchChatStream(roomId);
 
   /// Stream of team match status changes
   static Stream<Map<String, dynamic>?> getTeamMatchStream(String matchId) async* {

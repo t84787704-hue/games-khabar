@@ -7,6 +7,7 @@ import '../models/coin_wallet_model.dart';
 import '../models/coin_transaction_model.dart';
 import 'gamer_auth_service.dart';
 import 'coin_reward_service.dart';
+import 'supabase_service.dart';
 
 class CoinWalletService extends ChangeNotifier {
   static final CoinWalletService _instance = CoinWalletService._internal();
@@ -160,6 +161,20 @@ class CoinWalletService extends ChangeNotifier {
       batch.set(firestore.collection('coin_transactions').doc(txId), txData);
 
       await batch.commit();
+
+      // Sync transaction to Supabase coin_transactions table
+      try {
+        await SupabaseService.recordCoinTransaction(
+          userId: userId,
+          amount: amount,
+          type: type,
+          description: description,
+          referenceId: roomId,
+        );
+      } catch (e) {
+        debugPrint('CoinWalletService: Supabase coin_transactions sync notice: $e');
+      }
+
       debugPrint('Coins updated: $userId $amount ($type) new balance will be auto via StreamBuilder');
     } catch (e) {
       debugPrint('updateCoins error: $e');

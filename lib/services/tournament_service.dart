@@ -5,6 +5,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import '../models/tournament_room_model.dart';
 import '../constants/tournament_game_categories.dart';
 import 'coin_wallet_service.dart';
+import 'supabase_service.dart';
 
 class TournamentService extends ChangeNotifier {
   static final TournamentService _instance = TournamentService._internal();
@@ -138,6 +139,27 @@ class TournamentService extends ChangeNotifier {
       await doc.set(publishedRoom.toMap());
     } catch (e) {
       debugPrint('TournamentService: publishRoom Firestore sync notice: $e');
+    }
+
+    // 5. Sync to Supabase rooms table
+    try {
+      await SupabaseService.saveRoom({
+        'room_id': publishedRoom.id,
+        'title': publishedRoom.title,
+        'game': publishedRoom.gameName.isNotEmpty ? publishedRoom.gameName : publishedRoom.gameType,
+        'mode': publishedRoom.roomType,
+        'map_name': publishedRoom.map,
+        'entry_coins': publishedRoom.entryFeeCoins,
+        'prize_coins': publishedRoom.prizeCoins,
+        'max_players': publishedRoom.maxSlots,
+        'current_players': publishedRoom.joinedPlayers.length,
+        'host_id': publishedRoom.hostId,
+        'host_name': publishedRoom.hostName,
+        'status': publishedRoom.status,
+        'created_at': DateTime.now().toIso8601String(),
+      });
+    } catch (e) {
+      debugPrint('TournamentService: Supabase room sync notice: $e');
     }
 
     return publishedRoom;
@@ -300,6 +322,19 @@ class TournamentService extends ChangeNotifier {
           'createdAt': FieldValue.serverTimestamp(),
         });
       }
+
+      // Sync to Supabase room_members table
+      try {
+        await SupabaseService.addRoomMember({
+          'room_id': roomId,
+          'user_id': playerUid,
+          'username': playerName,
+          'joined_at': DateTime.now().toIso8601String(),
+        });
+      } catch (e) {
+        debugPrint('TournamentService: Supabase room member sync notice: $e');
+      }
+
       return true;
     } catch (e) {
       debugPrint('TournamentService: joinRoom error: $e');
@@ -332,6 +367,11 @@ class TournamentService extends ChangeNotifier {
       await _roomsRef.doc(roomId).update({
         'joinedPlayers': FieldValue.arrayRemove([playerUid]),
       });
+
+      // Sync removal from Supabase room_members
+      try {
+        await SupabaseService.delete('room_members', 'user_id', playerUid);
+      } catch (_) {}
     } catch (e) {
       debugPrint('TournamentService: leaveRoom error: $e');
     }

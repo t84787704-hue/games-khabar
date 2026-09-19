@@ -5,6 +5,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import '../models/community_post_model.dart';
 import '../utils/admin_security.dart';
 import 'ad_free_service.dart';
+import 'supabase_service.dart';
 
 class CommunityService {
   static final CommunityService _instance = CommunityService._internal();
@@ -145,7 +146,23 @@ class CommunityService {
       createdAt: DateTime.now(),
     );
 
-    await FirebaseFirestore.instance.collection(_collectionName).add(post.toMap());
+    final docRef = await FirebaseFirestore.instance.collection(_collectionName).add(post.toMap());
+
+    // Sync to Supabase posts table
+    try {
+      await SupabaseService.savePost({
+        'post_id': docRef.id,
+        'user_id': _userId,
+        'username': _userName,
+        'content': trimmed,
+        'media_url': imageUrl,
+        'media_type': 'image',
+        'game': gameName,
+        'created_at': DateTime.now().toIso8601String(),
+      });
+    } catch (e) {
+      debugPrint('[CommunityService] Supabase post sync notice: $e');
+    }
   }
 
   /// Like a post
@@ -163,6 +180,13 @@ class CommunityService {
         'likes': FieldValue.increment(1),
       });
     } catch (_) {}
+
+    // Sync to Supabase likes table
+    try {
+      await SupabaseService.toggleLike(postId: postId, userId: _userId, username: _userName);
+    } catch (e) {
+      debugPrint('[CommunityService] Supabase like sync notice: $e');
+    }
   }
 
   bool isPostLiked(String postId) {
@@ -230,5 +254,17 @@ class CommunityService {
         'commentCount': FieldValue.increment(1),
       });
     } catch (_) {}
+
+    // Sync comment to Supabase comments table
+    try {
+      await SupabaseService.addComment(
+        postId: postId,
+        userId: _userId,
+        username: _userName,
+        content: trimmed,
+      );
+    } catch (e) {
+      debugPrint('[CommunityService] Supabase comment sync notice: $e');
+    }
   }
 }

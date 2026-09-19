@@ -436,6 +436,22 @@ class TeamMatchService {
         'isSystem': isSystem,
         'timestamp': FieldValue.serverTimestamp(),
       });
+
+      // Sync message to Supabase match_chat table
+      try {
+        await SupabaseService.sendMatchChatMessage(
+          matchId: matchId,
+          senderId: senderId,
+          senderName: senderName,
+          senderAvatar: senderAvatar,
+          message: text.trim().isNotEmpty ? text.trim() : (imageUrl.isNotEmpty ? '📷 Image' : ''),
+          imageUrl: imageUrl,
+          messageType: isSystem ? 'system' : (imageUrl.isNotEmpty ? 'image' : 'text'),
+        );
+      } catch (e) {
+        debugPrint('[TeamMatchService] Supabase match_chat sync notice: $e');
+      }
+
       return true;
     } catch (e) {
       debugPrint('[TeamMatchService] Error sending chat: $e');
