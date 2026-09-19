@@ -14,6 +14,7 @@ class TournamentRoom {
   final String entryFee; // 'FREE' or '50 Coins'
   final String prize; // '💰 500 Coins Prize'
   final int prizePoolCoins;
+  int get prizeCoins => prizePoolCoins;
   final int entryFeeCoins;
   final int escrowCoins;
   final String status; // 'OPEN', 'IN_PROGRESS', 'COMPLETED', 'EXPIRED', 'CANCELED'

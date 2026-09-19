@@ -150,7 +150,7 @@ class TournamentService extends ChangeNotifier {
         'mode': publishedRoom.roomType,
         'map_name': publishedRoom.map,
         'entry_coins': publishedRoom.entryFeeCoins,
-        'prize_coins': publishedRoom.prizeCoins,
+        'prize_coins': publishedRoom.prizePoolCoins,
         'max_players': publishedRoom.maxSlots,
         'current_players': publishedRoom.joinedPlayers.length,
         'host_id': publishedRoom.hostId,
