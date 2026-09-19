@@ -8,7 +8,7 @@ import 'package:firebase_storage/firebase_storage.dart';
 import 'package:image_picker/image_picker.dart';
 import '../constants/gamer_theme.dart';
 import '../models/squad_post_model.dart';
-import '../services/cloudinary_service.dart';
+import '../services/supabase_service.dart';
 import '../services/gamer_auth_service.dart';
 import '../services/lfg_service.dart';
 import '../widgets/gamer_avatar.dart';
@@ -333,9 +333,13 @@ class _SquadChatScreenState extends State<SquadChatScreen> {
     }
   }
 
-  /// Uploads proof screenshot to Cloudinary using folder match_proofs
+  /// Uploads proof screenshot to Supabase Storage using folder match_proofs
   Future<String?> _uploadProofScreenshot(File imageFile, String uid, String squadId) async {
-    return await CloudinaryService.uploadFile(file: imageFile, folder: 'match_proofs');
+    return await SupabaseService.uploadFile(
+      file: imageFile,
+      folder: 'match_proofs',
+      bucket: SupabaseService.bucketMatchProofs,
+    );
   }
 
   /// Opens dialog for submitting a Win Proof message in squad chat
@@ -673,9 +677,13 @@ class _SquadChatScreenState extends State<SquadChatScreen> {
                                 final senderAvatar = user?.photoUrl ?? '';
                                 final note = noteController.text.trim();
 
-                                // Upload screenshot to Cloudinary
+                                // Upload screenshot to Supabase Storage
                                 File pickedFile = proofImage!;
-                                String? url = await CloudinaryService.uploadFile(file: pickedFile, folder: 'match_proofs');
+                                String? url = await SupabaseService.uploadFile(
+                                  file: pickedFile,
+                                  folder: 'match_proofs',
+                                  bucket: SupabaseService.bucketMatchProofs,
+                                );
                                 if (url == null) {
                                   if (mounted) {
                                     setModalState(() => isSubmitting = false);

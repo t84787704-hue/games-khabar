@@ -11,7 +11,7 @@ import '../constants/gamer_theme.dart';
 import '../models/team_match_model.dart';
 import '../services/gamer_auth_service.dart';
 import '../services/team_match_service.dart';
-import '../services/cloudinary_service.dart';
+import '../services/supabase_service.dart';
 
 class TeamMatchRoomScreen extends StatefulWidget {
   final String matchId;
@@ -191,7 +191,11 @@ class _TeamMatchRoomScreenState extends State<TeamMatchRoomScreen> with SingleTi
       const SnackBar(content: Text('Uploading image to chat...'), duration: Duration(seconds: 2)),
     );
 
-    final url = await CloudinaryService.uploadFile(file: File(picked.path), folder: 'match_chat');
+    final url = await SupabaseService.uploadFile(
+      file: File(picked.path),
+      folder: 'match_chat',
+      bucket: SupabaseService.bucketUploads,
+    );
     if (url != null && mounted) {
       final currentGamer = GamerAuthService().currentGamer;
       final teamName = isTeam1 ? match.team1Name : match.team2Name;

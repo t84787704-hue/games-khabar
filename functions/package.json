@@ -13,8 +13,9 @@
   },
   "main": "index.js",
   "dependencies": {
+    "@supabase/supabase-js": "^2.116.0",
+    "axios": "^1.7.2",
     "firebase-admin": "^12.1.0",
-    "firebase-functions": "^5.0.0",
-    "axios": "^1.7.2"
+    "firebase-functions": "^5.0.0"
   }
 }

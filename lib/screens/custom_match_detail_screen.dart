@@ -4,7 +4,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:image_picker/image_picker.dart';
 import '../models/gamer_theme.dart';
 import '../services/win_proof_validator.dart';
-import '../services/cloudinary_service.dart';
+import '../services/supabase_service.dart';
 
 class CustomMatchDetailScreen extends StatefulWidget {
   final String roomId;
@@ -45,10 +45,11 @@ class _CustomMatchDetailScreenState extends State<CustomMatchDetailScreen> {
         _isUploadingProof = true;
       });
 
-      // 1. Upload screenshot to Cloudinary
-      final uploadedUrl = await CloudinaryService.uploadFile(
+      // 1. Upload screenshot to Supabase Storage
+      final uploadedUrl = await SupabaseService.uploadFile(
         file: file,
         folder: 'win_proofs',
+        bucket: SupabaseService.bucketMatchProofs,
       );
 
       if (uploadedUrl == null || uploadedUrl.isEmpty) {
@@ -363,9 +364,10 @@ class _CustomMatchDetailScreenState extends State<CustomMatchDetailScreen> {
                                 });
 
                                 try {
-                                  final disputeUrl = await CloudinaryService.uploadFile(
+                                  final disputeUrl = await SupabaseService.uploadFile(
                                     file: disputeImage!,
                                     folder: 'dispute_proofs',
+                                    bucket: SupabaseService.bucketMatchProofs,
                                   );
 
                                   if (disputeUrl == null || disputeUrl.isEmpty) {

@@ -2,7 +2,7 @@ import 'dart:io';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/foundation.dart';
 import '../models/team_model.dart';
-import 'cloudinary_service.dart';
+import 'supabase_service.dart';
 
 class TeamService {
   static final TeamService _instance = TeamService._internal();
@@ -29,9 +29,10 @@ class TeamService {
     try {
       String logoUrl = '';
       if (logoFile != null) {
-        logoUrl = await CloudinaryService.uploadFile(
+        logoUrl = await SupabaseService.uploadFile(
               file: logoFile,
               folder: 'team_logos',
+              bucket: SupabaseService.bucketUploads,
             ) ??
             '';
       }

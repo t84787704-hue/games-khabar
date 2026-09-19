@@ -14,7 +14,7 @@ import '../services/gamer_auth_service.dart';
 import '../services/tournament_service.dart';
 import '../services/coin_wallet_service.dart';
 import '../services/ad_free_service.dart';
-import '../services/cloudinary_service.dart';
+import '../services/supabase_service.dart';
 import '../services/win_proof_validator.dart';
 import 'coin_store_screen.dart';
 import '../widgets/coin_history_sheet.dart';
@@ -2476,9 +2476,10 @@ class _InRoomBottomSheetContentState extends State<_InRoomBottomSheetContent> {
                                 });
 
                                 try {
-                                  final disputeUrl = await CloudinaryService.uploadFile(
+                                  final disputeUrl = await SupabaseService.uploadFile(
                                     file: disputeImage!,
                                     folder: 'dispute_proofs',
+                                    bucket: SupabaseService.bucketMatchProofs,
                                   );
 
                                   if (disputeUrl == null || disputeUrl.isEmpty) {
@@ -3012,10 +3013,11 @@ class _InRoomBottomSheetContentState extends State<_InRoomBottomSheetContent> {
         roomId: room.id,
       );
 
-      // 3. Upload new image
-      final uploadedUrl = await CloudinaryService.uploadFile(
+      // 3. Upload new image to Supabase Storage
+      final uploadedUrl = await SupabaseService.uploadFile(
         file: file,
         folder: 'win_proofs',
+        bucket: SupabaseService.bucketMatchProofs,
       );
 
       if (uploadedUrl == null || uploadedUrl.isEmpty) {
@@ -3133,10 +3135,11 @@ class _InRoomBottomSheetContentState extends State<_InRoomBottomSheetContent> {
           roomId: widget.room.id,
         );
 
-        // 2. Upload to Cloudinary folder win_proofs
-        String? uploadedUrl = await CloudinaryService.uploadFile(
+        // 2. Upload to Supabase Storage folder win_proofs
+        String? uploadedUrl = await SupabaseService.uploadFile(
           file: _selectedProofImage!,
           folder: 'win_proofs',
+          bucket: SupabaseService.bucketMatchProofs,
         );
 
         if (uploadedUrl == null || uploadedUrl.isEmpty) {

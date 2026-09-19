@@ -1,0 +1,13 @@
+{
+  "name": "gamers-id-network",
+  "version": "1.0.0",
+  "description": "GAMERS ID NETWORK - Supabase integration",
+  "main": "lib/supabase.js",
+  "type": "module",
+  "dependencies": {
+    "@supabase/supabase-js": "^2.116.0"
+  },
+  "scripts": {
+    "test": "node lib/supabase.js"
+  }
+}

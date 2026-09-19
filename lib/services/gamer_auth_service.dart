@@ -8,7 +8,7 @@ import 'package:firebase_storage/firebase_storage.dart';
 import 'package:google_sign_in/google_sign_in.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../models/gamer_user_model.dart';
-import 'cloudinary_service.dart';
+import 'supabase_service.dart';
 import 'notification_service.dart';
 
 class GamerAuthService {
@@ -233,15 +233,49 @@ class GamerAuthService {
     return cred;
   }
 
-  /// Uploads user avatar photo directly to Cloudinary
+  /// Sign Up with Supabase Auth
+  Future<Map<String, dynamic>?> signUpWithSupabase({
+    required String email,
+    required String password,
+    String? username,
+  }) async {
+    final res = await SupabaseService.signUpWithEmail(
+      email: email,
+      password: password,
+      userMetadata: {
+        'username': username ?? email.split('@').first,
+        'app': 'GAMERS ID NETWORK',
+      },
+    );
+    return res;
+  }
+
+  /// Sign In with Supabase Auth
+  Future<Map<String, dynamic>?> signInWithSupabase({
+    required String email,
+    required String password,
+  }) async {
+    final res = await SupabaseService.signInWithEmail(
+      email: email,
+      password: password,
+    );
+    return res;
+  }
+
+  /// Uploads user avatar photo directly to Supabase Storage
   Future<String> uploadProfilePhoto(File imageFile, String uid) async {
     try {
-      final url = await CloudinaryService.uploadFile(file: imageFile, folder: 'user_avatars');
+      final url = await SupabaseService.uploadFile(
+        file: imageFile,
+        folder: 'user_avatars',
+        bucket: SupabaseService.bucketAvatars,
+        customFileName: 'avatar_${uid}_${DateTime.now().millisecondsSinceEpoch}.jpg',
+      );
       if (url != null && url.isNotEmpty) {
         return url;
       }
     } catch (e) {
-      debugPrint('Cloudinary avatar upload notice: $e');
+      debugPrint('Supabase avatar upload notice: $e');
     }
 
     try {
@@ -256,15 +290,20 @@ class GamerAuthService {
     }
   }
 
-  /// Uploads user cover photo directly to Cloudinary or Firebase Storage
+  /// Uploads user cover photo directly to Supabase Storage
   Future<String> uploadCoverPhoto(File imageFile, String uid) async {
     try {
-      final url = await CloudinaryService.uploadFile(file: imageFile, folder: 'user_covers');
+      final url = await SupabaseService.uploadFile(
+        file: imageFile,
+        folder: 'user_covers',
+        bucket: SupabaseService.bucketCovers,
+        customFileName: 'cover_${uid}_${DateTime.now().millisecondsSinceEpoch}.jpg',
+      );
       if (url != null && url.isNotEmpty) {
         return url;
       }
     } catch (e) {
-      debugPrint('Cloudinary cover upload notice: $e');
+      debugPrint('Supabase cover upload notice: $e');
     }
 
     try {
@@ -279,15 +318,20 @@ class GamerAuthService {
     }
   }
 
-  /// Uploads rank proof screenshot to Cloudinary, Firebase Storage, or Base64
+  /// Uploads rank proof screenshot to Supabase Storage
   Future<String> uploadRankScreenshot(File imageFile, String uid) async {
     try {
-      final url = await CloudinaryService.uploadFile(file: imageFile, folder: 'rank_proofs');
+      final url = await SupabaseService.uploadFile(
+        file: imageFile,
+        folder: 'rank_proofs',
+        bucket: SupabaseService.bucketMatchProofs,
+        customFileName: 'rank_${uid}_${DateTime.now().millisecondsSinceEpoch}.jpg',
+      );
       if (url != null && url.isNotEmpty) {
         return url;
       }
     } catch (e) {
-      debugPrint('Cloudinary rank screenshot upload notice: $e');
+      debugPrint('Supabase rank screenshot upload notice: $e');
     }
 
     try {

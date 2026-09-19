@@ -155,7 +155,7 @@ class BackgroundUploadManager {
         );
 
         if (uploadResult == null || uploadResult['secure_url'] == null) {
-          throw Exception("Cloudinary unsigned preset or Firebase Storage not configured.");
+          throw Exception("Storage upload failed. Please check your network and try again.");
         }
 
         final String videoUrl = uploadResult['secure_url'].toString();

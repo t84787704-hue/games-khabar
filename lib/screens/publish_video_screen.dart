@@ -417,7 +417,7 @@ class _PublishVideoScreenState extends State<PublishVideoScreen> {
             Icon(Icons.cloud_upload_rounded, color: Colors.white, size: 20),
             SizedBox(width: 8),
             Expanded(
-              child: Text('Uploading 720p HD clip to Cloudinary in background... 🚀'),
+              child: Text('Uploading 720p HD clip to Supabase Storage in background... 🚀'),
             ),
           ],
         ),

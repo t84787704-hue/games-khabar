@@ -3,7 +3,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/foundation.dart';
 import '../models/team_match_model.dart';
 import '../models/team_ranking_model.dart';
-import 'cloudinary_service.dart';
+import 'supabase_service.dart';
 
 class TeamMatchService {
   static final TeamMatchService _instance = TeamMatchService._internal();
@@ -292,9 +292,10 @@ class TeamMatchService {
         };
       }
 
-      final imageUrl = await CloudinaryService.uploadFile(
+      final imageUrl = await SupabaseService.uploadFile(
         file: imageFile,
         folder: 'team_match_proofs',
+        bucket: SupabaseService.bucketMatchProofs,
       );
       if (imageUrl == null || imageUrl.isEmpty) {
         return {'success': false, 'error': 'تصویر اپلوڈ نہیں ہو سکی'};

@@ -51,7 +51,7 @@ class _PostCardState extends State<PostCard> {
   String? get imageUrl => (widget.post is GamerPost) ? (widget.post as GamerPost).imageUrl : widget.post?.imageUrl?.toString();
   String? get videoUrl => (widget.post is GamerPost)
       ? (widget.post as GamerPost).videoUrl
-      : (widget.post?.videoUrl ?? widget.post?.cloudinaryUrl ?? widget.post?.video)?.toString();
+      : (widget.post?.videoUrl ?? widget.post?.mediaUrl ?? widget.post?.video)?.toString();
   int get likesCount => (widget.post is GamerPost) ? (widget.post as GamerPost).likesCount : (widget.post?.likesCount ?? 0);
   int get commentsCount => (widget.post is GamerPost) ? (widget.post as GamerPost).commentsCount : (widget.post?.commentsCount ?? 0);
   DateTime? get createdAt => (widget.post is GamerPost) ? (widget.post as GamerPost).createdAt : widget.post?.createdAt;
