@@ -1644,7 +1644,7 @@ class _GamerProfileScreenState extends State<GamerProfileScreen> with SingleTick
             body: TabBarView(
               controller: _tabController,
               children: [
-                // Tab 1: Posts Tab (Shows merged text posts & Cloudinary video clips)
+                // Tab 1: Posts Tab (Shows merged text posts & video clips)
                 PostsTab(
                   user: user,
                   isOwnProfile: isOwnProfile,

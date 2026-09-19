@@ -305,6 +305,90 @@ class SupabaseService {
     return [];
   }
 
+  /// Upsert a user in public.users
+  static Future<bool> upsertUser(Map<String, dynamic> userData) async {
+    try {
+      final uri = Uri.parse('$supabaseUrl/rest/v1/users');
+      final response = await http.post(
+        uri,
+        headers: {
+          ..._headers,
+          'Content-Type': 'application/json',
+          'Prefer': 'resolution=merge-duplicates,return=representation',
+        },
+        body: jsonEncode(userData),
+      );
+      return response.statusCode == 201 || response.statusCode == 200;
+    } catch (e) {
+      debugPrint('Supabase upsertUser error: $e');
+      return false;
+    }
+  }
+
+  /// Send a chat message in public.chat_messages
+  static Future<bool> sendChatMessage({
+    String? roomId,
+    String? matchId,
+    required String senderId,
+    required String senderName,
+    String? senderAvatar,
+    required String message,
+    String? imageUrl,
+    String messageType = 'text',
+  }) async {
+    return await insert('chat_messages', {
+      if (roomId != null) 'room_id': roomId,
+      if (matchId != null) 'match_id': matchId,
+      'sender_id': senderId,
+      'sender_name': senderName,
+      'sender_avatar': senderAvatar ?? '',
+      'message': message,
+      if (imageUrl != null) 'image_url': imageUrl,
+      'message_type': messageType,
+      'created_at': DateTime.now().toIso8601String(),
+    });
+  }
+
+  /// Record an in-game coin transaction in public.coin_transactions (Strictly virtual coins, no real cash)
+  static Future<bool> recordCoinTransaction({
+    required String userId,
+    required int amount,
+    required String type,
+    String? description,
+    int? balanceAfter,
+    String? referenceId,
+  }) async {
+    return await insert('coin_transactions', {
+      'user_id': userId,
+      'amount': amount,
+      'type': type,
+      'description': description ?? '',
+      if (balanceAfter != null) 'balance_after': balanceAfter,
+      if (referenceId != null) 'reference_id': referenceId,
+      'created_at': DateTime.now().toIso8601String(),
+    });
+  }
+
+  /// Upsert a team match in public.team_matches
+  static Future<bool> upsertTeamMatch(Map<String, dynamic> matchData) async {
+    try {
+      final uri = Uri.parse('$supabaseUrl/rest/v1/team_matches');
+      final response = await http.post(
+        uri,
+        headers: {
+          ..._headers,
+          'Content-Type': 'application/json',
+          'Prefer': 'resolution=merge-duplicates,return=representation',
+        },
+        body: jsonEncode(matchData),
+      );
+      return response.statusCode == 201 || response.statusCode == 200;
+    } catch (e) {
+      debugPrint('Supabase upsertTeamMatch error: $e');
+      return false;
+    }
+  }
+
   // --------------------------------------------------------------------------
   // 4. REALTIME UPDATES (Chat & Matches)
   // --------------------------------------------------------------------------

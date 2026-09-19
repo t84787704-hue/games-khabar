@@ -106,6 +106,27 @@ class TeamMatchService {
 
       await matchDoc.set(match.toMap());
 
+      // Synchronize match to Supabase team_matches table
+      try {
+        await SupabaseService.upsertTeamMatch({
+          'match_id': matchDoc.id,
+          'team1_id': team1Id,
+          'team1_name': team1Name,
+          'team1_leader_id': team1LeaderId,
+          'team1_leader_name': team1LeaderName,
+          'team2_id': team2Id,
+          'team2_name': team2Name,
+          'team2_leader_id': team2LeaderId,
+          'team2_leader_name': team2LeaderName,
+          'game': game,
+          'mode': mode,
+          'status': 'Pending',
+          'match_time': matchTime.toIso8601String(),
+        });
+      } catch (sbErr) {
+        debugPrint('Supabase match sync notice: $sbErr');
+      }
+
       // Send in-app notification to Team 2 Leader:
       // "آپ کو [ٹیم کا نام] کی طرف سے چیلنج ملا ہے"
       await _notificationsRef.add({
@@ -324,6 +345,18 @@ class TeamMatchService {
       }
 
       await _matchesRef.doc(matchId).update(updateData);
+
+      // Synchronize proof and status to Supabase team_matches table
+      try {
+        await SupabaseService.update('team_matches', {
+          if (isTeam1) 'team1_proof': imageUrl else 'team2_proof': imageUrl,
+          'status': 'Proof Submitted',
+          'proof_attempts': newAttempts,
+          'last_proof_at': DateTime.now().toIso8601String(),
+        }, 'match_id', matchId);
+      } catch (sbErr) {
+        debugPrint('Supabase match proof update notice: $sbErr');
+      }
 
       // 2.1 نئے ثبوت کی اطلاع ایڈمن کو جائے
       try {

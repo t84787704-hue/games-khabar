@@ -13,7 +13,7 @@ import 'fast_chunked_upload.dart';
 /// 3. Target size: under 90MB for a 2-min clip
 /// 4. If still > 100MB, re-compress with 1000k bitrate
 /// 5. No early 100MB error check; only check AFTER compression
-/// 6. Upload cleanly to Cloudinary
+/// 6. Upload cleanly to Supabase Storage
 class VideoUploadService {
   static final VideoUploadService _instance = VideoUploadService._internal();
   factory VideoUploadService() => _instance;
@@ -220,7 +220,7 @@ class VideoUploadService {
     }
   }
 
-  /// Upload compressed video to Cloudinary with fallback
+  /// Upload compressed video to Supabase Storage with fallback
   static Future<Map<String, dynamic>?> uploadVideo({
     required File file,
     String? caption,

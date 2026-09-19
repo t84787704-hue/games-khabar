@@ -147,6 +147,12 @@ class GamerAuthService {
         email: email.trim(),
         password: password,
       );
+      // Synchronize with Supabase Auth
+      try {
+        await SupabaseService.signInWithEmail(email: email.trim(), password: password);
+      } catch (sbErr) {
+        debugPrint('Supabase signin sync notice: $sbErr');
+      }
       await refreshCurrentGamer();
       return cred;
     } on FirebaseAuthException catch (e) {
@@ -191,6 +197,16 @@ class GamerAuthService {
       email: email.trim(),
       password: password,
     );
+    // Synchronize with Supabase Auth
+    try {
+      await SupabaseService.signUpWithEmail(
+        email: email.trim(),
+        password: password,
+        userMetadata: {'app': 'GAMERS ID NETWORK', 'uid': cred.user?.uid},
+      );
+    } catch (sbErr) {
+      debugPrint('Supabase signup sync notice: $sbErr');
+    }
     await refreshCurrentGamer();
     return cred;
   }
@@ -376,6 +392,28 @@ class GamerAuthService {
 
     final realCoins = (userMap['coins'] as num?)?.toInt() ?? user.coins;
     currentGamerNotifier.value = user.copyWith(coins: realCoins);
+
+    // Synchronize user profile with Supabase public.users table
+    try {
+      final supabaseUser = {
+        'uid': user.uid,
+        'username': user.username,
+        'email': user.email,
+        'display_name': user.displayName,
+        'avatar_url': user.avatarUrl,
+        'cover_url': user.coverUrl,
+        'bio': user.bio,
+        'game_id': user.gameId,
+        'game_name': user.gameName,
+        'gamer_rank': user.gamerRank,
+        'coins': realCoins,
+        'is_verified': user.isVerified,
+        'updated_at': DateTime.now().toIso8601String(),
+      };
+      await SupabaseService.upsertUser(supabaseUser);
+    } catch (e) {
+      debugPrint('Supabase user sync error: $e');
+    }
   }
 
   /// Fetch any user's profile by UID
