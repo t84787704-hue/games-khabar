@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import 'package:cloud_firestore/cloud_firestore.dart';
 import 'gamer_user_model.dart';
 
 class GamerPost {
@@ -91,12 +90,14 @@ class GamerPost {
   factory GamerPost.fromMap(Map<String, dynamic> data) {
     DateTime? created;
     final rawCreated = data['created_at'] ?? data['createdAt'];
-    if (rawCreated is Timestamp) {
-      created = rawCreated.toDate();
+    if (rawCreated is DateTime) {
+      created = rawCreated;
     } else if (rawCreated is String) {
       created = DateTime.tryParse(rawCreated);
-    } else if (rawCreated is DateTime) {
-      created = rawCreated;
+    } else if (rawCreated != null) {
+      try {
+        created = (rawCreated as dynamic).toDate();
+      } catch (_) {}
     }
 
     return GamerPost(
@@ -119,30 +120,46 @@ class GamerPost {
     );
   }
 
-  factory GamerPost.fromFirestore(DocumentSnapshot doc) {
-    final data = doc.data() as Map<String, dynamic>? ?? {};
+  factory GamerPost.fromFirestore(dynamic doc) {
+    Map<String, dynamic> data = {};
+    String docId = '';
+    try {
+      docId = doc.id?.toString() ?? '';
+      data = doc.data() as Map<String, dynamic>? ?? {};
+    } catch (_) {
+      if (doc is Map<String, dynamic>) {
+        data = doc;
+        docId = data['postId']?.toString() ?? data['id']?.toString() ?? '';
+      }
+    }
     DateTime? created;
-    final rawCreated = data['createdAt'];
-    if (rawCreated is Timestamp) {
-      created = rawCreated.toDate();
-    } else if (rawCreated is String) {
-      created = DateTime.tryParse(rawCreated);
+    final rawCreated = data['createdAt'] ?? data['created_at'];
+    if (rawCreated != null) {
+      if (rawCreated is DateTime) {
+        created = rawCreated;
+      } else if (rawCreated is String) {
+        created = DateTime.tryParse(rawCreated);
+      } else {
+        try {
+          created = (rawCreated as dynamic).toDate();
+        } catch (_) {}
+      }
     }
 
     return GamerPost(
-      postId: data['postId'] ?? doc.id,
-      userId: data['userId'] ?? '',
+      postId: data['postId'] ?? data['id'] ?? docId,
+      userId: data['userId'] ?? data['user_id'] ?? '',
       username: data['username'] ?? 'gamer',
-      userPhoto: data['userPhoto'] ?? '',
+      userPhoto: data['userPhoto'] ?? data['user_avatar'] ?? '',
       displayName: data['displayName'] ?? 'Gamer',
-      text: data['text'] ?? '',
-      imageUrl: data['imageUrl'] as String?,
-      videoUrl: (data['videoUrl'] ?? data['mediaUrl']) as String?,
-      gameTag: data['gameTag'] ?? 'BGMI',
+      text: data['text'] ?? data['content'] ?? '',
+      imageUrl: (data['imageUrl'] ?? data['image_url']) as String?,
+      videoUrl: (data['videoUrl'] ?? data['video_url'] ?? data['mediaUrl']) as String?,
+      gameTag: data['gameTag'] ?? data['game'] ?? 'BGMI',
       userRank: data['userRank'] ?? 'Ace',
       userKd: (data['userKd'] as num?)?.toDouble() ?? 0.0,
-      likesCount: (data['likesCount'] as num?)?.toInt() ?? 0,
-      commentsCount: (data['commentsCount'] as num?)?.toInt() ?? 0,
+      likesCount: (data['likesCount'] ?? data['likes_count'] as num?)?.toInt() ?? 0,
+      commentsCount: (data['commentsCount'] ?? data['comments_count'] as num?)?.toInt() ?? 0,
       isVerified: data['isVerified'] == true,
       isDemoAccount: data['isDemoAccount'] == true,
       createdAt: created,
@@ -169,7 +186,7 @@ class GamerPost {
       'commentsCount': commentsCount,
       'isVerified': isVerified,
       'isDemoAccount': isDemoAccount,
-      'createdAt': createdAt != null ? Timestamp.fromDate(createdAt!) : FieldValue.serverTimestamp(),
+      'createdAt': createdAt?.toIso8601String() ?? DateTime.now().toIso8601String(),
     };
   }
 

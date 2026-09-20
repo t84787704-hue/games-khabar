@@ -14,6 +14,39 @@ class GamerSocialService {
 
   SupabaseClient get _supabase => SupabaseService.client;
 
+  /// Notifier to instantly inform Feed of new posts
+  final ValueNotifier<int> feedRefreshNotifier = ValueNotifier<int>(0);
+
+  /// Ensure user exists in Supabase users table before foreign key operations
+  Future<void> _ensureUserExists({
+    required String userId,
+    required String username,
+    required String displayName,
+    required String userPhoto,
+  }) async {
+    try {
+      final existing = await _supabase
+          .from('users')
+          .select('id, uid')
+          .or('id.eq.$userId,uid.eq.$userId')
+          .maybeSingle();
+
+      if (existing == null) {
+        await _supabase.from('users').upsert({
+          'id': userId,
+          'uid': userId,
+          'username': username.isNotEmpty ? username : 'gamer_${userId.substring(0, userId.length > 5 ? 5 : userId.length)}',
+          'display_name': displayName.isNotEmpty ? displayName : 'Gamer',
+          'avatar_url': userPhoto,
+          'created_at': DateTime.now().toIso8601String(),
+        });
+        debugPrint('[GamerSocialService] Synced user to Supabase: $userId');
+      }
+    } catch (e) {
+      debugPrint('[GamerSocialService] Note on user sync: $e');
+    }
+  }
+
   // ==========================================
   // FOLLOW SYSTEM (Supabase)
   // ==========================================
@@ -128,10 +161,23 @@ class GamerSocialService {
     final finalMedia = imageUrl ?? mediaUrl;
     final finalVideo = videoUrl;
 
+    debugPrint('[GamerSocialService] Attempting to create post for user: $userId');
+
+    // Make sure user exists in Supabase users table to satisfy foreign key constraint
+    await _ensureUserExists(
+      userId: userId,
+      username: username,
+      displayName: displayName,
+      userPhoto: userPhoto,
+    );
+
     try {
       final response = await _supabase.from('posts').insert({
         'user_id': userId,
+        'username': username.isNotEmpty ? username : 'gamer',
+        'user_avatar': userPhoto,
         'content': postContent,
+        'media_url': finalMedia ?? finalVideo,
         'image_url': finalMedia,
         'video_url': finalVideo,
         'game': finalGame,
@@ -139,11 +185,15 @@ class GamerSocialService {
         'comments_count': 0,
       }).select().single();
 
-      debugPrint('[GamerSocialService] Post saved: ${response['id']}');
+      debugPrint('[GamerSocialService] Post saved successfully: ${response['id']}');
+
+      // Trigger feed refresh instantly
+      feedRefreshNotifier.value++;
+
       return response['id'].toString();
     } catch (e) {
       debugPrint('[GamerSocialService] Error saving post: $e');
-      return '';
+      rethrow;
     }
   }
 

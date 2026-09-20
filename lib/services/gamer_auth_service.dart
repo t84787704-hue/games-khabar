@@ -216,15 +216,36 @@ class GamerAuthService {
       email: email.trim(),
       password: password,
     );
-    // Synchronize with Supabase Auth
+    // Synchronize with Supabase Auth and insert into public.users table immediately
     try {
-      await SupabaseService.signUpWithEmail(
-        email: email.trim(),
+      final cleanEmail = email.trim();
+      final defaultUsername = cleanEmail.split('@').first;
+      final authRes = await SupabaseService.signUpWithEmail(
+        email: cleanEmail,
         password: password,
-        userMetadata: {'app': 'GAMERS ID NETWORK', 'uid': cred.user?.uid},
+        userMetadata: {
+          'app': 'GAMERS ID NETWORK',
+          'uid': cred.user?.uid,
+          'username': defaultUsername,
+          'display_name': defaultUsername,
+        },
       );
+
+      final supabaseAuthId = authRes?['user']?['id']?.toString() ?? cred.user?.uid;
+      if (supabaseAuthId != null) {
+        await SupabaseService.client.from('users').upsert({
+          'id': supabaseAuthId,
+          'uid': supabaseAuthId,
+          'email': cleanEmail,
+          'username': defaultUsername,
+          'display_name': defaultUsername,
+          'avatar_url': '',
+          'created_at': DateTime.now().toIso8601String(),
+        });
+        debugPrint('[AuthService] Supabase user row created successfully: $supabaseAuthId');
+      }
     } catch (sbErr) {
-      debugPrint('Supabase signup sync notice: $sbErr');
+      debugPrint('Supabase signup & user sync notice: $sbErr');
     }
     await refreshCurrentGamer();
     return cred;
@@ -273,15 +294,40 @@ class GamerAuthService {
     required String email,
     required String password,
     String? username,
+    String? displayName,
+    String? avatarUrl,
   }) async {
+    final cleanEmail = email.trim();
+    final defaultUsername = username ?? cleanEmail.split('@').first;
+    final defaultDisplayName = displayName ?? defaultUsername;
+
     final res = await SupabaseService.signUpWithEmail(
-      email: email,
+      email: cleanEmail,
       password: password,
       userMetadata: {
-        'username': username ?? email.split('@').first,
+        'username': defaultUsername,
+        'display_name': defaultDisplayName,
         'app': 'GAMERS ID NETWORK',
       },
     );
+
+    final supabaseAuthId = res?['user']?['id']?.toString();
+    if (supabaseAuthId != null) {
+      try {
+        await SupabaseService.client.from('users').upsert({
+          'id': supabaseAuthId,
+          'uid': supabaseAuthId,
+          'email': cleanEmail,
+          'username': defaultUsername,
+          'display_name': defaultDisplayName,
+          'avatar_url': avatarUrl ?? '',
+          'created_at': DateTime.now().toIso8601String(),
+        });
+        debugPrint('[AuthService] Supabase user record created for $supabaseAuthId');
+      } catch (e) {
+        debugPrint('[AuthService] Error writing user to Supabase table: $e');
+      }
+    }
     return res;
   }
 
@@ -416,6 +462,7 @@ class GamerAuthService {
     try {
       final userEmail = userMap['email']?.toString() ?? user.email;
       final supabaseUser = {
+        'id': user.uid,
         'uid': user.uid,
         'username': user.username,
         'email': userEmail,
@@ -430,7 +477,7 @@ class GamerAuthService {
         'is_verified': user.isVerified,
         'updated_at': DateTime.now().toIso8601String(),
       };
-      await SupabaseService.upsertUser(supabaseUser);
+      await SupabaseService.client.from('users').upsert(supabaseUser);
     } catch (e) {
       debugPrint('Supabase user sync error: $e');
     }

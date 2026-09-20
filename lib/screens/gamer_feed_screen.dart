@@ -51,6 +51,24 @@ class _GamerFeedScreenState extends State<GamerFeedScreen> {
   String _feedMode = 'all';
   String _selectedGameTag = 'All';
 
+  @override
+  void initState() {
+    super.initState();
+    _socialService.feedRefreshNotifier.addListener(_onFeedNeedsRefresh);
+  }
+
+  @override
+  void dispose() {
+    _socialService.feedRefreshNotifier.removeListener(_onFeedNeedsRefresh);
+    super.dispose();
+  }
+
+  void _onFeedNeedsRefresh() {
+    if (mounted) {
+      setState(() {});
+    }
+  }
+
   final List<String> _gameFilters = [
     'All',
     'PUBG',
