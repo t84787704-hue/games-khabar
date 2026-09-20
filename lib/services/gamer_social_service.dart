@@ -1,11 +1,12 @@
 import 'dart:async';
 import 'package:flutter/foundation.dart';
-import 'package:supabase/supabase.dart'; // Direct Supabase dart SDK stream & query integration
+import 'package:supabase/supabase.dart';
 import '../models/gamer_user_model.dart';
 import '../models/gamer_post_model.dart';
 import '../models/post_comment_model.dart';
 import 'supabase_service.dart';
 
+// Gamer Social Service - Migrated fully to Supabase
 class GamerSocialService {
   static final GamerSocialService _instance = GamerSocialService._internal();
   factory GamerSocialService() => _instance;
