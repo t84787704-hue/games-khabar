@@ -385,10 +385,17 @@ class SupabaseService {
     }
   }
 
-  /// Get user by UID
+  /// Get user by UID or ID
   static Future<Map<String, dynamic>?> getUser(String uid) async {
     final list = await query('users', filters: {'uid': 'eq.$uid'}, limit: 1);
-    return list.isNotEmpty ? list.first : null;
+    if (list.isNotEmpty) return list.first;
+    // Try query by id in case uid is UUID
+    final uuidRegex = RegExp(r'^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$');
+    if (uuidRegex.hasMatch(uid)) {
+      final listById = await query('users', filters: {'id': 'eq.$uid'}, limit: 1);
+      if (listById.isNotEmpty) return listById.first;
+    }
+    return null;
   }
 
   // --- 2. POSTS TABLE ---

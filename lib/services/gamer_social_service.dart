@@ -1,4 +1,6 @@
 import 'dart:async';
+import 'dart:convert';
+import 'package:crypto/crypto.dart';
 import 'package:flutter/foundation.dart';
 import 'package:supabase/supabase.dart';
 import '../models/gamer_user_model.dart';
@@ -14,6 +16,26 @@ class GamerSocialService {
 
   SupabaseClient get _supabase => SupabaseService.client;
 
+  /// Helper to convert any string (e.g. Firebase UID) deterministically to a valid RFC4122 UUID v4/v5 format
+  static String stringToUuid(String input) {
+    if (input.isEmpty) return '00000000-0000-0000-0000-000000000000';
+    final uuidRegex = RegExp(r'^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$');
+    if (uuidRegex.hasMatch(input)) return input.toLowerCase();
+
+    // Deterministic UUID from string via MD5 (RFC 4122 UUID v3 format)
+    final bytes = utf8.encode('gamer_user_namespace:$input');
+    final digest = md5.convert(bytes).bytes;
+    final hexList = digest.map((b) => b.toRadixString(16).padLeft(2, '0')).toList();
+    
+    // Set version 4/3 and variant bits
+    hexList[6] = '4' + hexList[6].substring(1);
+    final variantByte = (digest[8] & 0x3f) | 0x80;
+    hexList[8] = variantByte.toRadixString(16).padLeft(2, '0');
+
+    final h = hexList.join('');
+    return '${h.substring(0, 8)}-${h.substring(8, 12)}-${h.substring(12, 16)}-${h.substring(16, 20)}-${h.substring(20, 32)}';
+  }
+
   /// Notifier to instantly inform Feed of new posts
   final ValueNotifier<int> feedRefreshNotifier = ValueNotifier<int>(0);
 
@@ -26,36 +48,24 @@ class GamerSocialService {
   }) async {
     if (userId.isEmpty) return;
     try {
-      final uuidRegex = RegExp(r'^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$');
-      final isUuid = uuidRegex.hasMatch(userId);
-      dynamic existing;
-      if (isUuid) {
-        existing = await _supabase
-            .from('users')
-            .select('id, uid')
-            .or('id.eq.$userId,uid.eq.$userId')
-            .maybeSingle();
-      } else {
-        existing = await _supabase
-            .from('users')
-            .select('id, uid')
-            .eq('uid', userId)
-            .maybeSingle();
-      }
+      final validUuid = stringToUuid(userId);
+      final existing = await _supabase
+          .from('users')
+          .select('id, uid')
+          .or('id.eq.$validUuid,uid.eq.$userId')
+          .maybeSingle();
 
       if (existing == null) {
         final Map<String, dynamic> insertPayload = {
+          'id': validUuid,
           'uid': userId,
           'username': username.isNotEmpty ? username : 'gamer_${userId.substring(0, userId.length > 5 ? 5 : userId.length)}',
           'display_name': displayName.isNotEmpty ? displayName : 'Gamer',
           'avatar_url': userPhoto,
           'created_at': DateTime.now().toIso8601String(),
         };
-        if (isUuid) {
-          insertPayload['id'] = userId;
-        }
         await _supabase.from('users').upsert(insertPayload);
-        debugPrint('[GamerSocialService] Synced user to Supabase: $userId');
+        debugPrint('[GamerSocialService] Synced user to Supabase: $userId ($validUuid)');
       }
     } catch (e) {
       debugPrint('[GamerSocialService] Note on user sync: $e');
@@ -180,7 +190,10 @@ class GamerSocialService {
         ? _supabase.auth.currentUser!.id
         : userId;
 
-    debugPrint('[GamerSocialService] Attempting to create post for user: $effectiveUserId');
+    // Supabase posts.user_id requires a UUID format if the column type is UUID
+    final postUuid = stringToUuid(effectiveUserId);
+
+    debugPrint('[GamerSocialService] Attempting to create post for user: $effectiveUserId (UUID: $postUuid)');
 
     // Make sure user exists in Supabase users table to satisfy foreign key constraint
     await _ensureUserExists(
@@ -191,16 +204,33 @@ class GamerSocialService {
     );
 
     try {
-      final response = await _supabase.from('posts').insert({
-        'user_id': effectiveUserId,
-        'content': postContent,
-        'image_url': finalMedia,
-        'video_url': finalVideo,
-        'game': finalGame,
-        'media_url': finalMedia ?? finalVideo,
-        'likes_count': 0,
-        'comments_count': 0,
-      }).select().single();
+      Map<String, dynamic>? response;
+      try {
+        // First try with valid UUID
+        response = await _supabase.from('posts').insert({
+          'user_id': postUuid,
+          'content': postContent,
+          'image_url': finalMedia,
+          'video_url': finalVideo,
+          'game': finalGame,
+          'media_url': finalMedia ?? finalVideo,
+          'likes_count': 0,
+          'comments_count': 0,
+        }).select().single();
+      } catch (insertErr) {
+        debugPrint('[GamerSocialService] Insert with UUID failed ($insertErr), retrying with raw userId...');
+        // Fallback with effectiveUserId if posts.user_id is TEXT
+        response = await _supabase.from('posts').insert({
+          'user_id': effectiveUserId,
+          'content': postContent,
+          'image_url': finalMedia,
+          'video_url': finalVideo,
+          'game': finalGame,
+          'media_url': finalMedia ?? finalVideo,
+          'likes_count': 0,
+          'comments_count': 0,
+        }).select().single();
+      }
 
       debugPrint('[GamerSocialService] Post saved successfully: ${response['id']}');
 
@@ -255,10 +285,11 @@ class GamerSocialService {
   Stream<List<GamerPost>> getUserPostsStream(String userId, [String? username]) async* {
     while (true) {
       try {
+        final uuid = stringToUuid(userId);
         final data = await _supabase
             .from('posts')
             .select()
-            .eq('user_id', userId)
+            .or('user_id.eq.$userId,user_id.eq.$uuid')
             .order('created_at', ascending: false);
         final list = (data as List).map((map) => GamerPost.fromMap(map)).toList();
         yield list;

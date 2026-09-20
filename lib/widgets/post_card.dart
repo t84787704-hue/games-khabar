@@ -104,7 +104,7 @@ class _PostCardState extends State<PostCard> {
       return;
     }
     try {
-      final user = await _authService.getUserProfile(userId);
+      var user = await _authService.getUserProfile(userId);
       if (user != null) {
         _authorCache[userId] = user;
         if (mounted) setState(() => _authorUser = user);
