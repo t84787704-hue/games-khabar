@@ -399,7 +399,9 @@ class SupabaseService {
         'user_id': postData['user_id'],
         'content': postData['content'],
         'image_url': postData['image_url'],
-        'game': postData['game'],
+        'video_url': postData['video_url'],
+        'game': postData['game'] ?? 'All Games',
+        'media_url': postData['media_url'] ?? postData['image_url'] ?? postData['video_url'],
         'likes_count': 0,
         'comments_count': 0,
       }).select().single();

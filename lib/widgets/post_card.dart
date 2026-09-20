@@ -34,6 +34,8 @@ class _PostCardState extends State<PostCard> {
   final GamerSocialService _socialService = GamerSocialService();
   final GamerAuthService _authService = GamerAuthService();
   bool _isAuthorVerified = false;
+  static final Map<String, dynamic> _authorCache = {};
+  dynamic _authorUser;
 
   VideoPlayerController? _videoController;
   ChewieController? _chewieController;
@@ -46,6 +48,27 @@ class _PostCardState extends State<PostCard> {
   String get username => (widget.post is GamerPost) ? (widget.post as GamerPost).username : (widget.post?.username ?? '').toString();
   String get displayName => (widget.post is GamerPost) ? (widget.post as GamerPost).displayName : (widget.post?.displayName ?? username).toString();
   String get userPhoto => (widget.post is GamerPost) ? (widget.post as GamerPost).userPhoto : (widget.post?.userPhoto ?? '').toString();
+
+  String get authorUsername {
+    final cachedName = _authorUser?.username?.toString();
+    if (cachedName != null && cachedName.isNotEmpty && cachedName != 'gamer') return cachedName;
+    if (username.isNotEmpty && username != 'gamer') return username;
+    return 'gamer';
+  }
+
+  String get authorDisplayName {
+    final cachedDisplay = _authorUser?.displayName?.toString();
+    if (cachedDisplay != null && cachedDisplay.isNotEmpty && cachedDisplay != 'Gamer') return cachedDisplay;
+    if (displayName.isNotEmpty && displayName != 'Gamer') return displayName;
+    return authorUsername;
+  }
+
+  String get authorPhoto {
+    final cachedPhoto = _authorUser?.photoUrl?.toString();
+    if (cachedPhoto != null && cachedPhoto.isNotEmpty) return cachedPhoto;
+    if (userPhoto.isNotEmpty) return userPhoto;
+    return '';
+  }
   String get postText => (widget.post is GamerPost) ? (widget.post as GamerPost).text : (widget.post?.text ?? widget.post?.caption ?? '').toString();
   String get gameTag => (widget.post is GamerPost) ? (widget.post as GamerPost).gameTag : (widget.post?.gameTag ?? widget.post?.game ?? 'Gaming').toString();
   String? get imageUrl => (widget.post is GamerPost) ? (widget.post as GamerPost).imageUrl : widget.post?.imageUrl?.toString();
@@ -62,6 +85,7 @@ class _PostCardState extends State<PostCard> {
     _isAuthorVerified = (widget.post is GamerPost && (widget.post as GamerPost).isVerified) ||
         VerificationService.isVerifiedCached(userId);
     _checkVerification();
+    _loadAuthor();
   }
 
   @override
@@ -69,7 +93,23 @@ class _PostCardState extends State<PostCard> {
     super.didUpdateWidget(oldWidget);
     if (oldWidget.post != widget.post) {
       _checkVerification();
+      _loadAuthor();
     }
+  }
+
+  Future<void> _loadAuthor() async {
+    if (userId.isEmpty) return;
+    if (_authorCache.containsKey(userId)) {
+      if (mounted) setState(() => _authorUser = _authorCache[userId]);
+      return;
+    }
+    try {
+      final user = await _authService.getUserProfile(userId);
+      if (user != null) {
+        _authorCache[userId] = user;
+        if (mounted) setState(() => _authorUser = user);
+      }
+    } catch (_) {}
   }
 
   Future<void> _checkVerification() async {
@@ -252,8 +292,8 @@ class _PostCardState extends State<PostCard> {
               crossAxisAlignment: CrossAxisAlignment.center,
               children: [
                 GamerAvatar(
-                  photoUrl: userPhoto,
-                  displayName: displayName,
+                  photoUrl: authorPhoto,
+                  displayName: authorDisplayName,
                   radius: 20,
                   onTap: _openProfile,
                 ),
@@ -268,7 +308,7 @@ class _PostCardState extends State<PostCard> {
                           children: [
                             Flexible(
                               child: Text(
-                                displayName,
+                                authorDisplayName,
                                 style: TextStyle(
                                   color: ThemeService.textPrimary,
                                   fontWeight: FontWeight.w800,
@@ -290,7 +330,7 @@ class _PostCardState extends State<PostCard> {
                         Row(
                           children: [
                             Text(
-                              '@$username',
+                              '@$authorUsername',
                               style: const TextStyle(
                                 color: GamerTheme.accentOrange,
                                 fontSize: 11,

@@ -24,22 +24,37 @@ class GamerSocialService {
     required String displayName,
     required String userPhoto,
   }) async {
+    if (userId.isEmpty) return;
     try {
-      final existing = await _supabase
-          .from('users')
-          .select('id, uid')
-          .or('id.eq.$userId,uid.eq.$userId')
-          .maybeSingle();
+      final uuidRegex = RegExp(r'^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$');
+      final isUuid = uuidRegex.hasMatch(userId);
+      dynamic existing;
+      if (isUuid) {
+        existing = await _supabase
+            .from('users')
+            .select('id, uid')
+            .or('id.eq.$userId,uid.eq.$userId')
+            .maybeSingle();
+      } else {
+        existing = await _supabase
+            .from('users')
+            .select('id, uid')
+            .eq('uid', userId)
+            .maybeSingle();
+      }
 
       if (existing == null) {
-        await _supabase.from('users').upsert({
-          'id': userId,
+        final Map<String, dynamic> insertPayload = {
           'uid': userId,
           'username': username.isNotEmpty ? username : 'gamer_${userId.substring(0, userId.length > 5 ? 5 : userId.length)}',
           'display_name': displayName.isNotEmpty ? displayName : 'Gamer',
           'avatar_url': userPhoto,
           'created_at': DateTime.now().toIso8601String(),
-        });
+        };
+        if (isUuid) {
+          insertPayload['id'] = userId;
+        }
+        await _supabase.from('users').upsert(insertPayload);
         debugPrint('[GamerSocialService] Synced user to Supabase: $userId');
       }
     } catch (e) {
@@ -161,11 +176,15 @@ class GamerSocialService {
     final finalMedia = imageUrl ?? mediaUrl;
     final finalVideo = videoUrl;
 
-    debugPrint('[GamerSocialService] Attempting to create post for user: $userId');
+    final effectiveUserId = (_supabase.auth.currentUser?.id?.isNotEmpty == true)
+        ? _supabase.auth.currentUser!.id
+        : userId;
+
+    debugPrint('[GamerSocialService] Attempting to create post for user: $effectiveUserId');
 
     // Make sure user exists in Supabase users table to satisfy foreign key constraint
     await _ensureUserExists(
-      userId: userId,
+      userId: effectiveUserId,
       username: username,
       displayName: displayName,
       userPhoto: userPhoto,
@@ -173,14 +192,12 @@ class GamerSocialService {
 
     try {
       final response = await _supabase.from('posts').insert({
-        'user_id': userId,
-        'username': username.isNotEmpty ? username : 'gamer',
-        'user_avatar': userPhoto,
+        'user_id': effectiveUserId,
         'content': postContent,
-        'media_url': finalMedia ?? finalVideo,
         'image_url': finalMedia,
         'video_url': finalVideo,
         'game': finalGame,
+        'media_url': finalMedia ?? finalVideo,
         'likes_count': 0,
         'comments_count': 0,
       }).select().single();
