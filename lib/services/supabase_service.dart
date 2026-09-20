@@ -18,6 +18,7 @@ class SupabaseService {
     supabaseUrl,
     supabaseAnonKey,
   );
+  static SupabaseClient get _supabase => client;
 
   static Future<void> init() async {
     // Client initialized
@@ -392,22 +393,22 @@ class SupabaseService {
 
   // --- 2. POSTS TABLE ---
   /// Save a post in public.posts
-  static Future<bool> savePost(Map<String, dynamic> postData) async {
+  static Future<Map<String, dynamic>?> savePost(Map<String, dynamic> postData) async {
     try {
-      final uri = Uri.parse('$supabaseUrl/rest/v1/posts');
-      final response = await http.post(
-        uri,
-        headers: {
-          ..._headers,
-          'Content-Type': 'application/json',
-          'Prefer': 'resolution=merge-duplicates,return=representation',
-        },
-        body: jsonEncode(postData),
-      );
-      return response.statusCode == 201 || response.statusCode == 200;
+      final response = await _supabase.from('posts').insert({
+        'user_id': postData['user_id'],
+        'content': postData['content'],
+        'image_url': postData['image_url'],
+        'game': postData['game'],
+        'likes_count': 0,
+        'comments_count': 0,
+      }).select().single();
+
+      print('Post saved to Supabase: $response');
+      return response;
     } catch (e) {
-      debugPrint('Supabase savePost error: $e');
-      return false;
+      print('Error saving post to Supabase: $e');
+      return null;
     }
   }
 
