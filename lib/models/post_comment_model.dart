@@ -19,6 +19,28 @@ class PostComment {
     this.createdAt,
   });
 
+  factory PostComment.fromMap(Map<String, dynamic> data) {
+    DateTime? created;
+    final raw = data['created_at'] ?? data['createdAt'];
+    if (raw is Timestamp) {
+      created = raw.toDate();
+    } else if (raw is String) {
+      created = DateTime.tryParse(raw);
+    } else if (raw is DateTime) {
+      created = raw;
+    }
+
+    return PostComment(
+      commentId: (data['id'] ?? data['comment_id'] ?? data['commentId'] ?? '').toString(),
+      userId: (data['user_id'] ?? data['userId'] ?? '').toString(),
+      username: data['username'] ?? 'gamer',
+      displayName: data['displayName'] ?? data['username'] ?? 'Gamer',
+      userPhoto: data['user_avatar'] ?? data['userPhoto'] ?? '',
+      text: data['content'] ?? data['text'] ?? '',
+      createdAt: created,
+    );
+  }
+
   factory PostComment.fromFirestore(DocumentSnapshot doc) {
     final data = doc.data() as Map<String, dynamic>? ?? {};
     DateTime? created;

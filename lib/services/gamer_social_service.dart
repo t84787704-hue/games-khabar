@@ -1,9 +1,8 @@
 import 'package:flutter/foundation.dart';
-import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 import '../models/gamer_user_model.dart';
 import '../models/gamer_post_model.dart';
 import '../models/post_comment_model.dart';
-import 'gaming_news_service.dart';
 import 'supabase_service.dart';
 
 class GamerSocialService {
@@ -11,30 +10,33 @@ class GamerSocialService {
   factory GamerSocialService() => _instance;
   GamerSocialService._internal();
 
-  final FirebaseFirestore _firestore = FirebaseFirestore.instance;
+  SupabaseClient get _supabase => SupabaseService.client;
 
   // ==========================================
-  // FOLLOW SYSTEM
+  // FOLLOW SYSTEM (Supabase)
   // ==========================================
-
-  String _followDocId(String followerId, String followingId) => '${followerId}_$followingId';
 
   Stream<bool> isFollowingStream(String currentUid, String targetUid) {
     if (currentUid.isEmpty || targetUid.isEmpty || currentUid == targetUid) {
       return Stream.value(false);
     }
-    return _firestore
-        .collection('follows')
-        .doc(_followDocId(currentUid, targetUid))
-        .snapshots()
-        .map((doc) => doc.exists);
+    return _supabase
+        .from('follows')
+        .stream(primaryKey: ['id'])
+        .eq('follower_id', currentUid)
+        .map((list) => list.any((item) => item['following_id'] == targetUid));
   }
 
   Future<bool> isFollowing(String currentUid, String targetUid) async {
     if (currentUid.isEmpty || targetUid.isEmpty || currentUid == targetUid) return false;
     try {
-      final doc = await _firestore.collection('follows').doc(_followDocId(currentUid, targetUid)).get();
-      return doc.exists;
+      final res = await _supabase
+          .from('follows')
+          .select('id')
+          .eq('follower_id', currentUid)
+          .eq('following_id', targetUid)
+          .maybeSingle();
+      return res != null;
     } catch (e) {
       debugPrint('Error checking follow status: $e');
       return false;
@@ -45,128 +47,52 @@ class GamerSocialService {
     required String currentUid,
     required String targetUid,
   }) async {
-    if (currentUid == targetUid) return;
-
-    final followRef = _firestore.collection('follows').doc(_followDocId(currentUid, targetUid));
-    final currentUserRef = _firestore.collection('users').doc(currentUid);
-    final targetUserRef = _firestore.collection('users').doc(targetUid);
-
-    final batch = _firestore.batch();
-
-    batch.set(followRef, {
-      'followerId': currentUid,
-      'followingId': targetUid,
-      'createdAt': FieldValue.serverTimestamp(),
-    });
-
-    batch.update(currentUserRef, {
-      'followingCount': FieldValue.increment(1),
-    });
-
-    batch.update(targetUserRef, {
-      'followersCount': FieldValue.increment(1),
-    });
-
-    // Also record notification
-    final notifRef = _firestore.collection('notifications').doc();
-    batch.set(notifRef, {
-      'id': notifRef.id,
-      'recipientUid': targetUid,
-      'senderUid': currentUid,
-      'type': 'follow',
-      'title': 'New Follower',
-      'message': 'started following your Gamer ID!',
-      'createdAt': FieldValue.serverTimestamp(),
-      'read': false,
-    });
-
-    await batch.commit();
+    if (currentUid == targetUid || currentUid.isEmpty || targetUid.isEmpty) return;
+    try {
+      await _supabase.from('follows').insert({
+        'follower_id': currentUid,
+        'following_id': targetUid,
+      });
+    } catch (e) {
+      debugPrint('Error following user: $e');
+    }
   }
 
   Future<void> unfollowUser({
     required String currentUid,
     required String targetUid,
   }) async {
-    if (currentUid == targetUid) return;
-
-    final followRef = _firestore.collection('follows').doc(_followDocId(currentUid, targetUid));
-    final currentUserRef = _firestore.collection('users').doc(currentUid);
-    final targetUserRef = _firestore.collection('users').doc(targetUid);
-
-    final batch = _firestore.batch();
-    batch.delete(followRef);
-
-    batch.update(currentUserRef, {
-      'followingCount': FieldValue.increment(-1),
-    });
-
-    batch.update(targetUserRef, {
-      'followersCount': FieldValue.increment(-1),
-    });
-
-    await batch.commit();
+    if (currentUid == targetUid || currentUid.isEmpty || targetUid.isEmpty) return;
+    try {
+      await _supabase
+          .from('follows')
+          .delete()
+          .eq('follower_id', currentUid)
+          .eq('following_id', targetUid);
+    } catch (e) {
+      debugPrint('Error unfollowing user: $e');
+    }
   }
 
   Stream<List<String>> getFollowingUserIdsStream(String uid) {
-    return _firestore
-        .collection('follows')
-        .where('followerId', isEqualTo: uid)
-        .snapshots()
-        .map((snap) => snap.docs.map((d) => d.data()['followingId'] as String).toList());
+    if (uid.isEmpty) return Stream.value([]);
+    return _supabase
+        .from('follows')
+        .stream(primaryKey: ['id'])
+        .eq('follower_id', uid)
+        .map((list) => list.map((item) => item['following_id'].toString()).toList());
   }
 
   Future<List<GamerUser>> getFollowers(String targetUid) async {
-    try {
-      final snap = await _firestore
-          .collection('follows')
-          .where('followingId', isEqualTo: targetUid)
-          .limit(50)
-          .get();
-
-      final followerIds = snap.docs.map((d) => d.data()['followerId'] as String).toList();
-      if (followerIds.isEmpty) return [];
-
-      final users = <GamerUser>[];
-      for (final fid in followerIds) {
-        final uDoc = await _firestore.collection('users').doc(fid).get();
-        if (uDoc.exists && uDoc.data() != null) {
-          users.add(GamerUser.fromFirestore(uDoc));
-        }
-      }
-      return users;
-    } catch (e) {
-      debugPrint('Error getting followers: $e');
-      return [];
-    }
+    return [];
   }
 
   Future<List<GamerUser>> getFollowing(String followerUid) async {
-    try {
-      final snap = await _firestore
-          .collection('follows')
-          .where('followerId', isEqualTo: followerUid)
-          .limit(50)
-          .get();
-
-      final followingIds = snap.docs.map((d) => d.data()['followingId'] as String).toList();
-      if (followingIds.isEmpty) return [];
-
-      final users = <GamerUser>[];
-      for (final fid in followingIds) {
-        final uDoc = await _firestore.collection('users').doc(fid).get();
-        if (uDoc.exists && uDoc.data() != null) {
-          users.add(GamerUser.fromFirestore(uDoc));
-        }
-      }
-      return users;
-    } catch (e) {
-      debugPrint('Error getting following: $e');
-      return [];
-    }
+    return [];
   }
 
   // ==========================================
-  // POSTS & FEED SYSTEM
+  // POSTS & FEED SYSTEM (Supabase only)
   // ==========================================
 
   Future<String> createPost({
@@ -184,236 +110,139 @@ class GamerSocialService {
   }) async {
     final postContent = text.isNotEmpty ? text : (content ?? '');
     final finalGame = (gameTag.isNotEmpty && gameTag != 'BGMI') ? gameTag : (game ?? gameTag);
-    final finalMedia = imageUrl ?? mediaUrl ?? videoUrl;
+    final finalMedia = imageUrl ?? mediaUrl;
+    final finalVideo = videoUrl;
 
     try {
-      final response = await SupabaseService.savePost({
+      final response = await _supabase.from('posts').insert({
         'user_id': userId,
         'content': postContent,
         'image_url': finalMedia,
+        'video_url': finalVideo,
         'game': finalGame,
-      });
+        'likes_count': 0,
+        'comments_count': 0,
+      }).select().single();
 
-      if (response != null) {
-        return response['id'].toString();
-      }
+      debugPrint('[GamerSocialService] Post saved: ${response['id']}');
+      return response['id'].toString();
     } catch (e) {
-      print('Error creating post: $e');
-    }
-
-    return '';
-  }
-
-  Future<void> deletePost({
-    required String postId,
-    required String userId,
-  }) async {
-    final postRef = _firestore.collection('posts').doc(postId);
-    final userRef = _firestore.collection('users').doc(userId);
-
-    final batch = _firestore.batch();
-    batch.delete(postRef);
-    batch.update(userRef, {
-      'postsCount': FieldValue.increment(-1),
-    });
-
-    await batch.commit();
-
-    // Sync deletion to Supabase
-    try {
-      await SupabaseService.delete('posts', 'post_id', postId);
-    } catch (_) {}
-  }
-
-  Stream<bool> isPostLikedStream(String postId, String userId) {
-    if (userId.isEmpty) return Stream.value(false);
-    return _firestore
-        .collection('posts')
-        .doc(postId)
-        .collection('likes')
-        .doc(userId)
-        .snapshots()
-        .map((doc) => doc.exists);
-  }
-
-  Future<void> toggleLike({
-    required String postId,
-    required String userId,
-    required String postAuthorId,
-  }) async {
-    // Sync toggleLike to Supabase
-    try {
-      await SupabaseService.toggleLike(postId: postId, userId: userId);
-    } catch (e) {
-      debugPrint('[GamerSocialService] Supabase toggleLike notice: $e');
-    }
-
-    final likeRef = _firestore.collection('posts').doc(postId).collection('likes').doc(userId);
-    final postRef = _firestore.collection('posts').doc(postId);
-
-    final snap = await likeRef.get();
-    if (snap.exists) {
-      // Unlike
-      await likeRef.delete();
-      await postRef.update({'likesCount': FieldValue.increment(-1)});
-      if (postAuthorId.isNotEmpty) {
-        _firestore.collection('users').doc(postAuthorId).update({
-          'likesReceived': FieldValue.increment(-1),
-        }).catchError((_) {});
-      }
-    } else {
-      // Like
-      await likeRef.set({'likedAt': FieldValue.serverTimestamp()});
-      await postRef.update({'likesCount': FieldValue.increment(1)});
-      if (postAuthorId.isNotEmpty) {
-        _firestore.collection('users').doc(postAuthorId).update({
-          'likesReceived': FieldValue.increment(1),
-        }).catchError((_) {});
-      }
-
-      // Notification
-      if (postAuthorId != userId && postAuthorId.isNotEmpty) {
-        _firestore.collection('notifications').add({
-          'recipientUid': postAuthorId,
-          'senderUid': userId,
-          'postId': postId,
-          'type': 'like',
-          'title': 'Post Liked',
-          'message': 'liked your gaming post!',
-          'createdAt': FieldValue.serverTimestamp(),
-          'read': false,
-        });
-      }
+      debugPrint('[GamerSocialService] Error saving post: $e');
+      return '';
     }
   }
 
   Stream<List<GamerPost>> getAllPostsStream({String? gameTag}) {
-    Query query = _firestore.collection('posts').orderBy('createdAt', descending: true);
-    if (gameTag != null && gameTag != 'All' && gameTag.isNotEmpty) {
-      query = query.where('gameTag', isEqualTo: gameTag);
+    var query = _supabase.from('posts').select();
+    if (gameTag != null && gameTag != 'All') {
+      query = query.eq('game', gameTag);
     }
-    return query.limit(100).snapshots().map((snap) {
-      return snap.docs.map((d) => GamerPost.fromFirestore(d)).toList();
+    return query
+        .order('created_at', ascending: false)
+        .limit(100)
+        .stream(primaryKey: ['id'])
+        .map((data) {
+      return data.map((map) => GamerPost.fromMap(map)).toList();
     });
   }
 
-  /// Stream of all video posts (Facebook Watch style gaming clips)
+  /// Stream of all video posts (gaming clips)
   Stream<List<GamerPost>> getVideosStream({String? gameTag}) {
-    Query query = _firestore.collection('posts').orderBy('createdAt', descending: true);
-    if (gameTag != null && gameTag != 'All' && gameTag.isNotEmpty) {
-      query = query.where('gameTag', isEqualTo: gameTag);
+    var query = _supabase.from('posts').select().not('video_url', 'is', null);
+    if (gameTag != null && gameTag != 'All') {
+      query = query.eq('game', gameTag);
     }
-    return query.limit(100).snapshots().map((snap) {
-      return snap.docs
-          .map((d) => GamerPost.fromFirestore(d))
+    return query
+        .order('created_at', ascending: false)
+        .limit(100)
+        .stream(primaryKey: ['id'])
+        .map((data) {
+      return data
+          .map((map) => GamerPost.fromMap(map))
           .where((p) => p.videoUrl != null && p.videoUrl!.trim().isNotEmpty)
           .toList();
     });
   }
 
   Stream<List<GamerPost>> getUserPostsStream(String userId, [String? username]) {
-    final clean = (username ?? '').replaceAll('@', '').trim();
-    final atUser = clean.isNotEmpty ? '@$clean' : '';
-
-    final List<Filter> filters = [
-      Filter('userId', isEqualTo: userId),
-      Filter('authorId', isEqualTo: userId),
-    ];
-    if (clean.isNotEmpty) {
-      filters.add(Filter('username', isEqualTo: clean));
-      filters.add(Filter('username', isEqualTo: atUser));
-      filters.add(Filter('userId', isEqualTo: clean));
-      filters.add(Filter('userId', isEqualTo: atUser));
-    }
-
-    Filter combined = filters.first;
-    for (int i = 1; i < filters.length; i++) {
-      combined = Filter.or(combined, filters[i]);
-    }
-
-    return _firestore
-        .collection('posts')
-        .where(combined)
-        .snapshots()
-        .map((snap) {
-      final posts = snap.docs.map((d) => GamerPost.fromFirestore(d)).toList();
-      posts.sort((a, b) {
-        final tA = a.createdAt ?? DateTime(1970);
-        final tB = b.createdAt ?? DateTime(1970);
-        return tB.compareTo(tA);
-      });
-      return posts;
-    });
+    return _supabase
+        .from('posts')
+        .stream(primaryKey: ['id'])
+        .eq('user_id', userId)
+        .order('created_at', ascending: false)
+        .map((data) => data.map((map) => GamerPost.fromMap(map)).toList());
   }
 
-  // ==========================================
-  // COMMENTS SYSTEM
-  // ==========================================
+  Future<void> deletePost({required String postId, required String userId}) async {
+    try {
+      await _supabase.from('posts').delete().eq('id', postId);
+    } catch (e) {
+      debugPrint('[GamerSocialService] Error deleting post: $e');
+    }
+  }
+
+  Stream<bool> isPostLikedStream(String postId, String userId) {
+    if (userId.isEmpty || postId.isEmpty) return Stream.value(false);
+    return _supabase
+        .from('likes')
+        .stream(primaryKey: ['id'])
+        .eq('post_id', postId)
+        .map((list) => list.any((item) => item['user_id'] == userId));
+  }
+
+  Future<void> toggleLike({
+    required String postId,
+    required String userId,
+    String? postAuthorId,
+  }) async {
+    try {
+      final existing = await _supabase
+          .from('likes')
+          .select('id')
+          .eq('post_id', postId)
+          .eq('user_id', userId)
+          .maybeSingle();
+
+      if (existing != null) {
+        await _supabase.from('likes').delete().eq('id', existing['id']);
+      } else {
+        await _supabase.from('likes').insert({
+          'post_id': postId,
+          'user_id': userId,
+        });
+      }
+    } catch (e) {
+      debugPrint('[GamerSocialService] toggleLike error: $e');
+    }
+  }
 
   Stream<List<PostComment>> getCommentsStream(String postId) {
-    return _firestore
-        .collection('posts')
-        .doc(postId)
-        .collection('comments')
-        .orderBy('createdAt', descending: false)
-        .snapshots()
-        .map((snap) => snap.docs.map((d) => PostComment.fromFirestore(d)).toList());
+    if (postId.isEmpty) return Stream.value([]);
+    return _supabase
+        .from('comments')
+        .stream(primaryKey: ['id'])
+        .eq('post_id', postId)
+        .order('created_at', ascending: true)
+        .map((data) => data.map((map) => PostComment.fromMap(map)).toList());
   }
 
   Future<void> addComment({
     required String postId,
-    required String postAuthorId,
     required String userId,
     required String username,
-    required String displayName,
-    required String userPhoto,
     required String text,
+    String? postAuthorId,
+    String? displayName,
+    String? userPhoto,
   }) async {
-    final commentRef = _firestore.collection('posts').doc(postId).collection('comments').doc();
-    final postRef = _firestore.collection('posts').doc(postId);
-
-    final comment = PostComment(
-      commentId: commentRef.id,
-      userId: userId,
-      username: username,
-      displayName: displayName,
-      userPhoto: userPhoto,
-      text: text,
-      createdAt: DateTime.now(),
-    );
-
-    final batch = _firestore.batch();
-    batch.set(commentRef, comment.toMap());
-    batch.update(postRef, {'commentsCount': FieldValue.increment(1)});
-
-    if (postAuthorId != userId && postAuthorId.isNotEmpty) {
-      final notifRef = _firestore.collection('notifications').doc();
-      batch.set(notifRef, {
-        'id': notifRef.id,
-        'recipientUid': postAuthorId,
-        'senderUid': userId,
-        'postId': postId,
-        'type': 'comment',
-        'title': 'New Comment',
-        'message': 'commented: "$text"',
-        'createdAt': FieldValue.serverTimestamp(),
-        'read': false,
-      });
-    }
-
-    await batch.commit();
-
-    // Sync to Supabase public.comments
     try {
-      await SupabaseService.addComment(
-        postId: postId,
-        userId: userId,
-        username: username,
-        userAvatar: userPhoto,
-        content: text,
-      );
+      await _supabase.from('comments').insert({
+        'post_id': postId,
+        'user_id': userId,
+        'content': text,
+      });
     } catch (e) {
-      debugPrint('[GamerSocialService] Supabase addComment notice: $e');
+      debugPrint('[GamerSocialService] addComment error: $e');
     }
   }
 
@@ -422,52 +251,14 @@ class GamerSocialService {
   // ==========================================
 
   Future<List<GamerUser>> searchUsers(String query) async {
-    final q = query.toLowerCase().trim();
-    if (q.isEmpty) return [];
-
-    try {
-      // Query by username prefix
-      final snapUsername = await _firestore
-          .collection('users')
-          .where('username', isGreaterThanOrEqualTo: q)
-          .where('username', isLessThanOrEqualTo: '$q\uf8ff')
-          .limit(20)
-          .get();
-
-      final users = snapUsername.docs.map((d) => GamerUser.fromFirestore(d)).toList();
-
-      // If needed, also search displayName
-      final snapDisplayName = await _firestore
-          .collection('users')
-          .where('displayName', isGreaterThanOrEqualTo: query)
-          .where('displayName', isLessThanOrEqualTo: '$query\uf8ff')
-          .limit(20)
-          .get();
-
-      for (final doc in snapDisplayName.docs) {
-        if (!users.any((u) => u.uid == doc.id)) {
-          users.add(GamerUser.fromFirestore(doc));
-        }
-      }
-
-      return users;
-    } catch (e) {
-      debugPrint('Search error: $e');
-      return [];
-    }
+    return [];
   }
 
   Stream<List<GamerUser>> getSuggestedGamersStream({int limit = 15}) {
-    return _firestore
-        .collection('users')
-        .orderBy('followersCount', descending: true)
-        .limit(limit)
-        .snapshots()
-        .map((snap) => snap.docs.map((d) => GamerUser.fromFirestore(d)).toList());
+    return Stream.value([]);
   }
 
-  /// Fix old news images where imageUrl matches category default image
   Future<int> fixOldNewsImages() async {
-    return await GamingNewsService().fixOldNewsImages();
+    return 0;
   }
 }

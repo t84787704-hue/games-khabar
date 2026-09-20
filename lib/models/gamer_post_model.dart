@@ -1,13 +1,213 @@
-final data = await supabase.from('posts').select();
-// data = [
-//   {
-//     'id': 'abc-123',
-//     'user_id': 'xyz-456',
-//     'content': 'meny ye change kea hy',
-//     'game': 'BGMI',
-//     'likes_count': 0,
-//     'created_at': '2026-09-19T12:00:00Z'
-//   }
-// ]
+import 'package:flutter/material.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
+import 'gamer_user_model.dart';
 
-final posts = data.map((map) => GamerPost.fromMap(map)).toList();
+class GamerPost {
+  final String postId;
+  final String userId;
+  final String username;
+  final String userPhoto;
+  final String displayName;
+  final String text;
+  final String? imageUrl;
+  final String? videoUrl;
+  final String gameTag;
+  final String userRank;
+  final double userKd;
+  final int likesCount;
+  final int commentsCount;
+  final bool isVerified;
+  final bool isDemoAccount;
+  final DateTime? createdAt;
+
+  const GamerPost({
+    required this.postId,
+    required this.userId,
+    required this.username,
+    this.userPhoto = '',
+    required this.displayName,
+    required this.text,
+    this.imageUrl,
+    this.videoUrl,
+    this.gameTag = 'BGMI',
+    this.userRank = 'Ace',
+    this.userKd = 0.0,
+    this.likesCount = 0,
+    this.commentsCount = 0,
+    this.isVerified = false,
+    this.isDemoAccount = false,
+    this.createdAt,
+  });
+
+  GamerRankBadge getRankBadge() {
+    final lowerRank = userRank.toLowerCase().trim();
+    if (userKd > 5.0 || lowerRank.contains('kd king') || lowerRank.contains('5+')) {
+      return const GamerRankBadge(
+        type: RankBadgeType.kdKing,
+        label: 'K/D King',
+        emoji: '💀',
+        icon: Icons.dangerous_rounded,
+        primaryColor: Color(0xFFFF2D55),
+        backgroundColor: Color(0x33FF2D55),
+        borderColor: Color(0x88FF2D55),
+      );
+    }
+
+    if (lowerRank.contains('conqueror')) {
+      return const GamerRankBadge(
+        type: RankBadgeType.conqueror,
+        label: 'Conqueror',
+        emoji: '👑',
+        icon: Icons.military_tech_rounded,
+        primaryColor: Color(0xFFFF334B),
+        backgroundColor: Color(0x33FF334B),
+        borderColor: Color(0x99FF334B),
+      );
+    }
+
+    if (lowerRank.contains('ace') || lowerRank.contains('pro') || lowerRank.isNotEmpty) {
+      return const GamerRankBadge(
+        type: RankBadgeType.ace,
+        label: 'Ace',
+        emoji: '⭐',
+        icon: Icons.star_rounded,
+        primaryColor: Color(0xFFFF9500),
+        backgroundColor: Color(0x33FF9500),
+        borderColor: Color(0x88FF9500),
+      );
+    }
+
+    return const GamerRankBadge(
+      type: RankBadgeType.none,
+      label: '',
+      emoji: '',
+      icon: Icons.shield,
+      primaryColor: Colors.transparent,
+      backgroundColor: Colors.transparent,
+      borderColor: Colors.transparent,
+    );
+  }
+
+  factory GamerPost.fromMap(Map<String, dynamic> data) {
+    DateTime? created;
+    final rawCreated = data['created_at'] ?? data['createdAt'];
+    if (rawCreated is Timestamp) {
+      created = rawCreated.toDate();
+    } else if (rawCreated is String) {
+      created = DateTime.tryParse(rawCreated);
+    } else if (rawCreated is DateTime) {
+      created = rawCreated;
+    }
+
+    return GamerPost(
+      postId: (data['id'] ?? data['post_id'] ?? data['postId'] ?? '').toString(),
+      userId: (data['user_id'] ?? data['userId'] ?? '').toString(),
+      username: data['username'] ?? 'gamer',
+      userPhoto: data['user_avatar'] ?? data['userPhoto'] ?? '',
+      displayName: data['displayName'] ?? data['username'] ?? 'Gamer',
+      text: data['content'] ?? data['text'] ?? '',
+      imageUrl: (data['image_url'] ?? data['imageUrl'] ?? data['media_url']) as String?,
+      videoUrl: (data['video_url'] ?? data['videoUrl'] ?? data['mediaUrl']) as String?,
+      gameTag: data['game'] ?? data['gameTag'] ?? 'BGMI',
+      userRank: data['userRank'] ?? 'Ace',
+      userKd: (data['userKd'] as num?)?.toDouble() ?? 0.0,
+      likesCount: (data['likes_count'] ?? data['likesCount'] as num?)?.toInt() ?? 0,
+      commentsCount: (data['comments_count'] ?? data['commentsCount'] as num?)?.toInt() ?? 0,
+      isVerified: data['isVerified'] == true,
+      isDemoAccount: data['isDemoAccount'] == true,
+      createdAt: created,
+    );
+  }
+
+  factory GamerPost.fromFirestore(DocumentSnapshot doc) {
+    final data = doc.data() as Map<String, dynamic>? ?? {};
+    DateTime? created;
+    final rawCreated = data['createdAt'];
+    if (rawCreated is Timestamp) {
+      created = rawCreated.toDate();
+    } else if (rawCreated is String) {
+      created = DateTime.tryParse(rawCreated);
+    }
+
+    return GamerPost(
+      postId: data['postId'] ?? doc.id,
+      userId: data['userId'] ?? '',
+      username: data['username'] ?? 'gamer',
+      userPhoto: data['userPhoto'] ?? '',
+      displayName: data['displayName'] ?? 'Gamer',
+      text: data['text'] ?? '',
+      imageUrl: data['imageUrl'] as String?,
+      videoUrl: (data['videoUrl'] ?? data['mediaUrl']) as String?,
+      gameTag: data['gameTag'] ?? 'BGMI',
+      userRank: data['userRank'] ?? 'Ace',
+      userKd: (data['userKd'] as num?)?.toDouble() ?? 0.0,
+      likesCount: (data['likesCount'] as num?)?.toInt() ?? 0,
+      commentsCount: (data['commentsCount'] as num?)?.toInt() ?? 0,
+      isVerified: data['isVerified'] == true,
+      isDemoAccount: data['isDemoAccount'] == true,
+      createdAt: created,
+    );
+  }
+
+  Map<String, dynamic> toMap() {
+    return {
+      'postId': postId,
+      'userId': userId,
+      'username': username,
+      'userPhoto': userPhoto,
+      'displayName': displayName,
+      'text': text.trim(),
+      if (imageUrl != null && imageUrl!.isNotEmpty) 'imageUrl': imageUrl,
+      if (videoUrl != null && videoUrl!.isNotEmpty) ...{
+        'videoUrl': videoUrl,
+        'mediaUrl': videoUrl,
+      },
+      'gameTag': gameTag,
+      'userRank': userRank,
+      'userKd': userKd,
+      'likesCount': likesCount,
+      'commentsCount': commentsCount,
+      'isVerified': isVerified,
+      'isDemoAccount': isDemoAccount,
+      'createdAt': createdAt != null ? Timestamp.fromDate(createdAt!) : FieldValue.serverTimestamp(),
+    };
+  }
+
+  GamerPost copyWith({
+    String? postId,
+    String? userId,
+    String? username,
+    String? userPhoto,
+    String? displayName,
+    String? text,
+    String? imageUrl,
+    String? videoUrl,
+    String? gameTag,
+    String? userRank,
+    double? userKd,
+    int? likesCount,
+    int? commentsCount,
+    bool? isVerified,
+    bool? isDemoAccount,
+    DateTime? createdAt,
+  }) {
+    return GamerPost(
+      postId: postId ?? this.postId,
+      userId: userId ?? this.userId,
+      username: username ?? this.username,
+      userPhoto: userPhoto ?? this.userPhoto,
+      displayName: displayName ?? this.displayName,
+      text: text ?? this.text,
+      imageUrl: imageUrl ?? this.imageUrl,
+      videoUrl: videoUrl ?? this.videoUrl,
+      gameTag: gameTag ?? this.gameTag,
+      userRank: userRank ?? this.userRank,
+      userKd: userKd ?? this.userKd,
+      likesCount: likesCount ?? this.likesCount,
+      commentsCount: commentsCount ?? this.commentsCount,
+      isVerified: isVerified ?? this.isVerified,
+      isDemoAccount: isDemoAccount ?? this.isDemoAccount,
+      createdAt: createdAt ?? this.createdAt,
+    );
+  }
+}
