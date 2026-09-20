@@ -204,33 +204,17 @@ class GamerSocialService {
     );
 
     try {
-      Map<String, dynamic>? response;
-      try {
-        // First try with valid UUID
-        response = await _supabase.from('posts').insert({
-          'user_id': postUuid,
-          'content': postContent,
-          'image_url': finalMedia,
-          'video_url': finalVideo,
-          'game': finalGame,
-          'media_url': finalMedia ?? finalVideo,
-          'likes_count': 0,
-          'comments_count': 0,
-        }).select().single();
-      } catch (insertErr) {
-        debugPrint('[GamerSocialService] Insert with UUID failed ($insertErr), retrying with raw userId...');
-        // Fallback with effectiveUserId if posts.user_id is TEXT
-        response = await _supabase.from('posts').insert({
-          'user_id': effectiveUserId,
-          'content': postContent,
-          'image_url': finalMedia,
-          'video_url': finalVideo,
-          'game': finalGame,
-          'media_url': finalMedia ?? finalVideo,
-          'likes_count': 0,
-          'comments_count': 0,
-        }).select().single();
-      }
+      // Supabase posts.user_id requires a valid UUID
+      final response = await _supabase.from('posts').insert({
+        'user_id': postUuid,
+        'content': postContent,
+        'image_url': finalMedia,
+        'video_url': finalVideo,
+        'game': finalGame,
+        'media_url': finalMedia ?? finalVideo,
+        'likes_count': 0,
+        'comments_count': 0,
+      }).select().single();
 
       debugPrint('[GamerSocialService] Post saved successfully: ${response['id']}');
 
