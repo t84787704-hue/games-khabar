@@ -1,5 +1,6 @@
+import 'dart:async';
 import 'package:flutter/foundation.dart';
-import 'package:supabase/supabase.dart'; // Pure Supabase client without flutter package dependency
+import 'package:supabase/supabase.dart'; // Direct Supabase dart SDK stream & query integration
 import '../models/gamer_user_model.dart';
 import '../models/gamer_post_model.dart';
 import '../models/post_comment_model.dart';
@@ -16,15 +17,15 @@ class GamerSocialService {
   // FOLLOW SYSTEM (Supabase)
   // ==========================================
 
-  Stream<bool> isFollowingStream(String currentUid, String targetUid) {
+  Stream<bool> isFollowingStream(String currentUid, String targetUid) async* {
     if (currentUid.isEmpty || targetUid.isEmpty || currentUid == targetUid) {
-      return Stream.value(false);
+      yield false;
+      return;
     }
-    return _supabase
-        .from('follows')
-        .stream(primaryKey: ['id'])
-        .eq('follower_id', currentUid)
-        .map((list) => list.any((item) => item['following_id'] == targetUid));
+    while (true) {
+      yield await isFollowing(currentUid, targetUid);
+      await Future.delayed(const Duration(seconds: 4));
+    }
   }
 
   Future<bool> isFollowing(String currentUid, String targetUid) async {
@@ -74,13 +75,26 @@ class GamerSocialService {
     }
   }
 
-  Stream<List<String>> getFollowingUserIdsStream(String uid) {
-    if (uid.isEmpty) return Stream.value([]);
-    return _supabase
-        .from('follows')
-        .stream(primaryKey: ['id'])
-        .eq('follower_id', uid)
-        .map((list) => list.map((item) => item['following_id'].toString()).toList());
+  Stream<List<String>> getFollowingUserIdsStream(String uid) async* {
+    if (uid.isEmpty) {
+      yield [];
+      return;
+    }
+    while (true) {
+      try {
+        final res = await _supabase
+            .from('follows')
+            .select('following_id')
+            .eq('follower_id', uid);
+        final list = (res as List)
+            .map((item) => item['following_id'].toString())
+            .toList();
+        yield list;
+      } catch (e) {
+        yield [];
+      }
+      await Future.delayed(const Duration(seconds: 5));
+    }
   }
 
   Future<List<GamerUser>> getFollowers(String targetUid) async {
@@ -132,45 +146,59 @@ class GamerSocialService {
     }
   }
 
-  Stream<List<GamerPost>> getAllPostsStream({String? gameTag}) {
-    var query = _supabase.from('posts').select();
-    if (gameTag != null && gameTag != 'All') {
-      query = query.eq('game', gameTag);
+  Stream<List<GamerPost>> getAllPostsStream({String? gameTag}) async* {
+    while (true) {
+      try {
+        var query = _supabase.from('posts').select();
+        if (gameTag != null && gameTag != 'All') {
+          query = query.eq('game', gameTag);
+        }
+        final data = await query.order('created_at', ascending: false).limit(100);
+        final list = (data as List).map((map) => GamerPost.fromMap(map)).toList();
+        yield list;
+      } catch (e) {
+        debugPrint('[GamerSocialService] getAllPosts error: $e');
+      }
+      await Future.delayed(const Duration(seconds: 3));
     }
-    return query
-        .order('created_at', ascending: false)
-        .limit(100)
-        .stream(primaryKey: ['id'])
-        .map((data) {
-      return data.map((map) => GamerPost.fromMap(map)).toList();
-    });
   }
 
   /// Stream of all video posts (gaming clips)
-  Stream<List<GamerPost>> getVideosStream({String? gameTag}) {
-    var query = _supabase.from('posts').select().not('video_url', 'is', null);
-    if (gameTag != null && gameTag != 'All') {
-      query = query.eq('game', gameTag);
+  Stream<List<GamerPost>> getVideosStream({String? gameTag}) async* {
+    while (true) {
+      try {
+        var query = _supabase.from('posts').select().not('video_url', 'is', null);
+        if (gameTag != null && gameTag != 'All') {
+          query = query.eq('game', gameTag);
+        }
+        final data = await query.order('created_at', ascending: false).limit(100);
+        final list = (data as List)
+            .map((map) => GamerPost.fromMap(map))
+            .where((p) => p.videoUrl != null && p.videoUrl!.trim().isNotEmpty)
+            .toList();
+        yield list;
+      } catch (e) {
+        debugPrint('[GamerSocialService] getVideosStream error: $e');
+      }
+      await Future.delayed(const Duration(seconds: 4));
     }
-    return query
-        .order('created_at', ascending: false)
-        .limit(100)
-        .stream(primaryKey: ['id'])
-        .map((data) {
-      return data
-          .map((map) => GamerPost.fromMap(map))
-          .where((p) => p.videoUrl != null && p.videoUrl!.trim().isNotEmpty)
-          .toList();
-    });
   }
 
-  Stream<List<GamerPost>> getUserPostsStream(String userId, [String? username]) {
-    return _supabase
-        .from('posts')
-        .stream(primaryKey: ['id'])
-        .eq('user_id', userId)
-        .order('created_at', ascending: false)
-        .map((data) => data.map((map) => GamerPost.fromMap(map)).toList());
+  Stream<List<GamerPost>> getUserPostsStream(String userId, [String? username]) async* {
+    while (true) {
+      try {
+        final data = await _supabase
+            .from('posts')
+            .select()
+            .eq('user_id', userId)
+            .order('created_at', ascending: false);
+        final list = (data as List).map((map) => GamerPost.fromMap(map)).toList();
+        yield list;
+      } catch (e) {
+        debugPrint('[GamerSocialService] getUserPostsStream error: $e');
+      }
+      await Future.delayed(const Duration(seconds: 3));
+    }
   }
 
   Future<void> deletePost({required String postId, required String userId}) async {
@@ -181,13 +209,25 @@ class GamerSocialService {
     }
   }
 
-  Stream<bool> isPostLikedStream(String postId, String userId) {
-    if (userId.isEmpty || postId.isEmpty) return Stream.value(false);
-    return _supabase
-        .from('likes')
-        .stream(primaryKey: ['id'])
-        .eq('post_id', postId)
-        .map((list) => list.any((item) => item['user_id'] == userId));
+  Stream<bool> isPostLikedStream(String postId, String userId) async* {
+    if (userId.isEmpty || postId.isEmpty) {
+      yield false;
+      return;
+    }
+    while (true) {
+      try {
+        final existing = await _supabase
+            .from('likes')
+            .select('id')
+            .eq('post_id', postId)
+            .eq('user_id', userId)
+            .maybeSingle();
+        yield existing != null;
+      } catch (e) {
+        yield false;
+      }
+      await Future.delayed(const Duration(seconds: 3));
+    }
   }
 
   Future<void> toggleLike({
@@ -216,14 +256,25 @@ class GamerSocialService {
     }
   }
 
-  Stream<List<PostComment>> getCommentsStream(String postId) {
-    if (postId.isEmpty) return Stream.value([]);
-    return _supabase
-        .from('comments')
-        .stream(primaryKey: ['id'])
-        .eq('post_id', postId)
-        .order('created_at', ascending: true)
-        .map((data) => data.map((map) => PostComment.fromMap(map)).toList());
+  Stream<List<PostComment>> getCommentsStream(String postId) async* {
+    if (postId.isEmpty) {
+      yield [];
+      return;
+    }
+    while (true) {
+      try {
+        final data = await _supabase
+            .from('comments')
+            .select()
+            .eq('post_id', postId)
+            .order('created_at', ascending: true);
+        final list = (data as List).map((map) => PostComment.fromMap(map)).toList();
+        yield list;
+      } catch (e) {
+        yield [];
+      }
+      await Future.delayed(const Duration(seconds: 3));
+    }
   }
 
   Future<void> addComment({
