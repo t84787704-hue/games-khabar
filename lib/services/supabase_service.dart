@@ -243,6 +243,24 @@ class SupabaseService {
     return prefs.getString('supabase_user_id');
   }
 
+  /// Returns stored Supabase access token
+  static Future<String?> getAccessToken() async {
+    final prefs = await SharedPreferences.getInstance();
+    return prefs.getString('supabase_access_token');
+  }
+
+  /// Returns headers with user Bearer token if logged in, else anon key
+  static Future<Map<String, String>> getAuthHeaders() async {
+    final token = await getAccessToken();
+    if (token != null && token.isNotEmpty) {
+      return {
+        'apikey': supabaseAnonKey,
+        'Authorization': 'Bearer $token',
+      };
+    }
+    return Map<String, String>.from(_headers);
+  }
+
   // --------------------------------------------------------------------------
   // 3. SUPABASE DATABASE REST CLIENT (CRUD)
   // --------------------------------------------------------------------------
@@ -368,11 +386,12 @@ class SupabaseService {
   /// Upsert a user in public.users
   static Future<bool> upsertUser(Map<String, dynamic> userData) async {
     try {
+      final headers = await getAuthHeaders();
       final uri = Uri.parse('$supabaseUrl/rest/v1/users');
       final response = await http.post(
         uri,
         headers: {
-          ..._headers,
+          ...headers,
           'Content-Type': 'application/json',
           'Prefer': 'resolution=merge-duplicates,return=representation',
         },
@@ -402,8 +421,22 @@ class SupabaseService {
   /// Save a post in public.posts
   static Future<Map<String, dynamic>?> savePost(Map<String, dynamic> postData) async {
     try {
+      // Ensure user_id is a valid UUID
+      String? userId = postData['user_id']?.toString();
+      final uuidRegex = RegExp(r'^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$');
+      if (userId == null || !uuidRegex.hasMatch(userId)) {
+        // Fallback: try getting currently logged in Supabase user's UUID
+        final currentSbId = await getCurrentUserId();
+        if (currentSbId != null && uuidRegex.hasMatch(currentSbId)) {
+          userId = currentSbId;
+        } else {
+          debugPrint('Cannot save post to Supabase: user_id is not a valid UUID ($userId)');
+          return null;
+        }
+      }
+
       final response = await _supabase.from('posts').insert({
-        'user_id': postData['user_id'],
+        'user_id': userId,
         'content': postData['content'],
         'image_url': postData['image_url'],
         'video_url': postData['video_url'],

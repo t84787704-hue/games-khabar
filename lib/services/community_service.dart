@@ -150,16 +150,29 @@ class CommunityService {
 
     // Sync to Supabase posts table
     try {
-      await SupabaseService.savePost({
-        'post_id': docRef.id,
-        'user_id': _userId,
-        'username': _userName,
-        'content': trimmed,
-        'media_url': imageUrl,
-        'media_type': 'image',
-        'game': gameName,
-        'created_at': DateTime.now().toIso8601String(),
-      });
+      // Resolve Supabase UUID
+      String? supabaseUserId = await SupabaseService.getCurrentUserId();
+      final uuidRegex = RegExp(r'^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$');
+      if (supabaseUserId == null || !uuidRegex.hasMatch(supabaseUserId)) {
+        if (uuidRegex.hasMatch(_userId)) {
+          supabaseUserId = _userId;
+        } else {
+          supabaseUserId = null;
+        }
+      }
+
+      if (supabaseUserId != null) {
+        await SupabaseService.savePost({
+          'post_id': docRef.id,
+          'user_id': supabaseUserId,
+          'username': _userName,
+          'content': trimmed,
+          'media_url': imageUrl,
+          'media_type': 'image',
+          'game': gameName,
+          'created_at': DateTime.now().toIso8601String(),
+        });
+      }
     } catch (e) {
       debugPrint('[CommunityService] Supabase post sync notice: $e');
     }

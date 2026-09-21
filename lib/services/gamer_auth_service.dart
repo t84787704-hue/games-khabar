@@ -225,21 +225,21 @@ class GamerAuthService {
         password: password,
         userMetadata: {
           'app': 'GAMERS ID NETWORK',
-          'uid': cred.user?.uid,
           'username': defaultUsername,
           'display_name': defaultUsername,
         },
       );
 
-      final supabaseAuthId = authRes?['user']?['id']?.toString() ?? cred.user?.uid;
+      final supabaseAuthId = authRes?['user']?['id']?.toString();
       if (supabaseAuthId != null) {
-        await SupabaseService.client.from('users').upsert({
+        await SupabaseService.upsertUser({
           'id': supabaseAuthId,
           'uid': supabaseAuthId,
           'email': cleanEmail,
           'username': defaultUsername,
           'display_name': defaultUsername,
-          'avatar_url': '',
+          'avatar_url': null,
+          'coins': 100,
           'created_at': DateTime.now().toIso8601String(),
         });
         debugPrint('[AuthService] Supabase user row created successfully: $supabaseAuthId');
@@ -461,23 +461,30 @@ class GamerAuthService {
     // Synchronize user profile with Supabase public.users table
     try {
       final userEmail = userMap['email']?.toString() ?? user.email;
-      final supabaseUser = {
-        'id': user.uid,
-        'uid': user.uid,
-        'username': user.username,
-        'email': userEmail,
-        'display_name': user.displayName,
-        'avatar_url': user.photoUrl,
-        'cover_url': user.coverUrl,
-        'bio': user.bio,
-        'game_id': user.gameId,
-        'game_name': user.gameName,
-        'gamer_rank': user.gamerRank,
-        'coins': realCoins,
-        'is_verified': user.isVerified,
-        'updated_at': DateTime.now().toIso8601String(),
-      };
-      await SupabaseService.client.from('users').upsert(supabaseUser);
+      final currentSbId = await SupabaseService.getCurrentUserId();
+      final uuidRegex = RegExp(r'^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$');
+      final targetId = (currentSbId != null && uuidRegex.hasMatch(currentSbId))
+          ? currentSbId
+          : (uuidRegex.hasMatch(user.uid) ? user.uid : null);
+
+      if (targetId != null) {
+        final supabaseUser = <String, dynamic>{
+          'id': targetId,
+          'uid': targetId,
+          'username': user.username,
+          'email': userEmail,
+          'display_name': user.displayName,
+          'avatar_url': user.photoUrl.isNotEmpty ? user.photoUrl : null,
+          'cover_url': user.coverUrl.isNotEmpty ? user.coverUrl : null,
+          'bio': user.bio.isNotEmpty ? user.bio : null,
+          'game': (user.favoriteGame.isNotEmpty && user.favoriteGame != 'All Games') ? user.favoriteGame : null,
+          'rank': user.rank.isNotEmpty ? user.rank : null,
+          'coins': realCoins,
+          'is_verified': user.isVerified,
+          'updated_at': DateTime.now().toIso8601String(),
+        };
+        await SupabaseService.upsertUser(supabaseUser);
+      }
     } catch (e) {
       debugPrint('Supabase user sync error: $e');
     }
