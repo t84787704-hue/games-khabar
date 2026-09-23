@@ -1,7 +1,8 @@
 import 'package:flutter/material.dart';
-import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:uuid/uuid.dart';
 import '../models/gamer_post_model.dart';
+import '../services/gamer_auth_service.dart';
+import '../services/supabase_service.dart';
 
 class CreatePostScreen extends StatefulWidget {
   const CreatePostScreen({super.key});
@@ -16,9 +17,18 @@ class _CreatePostScreenState extends State<CreatePostScreen> {
   String _selectedGame = 'Mobile Games';
 
   Future<void> _publishPost() async {
-    final authUser = Supabase.instance.client.auth.currentUser;
+    // Resolve Supabase UUID or Auth UID
+    final uuidRegex = RegExp(r'^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$');
+    String? userId = await SupabaseService.getCurrentUserId();
+    if (userId == null || !uuidRegex.hasMatch(userId)) {
+      final currentUid = GamerAuthService().currentUid;
+      if (currentUid != null && uuidRegex.hasMatch(currentUid)) {
+        userId = currentUid;
+      }
+    }
 
-    if (authUser == null) {
+    if (userId == null) {
+      if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('Login nahi ho, pehle login karo')),
       );
@@ -35,13 +45,17 @@ class _CreatePostScreenState extends State<CreatePostScreen> {
     setState(() => _isLoading = true);
 
     try {
-      // YEHI ASAL FIX HAI - userId hamesha authUser.id
+      final currentGamer = GamerAuthService().currentGamer;
+      final username = (currentGamer?.username.isNotEmpty == true) ? currentGamer!.username : 'mtk';
+      final displayName = (currentGamer?.displayName.isNotEmpty == true) ? currentGamer!.displayName : 'M*TK';
+      final userPhoto = currentGamer?.photoUrl ?? '';
+
       final newPost = GamerPost(
         postId: const Uuid().v4(),
-        userId: authUser.id,
-        username: 'mtk',
-        userPhoto: '',
-        displayName: 'M*TK',
+        userId: userId,
+        username: username,
+        userPhoto: userPhoto,
+        displayName: displayName,
         text: _textController.text.trim(),
         gameTag: _selectedGame == 'Mobile Games' ? 'BGMI' : _selectedGame,
         userRank: 'Ace',
@@ -50,8 +64,8 @@ class _CreatePostScreenState extends State<CreatePostScreen> {
         commentsCount: 0,
       );
 
-      // Supabase me insert
-      await Supabase.instance.client.from('posts').insert(newPost.toMap());
+      // Supabase me insert via SupabaseService.client
+      await SupabaseService.client.from('posts').insert(newPost.toMap());
 
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
