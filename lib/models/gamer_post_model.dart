@@ -51,7 +51,6 @@ class GamerPost {
         borderColor: Color(0x88FF2D55),
       );
     }
-
     if (lowerRank.contains('conqueror')) {
       return const GamerRankBadge(
         type: RankBadgeType.conqueror,
@@ -63,7 +62,6 @@ class GamerPost {
         borderColor: Color(0x99FF334B),
       );
     }
-
     if (lowerRank.contains('ace') || lowerRank.contains('pro') || lowerRank.isNotEmpty) {
       return const GamerRankBadge(
         type: RankBadgeType.ace,
@@ -75,7 +73,6 @@ class GamerPost {
         borderColor: Color(0x88FF9500),
       );
     }
-
     return const GamerRankBadge(
       type: RankBadgeType.none,
       label: '',
@@ -99,7 +96,6 @@ class GamerPost {
         created = (rawCreated as dynamic).toDate();
       } catch (_) {}
     }
-
     return GamerPost(
       postId: (data['id'] ?? data['post_id'] ?? data['postId'] ?? '').toString(),
       userId: (data['user_id'] ?? data['userId'] ?? '').toString(),
@@ -109,13 +105,13 @@ class GamerPost {
       text: data['content'] ?? data['text'] ?? '',
       imageUrl: (data['image_url'] ?? data['imageUrl'] ?? data['media_url']) as String?,
       videoUrl: (data['video_url'] ?? data['videoUrl'] ?? data['mediaUrl']) as String?,
-      gameTag: data['game'] ?? data['gameTag'] ?? 'BGMI',
-      userRank: data['userRank'] ?? 'Ace',
-      userKd: (data['userKd'] as num?)?.toDouble() ?? 0.0,
+      gameTag: data['game'] ?? data['gameTag'] ?? data['game_tag'] ?? 'BGMI',
+      userRank: data['userRank'] ?? data['user_rank'] ?? 'Ace',
+      userKd: (data['userKd'] ?? data['user_kd'] as num?)?.toDouble() ?? 0.0,
       likesCount: (data['likes_count'] ?? data['likesCount'] as num?)?.toInt() ?? 0,
       commentsCount: (data['comments_count'] ?? data['commentsCount'] as num?)?.toInt() ?? 0,
-      isVerified: data['isVerified'] == true,
-      isDemoAccount: data['isDemoAccount'] == true,
+      isVerified: data['isVerified'] == true || data['is_verified'] == true,
+      isDemoAccount: data['isDemoAccount'] == true || data['is_demo_account'] == true,
       createdAt: created,
     );
   }
@@ -145,7 +141,6 @@ class GamerPost {
         } catch (_) {}
       }
     }
-
     return GamerPost(
       postId: data['postId'] ?? data['id'] ?? docId,
       userId: data['userId'] ?? data['user_id'] ?? '',
@@ -166,27 +161,25 @@ class GamerPost {
     );
   }
 
+  // YE SUPABASE KE LIYE SAHI MAP HAI
   Map<String, dynamic> toMap() {
     return {
-      'postId': postId,
-      'userId': userId,
+      'user_id': userId,
       'username': username,
-      'userPhoto': userPhoto,
-      'displayName': displayName,
-      'text': text.trim(),
-      if (imageUrl != null && imageUrl!.isNotEmpty) 'imageUrl': imageUrl,
-      if (videoUrl != null && videoUrl!.isNotEmpty) ...{
-        'videoUrl': videoUrl,
-        'mediaUrl': videoUrl,
-      },
-      'gameTag': gameTag,
-      'userRank': userRank,
-      'userKd': userKd,
-      'likesCount': likesCount,
-      'commentsCount': commentsCount,
-      'isVerified': isVerified,
-      'isDemoAccount': isDemoAccount,
-      'createdAt': createdAt?.toIso8601String() ?? DateTime.now().toIso8601String(),
+      'user_avatar': userPhoto,
+      'display_name': displayName,
+      'content': text,
+      'image_url': imageUrl,
+      'video_url': videoUrl,
+      'media_url': videoUrl,
+      'game': gameTag,
+      'game_tag': gameTag,
+      'user_rank': userRank,
+      'user_kd': userKd,
+      'likes_count': likesCount,
+      'comments_count': commentsCount,
+      'is_verified': isVerified,
+      'is_demo_account': isDemoAccount,
     };
   }
 
