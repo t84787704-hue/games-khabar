@@ -2,7 +2,7 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:image_picker/image_picker.dart';
-import '../models/gamer_theme.dart';
+import '../constants/gamer_theme.dart';
 import '../services/win_proof_validator.dart';
 import '../services/supabase_service.dart';
 

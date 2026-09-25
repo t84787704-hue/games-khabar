@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import 'package:supabase_service.dart';
+import '../services/supabase_service.dart';
 
 class PostCard extends StatefulWidget {
   final Map<String, dynamic> post;
