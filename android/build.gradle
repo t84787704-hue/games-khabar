@@ -19,6 +19,14 @@ subprojects {
         minSdkVersion = 24
         targetSdkVersion = 35
     }
+    if (project.name != "app" && !project.hasProperty("flutter")) {
+        project.ext.flutter = [
+            compileSdkVersion: 36,
+            minSdkVersion    : 24,
+            targetSdkVersion : 35,
+            ndkVersion       : "28.2.13676358"
+        ]
+    }
     afterEvaluate { project ->
         if (project.hasProperty("android")) {
             try {
