@@ -3,8 +3,6 @@ import '../constants/gamer_theme.dart';
 import '../models/gamer_post_model.dart';
 import '../services/gamer_social_service.dart';
 import '../widgets/post_card.dart';
-import '../widgets/tiktok_upload_progress_banner.dart';
-import 'publish_video_screen.dart';
 
 /// Dedicated Facebook Watch-Style Gaming Videos Screen
 class GamerVideosScreen extends StatefulWidget {
@@ -50,55 +48,8 @@ class _GamerVideosScreenState extends State<GamerVideosScreen> {
           ],
         ),
       ),
-      floatingActionButton: Container(
-        decoration: BoxDecoration(
-          color: GamerTheme.accentBlue,
-          borderRadius: BorderRadius.circular(20),
-          boxShadow: [
-            BoxShadow(
-              color: GamerTheme.accentBlue.withOpacity(0.4),
-              blurRadius: 8,
-              offset: const Offset(0, 3),
-            ),
-          ],
-        ),
-        child: Material(
-          color: Colors.transparent,
-          child: InkWell(
-            onTap: () {
-              Navigator.of(context).push(
-                MaterialPageRoute(builder: (_) => const PublishVideoScreen()),
-              );
-            },
-            borderRadius: BorderRadius.circular(20),
-            child: const Padding(
-              padding: EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-              child: Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Icon(Icons.video_call_rounded, color: Colors.white, size: 16),
-                  SizedBox(width: 6),
-                  Text(
-                    'Post Video (Max 3m)',
-                    style: TextStyle(
-                      color: Colors.white,
-                      fontWeight: FontWeight.bold,
-                      fontSize: 12,
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          ),
-        ),
-      ),
       body: CustomScrollView(
         slivers: [
-          // Background Upload Progress Banner (TikTok style)
-          const SliverToBoxAdapter(
-            child: TikTokUploadProgressBanner(),
-          ),
-
           // Game Category Filter Chips
           SliverToBoxAdapter(
             child: Container(
@@ -118,18 +69,18 @@ class _GamerVideosScreenState extends State<GamerVideosScreen> {
                     child: Container(
                       padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
                       decoration: BoxDecoration(
-                        color: isSelected? GamerTheme.accentBlue : GamerTheme.cardDark,
+                        color: isSelected ? GamerTheme.accentBlue : GamerTheme.cardDark,
                         borderRadius: BorderRadius.circular(18),
                         border: Border.all(
-                          color: isSelected? GamerTheme.accentBlue : GamerTheme.borderDark,
+                          color: isSelected ? GamerTheme.accentBlue : GamerTheme.borderDark,
                         ),
                       ),
                       child: Text(
                         tag,
                         style: TextStyle(
-                          color: isSelected? Colors.white : GamerTheme.textGray,
+                          color: isSelected ? Colors.white : GamerTheme.textGray,
                           fontSize: 12,
-                          fontWeight: isSelected? FontWeight.bold : FontWeight.normal,
+                          fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
                         ),
                       ),
                     ),
@@ -142,7 +93,7 @@ class _GamerVideosScreenState extends State<GamerVideosScreen> {
           // Stream of Videos
           StreamBuilder<List<GamerPost>>(
             stream: _socialService.getVideosStream(
-              gameTag: _selectedTag == 'All'? null : _selectedTag,
+              gameTag: _selectedTag == 'All' ? null : _selectedTag,
             ),
             builder: (context, snapshot) {
               if (snapshot.connectionState == ConnectionState.waiting) {
@@ -153,7 +104,7 @@ class _GamerVideosScreenState extends State<GamerVideosScreen> {
                 );
               }
 
-              final videoPosts = snapshot.data?? [];
+              final videoPosts = snapshot.data ?? [];
 
               if (videoPosts.isEmpty) {
                 return SliverFillRemaining(
@@ -179,7 +130,7 @@ class _GamerVideosScreenState extends State<GamerVideosScreen> {
                           ),
                           const SizedBox(height: 16),
                           Text(
-                            'No Videos Published Yet',
+                            'No Videos Available',
                             style: TextStyle(
                               color: GamerTheme.textWhite,
                               fontSize: 17,
@@ -188,31 +139,12 @@ class _GamerVideosScreenState extends State<GamerVideosScreen> {
                           ),
                           const SizedBox(height: 6),
                           const Text(
-                            'Publish your first gaming clutch or funny clip!\nMaximum duration: 3 minutes.',
+                            'Check back later for new gaming clips and highlights.',
                             textAlign: TextAlign.center,
                             style: TextStyle(
                               color: GamerTheme.textMuted,
                               fontSize: 13,
                               height: 1.4,
-                            ),
-                          ),
-                          const SizedBox(height: 20),
-                          ElevatedButton.icon(
-                            onPressed: () {
-                              Navigator.of(context).push(
-                                MaterialPageRoute(builder: (_) => const PublishVideoScreen()),
-                              );
-                            },
-                            style: ElevatedButton.styleFrom(
-                              backgroundColor: GamerTheme.accentBlue,
-                              foregroundColor: Colors.white,
-                              padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
-                              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                            ),
-                            icon: const Icon(Icons.video_call_rounded, size: 20),
-                            label: const Text(
-                              'Publish Video Now',
-                              style: TextStyle(fontWeight: FontWeight.bold),
                             ),
                           ),
                         ],
