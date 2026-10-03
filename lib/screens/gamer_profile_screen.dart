@@ -1911,21 +1911,21 @@ class _GamerProfileScreenState extends State<GamerProfileScreen> with SingleTick
                                 ),
                               ],
                             ),
-                            child: const Row(
+                            child: Row(
                               children: [
                                 Container(
-                                  padding: EdgeInsets.all(10),
-                                  decoration: BoxDecoration(
+                                  padding: const EdgeInsets.all(10),
+                                  decoration: const BoxDecoration(
                                     color: Color(0xFFE7F3FF),
                                     shape: BoxShape.circle,
                                   ),
-                                  child: Icon(
+                                  child: const Icon(
                                     Icons.share_rounded,
                                     color: Color(0xFF1877F2),
                                     size: 20,
                                   ),
                                 ),
-                                SizedBox(width: 14),
+                                const SizedBox(width: 14),
                                 Expanded(
                                   child: Column(
                                     crossAxisAlignment: CrossAxisAlignment.start,
