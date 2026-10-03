@@ -6,7 +6,6 @@ import '../constants/gamer_theme.dart';
 import '../services/gamer_auth_service.dart';
 import '../services/theme_service.dart';
 import 'gamer_feed_screen.dart';
-import 'gamer_videos_screen.dart';
 import 'teams_screen.dart';
 import 'gamer_rooms_screen.dart';
 import 'gamer_profile_screen.dart';
@@ -58,7 +57,7 @@ class _GamerMainNavigationScreenState extends State<GamerMainNavigationScreen> {
         if (newIsAdmin != _isAdmin && mounted) {
           setState(() {
             _isAdmin = newIsAdmin;
-            if (!_isAdmin && _currentIndex > 4) {
+            if (!_isAdmin && _currentIndex > 3) {
               _currentIndex = 0;
             }
           });
@@ -87,11 +86,10 @@ class _GamerMainNavigationScreenState extends State<GamerMainNavigationScreen> {
 
   @override
   Widget build(BuildContext context) {
-    // 5 Core tabs: Feed, Videos, Teams, Rooms, Profile
+    // 4 Core tabs: Feed, Teams, Rooms, Profile
     // Admin tab: Admin (shield icon) visible ONLY to admin
     final screens = <Widget>[
       const GamerFeedScreen(),
-      const GamerVideosScreen(),
       const TeamsScreen(),
       const GamerRoomsScreen(),
       const GamerProfileScreen(),
@@ -146,50 +144,40 @@ class _GamerMainNavigationScreenState extends State<GamerMainNavigationScreen> {
                       isDark: isDark,
                     ),
 
-                    // Tab 1: Videos (Facebook Watch style Gaming Clips)
+                    // Tab 1: Teams
                     _buildNavItem(
                       index: 1,
-                      icon: Icons.ondemand_video_rounded,
-                      label: 'Videos',
+                      icon: Icons.shield_rounded,
+                      label: 'Teams',
                       isSelected: _currentIndex == 1,
-                      activeColor: const Color(0xFFFF7A00),
                       isDark: isDark,
                     ),
 
-                    // Tab 2: Teams
+                    // Tab 2: Rooms (Tournaments / Custom Rooms)
                     _buildNavItem(
                       index: 2,
-                      icon: Icons.shield_rounded,
-                      label: 'Teams',
+                      icon: Icons.military_tech_rounded,
+                      label: 'Rooms',
                       isSelected: _currentIndex == 2,
                       isDark: isDark,
                     ),
 
-                    // Tab 3: Rooms (Tournaments / Custom Rooms)
+                    // Tab 3: Profile
                     _buildNavItem(
                       index: 3,
-                      icon: Icons.military_tech_rounded,
-                      label: 'Rooms',
+                      icon: Icons.person_rounded,
+                      label: 'Profile',
                       isSelected: _currentIndex == 3,
                       isDark: isDark,
                     ),
 
-                    // Tab 4: Profile
-                    _buildNavItem(
-                      index: 4,
-                      icon: Icons.person_rounded,
-                      label: 'Profile',
-                      isSelected: _currentIndex == 4,
-                      isDark: isDark,
-                    ),
-
-                    // Tab 5: Admin (Visible ONLY to Admin)
+                    // Tab 4: Admin (Visible ONLY to Admin)
                     if (_isAdmin)
                       _buildNavItem(
-                        index: 5,
+                        index: 4,
                         icon: Icons.shield_rounded,
                         label: 'Admin',
-                        isSelected: _currentIndex == 5,
+                        isSelected: _currentIndex == 4,
                         activeColor: const Color(0xFF00FF88),
                         isDark: isDark,
                       ),
