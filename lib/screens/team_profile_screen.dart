@@ -176,6 +176,10 @@ class _TeamProfileScreenState extends State<TeamProfileScreen> {
                   orElse: () => {},
                 );
                 final bool hasActiveMatch = activeMatch.isNotEmpty;
+                final bool isMyOwnTeam = isLeader ||
+                    isMember ||
+                    widget.teamId == myTeamId ||
+                    myLeaderTeams.any((t) => t.id == widget.teamId);
                 final bool isMatchLeader = hasActiveMatch && (
                   isLeader ||
                   myLeaderTeams.any((t) {
@@ -216,7 +220,7 @@ class _TeamProfileScreenState extends State<TeamProfileScreen> {
                             ),
                           ),
                         )
-                      else if (!isLeader && !isMember) ...[
+                      else if (!isMyOwnTeam) ...[
                         IconButton(
                           tooltip: 'Challenge Team',
                           icon: const Icon(Icons.flash_on_rounded, color: Color(0xFFFF4655)),
@@ -327,8 +331,341 @@ class _TeamProfileScreenState extends State<TeamProfileScreen> {
                             ),
                           ),
 
-                        // 2. RED BANNER: Realtime Supabase check if pending challenge already sent to this team
-                        if (!isLeader && !isMember && myTeamId.isNotEmpty)
+                        // 1. IN MY OWN TEAM PROFILE: Outgoing Requests
+                        if (isMyOwnTeam)
+                          StreamBuilder<List<Map<String, dynamic>>>(
+                            stream: SupabaseService.client
+                                .from('challenges')
+                                .stream(primaryKey: ['id'])
+                                .eq('from_team_id', SupabaseService.toUuid(widget.teamId)),
+                            builder: (context, outSnap) {
+                              if (!outSnap.hasData) return const SizedBox.shrink();
+                              final outgoingList = outSnap.data!
+                                  .where((d) => (d['status'] ?? '').toString().toLowerCase() == 'pending')
+                                  .toList();
+                              if (outgoingList.isEmpty) return const SizedBox.shrink();
+
+                              return Container(
+                                width: double.infinity,
+                                margin: const EdgeInsets.only(bottom: 14),
+                                padding: const EdgeInsets.all(14),
+                                decoration: BoxDecoration(
+                                  color: const Color(0xFF131A29),
+                                  borderRadius: BorderRadius.circular(14),
+                                  border: Border.all(color: const Color(0xFFFF6B00).withOpacity(0.6), width: 1.5),
+                                  boxShadow: [
+                                    BoxShadow(
+                                      color: const Color(0xFFFF6B00).withOpacity(0.08),
+                                      blurRadius: 8,
+                                      offset: const Offset(0, 2),
+                                    ),
+                                  ],
+                                ),
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Row(
+                                      children: [
+                                        Container(
+                                          padding: const EdgeInsets.all(6),
+                                          decoration: BoxDecoration(
+                                            color: const Color(0xFFFF6B00).withOpacity(0.18),
+                                            borderRadius: BorderRadius.circular(8),
+                                          ),
+                                          child: const Icon(Icons.send_rounded, color: Color(0xFFFF6B00), size: 18),
+                                        ),
+                                        const SizedBox(width: 8),
+                                        const Expanded(
+                                          child: Text(
+                                            'My Outgoing Requests',
+                                            style: TextStyle(
+                                              color: Colors.white,
+                                              fontWeight: FontWeight.bold,
+                                              fontSize: 15,
+                                            ),
+                                          ),
+                                        ),
+                                        Container(
+                                          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                                          decoration: BoxDecoration(
+                                            color: const Color(0xFFFF6B00),
+                                            borderRadius: BorderRadius.circular(12),
+                                          ),
+                                          child: Text(
+                                            '${outgoingList.length} Sent',
+                                            style: const TextStyle(color: Colors.black, fontWeight: FontWeight.bold, fontSize: 11),
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                    const SizedBox(height: 10),
+                                    ...outgoingList.map((doc) {
+                                      final challengeId = doc['id'];
+                                      final toTeamName = doc['to_team_name']?.toString() ?? 'Opponent Team';
+
+                                      return Container(
+                                        margin: const EdgeInsets.only(bottom: 8),
+                                        padding: const EdgeInsets.all(12),
+                                        decoration: BoxDecoration(
+                                          color: const Color(0xFF1B2436),
+                                          borderRadius: BorderRadius.circular(10),
+                                          border: Border.all(color: const Color(0xFF2A3447)),
+                                        ),
+                                        child: Row(
+                                          children: [
+                                            const CircleAvatar(
+                                              radius: 16,
+                                              backgroundColor: Color(0xFF26334D),
+                                              child: Icon(Icons.shield_rounded, color: Color(0xFFFF6B00), size: 18),
+                                            ),
+                                            const SizedBox(width: 10),
+                                            Expanded(
+                                              child: Column(
+                                                crossAxisAlignment: CrossAxisAlignment.start,
+                                                children: [
+                                                  Text(
+                                                    'Aap ne $toTeamName ko challenge bheja hai',
+                                                    style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: Colors.white),
+                                                  ),
+                                                  const SizedBox(height: 2),
+                                                  const Text(
+                                                    'جواب کا انتظار ہے (Waiting for response)',
+                                                    style: TextStyle(color: Color(0xFF8B949E), fontSize: 11),
+                                                  ),
+                                                ],
+                                              ),
+                                            ),
+                                            const SizedBox(width: 8),
+                                            Container(
+                                              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 5),
+                                              decoration: BoxDecoration(
+                                                color: Colors.white12,
+                                                borderRadius: BorderRadius.circular(6),
+                                                border: Border.all(color: Colors.white24),
+                                              ),
+                                              child: const Text(
+                                                'REQUESTED',
+                                                style: TextStyle(color: Colors.white70, fontWeight: FontWeight.bold, fontSize: 11),
+                                              ),
+                                            ),
+                                            const SizedBox(width: 6),
+                                            ElevatedButton(
+                                              onPressed: () async {
+                                                await SupabaseService.client
+                                                    .from('challenges')
+                                                    .delete()
+                                                    .eq('id', challengeId);
+                                                if (mounted) {
+                                                  setState(() {});
+                                                  ScaffoldMessenger.of(context).showSnackBar(
+                                                    const SnackBar(
+                                                      content: Text('🚫 چیلنج کامیابی سے Cancel کر دیا گیا ہے'),
+                                                      backgroundColor: Color(0xFF1877F2),
+                                                    ),
+                                                  );
+                                                }
+                                              },
+                                              style: ElevatedButton.styleFrom(
+                                                backgroundColor: const Color(0xFFFF4655),
+                                                foregroundColor: Colors.white,
+                                                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+                                                minimumSize: const Size(0, 32),
+                                                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(6)),
+                                                elevation: 0,
+                                              ),
+                                              child: const Text('CANCEL', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 11)),
+                                            ),
+                                          ],
+                                        ),
+                                      );
+                                    }),
+                                  ],
+                                ),
+                              );
+                            },
+                          ),
+
+                        // 3. FOR RECEIVER: In J17's OWN TEAM PROFILE: Incoming Challenges
+                        if (isMyOwnTeam)
+                          StreamBuilder<List<Map<String, dynamic>>>(
+                            stream: SupabaseService.client
+                                .from('challenges')
+                                .stream(primaryKey: ['id'])
+                                .eq('to_team_id', SupabaseService.toUuid(widget.teamId)),
+                            builder: (context, incSnap) {
+                              if (!incSnap.hasData) return const SizedBox.shrink();
+                              final incomingList = incSnap.data!
+                                  .where((d) => (d['status'] ?? '').toString().toLowerCase() == 'pending')
+                                  .toList();
+                              if (incomingList.isEmpty) return const SizedBox.shrink();
+
+                              return Container(
+                                width: double.infinity,
+                                margin: const EdgeInsets.only(bottom: 14),
+                                padding: const EdgeInsets.all(14),
+                                decoration: BoxDecoration(
+                                  color: const Color(0xFF131A29),
+                                  borderRadius: BorderRadius.circular(14),
+                                  border: Border.all(color: const Color(0xFF00FF88).withOpacity(0.5), width: 1.5),
+                                  boxShadow: [
+                                    BoxShadow(
+                                      color: const Color(0xFF00FF88).withOpacity(0.08),
+                                      blurRadius: 8,
+                                      offset: const Offset(0, 2),
+                                    ),
+                                  ],
+                                ),
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Row(
+                                      children: [
+                                        Container(
+                                          padding: const EdgeInsets.all(6),
+                                          decoration: BoxDecoration(
+                                            color: const Color(0xFF00FF88).withOpacity(0.18),
+                                            borderRadius: BorderRadius.circular(8),
+                                          ),
+                                          child: const Icon(Icons.flash_on_rounded, color: Color(0xFF00FF88), size: 18),
+                                        ),
+                                        const SizedBox(width: 8),
+                                        const Expanded(
+                                          child: Text(
+                                            'Incoming Challenges',
+                                            style: TextStyle(
+                                              color: Colors.white,
+                                              fontWeight: FontWeight.bold,
+                                              fontSize: 15,
+                                            ),
+                                          ),
+                                        ),
+                                        Container(
+                                          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                                          decoration: BoxDecoration(
+                                            color: const Color(0xFFFF4655),
+                                            borderRadius: BorderRadius.circular(12),
+                                          ),
+                                          child: Text(
+                                            '${incomingList.length} New',
+                                            style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 11),
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                    const SizedBox(height: 10),
+                                    ...incomingList.map((doc) {
+                                      final challengeId = doc['id'];
+                                      final fromTeamName = doc['from_team_name']?.toString() ?? 'Opponent Team';
+                                      final fromTeamId = doc['from_team_id']?.toString() ?? '';
+                                      final toTeamId = doc['to_team_id']?.toString() ?? widget.teamId;
+
+                                      return Container(
+                                        margin: const EdgeInsets.only(bottom: 8),
+                                        padding: const EdgeInsets.all(12),
+                                        decoration: BoxDecoration(
+                                          color: const Color(0xFF1B2436),
+                                          borderRadius: BorderRadius.circular(10),
+                                          border: Border.all(color: const Color(0xFF2A3447)),
+                                        ),
+                                        child: Column(
+                                          crossAxisAlignment: CrossAxisAlignment.start,
+                                          children: [
+                                            Row(
+                                              children: [
+                                                const CircleAvatar(
+                                                  radius: 18,
+                                                  backgroundColor: Color(0xFF26334D),
+                                                  child: Icon(Icons.shield_rounded, color: Color(0xFF00FF88), size: 20),
+                                                ),
+                                                const SizedBox(width: 10),
+                                                Expanded(
+                                                  child: Text(
+                                                    '$fromTeamName ne aap ko challenge bheja hai',
+                                                    style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13.5, color: Colors.white),
+                                                  ),
+                                                ),
+                                              ],
+                                            ),
+                                            const SizedBox(height: 10),
+                                            Row(
+                                              children: [
+                                                Expanded(
+                                                  child: OutlinedButton(
+                                                    onPressed: () async {
+                                                      await SupabaseService.client
+                                                          .from('challenges')
+                                                          .update({'status': 'rejected'})
+                                                          .eq('id', challengeId);
+                                                      if (mounted) {
+                                                        setState(() {});
+                                                        ScaffoldMessenger.of(context).showSnackBar(
+                                                          const SnackBar(content: Text('Challenge rejected')),
+                                                        );
+                                                      }
+                                                    },
+                                                    style: OutlinedButton.styleFrom(
+                                                      foregroundColor: const Color(0xFFFF4655),
+                                                      side: const BorderSide(color: Color(0xFFFF4655)),
+                                                      padding: const EdgeInsets.symmetric(vertical: 6),
+                                                      minimumSize: const Size(0, 34),
+                                                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                                                    ),
+                                                    child: const Text('REJECT', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12)),
+                                                  ),
+                                                ),
+                                                const SizedBox(width: 10),
+                                                Expanded(
+                                                  child: ElevatedButton(
+                                                    onPressed: () async {
+                                                      await SupabaseService.client
+                                                          .from('challenges')
+                                                          .update({'status': 'accepted'})
+                                                          .eq('id', challengeId);
+                                                      final t1 = SupabaseService.toUuid(fromTeamId);
+                                                      final t2 = SupabaseService.toUuid(toTeamId);
+                                                      await SupabaseService.client
+                                                          .from('active_matches')
+                                                          .insert({
+                                                            'team1_id': t1,
+                                                            'team2_id': t2,
+                                                            'participants': [t1, t2],
+                                                            'status': 'active',
+                                                          });
+                                                      if (mounted) {
+                                                        setState(() {});
+                                                        ScaffoldMessenger.of(context).showSnackBar(
+                                                          const SnackBar(
+                                                            content: Text('✅ Challenge Accepted! Active Match is Live.'),
+                                                            backgroundColor: Color(0xFF00FF88),
+                                                          ),
+                                                        );
+                                                      }
+                                                    },
+                                                    style: ElevatedButton.styleFrom(
+                                                      backgroundColor: const Color(0xFF00FF88),
+                                                      foregroundColor: Colors.black,
+                                                      padding: const EdgeInsets.symmetric(vertical: 6),
+                                                      minimumSize: const Size(0, 34),
+                                                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                                                      elevation: 0,
+                                                    ),
+                                                    child: const Text('ACCEPT', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12)),
+                                                  ),
+                                                ),
+                                              ],
+                                            ),
+                                          ],
+                                        ),
+                                      );
+                                    }),
+                                  ],
+                                ),
+                              );
+                            },
+                          ),
+
+                        // 2. RED BANNER ON OPPONENT PROFILE: Realtime Supabase check if pending challenge already sent to this team
+                        if (!isMyOwnTeam && myTeamId.isNotEmpty)
                           StreamBuilder<List<Map<String, dynamic>>>(
                             stream: SupabaseService.client
                                 .from('challenges')
@@ -503,8 +840,8 @@ class _TeamProfileScreenState extends State<TeamProfileScreen> {
                 ),
                 const SizedBox(height: 16),
 
-                // Action Buttons (Join Request / Challenge)
-                if (!isLeader && !isMember) ...[
+                // Action Buttons (Join Request / Challenge on Opponent Profile)
+                if (!isMyOwnTeam) ...[
                   Row(
                     children: [
                       // Join Request Button
