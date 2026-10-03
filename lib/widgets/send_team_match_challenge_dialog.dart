@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:intl/intl.dart';
 import '../models/team_model.dart';
 import '../services/gamer_auth_service.dart';
@@ -339,6 +340,101 @@ class _SendTeamMatchChallengeDialogState extends State<SendTeamMatchChallengeDia
               ),
             ),
             const SizedBox(height: 16),
+
+            // Active Pending Challenge Red Banner
+            StreamBuilder<QuerySnapshot>(
+              stream: FirebaseFirestore.instance
+                  .collection('challenges')
+                  .where('toTeamId', isEqualTo: widget.opponentTeam.id)
+                  .snapshots(),
+              builder: (context, cSnap) {
+                String? pendingChallengeId;
+                if (cSnap.hasData) {
+                  final curUid = FirebaseAuth.instance.currentUser?.uid ?? '';
+                  for (var d in cSnap.data!.docs) {
+                    final data = d.data() as Map<String, dynamic>;
+                    final st = (data['status'] ?? '').toString().toLowerCase();
+                    if (st == 'pending') {
+                      final fTeam = data['fromTeamId']?.toString() ?? '';
+                      final fLeader = data['fromTeamLeaderId']?.toString() ?? '';
+                      if (fTeam == _selectedMyTeamId || (curUid.isNotEmpty && fLeader == curUid)) {
+                        pendingChallengeId = d.id;
+                        break;
+                      }
+                    }
+                  }
+                }
+
+                if (pendingChallengeId == null) return const SizedBox.shrink();
+
+                return Container(
+                  margin: const EdgeInsets.only(bottom: 16),
+                  padding: const EdgeInsets.all(12),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFFFF4655).withOpacity(0.12),
+                    borderRadius: BorderRadius.circular(12),
+                    border: Border.all(color: const Color(0xFFFF4655), width: 1.2),
+                  ),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      const Row(
+                        children: [
+                          Icon(Icons.warning_amber_rounded, color: Color(0xFFFF4655), size: 20),
+                          SizedBox(width: 8),
+                          Expanded(
+                            child: Text(
+                              'Aap ne pehle hi challenge bheja hai',
+                              style: TextStyle(
+                                color: Color(0xFFFF4655),
+                                fontWeight: FontWeight.bold,
+                                fontSize: 13.5,
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 6),
+                      const Text(
+                        'آپ نے اس ٹیم کو پہلے سے چیلنج بھیجا ہوا ہے۔ اگر آپ نیا چیلنج بھیجنا چاہتے ہیں تو پہلے موجودہ چیلنج کو Cancel کریں۔',
+                        style: TextStyle(color: Colors.white70, fontSize: 12),
+                      ),
+                      const SizedBox(height: 10),
+                      SizedBox(
+                        width: double.infinity,
+                        child: OutlinedButton.icon(
+                          onPressed: () async {
+                            final uid = FirebaseAuth.instance.currentUser?.uid ?? '';
+                            final success = await _matchService.cancelChallenge(pendingChallengeId!, cancelledByUid: uid);
+                            if (mounted) {
+                              if (success) {
+                                ScaffoldMessenger.of(context).showSnackBar(
+                                  const SnackBar(
+                                    content: Text('🚫 چیلنج کامیابی سے Cancel کر دیا گیا ہے'),
+                                    backgroundColor: Color(0xFF1877F2),
+                                  ),
+                                );
+                              }
+                            }
+                          },
+                          style: OutlinedButton.styleFrom(
+                            foregroundColor: const Color(0xFFFF4655),
+                            side: const BorderSide(color: Color(0xFFFF4655), width: 1.2),
+                            padding: const EdgeInsets.symmetric(vertical: 8),
+                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                          ),
+                          icon: const Icon(Icons.close_rounded, size: 16),
+                          label: const Text(
+                            'CANCEL CHALLENGE (چیلنج منسوخ کریں)',
+                            style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12),
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                );
+              },
+            ),
 
             // Select My Team
             if (widget.myTeams.isNotEmpty) ...[

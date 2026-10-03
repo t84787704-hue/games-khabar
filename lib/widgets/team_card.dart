@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
 import '../models/team_model.dart';
 import '../services/team_service.dart';
+import '../services/team_match_service.dart';
 import '../services/gamer_auth_service.dart';
 import '../widgets/send_team_match_challenge_dialog.dart';
 import '../screens/team_profile_screen.dart';
@@ -17,7 +19,23 @@ class TeamCard extends StatefulWidget {
 
 class _TeamCardState extends State<TeamCard> {
   final TeamService _teamService = TeamService();
+  final TeamMatchService _matchService = TeamMatchService();
   bool _isRequesting = false;
+
+  Future<void> _handleCancelChallenge(String challengeId) async {
+    final currentUid = FirebaseAuth.instance.currentUser?.uid ?? '';
+    final success = await _matchService.cancelChallenge(challengeId, cancelledByUid: currentUid);
+    if (mounted) {
+      if (success) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('🚫 چیلنج کامیابی سے Cancel کر دیا گیا ہے'),
+            backgroundColor: Color(0xFF1877F2),
+          ),
+        );
+      }
+    }
+  }
 
   Future<void> _handleJoin(String currentUid) async {
     final currentGamer = GamerAuthService().currentGamer;
@@ -218,6 +236,70 @@ class _TeamCardState extends State<TeamCard> {
                   ),
                 ],
 
+                // Red banner if current user has already sent a pending challenge to this team
+                if (!isLeader && !isMember && currentUid.isNotEmpty)
+                  StreamBuilder<QuerySnapshot>(
+                    stream: FirebaseFirestore.instance
+                        .collection('challenges')
+                        .where('toTeamId', isEqualTo: team.id)
+                        .snapshots(),
+                    builder: (context, cSnap) {
+                      String? pendingChallengeId;
+                      if (cSnap.hasData) {
+                        for (var d in cSnap.data!.docs) {
+                          final data = d.data() as Map<String, dynamic>;
+                          final st = (data['status'] ?? '').toString().toLowerCase();
+                          if (st == 'pending') {
+                            final fLeader = data['fromTeamLeaderId']?.toString() ?? '';
+                            if (fLeader == currentUid) {
+                              pendingChallengeId = d.id;
+                              break;
+                            }
+                          }
+                        }
+                      }
+
+                      if (pendingChallengeId == null) return const SizedBox.shrink();
+
+                      return Container(
+                        margin: const EdgeInsets.only(top: 8),
+                        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                        decoration: BoxDecoration(
+                          color: const Color(0xFFFEF2F2),
+                          borderRadius: BorderRadius.circular(8),
+                          border: Border.all(color: const Color(0xFFFF4655).withOpacity(0.5)),
+                        ),
+                        child: Row(
+                          children: [
+                            const Icon(Icons.warning_amber_rounded, color: Color(0xFFFF4655), size: 14),
+                            const SizedBox(width: 6),
+                            const Expanded(
+                              child: Text(
+                                'Aap ne pehle hi challenge bheja hai',
+                                style: TextStyle(color: Color(0xFFFF4655), fontSize: 11, fontWeight: FontWeight.bold),
+                              ),
+                            ),
+                            InkWell(
+                              onTap: () => _handleCancelChallenge(pendingChallengeId!),
+                              child: const Padding(
+                                padding: EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                                child: Text(
+                                  'Cancel',
+                                  style: TextStyle(
+                                    color: Color(0xFFFF4655),
+                                    fontSize: 11.5,
+                                    fontWeight: FontWeight.w900,
+                                    decoration: TextDecoration.underline,
+                                  ),
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                      );
+                    },
+                  ),
+
                 const SizedBox(height: 12),
                 const Divider(color: Color(0xFFE4E6EB), height: 1),
                 const SizedBox(height: 10),
@@ -281,18 +363,59 @@ class _TeamCardState extends State<TeamCard> {
                         ),
                       ),
                     ] else ...[
-                      // Challenge Button
-                      OutlinedButton.icon(
-                        style: OutlinedButton.styleFrom(
-                          foregroundColor: const Color(0xFF1877F2),
-                          side: const BorderSide(color: Color(0xFF1877F2)),
-                          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                          minimumSize: const Size(0, 32),
-                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-                        ),
-                        icon: const Icon(Icons.flash_on_rounded, size: 13, color: Color(0xFF1877F2)),
-                        label: const Text('Challenge', style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold)),
-                        onPressed: () => _handleChallenge(currentUid),
+                      // Challenge / Cancel Challenge Button
+                      StreamBuilder<QuerySnapshot>(
+                        stream: currentUid.isNotEmpty
+                            ? FirebaseFirestore.instance
+                                .collection('challenges')
+                                .where('toTeamId', isEqualTo: team.id)
+                                .snapshots()
+                            : Stream.empty(),
+                        builder: (context, cSnap) {
+                          String? pendingChallengeId;
+                          if (cSnap.hasData) {
+                            for (var d in cSnap.data!.docs) {
+                              final data = d.data() as Map<String, dynamic>;
+                              final st = (data['status'] ?? '').toString().toLowerCase();
+                              if (st == 'pending') {
+                                final fLeader = data['fromTeamLeaderId']?.toString() ?? '';
+                                if (fLeader == currentUid) {
+                                  pendingChallengeId = d.id;
+                                  break;
+                                }
+                              }
+                            }
+                          }
+
+                          if (pendingChallengeId != null) {
+                            return OutlinedButton.icon(
+                              style: OutlinedButton.styleFrom(
+                                foregroundColor: const Color(0xFFFF4655),
+                                side: const BorderSide(color: Color(0xFFFF4655), width: 1.2),
+                                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                                minimumSize: const Size(0, 32),
+                                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                                backgroundColor: const Color(0xFFFEF2F2),
+                              ),
+                              icon: const Icon(Icons.close_rounded, size: 13, color: Color(0xFFFF4655)),
+                              label: const Text('Cancel Challenge', style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold)),
+                              onPressed: () => _handleCancelChallenge(pendingChallengeId!),
+                            );
+                          }
+
+                          return OutlinedButton.icon(
+                            style: OutlinedButton.styleFrom(
+                              foregroundColor: const Color(0xFF1877F2),
+                              side: const BorderSide(color: Color(0xFF1877F2)),
+                              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                              minimumSize: const Size(0, 32),
+                              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                            ),
+                            icon: const Icon(Icons.flash_on_rounded, size: 13, color: Color(0xFF1877F2)),
+                            label: const Text('Challenge', style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold)),
+                            onPressed: () => _handleChallenge(currentUid),
+                          );
+                        },
                       ),
                       const SizedBox(width: 8),
 

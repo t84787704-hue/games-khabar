@@ -15,6 +15,7 @@ class TeamMatchService {
   CollectionReference get _matchesRef => _firestore.collection('team_matches');
   CollectionReference get _rankingsRef => _firestore.collection('team_rankings');
   CollectionReference get _notificationsRef => _firestore.collection('notifications');
+  CollectionReference get _challengesRef => _firestore.collection('challenges');
 
   /// Check if there is already an active match/challenge between two teams
   /// (Pending, Accepted, Live, Proof Submitted, Disputed)
@@ -40,6 +41,65 @@ class TeamMatchService {
       for (var doc in query2.docs) {
         final match = TeamMatch.fromFirestore(doc);
         if (match.isActive) return match;
+      }
+
+      // Also check in challenges collection (for cross-compatibility)
+      final cQuery1 = await _challengesRef
+          .where('fromTeamId', isEqualTo: teamAId)
+          .where('toTeamId', isEqualTo: teamBId)
+          .get();
+      for (var doc in cQuery1.docs) {
+        final d = doc.data() as Map<String, dynamic>?;
+        final st = (d?['status'] ?? '').toString().toLowerCase();
+        if (st == 'pending' || st == 'accepted' || st == 'live') {
+          return TeamMatch(
+            matchId: doc.id,
+            team1Id: teamAId,
+            team1Name: d?['fromTeamName'] ?? '',
+            team1LeaderId: d?['fromTeamLeaderId'] ?? '',
+            team1LeaderName: d?['fromTeamLeaderName'] ?? '',
+            team2Id: teamBId,
+            team2Name: d?['toTeamName'] ?? '',
+            team2LeaderId: d?['toTeamLeaderId'] ?? '',
+            team2LeaderName: d?['toTeamLeaderName'] ?? '',
+            game: d?['game'] ?? '',
+            mode: d?['mode'] ?? '',
+            matchTime: DateTime.now(),
+            entryFee: d?['entryFee'] ?? 'Free',
+            status: st == 'pending' ? 'Pending' : 'Accepted',
+            chatId: doc.id,
+            createdAt: DateTime.now(),
+          );
+        }
+      }
+
+      final cQuery2 = await _challengesRef
+          .where('fromTeamId', isEqualTo: teamBId)
+          .where('toTeamId', isEqualTo: teamAId)
+          .get();
+      for (var doc in cQuery2.docs) {
+        final d = doc.data() as Map<String, dynamic>?;
+        final st = (d?['status'] ?? '').toString().toLowerCase();
+        if (st == 'pending' || st == 'accepted' || st == 'live') {
+          return TeamMatch(
+            matchId: doc.id,
+            team1Id: teamBId,
+            team1Name: d?['fromTeamName'] ?? '',
+            team1LeaderId: d?['fromTeamLeaderId'] ?? '',
+            team1LeaderName: d?['fromTeamLeaderName'] ?? '',
+            team2Id: teamAId,
+            team2Name: d?['toTeamName'] ?? '',
+            team2LeaderId: d?['toTeamLeaderId'] ?? '',
+            team2LeaderName: d?['toTeamLeaderName'] ?? '',
+            game: d?['game'] ?? '',
+            mode: d?['mode'] ?? '',
+            matchTime: DateTime.now(),
+            entryFee: d?['entryFee'] ?? 'Free',
+            status: st == 'pending' ? 'Pending' : 'Accepted',
+            chatId: doc.id,
+            createdAt: DateTime.now(),
+          );
+        }
       }
 
       return null;
@@ -106,6 +166,32 @@ class TeamMatchService {
 
       await matchDoc.set(match.toMap());
 
+      // Write to challenges collection for cross-compatibility
+      try {
+        await _challengesRef.doc(matchDoc.id).set({
+          'id': matchDoc.id,
+          'matchId': matchDoc.id,
+          'fromTeamId': team1Id,
+          'fromTeamName': team1Name,
+          'fromTeamLeaderId': team1LeaderId,
+          'fromTeamLeaderName': team1LeaderName,
+          'fromTeamAvatar': team1Avatar,
+          'toTeamId': team2Id,
+          'toTeamName': team2Name,
+          'toTeamLeaderId': team2LeaderId,
+          'toTeamLeaderName': team2LeaderName,
+          'toTeamAvatar': team2Avatar,
+          'game': game,
+          'mode': mode,
+          'status': 'pending',
+          'entryFee': entryFee,
+          'matchTime': matchTime.toIso8601String(),
+          'createdAt': FieldValue.serverTimestamp(),
+        });
+      } catch (cErr) {
+        debugPrint('[TeamMatchService] Notice writing to challenges collection: $cErr');
+      }
+
       // Synchronize match to Supabase team_matches table
       try {
         await SupabaseService.upsertTeamMatch({
@@ -157,33 +243,40 @@ class TeamMatchService {
   Future<bool> acceptChallenge(String matchId, {String? customRoomId, String? customRoomPassword}) async {
     try {
       final doc = await _matchesRef.doc(matchId).get();
-      if (!doc.exists) return false;
-      final match = TeamMatch.fromFirestore(doc);
+      if (doc.exists) {
+        final match = TeamMatch.fromFirestore(doc);
+        final updateData = <String, dynamic>{
+          'status': 'Accepted',
+          'acceptedAt': FieldValue.serverTimestamp(),
+        };
+        if (customRoomId != null && customRoomId.isNotEmpty) {
+          updateData['customRoomId'] = customRoomId;
+        }
+        if (customRoomPassword != null && customRoomPassword.isNotEmpty) {
+          updateData['customRoomPassword'] = customRoomPassword;
+        }
+        await _matchesRef.doc(matchId).update(updateData);
 
-      final updateData = <String, dynamic>{
-        'status': 'Accepted',
-        'acceptedAt': FieldValue.serverTimestamp(),
-      };
-      if (customRoomId != null && customRoomId.isNotEmpty) {
-        updateData['customRoomId'] = customRoomId;
+        // Notify Team 1 Leader
+        await _notificationsRef.add({
+          'recipientUid': match.team1LeaderId,
+          'senderUid': match.team2LeaderId,
+          'type': 'team_challenge_accepted',
+          'title': '✅ Challenge Accepted!',
+          'message': '${match.team2Name} نے آپ کا چیلنج قبول کر لیا ہے! میچ روم تیار ہے۔',
+          'matchId': matchId,
+          'read': false,
+          'createdAt': FieldValue.serverTimestamp(),
+        });
       }
-      if (customRoomPassword != null && customRoomPassword.isNotEmpty) {
-        updateData['customRoomPassword'] = customRoomPassword;
-      }
 
-      await _matchesRef.doc(matchId).update(updateData);
-
-      // Notify Team 1 Leader
-      await _notificationsRef.add({
-        'recipientUid': match.team1LeaderId,
-        'senderUid': match.team2LeaderId,
-        'type': 'team_challenge_accepted',
-        'title': '✅ Challenge Accepted!',
-        'message': '${match.team2Name} نے آپ کا چیلنج قبول کر لیا ہے! میچ روم تیار ہے۔',
-        'matchId': matchId,
-        'read': false,
-        'createdAt': FieldValue.serverTimestamp(),
-      });
+      // Always sync to challenges collection
+      try {
+        await _challengesRef.doc(matchId).update({
+          'status': 'accepted',
+          'acceptedAt': FieldValue.serverTimestamp(),
+        });
+      } catch (_) {}
 
       return true;
     } catch (e) {
@@ -196,26 +289,34 @@ class TeamMatchService {
   Future<bool> rejectChallenge(String matchId, {String reason = ''}) async {
     try {
       final doc = await _matchesRef.doc(matchId).get();
-      if (!doc.exists) return false;
-      final match = TeamMatch.fromFirestore(doc);
+      if (doc.exists) {
+        final match = TeamMatch.fromFirestore(doc);
+        await _matchesRef.doc(matchId).update({
+          'status': 'Rejected',
+          'disputeReason': reason.isNotEmpty ? reason : 'Challenge rejected by opponent team leader',
+          'rejectedAt': FieldValue.serverTimestamp(),
+        });
 
-      await _matchesRef.doc(matchId).update({
-        'status': 'Rejected',
-        'disputeReason': reason.isNotEmpty ? reason : 'Challenge rejected by opponent team leader',
-        'rejectedAt': FieldValue.serverTimestamp(),
-      });
+        // Notify Team 1 Leader
+        await _notificationsRef.add({
+          'recipientUid': match.team1LeaderId,
+          'senderUid': match.team2LeaderId,
+          'type': 'team_challenge_rejected',
+          'title': '❌ Challenge Declined',
+          'message': '${match.team2Name} نے چیلنج مسترد کر دیا ہے۔',
+          'matchId': matchId,
+          'read': false,
+          'createdAt': FieldValue.serverTimestamp(),
+        });
+      }
 
-      // Notify Team 1 Leader
-      await _notificationsRef.add({
-        'recipientUid': match.team1LeaderId,
-        'senderUid': match.team2LeaderId,
-        'type': 'team_challenge_rejected',
-        'title': '❌ Challenge Declined',
-        'message': '${match.team2Name} نے چیلنج مسترد کر دیا ہے۔',
-        'matchId': matchId,
-        'read': false,
-        'createdAt': FieldValue.serverTimestamp(),
-      });
+      // Always sync to challenges collection
+      try {
+        await _challengesRef.doc(matchId).update({
+          'status': 'rejected',
+          'rejectedAt': FieldValue.serverTimestamp(),
+        });
+      } catch (_) {}
 
       return true;
     } catch (e) {
@@ -228,39 +329,101 @@ class TeamMatchService {
   Future<bool> cancelChallenge(String matchId, {String cancelledByUid = ''}) async {
     try {
       final doc = await _matchesRef.doc(matchId).get();
-      if (!doc.exists) return false;
-      final match = TeamMatch.fromFirestore(doc);
+      if (doc.exists) {
+        final match = TeamMatch.fromFirestore(doc);
 
-      // Can only cancel if match is in Pending status
-      if (!match.isPending) return false;
+        // Can only cancel if match is in Pending status
+        if (match.isPending) {
+          await _matchesRef.doc(matchId).update({
+            'status': 'Cancelled',
+            'cancelledAt': FieldValue.serverTimestamp(),
+            'cancelledBy': cancelledByUid,
+            'disputeReason': 'Challenge cancelled by team leader',
+          });
 
-      await _matchesRef.doc(matchId).update({
-        'status': 'Cancelled',
-        'cancelledAt': FieldValue.serverTimestamp(),
-        'cancelledBy': cancelledByUid,
-        'disputeReason': 'Challenge cancelled by team leader',
-      });
-
-      // Notify the opponent team leader
-      final notifyUid = (cancelledByUid == match.team1LeaderId)
-          ? match.team2LeaderId
-          : match.team1LeaderId;
-      if (notifyUid.isNotEmpty) {
-        await _notificationsRef.add({
-          'recipientUid': notifyUid,
-          'senderUid': cancelledByUid,
-          'type': 'team_challenge_cancelled',
-          'title': '🚫 Challenge Cancelled',
-          'message': 'ٹیم چیلنج واپس (Cancel) لے لیا گیا ہے۔',
-          'matchId': matchId,
-          'read': false,
-          'createdAt': FieldValue.serverTimestamp(),
-        });
+          // Notify the opponent team leader
+          final notifyUid = (cancelledByUid == match.team1LeaderId)
+              ? match.team2LeaderId
+              : match.team1LeaderId;
+          if (notifyUid.isNotEmpty) {
+            await _notificationsRef.add({
+              'recipientUid': notifyUid,
+              'senderUid': cancelledByUid,
+              'type': 'team_challenge_cancelled',
+              'title': '🚫 Challenge Cancelled',
+              'message': 'ٹیم چیلنج واپس (Cancel) لے لیا گیا ہے۔',
+              'matchId': matchId,
+              'read': false,
+              'createdAt': FieldValue.serverTimestamp(),
+            });
+          }
+        }
       }
+
+      // Also always update challenges collection
+      try {
+        await _challengesRef.doc(matchId).update({
+          'status': 'cancelled',
+          'cancelledAt': FieldValue.serverTimestamp(),
+          'cancelledBy': cancelledByUid,
+        });
+      } catch (_) {}
 
       return true;
     } catch (e) {
       debugPrint('[TeamMatchService] Error cancelling challenge: $e');
+      return false;
+    }
+  }
+
+  /// Cancel any pending challenge between two teams (by team IDs or names)
+  Future<bool> cancelChallengeBetweenTeams(String teamAId, String teamBId, {String cancelledByUid = ''}) async {
+    try {
+      bool anyCancelled = false;
+
+      // 1. Check in team_matches
+      final active = await getActiveMatchBetweenTeams(teamAId, teamBId);
+      if (active != null && active.isPending) {
+        await cancelChallenge(active.matchId, cancelledByUid: cancelledByUid);
+        anyCancelled = true;
+      }
+
+      // 2. Also check in challenges collection
+      final q1 = await _challengesRef
+          .where('fromTeamId', isEqualTo: teamAId)
+          .where('toTeamId', isEqualTo: teamBId)
+          .get();
+      for (final doc in q1.docs) {
+        final status = (doc.data() as Map<String, dynamic>?)?['status']?.toString().toLowerCase() ?? '';
+        if (status == 'pending') {
+          await doc.reference.update({
+            'status': 'cancelled',
+            'cancelledAt': FieldValue.serverTimestamp(),
+            'cancelledBy': cancelledByUid,
+          });
+          anyCancelled = true;
+        }
+      }
+
+      final q2 = await _challengesRef
+          .where('fromTeamId', isEqualTo: teamBId)
+          .where('toTeamId', isEqualTo: teamAId)
+          .get();
+      for (final doc in q2.docs) {
+        final status = (doc.data() as Map<String, dynamic>?)?['status']?.toString().toLowerCase() ?? '';
+        if (status == 'pending') {
+          await doc.reference.update({
+            'status': 'cancelled',
+            'cancelledAt': FieldValue.serverTimestamp(),
+            'cancelledBy': cancelledByUid,
+          });
+          anyCancelled = true;
+        }
+      }
+
+      return anyCancelled;
+    } catch (e) {
+      debugPrint('[TeamMatchService] Error in cancelChallengeBetweenTeams: $e');
       return false;
     }
   }

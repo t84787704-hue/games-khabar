@@ -276,4 +276,11 @@ class TeamService {
       return [];
     }
   }
+
+  /// Stream of user's teams (real-time updates)
+  Stream<List<TeamModel>> getUserTeamsStream(String userId) {
+    return _teamsRef.where('members', arrayContains: userId).snapshots().map((snap) {
+      return snap.docs.map((d) => TeamModel.fromFirestore(d)).toList();
+    });
+  }
 }
