@@ -1,15 +1,13 @@
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
-import 'package:cloud_firestore/cloud_firestore.dart';
-import '../constants/gamer_theme.dart';
+import '../services/supabase_service.dart';
 import '../models/team_model.dart';
 import '../services/team_service.dart';
-import '../services/team_match_service.dart';
 import '../widgets/team_card.dart';
 import '../widgets/create_team_dialog.dart';
 import 'my_team_matches_screen.dart';
 import 'team_leaderboard_screen.dart';
-import 'team_match_room_screen.dart';
+import 'team_profile_screen.dart';
 
 class TeamsScreen extends StatefulWidget {
   const TeamsScreen({super.key});
@@ -20,8 +18,6 @@ class TeamsScreen extends StatefulWidget {
 
 class _TeamsScreenState extends State<TeamsScreen> {
   final TeamService _teamService = TeamService();
-  final TeamMatchService _matchService = TeamMatchService();
-  final FirebaseFirestore _firestore = FirebaseFirestore.instance;
   final TextEditingController _searchController = TextEditingController();
 
   String _selectedGameFilter = 'All';
@@ -45,123 +41,6 @@ class _TeamsScreenState extends State<TeamsScreen> {
     final created = await CreateTeamDialog.show(context);
     if (created == true) {
       setState(() {});
-    }
-  }
-
-  Future<void> _acceptIncomingChallenge(DocumentSnapshot challengeDoc) async {
-    try {
-      final challengeId = challengeDoc.id;
-      final data = challengeDoc.data() as Map<String, dynamic>? ?? {};
-
-      // 1. Update challenge status to 'accepted'
-      await challengeDoc.reference.update({
-        'status': 'accepted',
-        'acceptedAt': FieldValue.serverTimestamp(),
-      });
-
-      // 2. Create / update match room in team_matches
-      final matchDocRef = _firestore.collection('team_matches').doc(challengeId);
-      final matchDoc = await matchDocRef.get();
-      if (matchDoc.exists) {
-        await matchDocRef.update({
-          'status': 'Accepted',
-          'acceptedAt': FieldValue.serverTimestamp(),
-        });
-      } else {
-        await matchDocRef.set({
-          'matchId': challengeId,
-          'team1Id': data['fromTeamId'] ?? '',
-          'team1Name': data['fromTeamName'] ?? '',
-          'team1LeaderId': data['fromTeamLeaderId'] ?? '',
-          'team1LeaderName': data['fromTeamLeaderName'] ?? '',
-          'team1Avatar': data['fromTeamAvatar'] ?? '',
-          'team1Members': data['team1Members'] ?? [],
-          'team2Id': data['toTeamId'] ?? '',
-          'team2Name': data['toTeamName'] ?? '',
-          'team2LeaderId': data['toTeamLeaderId'] ?? '',
-          'team2LeaderName': data['toTeamLeaderName'] ?? '',
-          'team2Avatar': data['toTeamAvatar'] ?? '',
-          'team2Members': data['team2Members'] ?? [],
-          'game': data['game'] ?? 'BGMI',
-          'mode': data['mode'] ?? '4v4',
-          'matchTime': data['matchTime'] != null
-              ? (DateTime.tryParse(data['matchTime'].toString()) ?? DateTime.now())
-              : DateTime.now(),
-          'entryFee': data['entryFee'] ?? 'Free',
-          'status': 'Accepted',
-          'chatId': challengeId,
-          'createdAt': FieldValue.serverTimestamp(),
-          'acceptedAt': FieldValue.serverTimestamp(),
-        });
-      }
-
-      try {
-        await _matchService.acceptChallenge(challengeId);
-      } catch (_) {}
-
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('✅ چیلنج قبول کر لیا گیا ہے! میچ روم تیار ہے۔'),
-            backgroundColor: Color(0xFF1877F2),
-          ),
-        );
-        Navigator.push(
-          context,
-          MaterialPageRoute(builder: (_) => TeamMatchRoomScreen(matchId: challengeId)),
-        );
-      }
-    } catch (e) {
-      debugPrint('[TeamsScreen] Error accepting challenge: $e');
-    }
-  }
-
-  Future<void> _rejectIncomingChallenge(DocumentSnapshot challengeDoc) async {
-    try {
-      final challengeId = challengeDoc.id;
-      // Delete challenge document or update to rejected
-      await challengeDoc.reference.delete();
-      try {
-        await _firestore.collection('team_matches').doc(challengeId).delete();
-      } catch (_) {}
-      try {
-        await _matchService.rejectChallenge(challengeId);
-      } catch (_) {}
-
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('چیلنج مسترد کر دیا گیا ہے'),
-            backgroundColor: Color(0xFF65676B),
-          ),
-        );
-      }
-    } catch (e) {
-      debugPrint('[TeamsScreen] Error rejecting challenge: $e');
-    }
-  }
-
-  Future<void> _cancelChallenge(String challengeId) async {
-    try {
-      final currentUid = FirebaseAuth.instance.currentUser?.uid ?? '';
-      await _firestore.collection('challenges').doc(challengeId).delete();
-      try {
-        await _firestore.collection('team_matches').doc(challengeId).delete();
-      } catch (_) {}
-      try {
-        await _matchService.cancelChallenge(challengeId, cancelledByUid: currentUid);
-      } catch (_) {}
-
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('🚫 چیلنج کامیابی سے Cancel کر دیا گیا ہے'),
-            backgroundColor: Color(0xFF1877F2),
-          ),
-        );
-      }
-    } catch (e) {
-      debugPrint('[TeamsScreen] Error cancelling challenge: $e');
     }
   }
 
@@ -213,13 +92,16 @@ class _TeamsScreenState extends State<TeamsScreen> {
         builder: (context, userTeamsSnap) {
           final userTeams = userTeamsSnap.data ?? [];
           final myLeaderTeams = userTeams.where((t) => t.isLeader(currentUid)).toList();
-          final String myTeamId = myLeaderTeams.isNotEmpty
-              ? myLeaderTeams.first.id
-              : (userTeams.isNotEmpty ? userTeams.first.id : '');
+          final myTeam = myLeaderTeams.isNotEmpty
+              ? myLeaderTeams.first
+              : (userTeams.isNotEmpty ? userTeams.first : null);
+          final String myTeamId = myTeam?.id ?? '';
+          final String myTeamName = myTeam?.name ?? '';
+          final String myTeamUuid = SupabaseService.toUuid(myTeamId);
 
           return Column(
             children: [
-              // 1. Top Bar: Create Team Action & Filters
+              // Top Bar: Create Team Action & Game Filter
               Container(
                 padding: const EdgeInsets.fromLTRB(16, 12, 16, 10),
                 decoration: const BoxDecoration(
@@ -322,17 +204,19 @@ class _TeamsScreenState extends State<TeamsScreen> {
                 ),
               ),
 
-              // 2. Incoming Challenges Section (Listens to challenges where toTeamId == myTeamId && status == pending)
+              // 1. INCOMING CHALLENGES: Supabase Realtime stream
               if (myTeamId.isNotEmpty)
-                StreamBuilder<QuerySnapshot>(
-                  stream: FirebaseFirestore.instance
-                      .collection('challenges')
-                      .where('toTeamId', isEqualTo: myTeamId)
-                      .where('status', isEqualTo: 'pending')
-                      .snapshots(),
+                StreamBuilder<List<Map<String, dynamic>>>(
+                  stream: SupabaseService.client
+                      .from('challenges')
+                      .stream(primaryKey: ['id'])
+                      .eq('to_team_id', myTeamUuid)
+                      .eq('status', 'pending'),
                   builder: (context, challengesSnap) {
                     if (!challengesSnap.hasData) return const SizedBox.shrink();
-                    final docs = challengesSnap.data!.docs;
+                    final docs = challengesSnap.data!
+                        .where((d) => (d['status'] ?? '').toString().toLowerCase() == 'pending')
+                        .toList();
                     if (docs.isEmpty) return const SizedBox.shrink();
 
                     return Container(
@@ -389,37 +273,283 @@ class _TeamsScreenState extends State<TeamsScreen> {
                             ],
                           ),
                           const SizedBox(height: 10),
-                          ...docs.map((doc) => _IncomingChallengeCard(
-                                challengeDoc: doc,
-                                onAccept: () => _acceptIncomingChallenge(doc),
-                                onReject: () => _rejectIncomingChallenge(doc),
-                              )),
+                          ...docs.map((doc) {
+                            final challengeId = doc['id'];
+                            final fromTeamName = doc['from_team_name']?.toString() ?? 'Opponent Team';
+                            final fromTeamId = doc['from_team_id']?.toString() ?? '';
+                            final toTeamId = doc['to_team_id']?.toString() ?? myTeamId;
+
+                            return Container(
+                              margin: const EdgeInsets.only(bottom: 8),
+                              padding: const EdgeInsets.all(12),
+                              decoration: BoxDecoration(
+                                color: const Color(0xFFF0F2F5),
+                                borderRadius: BorderRadius.circular(10),
+                                border: Border.all(color: const Color(0xFFCED0D4)),
+                              ),
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Row(
+                                    children: [
+                                      const CircleAvatar(
+                                        radius: 18,
+                                        backgroundColor: Color(0xFFCED0D4),
+                                        child: Icon(Icons.shield_rounded, color: Color(0xFF1877F2), size: 20),
+                                      ),
+                                      const SizedBox(width: 10),
+                                      Expanded(
+                                        child: Text(
+                                          'Challenge from $fromTeamName',
+                                          style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14, color: Color(0xFF050505)),
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                  const SizedBox(height: 10),
+                                  Row(
+                                    children: [
+                                      Expanded(
+                                        child: OutlinedButton(
+                                          onPressed: () async {
+                                            await SupabaseService.client
+                                                .from('challenges')
+                                                .update({'status': 'rejected'})
+                                                .eq('id', challengeId);
+                                            if (mounted) {
+                                              ScaffoldMessenger.of(context).showSnackBar(
+                                                const SnackBar(content: Text('Challenge rejected')),
+                                              );
+                                            }
+                                          },
+                                          style: OutlinedButton.styleFrom(
+                                            foregroundColor: const Color(0xFFFF4655),
+                                            side: const BorderSide(color: Color(0xFFFF4655)),
+                                            padding: const EdgeInsets.symmetric(vertical: 6),
+                                            minimumSize: const Size(0, 34),
+                                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                                          ),
+                                          child: const Text('Reject', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12)),
+                                        ),
+                                      ),
+                                      const SizedBox(width: 10),
+                                      Expanded(
+                                        child: ElevatedButton(
+                                          onPressed: () async {
+                                            await SupabaseService.client
+                                                .from('challenges')
+                                                .update({'status': 'accepted'})
+                                                .eq('id', challengeId);
+                                            final t1 = SupabaseService.toUuid(fromTeamId);
+                                            final t2 = SupabaseService.toUuid(toTeamId);
+                                            await SupabaseService.client
+                                                .from('active_matches')
+                                                .insert({
+                                                  'team1_id': t1,
+                                                  'team2_id': t2,
+                                                  'participants': [t1, t2],
+                                                  'status': 'active',
+                                                });
+                                            if (mounted) {
+                                              ScaffoldMessenger.of(context).showSnackBar(
+                                                const SnackBar(
+                                                  content: Text('✅ Challenge Accepted! Active Match is Live.'),
+                                                  backgroundColor: Color(0xFF2E7D32),
+                                                ),
+                                              );
+                                            }
+                                          },
+                                          style: ElevatedButton.styleFrom(
+                                            backgroundColor: const Color(0xFF1877F2),
+                                            foregroundColor: Colors.white,
+                                            padding: const EdgeInsets.symmetric(vertical: 6),
+                                            minimumSize: const Size(0, 34),
+                                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                                            elevation: 0,
+                                          ),
+                                          child: const Text('Accept', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12)),
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                ],
+                              ),
+                            );
+                          }),
                         ],
                       ),
                     );
                   },
                 ),
 
-              // 3. Sender side pending banner (if user's team sent pending challenges)
+              // 3. ACTIVE MATCH CONNECTION BANNER: Supabase Realtime stream
               if (myTeamId.isNotEmpty)
-                StreamBuilder<QuerySnapshot>(
-                  stream: FirebaseFirestore.instance
-                      .collection('challenges')
-                      .where('fromTeamId', isEqualTo: myTeamId)
-                      .where('status', isEqualTo: 'pending')
-                      .snapshots(),
+                StreamBuilder<List<Map<String, dynamic>>>(
+                  stream: SupabaseService.client
+                      .from('active_matches')
+                      .stream(primaryKey: ['id'])
+                      .eq('status', 'active'),
+                  builder: (context, activeSnap) {
+                    if (!activeSnap.hasData) return const SizedBox.shrink();
+                    final myActiveMatches = activeSnap.data!.where((m) {
+                      if (m['status'] != 'active') return false;
+                      final participants = m['participants'];
+                      final List<String> pList = [];
+                      if (participants is List) {
+                        pList.addAll(participants.map((p) => p.toString().toLowerCase()));
+                      }
+                      pList.add(m['team1_id']?.toString().toLowerCase() ?? '');
+                      pList.add(m['team2_id']?.toString().toLowerCase() ?? '');
+                      return pList.contains(myTeamUuid.toLowerCase()) || pList.contains(myTeamId.toLowerCase());
+                    }).toList();
+
+                    if (myActiveMatches.isEmpty) return const SizedBox.shrink();
+
+                    return Column(
+                      children: myActiveMatches.map((match) {
+                        final matchId = match['id'];
+                        final t1 = match['team1_id']?.toString() ?? '';
+                        final t2 = match['team2_id']?.toString() ?? '';
+                        final opponentId = (t1.toLowerCase() == myTeamUuid.toLowerCase() || t1.toLowerCase() == myTeamId.toLowerCase())
+                            ? t2
+                            : t1;
+
+                        return Container(
+                          margin: const EdgeInsets.fromLTRB(16, 4, 16, 8),
+                          padding: const EdgeInsets.all(12),
+                          decoration: BoxDecoration(
+                            color: const Color(0xFFE8F5E9),
+                            borderRadius: BorderRadius.circular(12),
+                            border: Border.all(color: const Color(0xFF2E7D32), width: 1.5),
+                            boxShadow: [
+                              BoxShadow(
+                                color: const Color(0xFF2E7D32).withOpacity(0.08),
+                                blurRadius: 6,
+                                offset: const Offset(0, 2),
+                              ),
+                            ],
+                          ),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Row(
+                                children: [
+                                  const Icon(Icons.local_fire_department_rounded, color: Color(0xFF2E7D32), size: 20),
+                                  const SizedBox(width: 8),
+                                  const Expanded(
+                                    child: Text(
+                                      '🔥 Active Match in Progress - Match is Live',
+                                      style: TextStyle(
+                                        color: Color(0xFF2E7D32),
+                                        fontWeight: FontWeight.bold,
+                                        fontSize: 13.5,
+                                      ),
+                                    ),
+                                  ),
+                                  Container(
+                                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                                    decoration: BoxDecoration(
+                                      color: const Color(0xFF2E7D32),
+                                      borderRadius: BorderRadius.circular(10),
+                                    ),
+                                    child: const Text('LIVE', style: TextStyle(color: Colors.white, fontWeight: FontWeight.w900, fontSize: 10)),
+                                  ),
+                                ],
+                              ),
+                              const SizedBox(height: 8),
+                              Row(
+                                mainAxisAlignment: MainAxisAlignment.end,
+                                children: [
+                                  if (opponentId != null && opponentId.isNotEmpty)
+                                    OutlinedButton.icon(
+                                      onPressed: () {
+                                        Navigator.push(
+                                          context,
+                                          MaterialPageRoute(
+                                            builder: (_) => TeamProfileScreen(teamId: opponentId),
+                                          ),
+                                        );
+                                      },
+                                      style: OutlinedButton.styleFrom(
+                                        foregroundColor: const Color(0xFF2E7D32),
+                                        side: const BorderSide(color: Color(0xFF2E7D32)),
+                                        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                                        minimumSize: const Size(0, 32),
+                                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                                      ),
+                                      icon: const Icon(Icons.visibility_rounded, size: 14),
+                                      label: const Text('View Opponent', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 11)),
+                                    ),
+                                  const SizedBox(width: 8),
+                                  // 4. END MATCH button for leaders
+                                  ElevatedButton.icon(
+                                    onPressed: () async {
+                                      final confirm = await showDialog<bool>(
+                                        context: context,
+                                        builder: (ctx) => AlertDialog(
+                                          title: const Text('End Match?'),
+                                          content: const Text('Are you sure you want to end this active match?'),
+                                          actions: [
+                                            TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Cancel')),
+                                            ElevatedButton(
+                                              style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFFFF4655)),
+                                              onPressed: () => Navigator.pop(ctx, true),
+                                              child: const Text('End Match', style: TextStyle(color: Colors.white)),
+                                            ),
+                                          ],
+                                        ),
+                                      );
+                                      if (confirm == true) {
+                                        await SupabaseService.client
+                                            .from('active_matches')
+                                            .update({'status': 'completed'})
+                                            .eq('id', matchId);
+                                        if (mounted) {
+                                          ScaffoldMessenger.of(context).showSnackBar(
+                                            const SnackBar(content: Text('Match marked as completed!'), backgroundColor: Color(0xFF2E7D32)),
+                                          );
+                                        }
+                                      }
+                                    },
+                                    style: ElevatedButton.styleFrom(
+                                      backgroundColor: const Color(0xFFFF4655),
+                                      foregroundColor: Colors.white,
+                                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                                      minimumSize: const Size(0, 32),
+                                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                                      elevation: 0,
+                                    ),
+                                    icon: const Icon(Icons.stop_circle_rounded, size: 14),
+                                    label: const Text('End Match', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 11)),
+                                  ),
+                                ],
+                              ),
+                            ],
+                          ),
+                        );
+                      }).toList(),
+                    );
+                  },
+                ),
+
+              // 2. SENDER SIDE: Pending challenge red banner
+              if (myTeamId.isNotEmpty)
+                StreamBuilder<List<Map<String, dynamic>>>(
+                  stream: SupabaseService.client
+                      .from('challenges')
+                      .stream(primaryKey: ['id'])
+                      .eq('from_team_id', myTeamUuid),
                   builder: (context, sentSnap) {
                     if (!sentSnap.hasData) return const SizedBox.shrink();
-                    final sentDocs = sentSnap.data!.docs;
+                    final sentDocs = sentSnap.data!
+                        .where((d) => (d['status'] ?? '').toString().toLowerCase() == 'pending')
+                        .toList();
                     if (sentDocs.isEmpty) return const SizedBox.shrink();
 
                     return Column(
                       children: sentDocs.map((doc) {
-                        final data = doc.data() as Map<String, dynamic>;
-                        final challengeId = doc.id;
-                        final toTeamName = data['toTeamName']?.toString() ?? 'Opponent Team';
-                        final game = data['game']?.toString() ?? '';
-                        final mode = data['mode']?.toString() ?? '';
+                        final challengeId = doc['id'];
+                        final toTeamName = doc['to_team_name']?.toString() ?? 'Opponent Team';
 
                         return Container(
                           margin: const EdgeInsets.fromLTRB(16, 4, 16, 8),
@@ -464,14 +594,27 @@ class _TeamsScreenState extends State<TeamsScreen> {
                               ),
                               const SizedBox(height: 6),
                               Text(
-                                'آپ نے $toTeamName کو ${game.isNotEmpty ? "$game " : ""}${mode.isNotEmpty ? "($mode) " : ""}میں چیلنج بھیجا ہوا ہے۔ جواب کا انتظار ہے یا چیلنج واپس لے سکتے ہیں۔',
+                                'آپ نے $toTeamName کو چیلنج بھیجا ہوا ہے۔ جواب کا انتظار ہے یا چیلنج واپس لے سکتے ہیں۔',
                                 style: const TextStyle(color: Color(0xFF4B5563), fontSize: 12),
                               ),
                               const SizedBox(height: 8),
                               Align(
                                 alignment: Alignment.centerRight,
                                 child: OutlinedButton.icon(
-                                  onPressed: () => _cancelChallenge(challengeId),
+                                  onPressed: () async {
+                                    await SupabaseService.client
+                                        .from('challenges')
+                                        .delete()
+                                        .eq('id', challengeId);
+                                    if (mounted) {
+                                      ScaffoldMessenger.of(context).showSnackBar(
+                                        const SnackBar(
+                                          content: Text('🚫 چیلنج کامیابی سے Cancel کر دیا گیا ہے'),
+                                          backgroundColor: Color(0xFF1877F2),
+                                        ),
+                                      );
+                                    }
+                                  },
                                   style: OutlinedButton.styleFrom(
                                     foregroundColor: const Color(0xFFFF4655),
                                     side: const BorderSide(color: Color(0xFFFF4655), width: 1.2),
@@ -495,7 +638,7 @@ class _TeamsScreenState extends State<TeamsScreen> {
                   },
                 ),
 
-              // 4. All Teams List (passes myTeamId to every TeamCard)
+              // All Teams List
               Expanded(
                 child: StreamBuilder<List<TeamModel>>(
                   stream: _teamService.getTeamsStream(
@@ -565,6 +708,7 @@ class _TeamsScreenState extends State<TeamsScreen> {
                         return TeamCard(
                           team: team,
                           myTeamId: myTeamId,
+                          myTeamName: myTeamName,
                         );
                       },
                     );
@@ -575,148 +719,6 @@ class _TeamsScreenState extends State<TeamsScreen> {
           );
         },
       ),
-    );
-  }
-}
-
-class _IncomingChallengeCard extends StatelessWidget {
-  final DocumentSnapshot challengeDoc;
-  final VoidCallback onAccept;
-  final VoidCallback onReject;
-
-  const _IncomingChallengeCard({
-    required this.challengeDoc,
-    required this.onAccept,
-    required this.onReject,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    final data = challengeDoc.data() as Map<String, dynamic>? ?? {};
-    final fromTeamId = data['fromTeamId']?.toString() ?? '';
-    final game = data['game']?.toString() ?? 'Game';
-    final mode = data['mode']?.toString() ?? '4v4';
-
-    return FutureBuilder<DocumentSnapshot>(
-      future: fromTeamId.isNotEmpty
-          ? FirebaseFirestore.instance.collection('teams').doc(fromTeamId).get()
-          : null,
-      builder: (context, teamSnap) {
-        Map<String, dynamic>? teamData;
-        if (teamSnap.hasData && teamSnap.data?.exists == true) {
-          teamData = teamSnap.data!.data() as Map<String, dynamic>?;
-        }
-
-        final fromTeamName = teamData?['name']?.toString() ?? data['fromTeamName']?.toString() ?? 'Opponent Team';
-        final fromTeamTag = teamData?['tag']?.toString() ?? data['fromTeamTag']?.toString() ?? '';
-        final fromTeamLogo = teamData?['logo']?.toString() ?? data['fromTeamAvatar']?.toString() ?? '';
-        final fromTeamLeaderName = teamData?['leaderName']?.toString() ?? data['fromTeamLeaderName']?.toString() ?? '';
-
-        return Container(
-          margin: const EdgeInsets.only(bottom: 8),
-          padding: const EdgeInsets.all(10),
-          decoration: BoxDecoration(
-            color: const Color(0xFFF0F2F5),
-            borderRadius: BorderRadius.circular(10),
-            border: Border.all(color: const Color(0xFFCED0D4)),
-          ),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Row(
-                children: [
-                  CircleAvatar(
-                    radius: 20,
-                    backgroundColor: const Color(0xFFCED0D4),
-                    backgroundImage: fromTeamLogo.isNotEmpty ? NetworkImage(fromTeamLogo) : null,
-                    child: fromTeamLogo.isEmpty
-                        ? const Icon(Icons.shield_rounded, color: Color(0xFF1877F2), size: 22)
-                        : null,
-                  ),
-                  const SizedBox(width: 10),
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Row(
-                          children: [
-                            Flexible(
-                              child: Text(
-                                fromTeamName,
-                                style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14, color: Color(0xFF050505)),
-                                overflow: TextOverflow.ellipsis,
-                              ),
-                            ),
-                            if (fromTeamTag.isNotEmpty) ...[
-                              const SizedBox(width: 6),
-                              Container(
-                                padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                                decoration: BoxDecoration(
-                                  color: const Color(0xFFE7F3FF),
-                                  borderRadius: BorderRadius.circular(6),
-                                  border: Border.all(color: const Color(0xFF1877F2).withOpacity(0.3)),
-                                ),
-                                child: Text(
-                                  fromTeamTag,
-                                  style: const TextStyle(
-                                    color: Color(0xFF1877F2),
-                                    fontWeight: FontWeight.bold,
-                                    fontSize: 10,
-                                  ),
-                                ),
-                              ),
-                            ],
-                          ],
-                        ),
-                        const SizedBox(height: 2),
-                        Text(
-                          fromTeamLeaderName.isNotEmpty
-                              ? 'Leader: $fromTeamLeaderName • $game ($mode)'
-                              : '$game ($mode)',
-                          style: const TextStyle(fontSize: 11.5, color: Color(0xFF65676B)),
-                        ),
-                      ],
-                    ),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 10),
-              Row(
-                children: [
-                  Expanded(
-                    child: OutlinedButton(
-                      onPressed: onReject,
-                      style: OutlinedButton.styleFrom(
-                        foregroundColor: const Color(0xFFFF4655),
-                        side: const BorderSide(color: Color(0xFFFF4655)),
-                        padding: const EdgeInsets.symmetric(vertical: 6),
-                        minimumSize: const Size(0, 34),
-                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-                      ),
-                      child: const Text('Reject', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12)),
-                    ),
-                  ),
-                  const SizedBox(width: 10),
-                  Expanded(
-                    child: ElevatedButton(
-                      onPressed: onAccept,
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: const Color(0xFF1877F2),
-                        foregroundColor: Colors.white,
-                        padding: const EdgeInsets.symmetric(vertical: 6),
-                        minimumSize: const Size(0, 34),
-                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-                        elevation: 0,
-                      ),
-                      child: const Text('Accept', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12)),
-                    ),
-                  ),
-                ],
-              ),
-            ],
-          ),
-        );
-      },
     );
   }
 }

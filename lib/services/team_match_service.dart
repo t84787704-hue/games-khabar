@@ -16,6 +16,7 @@ class TeamMatchService {
   CollectionReference get _rankingsRef => _firestore.collection('team_rankings');
   CollectionReference get _notificationsRef => _firestore.collection('notifications');
   CollectionReference get _challengesRef => _firestore.collection('challenges');
+  CollectionReference get _activeMatchesRef => _firestore.collection('active_matches');
 
   /// Check if there is already an active match/challenge between two teams
   /// (Pending, Accepted, Live, Proof Submitted, Disputed)
@@ -278,6 +279,66 @@ class TeamMatchService {
         });
       } catch (_) {}
 
+      // Create document in active_matches collection
+      try {
+        String fromTeamId = '';
+        String toTeamId = '';
+        String fromTeamName = '';
+        String toTeamName = '';
+        String fromTeamLogo = '';
+        String toTeamLogo = '';
+        String fromLeaderId = '';
+        String toLeaderId = '';
+        String game = 'BGMI';
+
+        if (doc.exists) {
+          final m = TeamMatch.fromFirestore(doc);
+          fromTeamId = m.team1Id;
+          toTeamId = m.team2Id;
+          fromTeamName = m.team1Name;
+          toTeamName = m.team2Name;
+          fromTeamLogo = m.team1Avatar;
+          toTeamLogo = m.team2Avatar;
+          fromLeaderId = m.team1LeaderId;
+          toLeaderId = m.team2LeaderId;
+          game = m.game;
+        } else {
+          final cDoc = await _challengesRef.doc(matchId).get();
+          if (cDoc.exists) {
+            final d = cDoc.data() as Map<String, dynamic>? ?? {};
+            fromTeamId = d['fromTeamId']?.toString() ?? '';
+            toTeamId = d['toTeamId']?.toString() ?? '';
+            fromTeamName = d['fromTeamName']?.toString() ?? '';
+            toTeamName = d['toTeamName']?.toString() ?? '';
+            fromTeamLogo = d['fromTeamAvatar']?.toString() ?? '';
+            toTeamLogo = d['toTeamAvatar']?.toString() ?? '';
+            fromLeaderId = d['fromTeamLeaderId']?.toString() ?? '';
+            toLeaderId = d['toTeamLeaderId']?.toString() ?? '';
+            game = d['game']?.toString() ?? 'BGMI';
+          }
+        }
+
+        if (fromTeamId.isNotEmpty && toTeamId.isNotEmpty) {
+          await _activeMatchesRef.doc(matchId).set({
+            'matchId': matchId,
+            'participants': [fromTeamId, toTeamId],
+            'team1Id': fromTeamId,
+            'team2Id': toTeamId,
+            'team1Name': fromTeamName,
+            'team2Name': toTeamName,
+            'team1Logo': fromTeamLogo,
+            'team2Logo': toTeamLogo,
+            'team1LeaderId': fromLeaderId,
+            'team2LeaderId': toLeaderId,
+            'status': 'active',
+            'game': game.isNotEmpty ? game : 'BGMI',
+            'createdAt': Timestamp.now(),
+          }, SetOptions(merge: true));
+        }
+      } catch (aErr) {
+        debugPrint('[TeamMatchService] Notice writing to active_matches: $aErr');
+      }
+
       return true;
     } catch (e) {
       debugPrint('[TeamMatchService] Error accepting challenge: $e');
@@ -316,6 +377,10 @@ class TeamMatchService {
           'status': 'rejected',
           'rejectedAt': FieldValue.serverTimestamp(),
         });
+      } catch (_) {}
+
+      try {
+        await _activeMatchesRef.doc(matchId).delete();
       } catch (_) {}
 
       return true;
@@ -369,9 +434,34 @@ class TeamMatchService {
         });
       } catch (_) {}
 
+      try {
+        await _activeMatchesRef.doc(matchId).delete();
+      } catch (_) {}
+
       return true;
     } catch (e) {
       debugPrint('[TeamMatchService] Error cancelling challenge: $e');
+      return false;
+    }
+  }
+
+  /// 3c. End / Complete Match (Leader only - sets status to completed in active_matches and Completed in team_matches)
+  Future<bool> completeMatch(String matchId, {String completedByUid = ''}) async {
+    try {
+      await _activeMatchesRef.doc(matchId).update({
+        'status': 'completed',
+        'completedAt': FieldValue.serverTimestamp(),
+        'completedBy': completedByUid,
+      });
+      try {
+        await _matchesRef.doc(matchId).update({
+          'status': 'Completed',
+          'completedAt': FieldValue.serverTimestamp(),
+        });
+      } catch (_) {}
+      return true;
+    } catch (e) {
+      debugPrint('[TeamMatchService] Error completing match: $e');
       return false;
     }
   }

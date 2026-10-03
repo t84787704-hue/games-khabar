@@ -1,21 +1,21 @@
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
-import 'package:cloud_firestore/cloud_firestore.dart';
 import '../models/team_model.dart';
 import '../services/team_service.dart';
-import '../services/team_match_service.dart';
+import '../services/supabase_service.dart';
 import '../services/gamer_auth_service.dart';
-import '../widgets/send_team_match_challenge_dialog.dart';
 import '../screens/team_profile_screen.dart';
 
 class TeamCard extends StatefulWidget {
   final TeamModel team;
   final String myTeamId;
+  final String myTeamName;
 
   const TeamCard({
     super.key,
     required this.team,
     this.myTeamId = '',
+    this.myTeamName = '',
   });
 
   @override
@@ -24,54 +24,7 @@ class TeamCard extends StatefulWidget {
 
 class _TeamCardState extends State<TeamCard> {
   final TeamService _teamService = TeamService();
-  final TeamMatchService _matchService = TeamMatchService();
   bool _isRequesting = false;
-
-  Future<void> _deleteChallenge(DocumentReference docRef, String challengeId) async {
-    final currentUid = FirebaseAuth.instance.currentUser?.uid ?? '';
-    try {
-      // Delete challenge document directly so red banner disappears instantly!
-      await docRef.delete();
-      try {
-        await FirebaseFirestore.instance.collection('team_matches').doc(challengeId).delete();
-      } catch (_) {}
-      try {
-        await _matchService.cancelChallenge(challengeId, cancelledByUid: currentUid);
-      } catch (_) {}
-
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('🚫 چیلنج کامیابی سے Cancel کر دیا گیا ہے'),
-            backgroundColor: Color(0xFF1877F2),
-          ),
-        );
-      }
-    } catch (e) {
-      debugPrint('[TeamCard] Error deleting challenge: $e');
-    }
-  }
-
-  Future<void> _handleCancelChallenge(String challengeId) async {
-    final currentUid = FirebaseAuth.instance.currentUser?.uid ?? '';
-    try {
-      await FirebaseFirestore.instance.collection('challenges').doc(challengeId).delete();
-      try {
-        await FirebaseFirestore.instance.collection('team_matches').doc(challengeId).delete();
-      } catch (_) {}
-      await _matchService.cancelChallenge(challengeId, cancelledByUid: currentUid);
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('🚫 چیلنج کامیابی سے Cancel کر دیا گیا ہے'),
-            backgroundColor: Color(0xFF1877F2),
-          ),
-        );
-      }
-    } catch (e) {
-      debugPrint('[TeamCard] Error cancelling challenge: $e');
-    }
-  }
 
   Future<void> _handleJoin(String currentUid) async {
     final currentGamer = GamerAuthService().currentGamer;
@@ -113,36 +66,92 @@ class _TeamCardState extends State<TeamCard> {
       return;
     }
 
-    final effectiveMyTeamId = widget.myTeamId.isNotEmpty ? widget.myTeamId : myLeaderTeams.first.id;
+    final effectiveMyTeam = myLeaderTeams.firstWhere(
+      (t) => t.id == widget.myTeamId,
+      orElse: () => myLeaderTeams.first,
+    );
+    final effectiveMyTeamId = SupabaseService.toUuid(effectiveMyTeam.id);
+    final effectiveTargetId = SupabaseService.toUuid(widget.team.id);
+    final effectiveMyTeamName = widget.myTeamName.isNotEmpty ? widget.myTeamName : effectiveMyTeam.name;
 
-    // Check if a pending challenge already exists where fromTeamId == myTeamId && toTeamId == targetId
     try {
-      final existingCheck = await FirebaseFirestore.instance
-          .collection('challenges')
-          .where('fromTeamId', isEqualTo: effectiveMyTeamId)
-          .where('toTeamId', isEqualTo: widget.team.id)
-          .get();
+      // 1. Check in Supabase if pending challenge already exists
+      final existingCheck = await SupabaseService.client
+          .from('challenges')
+          .select()
+          .eq('from_team_id', effectiveMyTeamId)
+          .eq('to_team_id', effectiveTargetId)
+          .eq('status', 'pending');
 
-      for (var doc in existingCheck.docs) {
-        final data = doc.data();
-        final st = (data['status'] ?? '').toString().toLowerCase();
-        if (st == 'pending') {
+      if (existingCheck.isNotEmpty) {
+        if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
             const SnackBar(
               content: Text('⚠️ Aap ne pehle hi challenge bheja hai!'),
               backgroundColor: Color(0xFFFF4655),
             ),
           );
-          return;
         }
+        return;
       }
-    } catch (_) {}
 
-    SendTeamMatchChallengeDialog.show(
-      context,
-      opponentTeam: widget.team,
-      myTeams: myLeaderTeams,
-    );
+      // 2. Check if active match already exists
+      final activeCheck = await SupabaseService.client
+          .from('active_matches')
+          .select()
+          .eq('status', 'active');
+
+      final hasActiveMatch = activeCheck.any((m) {
+        final participants = m['participants'];
+        final List<String> pList = [];
+        if (participants is List) {
+          pList.addAll(participants.map((p) => p.toString()));
+        }
+        pList.add(m['team1_id']?.toString() ?? '');
+        pList.add(m['team2_id']?.toString() ?? '');
+        return pList.contains(effectiveMyTeamId) && pList.contains(widget.team.id);
+      });
+
+      if (hasActiveMatch) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('🔥 Is team ke sath pehle se hi Active Match chal raha hai!'),
+              backgroundColor: Color(0xFF2E7D32),
+            ),
+          );
+        }
+        return;
+      }
+
+      // 3. Insert challenge into Supabase challenges table
+      await SupabaseService.client.from('challenges').insert({
+        'from_team_id': effectiveMyTeamId,
+        'to_team_id': effectiveTargetId,
+        'from_team_name': effectiveMyTeamName,
+        'to_team_name': widget.team.name,
+        'status': 'pending',
+      });
+
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('⚔️ Challenge sent to ${widget.team.name}!'),
+            backgroundColor: const Color(0xFF1877F2),
+          ),
+        );
+      }
+    } catch (e) {
+      debugPrint('[TeamCard] Error sending challenge via Supabase: $e');
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Error sending challenge: $e'),
+            backgroundColor: const Color(0xFFFF4655),
+          ),
+        );
+      }
+    }
   }
 
   @override
@@ -171,6 +180,7 @@ class _TeamCardState extends State<TeamCard> {
         color: Colors.transparent,
         borderRadius: BorderRadius.circular(12),
         child: InkWell(
+          borderRadius: BorderRadius.circular(12),
           onTap: () {
             Navigator.push(
               context,
@@ -179,13 +189,12 @@ class _TeamCardState extends State<TeamCard> {
               ),
             );
           },
-          borderRadius: BorderRadius.circular(12),
           child: Padding(
-            padding: const EdgeInsets.all(14),
+            padding: const EdgeInsets.all(12),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                // Top Row: Logo, Name, Tag, Game & Members
+                // Top Row: Logo, Name, Tag & Leader
                 Row(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
@@ -297,42 +306,27 @@ class _TeamCardState extends State<TeamCard> {
                   ),
                 ],
 
-                // Red banner if current user has already sent a pending challenge to this team
-                if (!isLeader && !isMember && currentUid.isNotEmpty)
-                  StreamBuilder<QuerySnapshot>(
-                    stream: widget.myTeamId.isNotEmpty
-                        ? FirebaseFirestore.instance
-                            .collection('challenges')
-                            .where('fromTeamId', isEqualTo: widget.myTeamId)
-                            .where('toTeamId', isEqualTo: team.id)
-                            .where('status', isEqualTo: 'pending')
-                            .snapshots()
-                        : FirebaseFirestore.instance
-                            .collection('challenges')
-                            .where('toTeamId', isEqualTo: team.id)
-                            .where('status', isEqualTo: 'pending')
-                            .snapshots(),
+                // 2. RED BANNER: Realtime Supabase check if pending challenge already sent to this team
+                if (!isLeader && !isMember && currentUid.isNotEmpty && widget.myTeamId.isNotEmpty)
+                  StreamBuilder<List<Map<String, dynamic>>>(
+                    stream: SupabaseService.client
+                        .from('challenges')
+                        .stream(primaryKey: ['id'])
+                        .eq('from_team_id', SupabaseService.toUuid(widget.myTeamId)),
                     builder: (context, cSnap) {
-                      DocumentSnapshot? pendingDoc;
-                      if (cSnap.hasData && cSnap.data!.docs.isNotEmpty) {
-                        for (var d in cSnap.data!.docs) {
-                          final data = d.data() as Map<String, dynamic>;
-                          final st = (data['status'] ?? '').toString().toLowerCase();
-                          if (st == 'pending') {
-                            final fTeam = data['fromTeamId']?.toString() ?? '';
-                            final fLeader = data['fromTeamLeaderId']?.toString() ?? '';
-                            if (widget.myTeamId.isNotEmpty && fTeam == widget.myTeamId) {
-                              pendingDoc = d;
-                              break;
-                            } else if (fLeader == currentUid) {
-                              pendingDoc = d;
-                              break;
-                            }
-                          }
-                        }
-                      }
+                      final challenges = cSnap.data ?? [];
+                      final targetUuid = SupabaseService.toUuid(team.id).toLowerCase();
+                      final rawTeamId = team.id.toLowerCase();
+                      final pendingDoc = challenges.firstWhere(
+                        (d) {
+                          final toId = d['to_team_id']?.toString().toLowerCase();
+                          final st = (d['status'] ?? '').toString().toLowerCase();
+                          return (toId == targetUuid || toId == rawTeamId) && st == 'pending';
+                        },
+                        orElse: () => {},
+                      );
 
-                      if (pendingDoc == null) return const SizedBox.shrink();
+                      if (pendingDoc.isEmpty) return const SizedBox.shrink();
 
                       return Container(
                         margin: const EdgeInsets.only(top: 8),
@@ -353,7 +347,21 @@ class _TeamCardState extends State<TeamCard> {
                               ),
                             ),
                             InkWell(
-                              onTap: () => _deleteChallenge(pendingDoc!.reference, pendingDoc.id),
+                              onTap: () async {
+                                final cId = pendingDoc['id'];
+                                await SupabaseService.client
+                                    .from('challenges')
+                                    .delete()
+                                    .eq('id', cId);
+                                if (mounted) {
+                                  ScaffoldMessenger.of(context).showSnackBar(
+                                    const SnackBar(
+                                      content: Text('🚫 چیلنج کامیابی سے Cancel کر دیا گیا ہے'),
+                                      backgroundColor: Color(0xFF1877F2),
+                                    ),
+                                  );
+                                }
+                              },
                               child: const Padding(
                                 padding: EdgeInsets.symmetric(horizontal: 6, vertical: 2),
                                 child: Text(
@@ -408,7 +416,7 @@ class _TeamCardState extends State<TeamCard> {
                     ),
                     const SizedBox(width: 8),
 
-                    // Join / Challenge / Manage Button
+                    // Join / Challenge / Active Match / Manage Button
                     if (isLeader) ...[
                       Container(
                         padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
@@ -436,62 +444,59 @@ class _TeamCardState extends State<TeamCard> {
                         ),
                       ),
                     ] else ...[
-                      // Challenge / Cancel Challenge Button with real-time stream
-                      StreamBuilder<QuerySnapshot>(
+                      // 3. ACTIVE MATCH CONNECTION CHECK VIA REALTIME
+                      StreamBuilder<List<Map<String, dynamic>>>(
                         stream: widget.myTeamId.isNotEmpty
-                            ? FirebaseFirestore.instance
-                                .collection('challenges')
-                                .where('fromTeamId', isEqualTo: widget.myTeamId)
-                                .where('toTeamId', isEqualTo: team.id)
-                                .where('status', isEqualTo: 'pending')
-                                .snapshots()
-                            : (currentUid.isNotEmpty
-                                ? FirebaseFirestore.instance
-                                    .collection('challenges')
-                                    .where('toTeamId', isEqualTo: team.id)
-                                    .where('status', isEqualTo: 'pending')
-                                    .snapshots()
-                                : Stream.empty()),
-                        builder: (context, cSnap) {
-                          DocumentSnapshot? pendingDoc;
-                          if (cSnap.hasData && cSnap.data!.docs.isNotEmpty) {
-                            for (var d in cSnap.data!.docs) {
-                              final data = d.data() as Map<String, dynamic>;
-                              final st = (data['status'] ?? '').toString().toLowerCase();
-                              if (st == 'pending') {
-                                final fTeam = data['fromTeamId']?.toString() ?? '';
-                                final fLeader = data['fromTeamLeaderId']?.toString() ?? '';
-                                if (widget.myTeamId.isNotEmpty && fTeam == widget.myTeamId) {
-                                  pendingDoc = d;
-                                  break;
-                                } else if (fLeader == currentUid) {
-                                  pendingDoc = d;
-                                  break;
-                                }
-                              }
-                            }
-                          }
+                            ? SupabaseService.client
+                                .from('active_matches')
+                                .stream(primaryKey: ['id'])
+                                .eq('status', 'active')
+                            : Stream.value([]),
+                        builder: (context, activeSnap) {
+                          final activeMatches = activeSnap.data ?? [];
+                          final myUuid = SupabaseService.toUuid(widget.myTeamId).toLowerCase();
+                          final myRawId = widget.myTeamId.toLowerCase();
+                          final targetUuid = SupabaseService.toUuid(team.id).toLowerCase();
+                          final targetRawId = team.id.toLowerCase();
 
-                          if (pendingDoc != null) {
+                          final activeMatchWithOpponent = activeMatches.firstWhere(
+                            (m) {
+                              if (m['status'] != 'active') return false;
+                              final participants = m['participants'];
+                              final List<String> pList = [];
+                              if (participants is List) {
+                                pList.addAll(participants.map((p) => p.toString().toLowerCase()));
+                              }
+                              pList.add(m['team1_id']?.toString().toLowerCase() ?? '');
+                              pList.add(m['team2_id']?.toString().toLowerCase() ?? '');
+                              final hasMe = pList.contains(myUuid) || pList.contains(myRawId);
+                              final hasTarget = pList.contains(targetUuid) || pList.contains(targetRawId);
+                              return hasMe && hasTarget;
+                            },
+                            orElse: () => {},
+                          );
+
+                          // If active match found with opponent: show "ACTIVE MATCH" green button + "View Match" button
+                          if (activeMatchWithOpponent.isNotEmpty) {
                             return Row(
                               mainAxisSize: MainAxisSize.min,
                               children: [
                                 Container(
                                   padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
                                   decoration: BoxDecoration(
-                                    color: const Color(0xFFE4E6EB),
+                                    color: const Color(0xFFE8F5E9),
                                     borderRadius: BorderRadius.circular(8),
-                                    border: Border.all(color: const Color(0xFFCED0D4)),
+                                    border: Border.all(color: const Color(0xFF2E7D32)),
                                   ),
                                   child: const Row(
                                     mainAxisSize: MainAxisSize.min,
                                     children: [
-                                      Icon(Icons.hourglass_top_rounded, size: 12, color: Color(0xFF65676B)),
+                                      Icon(Icons.local_fire_department_rounded, size: 14, color: Color(0xFF2E7D32)),
                                       SizedBox(width: 4),
                                       Text(
-                                        'Requested',
+                                        'ACTIVE MATCH',
                                         style: TextStyle(
-                                          color: Color(0xFF65676B),
+                                          color: Color(0xFF2E7D32),
                                           fontWeight: FontWeight.bold,
                                           fontSize: 11,
                                         ),
@@ -500,34 +505,122 @@ class _TeamCardState extends State<TeamCard> {
                                   ),
                                 ),
                                 const SizedBox(width: 6),
-                                OutlinedButton.icon(
-                                  style: OutlinedButton.styleFrom(
-                                    foregroundColor: const Color(0xFFFF4655),
-                                    side: const BorderSide(color: Color(0xFFFF4655), width: 1.2),
-                                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                                ElevatedButton.icon(
+                                  style: ElevatedButton.styleFrom(
+                                    backgroundColor: const Color(0xFF2E7D32),
+                                    foregroundColor: Colors.white,
+                                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
                                     minimumSize: const Size(0, 32),
                                     shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-                                    backgroundColor: const Color(0xFFFEF2F2),
+                                    elevation: 0,
                                   ),
-                                  icon: const Icon(Icons.close_rounded, size: 13, color: Color(0xFFFF4655)),
-                                  label: const Text('Cancel', style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold)),
-                                  onPressed: () => _deleteChallenge(pendingDoc!.reference, pendingDoc.id),
+                                  icon: const Icon(Icons.sports_esports_rounded, size: 14),
+                                  label: const Text('View Match', style: TextStyle(fontSize: 11.5, fontWeight: FontWeight.bold)),
+                                  onPressed: () {
+                                    Navigator.push(
+                                      context,
+                                      MaterialPageRoute(
+                                        builder: (_) => TeamProfileScreen(teamId: team.id),
+                                      ),
+                                    );
+                                  },
                                 ),
                               ],
                             );
                           }
 
-                          return OutlinedButton.icon(
-                            style: OutlinedButton.styleFrom(
-                              foregroundColor: const Color(0xFF1877F2),
-                              side: const BorderSide(color: Color(0xFF1877F2)),
-                              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                              minimumSize: const Size(0, 32),
-                              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-                            ),
-                            icon: const Icon(Icons.flash_on_rounded, size: 13, color: Color(0xFF1877F2)),
-                            label: const Text('Challenge', style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold)),
-                            onPressed: () => _handleChallenge(currentUid),
+                          // 2. SENDER SIDE: CHECK PENDING CHALLENGE VIA REALTIME
+                          return StreamBuilder<List<Map<String, dynamic>>>(
+                            stream: widget.myTeamId.isNotEmpty
+                                ? SupabaseService.client
+                                    .from('challenges')
+                                    .stream(primaryKey: ['id'])
+                                    .eq('from_team_id', SupabaseService.toUuid(widget.myTeamId))
+                                : Stream.value([]),
+                            builder: (context, cSnap) {
+                              final challenges = cSnap.data ?? [];
+                              final targetUuid = SupabaseService.toUuid(team.id).toLowerCase();
+                              final rawTeamId = team.id.toLowerCase();
+                              final pendingDoc = challenges.firstWhere(
+                                (d) {
+                                  final toId = d['to_team_id']?.toString().toLowerCase();
+                                  final st = (d['status'] ?? '').toString().toLowerCase();
+                                  return (toId == targetUuid || toId == rawTeamId) && st == 'pending';
+                                },
+                                orElse: () => {},
+                              );
+
+                              if (pendingDoc.isNotEmpty) {
+                                return Row(
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    Container(
+                                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
+                                      decoration: BoxDecoration(
+                                        color: const Color(0xFFE4E6EB),
+                                        borderRadius: BorderRadius.circular(8),
+                                        border: Border.all(color: const Color(0xFFCED0D4)),
+                                      ),
+                                      child: const Row(
+                                        mainAxisSize: MainAxisSize.min,
+                                        children: [
+                                          Icon(Icons.hourglass_top_rounded, size: 12, color: Color(0xFF65676B)),
+                                          SizedBox(width: 4),
+                                          Text(
+                                            'Requested',
+                                            style: TextStyle(
+                                              color: Color(0xFF65676B),
+                                              fontWeight: FontWeight.bold,
+                                              fontSize: 11,
+                                            ),
+                                          ),
+                                        ],
+                                      ),
+                                    ),
+                                    const SizedBox(width: 6),
+                                    OutlinedButton.icon(
+                                      style: OutlinedButton.styleFrom(
+                                        foregroundColor: const Color(0xFFFF4655),
+                                        side: const BorderSide(color: Color(0xFFFF4655), width: 1.2),
+                                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                                        minimumSize: const Size(0, 32),
+                                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                                        backgroundColor: const Color(0xFFFEF2F2),
+                                      ),
+                                      icon: const Icon(Icons.close_rounded, size: 13, color: Color(0xFFFF4655)),
+                                      label: const Text('Cancel', style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold)),
+                                      onPressed: () async {
+                                        await SupabaseService.client
+                                            .from('challenges')
+                                            .delete()
+                                            .eq('id', pendingDoc['id']);
+                                        if (mounted) {
+                                          ScaffoldMessenger.of(context).showSnackBar(
+                                            const SnackBar(
+                                              content: Text('🚫 چیلنج کامیابی سے Cancel کر دیا گیا ہے'),
+                                              backgroundColor: Color(0xFF1877F2),
+                                            ),
+                                          );
+                                        }
+                                      },
+                                    ),
+                                  ],
+                                );
+                              }
+
+                              return OutlinedButton.icon(
+                                style: OutlinedButton.styleFrom(
+                                  foregroundColor: const Color(0xFF1877F2),
+                                  side: const BorderSide(color: Color(0xFF1877F2)),
+                                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                                  minimumSize: const Size(0, 32),
+                                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                                ),
+                                icon: const Icon(Icons.flash_on_rounded, size: 13, color: Color(0xFF1877F2)),
+                                label: const Text('Challenge', style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold)),
+                                onPressed: () => _handleChallenge(currentUid),
+                              );
+                            },
                           );
                         },
                       ),

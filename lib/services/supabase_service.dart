@@ -5,6 +5,7 @@ import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:crypto/crypto.dart';
 
 /// Supabase Service for GAMERS ID NETWORK
 /// Handles Supabase Storage (image/proof uploads), Auth (login/signup),
@@ -19,6 +20,19 @@ class SupabaseService {
     supabaseAnonKey,
   );
   static SupabaseClient get _supabase => client;
+
+  /// Converts any string ID into a valid RFC 4122 UUID deterministically.
+  /// If it is already a valid UUID, returns it lowercased.
+  static String toUuid(String id) {
+    final clean = id.trim();
+    if (clean.isEmpty) return '00000000-0000-0000-0000-000000000000';
+    final uuidRegex = RegExp(r'^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$');
+    if (uuidRegex.hasMatch(clean)) return clean.toLowerCase();
+
+    final bytes = md5.convert(utf8.encode(clean)).bytes;
+    final hex = bytes.map((b) => b.toRadixString(16).padLeft(2, '0')).join();
+    return '${hex.substring(0, 8)}-${hex.substring(8, 12)}-${hex.substring(12, 16)}-${hex.substring(16, 20)}-${hex.substring(20, 32)}';
+  }
 
   static Future<void> init() async {
     try {

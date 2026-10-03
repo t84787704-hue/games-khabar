@@ -6,6 +6,7 @@ import '../models/team_model.dart';
 import '../services/gamer_auth_service.dart';
 import '../services/team_service.dart';
 import '../services/team_match_service.dart';
+import '../services/supabase_service.dart';
 
 class SendTeamMatchChallengeDialog extends StatefulWidget {
   final TeamModel opponentTeam;
@@ -154,6 +155,29 @@ class _SendTeamMatchChallengeDialogState extends State<SendTeamMatchChallengeDia
       _selectedTime.minute,
     );
 
+    final fromUuid = SupabaseService.toUuid(myTeam.id);
+    final toUuid = SupabaseService.toUuid(widget.opponentTeam.id);
+
+    try {
+      final existing = await SupabaseService.client
+          .from('challenges')
+          .select()
+          .eq('from_team_id', fromUuid)
+          .eq('to_team_id', toUuid)
+          .eq('status', 'pending');
+
+      if (existing.isNotEmpty) {
+        setState(() => _isSending = false);
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('⚠️ Aap ne pehle hi challenge bheja hai!'),
+            backgroundColor: Color(0xFFFF4655),
+          ),
+        );
+        return;
+      }
+    } catch (_) {}
+
     final result = await _matchService.sendChallenge(
       team1Id: myTeam.id,
       team1Name: myTeam.name,
@@ -172,6 +196,19 @@ class _SendTeamMatchChallengeDialogState extends State<SendTeamMatchChallengeDia
       matchTime: finalMatchDateTime,
       entryFee: 'Free (مفت)',
     );
+
+    // Also insert directly into Supabase challenges table
+    try {
+      await SupabaseService.client.from('challenges').insert({
+        'from_team_id': fromUuid,
+        'to_team_id': toUuid,
+        'from_team_name': myTeam.name,
+        'to_team_name': widget.opponentTeam.name,
+        'status': 'pending',
+      });
+    } catch (e) {
+      debugPrint('[SendChallengeDialog] Supabase insert note: $e');
+    }
 
     setState(() => _isSending = false);
 
@@ -341,26 +378,25 @@ class _SendTeamMatchChallengeDialogState extends State<SendTeamMatchChallengeDia
             ),
             const SizedBox(height: 16),
 
-            // Active Pending Challenge Red Banner
-            StreamBuilder<QuerySnapshot>(
-              stream: FirebaseFirestore.instance
-                  .collection('challenges')
-                  .where('toTeamId', isEqualTo: widget.opponentTeam.id)
-                  .snapshots(),
+            // Active Pending Challenge Red Banner (Supabase Realtime)
+            StreamBuilder<List<Map<String, dynamic>>>(
+              stream: _selectedMyTeamId.isNotEmpty
+                  ? SupabaseService.client
+                      .from('challenges')
+                      .stream(primaryKey: ['id'])
+                      .eq('from_team_id', SupabaseService.toUuid(_selectedMyTeamId))
+                  : Stream.value([]),
               builder: (context, cSnap) {
                 String? pendingChallengeId;
                 if (cSnap.hasData) {
-                  final curUid = FirebaseAuth.instance.currentUser?.uid ?? '';
-                  for (var d in cSnap.data!.docs) {
-                    final data = d.data() as Map<String, dynamic>;
-                    final st = (data['status'] ?? '').toString().toLowerCase();
-                    if (st == 'pending') {
-                      final fTeam = data['fromTeamId']?.toString() ?? '';
-                      final fLeader = data['fromTeamLeaderId']?.toString() ?? '';
-                      if (fTeam == _selectedMyTeamId || (curUid.isNotEmpty && fLeader == curUid)) {
-                        pendingChallengeId = d.id;
-                        break;
-                      }
+                  final targetUuid = SupabaseService.toUuid(widget.opponentTeam.id).toLowerCase();
+                  final rawTargetId = widget.opponentTeam.id.toLowerCase();
+                  for (var d in cSnap.data!) {
+                    final st = (d['status'] ?? '').toString().toLowerCase();
+                    final toId = d['to_team_id']?.toString().toLowerCase();
+                    if (st == 'pending' && (toId == targetUuid || toId == rawTargetId)) {
+                      pendingChallengeId = d['id']?.toString();
+                      break;
                     }
                   }
                 }
@@ -408,7 +444,10 @@ class _SendTeamMatchChallengeDialogState extends State<SendTeamMatchChallengeDia
                             if (pId == null) return;
                             final uid = FirebaseAuth.instance.currentUser?.uid ?? '';
                             try {
-                              await FirebaseFirestore.instance.collection('challenges').doc(pId).delete();
+                              await SupabaseService.client.from('challenges').delete().eq('id', pId);
+                              try {
+                                await FirebaseFirestore.instance.collection('challenges').doc(pId).delete();
+                              } catch (_) {}
                               try {
                                 await FirebaseFirestore.instance.collection('team_matches').doc(pId).delete();
                               } catch (_) {}
