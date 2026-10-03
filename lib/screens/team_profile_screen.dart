@@ -792,8 +792,9 @@ class _TeamProfileScreenState extends State<TeamProfileScreen> {
                     },
                   ),
                 ),
-              ],
-            ),
+                      ],
+                    ),
+                  ),
                 );
               },
             );
