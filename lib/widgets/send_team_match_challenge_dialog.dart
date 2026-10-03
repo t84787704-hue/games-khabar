@@ -404,13 +404,15 @@ class _SendTeamMatchChallengeDialogState extends State<SendTeamMatchChallengeDia
                         width: double.infinity,
                         child: OutlinedButton.icon(
                           onPressed: () async {
+                            final pId = pendingChallengeId;
+                            if (pId == null) return;
                             final uid = FirebaseAuth.instance.currentUser?.uid ?? '';
                             try {
-                              await FirebaseFirestore.instance.collection('challenges').doc(pendingChallengeId!).delete();
+                              await FirebaseFirestore.instance.collection('challenges').doc(pId).delete();
                               try {
-                                await FirebaseFirestore.instance.collection('team_matches').doc(pendingChallengeId).delete();
+                                await FirebaseFirestore.instance.collection('team_matches').doc(pId).delete();
                               } catch (_) {}
-                              await _matchService.cancelChallenge(pendingChallengeId, cancelledByUid: uid);
+                              await _matchService.cancelChallenge(pId, cancelledByUid: uid);
                               if (mounted) {
                                 ScaffoldMessenger.of(context).showSnackBar(
                                   const SnackBar(
