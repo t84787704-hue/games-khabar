@@ -233,6 +233,148 @@ class _GamerFeedScreenState extends State<GamerFeedScreen> {
     ).then((_) => _loadFeed());
   }
 
+  void _showCreatePost() {
+    final textController = TextEditingController();
+    bool isPosting = false;
+
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.white,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
+      ),
+      builder: (sheetCtx) => StatefulBuilder(
+        builder: (context, setSheetState) {
+          return Padding(
+            padding: EdgeInsets.only(
+              left: 16,
+              right: 16,
+              top: 16,
+              bottom: MediaQuery.of(context).viewInsets.bottom + 16,
+            ),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                // Top row has user avatar, username "tufailm1083", and a blue Post button
+                Row(
+                  children: [
+                    const CircleAvatar(
+                      radius: 20,
+                      backgroundColor: Color(0xFFE4E6EB),
+                      child: Icon(Icons.person, color: Color(0xFF050505)),
+                    ),
+                    const SizedBox(width: 10),
+                    const Text(
+                      'tufailm1083',
+                      style: TextStyle(
+                        fontWeight: FontWeight.bold,
+                        fontSize: 16,
+                        color: Color(0xFF050505),
+                      ),
+                    ),
+                    const Spacer(),
+                    ElevatedButton(
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: const Color(0xFF1877F2),
+                        foregroundColor: Colors.white,
+                        elevation: 0,
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(8),
+                        ),
+                        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                      ),
+                      onPressed: isPosting
+                          ? null
+                          : () async {
+                              final text = textController.text.trim();
+                              if (text.isEmpty) return;
+
+                              setSheetState(() => isPosting = true);
+
+                              try {
+                                final uid = currentUserId.isNotEmpty ? currentUserId : 'anon';
+                                await SupabaseService.client.from('posts').insert({
+                                  'content': text,
+                                  'user_id': uid,
+                                  'username': 'tufailm1083',
+                                  'likes_count': 0,
+                                  'comments_count': 0,
+                                });
+
+                                if (sheetCtx.mounted) {
+                                  Navigator.pop(sheetCtx);
+                                }
+
+                                if (mounted) {
+                                  ScaffoldMessenger.of(context).showSnackBar(
+                                    const SnackBar(
+                                      content: Text('Post created!'),
+                                      backgroundColor: Color(0xFF1877F2),
+                                    ),
+                                  );
+                                  _loadFeed();
+                                }
+                              } catch (e) {
+                                debugPrint('Error creating post: $e');
+                                if (sheetCtx.mounted) {
+                                  setSheetState(() => isPosting = false);
+                                }
+                                if (mounted) {
+                                  ScaffoldMessenger.of(context).showSnackBar(
+                                    SnackBar(
+                                      content: Text('Failed to create post: $e'),
+                                      backgroundColor: Colors.red,
+                                    ),
+                                  );
+                                }
+                              }
+                            },
+                      child: isPosting
+                          ? const SizedBox(
+                              width: 16,
+                              height: 16,
+                              child: CircularProgressIndicator(
+                                strokeWidth: 2,
+                                color: Colors.white,
+                              ),
+                            )
+                          : const Text(
+                              'Post',
+                              style: TextStyle(fontWeight: FontWeight.bold),
+                            ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 14),
+                // TextField with hint "What's on your mind?" autofocus true, maxLines 5
+                TextField(
+                  controller: textController,
+                  autofocus: true,
+                  maxLines: 5,
+                  minLines: 3,
+                  style: const TextStyle(
+                    color: Color(0xFF050505),
+                    fontSize: 16,
+                  ),
+                  decoration: const InputDecoration(
+                    hintText: "What's on your mind?",
+                    hintStyle: TextStyle(
+                      color: Color(0xFF65676B),
+                      fontSize: 16,
+                    ),
+                    border: InputBorder.none,
+                  ),
+                ),
+              ],
+            ),
+          );
+        },
+      ),
+    );
+  }
+
   String _formatTimeAgo(dynamic raw) {
     if (raw == null) return 'Just now';
     DateTime? dt;
@@ -276,36 +418,53 @@ class _GamerFeedScreenState extends State<GamerFeedScreen> {
                 itemBuilder: (context, index) {
                   // Top "What's on your mind?" Card
                   if (index == 0) {
-                    return Card(
-                      margin: const EdgeInsets.all(8),
-                      elevation: 0,
-                      color: Colors.white,
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(10),
-                      ),
-                      child: ListTile(
-                        leading: const CircleAvatar(
-                          backgroundColor: Color(0xFFE4E6EB),
-                          child: Icon(Icons.person, color: Color(0xFF050505)),
+                    return InkWell(
+                      onTap: _showCreatePost,
+                      borderRadius: BorderRadius.circular(10),
+                      child: Card(
+                        margin: const EdgeInsets.all(8),
+                        elevation: 0,
+                        color: Colors.white,
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(10),
                         ),
-                        title: Container(
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: 14,
-                            vertical: 10,
-                          ),
-                          decoration: BoxDecoration(
-                            color: const Color(0xFFF0F2F5),
-                            borderRadius: BorderRadius.circular(20),
-                          ),
-                          child: const Text(
-                            "What's on your mind?",
-                            style: TextStyle(
-                              color: Color(0xFF65676B),
-                              fontSize: 14,
-                            ),
+                        child: Padding(
+                          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                          child: Row(
+                            children: [
+                              GestureDetector(
+                                onTap: _showCreatePost,
+                                child: const CircleAvatar(
+                                  backgroundColor: Color(0xFFE4E6EB),
+                                  child: Icon(Icons.person, color: Color(0xFF050505)),
+                                ),
+                              ),
+                              const SizedBox(width: 12),
+                              Expanded(
+                                child: GestureDetector(
+                                  onTap: _showCreatePost,
+                                  child: Container(
+                                    padding: const EdgeInsets.symmetric(
+                                      horizontal: 14,
+                                      vertical: 10,
+                                    ),
+                                    decoration: BoxDecoration(
+                                      color: const Color(0xFFF0F2F5),
+                                      borderRadius: BorderRadius.circular(20),
+                                    ),
+                                    child: const Text(
+                                      "What's on your mind?",
+                                      style: TextStyle(
+                                        color: Color(0xFF65676B),
+                                        fontSize: 14,
+                                      ),
+                                    ),
+                                  ),
+                                ),
+                              ),
+                            ],
                           ),
                         ),
-                        onTap: () => Navigator.pushNamed(context, '/create_post'),
                       ),
                     );
                   }
