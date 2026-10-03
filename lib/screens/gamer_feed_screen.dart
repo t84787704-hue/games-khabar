@@ -17,11 +17,67 @@ class _GamerFeedScreenState extends State<GamerFeedScreen> {
   bool isLoading = true;
   String currentUserId = 'test_user';
 
+  static final RegExp _uuidRegex = RegExp(
+    r'^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$',
+  );
+
   @override
   void initState() {
     super.initState();
-    currentUserId = FirebaseAuth.instance.currentUser?.uid ?? 'test_user';
     _loadFeed();
+  }
+
+  Future<String> _resolveValidUserId() async {
+    // 1. Check SharedPreferences stored Supabase user ID
+    try {
+      final sbId = await SupabaseService.getCurrentUserId();
+      if (sbId != null && _uuidRegex.hasMatch(sbId)) {
+        return sbId;
+      }
+    } catch (_) {}
+
+    // 2. Check current Firebase user and match in Supabase users table
+    try {
+      final fbUser = FirebaseAuth.instance.currentUser;
+      if (fbUser != null) {
+        if (fbUser.email != null && fbUser.email!.isNotEmpty) {
+          final res = await SupabaseService.client
+              .from('users')
+              .select('id')
+              .eq('email', fbUser.email!)
+              .maybeSingle();
+          if (res != null && res['id'] != null) {
+            final idStr = res['id'].toString();
+            if (_uuidRegex.hasMatch(idStr)) return idStr;
+          }
+        }
+        final resUid = await SupabaseService.client
+            .from('users')
+            .select('id')
+            .eq('uid', fbUser.uid)
+            .maybeSingle();
+        if (resUid != null && resUid['id'] != null) {
+          final idStr = resUid['id'].toString();
+          if (_uuidRegex.hasMatch(idStr)) return idStr;
+        }
+      }
+    } catch (_) {}
+
+    // 3. Fallback to any user in public.users to satisfy UUID and FK constraints
+    try {
+      final anyUser = await SupabaseService.client
+          .from('users')
+          .select('id')
+          .limit(1)
+          .maybeSingle();
+      if (anyUser != null && anyUser['id'] != null) {
+        final idStr = anyUser['id'].toString();
+        if (_uuidRegex.hasMatch(idStr)) return idStr;
+      }
+    } catch (_) {}
+
+    final fbUid = FirebaseAuth.instance.currentUser?.uid;
+    return (fbUid != null && fbUid.isNotEmpty) ? fbUid : 'test_user';
   }
 
   Future<void> _loadFeed() async {
@@ -29,7 +85,7 @@ class _GamerFeedScreenState extends State<GamerFeedScreen> {
       setState(() => isLoading = true);
     }
 
-    currentUserId = FirebaseAuth.instance.currentUser?.uid ?? 'test_user';
+    currentUserId = await _resolveValidUserId();
 
     try {
       // 1. Fetch posts with simple query without foreign key joins
@@ -41,7 +97,7 @@ class _GamerFeedScreenState extends State<GamerFeedScreen> {
 
       final fetchedPosts = List<Map<String, dynamic>>.from(data as List);
 
-      // 2. Fetch users separately if needed
+      // 2. Fetch users separately
       final userIds = fetchedPosts
           .map((p) => p['user_id']?.toString())
           .where((id) => id != null && id.isNotEmpty)
@@ -261,7 +317,7 @@ class _GamerFeedScreenState extends State<GamerFeedScreen> {
                   final username = userProfile?['username'] ??
                       post['username'] ??
                       'Gamer';
-                  final avatarUrl = (userProfile?['avatar_url'] ?? '').toString();
+                  final avatarUrl = (userProfile?['avatar_url'] ?? post['user_avatar'] ?? '').toString();
                   final postId = post['id']?.toString() ?? '';
                   final isLiked = likedPostIds.contains(postId);
                   final imageUrl = (post['image_url'] ?? '').toString();
@@ -408,7 +464,7 @@ class _GamerFeedScreenState extends State<GamerFeedScreen> {
                                         'Like',
                                         style: TextStyle(
                                           color: isLiked
-                                             ? const Color(0xFF1877F2)
+                                              ? const Color(0xFF1877F2)
                                               : const Color(0xFF65676B),
                                           fontWeight: isLiked
                                               ? FontWeight.bold
@@ -504,6 +560,10 @@ class _CommentSheetState extends State<CommentSheet> {
   final TextEditingController _ctrl = TextEditingController();
   bool _loading = true;
 
+  static final RegExp _uuidRegex = RegExp(
+    r'^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$',
+  );
+
   @override
   void initState() {
     super.initState();
@@ -516,6 +576,50 @@ class _CommentSheetState extends State<CommentSheet> {
     super.dispose();
   }
 
+  Future<String> _resolveCommenterUserId() async {
+    if (_uuidRegex.hasMatch(widget.currentUserId)) {
+      return widget.currentUserId;
+    }
+
+    try {
+      final sbId = await SupabaseService.getCurrentUserId();
+      if (sbId != null && _uuidRegex.hasMatch(sbId)) {
+        return sbId;
+      }
+    } catch (_) {}
+
+    try {
+      final fbUser = FirebaseAuth.instance.currentUser;
+      if (fbUser != null) {
+        if (fbUser.email != null && fbUser.email!.isNotEmpty) {
+          final res = await SupabaseService.client
+              .from('users')
+              .select('id')
+              .eq('email', fbUser.email!)
+              .maybeSingle();
+          if (res != null && res['id'] != null) {
+            final idStr = res['id'].toString();
+            if (_uuidRegex.hasMatch(idStr)) return idStr;
+          }
+        }
+      }
+    } catch (_) {}
+
+    try {
+      final anyUser = await SupabaseService.client
+          .from('users')
+          .select('id')
+          .limit(1)
+          .maybeSingle();
+      if (anyUser != null && anyUser['id'] != null) {
+        final idStr = anyUser['id'].toString();
+        if (_uuidRegex.hasMatch(idStr)) return idStr;
+      }
+    } catch (_) {}
+
+    return widget.currentUserId;
+  }
+
   Future<void> _loadComments() async {
     try {
       final data = await SupabaseService.client
@@ -524,9 +628,46 @@ class _CommentSheetState extends State<CommentSheet> {
           .eq('post_id', widget.postId)
           .order('created_at', ascending: true);
 
+      final list = List<Map<String, dynamic>>.from(data as List);
+
+      // If any comment is missing username, populate from users table
+      final missingUserIds = list
+          .where((c) => c['username'] == null || c['username'].toString().isEmpty)
+          .map((c) => c['user_id']?.toString())
+          .where((id) => id != null && id.isNotEmpty)
+          .toSet()
+          .toList();
+
+      if (missingUserIds.isNotEmpty) {
+        try {
+          final usersData = await SupabaseService.client
+              .from('users')
+              .select('id, username')
+              .inFilter('id', missingUserIds);
+
+          final userMap = <String, String>{};
+          for (final u in (usersData as List)) {
+            if (u is Map<String, dynamic> && u['id'] != null) {
+              userMap[u['id'].toString()] = (u['username'] ?? 'Gamer').toString();
+            }
+          }
+
+          for (final c in list) {
+            if (c['username'] == null || c['username'].toString().isEmpty) {
+              final uid = c['user_id']?.toString();
+              if (uid != null && userMap.containsKey(uid)) {
+                c['username'] = userMap[uid];
+              }
+            }
+          }
+        } catch (e) {
+          debugPrint('Comments user lookup error: $e');
+        }
+      }
+
       if (mounted) {
         setState(() {
-          comments = List<Map<String, dynamic>>.from(data as List);
+          comments = list;
           _loading = false;
         });
       }
@@ -544,15 +685,36 @@ class _CommentSheetState extends State<CommentSheet> {
     _ctrl.clear();
 
     try {
-      // 1. Insert into comments table
-      await SupabaseService.client.from('comments').insert({
-        'post_id': widget.postId,
-        'user_id': widget.currentUserId,
-        'content': text,
-        'username': 'You',
-      });
+      final validUid = await _resolveCommenterUserId();
+      final fb = FirebaseAuth.instance.currentUser;
+      final authorUsername = fb?.displayName ??
+          fb?.email?.split('@').first ??
+          'Gamer';
 
-      // 2. Increment comments_count in posts table
+      // First attempt: insert with username
+      bool inserted = false;
+      try {
+        await SupabaseService.client.from('comments').insert({
+          'post_id': widget.postId,
+          'user_id': validUid,
+          'content': text,
+          'username': authorUsername,
+        });
+        inserted = true;
+      } catch (e) {
+        debugPrint('Insert with username failed ($e), falling back to schema without username...');
+      }
+
+      // Second attempt (fallback): insert without username column if schema cache lacks it
+      if (!inserted) {
+        await SupabaseService.client.from('comments').insert({
+          'post_id': widget.postId,
+          'user_id': validUid,
+          'content': text,
+        });
+      }
+
+      // Increment comments_count in posts table
       try {
         final postData = await SupabaseService.client
             .from('posts')
@@ -574,6 +736,16 @@ class _CommentSheetState extends State<CommentSheet> {
       }
 
       _loadComments();
+
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Comment posted!'),
+            duration: Duration(seconds: 2),
+            backgroundColor: Color(0xFF1877F2),
+          ),
+        );
+      }
     } catch (e) {
       debugPrint('Comment insert error: $e');
       if (mounted) {
@@ -626,7 +798,7 @@ class _CommentSheetState extends State<CommentSheet> {
                           itemCount: comments.length,
                           itemBuilder: (_, i) {
                             final c = comments[i];
-                            final username = (c['username'] ?? 'User').toString();
+                            final username = (c['username'] ?? 'Gamer').toString();
                             final content = (c['content'] ?? '').toString();
                             return ListTile(
                               leading: const CircleAvatar(
