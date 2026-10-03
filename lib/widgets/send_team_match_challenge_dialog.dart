@@ -405,9 +405,13 @@ class _SendTeamMatchChallengeDialogState extends State<SendTeamMatchChallengeDia
                         child: OutlinedButton.icon(
                           onPressed: () async {
                             final uid = FirebaseAuth.instance.currentUser?.uid ?? '';
-                            final success = await _matchService.cancelChallenge(pendingChallengeId!, cancelledByUid: uid);
-                            if (mounted) {
-                              if (success) {
+                            try {
+                              await FirebaseFirestore.instance.collection('challenges').doc(pendingChallengeId!).delete();
+                              try {
+                                await FirebaseFirestore.instance.collection('team_matches').doc(pendingChallengeId).delete();
+                              } catch (_) {}
+                              await _matchService.cancelChallenge(pendingChallengeId, cancelledByUid: uid);
+                              if (mounted) {
                                 ScaffoldMessenger.of(context).showSnackBar(
                                   const SnackBar(
                                     content: Text('🚫 چیلنج کامیابی سے Cancel کر دیا گیا ہے'),
@@ -415,6 +419,8 @@ class _SendTeamMatchChallengeDialogState extends State<SendTeamMatchChallengeDia
                                   ),
                                 );
                               }
+                            } catch (e) {
+                              debugPrint('Error cancelling challenge: $e');
                             }
                           },
                           style: OutlinedButton.styleFrom(
