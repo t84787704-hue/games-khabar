@@ -115,14 +115,14 @@ class _GamerMainNavigationScreenState extends State<GamerMainNavigationScreen> {
           ),
           bottomNavigationBar: Container(
             decoration: BoxDecoration(
-              color: ThemeService.bottomNavBg,
-              border: Border(
-                top: BorderSide(color: ThemeService.bottomNavBorder, width: 1),
+              color: Colors.white,
+              border: const Border(
+                top: BorderSide(color: Color(0xFFE4E6EB), width: 1),
               ),
               boxShadow: [
                 BoxShadow(
-                  color: isDark ? Colors.black.withOpacity(0.3) : Colors.black.withOpacity(0.06),
-                  blurRadius: 10,
+                  color: Colors.black.withOpacity(0.06),
+                  blurRadius: 8,
                   offset: const Offset(0, -2),
                 ),
               ],
@@ -141,7 +141,6 @@ class _GamerMainNavigationScreenState extends State<GamerMainNavigationScreen> {
                       icon: Icons.home_rounded,
                       label: 'Feed',
                       isSelected: _currentIndex == 0,
-                      isDark: isDark,
                     ),
 
                     // Tab 1: Teams
@@ -150,7 +149,6 @@ class _GamerMainNavigationScreenState extends State<GamerMainNavigationScreen> {
                       icon: Icons.shield_rounded,
                       label: 'Teams',
                       isSelected: _currentIndex == 1,
-                      isDark: isDark,
                     ),
 
                     // Tab 2: Rooms (Tournaments / Custom Rooms)
@@ -159,7 +157,6 @@ class _GamerMainNavigationScreenState extends State<GamerMainNavigationScreen> {
                       icon: Icons.military_tech_rounded,
                       label: 'Rooms',
                       isSelected: _currentIndex == 2,
-                      isDark: isDark,
                     ),
 
                     // Tab 3: Profile
@@ -168,18 +165,16 @@ class _GamerMainNavigationScreenState extends State<GamerMainNavigationScreen> {
                       icon: Icons.person_rounded,
                       label: 'Profile',
                       isSelected: _currentIndex == 3,
-                      isDark: isDark,
                     ),
 
                     // Tab 4: Admin (Visible ONLY to Admin)
                     if (_isAdmin)
                       _buildNavItem(
                         index: 4,
-                        icon: Icons.shield_rounded,
+                        icon: Icons.admin_panel_settings_rounded,
                         label: 'Admin',
                         isSelected: _currentIndex == 4,
-                        activeColor: const Color(0xFF00FF88),
-                        isDark: isDark,
+                        activeColor: const Color(0xFF1877F2),
                       ),
                   ],
                 ),
@@ -202,10 +197,9 @@ class _GamerMainNavigationScreenState extends State<GamerMainNavigationScreen> {
     required IconData icon,
     required String label,
     required bool isSelected,
-    Color activeColor = const Color(0xFF00E5FF),
-    bool isDark = true,
+    Color activeColor = const Color(0xFF1877F2),
   }) {
-    final unselectedColor = isDark ? GamerTheme.textMuted : const Color(0xFF64748B);
+    const unselectedColor = Color(0xFF65676B);
 
     return InkWell(
       onTap: () => _onTabTapped(index),

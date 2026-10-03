@@ -36,7 +36,7 @@ class _TeamCardState extends State<TeamCard> {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
             content: Text('✅ شمولیت کی درخواست بھیج دی گئی ہے!'),
-            backgroundColor: Color(0xFF00FF88),
+            backgroundColor: Color(0xFF1877F2),
           ),
         );
       }
@@ -53,7 +53,7 @@ class _TeamCardState extends State<TeamCard> {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
           content: Text('چیلنج بھیجنے کے لیے پہلے اپنی ٹیم بنائیں (Create Team)!'),
-          backgroundColor: Color(0xFFFF6B00),
+          backgroundColor: Color(0xFF65676B),
         ),
       );
       return;
@@ -75,15 +75,22 @@ class _TeamCardState extends State<TeamCard> {
     final hasRequested = team.hasRequestedJoin(currentUid);
 
     return Container(
-      margin: const EdgeInsets.only(bottom: 12),
+      margin: const EdgeInsets.only(bottom: 10),
       decoration: BoxDecoration(
-        color: const Color(0xFF131A29),
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: const Color(0xFF2A3447)),
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: const Color(0xFFE4E6EB)),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.04),
+            blurRadius: 4,
+            offset: const Offset(0, 1),
+          ),
+        ],
       ),
       child: Material(
         color: Colors.transparent,
-        borderRadius: BorderRadius.circular(16),
+        borderRadius: BorderRadius.circular(12),
         child: InkWell(
           onTap: () {
             Navigator.push(
@@ -93,7 +100,7 @@ class _TeamCardState extends State<TeamCard> {
               ),
             );
           },
-          borderRadius: BorderRadius.circular(16),
+          borderRadius: BorderRadius.circular(12),
           child: Padding(
             padding: const EdgeInsets.all(14),
             child: Column(
@@ -105,18 +112,18 @@ class _TeamCardState extends State<TeamCard> {
                   children: [
                     // Team Logo
                     Container(
-                      width: 52,
-                      height: 52,
+                      width: 50,
+                      height: 50,
                       decoration: BoxDecoration(
                         shape: BoxShape.circle,
-                        color: const Color(0xFF1A2234),
-                        border: Border.all(color: const Color(0xFFFF6B00), width: 1.5),
+                        color: const Color(0xFFE4E6EB),
+                        border: Border.all(color: const Color(0xFFCED0D4), width: 1.2),
                         image: team.logo.isNotEmpty
                             ? DecorationImage(image: NetworkImage(team.logo), fit: BoxFit.cover)
                             : null,
                       ),
                       child: team.logo.isEmpty
-                          ? const Center(child: Icon(Icons.shield_rounded, color: Colors.white70, size: 28))
+                          ? const Center(child: Icon(Icons.shield_rounded, color: Color(0xFF1877F2), size: 28))
                           : null,
                     ),
                     const SizedBox(width: 12),
@@ -132,26 +139,26 @@ class _TeamCardState extends State<TeamCard> {
                                 child: Text(
                                   team.name,
                                   style: const TextStyle(
-                                    color: Colors.white,
-                                    fontWeight: FontWeight.w900,
-                                    fontSize: 15.5,
+                                    color: Color(0xFF050505),
+                                    fontWeight: FontWeight.bold,
+                                    fontSize: 16,
                                   ),
                                   overflow: TextOverflow.ellipsis,
                                 ),
                               ),
                               const SizedBox(width: 6),
                               Container(
-                                padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 1.5),
+                                padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
                                 decoration: BoxDecoration(
-                                  color: const Color(0xFFFF6B00).withOpacity(0.18),
-                                  borderRadius: BorderRadius.circular(5),
-                                  border: Border.all(color: const Color(0xFFFF6B00).withOpacity(0.4)),
+                                  color: const Color(0xFFE7F3FF),
+                                  borderRadius: BorderRadius.circular(6),
+                                  border: Border.all(color: const Color(0xFF1877F2).withOpacity(0.3)),
                                 ),
                                 child: Text(
                                   team.tag,
                                   style: const TextStyle(
-                                    color: Color(0xFFFF6B00),
-                                    fontWeight: FontWeight.w900,
+                                    color: Color(0xFF1877F2),
+                                    fontWeight: FontWeight.bold,
                                     fontSize: 10,
                                   ),
                                 ),
@@ -161,34 +168,35 @@ class _TeamCardState extends State<TeamCard> {
                           const SizedBox(height: 3),
                           Text(
                             'Leader: ${team.leaderName}',
-                            style: const TextStyle(color: Color(0xFF8B949E), fontSize: 11.5),
+                            style: const TextStyle(color: Color(0xFF65676B), fontSize: 12),
                           ),
-                          const SizedBox(height: 4),
+                          const SizedBox(height: 5),
                           Row(
                             children: [
                               Container(
                                 padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
                                 decoration: BoxDecoration(
-                                  color: const Color(0xFF00FF88).withOpacity(0.15),
+                                  color: const Color(0xFFF0F2F5),
                                   borderRadius: BorderRadius.circular(6),
+                                  border: Border.all(color: const Color(0xFFE4E6EB)),
                                 ),
                                 child: Text(
                                   team.game,
                                   style: const TextStyle(
-                                    color: Color(0xFF00FF88),
-                                    fontWeight: FontWeight.bold,
-                                    fontSize: 10.5,
+                                    color: Color(0xFF050505),
+                                    fontWeight: FontWeight.w600,
+                                    fontSize: 11,
                                   ),
                                 ),
                               ),
                               const SizedBox(width: 8),
                               Row(
                                 children: [
-                                  const Icon(Icons.group_rounded, size: 14, color: Color(0xFF8B949E)),
+                                  const Icon(Icons.group_rounded, size: 14, color: Color(0xFF65676B)),
                                   const SizedBox(width: 4),
                                   Text(
                                     '${team.memberCount} Members',
-                                    style: const TextStyle(color: Color(0xFF8B949E), fontSize: 11, fontWeight: FontWeight.bold),
+                                    style: const TextStyle(color: Color(0xFF65676B), fontSize: 11.5, fontWeight: FontWeight.w500),
                                   ),
                                 ],
                               ),
@@ -206,12 +214,12 @@ class _TeamCardState extends State<TeamCard> {
                     team.description,
                     maxLines: 2,
                     overflow: TextOverflow.ellipsis,
-                    style: const TextStyle(color: Colors.white70, fontSize: 12),
+                    style: const TextStyle(color: Color(0xFF1C1E21), fontSize: 12.5),
                   ),
                 ],
 
                 const SizedBox(height: 12),
-                const Divider(color: Color(0xFF2A3447), height: 1),
+                const Divider(color: Color(0xFFE4E6EB), height: 1),
                 const SizedBox(height: 10),
 
                 // Bottom Action Buttons
@@ -220,15 +228,15 @@ class _TeamCardState extends State<TeamCard> {
                     // Win/Loss record mini badge
                     Text(
                       'W: ${team.wins} | L: ${team.losses} | Pts: ${team.points}',
-                      style: const TextStyle(color: Color(0xFF8B949E), fontSize: 11, fontWeight: FontWeight.w600),
+                      style: const TextStyle(color: Color(0xFF65676B), fontSize: 11.5, fontWeight: FontWeight.w600),
                     ),
                     const Spacer(),
 
                     // View Team Button
                     OutlinedButton(
                       style: OutlinedButton.styleFrom(
-                        foregroundColor: Colors.white70,
-                        side: const BorderSide(color: Color(0xFF2A3447)),
+                        foregroundColor: const Color(0xFF050505),
+                        side: const BorderSide(color: Color(0xFFCED0D4)),
                         padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
                         minimumSize: const Size(0, 32),
                         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
@@ -250,39 +258,39 @@ class _TeamCardState extends State<TeamCard> {
                       Container(
                         padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
                         decoration: BoxDecoration(
-                          color: const Color(0xFFFF6B00).withOpacity(0.18),
+                          color: const Color(0xFFE7F3FF),
                           borderRadius: BorderRadius.circular(8),
-                          border: Border.all(color: const Color(0xFFFF6B00)),
+                          border: Border.all(color: const Color(0xFF1877F2)),
                         ),
                         child: const Text(
                           'YOUR TEAM',
-                          style: TextStyle(color: Color(0xFFFF6B00), fontWeight: FontWeight.bold, fontSize: 11),
+                          style: TextStyle(color: Color(0xFF1877F2), fontWeight: FontWeight.bold, fontSize: 11),
                         ),
                       ),
                     ] else if (isMember) ...[
                       Container(
                         padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
                         decoration: BoxDecoration(
-                          color: const Color(0xFF00FF88).withOpacity(0.18),
+                          color: const Color(0xFFE4E6EB),
                           borderRadius: BorderRadius.circular(8),
-                          border: Border.all(color: const Color(0xFF00FF88)),
+                          border: Border.all(color: const Color(0xFFCED0D4)),
                         ),
                         child: const Text(
                           'MEMBER',
-                          style: TextStyle(color: Color(0xFF00FF88), fontWeight: FontWeight.bold, fontSize: 11),
+                          style: TextStyle(color: Color(0xFF050505), fontWeight: FontWeight.bold, fontSize: 11),
                         ),
                       ),
                     ] else ...[
                       // Challenge Button
                       OutlinedButton.icon(
                         style: OutlinedButton.styleFrom(
-                          foregroundColor: const Color(0xFFFF4655),
-                          side: const BorderSide(color: Color(0xFFFF4655)),
+                          foregroundColor: const Color(0xFF1877F2),
+                          side: const BorderSide(color: Color(0xFF1877F2)),
                           padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                           minimumSize: const Size(0, 32),
                           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
                         ),
-                        icon: const Icon(Icons.flash_on_rounded, size: 13, color: Color(0xFFFF4655)),
+                        icon: const Icon(Icons.flash_on_rounded, size: 13, color: Color(0xFF1877F2)),
                         label: const Text('Challenge', style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold)),
                         onPressed: () => _handleChallenge(currentUid),
                       ),
@@ -291,8 +299,8 @@ class _TeamCardState extends State<TeamCard> {
                       // Join Button
                       ElevatedButton.icon(
                         style: ElevatedButton.styleFrom(
-                          backgroundColor: hasRequested ? Colors.white24 : const Color(0xFF00FF88),
-                          foregroundColor: Colors.black,
+                          backgroundColor: hasRequested ? const Color(0xFFE4E6EB) : const Color(0xFF1877F2),
+                          foregroundColor: hasRequested ? const Color(0xFF65676B) : Colors.white,
                           padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
                           minimumSize: const Size(0, 32),
                           elevation: 0,
@@ -301,11 +309,15 @@ class _TeamCardState extends State<TeamCard> {
                         icon: Icon(
                           hasRequested ? Icons.hourglass_top_rounded : Icons.person_add_rounded,
                           size: 14,
-                          color: Colors.black,
+                          color: hasRequested ? const Color(0xFF65676B) : Colors.white,
                         ),
                         label: Text(
                           hasRequested ? 'Requested' : 'Join',
-                          style: const TextStyle(fontWeight: FontWeight.w900, fontSize: 11.5, color: Colors.black),
+                          style: TextStyle(
+                            fontWeight: FontWeight.bold,
+                            fontSize: 11.5,
+                            color: hasRequested ? const Color(0xFF65676B) : Colors.white,
+                          ),
                         ),
                         onPressed: (hasRequested || _isRequesting) ? null : () => _handleJoin(currentUid),
                       ),

@@ -65,7 +65,7 @@ class _GamerProfileScreenState extends State<GamerProfileScreen> with SingleTick
   void _showChangeCoverSheet(BuildContext context, GamerUser user) {
     showModalBottomSheet(
       context: context,
-      backgroundColor: GamerTheme.cardDark,
+      backgroundColor: Colors.white,
       shape: const RoundedRectangleBorder(
         borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
       ),
@@ -82,7 +82,7 @@ class _GamerProfileScreenState extends State<GamerProfileScreen> with SingleTick
                     width: 40,
                     height: 4,
                     decoration: BoxDecoration(
-                      color: GamerTheme.borderLight,
+                      color: const Color(0xFFCED0D4),
                       borderRadius: BorderRadius.circular(2),
                     ),
                   ),
@@ -91,45 +91,45 @@ class _GamerProfileScreenState extends State<GamerProfileScreen> with SingleTick
                 const Text(
                   'Change Cover Photo',
                   style: TextStyle(
-                    color: GamerTheme.textWhite,
+                    color: Color(0xFF050505),
                     fontSize: 17,
-                    fontWeight: FontWeight.w900,
+                    fontWeight: FontWeight.bold,
                   ),
                 ),
                 const SizedBox(height: 4),
                 const Text(
                   'Choose a custom banner or select a BGMI theme',
-                  style: TextStyle(color: GamerTheme.textMuted, fontSize: 12),
+                  style: TextStyle(color: Color(0xFF65676B), fontSize: 12),
                 ),
                 const SizedBox(height: 16),
                 ListTile(
                   leading: Container(
                     padding: const EdgeInsets.all(8),
-                    decoration: BoxDecoration(
-                      color: GamerTheme.accentOrange.withOpacity(0.15),
-                      borderRadius: BorderRadius.circular(10),
+                    decoration: const BoxDecoration(
+                      color: Color(0xFFE7F3FF),
+                      shape: BoxShape.circle,
                     ),
-                    child: const Icon(Icons.photo_library_rounded, color: GamerTheme.accentOrange, size: 20),
+                    child: const Icon(Icons.photo_library_rounded, color: Color(0xFF1877F2), size: 20),
                   ),
-                  title: const Text('Choose from Gallery', style: TextStyle(color: GamerTheme.textWhite, fontWeight: FontWeight.bold, fontSize: 14)),
-                  subtitle: const Text('Upload your custom gaming banner', style: TextStyle(color: GamerTheme.textMuted, fontSize: 11)),
+                  title: const Text('Choose from Gallery', style: TextStyle(color: Color(0xFF050505), fontWeight: FontWeight.bold, fontSize: 14)),
+                  subtitle: const Text('Upload your custom gaming banner', style: TextStyle(color: Color(0xFF65676B), fontSize: 11)),
                   onTap: () {
                     Navigator.pop(ctx);
                     _pickAndUploadCoverPhoto(user);
                   },
                 ),
-                const Divider(color: GamerTheme.borderDark, height: 1),
+                const Divider(color: Color(0xFFCED0D4), height: 1),
                 ListTile(
                   leading: Container(
                     padding: const EdgeInsets.all(8),
-                    decoration: BoxDecoration(
-                      color: GamerTheme.accentBlue.withOpacity(0.15),
-                      borderRadius: BorderRadius.circular(10),
+                    decoration: const BoxDecoration(
+                      color: Color(0xFFE7F3FF),
+                      shape: BoxShape.circle,
                     ),
-                    child: const Icon(Icons.sports_esports_rounded, color: GamerTheme.accentBlue, size: 20),
+                    child: const Icon(Icons.sports_esports_rounded, color: Color(0xFF1877F2), size: 20),
                   ),
-                  title: const Text('BGMI Erangel Scrims Banner', style: TextStyle(color: GamerTheme.textWhite, fontWeight: FontWeight.bold, fontSize: 14)),
-                  subtitle: const Text('Official action theme', style: TextStyle(color: GamerTheme.textMuted, fontSize: 11)),
+                  title: const Text('BGMI Erangel Scrims Banner', style: TextStyle(color: Color(0xFF050505), fontWeight: FontWeight.bold, fontSize: 14)),
+                  subtitle: const Text('Official action theme', style: TextStyle(color: Color(0xFF65676B), fontSize: 11)),
                   onTap: () {
                     Navigator.pop(ctx);
                     _setPresetCover(user, 'https://images.unsplash.com/photo-1542751371-adc38448a05e?w=1200&auto=format&fit=crop&q=80');
@@ -138,14 +138,14 @@ class _GamerProfileScreenState extends State<GamerProfileScreen> with SingleTick
                 ListTile(
                   leading: Container(
                     padding: const EdgeInsets.all(8),
-                    decoration: BoxDecoration(
-                      color: const Color(0xFFFFD700).withOpacity(0.15),
-                      borderRadius: BorderRadius.circular(10),
+                    decoration: const BoxDecoration(
+                      color: Color(0xFFE7F3FF),
+                      shape: BoxShape.circle,
                     ),
-                    child: const Icon(Icons.military_tech_rounded, color: Color(0xFFFFD700), size: 20),
+                    child: const Icon(Icons.military_tech_rounded, color: Color(0xFF1877F2), size: 20),
                   ),
-                  title: const Text('BGMI Battlegrounds Cyber Banner', style: TextStyle(color: GamerTheme.textWhite, fontWeight: FontWeight.bold, fontSize: 14)),
-                  subtitle: const Text('Neon battleground style', style: TextStyle(color: GamerTheme.textMuted, fontSize: 11)),
+                  title: const Text('BGMI Battlegrounds Cyber Banner', style: TextStyle(color: Color(0xFF050505), fontWeight: FontWeight.bold, fontSize: 14)),
+                  subtitle: const Text('Action battleground style', style: TextStyle(color: Color(0xFF65676B), fontSize: 11)),
                   onTap: () {
                     Navigator.pop(ctx);
                     _setPresetCover(user, 'https://images.unsplash.com/photo-1538481199705-c710c4e965fc?w=1200&auto=format&fit=crop&q=80');
@@ -283,7 +283,7 @@ class _GamerProfileScreenState extends State<GamerProfileScreen> with SingleTick
           content: Text(progress.isVerified
               ? '🎉 You are officially verified!'
               : '${progress.completedRequirementsCount} of 6 requirements completed. Keep going!'),
-          backgroundColor: progress.isVerified ? GamerTheme.accentBlue : GamerTheme.cardElevated,
+          backgroundColor: progress.isVerified ? const Color(0xFF1877F2) : const Color(0xFF65676B),
           duration: const Duration(seconds: 2),
         ),
       );
@@ -304,10 +304,9 @@ class _GamerProfileScreenState extends State<GamerProfileScreen> with SingleTick
         return ScaleTransition(
           scale: curved,
           child: AlertDialog(
-            backgroundColor: const Color(0xFF0F172A),
+            backgroundColor: Colors.white,
             shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(24),
-              side: BorderSide(color: Colors.blue.withOpacity(0.6), width: 2),
+              borderRadius: BorderRadius.circular(20),
             ),
             content: Column(
               mainAxisSize: MainAxisSize.min,
@@ -315,29 +314,22 @@ class _GamerProfileScreenState extends State<GamerProfileScreen> with SingleTick
                 const SizedBox(height: 12),
                 // Glowing blue verified badge
                 Container(
-                  padding: const EdgeInsets.all(20),
-                  decoration: BoxDecoration(
+                  padding: const EdgeInsets.all(18),
+                  decoration: const BoxDecoration(
                     shape: BoxShape.circle,
-                    color: Colors.blue.withOpacity(0.15),
-                    boxShadow: [
-                      BoxShadow(
-                        color: Colors.blue.withOpacity(0.4),
-                        blurRadius: 28,
-                        spreadRadius: 4,
-                      ),
-                    ],
+                    color: Color(0xFFE7F3FF),
                   ),
                   child: const Icon(
                     Icons.verified_rounded,
-                    color: Colors.blue,
-                    size: 64,
+                    color: Color(0xFF1877F2),
+                    size: 60,
                   ),
                 ),
-                const SizedBox(height: 20),
+                const SizedBox(height: 18),
                 const Text(
                   '🎉 CONGRATULATIONS! 🎉',
                   style: TextStyle(
-                    color: GamerTheme.accentOrange,
+                    color: Color(0xFF1877F2),
                     fontSize: 16,
                     fontWeight: FontWeight.w900,
                     letterSpacing: 1.2,
@@ -347,7 +339,7 @@ class _GamerProfileScreenState extends State<GamerProfileScreen> with SingleTick
                 const Text(
                   'You Are Now Verified!',
                   style: TextStyle(
-                    color: GamerTheme.textWhite,
+                    color: Color(0xFF050505),
                     fontSize: 22,
                     fontWeight: FontWeight.w900,
                   ),
@@ -357,26 +349,27 @@ class _GamerProfileScreenState extends State<GamerProfileScreen> with SingleTick
                 const Text(
                   'You have completed all community requirements! The official Blue Tick ✓ has been permanently added to your Gamer ID and all your posts.',
                   style: TextStyle(
-                    color: GamerTheme.textGray,
+                    color: Color(0xFF65676B),
                     fontSize: 13,
                     height: 1.4,
                   ),
                   textAlign: TextAlign.center,
                 ),
-                const SizedBox(height: 24),
+                const SizedBox(height: 22),
                 SizedBox(
                   width: double.infinity,
-                  height: 46,
+                  height: 44,
                   child: ElevatedButton(
                     style: ElevatedButton.styleFrom(
-                      backgroundColor: Colors.blue,
+                      backgroundColor: const Color(0xFF1877F2),
                       foregroundColor: Colors.white,
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                      elevation: 0,
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
                     ),
                     onPressed: () => Navigator.pop(ctx),
                     child: const Text(
                       'Awesome! Let\'s Flex 🎮',
-                      style: TextStyle(fontWeight: FontWeight.w900, fontSize: 14),
+                      style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
                     ),
                   ),
                 ),
@@ -396,13 +389,13 @@ class _GamerProfileScreenState extends State<GamerProfileScreen> with SingleTick
       context: context,
       builder: (ctx) => StatefulBuilder(
         builder: (ctx, setDialogState) => AlertDialog(
-          backgroundColor: GamerTheme.cardElevated,
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
+          backgroundColor: Colors.white,
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
           title: const Row(
             children: [
-              Icon(Icons.sports_esports_rounded, color: GamerTheme.accentBlue, size: 22),
+              Icon(Icons.sports_esports_rounded, color: Color(0xFF1877F2), size: 22),
               SizedBox(width: 8),
-              Text('Link Game ID', style: TextStyle(color: GamerTheme.textWhite, fontSize: 18, fontWeight: FontWeight.bold)),
+              Text('Link Game ID', style: TextStyle(color: Color(0xFF050505), fontSize: 18, fontWeight: FontWeight.bold)),
             ],
           ),
           content: Column(
@@ -411,27 +404,27 @@ class _GamerProfileScreenState extends State<GamerProfileScreen> with SingleTick
             children: [
               const Text(
                 'Requirement 2: Link your Character UID or in-game nickname (e.g. BGMI: shadow_hunter, FF: 51293847).',
-                style: TextStyle(color: GamerTheme.textGray, fontSize: 12, height: 1.3),
+                style: TextStyle(color: Color(0xFF65676B), fontSize: 12, height: 1.3),
               ),
               const SizedBox(height: 16),
-              const Text('GAME', style: TextStyle(color: GamerTheme.textMuted, fontSize: 11, fontWeight: FontWeight.bold)),
+              const Text('GAME', style: TextStyle(color: Color(0xFF65676B), fontSize: 11, fontWeight: FontWeight.bold)),
               const SizedBox(height: 6),
               Container(
                 padding: const EdgeInsets.symmetric(horizontal: 12),
                 decoration: BoxDecoration(
-                  color: GamerTheme.cardDark,
+                  color: const Color(0xFFF0F2F5),
                   borderRadius: BorderRadius.circular(10),
-                  border: Border.all(color: GamerTheme.borderDark),
+                  border: Border.all(color: const Color(0xFFCED0D4)),
                 ),
                 child: DropdownButtonHideUnderline(
                   child: DropdownButton<String>(
                     value: GamerTheme.favoriteGames.contains(selectedGame) ? selectedGame : 'BGMI',
                     isExpanded: true,
-                    dropdownColor: GamerTheme.cardElevated,
+                    dropdownColor: Colors.white,
                     items: GamerTheme.favoriteGames.map((g) {
                       return DropdownMenuItem<String>(
                         value: g,
-                        child: Text(g, style: const TextStyle(color: GamerTheme.textWhite, fontWeight: FontWeight.bold)),
+                        child: Text(g, style: const TextStyle(color: Color(0xFF050505), fontWeight: FontWeight.bold)),
                       );
                     }).toList(),
                     onChanged: (v) {
@@ -441,17 +434,20 @@ class _GamerProfileScreenState extends State<GamerProfileScreen> with SingleTick
                 ),
               ),
               const SizedBox(height: 14),
-              const Text('IN-GAME ID / CHARACTER UID', style: TextStyle(color: GamerTheme.textMuted, fontSize: 11, fontWeight: FontWeight.bold)),
+              const Text('IN-GAME ID / CHARACTER UID', style: TextStyle(color: Color(0xFF65676B), fontSize: 11, fontWeight: FontWeight.bold)),
               const SizedBox(height: 6),
               TextField(
                 controller: controller,
-                style: const TextStyle(color: GamerTheme.textWhite, fontSize: 14),
+                style: const TextStyle(color: Color(0xFF050505), fontSize: 14),
                 decoration: InputDecoration(
                   hintText: 'e.g. shadow_hunter',
-                  hintStyle: const TextStyle(color: GamerTheme.textMuted),
+                  hintStyle: const TextStyle(color: Color(0xFF8A8D91)),
                   filled: true,
-                  fillColor: GamerTheme.cardDark,
-                  border: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: const BorderSide(color: GamerTheme.borderDark)),
+                  fillColor: const Color(0xFFF0F2F5),
+                  contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+                  border: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: const BorderSide(color: Color(0xFFCED0D4))),
+                  enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: const BorderSide(color: Color(0xFFCED0D4))),
+                  focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: const BorderSide(color: Color(0xFF1877F2))),
                 ),
               ),
             ],
@@ -459,10 +455,15 @@ class _GamerProfileScreenState extends State<GamerProfileScreen> with SingleTick
           actions: [
             TextButton(
               onPressed: () => Navigator.pop(ctx),
-              child: const Text('Cancel', style: TextStyle(color: GamerTheme.textMuted)),
+              child: const Text('Cancel', style: TextStyle(color: Color(0xFF65676B))),
             ),
             ElevatedButton(
-              style: ElevatedButton.styleFrom(backgroundColor: GamerTheme.accentBlue),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: const Color(0xFF1877F2),
+                foregroundColor: Colors.white,
+                elevation: 0,
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+              ),
               onPressed: () async {
                 final text = controller.text.trim();
                 if (text.isEmpty) return;
@@ -486,16 +487,15 @@ class _GamerProfileScreenState extends State<GamerProfileScreen> with SingleTick
     showDialog(
       context: context,
       builder: (ctx) => AlertDialog(
-        backgroundColor: const Color(0xFF0F172A),
+        backgroundColor: Colors.white,
         shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(20),
-          side: const BorderSide(color: GamerTheme.borderDark),
+          borderRadius: BorderRadius.circular(16),
         ),
         title: const Row(
           children: [
-            Icon(Icons.verified, color: Colors.blue, size: 22),
+            Icon(Icons.verified, color: Color(0xFF1877F2), size: 22),
             SizedBox(width: 8),
-            Text('Verification Requirements', style: TextStyle(color: GamerTheme.textWhite, fontSize: 17, fontWeight: FontWeight.bold)),
+            Text('Verification Requirements', style: TextStyle(color: Color(0xFF050505), fontSize: 17, fontWeight: FontWeight.bold)),
           ],
         ),
         content: SingleChildScrollView(
@@ -505,7 +505,7 @@ class _GamerProfileScreenState extends State<GamerProfileScreen> with SingleTick
             children: [
               const Text(
                 'Gamers ID requires authenticity and community standing before awarding the official Blue Tick ✓:',
-                style: TextStyle(color: GamerTheme.textGray, fontSize: 12.5, height: 1.35),
+                style: TextStyle(color: Color(0xFF65676B), fontSize: 12.5, height: 1.35),
               ),
               const SizedBox(height: 16),
               _buildRuleItem('1. Complete Profile', 'Must have a real photo avatar (not placeholder letter) and a gaming bio.'),
@@ -525,11 +525,13 @@ class _GamerProfileScreenState extends State<GamerProfileScreen> with SingleTick
         actions: [
           ElevatedButton(
             style: ElevatedButton.styleFrom(
-              backgroundColor: Colors.blue,
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+              backgroundColor: const Color(0xFF1877F2),
+              foregroundColor: Colors.white,
+              elevation: 0,
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
             ),
             onPressed: () => Navigator.pop(ctx),
-            child: const Text('Got It', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+            child: const Text('Got It', style: TextStyle(fontWeight: FontWeight.bold)),
           ),
         ],
       ),
@@ -542,16 +544,16 @@ class _GamerProfileScreenState extends State<GamerProfileScreen> with SingleTick
       children: [
         const Padding(
           padding: EdgeInsets.only(top: 2),
-          child: Icon(Icons.check_circle, color: Colors.blue, size: 16),
+          child: Icon(Icons.check_circle, color: Color(0xFF1877F2), size: 16),
         ),
         const SizedBox(width: 8),
         Expanded(
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Text(title, style: const TextStyle(color: GamerTheme.textWhite, fontSize: 13, fontWeight: FontWeight.bold)),
+              Text(title, style: const TextStyle(color: Color(0xFF050505), fontSize: 13, fontWeight: FontWeight.bold)),
               const SizedBox(height: 2),
-              Text(desc, style: const TextStyle(color: GamerTheme.textMuted, fontSize: 11.5, height: 1.3)),
+              Text(desc, style: const TextStyle(color: Color(0xFF65676B), fontSize: 11.5, height: 1.3)),
             ],
           ),
         ),
@@ -579,17 +581,16 @@ class _GamerProfileScreenState extends State<GamerProfileScreen> with SingleTick
       context: context,
       builder: (ctx) => StatefulBuilder(
         builder: (ctx, setDialogState) => AlertDialog(
-          backgroundColor: const Color(0xFF14101A),
+          backgroundColor: Colors.white,
           shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(20),
-            side: const BorderSide(color: Color(0xFFFF2D55), width: 1.5),
+            borderRadius: BorderRadius.circular(16),
           ),
           title: Row(
             children: [
               Container(
                 padding: const EdgeInsets.all(8),
-                decoration: BoxDecoration(
-                  color: const Color(0xFFFF2D55).withOpacity(0.2),
+                decoration: const BoxDecoration(
+                  color: Color(0xFFE7F3FF),
                   shape: BoxShape.circle,
                 ),
                 child: const Text('⚔️', style: TextStyle(fontSize: 20)),
@@ -602,7 +603,7 @@ class _GamerProfileScreenState extends State<GamerProfileScreen> with SingleTick
                     const Text(
                       '1v1 CHALLENGE',
                       style: TextStyle(
-                        color: Color(0xFFFF2D55),
+                        color: Color(0xFF1877F2),
                         fontSize: 16,
                         fontWeight: FontWeight.w900,
                         letterSpacing: 1.2,
@@ -611,7 +612,7 @@ class _GamerProfileScreenState extends State<GamerProfileScreen> with SingleTick
                     Text(
                       'vs ${targetUser.displayName}',
                       style: const TextStyle(
-                        color: GamerTheme.textWhite,
+                        color: Color(0xFF050505),
                         fontSize: 13,
                         fontWeight: FontWeight.bold,
                       ),
@@ -630,9 +631,9 @@ class _GamerProfileScreenState extends State<GamerProfileScreen> with SingleTick
                 Container(
                   padding: const EdgeInsets.all(12),
                   decoration: BoxDecoration(
-                    color: GamerTheme.cardDark,
+                    color: const Color(0xFFF0F2F5),
                     borderRadius: BorderRadius.circular(12),
-                    border: Border.all(color: GamerTheme.borderDark),
+                    border: Border.all(color: const Color(0xFFCED0D4)),
                   ),
                   child: Row(
                     children: [
@@ -649,11 +650,11 @@ class _GamerProfileScreenState extends State<GamerProfileScreen> with SingleTick
                           children: [
                             Text(
                               targetUser.displayName,
-                              style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 13),
+                              style: const TextStyle(color: Color(0xFF050505), fontWeight: FontWeight.bold, fontSize: 13),
                             ),
                             Text(
                               'Rank: ${targetUser.rank} • UID: ${targetUser.gameId.isEmpty ? "Not set" : targetUser.gameId}',
-                              style: const TextStyle(color: GamerTheme.textGray, fontSize: 11),
+                              style: const TextStyle(color: Color(0xFF65676B), fontSize: 11),
                             ),
                           ],
                         ),
@@ -662,41 +663,41 @@ class _GamerProfileScreenState extends State<GamerProfileScreen> with SingleTick
                   ),
                 ),
                 const SizedBox(height: 16),
-                const Text('SELECT MAP / MODE', style: TextStyle(color: GamerTheme.textMuted, fontSize: 11, fontWeight: FontWeight.w800)),
+                const Text('SELECT MAP / MODE', style: TextStyle(color: Color(0xFF65676B), fontSize: 11, fontWeight: FontWeight.w800)),
                 const SizedBox(height: 6),
                 Container(
                   padding: const EdgeInsets.symmetric(horizontal: 12),
                   decoration: BoxDecoration(
-                    color: GamerTheme.cardDark,
+                    color: const Color(0xFFF0F2F5),
                     borderRadius: BorderRadius.circular(10),
-                    border: Border.all(color: GamerTheme.borderDark),
+                    border: Border.all(color: const Color(0xFFCED0D4)),
                   ),
                   child: DropdownButtonHideUnderline(
                     child: DropdownButton<String>(
                       value: selectedMode,
                       isExpanded: true,
-                      dropdownColor: const Color(0xFF1B1424),
-                      items: modes.map((m) => DropdownMenuItem(value: m, child: Text(m, style: const TextStyle(color: Colors.white, fontSize: 13)))).toList(),
+                      dropdownColor: Colors.white,
+                      items: modes.map((m) => DropdownMenuItem(value: m, child: Text(m, style: const TextStyle(color: Color(0xFF050505), fontSize: 13)))).toList(),
                       onChanged: (v) => setDialogState(() => selectedMode = v ?? selectedMode),
                     ),
                   ),
                 ),
                 const SizedBox(height: 14),
-                const Text('WEAPON RULE', style: TextStyle(color: GamerTheme.textMuted, fontSize: 11, fontWeight: FontWeight.w800)),
+                const Text('WEAPON RULE', style: TextStyle(color: Color(0xFF65676B), fontSize: 11, fontWeight: FontWeight.w800)),
                 const SizedBox(height: 6),
                 Container(
                   padding: const EdgeInsets.symmetric(horizontal: 12),
                   decoration: BoxDecoration(
-                    color: GamerTheme.cardDark,
+                    color: const Color(0xFFF0F2F5),
                     borderRadius: BorderRadius.circular(10),
-                    border: Border.all(color: GamerTheme.borderDark),
+                    border: Border.all(color: const Color(0xFFCED0D4)),
                   ),
                   child: DropdownButtonHideUnderline(
                     child: DropdownButton<String>(
                       value: selectedWeapon,
                       isExpanded: true,
-                      dropdownColor: const Color(0xFF1B1424),
-                      items: weapons.map((w) => DropdownMenuItem(value: w, child: Text(w, style: const TextStyle(color: Colors.white, fontSize: 13)))).toList(),
+                      dropdownColor: Colors.white,
+                      items: weapons.map((w) => DropdownMenuItem(value: w, child: Text(w, style: const TextStyle(color: Color(0xFF050505), fontSize: 13)))).toList(),
                       onChanged: (v) => setDialogState(() => selectedWeapon = v ?? selectedWeapon),
                     ),
                   ),
@@ -705,18 +706,18 @@ class _GamerProfileScreenState extends State<GamerProfileScreen> with SingleTick
                 Container(
                   padding: const EdgeInsets.all(10),
                   decoration: BoxDecoration(
-                    color: const Color(0xFFFF2D55).withOpacity(0.08),
+                    color: const Color(0xFFE7F3FF),
                     borderRadius: BorderRadius.circular(10),
-                    border: Border.all(color: const Color(0xFFFF2D55).withOpacity(0.2)),
+                    border: Border.all(color: const Color(0xFF1877F2).withOpacity(0.2)),
                   ),
                   child: const Row(
                     children: [
-                      Icon(Icons.info_outline_rounded, color: Color(0xFFFF2D55), size: 16),
+                      Icon(Icons.info_outline_rounded, color: Color(0xFF1877F2), size: 16),
                       SizedBox(width: 8),
                       Expanded(
                         child: Text(
                           'An instant invite will appear in their notifications to accept or decline.',
-                          style: TextStyle(color: GamerTheme.textGray, fontSize: 11.5, height: 1.3),
+                          style: TextStyle(color: Color(0xFF65676B), fontSize: 11.5, height: 1.3),
                         ),
                       ),
                     ],
@@ -728,12 +729,14 @@ class _GamerProfileScreenState extends State<GamerProfileScreen> with SingleTick
           actions: [
             TextButton(
               onPressed: () => Navigator.pop(ctx),
-              child: const Text('Cancel', style: TextStyle(color: GamerTheme.textMuted)),
+              child: const Text('Cancel', style: TextStyle(color: Color(0xFF65676B))),
             ),
             ElevatedButton(
               style: ElevatedButton.styleFrom(
-                backgroundColor: const Color(0xFFFF2D55),
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                backgroundColor: const Color(0xFF1877F2),
+                foregroundColor: Colors.white,
+                elevation: 0,
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
                 padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 10),
               ),
               onPressed: () async {
@@ -755,7 +758,7 @@ class _GamerProfileScreenState extends State<GamerProfileScreen> with SingleTick
                 ScaffoldMessenger.of(context).showSnackBar(
                   SnackBar(
                     content: Text('⚔️ 1v1 Challenge Sent to ${targetUser.displayName}!'),
-                    backgroundColor: const Color(0xFFFF2D55),
+                    backgroundColor: const Color(0xFF1877F2),
                     duration: const Duration(seconds: 3),
                   ),
                 );
@@ -765,7 +768,7 @@ class _GamerProfileScreenState extends State<GamerProfileScreen> with SingleTick
                 children: [
                   Icon(Icons.flash_on_rounded, color: Colors.white, size: 16),
                   SizedBox(width: 4),
-                  Text('SEND 1v1 ⚔️', style: TextStyle(color: Colors.white, fontWeight: FontWeight.w900)),
+                  Text('SEND 1v1 ⚔️', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
                 ],
               ),
             ),
@@ -788,16 +791,22 @@ class _GamerProfileScreenState extends State<GamerProfileScreen> with SingleTick
     showDialog(
       context: context,
       builder: (ctx) => AlertDialog(
-        backgroundColor: GamerTheme.cardElevated,
-        title: const Text('Log Out', style: TextStyle(color: GamerTheme.textWhite)),
-        content: const Text('Are you sure you want to log out of Gamers ID?', style: TextStyle(color: GamerTheme.textGray)),
+        backgroundColor: Colors.white,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        title: const Text('Log Out', style: TextStyle(color: Color(0xFF050505), fontWeight: FontWeight.bold)),
+        content: const Text('Are you sure you want to log out of Gamers ID?', style: TextStyle(color: Color(0xFF65676B))),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(ctx),
-            child: const Text('Cancel', style: TextStyle(color: GamerTheme.textMuted)),
+            child: const Text('Cancel', style: TextStyle(color: Color(0xFF65676B))),
           ),
           ElevatedButton(
-            style: ElevatedButton.styleFrom(backgroundColor: GamerTheme.redAccent),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: Colors.red,
+              foregroundColor: Colors.white,
+              elevation: 0,
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+            ),
             onPressed: () async {
               Navigator.pop(ctx);
               await _authService.signOut();
@@ -826,7 +835,7 @@ class _GamerProfileScreenState extends State<GamerProfileScreen> with SingleTick
             Text(
               count,
               style: const TextStyle(
-                color: GamerTheme.textWhite,
+                color: Color(0xFF050505),
                 fontWeight: FontWeight.w900,
                 fontSize: 18,
               ),
@@ -835,7 +844,7 @@ class _GamerProfileScreenState extends State<GamerProfileScreen> with SingleTick
             Text(
               label,
               style: const TextStyle(
-                color: GamerTheme.textMuted,
+                color: Color(0xFF65676B),
                 fontSize: 12,
                 fontWeight: FontWeight.w600,
               ),
@@ -857,33 +866,48 @@ class _GamerProfileScreenState extends State<GamerProfileScreen> with SingleTick
       builder: (context, snapshot) {
         if (snapshot.connectionState == ConnectionState.waiting && !snapshot.hasData) {
           return const Scaffold(
-            backgroundColor: GamerTheme.bgDark,
-            body: Center(child: CircularProgressIndicator(color: GamerTheme.accentBlue)),
+            backgroundColor: Color(0xFFF0F2F5),
+            body: Center(child: CircularProgressIndicator(color: Color(0xFF1877F2))),
           );
         }
 
         final user = snapshot.data;
         if (user == null) {
           return Scaffold(
-            backgroundColor: GamerTheme.bgDark,
-            appBar: AppBar(title: const Text('Gamer Profile')),
+            backgroundColor: const Color(0xFFF0F2F5),
+            appBar: AppBar(
+              backgroundColor: Colors.white,
+              elevation: 1,
+              title: const Text(
+                'Gamer Profile',
+                style: TextStyle(
+                  color: Color(0xFF1877F2),
+                  fontWeight: FontWeight.bold,
+                  fontSize: 20,
+                ),
+              ),
+            ),
             body: Center(
               child: Column(
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
-                  const Icon(Icons.sentiment_dissatisfied_rounded, color: GamerTheme.textMuted, size: 54),
+                  const Icon(Icons.sentiment_dissatisfied_rounded, color: Color(0xFF65676B), size: 54),
                   const SizedBox(height: 12),
-                  const Text('Gamer ID not found or not set up yet.', style: TextStyle(color: GamerTheme.textWhite)),
+                  const Text('Gamer ID not found or not set up yet.', style: TextStyle(color: Color(0xFF050505))),
                   const SizedBox(height: 16),
                   if (isOwnProfile)
                     ElevatedButton(
-                      style: ElevatedButton.styleFrom(backgroundColor: GamerTheme.accentBlue),
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: const Color(0xFF1877F2),
+                        foregroundColor: Colors.white,
+                        elevation: 0,
+                      ),
                       onPressed: () {
                         Navigator.of(context).push(
                           MaterialPageRoute(builder: (_) => const CreateGamerIdScreen()),
                         );
                       },
-                      child: const Text('Create Your Gamer ID', style: TextStyle(color: GamerTheme.bgDark, fontWeight: FontWeight.bold)),
+                      child: const Text('Create Your Gamer ID', style: TextStyle(fontWeight: FontWeight.bold)),
                     ),
                 ],
               ),
@@ -891,11 +915,11 @@ class _GamerProfileScreenState extends State<GamerProfileScreen> with SingleTick
           );
         }
 
-        final gameColor = GamerTheme.gameColors[user.favoriteGame] ?? GamerTheme.accentBlue;
+        final gameColor = GamerTheme.gameColors[user.favoriteGame] ?? const Color(0xFF1877F2);
         final gameEmoji = GamerTheme.gameEmojis[user.favoriteGame] ?? '🎮';
 
         return Scaffold(
-          backgroundColor: GamerTheme.bgDark,
+          backgroundColor: const Color(0xFFF0F2F5),
           extendBody: false,
           extendBodyBehindAppBar: false,
           body: NestedScrollView(
@@ -904,14 +928,16 @@ class _GamerProfileScreenState extends State<GamerProfileScreen> with SingleTick
                 SliverAppBar(
                   expandedHeight: 250,
                   pinned: true,
-                  backgroundColor: GamerTheme.cardDark,
+                  backgroundColor: Colors.white,
+                  elevation: 1,
                   automaticallyImplyLeading: !isOwnProfile,
+                  iconTheme: const IconThemeData(color: Color(0xFF65676B)),
                   actions: [
                     Padding(
                       padding: const EdgeInsets.only(right: 12),
                       child: Center(
                         child: Material(
-                          color: Colors.black.withOpacity(0.45),
+                          color: Colors.white,
                           shape: const CircleBorder(),
                           clipBehavior: Clip.antiAlias,
                           child: InkWell(
@@ -921,20 +947,22 @@ class _GamerProfileScreenState extends State<GamerProfileScreen> with SingleTick
                               height: 38,
                               decoration: BoxDecoration(
                                 shape: BoxShape.circle,
+                                color: Colors.white,
                                 border: Border.all(
-                                  color: Colors.white.withOpacity(0.35),
-                                  width: 1.2,
+                                  color: const Color(0xFFCED0D4),
+                                  width: 1.0,
                                 ),
                                 boxShadow: [
                                   BoxShadow(
-                                    color: Colors.black.withOpacity(0.3),
-                                    blurRadius: 6,
+                                    color: Colors.black.withOpacity(0.08),
+                                    blurRadius: 4,
+                                    offset: const Offset(0, 1),
                                   ),
                                 ],
                               ),
                               child: const Icon(
                                 Icons.settings_rounded,
-                                color: Colors.white,
+                                color: Color(0xFF65676B),
                                 size: 20,
                               ),
                             ),
@@ -959,7 +987,7 @@ class _GamerProfileScreenState extends State<GamerProfileScreen> with SingleTick
                             height: 175,
                             width: double.infinity,
                             decoration: const BoxDecoration(
-                              color: Color(0xFF0F172A),
+                              color: Color(0xFFCED0D4),
                             ),
                             child: CachedNetworkImage(
                               imageUrl: user.coverUrl.isNotEmpty
@@ -967,12 +995,12 @@ class _GamerProfileScreenState extends State<GamerProfileScreen> with SingleTick
                                   : 'https://images.unsplash.com/photo-1542751371-adc38448a05e?w=1200&auto=format&fit=crop&q=80',
                               fit: BoxFit.cover,
                               placeholder: (_, __) => Container(
-                                color: const Color(0xFF0F172A),
+                                color: const Color(0xFFCED0D4),
                                 child: const Center(
                                   child: SizedBox(
                                     width: 24,
                                     height: 24,
-                                    child: CircularProgressIndicator(strokeWidth: 2, color: GamerTheme.accentOrange),
+                                    child: CircularProgressIndicator(strokeWidth: 2, color: Color(0xFF1877F2)),
                                   ),
                                 ),
                               ),
@@ -984,7 +1012,7 @@ class _GamerProfileScreenState extends State<GamerProfileScreen> with SingleTick
                           ),
                         ),
 
-                        // Avatar F overlapping cover with orange glow - tap to view full screen
+                        // Avatar overlapping cover with clean white Facebook-style ring - tap to view full screen
                         Positioned(
                           top: 129,
                           left: 20,
@@ -997,16 +1025,12 @@ class _GamerProfileScreenState extends State<GamerProfileScreen> with SingleTick
                             child: Container(
                               decoration: BoxDecoration(
                                 shape: BoxShape.circle,
+                                border: Border.all(color: Colors.white, width: 4),
                                 boxShadow: [
                                   BoxShadow(
-                                    color: const Color(0xFFFF8A00).withOpacity(0.75),
-                                    blurRadius: 20,
-                                    spreadRadius: 4,
-                                  ),
-                                  BoxShadow(
-                                    color: const Color(0xFFFF5200).withOpacity(0.45),
-                                    blurRadius: 30,
-                                    spreadRadius: 8,
+                                    color: Colors.black.withOpacity(0.12),
+                                    blurRadius: 8,
+                                    offset: const Offset(0, 2),
                                   ),
                                 ],
                               ),
@@ -1014,8 +1038,8 @@ class _GamerProfileScreenState extends State<GamerProfileScreen> with SingleTick
                                 photoUrl: user.photoUrl,
                                 displayName: user.displayName,
                                 radius: 46,
-                                hasGlow: true,
-                                borderColor: const Color(0xFFFF8A00),
+                                hasGlow: false,
+                                borderColor: Colors.transparent,
                                 frameId: user.activeFrame,
                               ),
                             ),
@@ -1040,7 +1064,7 @@ class _GamerProfileScreenState extends State<GamerProfileScreen> with SingleTick
                               child: Text(
                                 user.displayName,
                                 style: const TextStyle(
-                                  color: GamerTheme.textWhite,
+                                  color: Color(0xFF050505),
                                   fontSize: 22,
                                   fontWeight: FontWeight.w900,
                                 ),
@@ -1061,23 +1085,16 @@ class _GamerProfileScreenState extends State<GamerProfileScreen> with SingleTick
                             ],
                             if (user.hasBlueTick) ...[
                               const SizedBox(width: 5),
-                              const Icon(Icons.verified, color: Color(0xFF1D9BF0), size: 18),
+                              const Icon(Icons.verified, color: Color(0xFF1877F2), size: 18),
                             ],
                             if (user.isOwnerUser) ...[
                               const SizedBox(width: 6),
                               Container(
                                 padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
                                 decoration: BoxDecoration(
-                                  gradient: const LinearGradient(
-                                    colors: [Color(0xFFFFD700), Color(0xFFFF8A00)],
-                                  ),
+                                  color: const Color(0xFFFEF7E0),
                                   borderRadius: BorderRadius.circular(12),
-                                  boxShadow: [
-                                    BoxShadow(
-                                      color: const Color(0xFFFFD700).withOpacity(0.4),
-                                      blurRadius: 6,
-                                    ),
-                                  ],
+                                  border: Border.all(color: const Color(0xFFF9AB00)),
                                 ),
                                 child: const Row(
                                   mainAxisSize: MainAxisSize.min,
@@ -1087,7 +1104,7 @@ class _GamerProfileScreenState extends State<GamerProfileScreen> with SingleTick
                                     Text(
                                       'LEGEND',
                                       style: TextStyle(
-                                        color: Colors.black,
+                                        color: Color(0xFFB06000),
                                         fontSize: 10.5,
                                         fontWeight: FontWeight.w900,
                                         letterSpacing: 0.8,
@@ -1105,9 +1122,9 @@ class _GamerProfileScreenState extends State<GamerProfileScreen> with SingleTick
                         Text(
                           '@${user.username}',
                           style: const TextStyle(
-                            color: GamerTheme.accentOrange,
+                            color: Color(0xFF65676B),
                             fontSize: 14,
-                            fontWeight: FontWeight.w800,
+                            fontWeight: FontWeight.w700,
                           ),
                         ),
 
@@ -1117,7 +1134,7 @@ class _GamerProfileScreenState extends State<GamerProfileScreen> with SingleTick
                           Text(
                             user.bio,
                             style: const TextStyle(
-                              color: GamerTheme.textWhite,
+                              color: Color(0xFF050505),
                               fontSize: 13.5,
                               height: 1.35,
                             ),
@@ -1422,11 +1439,18 @@ class _GamerProfileScreenState extends State<GamerProfileScreen> with SingleTick
 
                         // Followers / Following / Posts Counts
                         Container(
-                          padding: const EdgeInsets.symmetric(vertical: 10),
+                          padding: const EdgeInsets.symmetric(vertical: 12),
                           decoration: BoxDecoration(
-                            color: GamerTheme.cardDark,
+                            color: Colors.white,
                             borderRadius: BorderRadius.circular(12),
-                            border: Border.all(color: GamerTheme.borderDark),
+                            border: Border.all(color: const Color(0xFFCED0D4)),
+                            boxShadow: [
+                              BoxShadow(
+                                color: Colors.black.withOpacity(0.04),
+                                blurRadius: 4,
+                                offset: const Offset(0, 1),
+                              ),
+                            ],
                           ),
                           child: Row(
                             mainAxisAlignment: MainAxisAlignment.spaceAround,
@@ -1443,7 +1467,7 @@ class _GamerProfileScreenState extends State<GamerProfileScreen> with SingleTick
                                   });
                                 },
                               ),
-                              Container(height: 24, width: 1, color: GamerTheme.borderDark),
+                              Container(height: 24, width: 1, color: const Color(0xFFCED0D4)),
                               _buildStatColumn('${user.followersCount}', 'Followers', () {
                                 Navigator.of(context).push(
                                   MaterialPageRoute(
@@ -1455,7 +1479,7 @@ class _GamerProfileScreenState extends State<GamerProfileScreen> with SingleTick
                                   ),
                                 );
                               }),
-                              Container(height: 24, width: 1, color: GamerTheme.borderDark),
+                              Container(height: 24, width: 1, color: const Color(0xFFCED0D4)),
                               _buildStatColumn('${user.followingCount}', 'Following', () {
                                 Navigator.of(context).push(
                                   MaterialPageRoute(
@@ -1480,14 +1504,14 @@ class _GamerProfileScreenState extends State<GamerProfileScreen> with SingleTick
                               Expanded(
                                 child: ElevatedButton.icon(
                                   style: ElevatedButton.styleFrom(
-                                    backgroundColor: GamerTheme.accentBlue,
-                                    foregroundColor: GamerTheme.bgDark,
-                                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                                    backgroundColor: const Color(0xFF1877F2),
+                                    foregroundColor: Colors.white,
+                                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
                                     padding: const EdgeInsets.symmetric(vertical: 12),
                                     elevation: 0,
                                   ),
                                   icon: const Icon(Icons.edit_rounded, size: 18),
-                                  label: const Text('Edit Profile', style: TextStyle(fontWeight: FontWeight.w900, fontSize: 13)),
+                                  label: const Text('Edit Profile', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
                                   onPressed: () {
                                     Navigator.of(context).push(
                                       MaterialPageRoute(
@@ -1500,25 +1524,27 @@ class _GamerProfileScreenState extends State<GamerProfileScreen> with SingleTick
                               const SizedBox(width: 8),
                               OutlinedButton.icon(
                                 style: OutlinedButton.styleFrom(
-                                  side: const BorderSide(color: GamerTheme.borderLight),
-                                  foregroundColor: GamerTheme.textWhite,
-                                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                                  backgroundColor: const Color(0xFFE4E6EB),
+                                  foregroundColor: const Color(0xFF050505),
+                                  side: BorderSide.none,
+                                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
                                   padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 12),
                                 ),
-                                icon: const Icon(Icons.add_photo_alternate_rounded, size: 18, color: GamerTheme.accentOrange),
-                                label: const Text('Cover', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
+                                icon: const Icon(Icons.add_photo_alternate_rounded, size: 18, color: Color(0xFF65676B)),
+                                label: const Text('Cover', style: TextStyle(color: Color(0xFF050505), fontWeight: FontWeight.bold, fontSize: 13)),
                                 onPressed: () => _showChangeCoverSheet(context, user),
                               ),
                               const SizedBox(width: 8),
                               OutlinedButton.icon(
                                 style: OutlinedButton.styleFrom(
-                                  side: const BorderSide(color: GamerTheme.borderLight),
-                                  foregroundColor: GamerTheme.textWhite,
-                                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                                  backgroundColor: const Color(0xFFE4E6EB),
+                                  foregroundColor: const Color(0xFF050505),
+                                  side: BorderSide.none,
+                                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
                                   padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 12),
                                 ),
-                                icon: const Icon(Icons.share_rounded, size: 18, color: GamerTheme.accentBlue),
-                                label: const Text('Share', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
+                                icon: const Icon(Icons.share_rounded, size: 18, color: Color(0xFF65676B)),
+                                label: const Text('Share', style: TextStyle(color: Color(0xFF050505), fontWeight: FontWeight.bold, fontSize: 13)),
                                 onPressed: () => _shareProfile(user),
                               ),
                             ] else ...[
@@ -1531,11 +1557,10 @@ class _GamerProfileScreenState extends State<GamerProfileScreen> with SingleTick
                                     final isFollowing = snap.data ?? false;
                                     return ElevatedButton.icon(
                                       style: ElevatedButton.styleFrom(
-                                        backgroundColor: isFollowing ? GamerTheme.cardElevated : GamerTheme.accentBlue,
-                                        foregroundColor: isFollowing ? GamerTheme.textWhite : GamerTheme.bgDark,
+                                        backgroundColor: isFollowing ? const Color(0xFFE4E6EB) : const Color(0xFF1877F2),
+                                        foregroundColor: isFollowing ? const Color(0xFF050505) : Colors.white,
                                         shape: RoundedRectangleBorder(
-                                          borderRadius: BorderRadius.circular(10),
-                                          side: BorderSide(color: isFollowing ? GamerTheme.borderLight : Colors.transparent),
+                                          borderRadius: BorderRadius.circular(8),
                                         ),
                                         padding: const EdgeInsets.symmetric(vertical: 12),
                                         elevation: 0,
@@ -1543,14 +1568,14 @@ class _GamerProfileScreenState extends State<GamerProfileScreen> with SingleTick
                                       icon: Icon(
                                         isFollowing ? Icons.check_rounded : Icons.person_add_rounded,
                                         size: 16,
-                                        color: isFollowing ? GamerTheme.neonGreen : GamerTheme.bgDark,
+                                        color: isFollowing ? const Color(0xFF34A853) : Colors.white,
                                       ),
                                       label: Text(
                                         isFollowing ? 'Following' : 'Follow',
                                         style: TextStyle(
-                                          fontWeight: FontWeight.w900,
+                                          fontWeight: FontWeight.bold,
                                           fontSize: 12.5,
-                                          color: isFollowing ? GamerTheme.textWhite : GamerTheme.bgDark,
+                                          color: isFollowing ? const Color(0xFF050505) : Colors.white,
                                         ),
                                       ),
                                       onPressed: () async {
@@ -1567,25 +1592,24 @@ class _GamerProfileScreenState extends State<GamerProfileScreen> with SingleTick
                               ),
                               const SizedBox(width: 8),
 
-                              // Prominent 1v1 Challenge Button (Red Outline)
+                              // 1v1 Challenge Button
                               Expanded(
                                 flex: 3,
                                 child: OutlinedButton.icon(
                                   style: OutlinedButton.styleFrom(
-                                    side: const BorderSide(color: Color(0xFFFF2D55), width: 1.6),
-                                    backgroundColor: const Color(0xFFFF2D55).withOpacity(0.12),
-                                    foregroundColor: const Color(0xFFFF2D55),
-                                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                                    side: const BorderSide(color: Color(0xFFF87171), width: 1.2),
+                                    backgroundColor: const Color(0xFFFEE2E2),
+                                    foregroundColor: const Color(0xFFDC2626),
+                                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
                                     padding: const EdgeInsets.symmetric(vertical: 12),
                                   ),
                                   icon: const Text('⚔️', style: TextStyle(fontSize: 14)),
                                   label: const Text(
                                     '1v1 Battle',
                                     style: TextStyle(
-                                      fontWeight: FontWeight.w900,
+                                      fontWeight: FontWeight.bold,
                                       fontSize: 12.5,
-                                      color: Color(0xFFFF2D55),
-                                      letterSpacing: 0.3,
+                                      color: Color(0xFFDC2626),
                                     ),
                                   ),
                                   onPressed: () => _show1v1ChallengeDialog(user),
@@ -1596,14 +1620,13 @@ class _GamerProfileScreenState extends State<GamerProfileScreen> with SingleTick
                               // Share Button
                               IconButton(
                                 style: IconButton.styleFrom(
-                                  backgroundColor: GamerTheme.cardDark,
+                                  backgroundColor: const Color(0xFFE4E6EB),
                                   shape: RoundedRectangleBorder(
-                                    borderRadius: BorderRadius.circular(10),
-                                    side: const BorderSide(color: GamerTheme.borderDark),
+                                    borderRadius: BorderRadius.circular(8),
                                   ),
                                   padding: const EdgeInsets.all(10),
                                 ),
-                                icon: const Icon(Icons.share_rounded, size: 18, color: GamerTheme.accentOrange),
+                                icon: const Icon(Icons.share_rounded, size: 18, color: Color(0xFF65676B)),
                                 onPressed: () => _shareProfile(user),
                               ),
                             ],
@@ -1627,11 +1650,11 @@ class _GamerProfileScreenState extends State<GamerProfileScreen> with SingleTick
                   delegate: _SliverTabBarDelegate(
                     TabBar(
                       controller: _tabController,
-                      indicatorColor: GamerTheme.accentBlue,
+                      indicatorColor: const Color(0xFF1877F2),
                       indicatorWeight: 3,
-                      labelColor: GamerTheme.accentBlue,
-                      unselectedLabelColor: GamerTheme.textMuted,
-                      labelStyle: const TextStyle(fontWeight: FontWeight.w900, fontSize: 14),
+                      labelColor: const Color(0xFF1877F2),
+                      unselectedLabelColor: const Color(0xFF65676B),
+                      labelStyle: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
                       tabs: const [
                         Tab(icon: Icon(Icons.grid_view_rounded, size: 18), text: 'Posts'),
                         Tab(icon: Icon(Icons.info_outline_rounded, size: 18), text: 'About'),
@@ -1697,7 +1720,7 @@ class _GamerProfileScreenState extends State<GamerProfileScreen> with SingleTick
                       Material(
                         color: Colors.transparent,
                         child: InkWell(
-                          borderRadius: BorderRadius.circular(16),
+                          borderRadius: BorderRadius.circular(12),
                           onTap: () {
                             Navigator.push(
                               context,
@@ -1707,33 +1730,31 @@ class _GamerProfileScreenState extends State<GamerProfileScreen> with SingleTick
                           child: Container(
                             padding: const EdgeInsets.all(16),
                             decoration: BoxDecoration(
-                              gradient: GamerTheme.cardGradient,
-                              borderRadius: BorderRadius.circular(16),
+                              color: Colors.white,
+                              borderRadius: BorderRadius.circular(12),
                               border: Border.all(
-                                color: user.isVerifiedBadge
-                                    ? Colors.blue
-                                    : (user.isPendingVerification ? const Color(0xFFFF8A00) : GamerTheme.borderDark),
-                                width: 1.5,
+                                color: const Color(0xFFCED0D4),
+                                width: 1.0,
                               ),
+                              boxShadow: [
+                                BoxShadow(
+                                  color: Colors.black.withOpacity(0.04),
+                                  blurRadius: 4,
+                                  offset: const Offset(0, 1),
+                                ),
+                              ],
                             ),
                             child: Row(
                               children: [
                                 Container(
                                   padding: const EdgeInsets.all(12),
-                                  decoration: BoxDecoration(
-                                    color: (user.isVerifiedBadge
-                                            ? Colors.blue
-                                            : (user.isPendingVerification ? const Color(0xFFFF8A00) : GamerTheme.accentBlue))
-                                        .withOpacity(0.15),
+                                  decoration: const BoxDecoration(
+                                    color: Color(0xFFE7F3FF),
                                     shape: BoxShape.circle,
                                   ),
-                                  child: Icon(
-                                    user.isVerifiedBadge
-                                        ? Icons.verified_rounded
-                                        : (user.isPendingVerification ? Icons.hourglass_top_rounded : Icons.verified_user_outlined),
-                                    color: user.isVerifiedBadge
-                                        ? Colors.blue
-                                        : (user.isPendingVerification ? const Color(0xFFFF8A00) : GamerTheme.accentBlue),
+                                  child: const Icon(
+                                    Icons.verified_user_rounded,
+                                    color: Color(0xFF1877F2),
                                     size: 24,
                                   ),
                                 ),
@@ -1749,22 +1770,23 @@ class _GamerProfileScreenState extends State<GamerProfileScreen> with SingleTick
                                                 ? 'Official Verified Gamer ID'
                                                 : (user.isPendingVerification ? 'Verification Under Review 24h' : 'Blue Tick Verification'),
                                             style: const TextStyle(
-                                              color: GamerTheme.textWhite,
-                                              fontWeight: FontWeight.w900,
+                                              color: Color(0xFF050505),
+                                              fontWeight: FontWeight.bold,
                                               fontSize: 14,
                                             ),
                                           ),
                                           const SizedBox(width: 6),
                                           if (user.isVerifiedBadge)
-                                            const Icon(Icons.verified, color: Colors.blue, size: 16)
+                                            const Icon(Icons.verified, color: Color(0xFF1877F2), size: 16)
                                           else if (user.isPendingVerification)
                                             Container(
                                               padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1),
                                               decoration: BoxDecoration(
-                                                color: const Color(0xFFFF8A00).withOpacity(0.15),
+                                                color: const Color(0xFFFEF7E0),
                                                 borderRadius: BorderRadius.circular(4),
+                                                border: Border.all(color: const Color(0xFFF9AB00)),
                                               ),
-                                              child: const Text('24H REVIEW', style: TextStyle(color: Color(0xFFFF8A00), fontSize: 8.5, fontWeight: FontWeight.w900)),
+                                              child: const Text('24H REVIEW', style: TextStyle(color: Color(0xFFB06000), fontSize: 8.5, fontWeight: FontWeight.bold)),
                                             ),
                                         ],
                                       ),
@@ -1775,13 +1797,13 @@ class _GamerProfileScreenState extends State<GamerProfileScreen> with SingleTick
                                             : (user.isPendingVerification
                                                 ? 'Application submitted • Verifying requirements in 24h.'
                                                 : 'View 6 requirements checklist & apply for Blue Tick ✓'),
-                                        style: const TextStyle(color: GamerTheme.textMuted, fontSize: 11),
+                                        style: const TextStyle(color: Color(0xFF65676B), fontSize: 11),
                                       ),
                                     ],
                                   ),
                                 ),
                                 const SizedBox(width: 8),
-                                const Icon(Icons.arrow_forward_ios_rounded, color: GamerTheme.textMuted, size: 14),
+                                const Icon(Icons.arrow_forward_ios_rounded, color: Color(0xFF65676B), size: 14),
                               ],
                             ),
                           ),
@@ -1796,16 +1818,16 @@ class _GamerProfileScreenState extends State<GamerProfileScreen> with SingleTick
                           return Container(
                             padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
                             decoration: BoxDecoration(
-                              color: isDark ? GamerTheme.cardDark : Colors.white,
-                              borderRadius: BorderRadius.circular(16),
+                              color: isDark ? const Color(0xFF1E293B) : Colors.white,
+                              borderRadius: BorderRadius.circular(12),
                               border: Border.all(
-                                color: isDark ? GamerTheme.borderDark : const Color(0xFFE2E8F0),
+                                color: const Color(0xFFCED0D4),
                               ),
                               boxShadow: [
                                 BoxShadow(
-                                  color: isDark ? Colors.black.withOpacity(0.2) : Colors.black.withOpacity(0.04),
-                                  blurRadius: 8,
-                                  offset: const Offset(0, 2),
+                                  color: Colors.black.withOpacity(0.04),
+                                  blurRadius: 4,
+                                  offset: const Offset(0, 1),
                                 ),
                               ],
                             ),
@@ -1814,11 +1836,8 @@ class _GamerProfileScreenState extends State<GamerProfileScreen> with SingleTick
                                 Container(
                                   padding: const EdgeInsets.all(10),
                                   decoration: BoxDecoration(
-                                    color: isDark ? const Color(0xFF1E293B) : const Color(0xFFFFFBEB),
-                                    borderRadius: BorderRadius.circular(12),
-                                    border: Border.all(
-                                      color: isDark ? const Color(0xFF334155) : const Color(0xFFFDE68A),
-                                    ),
+                                    color: isDark ? const Color(0xFF334155) : const Color(0xFFFEF7E0),
+                                    borderRadius: BorderRadius.circular(10),
                                   ),
                                   child: Icon(
                                     isDark ? Icons.dark_mode_rounded : Icons.light_mode_rounded,
@@ -1831,41 +1850,21 @@ class _GamerProfileScreenState extends State<GamerProfileScreen> with SingleTick
                                   child: Column(
                                     crossAxisAlignment: CrossAxisAlignment.start,
                                     children: [
-                                      Row(
-                                        children: [
-                                          Text(
-                                            isDark ? 'Night Mode' : 'Day Mode (Default)',
-                                            style: TextStyle(
-                                              fontWeight: FontWeight.w800,
-                                              fontSize: 14,
-                                              color: isDark ? GamerTheme.textWhite : const Color(0xFF0F172A),
-                                            ),
-                                          ),
-                                          const SizedBox(width: 6),
-                                          Container(
-                                            padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                                            decoration: BoxDecoration(
-                                              color: isDark ? const Color(0xFF6366F1).withOpacity(0.2) : const Color(0xFF10B981).withOpacity(0.15),
-                                              borderRadius: BorderRadius.circular(6),
-                                            ),
-                                            child: Text(
-                                              isDark ? 'NIGHT' : 'DEFAULT',
-                                              style: TextStyle(
-                                                fontSize: 9,
-                                                fontWeight: FontWeight.w900,
-                                                color: isDark ? const Color(0xFF818CF8) : const Color(0xFF059669),
-                                              ),
-                                            ),
-                                          ),
-                                        ],
+                                      Text(
+                                        isDark ? 'Night Mode' : 'Day Mode (Default)',
+                                        style: TextStyle(
+                                          fontWeight: FontWeight.bold,
+                                          fontSize: 14,
+                                          color: isDark ? Colors.white : const Color(0xFF050505),
+                                        ),
                                       ),
                                       const SizedBox(height: 2),
                                       Text(
                                         isDark
                                             ? 'Dark aesthetic for night gaming sessions'
                                             : 'Bright, clean interface for daytime gaming',
-                                        style: TextStyle(
-                                          color: isDark ? GamerTheme.textMuted : const Color(0xFF64748B),
+                                        style: const TextStyle(
+                                          color: Color(0xFF65676B),
                                           fontSize: 11,
                                         ),
                                       ),
@@ -1874,7 +1873,7 @@ class _GamerProfileScreenState extends State<GamerProfileScreen> with SingleTick
                                 ),
                                 Switch.adaptive(
                                   value: isDark,
-                                  activeColor: const Color(0xFF6366F1),
+                                  activeColor: const Color(0xFF1877F2),
                                   onChanged: (val) {
                                     ThemeService.setTheme(val);
                                   },
@@ -1886,106 +1885,80 @@ class _GamerProfileScreenState extends State<GamerProfileScreen> with SingleTick
                       ),
                       // Follow Us Social Card
                       const SizedBox(height: 12),
-                      ValueListenableBuilder<ThemeMode>(
-                        valueListenable: ThemeService.themeModeNotifier,
-                        builder: (context, mode, _) {
-                          final isDark = mode == ThemeMode.dark;
-                          return Material(
-                            color: Colors.transparent,
-                            child: InkWell(
-                              borderRadius: BorderRadius.circular(16),
-                              onTap: () {
-                                Navigator.push(
-                                  context,
-                                  MaterialPageRoute(builder: (_) => const FollowUsScreen()),
-                                );
-                              },
-                              child: Container(
-                                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
-                                decoration: BoxDecoration(
-                                  color: isDark ? GamerTheme.cardDark : Colors.white,
-                                  borderRadius: BorderRadius.circular(16),
-                                  border: Border.all(
-                                    color: isDark ? GamerTheme.borderDark : const Color(0xFFE2E8F0),
-                                  ),
-                                  boxShadow: [
-                                    BoxShadow(
-                                      color: isDark ? Colors.black.withOpacity(0.2) : Colors.black.withOpacity(0.04),
-                                      blurRadius: 8,
-                                      offset: const Offset(0, 2),
-                                    ),
-                                  ],
-                                ),
-                                child: Row(
-                                  children: [
-                                    Container(
-                                      padding: const EdgeInsets.all(10),
-                                      decoration: BoxDecoration(
-                                        color: const Color(0xFF00FF88).withOpacity(0.12),
-                                        borderRadius: BorderRadius.circular(12),
-                                      ),
-                                      child: const Icon(
-                                        Icons.share_rounded,
-                                        color: Color(0xFF00FF88),
-                                        size: 22,
-                                      ),
-                                    ),
-                                    const SizedBox(width: 14),
-                                    Expanded(
-                                      child: Column(
-                                        crossAxisAlignment: CrossAxisAlignment.start,
-                                        children: [
-                                          Row(
-                                            children: [
-                                              Text(
-                                                'Follow Us',
-                                                style: TextStyle(
-                                                  fontWeight: FontWeight.w800,
-                                                  fontSize: 14,
-                                                  color: isDark ? GamerTheme.textWhite : const Color(0xFF0F172A),
-                                                ),
-                                              ),
-                                              const SizedBox(width: 6),
-                                              Container(
-                                                padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                                                decoration: BoxDecoration(
-                                                  color: const Color(0xFF00FF88).withOpacity(0.15),
-                                                  borderRadius: BorderRadius.circular(6),
-                                                ),
-                                                child: const Text(
-                                                  'OFFICIAL',
-                                                  style: TextStyle(
-                                                    fontSize: 9,
-                                                    fontWeight: FontWeight.w900,
-                                                    color: Color(0xFF00FF88),
-                                                  ),
-                                                ),
-                                              ),
-                                            ],
-                                          ),
-                                          const SizedBox(height: 2),
-                                          Text(
-                                            'YouTube, Instagram, TikTok & Facebook channels',
-                                            style: TextStyle(
-                                              color: isDark ? GamerTheme.textMuted : const Color(0xFF64748B),
-                                              fontSize: 11,
-                                            ),
-                                          ),
-                                        ],
-                                      ),
-                                    ),
-                                    const SizedBox(width: 8),
-                                    Icon(
-                                      Icons.arrow_forward_ios_rounded,
-                                      color: isDark ? GamerTheme.textMuted : const Color(0xFF94A3B8),
-                                      size: 14,
-                                    ),
-                                  ],
-                                ),
+                      Material(
+                        color: Colors.transparent,
+                        child: InkWell(
+                          borderRadius: BorderRadius.circular(12),
+                          onTap: () {
+                            Navigator.push(
+                              context,
+                              MaterialPageRoute(builder: (_) => const FollowUsScreen()),
+                            );
+                          },
+                          child: Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+                            decoration: BoxDecoration(
+                              color: Colors.white,
+                              borderRadius: BorderRadius.circular(12),
+                              border: Border.all(
+                                color: const Color(0xFFCED0D4),
                               ),
+                              boxShadow: [
+                                BoxShadow(
+                                  color: Colors.black.withOpacity(0.04),
+                                  blurRadius: 4,
+                                  offset: const Offset(0, 1),
+                                ),
+                              ],
                             ),
-                          );
-                        },
+                            child: const Row(
+                              children: [
+                                Container(
+                                  padding: EdgeInsets.all(10),
+                                  decoration: BoxDecoration(
+                                    color: Color(0xFFE7F3FF),
+                                    shape: BoxShape.circle,
+                                  ),
+                                  child: Icon(
+                                    Icons.share_rounded,
+                                    color: Color(0xFF1877F2),
+                                    size: 20,
+                                  ),
+                                ),
+                                SizedBox(width: 14),
+                                Expanded(
+                                  child: Column(
+                                    crossAxisAlignment: CrossAxisAlignment.start,
+                                    children: [
+                                      Text(
+                                        'Follow Us',
+                                        style: TextStyle(
+                                          fontWeight: FontWeight.bold,
+                                          fontSize: 14,
+                                          color: Color(0xFF050505),
+                                        ),
+                                      ),
+                                      SizedBox(height: 2),
+                                      Text(
+                                        'YouTube, Instagram, TikTok & Facebook channels',
+                                        style: TextStyle(
+                                          color: Color(0xFF65676B),
+                                          fontSize: 11,
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                                SizedBox(width: 8),
+                                Icon(
+                                  Icons.arrow_forward_ios_rounded,
+                                  color: Color(0xFF65676B),
+                                  size: 14,
+                                ),
+                              ],
+                            ),
+                          ),
+                        ),
                       ),
                     ],
                   ),
@@ -2007,27 +1980,34 @@ class _GamerProfileScreenState extends State<GamerProfileScreen> with SingleTick
     return Container(
       padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
-        color: GamerTheme.cardDark,
-        borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: GamerTheme.borderDark),
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: const Color(0xFFCED0D4)),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.04),
+            blurRadius: 4,
+            offset: const Offset(0, 1),
+          ),
+        ],
       ),
       child: Row(
         children: [
           Container(
             padding: const EdgeInsets.all(8),
             decoration: BoxDecoration(
-              color: color.withOpacity(0.12),
-              borderRadius: BorderRadius.circular(10),
+              color: const Color(0xFFF0F2F5),
+              borderRadius: BorderRadius.circular(8),
             ),
-            child: Icon(icon, color: color, size: 20),
+            child: Icon(icon, color: const Color(0xFF1877F2), size: 20),
           ),
           const SizedBox(width: 14),
           Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Text(title, style: const TextStyle(color: GamerTheme.textMuted, fontSize: 11, fontWeight: FontWeight.bold)),
+              Text(title, style: const TextStyle(color: Color(0xFF65676B), fontSize: 11, fontWeight: FontWeight.bold)),
               const SizedBox(height: 2),
-              Text(value, style: const TextStyle(color: GamerTheme.textWhite, fontSize: 15, fontWeight: FontWeight.w800)),
+              Text(value, style: const TextStyle(color: Color(0xFF050505), fontSize: 14.5, fontWeight: FontWeight.w800)),
             ],
           ),
         ],
@@ -2129,7 +2109,7 @@ class _GamerProfileScreenState extends State<GamerProfileScreen> with SingleTick
       case 'Valorant':
         return const Color(0xFFFF4655);
       default:
-        return const Color(0xFF00E5FF);
+        return const Color(0xFF1877F2);
     }
   }
 
@@ -2139,14 +2119,14 @@ class _GamerProfileScreenState extends State<GamerProfileScreen> with SingleTick
       children: [
         Row(
           children: [
-            const Icon(Icons.military_tech_rounded, size: 16, color: GamerTheme.flameOrange),
+            const Icon(Icons.military_tech_rounded, size: 16, color: Color(0xFF1877F2)),
             const SizedBox(width: 6),
             const Text(
               'VERIFIED GAME RANKS',
               style: TextStyle(
-                color: GamerTheme.textMuted,
+                color: Color(0xFF65676B),
                 fontSize: 12,
-                fontWeight: FontWeight.w900,
+                fontWeight: FontWeight.bold,
                 letterSpacing: 0.8,
               ),
             ),
@@ -2155,9 +2135,9 @@ class _GamerProfileScreenState extends State<GamerProfileScreen> with SingleTick
               OutlinedButton.icon(
                 onPressed: () => _showAddVerifyGameRankSheet(user),
                 style: OutlinedButton.styleFrom(
-                  side: const BorderSide(color: Color(0xFF00E5FF), width: 1.2),
-                  backgroundColor: const Color(0xFF00E5FF).withOpacity(0.08),
-                  foregroundColor: const Color(0xFF00E5FF),
+                  side: const BorderSide(color: Color(0xFF1877F2), width: 1.0),
+                  backgroundColor: const Color(0xFFE7F3FF),
+                  foregroundColor: const Color(0xFF1877F2),
                   padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
                   minimumSize: Size.zero,
                   tapTargetSize: MaterialTapTargetSize.shrinkWrap,
@@ -2165,8 +2145,8 @@ class _GamerProfileScreenState extends State<GamerProfileScreen> with SingleTick
                 ),
                 icon: const Icon(Icons.add_moderator_rounded, size: 14),
                 label: const Text(
-                  'Add / Verify Game Rank (Optional - For Pro Players Only)',
-                  style: TextStyle(fontSize: 11, fontWeight: FontWeight.w800),
+                  'Add / Verify Game Rank',
+                  style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold),
                 ),
               ),
           ],
@@ -2178,17 +2158,24 @@ class _GamerProfileScreenState extends State<GamerProfileScreen> with SingleTick
             width: double.infinity,
             padding: const EdgeInsets.all(16),
             decoration: BoxDecoration(
-              color: GamerTheme.cardDark,
-              borderRadius: BorderRadius.circular(14),
-              border: Border.all(color: GamerTheme.borderDark),
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(color: const Color(0xFFCED0D4)),
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black.withOpacity(0.04),
+                  blurRadius: 4,
+                  offset: const Offset(0, 1),
+                ),
+              ],
             ),
             child: Column(
               children: [
-                const Icon(Icons.shield_outlined, color: Color(0xFF8B949E), size: 30),
+                const Icon(Icons.shield_outlined, color: Color(0xFF65676B), size: 30),
                 const SizedBox(height: 8),
                 const Text(
                   'No verified game ranks yet (Optional)',
-                  style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 13),
+                  style: TextStyle(color: Color(0xFF050505), fontWeight: FontWeight.bold, fontSize: 13),
                 ),
                 const SizedBox(height: 4),
                 Text(
@@ -2196,23 +2183,23 @@ class _GamerProfileScreenState extends State<GamerProfileScreen> with SingleTick
                       ? 'Submit your in-game UID and rank screenshot proof to get official verified status! (100% Optional for Pro Players)'
                       : 'This player has not verified any competitive game ranks yet.',
                   textAlign: TextAlign.center,
-                  style: const TextStyle(color: Color(0xFF8B949E), fontSize: 11.5),
+                  style: const TextStyle(color: Color(0xFF65676B), fontSize: 11.5),
                 ),
                 if (isOwnProfile) ...[
                   const SizedBox(height: 12),
                   ElevatedButton.icon(
                     onPressed: () => _showAddVerifyGameRankSheet(user),
                     style: ElevatedButton.styleFrom(
-                      backgroundColor: const Color(0xFF00E5FF),
-                      foregroundColor: const Color(0xFF0B0F14),
+                      backgroundColor: const Color(0xFF1877F2),
+                      foregroundColor: Colors.white,
                       elevation: 0,
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
                       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
                     ),
                     icon: const Icon(Icons.add_photo_alternate_rounded, size: 16),
                     label: const Text(
-                      'Add / Verify Game Rank (Optional - For Pro Players Only)',
-                      style: TextStyle(fontWeight: FontWeight.w900, fontSize: 11.5),
+                      'Add / Verify Game Rank',
+                      style: TextStyle(fontWeight: FontWeight.bold, fontSize: 11.5),
                     ),
                   ),
                 ],
@@ -2227,11 +2214,19 @@ class _GamerProfileScreenState extends State<GamerProfileScreen> with SingleTick
               final isRejected = game.status == 'rejected';
               final gameColor = _getGameAccentColor(game.gameName);
 
-              final Color statusBadgeColor = isApproved
-                  ? const Color(0xFF00FF88)
-                  : (isPending ? const Color(0xFFFF8A00) : const Color(0xFFFF4655));
+              final Color statusBg = isApproved
+                  ? const Color(0xFFE6F4EA)
+                  : (isPending ? const Color(0xFFFEF7E0) : const Color(0xFFFCE8E6));
 
-              final String statusText = isApproved
+              final Color statusBorder = isApproved
+                  ? const Color(0xFF34A853)
+                  : (isPending ? const Color(0xFFF9AB00) : const Color(0xFFEA4335));
+
+              final Color statusText = isApproved
+                  ? const Color(0xFF137333)
+                  : (isPending ? const Color(0xFFB06000) : const Color(0xFFC5221F));
+
+              final String statusLabel = isApproved
                   ? 'Verified ✓'
                   : (isPending ? 'Pending' : 'Rejected');
 
@@ -2239,13 +2234,16 @@ class _GamerProfileScreenState extends State<GamerProfileScreen> with SingleTick
                 margin: const EdgeInsets.only(bottom: 8),
                 padding: const EdgeInsets.all(12),
                 decoration: BoxDecoration(
-                  color: GamerTheme.cardDark,
+                  color: Colors.white,
                   borderRadius: BorderRadius.circular(12),
-                  border: Border.all(
-                    color: isApproved
-                        ? const Color(0xFF00FF88).withOpacity(0.4)
-                        : (isPending ? const Color(0xFFFF8A00).withOpacity(0.3) : GamerTheme.borderDark),
-                  ),
+                  border: Border.all(color: const Color(0xFFCED0D4)),
+                  boxShadow: [
+                    BoxShadow(
+                      color: Colors.black.withOpacity(0.04),
+                      blurRadius: 4,
+                      offset: const Offset(0, 1),
+                    ),
+                  ],
                 ),
                 child: Row(
                   children: [
@@ -2253,11 +2251,10 @@ class _GamerProfileScreenState extends State<GamerProfileScreen> with SingleTick
                     Container(
                       padding: const EdgeInsets.all(10),
                       decoration: BoxDecoration(
-                        color: gameColor.withOpacity(0.15),
+                        color: const Color(0xFFF0F2F5),
                         borderRadius: BorderRadius.circular(10),
-                        border: Border.all(color: gameColor.withOpacity(0.4)),
                       ),
-                      child: Icon(_getGameIcon(game.gameName), color: gameColor, size: 20),
+                      child: Icon(_getGameIcon(game.gameName), color: const Color(0xFF1877F2), size: 20),
                     ),
                     const SizedBox(width: 12),
 
@@ -2271,7 +2268,7 @@ class _GamerProfileScreenState extends State<GamerProfileScreen> with SingleTick
                               Text(
                                 game.gameName,
                                 style: const TextStyle(
-                                  color: Colors.white,
+                                  color: Color(0xFF050505),
                                   fontWeight: FontWeight.bold,
                                   fontSize: 13,
                                 ),
@@ -2280,14 +2277,14 @@ class _GamerProfileScreenState extends State<GamerProfileScreen> with SingleTick
                               Container(
                                 padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
                                 decoration: BoxDecoration(
-                                  color: statusBadgeColor.withOpacity(0.15),
+                                  color: statusBg,
                                   borderRadius: BorderRadius.circular(6),
-                                  border: Border.all(color: statusBadgeColor.withOpacity(0.4)),
+                                  border: Border.all(color: statusBorder.withOpacity(0.5)),
                                 ),
                                 child: Text(
-                                  statusText,
+                                  statusLabel,
                                   style: TextStyle(
-                                    color: statusBadgeColor,
+                                    color: statusText,
                                     fontSize: 10.5,
                                     fontWeight: FontWeight.bold,
                                   ),
@@ -2298,7 +2295,7 @@ class _GamerProfileScreenState extends State<GamerProfileScreen> with SingleTick
                           const SizedBox(height: 3),
                           Text(
                             'UID: ${game.gameId}',
-                            style: const TextStyle(color: Color(0xFF38BDF8), fontSize: 11.5, fontWeight: FontWeight.w600),
+                            style: const TextStyle(color: Color(0xFF65676B), fontSize: 11.5, fontWeight: FontWeight.w600),
                           ),
                           const SizedBox(height: 2),
                           Row(
@@ -2308,14 +2305,14 @@ class _GamerProfileScreenState extends State<GamerProfileScreen> with SingleTick
                                     ? 'Verified Rank: ${game.verifiedRank}'
                                     : 'Claimed Rank: ${game.claimedRank}',
                                 style: TextStyle(
-                                  color: isApproved ? const Color(0xFF00FF88) : const Color(0xFFFF8A00),
+                                  color: isApproved ? const Color(0xFF137333) : const Color(0xFF050505),
                                   fontSize: 11.5,
-                                  fontWeight: FontWeight.w800,
+                                  fontWeight: FontWeight.w700,
                                 ),
                               ),
                               if (isApproved) ...[
                                 const SizedBox(width: 4),
-                                const Icon(Icons.check_circle_rounded, color: Color(0xFF00FF88), size: 13),
+                                const Icon(Icons.check_circle_rounded, color: Color(0xFF34A853), size: 13),
                               ],
                             ],
                           ),
@@ -2323,7 +2320,7 @@ class _GamerProfileScreenState extends State<GamerProfileScreen> with SingleTick
                             const SizedBox(height: 3),
                             Text(
                               'Reason: ${game.rejectReason}',
-                              style: const TextStyle(color: Color(0xFFFF4655), fontSize: 11),
+                              style: const TextStyle(color: Color(0xFFC5221F), fontSize: 11),
                             ),
                           ],
                         ],
@@ -2335,7 +2332,7 @@ class _GamerProfileScreenState extends State<GamerProfileScreen> with SingleTick
                       const SizedBox(width: 8),
                       IconButton(
                         tooltip: 'View Screenshot Proof',
-                        icon: const Icon(Icons.photo_library_outlined, size: 20, color: Color(0xFF00E5FF)),
+                        icon: const Icon(Icons.photo_library_outlined, size: 20, color: Color(0xFF1877F2)),
                         onPressed: () => _showScreenshotProofDialog(
                           imageUrl: game.screenshotUrl,
                           title: '${game.gameName} Rank Proof • UID: ${game.gameId}',
@@ -2465,7 +2462,7 @@ class _GamerProfileScreenState extends State<GamerProfileScreen> with SingleTick
                           fit: BoxFit.contain,
                           placeholder: (_, __) => const Padding(
                             padding: EdgeInsets.all(48),
-                            child: CircularProgressIndicator(color: Color(0xFF00E5FF)),
+                            child: CircularProgressIndicator(color: Color(0xFF1877F2)),
                           ),
                           errorWidget: (_, __, ___) => const Padding(
                             padding: EdgeInsets.all(48),
@@ -2497,11 +2494,8 @@ class _GamerProfileScreenState extends State<GamerProfileScreen> with SingleTick
       builder: (ctx) {
         return Container(
           decoration: const BoxDecoration(
-            color: Color(0xFF131A29),
+            color: Colors.white,
             borderRadius: BorderRadius.vertical(top: Radius.circular(22)),
-            border: Border(
-              top: BorderSide(color: Color(0xFF2A3447), width: 1.5),
-            ),
           ),
           padding: const EdgeInsets.only(top: 12, bottom: 28),
           child: SafeArea(
@@ -2513,7 +2507,7 @@ class _GamerProfileScreenState extends State<GamerProfileScreen> with SingleTick
                   width: 44,
                   height: 4.5,
                   decoration: BoxDecoration(
-                    color: Colors.white24,
+                    color: const Color(0xFFCED0D4),
                     borderRadius: BorderRadius.circular(2),
                   ),
                 ),
@@ -2524,53 +2518,52 @@ class _GamerProfileScreenState extends State<GamerProfileScreen> with SingleTick
                     children: [
                       Container(
                         padding: const EdgeInsets.all(7),
-                        decoration: BoxDecoration(
-                          color: GamerTheme.accentBlue.withOpacity(0.18),
-                          borderRadius: BorderRadius.circular(10),
+                        decoration: const BoxDecoration(
+                          color: Color(0xFFE7F3FF),
+                          shape: BoxShape.circle,
                         ),
-                        child: const Icon(Icons.tune_rounded, color: GamerTheme.accentBlue, size: 20),
+                        child: const Icon(Icons.tune_rounded, color: Color(0xFF1877F2), size: 20),
                       ),
                       const SizedBox(width: 12),
                       const Expanded(
                         child: Text(
                           'Profile Menu & Settings',
                           style: TextStyle(
-                            color: Colors.white,
+                            color: Color(0xFF050505),
                             fontSize: 17,
-                            fontWeight: FontWeight.w900,
-                            letterSpacing: 0.2,
+                            fontWeight: FontWeight.bold,
                           ),
                         ),
                       ),
                       IconButton(
-                        icon: const Icon(Icons.close_rounded, color: Colors.white54, size: 22),
+                        icon: const Icon(Icons.close_rounded, color: Color(0xFF65676B), size: 22),
                         onPressed: () => Navigator.pop(ctx),
                       ),
                     ],
                   ),
                 ),
                 const SizedBox(height: 8),
-                const Divider(color: Color(0xFF1E293B), height: 1),
+                const Divider(color: Color(0xFFCED0D4), height: 1),
 
                 // 1. My Gamer ID (Profile / Dashboard)
                 ListTile(
                   leading: Container(
                     padding: const EdgeInsets.all(8),
-                    decoration: BoxDecoration(
-                      color: GamerTheme.accentBlue.withOpacity(0.14),
-                      borderRadius: BorderRadius.circular(10),
+                    decoration: const BoxDecoration(
+                      color: Color(0xFFE7F3FF),
+                      shape: BoxShape.circle,
                     ),
-                    child: const Icon(Icons.person_pin_rounded, color: GamerTheme.accentBlue, size: 20),
+                    child: const Icon(Icons.person_pin_rounded, color: Color(0xFF1877F2), size: 20),
                   ),
                   title: Text(
                     isOwnProfile ? 'My Gamer Profile' : '@${user.username}\'s Profile',
-                    style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w700, fontSize: 14),
+                    style: const TextStyle(color: Color(0xFF050505), fontWeight: FontWeight.bold, fontSize: 14),
                   ),
                   subtitle: Text(
                     'Level ${user.level} • ${user.favoriteGame}',
-                    style: const TextStyle(color: Colors.white54, fontSize: 12),
+                    style: const TextStyle(color: Color(0xFF65676B), fontSize: 12),
                   ),
-                  trailing: const Icon(Icons.arrow_forward_ios_rounded, color: Colors.white30, size: 14),
+                  trailing: const Icon(Icons.arrow_forward_ios_rounded, color: Color(0xFF65676B), size: 14),
                   onTap: () {
                     Navigator.pop(ctx);
                     if (isOwnProfile) {
@@ -2599,32 +2592,31 @@ class _GamerProfileScreenState extends State<GamerProfileScreen> with SingleTick
                     return ListTile(
                       leading: Container(
                         padding: const EdgeInsets.all(8),
-                        decoration: BoxDecoration(
-                          color: const Color(0xFFFFD700).withOpacity(0.15),
-                          borderRadius: BorderRadius.circular(10),
+                        decoration: const BoxDecoration(
+                          color: Color(0xFFFEF7E0),
+                          shape: BoxShape.circle,
                         ),
                         child: const Text('🪙', style: TextStyle(fontSize: 18)),
                       ),
                       title: const Text(
                         'G-Coins Wallet',
-                        style: TextStyle(color: Colors.white, fontWeight: FontWeight.w700, fontSize: 14),
+                        style: TextStyle(color: Color(0xFF050505), fontWeight: FontWeight.bold, fontSize: 14),
                       ),
                       subtitle: Text(
                         '$coins Coins • Tap for Transaction History',
-                        style: const TextStyle(color: Color(0xFFFFD700), fontSize: 12, fontWeight: FontWeight.w700),
+                        style: const TextStyle(color: Color(0xFF65676B), fontSize: 12),
                       ),
                       trailing: Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 4),
+                        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
                         decoration: BoxDecoration(
-                          color: const Color(0xFFFFD700).withOpacity(0.18),
+                          color: const Color(0xFFE4E6EB),
                           borderRadius: BorderRadius.circular(12),
-                          border: Border.all(color: const Color(0xFFFFD700), width: 1),
                         ),
                         child: Text(
                           '$coins',
                           style: const TextStyle(
-                            color: Color(0xFFFFD700),
-                            fontWeight: FontWeight.w900,
+                            color: Color(0xFF050505),
+                            fontWeight: FontWeight.bold,
                             fontSize: 12,
                           ),
                         ),
@@ -2641,21 +2633,21 @@ class _GamerProfileScreenState extends State<GamerProfileScreen> with SingleTick
                 ListTile(
                   leading: Container(
                     padding: const EdgeInsets.all(8),
-                    decoration: BoxDecoration(
-                      color: GamerTheme.accentOrange.withOpacity(0.14),
-                      borderRadius: BorderRadius.circular(10),
+                    decoration: const BoxDecoration(
+                      color: Color(0xFFE7F3FF),
+                      shape: BoxShape.circle,
                     ),
-                    child: const Icon(Icons.share_rounded, color: GamerTheme.accentOrange, size: 20),
+                    child: const Icon(Icons.share_rounded, color: Color(0xFF1877F2), size: 20),
                   ),
                   title: const Text(
                     'Share Profile',
-                    style: TextStyle(color: Colors.white, fontWeight: FontWeight.w700, fontSize: 14),
+                    style: TextStyle(color: Color(0xFF050505), fontWeight: FontWeight.bold, fontSize: 14),
                   ),
                   subtitle: const Text(
                     'Share Gamer ID link with friends & squad',
-                    style: TextStyle(color: Colors.white54, fontSize: 12),
+                    style: TextStyle(color: Color(0xFF65676B), fontSize: 12),
                   ),
-                  trailing: const Icon(Icons.arrow_forward_ios_rounded, color: Colors.white30, size: 14),
+                  trailing: const Icon(Icons.arrow_forward_ios_rounded, color: Color(0xFF65676B), size: 14),
                   onTap: () {
                     Navigator.pop(ctx);
                     _shareProfile(user);
@@ -2670,28 +2662,27 @@ class _GamerProfileScreenState extends State<GamerProfileScreen> with SingleTick
                     return ListTile(
                       leading: Container(
                         padding: const EdgeInsets.all(8),
-                        decoration: BoxDecoration(
-                          color: (isDark ? const Color(0xFFFFD700) : const Color(0xFF6366F1)).withOpacity(0.14),
-                          borderRadius: BorderRadius.circular(10),
+                        decoration: const BoxDecoration(
+                          color: Color(0xFFFEF7E0),
+                          shape: BoxShape.circle,
                         ),
                         child: Icon(
                           isDark ? Icons.light_mode_rounded : Icons.dark_mode_rounded,
-                          color: isDark ? const Color(0xFFFFD700) : const Color(0xFF818CF8),
+                          color: const Color(0xFFF59E0B),
                           size: 20,
                         ),
                       ),
                       title: Text(
                         isDark ? 'Day Mode' : 'Night Mode',
-                        style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w700, fontSize: 14),
+                        style: const TextStyle(color: Color(0xFF050505), fontWeight: FontWeight.bold, fontSize: 14),
                       ),
                       subtitle: Text(
                         isDark ? 'Switch to bright display theme' : 'Switch to dark gaming theme',
-                        style: const TextStyle(color: Colors.white54, fontSize: 12),
+                        style: const TextStyle(color: Color(0xFF65676B), fontSize: 12),
                       ),
                       trailing: Switch.adaptive(
                         value: isDark,
-                        activeColor: const Color(0xFFFFD700),
-                        activeTrackColor: const Color(0xFFFFD700).withOpacity(0.3),
+                        activeColor: const Color(0xFF1877F2),
                         onChanged: (val) {
                           ThemeService.toggleTheme();
                         },
@@ -2707,30 +2698,31 @@ class _GamerProfileScreenState extends State<GamerProfileScreen> with SingleTick
                 ListTile(
                   leading: Container(
                     padding: const EdgeInsets.all(8),
-                    decoration: BoxDecoration(
-                      color: GamerTheme.neonGreen.withOpacity(0.14),
-                      borderRadius: BorderRadius.circular(10),
+                    decoration: const BoxDecoration(
+                      color: Color(0xFFE7F3FF),
+                      shape: BoxShape.circle,
                     ),
-                    child: const Icon(Icons.bookmark_rounded, color: GamerTheme.neonGreen, size: 20),
+                    child: const Icon(Icons.bookmark_rounded, color: Color(0xFF1877F2), size: 20),
                   ),
                   title: const Text(
                     'Saved Posts & News',
-                    style: TextStyle(color: Colors.white, fontWeight: FontWeight.w700, fontSize: 14),
+                    style: TextStyle(color: Color(0xFF050505), fontWeight: FontWeight.bold, fontSize: 14),
                   ),
                   subtitle: const Text(
                     'View your bookmarked clips & articles',
-                    style: TextStyle(color: Colors.white54, fontSize: 12),
+                    style: TextStyle(color: Color(0xFF65676B), fontSize: 12),
                   ),
-                  trailing: const Icon(Icons.arrow_forward_ios_rounded, color: Colors.white30, size: 14),
+                  trailing: const Icon(Icons.arrow_forward_ios_rounded, color: Color(0xFF65676B), size: 14),
                   onTap: () {
                     Navigator.pop(ctx);
                     Navigator.of(context).push(
                       MaterialPageRoute(
                         builder: (_) => Scaffold(
-                          backgroundColor: GamerTheme.bgDark,
+                          backgroundColor: const Color(0xFFF0F2F5),
                           appBar: AppBar(
-                            backgroundColor: GamerTheme.bgDark,
-                            title: const Text('Saved Posts & News', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
+                            backgroundColor: Colors.white,
+                            elevation: 1,
+                            title: const Text('Saved Posts & News', style: TextStyle(color: Color(0xFF1877F2), fontWeight: FontWeight.bold, fontSize: 18)),
                           ),
                           body: const SavedNewsTabScreen(),
                         ),
@@ -2743,21 +2735,21 @@ class _GamerProfileScreenState extends State<GamerProfileScreen> with SingleTick
                 ListTile(
                   leading: Container(
                     padding: const EdgeInsets.all(8),
-                    decoration: BoxDecoration(
-                      color: Colors.white.withOpacity(0.12),
-                      borderRadius: BorderRadius.circular(10),
+                    decoration: const BoxDecoration(
+                      color: Color(0xFFE4E6EB),
+                      shape: BoxShape.circle,
                     ),
-                    child: const Icon(Icons.settings_rounded, color: Colors.white, size: 20),
+                    child: const Icon(Icons.settings_rounded, color: Color(0xFF65676B), size: 20),
                   ),
                   title: const Text(
                     'Settings & Preferences',
-                    style: TextStyle(color: Colors.white, fontWeight: FontWeight.w700, fontSize: 14),
+                    style: TextStyle(color: Color(0xFF050505), fontWeight: FontWeight.bold, fontSize: 14),
                   ),
                   subtitle: const Text(
                     'Follow Us, sound, notifications & accounts',
-                    style: TextStyle(color: Colors.white54, fontSize: 12),
+                    style: TextStyle(color: Color(0xFF65676B), fontSize: 12),
                   ),
-                  trailing: const Icon(Icons.arrow_forward_ios_rounded, color: Colors.white30, size: 14),
+                  trailing: const Icon(Icons.arrow_forward_ios_rounded, color: Color(0xFF65676B), size: 14),
                   onTap: () {
                     Navigator.pop(ctx);
                     Navigator.of(context).push(
@@ -2770,23 +2762,23 @@ class _GamerProfileScreenState extends State<GamerProfileScreen> with SingleTick
 
                 // 7. Logout (Only for own profile)
                 if (isOwnProfile) ...[
-                  const Divider(color: Color(0xFF1E293B), height: 16),
+                  const Divider(color: Color(0xFFCED0D4), height: 16),
                   ListTile(
                     leading: Container(
                       padding: const EdgeInsets.all(8),
-                      decoration: BoxDecoration(
-                        color: GamerTheme.redAccent.withOpacity(0.14),
-                        borderRadius: BorderRadius.circular(10),
+                      decoration: const BoxDecoration(
+                        color: Color(0xFFFEE2E2),
+                        shape: BoxShape.circle,
                       ),
-                      child: const Icon(Icons.logout_rounded, color: GamerTheme.redAccent, size: 20),
+                      child: const Icon(Icons.logout_rounded, color: Color(0xFFDC2626), size: 20),
                     ),
                     title: const Text(
                       'Log Out',
-                      style: TextStyle(color: GamerTheme.redAccent, fontWeight: FontWeight.w700, fontSize: 14),
+                      style: TextStyle(color: Color(0xFFDC2626), fontWeight: FontWeight.bold, fontSize: 14),
                     ),
                     subtitle: const Text(
                       'Sign out of Gamers ID Network',
-                      style: TextStyle(color: Colors.white54, fontSize: 12),
+                      style: TextStyle(color: Color(0xFF65676B), fontSize: 12),
                     ),
                     onTap: () {
                       Navigator.pop(ctx);
@@ -2985,9 +2977,9 @@ class _AddVerifyGameRankSheetState extends State<AddVerifyGameRankSheet> {
     return Container(
       padding: EdgeInsets.fromLTRB(20, 16, 20, 20 + bottomInset),
       decoration: const BoxDecoration(
-        color: Color(0xFF10141D),
-        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
-        border: Border(top: BorderSide(color: Color(0xFF1F2B3E), width: 1.5)),
+        color: Colors.white,
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+        border: Border(top: BorderSide(color: Color(0xFFCED0D4), width: 1)),
       ),
       child: Form(
         key: _formKey,
@@ -3003,7 +2995,7 @@ class _AddVerifyGameRankSheetState extends State<AddVerifyGameRankSheet> {
                   height: 4,
                   margin: const EdgeInsets.only(bottom: 14),
                   decoration: BoxDecoration(
-                    color: const Color(0xFF2E384D),
+                    color: const Color(0xFFCED0D4),
                     borderRadius: BorderRadius.circular(2),
                   ),
                 ),
@@ -3014,12 +3006,11 @@ class _AddVerifyGameRankSheetState extends State<AddVerifyGameRankSheet> {
                 children: [
                   Container(
                     padding: const EdgeInsets.all(8),
-                    decoration: BoxDecoration(
-                      color: const Color(0xFF00E5FF).withOpacity(0.15),
-                      borderRadius: BorderRadius.circular(8),
-                      border: Border.all(color: const Color(0xFF00E5FF).withOpacity(0.4)),
+                    decoration: const BoxDecoration(
+                      color: Color(0xFFE7F3FF),
+                      shape: BoxShape.circle,
                     ),
-                    child: const Icon(Icons.verified_user_rounded, color: Color(0xFF00E5FF), size: 20),
+                    child: const Icon(Icons.verified_user_rounded, color: Color(0xFF1877F2), size: 20),
                   ),
                   const SizedBox(width: 10),
                   const Expanded(
@@ -3027,18 +3018,18 @@ class _AddVerifyGameRankSheetState extends State<AddVerifyGameRankSheet> {
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         Text(
-                          'Add / Verify Game Rank (Optional)',
-                          style: TextStyle(color: Colors.white, fontWeight: FontWeight.w900, fontSize: 16),
+                          'Add / Verify Game Rank',
+                          style: TextStyle(color: Color(0xFF050505), fontWeight: FontWeight.bold, fontSize: 16),
                         ),
                         Text(
-                          'Upload screenshot proof to verify in-game UID & Rank (For Pro Players Only)',
-                          style: TextStyle(color: Color(0xFF8B949E), fontSize: 11),
+                          'Upload screenshot proof to verify in-game UID & Rank',
+                          style: TextStyle(color: Color(0xFF65676B), fontSize: 11),
                         ),
                       ],
                     ),
                   ),
                   IconButton(
-                    icon: const Icon(Icons.close, color: Colors.white70),
+                    icon: const Icon(Icons.close, color: Color(0xFF65676B)),
                     onPressed: () => Navigator.pop(context),
                   ),
                 ],
@@ -3049,28 +3040,28 @@ class _AddVerifyGameRankSheetState extends State<AddVerifyGameRankSheet> {
               // a) Select Game Dropdown
               const Text(
                 '1. Select Game',
-                style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 13),
+                style: TextStyle(color: Color(0xFF050505), fontWeight: FontWeight.bold, fontSize: 13),
               ),
               const SizedBox(height: 6),
               DropdownButtonFormField<String>(
                 value: _selectedGame,
-                dropdownColor: const Color(0xFF161B26),
-                style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w700, fontSize: 14),
+                dropdownColor: Colors.white,
+                style: const TextStyle(color: Color(0xFF050505), fontWeight: FontWeight.bold, fontSize: 14),
                 decoration: InputDecoration(
                   filled: true,
-                  fillColor: const Color(0xFF161B26),
+                  fillColor: const Color(0xFFF0F2F5),
                   contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
                   border: OutlineInputBorder(
                     borderRadius: BorderRadius.circular(10),
-                    borderSide: const BorderSide(color: Color(0xFF1F2B3E)),
+                    borderSide: const BorderSide(color: Color(0xFFCED0D4)),
                   ),
                   enabledBorder: OutlineInputBorder(
                     borderRadius: BorderRadius.circular(10),
-                    borderSide: const BorderSide(color: Color(0xFF1F2B3E)),
+                    borderSide: const BorderSide(color: Color(0xFFCED0D4)),
                   ),
                   focusedBorder: OutlineInputBorder(
                     borderRadius: BorderRadius.circular(10),
-                    borderSide: const BorderSide(color: Color(0xFF00E5FF)),
+                    borderSide: const BorderSide(color: Color(0xFF1877F2)),
                   ),
                 ),
                 items: ['BGMI', 'PUBG Mobile', 'Free Fire', 'COD Mobile', 'Valorant'].map((g) {
@@ -3078,7 +3069,7 @@ class _AddVerifyGameRankSheetState extends State<AddVerifyGameRankSheet> {
                     value: g,
                     child: Row(
                       children: [
-                        const Icon(Icons.sports_esports_rounded, size: 16, color: Color(0xFF00E5FF)),
+                        const Icon(Icons.sports_esports_rounded, size: 16, color: Color(0xFF1877F2)),
                         const SizedBox(width: 8),
                         Text(g),
                       ],
@@ -3100,31 +3091,31 @@ class _AddVerifyGameRankSheetState extends State<AddVerifyGameRankSheet> {
               // b) Enter Game UID/ID
               const Text(
                 '2. In-Game UID / Player ID',
-                style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 13),
+                style: TextStyle(color: Color(0xFF050505), fontWeight: FontWeight.bold, fontSize: 13),
               ),
               const SizedBox(height: 6),
               TextFormField(
                 controller: _gameIdController,
-                style: const TextStyle(color: Colors.white, fontSize: 14, fontWeight: FontWeight.w600),
+                style: const TextStyle(color: Color(0xFF050505), fontSize: 14, fontWeight: FontWeight.w600),
                 keyboardType: TextInputType.text,
                 decoration: InputDecoration(
                   hintText: 'Enter your exact in-game UID (e.g. 5123456789)',
-                  hintStyle: const TextStyle(color: Color(0xFF6E7681), fontSize: 13),
-                  prefixIcon: const Icon(Icons.tag_rounded, color: Color(0xFF00E5FF), size: 18),
+                  hintStyle: const TextStyle(color: Color(0xFF8A8D91), fontSize: 13),
+                  prefixIcon: const Icon(Icons.tag_rounded, color: Color(0xFF1877F2), size: 18),
                   filled: true,
-                  fillColor: const Color(0xFF161B26),
+                  fillColor: const Color(0xFFF0F2F5),
                   contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
                   border: OutlineInputBorder(
                     borderRadius: BorderRadius.circular(10),
-                    borderSide: const BorderSide(color: Color(0xFF1F2B3E)),
+                    borderSide: const BorderSide(color: Color(0xFFCED0D4)),
                   ),
                   enabledBorder: OutlineInputBorder(
                     borderRadius: BorderRadius.circular(10),
-                    borderSide: const BorderSide(color: Color(0xFF1F2B3E)),
+                    borderSide: const BorderSide(color: Color(0xFFCED0D4)),
                   ),
                   focusedBorder: OutlineInputBorder(
                     borderRadius: BorderRadius.circular(10),
-                    borderSide: const BorderSide(color: Color(0xFF00E5FF)),
+                    borderSide: const BorderSide(color: Color(0xFF1877F2)),
                   ),
                 ),
                 validator: (val) {
@@ -3140,28 +3131,28 @@ class _AddVerifyGameRankSheetState extends State<AddVerifyGameRankSheet> {
               // c) Select Claimed Rank Dropdown
               const Text(
                 '3. Claimed In-Game Rank',
-                style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 13),
+                style: TextStyle(color: Color(0xFF050505), fontWeight: FontWeight.bold, fontSize: 13),
               ),
               const SizedBox(height: 6),
               DropdownButtonFormField<String>(
                 value: availableRanks.contains(_selectedRank) ? _selectedRank : availableRanks.first,
-                dropdownColor: const Color(0xFF161B26),
-                style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w700, fontSize: 14),
+                dropdownColor: Colors.white,
+                style: const TextStyle(color: Color(0xFF050505), fontWeight: FontWeight.bold, fontSize: 14),
                 decoration: InputDecoration(
                   filled: true,
-                  fillColor: const Color(0xFF161B26),
+                  fillColor: const Color(0xFFF0F2F5),
                   contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
                   border: OutlineInputBorder(
                     borderRadius: BorderRadius.circular(10),
-                    borderSide: const BorderSide(color: Color(0xFF1F2B3E)),
+                    borderSide: const BorderSide(color: Color(0xFFCED0D4)),
                   ),
                   enabledBorder: OutlineInputBorder(
                     borderRadius: BorderRadius.circular(10),
-                    borderSide: const BorderSide(color: Color(0xFF1F2B3E)),
+                    borderSide: const BorderSide(color: Color(0xFFCED0D4)),
                   ),
                   focusedBorder: OutlineInputBorder(
                     borderRadius: BorderRadius.circular(10),
-                    borderSide: const BorderSide(color: Color(0xFF00E5FF)),
+                    borderSide: const BorderSide(color: Color(0xFF1877F2)),
                   ),
                 ),
                 items: availableRanks.map((r) {
@@ -3169,7 +3160,7 @@ class _AddVerifyGameRankSheetState extends State<AddVerifyGameRankSheet> {
                     value: r,
                     child: Row(
                       children: [
-                        const Icon(Icons.military_tech_rounded, size: 16, color: Color(0xFFFF8A00)),
+                        const Icon(Icons.military_tech_rounded, size: 16, color: Color(0xFF1877F2)),
                         const SizedBox(width: 8),
                         Text(r),
                       ],
@@ -3190,18 +3181,18 @@ class _AddVerifyGameRankSheetState extends State<AddVerifyGameRankSheet> {
                 children: [
                   const Text(
                     '4. Upload Screenshot Proof',
-                    style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 13),
+                    style: TextStyle(color: Color(0xFF050505), fontWeight: FontWeight.bold, fontSize: 13),
                   ),
                   const SizedBox(width: 6),
                   Container(
                     padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
                     decoration: BoxDecoration(
-                      color: const Color(0xFFFF4655).withOpacity(0.15),
+                      color: const Color(0xFFE7F3FF),
                       borderRadius: BorderRadius.circular(4),
                     ),
                     child: const Text(
                       'REQUIRED',
-                      style: TextStyle(color: Color(0xFFFF4655), fontSize: 9.5, fontWeight: FontWeight.bold),
+                      style: TextStyle(color: Color(0xFF1877F2), fontSize: 9.5, fontWeight: FontWeight.bold),
                     ),
                   ),
                 ],
@@ -3209,7 +3200,7 @@ class _AddVerifyGameRankSheetState extends State<AddVerifyGameRankSheet> {
               const SizedBox(height: 4),
               const Text(
                 'Must show your Game ID + Rank clearly on screen',
-                style: TextStyle(color: Color(0xFF8B949E), fontSize: 11.5),
+                style: TextStyle(color: Color(0xFF65676B), fontSize: 11.5),
               ),
               const SizedBox(height: 8),
 
@@ -3221,10 +3212,10 @@ class _AddVerifyGameRankSheetState extends State<AddVerifyGameRankSheet> {
                   width: double.infinity,
                   height: 120,
                   decoration: BoxDecoration(
-                    color: const Color(0xFF161B26),
+                    color: const Color(0xFFF0F2F5),
                     borderRadius: BorderRadius.circular(12),
                     border: Border.all(
-                      color: _pickedScreenshot != null ? const Color(0xFF00FF88) : const Color(0xFF2E384D),
+                      color: _pickedScreenshot != null ? const Color(0xFF1877F2) : const Color(0xFFCED0D4),
                       width: 1.5,
                     ),
                   ),
@@ -3236,7 +3227,7 @@ class _AddVerifyGameRankSheetState extends State<AddVerifyGameRankSheet> {
                             children: [
                               Image.file(_pickedScreenshot!, fit: BoxFit.cover),
                               Container(
-                                color: Colors.black.withOpacity(0.4),
+                                color: Colors.black.withOpacity(0.3),
                               ),
                               Positioned(
                                 bottom: 8,
@@ -3244,18 +3235,18 @@ class _AddVerifyGameRankSheetState extends State<AddVerifyGameRankSheet> {
                                 child: Container(
                                   padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                                   decoration: BoxDecoration(
-                                    color: const Color(0xFF10141D),
+                                    color: Colors.white,
                                     borderRadius: BorderRadius.circular(6),
-                                    border: Border.all(color: const Color(0xFF00FF88)),
+                                    border: Border.all(color: const Color(0xFF1877F2)),
                                   ),
                                   child: const Row(
                                     mainAxisSize: MainAxisSize.min,
                                     children: [
-                                      Icon(Icons.check_circle_rounded, color: Color(0xFF00FF88), size: 14),
+                                      Icon(Icons.check_circle_rounded, color: Color(0xFF1877F2), size: 14),
                                       SizedBox(width: 4),
                                       Text(
                                         'Change Photo',
-                                        style: TextStyle(color: Colors.white, fontSize: 11, fontWeight: FontWeight.bold),
+                                        style: TextStyle(color: Color(0xFF050505), fontSize: 11, fontWeight: FontWeight.bold),
                                       ),
                                     ],
                                   ),
@@ -3267,16 +3258,16 @@ class _AddVerifyGameRankSheetState extends State<AddVerifyGameRankSheet> {
                       : const Column(
                           mainAxisAlignment: MainAxisAlignment.center,
                           children: [
-                            Icon(Icons.add_photo_alternate_rounded, color: Color(0xFF00E5FF), size: 36),
+                            Icon(Icons.add_photo_alternate_rounded, color: Color(0xFF1877F2), size: 36),
                             SizedBox(height: 6),
                             Text(
                               'Tap to upload rank screenshot proof',
-                              style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 12.5),
+                              style: TextStyle(color: Color(0xFF050505), fontWeight: FontWeight.bold, fontSize: 12.5),
                             ),
                             SizedBox(height: 2),
                             Text(
                               'JPG, PNG supported',
-                              style: TextStyle(color: Color(0xFF6E7681), fontSize: 11),
+                              style: TextStyle(color: Color(0xFF65676B), fontSize: 11),
                             ),
                           ],
                         ),
@@ -3288,18 +3279,18 @@ class _AddVerifyGameRankSheetState extends State<AddVerifyGameRankSheet> {
                 Container(
                   padding: const EdgeInsets.all(10),
                   decoration: BoxDecoration(
-                    color: const Color(0xFFFF4655).withOpacity(0.12),
+                    color: const Color(0xFFFFEBEE),
                     borderRadius: BorderRadius.circular(8),
-                    border: Border.all(color: const Color(0xFFFF4655).withOpacity(0.4)),
+                    border: Border.all(color: const Color(0xFFFFCDD2)),
                   ),
                   child: Row(
                     children: [
-                      const Icon(Icons.error_outline_rounded, color: Color(0xFFFF4655), size: 16),
-                      const SizedBox(width: 8),
+                      const Icon(Icons.error_outline_rounded, color: Colors.red, size: 16),
+                      SizedBox(width: 8),
                       Expanded(
                         child: Text(
                           _errorMessage!,
-                          style: const TextStyle(color: Color(0xFFFF4655), fontSize: 11.5),
+                          style: const TextStyle(color: Colors.red, fontSize: 11.5),
                         ),
                       ),
                     ],
@@ -3315,22 +3306,22 @@ class _AddVerifyGameRankSheetState extends State<AddVerifyGameRankSheet> {
                 child: ElevatedButton.icon(
                   onPressed: _isSubmitting ? null : _submitVerification,
                   style: ElevatedButton.styleFrom(
-                    backgroundColor: const Color(0xFF00E5FF),
-                    foregroundColor: const Color(0xFF0B0F14),
+                    backgroundColor: const Color(0xFF1877F2),
+                    foregroundColor: Colors.white,
                     padding: const EdgeInsets.symmetric(vertical: 14),
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
                     elevation: 0,
                   ),
                   icon: _isSubmitting
                       ? const SizedBox(
                           width: 18,
                           height: 18,
-                          child: CircularProgressIndicator(color: Color(0xFF0B0F14), strokeWidth: 2),
+                          child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2),
                         )
                       : const Icon(Icons.send_rounded, size: 18),
                   label: Text(
                     _isSubmitting ? 'Submitting Verification...' : 'Submit Rank Verification',
-                    style: const TextStyle(fontWeight: FontWeight.w900, fontSize: 14),
+                    style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
                   ),
                 ),
               ),
@@ -3357,7 +3348,7 @@ class _SliverTabBarDelegate extends SliverPersistentHeaderDelegate {
   @override
   Widget build(BuildContext context, double shrinkOffset, bool overlapsContent) {
     return Container(
-      color: GamerTheme.bgDark,
+      color: Colors.white,
       child: tabBar,
     );
   }

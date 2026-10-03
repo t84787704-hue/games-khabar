@@ -334,7 +334,7 @@ class _GamerRoomsScreenState extends State<GamerRoomsScreen> {
                 setState(() => _isWatchingAdFromRooms = false);
                 ScaffoldMessenger.of(this.context).showSnackBar(
                   const SnackBar(
-                    backgroundColor: GamerTheme.accentOrange,
+                    backgroundColor: Color(0xFF1877F2),
                     content: Row(
                       children: [
                         Text('💰', style: TextStyle(fontSize: 20)),
@@ -353,29 +353,28 @@ class _GamerRoomsScreenState extends State<GamerRoomsScreen> {
           });
 
           return AlertDialog(
-            backgroundColor: GamerTheme.bgDark,
+            backgroundColor: Colors.white,
             shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(20),
-              side: const BorderSide(color: GamerTheme.accentOrange, width: 2),
+              borderRadius: BorderRadius.circular(16),
             ),
             title: Row(
               children: [
                 Container(
                   padding: const EdgeInsets.all(6),
-                  decoration: BoxDecoration(
-                    color: GamerTheme.accentOrange.withOpacity(0.2),
+                  decoration: const BoxDecoration(
+                    color: Color(0xFFE7F3FF),
                     shape: BoxShape.circle,
                   ),
-                  child: const Icon(Icons.play_arrow_rounded, color: GamerTheme.accentOrange, size: 20),
+                  child: const Icon(Icons.play_arrow_rounded, color: Color(0xFF1877F2), size: 20),
                 ),
                 const SizedBox(width: 10),
                 const Expanded(
                   child: Text(
                     'REWARDED SPONSOR AD',
                     style: TextStyle(
-                      color: GamerTheme.accentOrange,
+                      color: Color(0xFF1877F2),
                       fontSize: 13,
-                      fontWeight: FontWeight.w900,
+                      fontWeight: FontWeight.bold,
                       letterSpacing: 0.8,
                     ),
                   ),
@@ -383,12 +382,12 @@ class _GamerRoomsScreenState extends State<GamerRoomsScreen> {
                 Container(
                   padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                   decoration: BoxDecoration(
-                    color: Colors.white10,
+                    color: const Color(0xFFF0F2F5),
                     borderRadius: BorderRadius.circular(12),
                   ),
                   child: Text(
                     '${remainingSeconds}s',
-                    style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 12),
+                    style: const TextStyle(color: Color(0xFF050505), fontWeight: FontWeight.bold, fontSize: 12),
                   ),
                 ),
               ],
@@ -401,27 +400,27 @@ class _GamerRoomsScreenState extends State<GamerRoomsScreen> {
                   width: double.infinity,
                   decoration: BoxDecoration(
                     gradient: const LinearGradient(
-                      colors: [Color(0xFF1E293B), Color(0xFF0F172A)],
+                      colors: [Color(0xFFE7F3FF), Color(0xFFF0F2F5)],
                       begin: Alignment.topLeft,
                       end: Alignment.bottomRight,
                     ),
                     borderRadius: BorderRadius.circular(16),
-                    border: Border.all(color: GamerTheme.borderLight),
+                    border: Border.all(color: const Color(0xFFCED0D4)),
                   ),
                   child: const Center(
                     child: Column(
                       mainAxisAlignment: MainAxisAlignment.center,
                       children: [
-                        Icon(Icons.sports_esports_rounded, color: GamerTheme.accentBlue, size: 44),
+                        Icon(Icons.sports_esports_rounded, color: Color(0xFF1877F2), size: 44),
                         SizedBox(height: 8),
                         Text(
                           'Sponsored Gaming Partner',
-                          style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 13),
+                          style: TextStyle(color: Color(0xFF050505), fontWeight: FontWeight.bold, fontSize: 13),
                         ),
                         SizedBox(height: 4),
                         Text(
                           'Watch 5s ad to earn +50 G-Coins...',
-                          style: TextStyle(color: GamerTheme.textMuted, fontSize: 11),
+                          style: TextStyle(color: Color(0xFF65676B), fontSize: 11),
                         ),
                       ],
                     ),
@@ -430,8 +429,8 @@ class _GamerRoomsScreenState extends State<GamerRoomsScreen> {
                 const SizedBox(height: 12),
                 LinearProgressIndicator(
                   value: (5 - remainingSeconds) / 5.0,
-                  backgroundColor: GamerTheme.borderDark,
-                  color: GamerTheme.accentOrange,
+                  backgroundColor: const Color(0xFFE4E6EB),
+                  color: const Color(0xFF1877F2),
                   minHeight: 6,
                   borderRadius: BorderRadius.circular(3),
                 ),
@@ -479,7 +478,7 @@ class _GamerRoomsScreenState extends State<GamerRoomsScreen> {
     }
   }
 
-  static const Color _neonGreen = Color(0xFF00FF88);
+  static const Color _fbBlue = Color(0xFF1877F2);
 
   static const List<String> _gameCategories = [
     'All Games',
@@ -871,7 +870,7 @@ class _GamerRoomsScreenState extends State<GamerRoomsScreen> {
             ScaffoldMessenger.of(context).showSnackBar(
               const SnackBar(
                 content: Text('Joined! Free Entry - Room ID will be visible 10 mins before match'),
-                backgroundColor: _neonGreen,
+                backgroundColor: _fbBlue,
                 behavior: SnackBarBehavior.floating,
               ),
             );
@@ -904,7 +903,7 @@ class _GamerRoomsScreenState extends State<GamerRoomsScreen> {
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
-      backgroundColor: GamerTheme.cardDark,
+      backgroundColor: Colors.white,
       shape: const RoundedRectangleBorder(
         borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
       ),
@@ -1015,7 +1014,7 @@ class _GamerRoomsScreenState extends State<GamerRoomsScreen> {
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
-      backgroundColor: GamerTheme.cardDark,
+      backgroundColor: Colors.white,
       shape: const RoundedRectangleBorder(
         borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
       ),
@@ -1039,15 +1038,22 @@ class _GamerRoomsScreenState extends State<GamerRoomsScreen> {
                 children: [
                   Row(
                     children: [
-                      const Icon(Icons.add_moderator_rounded, color: GamerTheme.accentOrange, size: 22),
-                      const SizedBox(width: 8),
+                      Container(
+                        padding: const EdgeInsets.all(6),
+                        decoration: const BoxDecoration(
+                          color: Color(0xFFE7F3FF),
+                          shape: BoxShape.circle,
+                        ),
+                        child: const Icon(Icons.add_moderator_rounded, color: Color(0xFF1877F2), size: 20),
+                      ),
+                      const SizedBox(width: 10),
                       const Text(
                         'Host Custom Room',
-                        style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 17),
+                        style: TextStyle(color: Color(0xFF050505), fontWeight: FontWeight.bold, fontSize: 17),
                       ),
                       const Spacer(),
                       IconButton(
-                        icon: const Icon(Icons.close_rounded, color: GamerTheme.textMuted),
+                        icon: const Icon(Icons.close_rounded, color: Color(0xFF65676B)),
                         onPressed: () => Navigator.pop(ctx),
                       ),
                     ],
@@ -1055,18 +1061,20 @@ class _GamerRoomsScreenState extends State<GamerRoomsScreen> {
                   const SizedBox(height: 14),
 
                   // Game Dropdown
-                  const Text('SELECT GAME', style: TextStyle(color: GamerTheme.textMuted, fontSize: 11, fontWeight: FontWeight.bold)),
+                  const Text('SELECT GAME', style: TextStyle(color: Color(0xFF65676B), fontSize: 11, fontWeight: FontWeight.bold)),
                   const SizedBox(height: 6),
                   DropdownButtonFormField<String>(
                     value: selectedGame,
-                    dropdownColor: GamerTheme.cardElevated,
+                    dropdownColor: Colors.white,
                     decoration: InputDecoration(
                       filled: true,
-                      fillColor: GamerTheme.bgDark,
-                      border: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: const BorderSide(color: GamerTheme.borderDark)),
+                      fillColor: const Color(0xFFF0F2F5),
+                      border: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: const BorderSide(color: Color(0xFFCED0D4))),
+                      enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: const BorderSide(color: Color(0xFFCED0D4))),
+                      focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: const BorderSide(color: Color(0xFF1877F2))),
                       contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
                     ),
-                    style: const TextStyle(color: Colors.white, fontSize: 13),
+                    style: const TextStyle(color: Color(0xFF050505), fontSize: 13, fontWeight: FontWeight.bold),
                     items: _gameCategories
                         .where((g) => g != 'All Games')
                         .map((g) => DropdownMenuItem(value: g, child: Text(g)))
@@ -1080,17 +1088,19 @@ class _GamerRoomsScreenState extends State<GamerRoomsScreen> {
                   const SizedBox(height: 12),
 
                   // Room Title (auto-generated, user can edit)
-                  const Text('ROOM TITLE', style: TextStyle(color: GamerTheme.textMuted, fontSize: 11, fontWeight: FontWeight.bold)),
+                  const Text('ROOM TITLE', style: TextStyle(color: Color(0xFF65676B), fontSize: 11, fontWeight: FontWeight.bold)),
                   const SizedBox(height: 6),
                   TextField(
                     controller: titleController,
-                    style: const TextStyle(color: Colors.white, fontSize: 13),
+                    style: const TextStyle(color: Color(0xFF050505), fontSize: 13),
                     decoration: InputDecoration(
                       filled: true,
-                      fillColor: GamerTheme.bgDark,
+                      fillColor: const Color(0xFFF0F2F5),
                       hintText: 'Enter room title',
-                      hintStyle: const TextStyle(color: GamerTheme.textMuted, fontSize: 12),
-                      border: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: const BorderSide(color: GamerTheme.borderDark)),
+                      hintStyle: const TextStyle(color: Color(0xFF8A8D91), fontSize: 12),
+                      border: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: const BorderSide(color: Color(0xFFCED0D4))),
+                      enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: const BorderSide(color: Color(0xFFCED0D4))),
+                      focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: const BorderSide(color: Color(0xFF1877F2))),
                       contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
                     ),
                   ),
@@ -1104,18 +1114,20 @@ class _GamerRoomsScreenState extends State<GamerRoomsScreen> {
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            const Text('MAP', style: TextStyle(color: GamerTheme.textMuted, fontSize: 11, fontWeight: FontWeight.bold)),
+                            const Text('MAP', style: TextStyle(color: Color(0xFF65676B), fontSize: 11, fontWeight: FontWeight.bold)),
                             const SizedBox(height: 6),
                             DropdownButtonFormField<String>(
                               value: selectedMap,
-                              dropdownColor: GamerTheme.cardElevated,
+                              dropdownColor: Colors.white,
                               decoration: InputDecoration(
                                 filled: true,
-                                fillColor: GamerTheme.bgDark,
-                                border: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: const BorderSide(color: GamerTheme.borderDark)),
+                                fillColor: const Color(0xFFF0F2F5),
+                                border: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: const BorderSide(color: Color(0xFFCED0D4))),
+                                enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: const BorderSide(color: Color(0xFFCED0D4))),
+                                focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: const BorderSide(color: Color(0xFF1877F2))),
                                 contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
                               ),
-                              style: const TextStyle(color: Colors.white, fontSize: 13),
+                              style: const TextStyle(color: Color(0xFF050505), fontSize: 13, fontWeight: FontWeight.bold),
                               items: const [
                                 DropdownMenuItem(value: 'Erangel', child: Text('Erangel')),
                                 DropdownMenuItem(value: 'Miramar', child: Text('Miramar')),
@@ -1144,18 +1156,20 @@ class _GamerRoomsScreenState extends State<GamerRoomsScreen> {
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            const Text('SLOTS', style: TextStyle(color: GamerTheme.textMuted, fontSize: 11, fontWeight: FontWeight.bold)),
+                            const Text('SLOTS', style: TextStyle(color: Color(0xFF65676B), fontSize: 11, fontWeight: FontWeight.bold)),
                             const SizedBox(height: 6),
                             DropdownButtonFormField<int>(
                               value: maxSlots,
-                              dropdownColor: GamerTheme.cardElevated,
+                              dropdownColor: Colors.white,
                               decoration: InputDecoration(
                                 filled: true,
-                                fillColor: GamerTheme.bgDark,
-                                border: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: const BorderSide(color: GamerTheme.borderDark)),
+                                fillColor: const Color(0xFFF0F2F5),
+                                border: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: const BorderSide(color: Color(0xFFCED0D4))),
+                                enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: const BorderSide(color: Color(0xFFCED0D4))),
+                                focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: const BorderSide(color: Color(0xFF1877F2))),
                                 contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
                               ),
-                              style: const TextStyle(color: Colors.white, fontSize: 13),
+                              style: const TextStyle(color: Color(0xFF050505), fontSize: 13, fontWeight: FontWeight.bold),
                               items: const [
                                 DropdownMenuItem(value: 2, child: Text('2 (1v1)')),
                                 DropdownMenuItem(value: 4, child: Text('4 (2v2)')),
@@ -1183,18 +1197,20 @@ class _GamerRoomsScreenState extends State<GamerRoomsScreen> {
                   const SizedBox(height: 12),
 
                   // PRIZE Dropdown
-                  const Text('PRIZE POOL', style: TextStyle(color: GamerTheme.textMuted, fontSize: 11, fontWeight: FontWeight.bold)),
+                  const Text('PRIZE POOL', style: TextStyle(color: Color(0xFF65676B), fontSize: 11, fontWeight: FontWeight.bold)),
                   const SizedBox(height: 6),
                   DropdownButtonFormField<int>(
                     value: prizeCoins,
-                    dropdownColor: GamerTheme.cardElevated,
+                    dropdownColor: Colors.white,
                     decoration: InputDecoration(
                       filled: true,
-                      fillColor: GamerTheme.bgDark,
-                      border: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: const BorderSide(color: GamerTheme.borderDark)),
+                      fillColor: const Color(0xFFF0F2F5),
+                      border: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: const BorderSide(color: Color(0xFFCED0D4))),
+                      enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: const BorderSide(color: Color(0xFFCED0D4))),
+                      focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: const BorderSide(color: Color(0xFF1877F2))),
                       contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
                     ),
-                    style: const TextStyle(color: Colors.white, fontSize: 13),
+                    style: const TextStyle(color: Color(0xFF050505), fontSize: 13, fontWeight: FontWeight.bold),
                     items: const [
                       DropdownMenuItem(value: 100, child: Text('💰 100 Coins')),
                       DropdownMenuItem(value: 250, child: Text('💰 250 Coins')),
@@ -1225,7 +1241,7 @@ class _GamerRoomsScreenState extends State<GamerRoomsScreen> {
                               children: const [
                                 Text(
                                   'IN-GAME ROOM ID',
-                                  style: TextStyle(color: GamerTheme.textMuted, fontSize: 11, fontWeight: FontWeight.bold),
+                                  style: TextStyle(color: Color(0xFF65676B), fontSize: 11, fontWeight: FontWeight.bold),
                                 ),
                                 Text(
                                   ' *',
@@ -1236,18 +1252,22 @@ class _GamerRoomsScreenState extends State<GamerRoomsScreen> {
                             const SizedBox(height: 6),
                             TextField(
                               controller: roomIdController,
-                              style: const TextStyle(color: Colors.white, fontSize: 13),
+                              style: const TextStyle(color: Color(0xFF050505), fontSize: 13),
                               onChanged: (_) => setSheetState(() {}),
                               decoration: InputDecoration(
                                 filled: true,
-                                fillColor: GamerTheme.bgDark,
+                                fillColor: const Color(0xFFF0F2F5),
                                 hintText: 'e.g. 88453219',
-                                hintStyle: const TextStyle(color: GamerTheme.textMuted, fontSize: 12),
+                                hintStyle: const TextStyle(color: Color(0xFF8A8D91), fontSize: 12),
                                 errorText: isRoomIdEmpty ? 'Room ID is required' : null,
-                                border: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: const BorderSide(color: GamerTheme.borderDark)),
+                                border: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: const BorderSide(color: Color(0xFFCED0D4))),
                                 enabledBorder: OutlineInputBorder(
                                   borderRadius: BorderRadius.circular(10),
-                                  borderSide: BorderSide(color: isRoomIdEmpty ? Colors.redAccent.withOpacity(0.8) : GamerTheme.borderDark),
+                                  borderSide: BorderSide(color: isRoomIdEmpty ? Colors.redAccent.withOpacity(0.8) : const Color(0xFFCED0D4)),
+                                ),
+                                focusedBorder: OutlineInputBorder(
+                                  borderRadius: BorderRadius.circular(10),
+                                  borderSide: const BorderSide(color: Color(0xFF1877F2)),
                                 ),
                                 contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
                               ),
@@ -1266,7 +1286,7 @@ class _GamerRoomsScreenState extends State<GamerRoomsScreen> {
                               children: const [
                                 Text(
                                   'PASSWORD',
-                                  style: TextStyle(color: GamerTheme.textMuted, fontSize: 11, fontWeight: FontWeight.bold),
+                                  style: TextStyle(color: Color(0xFF65676B), fontSize: 11, fontWeight: FontWeight.bold),
                                 ),
                                 Text(
                                   ' *',
@@ -1277,18 +1297,22 @@ class _GamerRoomsScreenState extends State<GamerRoomsScreen> {
                             const SizedBox(height: 6),
                             TextField(
                               controller: passController,
-                              style: const TextStyle(color: Colors.white, fontSize: 13),
+                              style: const TextStyle(color: Color(0xFF050505), fontSize: 13),
                               onChanged: (_) => setSheetState(() {}),
                               decoration: InputDecoration(
                                 filled: true,
-                                fillColor: GamerTheme.bgDark,
+                                fillColor: const Color(0xFFF0F2F5),
                                 hintText: 'e.g. pubg123',
-                                hintStyle: const TextStyle(color: GamerTheme.textMuted, fontSize: 12),
+                                hintStyle: const TextStyle(color: Color(0xFF8A8D91), fontSize: 12),
                                 errorText: isPassEmpty ? 'Password is required' : null,
-                                border: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: const BorderSide(color: GamerTheme.borderDark)),
+                                border: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: const BorderSide(color: Color(0xFFCED0D4))),
                                 enabledBorder: OutlineInputBorder(
                                   borderRadius: BorderRadius.circular(10),
-                                  borderSide: BorderSide(color: isPassEmpty ? Colors.redAccent.withOpacity(0.8) : GamerTheme.borderDark),
+                                  borderSide: BorderSide(color: isPassEmpty ? Colors.redAccent.withOpacity(0.8) : const Color(0xFFCED0D4)),
+                                ),
+                                focusedBorder: OutlineInputBorder(
+                                  borderRadius: BorderRadius.circular(10),
+                                  borderSide: const BorderSide(color: Color(0xFF1877F2)),
                                 ),
                                 contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
                               ),
@@ -1306,8 +1330,10 @@ class _GamerRoomsScreenState extends State<GamerRoomsScreen> {
                     height: 46,
                     child: ElevatedButton(
                       style: ElevatedButton.styleFrom(
-                        backgroundColor: isPublishEnabled ? GamerTheme.accentOrange : Colors.grey.shade800,
-                        disabledBackgroundColor: Colors.grey.shade800,
+                        backgroundColor: isPublishEnabled ? const Color(0xFF1877F2) : const Color(0xFFE4E6EB),
+                        foregroundColor: Colors.white,
+                        disabledBackgroundColor: const Color(0xFFE4E6EB),
+                        elevation: 0,
                         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
                       ),
                       onPressed: isPublishEnabled
@@ -1387,7 +1413,7 @@ class _GamerRoomsScreenState extends State<GamerRoomsScreen> {
                                 ScaffoldMessenger.of(context).showSnackBar(
                                   const SnackBar(
                                     content: Text('🎉 Room published successfully!'),
-                                    backgroundColor: _neonGreen,
+                                    backgroundColor: _fbBlue,
                                   ),
                                 );
                               }
@@ -1453,38 +1479,36 @@ class _GamerRoomsScreenState extends State<GamerRoomsScreen> {
         : (hostDisplay.isNotEmpty ? hostDisplay[0].toUpperCase() : 'G');
 
     return Container(
-      margin: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+      margin: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
       padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
-        color: GamerTheme.cardDark,
-        borderRadius: BorderRadius.circular(16),
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(12),
         border: Border.all(
-          color: isJoined ? _neonGreen : GamerTheme.borderDark,
-          width: isJoined ? 2.0 : 1.0,
+          color: isJoined ? const Color(0xFF1877F2) : const Color(0xFFE4E6EB),
+          width: isJoined ? 1.5 : 1.0,
         ),
-        boxShadow: isJoined
-            ? [
-                BoxShadow(
-                  color: _neonGreen.withOpacity(0.3),
-                  blurRadius: 12,
-                  spreadRadius: 1,
-                ),
-              ]
-            : null,
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.04),
+            blurRadius: 4,
+            offset: const Offset(0, 1),
+          ),
+        ],
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // Top Row: Avatar 40 + Title + Game Badge
+          // Top Row: Avatar + Title + Game Badge
           Row(
             children: [
               CircleAvatar(
-                radius: 20, // 40px diameter
-                backgroundColor: (isHost || isJoined) ? _neonGreen : GamerTheme.accentOrange,
+                radius: 20,
+                backgroundColor: isJoined ? const Color(0xFF1877F2) : const Color(0xFFE4E6EB),
                 child: Text(
                   initial,
                   style: TextStyle(
-                    color: (isHost || isJoined) ? Colors.black : Colors.white,
+                    color: isJoined ? Colors.white : const Color(0xFF1C1E21),
                     fontWeight: FontWeight.bold,
                     fontSize: 16,
                   ),
@@ -1498,8 +1522,8 @@ class _GamerRoomsScreenState extends State<GamerRoomsScreen> {
                     Text(
                       room.title,
                       style: const TextStyle(
-                        color: GamerTheme.textWhite,
-                        fontSize: 14,
+                        color: Color(0xFF050505),
+                        fontSize: 14.5,
                         fontWeight: FontWeight.bold,
                       ),
                       maxLines: 2,
@@ -1509,7 +1533,7 @@ class _GamerRoomsScreenState extends State<GamerRoomsScreen> {
                     Text(
                       'Host: $hostDisplay • ${room.map}',
                       style: const TextStyle(
-                        color: GamerTheme.textGray,
+                        color: Color(0xFF65676B),
                         fontSize: 12,
                       ),
                       maxLines: 1,
@@ -1520,23 +1544,22 @@ class _GamerRoomsScreenState extends State<GamerRoomsScreen> {
               ),
               const SizedBox(width: 8),
               Container(
-                width: 85,
                 height: 28,
                 alignment: Alignment.center,
-                padding: const EdgeInsets.symmetric(horizontal: 4),
+                padding: const EdgeInsets.symmetric(horizontal: 8),
                 decoration: BoxDecoration(
-                  color: GamerTheme.surfaceDark,
-                  borderRadius: BorderRadius.circular(8),
+                  color: const Color(0xFFF0F2F5),
+                  borderRadius: BorderRadius.circular(6),
                   border: Border.all(
-                    color: isJoined ? _neonGreen.withOpacity(0.5) : GamerTheme.borderDark,
+                    color: isJoined ? const Color(0xFF1877F2).withOpacity(0.3) : const Color(0xFFE4E6EB),
                   ),
                 ),
                 child: Text(
                   room.game,
-                  style: TextStyle(
-                    color: isJoined ? _neonGreen : GamerTheme.textWhite,
+                  style: const TextStyle(
+                    color: Color(0xFF1877F2),
                     fontSize: 11,
-                    fontWeight: FontWeight.w600,
+                    fontWeight: FontWeight.bold,
                   ),
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
@@ -1547,13 +1570,13 @@ class _GamerRoomsScreenState extends State<GamerRoomsScreen> {
           ),
           const SizedBox(height: 12),
 
-          // Middle: Container bgDark 0.6 radius 12 padding 12 Row 3 cols
+          // Middle: Container with Prize, Entry Fee, Slots
           Container(
             decoration: BoxDecoration(
-              color: GamerTheme.bgDark.withOpacity(0.6),
-              borderRadius: BorderRadius.circular(12),
+              color: const Color(0xFFF0F2F5),
+              borderRadius: BorderRadius.circular(10),
             ),
-            padding: const EdgeInsets.all(12),
+            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 10),
             child: Row(
               children: [
                 // PRIZE POOL
@@ -1565,13 +1588,13 @@ class _GamerRoomsScreenState extends State<GamerRoomsScreen> {
                         mainAxisAlignment: MainAxisAlignment.center,
                         mainAxisSize: MainAxisSize.min,
                         children: [
-                          const Icon(Icons.monetization_on_rounded, size: 14, color: Colors.cyanAccent),
+                          const Icon(Icons.monetization_on_rounded, size: 14, color: Color(0xFF1877F2)),
                           const SizedBox(width: 3),
                           Flexible(
                             child: Text(
                               '${room.prize} Coins',
                               style: const TextStyle(
-                                color: Colors.cyanAccent,
+                                color: Color(0xFF1877F2),
                                 fontSize: 13,
                                 fontWeight: FontWeight.bold,
                               ),
@@ -1582,10 +1605,10 @@ class _GamerRoomsScreenState extends State<GamerRoomsScreen> {
                         ],
                       ),
                       const SizedBox(height: 1),
-                      Text(
+                      const Text(
                         '(From App)',
                         style: TextStyle(
-                          color: _neonGreen.withOpacity(0.9),
+                          color: Color(0xFF65676B),
                           fontSize: 9,
                           fontWeight: FontWeight.w600,
                         ),
@@ -1594,7 +1617,7 @@ class _GamerRoomsScreenState extends State<GamerRoomsScreen> {
                       const Text(
                         'PRIZE POOL',
                         style: TextStyle(
-                          color: GamerTheme.textMuted,
+                          color: Color(0xFF65676B),
                           fontSize: 10,
                           fontWeight: FontWeight.bold,
                         ),
@@ -1602,7 +1625,7 @@ class _GamerRoomsScreenState extends State<GamerRoomsScreen> {
                     ],
                   ),
                 ),
-                Container(height: 24, width: 1, color: GamerTheme.borderDark),
+                Container(height: 24, width: 1, color: const Color(0xFFCED0D4)),
 
                 // ENTRY FEE
                 Expanded(
@@ -1612,16 +1635,16 @@ class _GamerRoomsScreenState extends State<GamerRoomsScreen> {
                       Container(
                         padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
                         decoration: BoxDecoration(
-                          color: _neonGreen.withOpacity(0.15),
+                          color: const Color(0xFFE7F3FF),
                           borderRadius: BorderRadius.circular(6),
-                          border: Border.all(color: _neonGreen.withOpacity(0.5)),
+                          border: Border.all(color: const Color(0xFF1877F2).withOpacity(0.3)),
                         ),
                         child: const Text(
                           'FREE',
                           style: TextStyle(
-                            color: _neonGreen,
+                            color: Color(0xFF1877F2),
                             fontSize: 11.5,
-                            fontWeight: FontWeight.w900,
+                            fontWeight: FontWeight.bold,
                             letterSpacing: 0.5,
                           ),
                           maxLines: 1,
@@ -1632,7 +1655,7 @@ class _GamerRoomsScreenState extends State<GamerRoomsScreen> {
                       const Text(
                         'ENTRY FEE',
                         style: TextStyle(
-                          color: GamerTheme.textMuted,
+                          color: Color(0xFF65676B),
                           fontSize: 10,
                           fontWeight: FontWeight.bold,
                         ),
@@ -1640,7 +1663,7 @@ class _GamerRoomsScreenState extends State<GamerRoomsScreen> {
                     ],
                   ),
                 ),
-                Container(height: 24, width: 1, color: GamerTheme.borderDark),
+                Container(height: 24, width: 1, color: const Color(0xFFCED0D4)),
 
                 // SLOTS
                 Expanded(
@@ -1649,8 +1672,8 @@ class _GamerRoomsScreenState extends State<GamerRoomsScreen> {
                     children: [
                       Text(
                         '${room.joinedUsers.isNotEmpty ? room.joinedUsers.length : filled}/$total',
-                        style: TextStyle(
-                          color: GamerTheme.textWhite,
+                        style: const TextStyle(
+                          color: Color(0xFF050505),
                           fontSize: 13.5,
                           fontWeight: FontWeight.bold,
                         ),
@@ -1661,7 +1684,7 @@ class _GamerRoomsScreenState extends State<GamerRoomsScreen> {
                       const Text(
                         'SLOTS',
                         style: TextStyle(
-                          color: GamerTheme.textMuted,
+                          color: Color(0xFF65676B),
                           fontSize: 10,
                           fontWeight: FontWeight.bold,
                         ),
@@ -1680,14 +1703,8 @@ class _GamerRoomsScreenState extends State<GamerRoomsScreen> {
             child: LinearProgressIndicator(
               value: fillRatio,
               minHeight: 4,
-              backgroundColor: Colors.grey.withOpacity(0.25),
-              valueColor: AlwaysStoppedAnimation<Color>(
-                isHost
-                    ? GamerTheme.accentOrange
-                    : (isJoined
-                        ? _neonGreen
-                        : (fillRatio >= 0.7 ? const Color(0xFFFF3366) : const Color(0xFFFFD700))),
-              ),
+              backgroundColor: const Color(0xFFE4E6EB),
+              valueColor: const AlwaysStoppedAnimation<Color>(Color(0xFF1877F2)),
             ),
           ),
           const SizedBox(height: 12),
@@ -1700,12 +1717,12 @@ class _GamerRoomsScreenState extends State<GamerRoomsScreen> {
                 height: 8,
                 decoration: BoxDecoration(
                   color: room.isCompleted
-                      ? Colors.tealAccent
+                      ? const Color(0xFF1877F2)
                       : (room.isDisputed
-                          ? GamerTheme.redAccent
+                          ? const Color(0xFFFA383E)
                           : (room.isProofRejected
-                              ? GamerTheme.redAccent
-                              : (room.isRewardWaiting ? Colors.amberAccent : (room.isInProgress ? const Color(0xFFFF9900) : _neonGreen)))),
+                              ? const Color(0xFFFA383E)
+                              : (room.isRewardWaiting ? const Color(0xFFF7B125) : const Color(0xFF31A24C)))),
                   shape: BoxShape.circle,
                 ),
               ),
@@ -1722,15 +1739,15 @@ class _GamerRoomsScreenState extends State<GamerRoomsScreen> {
                                 : (room.isInProgress ? 'MATCH LIVE' : 'ACTIVE MATCH')))),
                 style: TextStyle(
                   color: room.isCompleted
-                      ? Colors.tealAccent
+                      ? const Color(0xFF1877F2)
                       : (room.isDisputed
-                          ? GamerTheme.redAccent
+                          ? const Color(0xFFFA383E)
                           : (room.isProofRejected
-                              ? GamerTheme.redAccent
+                              ? const Color(0xFFFA383E)
                               : (room.isRewardWaiting
-                                  ? Colors.amberAccent
-                                  : (room.isInProgress ? const Color(0xFFFF9900) : _neonGreen)))),
-                  fontSize: 12,
+                                  ? const Color(0xFFB45309)
+                                  : const Color(0xFF31A24C)))),
+                  fontSize: 11.5,
                   fontWeight: FontWeight.bold,
                 ),
               ),
@@ -1743,19 +1760,19 @@ class _GamerRoomsScreenState extends State<GamerRoomsScreen> {
                   child: Container(
                     padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
                     decoration: BoxDecoration(
-                      color: Colors.teal.withOpacity(0.18),
+                      color: const Color(0xFFE7F3FF),
                       borderRadius: BorderRadius.circular(8),
-                      border: Border.all(color: Colors.tealAccent.withOpacity(0.7), width: 1.2),
+                      border: Border.all(color: const Color(0xFF1877F2).withOpacity(0.4), width: 1),
                     ),
                     child: Row(
                       mainAxisSize: MainAxisSize.min,
                       children: [
-                        const Icon(Icons.check_circle_rounded, size: 13, color: Colors.tealAccent),
+                        const Icon(Icons.check_circle_rounded, size: 13, color: Color(0xFF1877F2)),
                         const SizedBox(width: 4),
                         Text(
                           _getCompletedDeleteRemainingText(room),
                           style: const TextStyle(
-                            color: Colors.tealAccent,
+                            color: Color(0xFF1877F2),
                             fontWeight: FontWeight.bold,
                             fontSize: 11,
                           ),
@@ -1771,19 +1788,19 @@ class _GamerRoomsScreenState extends State<GamerRoomsScreen> {
                   child: Container(
                     padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
                     decoration: BoxDecoration(
-                      color: GamerTheme.redAccent.withOpacity(0.18),
+                      color: const Color(0xFFFDE8E8),
                       borderRadius: BorderRadius.circular(8),
-                      border: Border.all(color: GamerTheme.redAccent.withOpacity(0.8), width: 1.2),
+                      border: Border.all(color: const Color(0xFFFA383E).withOpacity(0.6), width: 1),
                     ),
                     child: const Row(
                       mainAxisSize: MainAxisSize.min,
                       children: [
-                        Icon(Icons.warning_amber_rounded, size: 13, color: GamerTheme.redAccent),
+                        Icon(Icons.warning_amber_rounded, size: 13, color: Color(0xFFFA383E)),
                         SizedBox(width: 4),
                         Text(
                           'DISPUTED',
                           style: TextStyle(
-                            color: GamerTheme.redAccent,
+                            color: Color(0xFFFA383E),
                             fontWeight: FontWeight.bold,
                             fontSize: 11,
                           ),
@@ -1799,19 +1816,19 @@ class _GamerRoomsScreenState extends State<GamerRoomsScreen> {
                   child: Container(
                     padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
                     decoration: BoxDecoration(
-                      color: GamerTheme.redAccent.withOpacity(0.18),
+                      color: const Color(0xFFFDE8E8),
                       borderRadius: BorderRadius.circular(8),
-                      border: Border.all(color: GamerTheme.redAccent.withOpacity(0.8), width: 1.2),
+                      border: Border.all(color: const Color(0xFFFA383E).withOpacity(0.6), width: 1),
                     ),
                     child: const Row(
                       mainAxisSize: MainAxisSize.min,
                       children: [
-                        Icon(Icons.cancel_rounded, size: 13, color: GamerTheme.redAccent),
+                        Icon(Icons.cancel_rounded, size: 13, color: Color(0xFFFA383E)),
                         SizedBox(width: 4),
                         Text(
                           'PROOF REJECTED',
                           style: TextStyle(
-                            color: GamerTheme.redAccent,
+                            color: Color(0xFFFA383E),
                             fontWeight: FontWeight.bold,
                             fontSize: 11,
                           ),
@@ -1827,19 +1844,19 @@ class _GamerRoomsScreenState extends State<GamerRoomsScreen> {
                   child: Container(
                     padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
                     decoration: BoxDecoration(
-                      color: Colors.amber.withOpacity(0.18),
+                      color: const Color(0xFFFEF3D6),
                       borderRadius: BorderRadius.circular(8),
-                      border: Border.all(color: Colors.amberAccent.withOpacity(0.8), width: 1.2),
+                      border: Border.all(color: const Color(0xFFF7B125).withOpacity(0.6), width: 1),
                     ),
                     child: const Row(
                       mainAxisSize: MainAxisSize.min,
                       children: [
-                        Icon(Icons.hourglass_top_rounded, size: 13, color: Colors.amberAccent),
+                        Icon(Icons.hourglass_top_rounded, size: 13, color: Color(0xFFB45309)),
                         SizedBox(width: 4),
                         Text(
                           'REWARD WAITING',
                           style: TextStyle(
-                            color: Colors.amberAccent,
+                            color: Color(0xFFB45309),
                             fontWeight: FontWeight.bold,
                             fontSize: 11,
                           ),
@@ -1851,8 +1868,8 @@ class _GamerRoomsScreenState extends State<GamerRoomsScreen> {
               else if (room.isFull && !isJoined && !isHost)
                 ElevatedButton(
                   style: ElevatedButton.styleFrom(
-                    backgroundColor: GamerTheme.cardElevated,
-                    foregroundColor: GamerTheme.textMuted,
+                    backgroundColor: const Color(0xFFE4E6EB),
+                    foregroundColor: const Color(0xFF8D949E),
                     padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
                     shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
                     elevation: 0,
@@ -1863,8 +1880,8 @@ class _GamerRoomsScreenState extends State<GamerRoomsScreen> {
               else if (isHost)
                 OutlinedButton(
                   style: OutlinedButton.styleFrom(
-                    foregroundColor: GamerTheme.accentOrange,
-                    side: const BorderSide(color: GamerTheme.accentOrange, width: 1.2),
+                    foregroundColor: const Color(0xFF1877F2),
+                    side: const BorderSide(color: Color(0xFF1877F2), width: 1.2),
                     padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
                     shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
                   ),
@@ -1874,8 +1891,8 @@ class _GamerRoomsScreenState extends State<GamerRoomsScreen> {
               else if (isJoined)
                 ElevatedButton(
                   style: ElevatedButton.styleFrom(
-                    backgroundColor: _neonGreen,
-                    foregroundColor: Colors.black,
+                    backgroundColor: const Color(0xFFE7F3FF),
+                    foregroundColor: const Color(0xFF1877F2),
                     padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
                     shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
                     elevation: 0,
@@ -1886,7 +1903,7 @@ class _GamerRoomsScreenState extends State<GamerRoomsScreen> {
               else
                 ElevatedButton(
                   style: ElevatedButton.styleFrom(
-                    backgroundColor: GamerTheme.accentBlue,
+                    backgroundColor: const Color(0xFF1877F2),
                     foregroundColor: Colors.white,
                     padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
                     shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
@@ -1905,17 +1922,17 @@ class _GamerRoomsScreenState extends State<GamerRoomsScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: GamerTheme.bgDark,
+      backgroundColor: const Color(0xFFF0F2F5),
       body: SafeArea(
         child: Column(
           children: [
-            // Top Bar: G-Coins + STORE + EARN COINS (height 36)
+            // Top Bar: G-Coins + STORE + EARN COINS (height 52)
             Container(
               height: 52,
               padding: const EdgeInsets.symmetric(horizontal: 14),
               decoration: const BoxDecoration(
-                color: GamerTheme.cardDark,
-                border: Border(bottom: BorderSide(color: GamerTheme.borderDark)),
+                color: Colors.white,
+                border: Border(bottom: BorderSide(color: Color(0xFFE4E6EB), width: 1)),
               ),
               child: Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
@@ -1941,9 +1958,9 @@ class _GamerRoomsScreenState extends State<GamerRoomsScreen> {
                           height: 36,
                           padding: const EdgeInsets.symmetric(horizontal: 10),
                           decoration: BoxDecoration(
-                            color: GamerTheme.bgDark,
+                            color: const Color(0xFFF0F2F5),
                             borderRadius: BorderRadius.circular(8),
-                            border: Border.all(color: GamerTheme.borderDark),
+                            border: Border.all(color: const Color(0xFFE4E6EB)),
                           ),
                           child: Row(
                             mainAxisSize: MainAxisSize.min,
@@ -1952,8 +1969,8 @@ class _GamerRoomsScreenState extends State<GamerRoomsScreen> {
                               const SizedBox(width: 6),
                               Text(
                                 '${NumberFormat("#,###").format(coins)} G-Coins',
-                                style: TextStyle(
-                                  color: GamerTheme.textWhite,
+                                style: const TextStyle(
+                                  color: Color(0xFF050505),
                                   fontWeight: FontWeight.bold,
                                   fontSize: 12.5,
                                 ),
@@ -1964,82 +1981,81 @@ class _GamerRoomsScreenState extends State<GamerRoomsScreen> {
                       );
                     },
                   ),
-                  // Action buttons: STORE outline + EARN COINS (Rewarded Ad)
-                      Row(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          InkWell(
-                            onTap: () {
-                              Navigator.push(context, MaterialPageRoute(builder: (_) => const CoinStoreScreen()));
-                            },
+                  // Action buttons: STORE + EARN COINS
+                  Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      InkWell(
+                        onTap: () {
+                          Navigator.push(context, MaterialPageRoute(builder: (_) => const CoinStoreScreen()));
+                        },
+                        borderRadius: BorderRadius.circular(8),
+                        child: Container(
+                          height: 36,
+                          padding: const EdgeInsets.symmetric(horizontal: 10),
+                          alignment: Alignment.center,
+                          decoration: BoxDecoration(
+                            color: const Color(0xFFE4E6EB),
                             borderRadius: BorderRadius.circular(8),
-                            child: Container(
-                              height: 36,
-                              padding: const EdgeInsets.symmetric(horizontal: 10),
-                              alignment: Alignment.center,
-                              decoration: BoxDecoration(
-                                color: Colors.transparent,
-                                borderRadius: BorderRadius.circular(8),
-                                border: Border.all(color: GamerTheme.accentOrange, width: 1.2),
-                              ),
-                              child: const Row(
-                                mainAxisSize: MainAxisSize.min,
-                                children: [
-                                  Icon(Icons.storefront_rounded, color: GamerTheme.accentOrange, size: 14),
-                                  SizedBox(width: 4),
-                                  Text(
-                                    'STORE',
-                                    style: TextStyle(
-                                      color: GamerTheme.accentOrange,
-                                      fontWeight: FontWeight.bold,
-                                      fontSize: 11.5,
-                                    ),
-                                  ),
-                                ],
-                              ),
-                            ),
                           ),
-                          const SizedBox(width: 8),
-                          InkWell(
-                            onTap: _watchRewardedAdForCoins,
+                          child: const Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Icon(Icons.storefront_rounded, color: Color(0xFF050505), size: 14),
+                              SizedBox(width: 4),
+                              Text(
+                                'STORE',
+                                style: TextStyle(
+                                  color: Color(0xFF050505),
+                                  fontWeight: FontWeight.bold,
+                                  fontSize: 11.5,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                      InkWell(
+                        onTap: _watchRewardedAdForCoins,
+                        borderRadius: BorderRadius.circular(8),
+                        child: Container(
+                          height: 36,
+                          padding: const EdgeInsets.symmetric(horizontal: 10),
+                          alignment: Alignment.center,
+                          decoration: BoxDecoration(
+                            color: const Color(0xFF1877F2),
                             borderRadius: BorderRadius.circular(8),
-                            child: Container(
-                              height: 36,
-                              padding: const EdgeInsets.symmetric(horizontal: 10),
-                              alignment: Alignment.center,
-                              decoration: BoxDecoration(
-                                color: GamerTheme.accentOrange,
-                                borderRadius: BorderRadius.circular(8),
-                              ),
-                              child: const Row(
-                                mainAxisSize: MainAxisSize.min,
-                                children: [
-                                  Icon(Icons.play_circle_fill_rounded, color: Colors.white, size: 14),
-                                  SizedBox(width: 4),
-                                  Text(
-                                    'EARN COINS',
-                                    style: TextStyle(
-                                      color: Colors.white,
-                                      fontWeight: FontWeight.bold,
-                                      fontSize: 11.5,
-                                    ),
-                                  ),
-                                ],
-                              ),
-                            ),
                           ),
-                        ],
+                          child: const Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Icon(Icons.play_circle_fill_rounded, color: Colors.white, size: 14),
+                              SizedBox(width: 4),
+                              Text(
+                                'EARN COINS',
+                                style: TextStyle(
+                                  color: Colors.white,
+                                  fontWeight: FontWeight.bold,
+                                  fontSize: 11.5,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
                       ),
                     ],
                   ),
+                ],
               ),
+            ),
 
             // Filter chips: All Games, BGMI, Free Fire, PUBG Mobile
             Container(
-              color: GamerTheme.bgDark,
+              color: Colors.white,
               padding: const EdgeInsets.symmetric(vertical: 8),
               child: SizedBox(
-                height: 36,
+                height: 34,
                 child: ListView.separated(
                   scrollDirection: Axis.horizontal,
                   padding: const EdgeInsets.symmetric(horizontal: 12),
@@ -2055,22 +2071,22 @@ class _GamerRoomsScreenState extends State<GamerRoomsScreen> {
                         });
                       },
                       child: Container(
-                        height: 36,
+                        height: 34,
                         padding: const EdgeInsets.symmetric(horizontal: 14),
                         alignment: Alignment.center,
                         decoration: BoxDecoration(
-                          color: isSelected ? GamerTheme.accentOrange : GamerTheme.cardDark,
-                          borderRadius: BorderRadius.circular(18),
+                          color: isSelected ? const Color(0xFF1877F2) : const Color(0xFFE4E6EB),
+                          borderRadius: BorderRadius.circular(17),
                           border: Border.all(
-                            color: isSelected ? GamerTheme.accentOrange : GamerTheme.borderDark,
+                            color: isSelected ? const Color(0xFF1877F2) : const Color(0xFFCED0D4),
                           ),
                         ),
                         child: Text(
                           name,
                           style: TextStyle(
-                            color: isSelected ? Colors.white : GamerTheme.textGray,
-                            fontSize: 13,
-                            fontWeight: isSelected ? FontWeight.bold : FontWeight.w500,
+                            color: isSelected ? Colors.white : const Color(0xFF050505),
+                            fontSize: 12.5,
+                            fontWeight: isSelected ? FontWeight.bold : FontWeight.w600,
                           ),
                         ),
                       ),
@@ -2079,6 +2095,7 @@ class _GamerRoomsScreenState extends State<GamerRoomsScreen> {
                 ),
               ),
             ),
+            const Divider(color: Color(0xFFE4E6EB), height: 1),
 
             // Main Room List
             Expanded(
@@ -2086,7 +2103,7 @@ class _GamerRoomsScreenState extends State<GamerRoomsScreen> {
                 stream: _getRoomsStream(),
                 builder: (context, snapshot) {
                   if (snapshot.connectionState == ConnectionState.waiting && !snapshot.hasData) {
-                    return const Center(child: CircularProgressIndicator(color: GamerTheme.accentOrange));
+                    return const Center(child: CircularProgressIndicator(color: Color(0xFF1877F2)));
                   }
 
                   final allRooms = snapshot.data ?? [];
@@ -2109,22 +2126,31 @@ class _GamerRoomsScreenState extends State<GamerRoomsScreen> {
                       child: Column(
                         mainAxisAlignment: MainAxisAlignment.center,
                         children: [
-                          Icon(Icons.sports_esports_rounded, size: 52, color: GamerTheme.textMuted.withOpacity(0.5)),
-                          const SizedBox(height: 12),
+                          Container(
+                            padding: const EdgeInsets.all(18),
+                            decoration: BoxDecoration(
+                              color: const Color(0xFFE4E6EB),
+                              shape: BoxShape.circle,
+                              border: Border.all(color: const Color(0xFFCED0D4)),
+                            ),
+                            child: const Icon(Icons.sports_esports_rounded, size: 44, color: Color(0xFF65676B)),
+                          ),
+                          const SizedBox(height: 14),
                           const Text(
                             'No rooms found',
-                            style: TextStyle(color: GamerTheme.textMuted, fontSize: 14, fontWeight: FontWeight.bold),
+                            style: TextStyle(color: Color(0xFF050505), fontSize: 16, fontWeight: FontWeight.bold),
                           ),
                           const SizedBox(height: 14),
                           ElevatedButton.icon(
                             style: ElevatedButton.styleFrom(
-                              backgroundColor: GamerTheme.accentOrange,
+                              backgroundColor: const Color(0xFF1877F2),
                               foregroundColor: Colors.white,
-                              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
                               shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                              elevation: 0,
                             ),
                             icon: const Icon(Icons.add_rounded, size: 16),
-                            label: const Text('Host First Room', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12)),
+                            label: const Text('Host First Room', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
                             onPressed: _showCreateRoomDialog,
                           ),
                         ],
@@ -2136,11 +2162,11 @@ class _GamerRoomsScreenState extends State<GamerRoomsScreen> {
                     onRefresh: () async {
                       setState(() {});
                     },
-                    color: GamerTheme.accentOrange,
-                    backgroundColor: GamerTheme.cardDark,
+                    color: const Color(0xFF1877F2),
+                    backgroundColor: Colors.white,
                     child: ListView.builder(
                       // Padding bottom 120 avoids FAB and bottom nav overlap
-                      padding: const EdgeInsets.only(bottom: 120, top: 4),
+                      padding: const EdgeInsets.only(bottom: 120, top: 8),
                       itemCount: filtered.length,
                       itemBuilder: (context, index) => _buildRoomCard(filtered[index]),
                     ),
@@ -2155,9 +2181,9 @@ class _GamerRoomsScreenState extends State<GamerRoomsScreen> {
       floatingActionButton: Padding(
         padding: const EdgeInsets.only(bottom: 20),
         child: FloatingActionButton.extended(
-          backgroundColor: GamerTheme.accentOrange,
+          backgroundColor: const Color(0xFF1877F2),
           foregroundColor: Colors.white,
-          elevation: 4,
+          elevation: 2,
           icon: const Icon(Icons.add_moderator_rounded, size: 20),
           label: const Text(
             'HOST ROOM',
@@ -2204,7 +2230,7 @@ class _InRoomBottomSheetContentState extends State<_InRoomBottomSheetContent> {
   bool _isUploadingProof = false;
   DateTime? _lastSendTime;
 
-  static const Color _neonGreen = Color(0xFF00FF88);
+  static const Color _fbBlue = Color(0xFF1877F2);
 
   bool get isHost => widget.room.hostId == widget.currentUserId;
   bool get isJoined => widget.room.joinedUserIds.contains(widget.currentUserId);
@@ -2301,9 +2327,9 @@ class _InRoomBottomSheetContentState extends State<_InRoomBottomSheetContent> {
             child: Container(
               padding: const EdgeInsets.all(20),
               decoration: const BoxDecoration(
-                color: GamerTheme.surfaceDark,
+                color: Colors.white,
                 borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
-                border: Border(top: BorderSide(color: GamerTheme.redAccent, width: 1.5)),
+                border: Border(top: BorderSide(color: Color(0xFFCED0D4), width: 1.5)),
               ),
               child: SingleChildScrollView(
                 child: Column(
@@ -2315,10 +2341,10 @@ class _InRoomBottomSheetContentState extends State<_InRoomBottomSheetContent> {
                         Container(
                           padding: const EdgeInsets.all(8),
                           decoration: BoxDecoration(
-                            color: GamerTheme.redAccent.withOpacity(0.2),
+                            color: const Color(0xFFFFEBEE),
                             borderRadius: BorderRadius.circular(8),
                           ),
-                          child: const Icon(Icons.warning_amber_rounded, color: GamerTheme.redAccent, size: 22),
+                          child: const Icon(Icons.warning_amber_rounded, color: Color(0xFFDC2626), size: 22),
                         ),
                         const SizedBox(width: 12),
                         const Expanded(
@@ -2327,18 +2353,18 @@ class _InRoomBottomSheetContentState extends State<_InRoomBottomSheetContent> {
                             children: [
                               Text(
                                 'Raise Dispute with Proof',
-                                style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 16),
+                                style: TextStyle(color: Color(0xFF050505), fontWeight: FontWeight.bold, fontSize: 16),
                               ),
                               SizedBox(height: 2),
                               Text(
                                 'Submit screenshot proof to Admin review',
-                                style: TextStyle(color: Colors.white70, fontSize: 11),
+                                style: TextStyle(color: Color(0xFF65676B), fontSize: 11),
                               ),
                             ],
                           ),
                         ),
                         IconButton(
-                          icon: const Icon(Icons.close, color: Colors.white54),
+                          icon: const Icon(Icons.close, color: Color(0xFF65676B)),
                           onPressed: isSubmitting ? null : () => Navigator.pop(sheetCtx),
                         ),
                       ],
@@ -2346,7 +2372,7 @@ class _InRoomBottomSheetContentState extends State<_InRoomBottomSheetContent> {
                     const SizedBox(height: 16),
                     const Text(
                       'Dispute Screenshot (Required):',
-                      style: TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.bold),
+                      style: TextStyle(color: Color(0xFF050505), fontSize: 12, fontWeight: FontWeight.bold),
                     ),
                     const SizedBox(height: 8),
                     if (disputeImage == null)
@@ -2371,23 +2397,23 @@ class _InRoomBottomSheetContentState extends State<_InRoomBottomSheetContent> {
                           width: double.infinity,
                           height: 110,
                           decoration: BoxDecoration(
-                            color: GamerTheme.cardDark,
+                            color: const Color(0xFFF0F2F5),
                             borderRadius: BorderRadius.circular(10),
-                            border: Border.all(color: GamerTheme.redAccent.withOpacity(0.6)),
+                            border: Border.all(color: const Color(0xFFCED0D4)),
                           ),
                           child: const Column(
                             mainAxisAlignment: MainAxisAlignment.center,
                             children: [
-                              Icon(Icons.add_photo_alternate_rounded, color: GamerTheme.redAccent, size: 32),
+                              Icon(Icons.add_photo_alternate_rounded, color: Color(0xFF1877F2), size: 32),
                               SizedBox(height: 6),
                               Text(
                                 '📷 Upload Your Result / Defeat Screenshot',
-                                style: TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.bold),
+                                style: TextStyle(color: Color(0xFF050505), fontSize: 12, fontWeight: FontWeight.bold),
                               ),
                               SizedBox(height: 2),
                               Text(
                                 'Select image showing match end or scoreboard',
-                                style: TextStyle(color: Colors.white54, fontSize: 10),
+                                style: TextStyle(color: Color(0xFF65676B), fontSize: 10),
                               ),
                             ],
                           ),
@@ -2435,7 +2461,7 @@ class _InRoomBottomSheetContentState extends State<_InRoomBottomSheetContent> {
                               ),
                               child: const Row(
                                 children: [
-                                  Icon(Icons.check_circle, color: GamerTheme.redAccent, size: 12),
+                                  Icon(Icons.check_circle, color: Color(0xFF1877F2), size: 12),
                                   SizedBox(width: 4),
                                   Text('Dispute Proof Selected', style: TextStyle(color: Colors.white, fontSize: 10)),
                                 ],
@@ -2447,26 +2473,26 @@ class _InRoomBottomSheetContentState extends State<_InRoomBottomSheetContent> {
                     const SizedBox(height: 14),
                     const Text(
                       'Reason for Dispute (Optional):',
-                      style: TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.bold),
+                      style: TextStyle(color: Color(0xFF050505), fontSize: 12, fontWeight: FontWeight.bold),
                     ),
                     const SizedBox(height: 6),
                     TextField(
                       controller: reasonController,
                       enabled: !isSubmitting,
-                      style: const TextStyle(color: Colors.white, fontSize: 13),
+                      style: const TextStyle(color: Color(0xFF050505), fontSize: 13),
                       decoration: InputDecoration(
                         hintText: 'e.g. Winner screenshot is fake / from different match',
-                        hintStyle: const TextStyle(color: Colors.white38, fontSize: 12),
+                        hintStyle: const TextStyle(color: Color(0xFF8A8D91), fontSize: 12),
                         filled: true,
-                        fillColor: GamerTheme.cardDark,
+                        fillColor: const Color(0xFFF0F2F5),
                         contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
                         border: OutlineInputBorder(
                           borderRadius: BorderRadius.circular(8),
-                          borderSide: BorderSide(color: GamerTheme.borderDark),
+                          borderSide: const BorderSide(color: Color(0xFFCED0D4)),
                         ),
                         focusedBorder: OutlineInputBorder(
                           borderRadius: BorderRadius.circular(8),
-                          borderSide: const BorderSide(color: GamerTheme.redAccent),
+                          borderSide: const BorderSide(color: Color(0xFF1877F2)),
                         ),
                       ),
                     ),
@@ -2475,7 +2501,7 @@ class _InRoomBottomSheetContentState extends State<_InRoomBottomSheetContent> {
                       width: double.infinity,
                       child: ElevatedButton(
                         style: ElevatedButton.styleFrom(
-                          backgroundColor: GamerTheme.redAccent,
+                          backgroundColor: const Color(0xFFDC2626),
                           foregroundColor: Colors.white,
                           padding: const EdgeInsets.symmetric(vertical: 14),
                           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
@@ -2675,7 +2701,7 @@ class _InRoomBottomSheetContentState extends State<_InRoomBottomSheetContent> {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
             content: Text('🗑️ Dispute proof removed.'),
-            backgroundColor: GamerTheme.cardElevated,
+            backgroundColor: const Color(0xFF050505),
             behavior: SnackBarBehavior.floating,
           ),
         );
@@ -2739,7 +2765,7 @@ class _InRoomBottomSheetContentState extends State<_InRoomBottomSheetContent> {
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
         content: Text('$label copied to clipboard!'),
-        backgroundColor: _neonGreen,
+        backgroundColor: _fbBlue,
         behavior: SnackBarBehavior.floating,
         duration: const Duration(seconds: 2),
       ),
@@ -2955,7 +2981,7 @@ class _InRoomBottomSheetContentState extends State<_InRoomBottomSheetContent> {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
             content: Text('🗑️ Proof removed. You can upload a new screenshot now.'),
-            backgroundColor: GamerTheme.cardElevated,
+            backgroundColor: const Color(0xFF050505),
             behavior: SnackBarBehavior.floating,
           ),
         );
@@ -3099,7 +3125,7 @@ class _InRoomBottomSheetContentState extends State<_InRoomBottomSheetContent> {
                   ? '✅ Win Proof Verified! Awaiting reward.'
                   : valRes.message,
             ),
-            backgroundColor: valRes.isVerified ? _neonGreen : GamerTheme.redAccent,
+            backgroundColor: valRes.isVerified ? _fbBlue : GamerTheme.redAccent,
             behavior: SnackBarBehavior.floating,
           ),
         );
@@ -3223,7 +3249,7 @@ class _InRoomBottomSheetContentState extends State<_InRoomBottomSheetContent> {
                     ? '✅ Verified - Name Matched (Score 4/4)! Awaiting host approval.'
                     : valRes.message,
               ),
-              backgroundColor: valRes.isVerified ? _neonGreen : GamerTheme.redAccent,
+              backgroundColor: valRes.isVerified ? _fbBlue : GamerTheme.redAccent,
               behavior: SnackBarBehavior.floating,
               duration: const Duration(seconds: 4),
             ),
@@ -3301,7 +3327,7 @@ class _InRoomBottomSheetContentState extends State<_InRoomBottomSheetContent> {
                 fit: BoxFit.contain,
                 loadingBuilder: (ctx, child, progress) {
                   if (progress == null) return child;
-                  return const Center(child: CircularProgressIndicator(color: _neonGreen));
+                  return const Center(child: CircularProgressIndicator(color: _fbBlue));
                 },
                 errorBuilder: (_, __, ___) => const Center(
                   child: Text('Failed to load image', style: TextStyle(color: Colors.white)),
@@ -3352,7 +3378,7 @@ class _InRoomBottomSheetContentState extends State<_InRoomBottomSheetContent> {
           ScaffoldMessenger.of(context).showSnackBar(
             const SnackBar(
               content: Text('Reward already sent!'),
-              backgroundColor: GamerTheme.accentOrange,
+              backgroundColor: Color(0xFF1877F2),
               behavior: SnackBarBehavior.floating,
             ),
           );
@@ -3364,22 +3390,22 @@ class _InRoomBottomSheetContentState extends State<_InRoomBottomSheetContent> {
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
-        backgroundColor: GamerTheme.cardDark,
+        backgroundColor: Colors.white,
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-        title: const Text('Approve Reward', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+        title: const Text('Approve Reward', style: TextStyle(color: Color(0xFF050505), fontWeight: FontWeight.bold)),
         content: Text(
           'Send ${room.prize} Coins to $winnerName directly from the Application and mark match completed?',
-          style: const TextStyle(color: GamerTheme.textGray),
+          style: const TextStyle(color: Color(0xFF65676B)),
         ),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(ctx, false),
-            child: const Text('Cancel', style: TextStyle(color: GamerTheme.textMuted)),
+            child: const Text('Cancel', style: TextStyle(color: Color(0xFF65676B))),
           ),
           ElevatedButton(
             style: ElevatedButton.styleFrom(
-              backgroundColor: _neonGreen,
-              foregroundColor: Colors.black,
+              backgroundColor: const Color(0xFF1877F2),
+              foregroundColor: Colors.white,
               shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
             ),
             onPressed: () => Navigator.pop(ctx, true),
@@ -3403,7 +3429,7 @@ class _InRoomBottomSheetContentState extends State<_InRoomBottomSheetContent> {
           ScaffoldMessenger.of(context).showSnackBar(
             const SnackBar(
               content: Text('Reward already sent!'),
-              backgroundColor: GamerTheme.accentOrange,
+              backgroundColor: Color(0xFF1877F2),
               behavior: SnackBarBehavior.floating,
             ),
           );
@@ -3568,7 +3594,7 @@ class _InRoomBottomSheetContentState extends State<_InRoomBottomSheetContent> {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text('✓ $prize Coins sent to $winnerName from Application!'),
-            backgroundColor: _neonGreen,
+            backgroundColor: _fbBlue,
             behavior: SnackBarBehavior.floating,
             duration: const Duration(seconds: 4),
           ),
@@ -3686,7 +3712,7 @@ class _InRoomBottomSheetContentState extends State<_InRoomBottomSheetContent> {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
             content: Text('🔥 Match started successfully! All players have been notified.'),
-            backgroundColor: _neonGreen,
+            backgroundColor: _fbBlue,
             behavior: SnackBarBehavior.floating,
             duration: Duration(seconds: 3),
           ),
@@ -3716,30 +3742,31 @@ class _InRoomBottomSheetContentState extends State<_InRoomBottomSheetContent> {
     showDialog(
       context: context,
       builder: (dCtx) => AlertDialog(
-        backgroundColor: GamerTheme.cardDark,
-        title: Text('${room.game} Match Details', style: const TextStyle(color: Colors.white)),
+        backgroundColor: Colors.white,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        title: Text('${room.game} Match Details', style: const TextStyle(color: Color(0xFF050505), fontWeight: FontWeight.bold)),
         content: Column(
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text('Title: ${room.title}', style: const TextStyle(color: Colors.white)),
+            Text('Title: ${room.title}', style: const TextStyle(color: Color(0xFF050505), fontWeight: FontWeight.w600)),
             const SizedBox(height: 4),
-            Text('Map: ${room.map}', style: const TextStyle(color: GamerTheme.textGray)),
+            Text('Map: ${room.map}', style: const TextStyle(color: Color(0xFF65676B))),
             const SizedBox(height: 4),
-            Text('Prize: ${room.prize} G-Coins', style: const TextStyle(color: Colors.cyanAccent)),
+            Text('Prize: ${room.prize} G-Coins', style: const TextStyle(color: Color(0xFF1877F2), fontWeight: FontWeight.bold)),
             const SizedBox(height: 4),
-            Text('Entry Fee: ${room.entryFee}', style: const TextStyle(color: _neonGreen)),
+            Text('Entry Fee: ${room.entryFee}', style: const TextStyle(color: Color(0xFF050505))),
             const SizedBox(height: 8),
             const Text(
               'Rules: Fair play only. Screenshot win screen and upload in chat to claim reward.',
-              style: TextStyle(color: GamerTheme.textMuted, fontSize: 11),
+              style: TextStyle(color: Color(0xFF65676B), fontSize: 11),
             ),
           ],
         ),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(dCtx),
-            child: const Text('Got it', style: TextStyle(color: _neonGreen)),
+            child: const Text('Got it', style: TextStyle(color: Color(0xFF1877F2), fontWeight: FontWeight.bold)),
           ),
         ],
       ),
@@ -3798,7 +3825,7 @@ class _InRoomBottomSheetContentState extends State<_InRoomBottomSheetContent> {
               height: 4,
               margin: const EdgeInsets.only(top: 12, bottom: 8),
               decoration: BoxDecoration(
-                color: GamerTheme.borderDark,
+                color: const Color(0xFFCED0D4),
                 borderRadius: BorderRadius.circular(2),
               ),
             ),
@@ -3815,7 +3842,7 @@ class _InRoomBottomSheetContentState extends State<_InRoomBottomSheetContent> {
                         Text(
                           room.title,
                           style: const TextStyle(
-                            color: Colors.white,
+                            color: Color(0xFF050505),
                             fontWeight: FontWeight.bold,
                             fontSize: 16,
                           ),
@@ -3825,7 +3852,7 @@ class _InRoomBottomSheetContentState extends State<_InRoomBottomSheetContent> {
                         const SizedBox(height: 2),
                         Text(
                           'Host: $sheetHostDisplay • ${room.map}',
-                          style: const TextStyle(color: GamerTheme.textGray, fontSize: 12),
+                          style: const TextStyle(color: Color(0xFF65676B), fontSize: 12),
                         ),
                       ],
                     ),
@@ -3834,29 +3861,29 @@ class _InRoomBottomSheetContentState extends State<_InRoomBottomSheetContent> {
                     padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                     decoration: BoxDecoration(
                       color: isCompleted
-                          ? Colors.teal.withOpacity(0.2)
+                          ? Colors.teal.withOpacity(0.12)
                           : (room.isDisputed
-                              ? GamerTheme.redAccent.withOpacity(0.2)
+                              ? Colors.red.withOpacity(0.12)
                               : (room.isProofRejected
-                                  ? GamerTheme.redAccent.withOpacity(0.2)
+                                  ? Colors.red.withOpacity(0.12)
                                   : (room.isRewardWaiting
-                                      ? Colors.amber.withOpacity(0.2)
+                                      ? Colors.amber.withOpacity(0.15)
                                       : (isMatchStarted
-                                          ? _neonGreen.withOpacity(0.2)
+                                          ? const Color(0xFFE7F3FF)
                                           : (isHost
-                                              ? GamerTheme.accentOrange
-                                              : (isJoined ? _neonGreen : GamerTheme.cardElevated)))))),
+                                              ? const Color(0xFFE7F3FF)
+                                              : (isJoined ? const Color(0xFFE7F3FF) : const Color(0xFFF0F2F5))))))),
                       borderRadius: BorderRadius.circular(6),
                       border: isCompleted
-                          ? Border.all(color: Colors.tealAccent.withOpacity(0.6))
+                          ? Border.all(color: Colors.teal.withOpacity(0.5))
                           : (room.isDisputed
-                              ? Border.all(color: GamerTheme.redAccent.withOpacity(0.8), width: 1.2)
+                              ? Border.all(color: Colors.red.withOpacity(0.6), width: 1.2)
                               : (room.isProofRejected
-                                  ? Border.all(color: GamerTheme.redAccent.withOpacity(0.8), width: 1.2)
+                                  ? Border.all(color: Colors.red.withOpacity(0.6), width: 1.2)
                                   : (room.isRewardWaiting
-                                      ? Border.all(color: Colors.amberAccent.withOpacity(0.8))
+                                      ? Border.all(color: Colors.amber.shade700)
                                       : (isMatchStarted
-                                          ? Border.all(color: _neonGreen.withOpacity(0.6))
+                                          ? Border.all(color: const Color(0xFF1877F2))
                                           : null)))),
                     ),
                     child: Text(
@@ -3873,16 +3900,16 @@ class _InRoomBottomSheetContentState extends State<_InRoomBottomSheetContent> {
                                           : (isHost ? 'HOSTING' : (isJoined ? 'JOINED' : (room.isFull ? 'FULL' : 'OPEN'))))))),
                       style: TextStyle(
                         color: isCompleted
-                            ? Colors.tealAccent
+                            ? Colors.teal
                             : (room.isDisputed
-                                ? GamerTheme.redAccent
+                                ? Colors.red
                                 : (room.isProofRejected
-                                    ? GamerTheme.redAccent
+                                    ? Colors.red
                                     : (room.isRewardWaiting
-                                        ? Colors.amberAccent
+                                        ? Colors.amber.shade900
                                         : (isMatchStarted
-                                            ? _neonGreen
-                                            : (isJoined && !isHost ? Colors.black : Colors.white))))),
+                                            ? const Color(0xFF1877F2)
+                                            : (isJoined && !isHost ? const Color(0xFF1877F2) : const Color(0xFF050505)))))),
                         fontSize: 10,
                         fontWeight: FontWeight.bold,
                       ),
@@ -3890,13 +3917,13 @@ class _InRoomBottomSheetContentState extends State<_InRoomBottomSheetContent> {
                   ),
                   const SizedBox(width: 8),
                   IconButton(
-                    icon: const Icon(Icons.close_rounded, color: GamerTheme.textMuted, size: 20),
+                    icon: const Icon(Icons.close_rounded, color: Color(0xFF65676B), size: 20),
                     onPressed: () => Navigator.pop(context),
                   ),
                 ],
               ),
             ),
-            const Divider(color: GamerTheme.borderDark, height: 1),
+            const Divider(color: Color(0xFFCED0D4), height: 1),
 
             // Scrollable Body
             Expanded(
@@ -3947,13 +3974,13 @@ class _InRoomBottomSheetContentState extends State<_InRoomBottomSheetContent> {
                         margin: const EdgeInsets.only(bottom: 12),
                         padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
                         decoration: BoxDecoration(
-                          color: GamerTheme.redAccent.withOpacity(0.12),
+                          color: const Color(0xFFFFEBEE),
                           borderRadius: BorderRadius.circular(10),
-                          border: Border.all(color: GamerTheme.redAccent.withOpacity(0.8), width: 1.2),
+                          border: Border.all(color: const Color(0xFFFFCDD2), width: 1.2),
                         ),
                         child: const Row(
                           children: [
-                            Icon(Icons.warning_amber_rounded, color: GamerTheme.redAccent, size: 22),
+                            Icon(Icons.warning_amber_rounded, color: Color(0xFFDC2626), size: 22),
                             SizedBox(width: 10),
                             Expanded(
                               child: Column(
@@ -3962,7 +3989,7 @@ class _InRoomBottomSheetContentState extends State<_InRoomBottomSheetContent> {
                                   Text(
                                     '⚠️ DISPUTE RAISED - UNDER REVIEW',
                                     style: TextStyle(
-                                      color: GamerTheme.redAccent,
+                                      color: Color(0xFFDC2626),
                                       fontSize: 12,
                                       fontWeight: FontWeight.bold,
                                     ),
@@ -3970,7 +3997,7 @@ class _InRoomBottomSheetContentState extends State<_InRoomBottomSheetContent> {
                                   SizedBox(height: 2),
                                   Text(
                                     'Dispute Raised! Under review by Admin. Loser claims winner screenshot is fake/wrong.',
-                                    style: TextStyle(color: Colors.white70, fontSize: 10.5),
+                                    style: TextStyle(color: Color(0xFF4B5563), fontSize: 10.5),
                                   ),
                                 ],
                               ),
@@ -3983,13 +4010,13 @@ class _InRoomBottomSheetContentState extends State<_InRoomBottomSheetContent> {
                         margin: const EdgeInsets.only(bottom: 12),
                         padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
                         decoration: BoxDecoration(
-                          color: GamerTheme.redAccent.withOpacity(0.12),
+                          color: const Color(0xFFFFEBEE),
                           borderRadius: BorderRadius.circular(10),
-                          border: Border.all(color: GamerTheme.redAccent.withOpacity(0.6)),
+                          border: Border.all(color: const Color(0xFFFFCDD2)),
                         ),
                         child: const Row(
                           children: [
-                            Icon(Icons.cancel_rounded, color: GamerTheme.redAccent, size: 20),
+                            Icon(Icons.cancel_rounded, color: Color(0xFFDC2626), size: 20),
                             SizedBox(width: 10),
                             Expanded(
                               child: Column(
@@ -3998,7 +4025,7 @@ class _InRoomBottomSheetContentState extends State<_InRoomBottomSheetContent> {
                                   Text(
                                     'STATUS: PROOF REJECTED',
                                     style: TextStyle(
-                                      color: GamerTheme.redAccent,
+                                      color: Color(0xFFDC2626),
                                       fontSize: 12,
                                       fontWeight: FontWeight.bold,
                                     ),
@@ -4006,7 +4033,7 @@ class _InRoomBottomSheetContentState extends State<_InRoomBottomSheetContent> {
                                   SizedBox(height: 2),
                                   Text(
                                     'Uploaded screenshot does not match player ID. Please remove the rejected proof or upload a new valid screenshot.',
-                                    style: TextStyle(color: Colors.white70, fontSize: 10.5),
+                                    style: TextStyle(color: Color(0xFF4B5563), fontSize: 10.5),
                                   ),
                                 ],
                               ),
@@ -4019,22 +4046,22 @@ class _InRoomBottomSheetContentState extends State<_InRoomBottomSheetContent> {
                         margin: const EdgeInsets.only(bottom: 12),
                         padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
                         decoration: BoxDecoration(
-                          color: Colors.amber.withOpacity(0.12),
+                          color: const Color(0xFFFFFBEB),
                           borderRadius: BorderRadius.circular(10),
-                          border: Border.all(color: Colors.amberAccent.withOpacity(0.7), width: 1.1),
+                          border: Border.all(color: const Color(0xFFFDE68A), width: 1.1),
                         ),
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
                             Row(
                               children: [
-                                const Icon(Icons.hourglass_top_rounded, color: Colors.amberAccent, size: 20),
+                                const Icon(Icons.hourglass_top_rounded, color: Color(0xFFD97706), size: 20),
                                 const SizedBox(width: 8),
                                 const Expanded(
                                   child: Text(
                                     'STATUS: REWARD WAITING',
                                     style: TextStyle(
-                                      color: Colors.amberAccent,
+                                      color: Color(0xFFD97706),
                                       fontSize: 12,
                                       fontWeight: FontWeight.bold,
                                     ),
@@ -4043,14 +4070,14 @@ class _InRoomBottomSheetContentState extends State<_InRoomBottomSheetContent> {
                                 Container(
                                   padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
                                   decoration: BoxDecoration(
-                                    color: Colors.amber.withOpacity(0.25),
+                                    color: const Color(0xFFFEF3C7),
                                     borderRadius: BorderRadius.circular(6),
-                                    border: Border.all(color: Colors.amberAccent.withOpacity(0.5)),
+                                    border: Border.all(color: const Color(0xFFF59E0B)),
                                   ),
                                   child: Text(
                                     _formatAutoApproveCountdown(room.autoApproveAt),
                                     style: const TextStyle(
-                                      color: Colors.amberAccent,
+                                      color: Color(0xFFB45309),
                                       fontSize: 10.5,
                                       fontWeight: FontWeight.bold,
                                     ),
@@ -4061,7 +4088,7 @@ class _InRoomBottomSheetContentState extends State<_InRoomBottomSheetContent> {
                             const SizedBox(height: 4),
                             const Text(
                               'Winner has uploaded proof. Awaiting confirmation. Once reward sent, room will complete and auto delete in 5 mins.',
-                              style: TextStyle(color: Colors.white70, fontSize: 10.5),
+                              style: TextStyle(color: Color(0xFF4B5563), fontSize: 10.5),
                             ),
                             if (canAccess && !room.isDisputed && widget.currentUserId != room.winnerId) ...[
                               const SizedBox(height: 8),
@@ -4073,19 +4100,19 @@ class _InRoomBottomSheetContentState extends State<_InRoomBottomSheetContent> {
                                   child: Container(
                                     padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
                                     decoration: BoxDecoration(
-                                      color: GamerTheme.redAccent.withOpacity(0.2),
+                                      color: const Color(0xFFFFEBEE),
                                       borderRadius: BorderRadius.circular(6),
-                                      border: Border.all(color: GamerTheme.redAccent.withOpacity(0.8)),
+                                      border: Border.all(color: const Color(0xFFDC2626)),
                                     ),
                                     child: const Row(
                                       mainAxisSize: MainAxisSize.min,
                                       children: [
-                                        Icon(Icons.warning_amber_rounded, color: GamerTheme.redAccent, size: 14),
+                                        Icon(Icons.warning_amber_rounded, color: Color(0xFFDC2626), size: 14),
                                         SizedBox(width: 4),
                                         Text(
                                           '⚠️ Dispute Result',
                                           style: TextStyle(
-                                            color: GamerTheme.redAccent,
+                                            color: Color(0xFFDC2626),
                                             fontWeight: FontWeight.bold,
                                             fontSize: 11,
                                           ),
@@ -4104,9 +4131,9 @@ class _InRoomBottomSheetContentState extends State<_InRoomBottomSheetContent> {
                       margin: const EdgeInsets.only(bottom: 12),
                       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
                       decoration: BoxDecoration(
-                        color: GamerTheme.cardDark,
+                        color: Colors.white,
                         borderRadius: BorderRadius.circular(12),
-                        border: Border.all(color: GamerTheme.borderDark),
+                        border: Border.all(color: const Color(0xFFCED0D4)),
                       ),
                       child: Row(
                         children: [
@@ -4117,18 +4144,18 @@ class _InRoomBottomSheetContentState extends State<_InRoomBottomSheetContent> {
                               children: [
                                 const Text(
                                   'PRIZE POOL',
-                                  style: TextStyle(color: GamerTheme.textMuted, fontSize: 10, fontWeight: FontWeight.bold),
+                                  style: TextStyle(color: Color(0xFF65676B), fontSize: 10, fontWeight: FontWeight.bold),
                                 ),
                                 const SizedBox(height: 3),
                                 Row(
                                   children: [
-                                    const Icon(Icons.monetization_on_rounded, size: 14, color: Colors.cyanAccent),
+                                    const Icon(Icons.monetization_on_rounded, size: 14, color: Color(0xFF1877F2)),
                                     const SizedBox(width: 3),
                                     Flexible(
                                       child: Text(
                                         '${room.prize} Coins',
                                         style: const TextStyle(
-                                          color: Colors.cyanAccent,
+                                          color: Color(0xFF1877F2),
                                           fontSize: 12.5,
                                           fontWeight: FontWeight.bold,
                                         ),
@@ -4139,10 +4166,10 @@ class _InRoomBottomSheetContentState extends State<_InRoomBottomSheetContent> {
                                   ],
                                 ),
                                 const SizedBox(height: 1),
-                                Text(
+                                const Text(
                                   '(From App)',
                                   style: TextStyle(
-                                    color: _neonGreen.withOpacity(0.9),
+                                    color: Color(0xFF65676B),
                                     fontSize: 9.5,
                                     fontWeight: FontWeight.w600,
                                   ),
@@ -4150,7 +4177,7 @@ class _InRoomBottomSheetContentState extends State<_InRoomBottomSheetContent> {
                               ],
                             ),
                           ),
-                          Container(height: 32, width: 1, color: GamerTheme.borderDark, margin: const EdgeInsets.symmetric(horizontal: 8)),
+                          Container(height: 32, width: 1, color: const Color(0xFFCED0D4), margin: const EdgeInsets.symmetric(horizontal: 8)),
 
                           // Entry Fee
                           Expanded(
@@ -4159,20 +4186,20 @@ class _InRoomBottomSheetContentState extends State<_InRoomBottomSheetContent> {
                               children: [
                                 const Text(
                                   'ENTRY FEE',
-                                  style: TextStyle(color: GamerTheme.textMuted, fontSize: 10, fontWeight: FontWeight.bold),
+                                  style: TextStyle(color: Color(0xFF65676B), fontSize: 10, fontWeight: FontWeight.bold),
                                 ),
                                 const SizedBox(height: 4),
                                 Container(
                                   padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
                                   decoration: BoxDecoration(
-                                    color: _neonGreen.withOpacity(0.15),
+                                    color: const Color(0xFFE7F3FF),
                                     borderRadius: BorderRadius.circular(6),
-                                    border: Border.all(color: _neonGreen.withOpacity(0.5)),
+                                    border: Border.all(color: const Color(0xFF1877F2).withOpacity(0.3)),
                                   ),
                                   child: const Text(
                                     'FREE',
                                     style: TextStyle(
-                                      color: _neonGreen,
+                                      color: Color(0xFF1877F2),
                                       fontSize: 11,
                                       fontWeight: FontWeight.w900,
                                       letterSpacing: 0.5,
@@ -4182,12 +4209,12 @@ class _InRoomBottomSheetContentState extends State<_InRoomBottomSheetContent> {
                                 const SizedBox(height: 2),
                                 const Text(
                                   'No Coins Needed',
-                                  style: TextStyle(color: GamerTheme.textMuted, fontSize: 8.5),
+                                  style: TextStyle(color: Color(0xFF65676B), fontSize: 8.5),
                                 ),
                               ],
                             ),
                           ),
-                          Container(height: 32, width: 1, color: GamerTheme.borderDark, margin: const EdgeInsets.symmetric(horizontal: 8)),
+                          Container(height: 32, width: 1, color: const Color(0xFFCED0D4), margin: const EdgeInsets.symmetric(horizontal: 8)),
 
                           // Escrow
                           const Expanded(
@@ -4196,17 +4223,17 @@ class _InRoomBottomSheetContentState extends State<_InRoomBottomSheetContent> {
                               children: [
                                 Text(
                                   'ESCROW',
-                                  style: TextStyle(color: GamerTheme.textMuted, fontSize: 10, fontWeight: FontWeight.bold),
+                                  style: TextStyle(color: Color(0xFF65676B), fontSize: 10, fontWeight: FontWeight.bold),
                                 ),
                                 SizedBox(height: 3),
                                 Text(
                                   '0 Coins',
-                                  style: TextStyle(color: Colors.white, fontSize: 12.5, fontWeight: FontWeight.bold),
+                                  style: TextStyle(color: Color(0xFF050505), fontSize: 12.5, fontWeight: FontWeight.bold),
                                 ),
                                 SizedBox(height: 1),
                                 Text(
                                   'Free Entry',
-                                  style: TextStyle(color: GamerTheme.textMuted, fontSize: 9),
+                                  style: TextStyle(color: Color(0xFF65676B), fontSize: 9),
                                 ),
                               ],
                             ),
@@ -4219,9 +4246,9 @@ class _InRoomBottomSheetContentState extends State<_InRoomBottomSheetContent> {
                     Container(
                       padding: const EdgeInsets.all(12),
                       decoration: BoxDecoration(
-                        color: GamerTheme.bgDark,
+                        color: const Color(0xFFF0F2F5),
                         borderRadius: BorderRadius.circular(12),
-                        border: Border.all(color: GamerTheme.borderDark),
+                        border: Border.all(color: const Color(0xFFCED0D4)),
                       ),
                       child: Row(
                         children: [
@@ -4232,7 +4259,7 @@ class _InRoomBottomSheetContentState extends State<_InRoomBottomSheetContent> {
                               children: [
                                 const Text(
                                   'ROOM ID',
-                                  style: TextStyle(color: GamerTheme.textMuted, fontSize: 10, fontWeight: FontWeight.bold),
+                                  style: TextStyle(color: Color(0xFF65676B), fontSize: 10, fontWeight: FontWeight.bold),
                                 ),
                                 const SizedBox(height: 4),
                                 Text(
@@ -4240,7 +4267,7 @@ class _InRoomBottomSheetContentState extends State<_InRoomBottomSheetContent> {
                                       ? (room.roomIdCode.isNotEmpty ? room.roomIdCode : '88453219')
                                       : '••••••••',
                                   style: const TextStyle(
-                                    color: Colors.white,
+                                    color: Color(0xFF050505),
                                     fontWeight: FontWeight.bold,
                                     fontSize: 14,
                                     letterSpacing: 1,
@@ -4251,13 +4278,13 @@ class _InRoomBottomSheetContentState extends State<_InRoomBottomSheetContent> {
                           ),
                           if (canAccess)
                             IconButton(
-                              icon: const Icon(Icons.copy_rounded, color: GamerTheme.accentOrange, size: 18),
+                              icon: const Icon(Icons.copy_rounded, color: Color(0xFF1877F2), size: 18),
                               tooltip: 'Copy Room ID',
                               onPressed: () => _copyToClipboard('Room ID', room.roomIdCode.isNotEmpty ? room.roomIdCode : '88453219'),
                             )
                           else
-                            const Icon(Icons.lock_rounded, color: GamerTheme.textMuted, size: 18),
-                          Container(height: 32, width: 1, color: GamerTheme.borderDark, margin: const EdgeInsets.symmetric(horizontal: 8)),
+                            const Icon(Icons.lock_rounded, color: Color(0xFF65676B), size: 18),
+                          Container(height: 32, width: 1, color: const Color(0xFFCED0D4), margin: const EdgeInsets.symmetric(horizontal: 8)),
 
                           // Password
                           Expanded(
@@ -4266,7 +4293,7 @@ class _InRoomBottomSheetContentState extends State<_InRoomBottomSheetContent> {
                               children: [
                                 const Text(
                                   'PASSWORD',
-                                  style: TextStyle(color: GamerTheme.textMuted, fontSize: 10, fontWeight: FontWeight.bold),
+                                  style: TextStyle(color: Color(0xFF65676B), fontSize: 10, fontWeight: FontWeight.bold),
                                 ),
                                 const SizedBox(height: 4),
                                 Text(
@@ -4276,7 +4303,7 @@ class _InRoomBottomSheetContentState extends State<_InRoomBottomSheetContent> {
                                           : '••••')
                                       : '••••',
                                   style: const TextStyle(
-                                    color: Colors.white,
+                                    color: Color(0xFF050505),
                                     fontWeight: FontWeight.bold,
                                     fontSize: 14,
                                     letterSpacing: 1,
@@ -4285,19 +4312,19 @@ class _InRoomBottomSheetContentState extends State<_InRoomBottomSheetContent> {
                                 if (canAccess && !isWithin10Mins && !isHost && !room.isCompleted)
                                   const Text(
                                     'Visible 10 mins before match',
-                                    style: TextStyle(color: GamerTheme.textMuted, fontSize: 8),
+                                    style: TextStyle(color: Color(0xFF65676B), fontSize: 8),
                                   ),
                               ],
                             ),
                           ),
                           if (canAccess && (isWithin10Mins || isHost || room.isCompleted))
                             IconButton(
-                              icon: const Icon(Icons.copy_rounded, color: GamerTheme.accentOrange, size: 18),
+                              icon: const Icon(Icons.copy_rounded, color: Color(0xFF1877F2), size: 18),
                               tooltip: 'Copy Password',
                               onPressed: () => _copyToClipboard('Password', room.password.isNotEmpty ? room.password : 'pubg123'),
                             )
                           else
-                            const Icon(Icons.lock_rounded, color: GamerTheme.textMuted, size: 18),
+                            const Icon(Icons.lock_rounded, color: Color(0xFF65676B), size: 18),
                         ],
                       ),
                     ),
@@ -4309,19 +4336,13 @@ class _InRoomBottomSheetContentState extends State<_InRoomBottomSheetContent> {
                     padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
                     decoration: BoxDecoration(
                       color: isCompleted
-                          ? GamerTheme.cardElevated
-                          : (isMatchStarted
-                              ? _neonGreen.withOpacity(0.12)
-                              : (_remainingTime == Duration.zero || _remainingTime.isNegative
-                                  ? GamerTheme.accentOrange.withOpacity(0.15)
-                                  : GamerTheme.accentOrange.withOpacity(0.12))),
+                          ? Colors.amber.withOpacity(0.12)
+                          : const Color(0xFFE7F3FF),
                       borderRadius: BorderRadius.circular(20),
                       border: Border.all(
                         color: isCompleted
-                            ? GamerTheme.borderDark
-                            : (isMatchStarted
-                                ? _neonGreen.withOpacity(0.4)
-                                : GamerTheme.accentOrange.withOpacity(0.3)),
+                            ? Colors.amber
+                            : const Color(0xFF1877F2).withOpacity(0.4),
                       ),
                     ),
                     child: Row(
@@ -4334,8 +4355,8 @@ class _InRoomBottomSheetContentState extends State<_InRoomBottomSheetContent> {
                                   ? Icons.sports_esports_rounded
                                   : Icons.timer_outlined),
                           color: isCompleted
-                              ? Colors.amberAccent
-                              : (isMatchStarted ? _neonGreen : GamerTheme.accentOrange),
+                              ? Colors.amber.shade800
+                              : const Color(0xFF1877F2),
                           size: 16,
                         ),
                         const SizedBox(width: 6),
@@ -4349,8 +4370,8 @@ class _InRoomBottomSheetContentState extends State<_InRoomBottomSheetContent> {
                                       : _formatDuration(_remainingTime))),
                           style: TextStyle(
                             color: isCompleted
-                                ? Colors.amberAccent
-                                : (isMatchStarted ? _neonGreen : GamerTheme.accentOrange),
+                                ? Colors.amber.shade900
+                                : const Color(0xFF1877F2),
                             fontWeight: FontWeight.bold,
                             fontSize: 12,
                           ),
@@ -4367,12 +4388,12 @@ class _InRoomBottomSheetContentState extends State<_InRoomBottomSheetContent> {
                     Container(
                       width: 8,
                       height: 8,
-                      decoration: const BoxDecoration(color: _neonGreen, shape: BoxShape.circle),
+                      decoration: const BoxDecoration(color: Color(0xFF1877F2), shape: BoxShape.circle),
                     ),
                     const SizedBox(width: 6),
                     Text(
                       'Room Chat ($onlineCount online)',
-                      style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 13),
+                      style: const TextStyle(color: Color(0xFF050505), fontWeight: FontWeight.bold, fontSize: 13),
                     ),
                   ],
                 ),
@@ -4382,9 +4403,9 @@ class _InRoomBottomSheetContentState extends State<_InRoomBottomSheetContent> {
                 Container(
                   height: 250,
                   decoration: BoxDecoration(
-                    color: GamerTheme.bgDark.withOpacity(0.7),
+                    color: const Color(0xFFF0F2F5),
                     borderRadius: BorderRadius.circular(12),
-                    border: Border.all(color: GamerTheme.borderDark),
+                    border: Border.all(color: const Color(0xFFCED0D4)),
                   ),
                   child: Stack(
                     children: [
@@ -4399,7 +4420,7 @@ class _InRoomBottomSheetContentState extends State<_InRoomBottomSheetContent> {
                         builder: (context, snapshot) {
                           if (snapshot.hasError) {
                             return const Center(
-                              child: Text('Chat requires joining room', style: TextStyle(color: GamerTheme.textMuted, fontSize: 12)),
+                              child: Text('Chat requires joining room', style: TextStyle(color: Color(0xFF65676B), fontSize: 12)),
                             );
                           }
 
@@ -4408,7 +4429,7 @@ class _InRoomBottomSheetContentState extends State<_InRoomBottomSheetContent> {
                             return const Center(
                               child: Text(
                                 'No messages yet. Say hello to your squad!',
-                                style: TextStyle(color: GamerTheme.textMuted, fontSize: 12),
+                                style: TextStyle(color: Color(0xFF65676B), fontSize: 12),
                               ),
                             );
                           }
@@ -4456,12 +4477,12 @@ class _InRoomBottomSheetContentState extends State<_InRoomBottomSheetContent> {
                                     child: Container(
                                       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
                                       decoration: BoxDecoration(
-                                        color: GamerTheme.cardElevated,
+                                        color: const Color(0xFFE4E6EB),
                                         borderRadius: BorderRadius.circular(12),
                                       ),
                                       child: Text(
                                         text,
-                                        style: const TextStyle(color: _neonGreen, fontSize: 11, fontWeight: FontWeight.bold),
+                                        style: const TextStyle(color: Color(0xFF1877F2), fontSize: 11, fontWeight: FontWeight.bold),
                                       ),
                                     ),
                                   ),
@@ -4484,13 +4505,13 @@ class _InRoomBottomSheetContentState extends State<_InRoomBottomSheetContent> {
                                             alignment: Alignment.center,
                                             decoration: BoxDecoration(
                                               shape: BoxShape.circle,
-                                              color: msgIsHost ? Colors.amber.shade900 : GamerTheme.cardElevated,
+                                              color: msgIsHost ? Colors.amber.shade800 : const Color(0xFFCED0D4),
                                               border: msgIsHost ? Border.all(color: Colors.amber, width: 1.5) : null,
                                             ),
                                             child: Text(
                                               senderInitial,
                                               style: TextStyle(
-                                                color: msgIsHost ? Colors.amber : Colors.white,
+                                                color: msgIsHost ? Colors.white : const Color(0xFF050505),
                                                 fontWeight: FontWeight.bold,
                                                 fontSize: 11,
                                               ),
@@ -4503,11 +4524,11 @@ class _InRoomBottomSheetContentState extends State<_InRoomBottomSheetContent> {
                                             padding: const EdgeInsets.all(10),
                                             decoration: BoxDecoration(
                                               color: isMe
-                                                  ? _neonGreen
-                                                  : (msgIsHost ? GamerTheme.surfaceDark : GamerTheme.cardElevated),
+                                                  ? const Color(0xFF1877F2)
+                                                  : const Color(0xFFE4E6EB),
                                               borderRadius: BorderRadius.circular(12),
                                               border: msgIsHost && !isMe
-                                                  ? Border.all(color: Colors.amber.withOpacity(0.5))
+                                                  ? Border.all(color: Colors.amber.shade400)
                                                   : null,
                                             ),
                                             child: Column(
@@ -4520,14 +4541,14 @@ class _InRoomBottomSheetContentState extends State<_InRoomBottomSheetContent> {
                                                       Text(
                                                         senderName,
                                                         style: TextStyle(
-                                                          color: msgIsHost ? Colors.amber : Colors.white70,
+                                                          color: msgIsHost ? Colors.amber.shade900 : const Color(0xFF65676B),
                                                           fontWeight: FontWeight.bold,
                                                           fontSize: 11,
                                                         ),
                                                       ),
                                                       if (msgIsHost) ...[
                                                         const SizedBox(width: 4),
-                                                        const Icon(Icons.check_circle_rounded, color: _neonGreen, size: 12),
+                                                        const Icon(Icons.check_circle_rounded, color: Color(0xFF1877F2), size: 12),
                                                       ],
                                                     ],
                                                   ),
@@ -4543,8 +4564,8 @@ class _InRoomBottomSheetContentState extends State<_InRoomBottomSheetContent> {
                                                         decoration: BoxDecoration(
                                                           border: Border.all(
                                                             color: isDoubt
-                                                                ? GamerTheme.redAccent
-                                                                : (isVerified ? _neonGreen : GamerTheme.borderDark),
+                                                                ? const Color(0xFFDC2626)
+                                                                : (isVerified ? const Color(0xFF1877F2) : const Color(0xFFCED0D4)),
                                                             width: 1.5,
                                                           ),
                                                           borderRadius: BorderRadius.circular(8),
@@ -4565,7 +4586,7 @@ class _InRoomBottomSheetContentState extends State<_InRoomBottomSheetContent> {
                                                               child: const Row(
                                                                 mainAxisSize: MainAxisSize.min,
                                                                 children: [
-                                                                  Icon(Icons.visibility_rounded, color: _neonGreen, size: 14),
+                                                                  Icon(Icons.visibility_rounded, color: _fbBlue, size: 14),
                                                                   SizedBox(width: 4),
                                                                   Text(
                                                                     'Win Proof • Tap to view full',
@@ -4656,18 +4677,18 @@ class _InRoomBottomSheetContentState extends State<_InRoomBottomSheetContent> {
                                                       margin: const EdgeInsets.only(top: 6),
                                                       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
                                                       decoration: BoxDecoration(
-                                                        color: _neonGreen.withOpacity(0.15),
+                                                        color: _fbBlue.withOpacity(0.15),
                                                         borderRadius: BorderRadius.circular(8),
-                                                        border: Border.all(color: _neonGreen),
+                                                        border: Border.all(color: _fbBlue),
                                                       ),
                                                       child: Row(
                                                         children: [
-                                                          const Icon(Icons.check_circle_rounded, color: _neonGreen, size: 16),
+                                                          const Icon(Icons.check_circle_rounded, color: _fbBlue, size: 16),
                                                           const SizedBox(width: 6),
                                                           Expanded(
                                                             child: Text(
                                                               '✅ App Verified: Winner Detected (Score $msgOcrScore/4)',
-                                                              style: const TextStyle(color: _neonGreen, fontSize: 11, fontWeight: FontWeight.bold),
+                                                              style: const TextStyle(color: _fbBlue, fontSize: 11, fontWeight: FontWeight.bold),
                                                             ),
                                                           ),
                                                         ],
@@ -4725,17 +4746,17 @@ class _InRoomBottomSheetContentState extends State<_InRoomBottomSheetContent> {
                                                               decoration: BoxDecoration(
                                                                 color: Colors.black.withOpacity(0.85),
                                                                 borderRadius: BorderRadius.circular(8),
-                                                                border: Border.all(color: _neonGreen, width: 1.2),
+                                                                border: Border.all(color: _fbBlue, width: 1.2),
                                                               ),
                                                               child: const Row(
                                                                 mainAxisAlignment: MainAxisAlignment.center,
                                                                 children: [
-                                                                  Icon(Icons.camera_alt_rounded, size: 13, color: _neonGreen),
+                                                                  Icon(Icons.camera_alt_rounded, size: 13, color: _fbBlue),
                                                                   SizedBox(width: 4),
                                                                   Text(
                                                                     'Upload New Proof',
                                                                     style: TextStyle(
-                                                                      color: _neonGreen,
+                                                                      color: _fbBlue,
                                                                       fontSize: 11,
                                                                       fontWeight: FontWeight.bold,
                                                                     ),
@@ -4861,7 +4882,7 @@ class _InRoomBottomSheetContentState extends State<_InRoomBottomSheetContent> {
                                                   Text(
                                                     text,
                                                     style: TextStyle(
-                                                      color: isMe ? Colors.black : Colors.white,
+                                                      color: isMe ? Colors.white : const Color(0xFF050505),
                                                       fontSize: 12.5,
                                                     ),
                                                   ),
@@ -4872,7 +4893,7 @@ class _InRoomBottomSheetContentState extends State<_InRoomBottomSheetContent> {
                                                   child: Text(
                                                     timeStr,
                                                     style: TextStyle(
-                                                      color: isMe ? Colors.black54 : GamerTheme.textMuted,
+                                                      color: isMe ? Colors.white70 : const Color(0xFF65676B),
                                                       fontSize: 9,
                                                     ),
                                                   ),
@@ -4885,10 +4906,10 @@ class _InRoomBottomSheetContentState extends State<_InRoomBottomSheetContent> {
                                           const SizedBox(width: 6),
                                           CircleAvatar(
                                             radius: 14,
-                                            backgroundColor: _neonGreen,
+                                            backgroundColor: const Color(0xFF1877F2),
                                             child: Text(
                                               senderInitial,
-                                              style: const TextStyle(color: Colors.black, fontWeight: FontWeight.bold, fontSize: 11),
+                                              style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 11),
                                             ),
                                           ),
                                         ],
@@ -4999,24 +5020,24 @@ class _InRoomBottomSheetContentState extends State<_InRoomBottomSheetContent> {
                         Positioned.fill(
                           child: Container(
                             decoration: BoxDecoration(
-                              color: Colors.black.withOpacity(0.82),
+                              color: Colors.white.withOpacity(0.92),
                               borderRadius: BorderRadius.circular(12),
                             ),
                             padding: const EdgeInsets.all(20),
                             child: Column(
                               mainAxisAlignment: MainAxisAlignment.center,
                               children: [
-                                const Icon(Icons.lock_rounded, color: GamerTheme.accentOrange, size: 36),
+                                const Icon(Icons.lock_rounded, color: Color(0xFF65676B), size: 36),
                                 const SizedBox(height: 8),
                                 const Text(
                                   'Join room to chat & view details',
-                                  style: TextStyle(color: Colors.white, fontSize: 13, fontWeight: FontWeight.bold),
+                                  style: TextStyle(color: Color(0xFF050505), fontSize: 13, fontWeight: FontWeight.bold),
                                   textAlign: TextAlign.center,
                                 ),
                                 const SizedBox(height: 12),
                                 ElevatedButton(
                                   style: ElevatedButton.styleFrom(
-                                    backgroundColor: GamerTheme.accentBlue,
+                                    backgroundColor: const Color(0xFF1877F2),
                                     foregroundColor: Colors.white,
                                     padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 8),
                                     shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
@@ -5043,9 +5064,9 @@ class _InRoomBottomSheetContentState extends State<_InRoomBottomSheetContent> {
                     margin: const EdgeInsets.only(bottom: 8),
                     padding: const EdgeInsets.all(8),
                     decoration: BoxDecoration(
-                      color: GamerTheme.bgDark,
+                      color: Colors.white,
                       borderRadius: BorderRadius.circular(12),
-                      border: Border.all(color: _neonGreen),
+                      border: Border.all(color: const Color(0xFF1877F2)),
                     ),
                     child: Row(
                       children: [
@@ -5063,27 +5084,27 @@ class _InRoomBottomSheetContentState extends State<_InRoomBottomSheetContent> {
                           child: Column(
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
-                              const Text('Match Win Proof Ready', style: TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.bold)),
+                              const Text('Match Win Proof Ready', style: TextStyle(color: Color(0xFF050505), fontSize: 12, fontWeight: FontWeight.bold)),
                               const SizedBox(height: 2),
-                              Text('${(_selectedProofImage!.lengthSync() / 1024).toStringAsFixed(0)} KB', style: const TextStyle(color: GamerTheme.textMuted, fontSize: 10)),
+                              Text('${(_selectedProofImage!.lengthSync() / 1024).toStringAsFixed(0)} KB', style: const TextStyle(color: Color(0xFF65676B), fontSize: 10)),
                             ],
                           ),
                         ),
                         IconButton(
-                          icon: const Icon(Icons.close_rounded, color: GamerTheme.redAccent, size: 20),
+                          icon: const Icon(Icons.close_rounded, color: Color(0xFFDC2626), size: 20),
                           onPressed: () => setState(() => _selectedProofImage = null),
                         ),
                         ElevatedButton(
                           style: ElevatedButton.styleFrom(
-                            backgroundColor: _neonGreen,
-                            foregroundColor: Colors.black,
+                            backgroundColor: const Color(0xFF1877F2),
+                            foregroundColor: Colors.white,
                             padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
                             minimumSize: Size.zero,
                             tapTargetSize: MaterialTapTargetSize.shrinkWrap,
                           ),
                           onPressed: _isUploadingProof ? null : _sendMessage,
                           child: _isUploadingProof
-                              ? const SizedBox(width: 14, height: 14, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.black))
+                              ? const SizedBox(width: 14, height: 14, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
                               : const Text('SEND AS WIN PROOF', style: TextStyle(fontSize: 10, fontWeight: FontWeight.bold)),
                         ),
                       ],
@@ -5095,28 +5116,28 @@ class _InRoomBottomSheetContentState extends State<_InRoomBottomSheetContent> {
                   children: [
                     // Attachment button
                     IconButton(
-                      icon: const Icon(Icons.camera_alt_rounded, color: GamerTheme.accentOrange, size: 22),
+                      icon: const Icon(Icons.camera_alt_rounded, color: Color(0xFF1877F2), size: 22),
                       onPressed: canAccess
                           ? () {
                               showModalBottomSheet(
                                 context: context,
-                                backgroundColor: GamerTheme.cardDark,
+                                backgroundColor: Colors.white,
                                 shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(16))),
                                 builder: (sheetCtx) => SafeArea(
                                   child: Column(
                                     mainAxisSize: MainAxisSize.min,
                                     children: [
                                       ListTile(
-                                        leading: const Icon(Icons.camera_rounded, color: GamerTheme.accentOrange),
-                                        title: const Text('Take Photo', style: TextStyle(color: Colors.white)),
+                                        leading: const Icon(Icons.camera_rounded, color: Color(0xFF1877F2)),
+                                        title: const Text('Take Photo', style: TextStyle(color: Color(0xFF050505), fontWeight: FontWeight.bold)),
                                         onTap: () {
                                           Navigator.pop(sheetCtx);
                                           _pickImage(ImageSource.camera);
                                         },
                                       ),
                                       ListTile(
-                                        leading: const Icon(Icons.photo_library_rounded, color: _neonGreen),
-                                        title: const Text('Choose from Gallery', style: TextStyle(color: Colors.white)),
+                                        leading: const Icon(Icons.photo_library_rounded, color: Color(0xFF1877F2)),
+                                        title: const Text('Choose from Gallery', style: TextStyle(color: Color(0xFF050505), fontWeight: FontWeight.bold)),
                                         onTap: () {
                                           Navigator.pop(sheetCtx);
                                           _pickImage(ImageSource.gallery);
@@ -5124,7 +5145,7 @@ class _InRoomBottomSheetContentState extends State<_InRoomBottomSheetContent> {
                                       ),
                                       ListTile(
                                         leading: const Icon(Icons.emoji_events_rounded, color: Colors.amber),
-                                        title: const Text('Send Win Proof', style: TextStyle(color: Colors.white)),
+                                        title: const Text('Send Win Proof', style: TextStyle(color: Color(0xFF050505), fontWeight: FontWeight.bold)),
                                         onTap: () {
                                           Navigator.pop(sheetCtx);
                                           _pickImage(ImageSource.gallery);
@@ -5140,21 +5161,21 @@ class _InRoomBottomSheetContentState extends State<_InRoomBottomSheetContent> {
                     Expanded(
                       child: Container(
                         decoration: BoxDecoration(
-                          color: GamerTheme.bgDark,
+                          color: const Color(0xFFF0F2F5),
                           borderRadius: BorderRadius.circular(24),
-                          border: Border.all(color: GamerTheme.borderDark),
+                          border: Border.all(color: const Color(0xFFCED0D4)),
                         ),
                         child: TextField(
                           controller: _msgController,
                           enabled: canAccess,
                           maxLength: 200,
-                          style: const TextStyle(color: Colors.white, fontSize: 13),
+                          style: const TextStyle(color: Color(0xFF050505), fontSize: 13),
                           onSubmitted: (_) => _sendMessage(),
                           decoration: InputDecoration(
                             counterText: '',
                             hintText: canAccess ? 'Type a message...' : 'Join room to chat...',
-                            hintStyle: const TextStyle(color: GamerTheme.textMuted, fontSize: 12),
-                            prefixIcon: const Icon(Icons.sentiment_satisfied_alt_rounded, color: GamerTheme.textMuted, size: 20),
+                            hintStyle: const TextStyle(color: Color(0xFF8A8D91), fontSize: 12),
+                            prefixIcon: const Icon(Icons.sentiment_satisfied_alt_rounded, color: Color(0xFF65676B), size: 20),
                             border: InputBorder.none,
                             contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
                           ),
@@ -5169,12 +5190,12 @@ class _InRoomBottomSheetContentState extends State<_InRoomBottomSheetContent> {
                         width: 40,
                         height: 40,
                         decoration: BoxDecoration(
-                          color: canAccess ? _neonGreen : GamerTheme.cardElevated,
+                          color: canAccess ? const Color(0xFF1877F2) : const Color(0xFFE4E6EB),
                           shape: BoxShape.circle,
                         ),
                         child: Icon(
                           Icons.send_rounded,
-                          color: canAccess ? Colors.black : GamerTheme.textMuted,
+                          color: canAccess ? Colors.white : const Color(0xFF8A8D91),
                           size: 18,
                         ),
                       ),
@@ -5186,7 +5207,7 @@ class _InRoomBottomSheetContentState extends State<_InRoomBottomSheetContent> {
                 // Slot List Header
                 const Text(
                   'SLOT ALLOCATION',
-                  style: TextStyle(color: GamerTheme.textMuted, fontSize: 11, fontWeight: FontWeight.bold),
+                  style: TextStyle(color: Color(0xFF65676B), fontSize: 11, fontWeight: FontWeight.bold),
                 ),
                 const SizedBox(height: 8),
 
@@ -5207,11 +5228,11 @@ class _InRoomBottomSheetContentState extends State<_InRoomBottomSheetContent> {
                     return Container(
                       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
                       decoration: BoxDecoration(
-                        color: GamerTheme.bgDark,
+                        color: Colors.white,
                         borderRadius: BorderRadius.circular(8),
                         border: Border.all(
-                          color: isOccupied ? _neonGreen.withOpacity(0.5) : GamerTheme.borderDark,
-                          style: isOccupied ? BorderStyle.solid : BorderStyle.none,
+                          color: isOccupied ? const Color(0xFF1877F2) : const Color(0xFFCED0D4),
+                          width: isOccupied ? 1.2 : 1,
                         ),
                       ),
                       child: Row(
@@ -5219,7 +5240,7 @@ class _InRoomBottomSheetContentState extends State<_InRoomBottomSheetContent> {
                           Text(
                             'Slot ${i + 1}',
                             style: TextStyle(
-                              color: isOccupied ? _neonGreen : GamerTheme.textMuted,
+                              color: isOccupied ? const Color(0xFF1877F2) : const Color(0xFF65676B),
                               fontWeight: FontWeight.bold,
                               fontSize: 12,
                             ),
@@ -5229,17 +5250,18 @@ class _InRoomBottomSheetContentState extends State<_InRoomBottomSheetContent> {
                             child: Text(
                               displayName,
                               style: TextStyle(
-                                color: isOccupied ? Colors.white : GamerTheme.textMuted,
+                                color: isOccupied ? const Color(0xFF050505) : const Color(0xFF65676B),
                                 fontSize: 12,
+                                fontWeight: isOccupied ? FontWeight.w600 : FontWeight.normal,
                               ),
                               maxLines: 1,
                               overflow: TextOverflow.ellipsis,
                             ),
                           ),
                           if (isOccupied)
-                            const Icon(Icons.check_circle_rounded, color: _neonGreen, size: 16)
+                            const Icon(Icons.check_circle_rounded, color: Color(0xFF1877F2), size: 16)
                           else
-                            const Icon(Icons.radio_button_unchecked_rounded, color: GamerTheme.textMuted, size: 16),
+                            const Icon(Icons.radio_button_unchecked_rounded, color: Color(0xFFCED0D4), size: 16),
                         ],
                       ),
                     );
@@ -5254,8 +5276,8 @@ class _InRoomBottomSheetContentState extends State<_InRoomBottomSheetContent> {
                       Expanded(
                         child: OutlinedButton(
                           style: OutlinedButton.styleFrom(
-                            foregroundColor: GamerTheme.redAccent,
-                            side: const BorderSide(color: GamerTheme.redAccent, width: 1.2),
+                            foregroundColor: Colors.red,
+                            side: const BorderSide(color: Colors.red, width: 1.2),
                             padding: const EdgeInsets.symmetric(vertical: 12),
                             shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
                           ),
@@ -5263,18 +5285,24 @@ class _InRoomBottomSheetContentState extends State<_InRoomBottomSheetContent> {
                             showDialog(
                               context: context,
                               builder: (dCtx) => AlertDialog(
-                                backgroundColor: GamerTheme.cardDark,
-                                title: const Text('Leave Room?', style: TextStyle(color: Colors.white)),
-                                content: const Text('Are you sure you want to leave this room?', style: TextStyle(color: GamerTheme.textGray)),
+                                backgroundColor: Colors.white,
+                                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                                title: const Text('Leave Room?', style: TextStyle(color: Color(0xFF050505), fontWeight: FontWeight.bold)),
+                                content: const Text('Are you sure you want to leave this room?', style: TextStyle(color: Color(0xFF65676B))),
                                 actions: [
-                                  TextButton(onPressed: () => Navigator.pop(dCtx), child: const Text('Cancel')),
+                                  TextButton(onPressed: () => Navigator.pop(dCtx), child: const Text('Cancel', style: TextStyle(color: Color(0xFF65676B)))),
                                   ElevatedButton(
-                                    style: ElevatedButton.styleFrom(backgroundColor: GamerTheme.redAccent),
+                                    style: ElevatedButton.styleFrom(
+                                      backgroundColor: Colors.red,
+                                      foregroundColor: Colors.white,
+                                      elevation: 0,
+                                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                                    ),
                                     onPressed: () {
                                       Navigator.pop(dCtx);
                                       widget.onLeaveRoom();
                                     },
-                                    child: const Text('Leave', style: TextStyle(color: Colors.white)),
+                                    child: const Text('Leave'),
                                   ),
                                 ],
                               ),
@@ -5289,9 +5317,9 @@ class _InRoomBottomSheetContentState extends State<_InRoomBottomSheetContent> {
                       child: isCompleted
                           ? ElevatedButton.icon(
                               style: ElevatedButton.styleFrom(
-                                backgroundColor: Colors.teal.withOpacity(0.18),
-                                foregroundColor: Colors.tealAccent,
-                                side: const BorderSide(color: Colors.tealAccent, width: 1.2),
+                                backgroundColor: Colors.teal.withOpacity(0.12),
+                                foregroundColor: Colors.teal,
+                                side: const BorderSide(color: Colors.teal, width: 1.2),
                                 padding: const EdgeInsets.symmetric(vertical: 12),
                                 shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
                                 elevation: 0,
@@ -5303,38 +5331,38 @@ class _InRoomBottomSheetContentState extends State<_InRoomBottomSheetContent> {
                           : room.isProofRejected
                               ? ElevatedButton.icon(
                                   style: ElevatedButton.styleFrom(
-                                    backgroundColor: GamerTheme.redAccent.withOpacity(0.18),
-                                    foregroundColor: GamerTheme.redAccent,
-                                    side: const BorderSide(color: GamerTheme.redAccent, width: 1.2),
+                                    backgroundColor: Colors.red.withOpacity(0.12),
+                                    foregroundColor: Colors.red,
+                                    side: const BorderSide(color: Colors.red, width: 1.2),
                                     padding: const EdgeInsets.symmetric(vertical: 12),
                                     shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
                                     elevation: 0,
                                   ),
                                   onPressed: () => _showMatchDetailsDialog(room),
-                                  icon: const Icon(Icons.cancel_rounded, size: 16, color: GamerTheme.redAccent),
-                                  label: const Text('PROOF REJECTED', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12, color: GamerTheme.redAccent)),
+                                  icon: const Icon(Icons.cancel_rounded, size: 16, color: Colors.red),
+                                  label: const Text('PROOF REJECTED', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12, color: Colors.red)),
                                 )
                           : room.isRewardWaiting
                               ? ElevatedButton.icon(
                                   style: ElevatedButton.styleFrom(
-                                    backgroundColor: Colors.amber.withOpacity(0.18),
-                                    foregroundColor: Colors.amberAccent,
-                                    side: const BorderSide(color: Colors.amberAccent, width: 1.2),
+                                    backgroundColor: Colors.amber.withOpacity(0.15),
+                                    foregroundColor: Colors.amber.shade900,
+                                    side: BorderSide(color: Colors.amber.shade700, width: 1.2),
                                     padding: const EdgeInsets.symmetric(vertical: 12),
                                     shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
                                     elevation: 0,
                                   ),
                                   onPressed: () => _showMatchDetailsDialog(room),
-                                  icon: const Icon(Icons.hourglass_top_rounded, size: 16, color: Colors.amberAccent),
-                                  label: const Text('REWARD WAITING', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12, color: Colors.amberAccent)),
+                                  icon: Icon(Icons.hourglass_top_rounded, size: 16, color: Colors.amber.shade900),
+                                  label: Text('REWARD WAITING', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12, color: Colors.amber.shade900)),
                                 )
                               : isHost
                               ? (isMatchStarted
                                   ? OutlinedButton.icon(
                                       style: OutlinedButton.styleFrom(
-                                        foregroundColor: _neonGreen,
-                                        side: const BorderSide(color: _neonGreen, width: 1.2),
-                                        backgroundColor: _neonGreen.withOpacity(0.08),
+                                        foregroundColor: const Color(0xFF1877F2),
+                                        side: const BorderSide(color: Color(0xFF1877F2), width: 1.2),
+                                        backgroundColor: const Color(0xFFE7F3FF),
                                         padding: const EdgeInsets.symmetric(vertical: 12),
                                         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
                                       ),
@@ -5342,32 +5370,32 @@ class _InRoomBottomSheetContentState extends State<_InRoomBottomSheetContent> {
                                         ScaffoldMessenger.of(context).showSnackBar(
                                           const SnackBar(
                                             content: Text('🎮 Match is IN PROGRESS! Players are in game. Awaiting victory screenshot in chat.'),
-                                            backgroundColor: _neonGreen,
+                                            backgroundColor: Color(0xFF1877F2),
                                             behavior: SnackBarBehavior.floating,
                                             duration: Duration(seconds: 3),
                                           ),
                                         );
                                       },
-                                      icon: const Icon(Icons.sports_esports_rounded, size: 16, color: _neonGreen),
+                                      icon: const Icon(Icons.sports_esports_rounded, size: 16, color: Color(0xFF1877F2)),
                                       label: const Text(
                                         'MATCH IN PROGRESS',
-                                        style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12, color: _neonGreen),
+                                        style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12, color: Color(0xFF1877F2)),
                                       ),
                                     )
                                   : ElevatedButton.icon(
                                       style: ElevatedButton.styleFrom(
-                                        backgroundColor: _isStartingMatch ? GamerTheme.cardElevated : _neonGreen,
-                                        foregroundColor: Colors.black,
+                                        backgroundColor: _isStartingMatch ? const Color(0xFFE4E6EB) : const Color(0xFF1877F2),
+                                        foregroundColor: Colors.white,
+                                        elevation: 0,
                                         padding: const EdgeInsets.symmetric(vertical: 12),
                                         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-                                        elevation: 0,
                                       ),
                                       onPressed: _isStartingMatch ? null : () => _startMatch(room),
                                       icon: _isStartingMatch
                                           ? const SizedBox(
                                               width: 14,
                                               height: 14,
-                                              child: CircularProgressIndicator(strokeWidth: 2, color: _neonGreen),
+                                              child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
                                             )
                                           : const Icon(Icons.play_arrow_rounded, size: 18),
                                       label: Text(
@@ -5377,12 +5405,12 @@ class _InRoomBottomSheetContentState extends State<_InRoomBottomSheetContent> {
                                     ))
                               : ElevatedButton.icon(
                                   style: ElevatedButton.styleFrom(
-                                    backgroundColor: isMatchStarted ? _neonGreen.withOpacity(0.15) : _neonGreen,
-                                    foregroundColor: isMatchStarted ? _neonGreen : Colors.black,
-                                    side: isMatchStarted ? const BorderSide(color: _neonGreen, width: 1.2) : null,
+                                    backgroundColor: isMatchStarted ? const Color(0xFFE7F3FF) : const Color(0xFF1877F2),
+                                    foregroundColor: isMatchStarted ? const Color(0xFF1877F2) : Colors.white,
+                                    side: isMatchStarted ? const BorderSide(color: Color(0xFF1877F2), width: 1.2) : null,
+                                    elevation: 0,
                                     padding: const EdgeInsets.symmetric(vertical: 12),
                                     shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-                                    elevation: 0,
                                   ),
                                   onPressed: () => _showMatchDetailsDialog(room),
                                   icon: Icon(isMatchStarted ? Icons.sports_esports_rounded : Icons.info_outline_rounded, size: 16),

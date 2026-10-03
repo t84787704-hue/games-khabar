@@ -46,30 +46,23 @@ class _TeamsScreenState extends State<TeamsScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: const Color(0xFF0B0F17),
+      backgroundColor: const Color(0xFFF0F2F5),
       appBar: AppBar(
-        backgroundColor: const Color(0xFF131A29),
-        elevation: 0,
-        title: const Row(
-          children: [
-            Text('🛡️', style: TextStyle(fontSize: 22)),
-            SizedBox(width: 8),
-            Text(
-              'TEAMS',
-              style: TextStyle(
-                color: Colors.white,
-                fontWeight: FontWeight.w900,
-                fontSize: 18,
-                letterSpacing: 1.0,
-              ),
-            ),
-          ],
+        backgroundColor: Colors.white,
+        elevation: 1,
+        title: const Text(
+          'Teams',
+          style: TextStyle(
+            color: Color(0xFF1877F2),
+            fontWeight: FontWeight.bold,
+            fontSize: 22,
+          ),
         ),
         actions: [
           // Matches Quick Icon
           IconButton(
             tooltip: 'Team Matches',
-            icon: const Icon(Icons.sports_esports_rounded, color: Color(0xFFFF6B00)),
+            icon: const Icon(Icons.sports_esports_rounded, color: Color(0xFF65676B)),
             onPressed: () {
               Navigator.push(
                 context,
@@ -80,7 +73,7 @@ class _TeamsScreenState extends State<TeamsScreen> {
           // Leaderboard Quick Icon
           IconButton(
             tooltip: 'Team Leaderboard',
-            icon: const Icon(Icons.emoji_events_rounded, color: Color(0xFFFFD700)),
+            icon: const Icon(Icons.emoji_events_rounded, color: Color(0xFF65676B)),
             onPressed: () {
               Navigator.push(
                 context,
@@ -94,8 +87,13 @@ class _TeamsScreenState extends State<TeamsScreen> {
         children: [
           // 1. Top Bar: Create Team Action & Quick Navigation
           Container(
-            padding: const EdgeInsets.fromLTRB(16, 12, 16, 8),
-            color: const Color(0xFF131A29),
+            padding: const EdgeInsets.fromLTRB(16, 12, 16, 10),
+            decoration: const BoxDecoration(
+              color: Colors.white,
+              border: Border(
+                bottom: BorderSide(color: Color(0xFFE4E6EB), width: 1),
+              ),
+            ),
             child: Column(
               children: [
                 // "Create Team" Primary Action Button
@@ -104,19 +102,19 @@ class _TeamsScreenState extends State<TeamsScreen> {
                   child: ElevatedButton.icon(
                     onPressed: _openCreateTeamDialog,
                     style: ElevatedButton.styleFrom(
-                      backgroundColor: const Color(0xFFFF6B00),
-                      foregroundColor: Colors.black,
-                      padding: const EdgeInsets.symmetric(vertical: 13),
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                      elevation: 3,
+                      backgroundColor: const Color(0xFF1877F2),
+                      foregroundColor: Colors.white,
+                      padding: const EdgeInsets.symmetric(vertical: 12),
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                      elevation: 0,
                     ),
-                    icon: const Icon(Icons.shield_rounded, color: Colors.black, size: 20),
+                    icon: const Icon(Icons.shield_rounded, color: Colors.white, size: 20),
                     label: const Text(
-                      'CREATE TEAM (ٹیم بنائیں) 🛡️',
+                      'CREATE TEAM (ٹیم بنائیں)',
                       style: TextStyle(
-                        fontWeight: FontWeight.w900,
+                        fontWeight: FontWeight.bold,
                         fontSize: 14,
-                        letterSpacing: 0.5,
+                        letterSpacing: 0.3,
                       ),
                     ),
                   ),
@@ -125,22 +123,22 @@ class _TeamsScreenState extends State<TeamsScreen> {
 
                 // Search Box
                 Container(
-                  height: 42,
+                  height: 40,
                   decoration: BoxDecoration(
-                    color: const Color(0xFF1A2234),
-                    borderRadius: BorderRadius.circular(10),
-                    border: Border.all(color: const Color(0xFF2A3447)),
+                    color: const Color(0xFFF0F2F5),
+                    borderRadius: BorderRadius.circular(20),
+                    border: Border.all(color: const Color(0xFFE4E6EB)),
                   ),
                   child: TextField(
                     controller: _searchController,
-                    style: const TextStyle(color: Colors.white, fontSize: 13),
+                    style: const TextStyle(color: Color(0xFF050505), fontSize: 13),
                     decoration: InputDecoration(
                       hintText: 'Search by team name or tag...',
-                      hintStyle: const TextStyle(color: Color(0xFF555E6D), fontSize: 12.5),
-                      prefixIcon: const Icon(Icons.search_rounded, color: Color(0xFF8B949E), size: 18),
+                      hintStyle: const TextStyle(color: Color(0xFF65676B), fontSize: 13),
+                      prefixIcon: const Icon(Icons.search_rounded, color: Color(0xFF65676B), size: 18),
                       suffixIcon: _searchQuery.isNotEmpty
                           ? IconButton(
-                              icon: const Icon(Icons.clear, color: Colors.white54, size: 16),
+                              icon: const Icon(Icons.clear, color: Color(0xFF65676B), size: 16),
                               onPressed: () {
                                 _searchController.clear();
                                 setState(() => _searchQuery = '');
@@ -167,17 +165,17 @@ class _TeamsScreenState extends State<TeamsScreen> {
                           label: Text(
                             game,
                             style: TextStyle(
-                              color: isSel ? Colors.black : Colors.white,
-                              fontWeight: FontWeight.bold,
+                              color: isSel ? Colors.white : const Color(0xFF050505),
+                              fontWeight: isSel ? FontWeight.bold : FontWeight.w600,
                               fontSize: 12,
                             ),
                           ),
                           selected: isSel,
-                          selectedColor: const Color(0xFF00FF88),
-                          backgroundColor: const Color(0xFF161F2E),
+                          selectedColor: const Color(0xFF1877F2),
+                          backgroundColor: const Color(0xFFE4E6EB),
                           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
                           side: BorderSide(
-                            color: isSel ? const Color(0xFF00FF88) : const Color(0xFF2A3447),
+                            color: isSel ? const Color(0xFF1877F2) : const Color(0xFFCED0D4),
                           ),
                           onSelected: (val) {
                             if (val) setState(() => _selectedGameFilter = game);
@@ -200,7 +198,7 @@ class _TeamsScreenState extends State<TeamsScreen> {
               ),
               builder: (context, snapshot) {
                 if (snapshot.connectionState == ConnectionState.waiting) {
-                  return const Center(child: CircularProgressIndicator(color: Color(0xFFFF6B00)));
+                  return const Center(child: CircularProgressIndicator(color: Color(0xFF1877F2)));
                 }
 
                 final teams = snapshot.data ?? [];
@@ -215,35 +213,36 @@ class _TeamsScreenState extends State<TeamsScreen> {
                           Container(
                             padding: const EdgeInsets.all(20),
                             decoration: BoxDecoration(
-                              color: const Color(0xFF161F2E),
+                              color: const Color(0xFFE4E6EB),
                               shape: BoxShape.circle,
-                              border: Border.all(color: const Color(0xFF2A3447)),
+                              border: Border.all(color: const Color(0xFFCED0D4)),
                             ),
-                            child: const Text('🛡️', style: TextStyle(fontSize: 44)),
+                            child: const Icon(Icons.shield_rounded, size: 44, color: Color(0xFF65676B)),
                           ),
                           const SizedBox(height: 16),
                           Text(
                             _selectedGameFilter != 'All'
                                 ? 'No teams found for $_selectedGameFilter'
                                 : 'No Teams Registered Yet',
-                            style: const TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.bold),
+                            style: const TextStyle(color: Color(0xFF050505), fontSize: 16, fontWeight: FontWeight.bold),
                           ),
                           const SizedBox(height: 8),
                           const Text(
                             'سب سے پہلے اپنی ٹیم بنائیں اور دوسری ٹیموں کے ساتھ مقابلہ کریں!',
                             textAlign: TextAlign.center,
-                            style: TextStyle(color: Color(0xFF8B949E), fontSize: 13),
+                            style: TextStyle(color: Color(0xFF65676B), fontSize: 13),
                           ),
                           const SizedBox(height: 20),
                           ElevatedButton.icon(
                             onPressed: _openCreateTeamDialog,
                             style: ElevatedButton.styleFrom(
-                              backgroundColor: const Color(0xFFFF6B00),
-                              foregroundColor: Colors.black,
+                              backgroundColor: const Color(0xFF1877F2),
+                              foregroundColor: Colors.white,
                               padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
                               shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                              elevation: 0,
                             ),
-                            icon: const Icon(Icons.add, color: Colors.black),
+                            icon: const Icon(Icons.add, color: Colors.white),
                             label: const Text('Create First Team', style: TextStyle(fontWeight: FontWeight.bold)),
                           ),
                         ],
@@ -253,7 +252,7 @@ class _TeamsScreenState extends State<TeamsScreen> {
                 }
 
                 return ListView.builder(
-                  padding: const EdgeInsets.all(16),
+                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
                   itemCount: teams.length,
                   itemBuilder: (context, index) {
                     final team = teams[index];
