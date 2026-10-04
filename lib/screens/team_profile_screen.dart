@@ -1811,23 +1811,65 @@ class _TeamProfileScreenState extends State<TeamProfileScreen> {
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            FutureBuilder<TeamModel?>(
-                              future: _teamService.getTeam(opId),
+                            FutureBuilder<Map<String, String>>(
+                              future: () async {
+                                // 1. Check joined team from match map
+                                if (!isT1 && m['team1'] is Map) {
+                                  final name = m['team1']['name']?.toString() ?? '';
+                                  final tag = m['team1']['tag']?.toString() ?? '';
+                                  if (name.isNotEmpty) return {'name': name, 'tag': tag};
+                                } else if (isT1 && m['team2'] is Map) {
+                                  final name = m['team2']['name']?.toString() ?? '';
+                                  final tag = m['team2']['tag']?.toString() ?? '';
+                                  if (name.isNotEmpty) return {'name': name, 'tag': tag};
+                                }
+
+                                // 2. Query Supabase teams table
+                                try {
+                                  final tUuid = SupabaseService.toUuid(opId);
+                                  final sRes = await SupabaseService.client
+                                      .from('teams')
+                                      .select('name, tag')
+                                      .eq('id', tUuid)
+                                      .maybeSingle();
+                                  if (sRes != null && sRes['name'] != null) {
+                                    return {
+                                      'name': sRes['name'].toString(),
+                                      'tag': sRes['tag']?.toString() ?? '',
+                                    };
+                                  }
+                                } catch (_) {}
+
+                                // 3. Fallback to Firestore TeamService
+                                try {
+                                  final fTeam = await _teamService.getTeam(opId);
+                                  if (fTeam != null) {
+                                    return {'name': fTeam.name, 'tag': fTeam.tag};
+                                  }
+                                } catch (_) {}
+
+                                final fallbackName = m['opponent_name']?.toString() ?? 'Opponent';
+                                return {'name': fallbackName, 'tag': ''};
+                              }(),
                               builder: (context, opSnap) {
-                                final opName = opSnap.data?.name ?? 'Opponent Team';
+                                final opData = opSnap.data;
+                                final opName = opData?['name'] ?? 'Opponent';
+                                final opTag = opData?['tag'] ?? '';
+                                final tagStr = opTag.isNotEmpty ? ' [$opTag]' : '';
+
                                 return Text(
-                                  'vs $opName',
+                                  'vs $opName$tagStr',
                                   style: const TextStyle(
                                     color: Colors.white,
                                     fontWeight: FontWeight.bold,
-                                    fontSize: 13.5,
+                                    fontSize: 14,
                                   ),
                                   maxLines: 1,
                                   overflow: TextOverflow.ellipsis,
                                 );
                               },
                             ),
-                            const SizedBox(height: 3),
+                            const SizedBox(height: 4),
                             if (formattedDate.isNotEmpty)
                               Text(
                                 formattedDate,
@@ -1839,24 +1881,25 @@ class _TeamProfileScreenState extends State<TeamProfileScreen> {
                           ],
                         ),
                       ),
-                      const SizedBox(width: 8),
+                      const SizedBox(width: 10),
 
-                      // Result Badge
+                      // Result Badge (Bada aur Clear WON 🏆 / LOST ❌)
                       Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+                        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
                         decoration: BoxDecoration(
                           color: isWon
-                              ? const Color(0xFF00FF88).withOpacity(0.15)
+                              ? const Color(0xFF00FF88).withOpacity(0.18)
                               : isDraw
-                                  ? const Color(0xFFFFB800).withOpacity(0.15)
-                                  : const Color(0xFFFF4655).withOpacity(0.15),
-                          borderRadius: BorderRadius.circular(8),
+                                  ? const Color(0xFFFFB800).withOpacity(0.18)
+                                  : const Color(0xFFFF4655).withOpacity(0.18),
+                          borderRadius: BorderRadius.circular(10),
                           border: Border.all(
                             color: isWon
                                 ? const Color(0xFF00FF88)
                                 : isDraw
                                     ? const Color(0xFFFFB800)
                                     : const Color(0xFFFF4655),
+                            width: 1.5,
                           ),
                         ),
                         child: Text(
@@ -1872,7 +1915,8 @@ class _TeamProfileScreenState extends State<TeamProfileScreen> {
                                     ? const Color(0xFFFFB800)
                                     : const Color(0xFFFF4655),
                             fontWeight: FontWeight.w900,
-                            fontSize: 11,
+                            fontSize: 12.5,
+                            letterSpacing: 0.5,
                           ),
                         ),
                       ),

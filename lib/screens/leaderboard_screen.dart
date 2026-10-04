@@ -109,7 +109,7 @@ class _LeaderboardScreenState extends State<LeaderboardScreen> {
           onPressed: () => Navigator.pop(context),
         ),
         title: const Text(
-          '🏆 TOP 100 TEAMS',
+          '🏆 TOP 100 TEAMS - Most Wins',
           style: TextStyle(
             color: Colors.white,
             fontWeight: FontWeight.w900,
@@ -206,6 +206,8 @@ class _LeaderboardScreenState extends State<LeaderboardScreen> {
                           final team = _topTeams[index];
                           final rank = index + 1;
                           final teamName = team['name']?.toString() ?? 'Team';
+                          final tag = team['tag']?.toString() ?? '';
+                          final displayName = tag.isNotEmpty ? '$teamName [$tag]' : teamName;
                           final wins = (team['wins'] as num?)?.toInt() ?? 0;
 
                           return Container(
@@ -216,10 +218,10 @@ class _LeaderboardScreenState extends State<LeaderboardScreen> {
                                 _buildRankBadge(rank),
                                 const SizedBox(width: 14),
 
-                                // Team Name (e.g. J17)
+                                // Team Name [Tag] (e.g. J17 [TAG])
                                 Expanded(
                                   child: Text(
-                                    teamName,
+                                    displayName,
                                     style: const TextStyle(
                                       color: Colors.white,
                                       fontWeight: FontWeight.bold,

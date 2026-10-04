@@ -8,6 +8,7 @@ import '../widgets/create_team_dialog.dart';
 import '../widgets/end_match_dialog.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import 'my_team_matches_screen.dart';
+import 'team_matches_screen.dart';
 import 'team_leaderboard_screen.dart';
 import 'leaderboard_screen.dart';
 import 'team_profile_screen.dart';
@@ -259,7 +260,7 @@ class _TeamsScreenState extends State<TeamsScreen> {
             onPressed: () {
               Navigator.push(
                 context,
-                MaterialPageRoute(builder: (_) => const MyTeamMatchesScreen()),
+                MaterialPageRoute(builder: (_) => const TeamMatchesScreen()),
               );
             },
           ),
@@ -1002,12 +1003,12 @@ class _TeamsScreenState extends State<TeamsScreen> {
                               margin: const EdgeInsets.fromLTRB(16, 4, 16, 8),
                               padding: const EdgeInsets.all(12),
                               decoration: BoxDecoration(
-                                color: const Color(0xFFFEF2F2),
+                                color: const Color(0xFFE8F4FD),
                                 borderRadius: BorderRadius.circular(12),
-                                border: Border.all(color: const Color(0xFFFF4655), width: 1.2),
+                                border: Border.all(color: const Color(0xFF1877F2), width: 1.2),
                                 boxShadow: [
                                   BoxShadow(
-                                    color: const Color(0xFFFF4655).withOpacity(0.08),
+                                    color: const Color(0xFF1877F2).withOpacity(0.08),
                                     blurRadius: 4,
                                     offset: const Offset(0, 1),
                                   ),
@@ -1021,28 +1022,23 @@ class _TeamsScreenState extends State<TeamsScreen> {
                                       Container(
                                         padding: const EdgeInsets.all(5),
                                         decoration: BoxDecoration(
-                                          color: const Color(0xFFFF4655).withOpacity(0.12),
+                                          color: const Color(0xFF1877F2).withOpacity(0.12),
                                           borderRadius: BorderRadius.circular(6),
                                         ),
-                                        child: const Icon(Icons.warning_amber_rounded, color: Color(0xFFFF4655), size: 18),
+                                        child: const Icon(Icons.check_circle_rounded, color: Color(0xFF1877F2), size: 18),
                                       ),
                                       const SizedBox(width: 8),
-                                      const Expanded(
+                                      Expanded(
                                         child: Text(
-                                          'Aap ne pehle hi challenge bheja hai',
-                                          style: TextStyle(
-                                            color: Color(0xFFFF4655),
+                                          '✅ Aapka challenge bhej diya gaya hai - $toTeamName ko challenge bhej diya gaya hai, jawab ka intezar hai',
+                                          style: const TextStyle(
+                                            color: Color(0xFF1877F2),
                                             fontWeight: FontWeight.bold,
-                                            fontSize: 13.5,
+                                            fontSize: 13,
                                           ),
                                         ),
                                       ),
                                     ],
-                                  ),
-                                  const SizedBox(height: 6),
-                                  Text(
-                                    'آپ نے $toTeamName کو چیلنج بھیجا ہوا ہے۔ جواب کا انتظار ہے یا چیلنج واپس لے سکتے ہیں۔',
-                                    style: const TextStyle(color: Color(0xFF4B5563), fontSize: 12),
                                   ),
                                   const SizedBox(height: 8),
                                   Align(
@@ -1059,7 +1055,7 @@ class _TeamsScreenState extends State<TeamsScreen> {
                                       ),
                                       icon: const Icon(Icons.close_rounded, size: 15),
                                       label: const Text(
-                                        'CANCEL CHALLENGE (چیلنج منسوخ کریں)',
+                                        'CANCEL CHALLENGE',
                                         style: TextStyle(fontWeight: FontWeight.bold, fontSize: 11.5),
                                       ),
                                     ),

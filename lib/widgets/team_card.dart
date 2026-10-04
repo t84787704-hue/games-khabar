@@ -79,20 +79,55 @@ class _TeamCardState extends State<TeamCard> {
     final effectiveMyTeamName = widget.myTeamName.isNotEmpty ? widget.myTeamName : effectiveMyTeam.name;
 
     try {
-      // 1. Check in Supabase if pending challenge already exists
+      // 1. Check in Supabase if challenge already exists in pending/requested/active/under_review
       final existingCheck = await SupabaseService.client
           .from('challenges')
           .select()
           .eq('from_team_id', effectiveMyTeamId)
           .eq('to_team_id', effectiveTargetId)
-          .eq('status', 'pending');
+          .inFilter('status', ['pending', 'requested', 'active', 'under_review']);
 
       if (existingCheck.isNotEmpty) {
+        final cId = existingCheck[0]['id']?.toString() ?? '';
         if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-              content: Text('⚠️ Aap ne pehle hi challenge bheja hai!'),
-              backgroundColor: Color(0xFFFF4655),
+          // Block duplicate and show Red Error Banner / Dialog
+          showDialog(
+            context: context,
+            builder: (ctx) => AlertDialog(
+              backgroundColor: const Color(0xFF131A29),
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+              title: const Row(
+                children: [
+                  Icon(Icons.warning_amber_rounded, color: Color(0xFFFF4655), size: 24),
+                  SizedBox(width: 8),
+                  Text('Challenge Already Sent', style: TextStyle(color: Color(0xFFFF4655), fontWeight: FontWeight.bold, fontSize: 16)),
+                ],
+              ),
+              content: Text(
+                '⚠️ Aap ne pehle hi challenge bheja hai - Aap ${widget.team.name} ko pehle se challenge bhej chuke hain, isko complete ya cancel kiye baghair dubara nahi bhej sakte.',
+                style: const TextStyle(color: Colors.white, fontSize: 13),
+              ),
+              actions: [
+                TextButton(
+                  onPressed: () => Navigator.pop(ctx),
+                  child: const Text('Close', style: TextStyle(color: Color(0xFF8B949E))),
+                ),
+                ElevatedButton(
+                  onPressed: () {
+                    Navigator.pop(ctx);
+                    if (widget.onCancelChallenge != null && cId.isNotEmpty) {
+                      widget.onCancelChallenge!(cId);
+                    } else if (cId.isNotEmpty) {
+                      _cancelChallengeLocally(cId);
+                    }
+                  },
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: const Color(0xFFFF4655),
+                    foregroundColor: Colors.white,
+                  ),
+                  child: const Text('CANCEL', style: TextStyle(fontWeight: FontWeight.bold)),
+                ),
+              ],
             ),
           );
         }
@@ -141,8 +176,9 @@ class _TeamCardState extends State<TeamCard> {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text('⚔️ Challenge sent to ${widget.team.name}!'),
+            content: Text('✅ Aapka challenge bhej diya gaya hai - ${widget.team.name} ko challenge bhej diya gaya hai, jawab ka intezar hai'),
             backgroundColor: const Color(0xFF1877F2),
+            duration: const Duration(seconds: 4),
           ),
         );
       }
@@ -187,18 +223,18 @@ class _TeamCardState extends State<TeamCard> {
       margin: const EdgeInsets.only(top: 8),
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
       decoration: BoxDecoration(
-        color: const Color(0xFFFEF2F2),
+        color: const Color(0xFFE8F4FD),
         borderRadius: BorderRadius.circular(8),
-        border: Border.all(color: const Color(0xFFFF4655).withOpacity(0.5)),
+        border: Border.all(color: const Color(0xFF1877F2).withOpacity(0.4)),
       ),
       child: Row(
         children: [
-          const Icon(Icons.warning_amber_rounded, color: Color(0xFFFF4655), size: 14),
+          const Icon(Icons.hourglass_top_rounded, color: Color(0xFF1877F2), size: 14),
           const SizedBox(width: 6),
           const Expanded(
             child: Text(
-              'Aap ne pehle hi challenge bheja hai',
-              style: TextStyle(color: Color(0xFFFF4655), fontSize: 11, fontWeight: FontWeight.bold),
+              'Challenge bhej diya hai - Jawab ka intezar hai',
+              style: TextStyle(color: Color(0xFF1877F2), fontSize: 11, fontWeight: FontWeight.bold),
             ),
           ),
           InkWell(
