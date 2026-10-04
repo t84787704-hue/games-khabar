@@ -99,58 +99,36 @@ class _TeamsScreenState extends State<TeamsScreen> {
     final cId = challengeId.trim();
     if (_acceptingChallengeIds.contains(cId)) return;
 
-    // 1. Immediately setState: isAccepting=true, disable both Accept and Reject buttons
     setState(() {
       _acceptingChallengeIds.add(cId);
     });
 
     try {
-      // 2. Do operations with await in order:
-      // Update challenge status to accepted
-      await SupabaseService.client
-          .from('challenges')
-          .update({'status': 'accepted'})
-          .eq('id', cId);
+      // NEW SAFE RPC - 100 teams ek sath bhi duplicate nahi banega
+      final result = await SupabaseService.client
+         .rpc('accept_challenge_safe', params: {'p_challenge_id': cId});
 
-      // Check duplicate first: existing = await supabase.from('active_matches').select().eq('status','active').or('and(team1_id.eq.${from},team2_id.eq.${to}),and(team1_id.eq.${to},team2_id.eq.${from})')
-      final t1 = SupabaseService.toUuid(fromTeamId);
-      final t2 = SupabaseService.toUuid(toTeamId);
-
-      final existing = await SupabaseService.client
-          .from('active_matches')
-          .select()
-          .eq('status', 'active')
-          .or('and(team1_id.eq.$t1,team2_id.eq.$t2),and(team1_id.eq.$t2,team2_id.eq.$t1)');
-
-      final bool hasExisting = (existing as List).isNotEmpty;
-
-      // If existing empty: insert
-      if (!hasExisting) {
-        final newMatch = await SupabaseService.client.from('active_matches').insert({
-          'team1_id': t1,
-          'team2_id': t2,
-          'participants': [t1, t2],
-          'status': 'active',
-          'game': 'BGMI',
-          'created_at': DateTime.now().toUtc().toIso8601String(),
-        }).select().maybeSingle();
-
-        if (newMatch != null) {
-          _optimisticActiveMatches.add(newMatch);
+      final newMatchId = result?.toString();
+      if (newMatchId!= null && newMatchId.isNotEmpty) {
+        final fetched = await SupabaseService.client
+           .from('active_matches')
+           .select()
+           .eq('id', newMatchId)
+           .maybeSingle();
+        if (fetched!= null) {
+          _optimisticActiveMatches.add(fetched);
         }
       }
 
-      // 3. Optimistic UI: Immediately after await, setState hide Incoming banner and show Active Match banner (don't wait for stream). Show snackbar "Match Started! Live ho gaya"
       if (mounted) {
         setState(() {
           _acceptedChallengeIds.add(cId);
         });
-
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(hasExisting ? 'Already Active' : 'Match Started! Live ho gaya'),
-            backgroundColor: const Color(0xFF2E7D32),
-            duration: const Duration(seconds: 3),
+          const SnackBar(
+            content: Text('Match Started! Live ho gaya'),
+            backgroundColor: Color(0xFF2E7D32),
+            duration: Duration(seconds: 3),
           ),
         );
       }
@@ -162,7 +140,6 @@ class _TeamsScreenState extends State<TeamsScreen> {
         );
       }
     } finally {
-      // 4. On success: isAccepting=false
       if (mounted) {
         setState(() {
           _acceptingChallengeIds.remove(cId);
@@ -178,9 +155,9 @@ class _TeamsScreenState extends State<TeamsScreen> {
     });
     try {
       await SupabaseService.client
-          .from('challenges')
-          .update({'status': 'rejected'})
-          .eq('id', cId);
+         .from('challenges')
+         .update({'status': 'rejected'})
+         .eq('id', cId);
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(content: Text('Challenge rejected')),
@@ -192,26 +169,19 @@ class _TeamsScreenState extends State<TeamsScreen> {
   }
 
   Future<void> _handleCancelChallenge(String challengeId) async {
-    // 1. First: hide instantly for UX
     setState(() {
       _hasPending = false;
       _pendingChallengeId = null;
       _showRedBanner = false;
       _cancelledChallengeIds.add(challengeId);
     });
-
     try {
-      // 2. Then: delete from Supabase
       await SupabaseService.client
-          .from('challenges')
-          .delete()
-          .eq('id', challengeId);
-
-      // 3. Small delay 500ms then refetch to confirm
+         .from('challenges')
+         .delete()
+         .eq('id', challengeId);
       await Future.delayed(const Duration(milliseconds: 500));
       if (mounted) setState(() {});
-
-      // 4. Show snackbar "Challenge Cancel ho gaya"
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
@@ -234,7 +204,7 @@ class _TeamsScreenState extends State<TeamsScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final currentUid = FirebaseAuth.instance.currentUser?.uid ?? '';
+    final currentUid = FirebaseAuth.instance.currentUser?.uid?? '';
 
     return Scaffold(
       backgroundColor: const Color(0xFFF0F2F5),
@@ -272,22 +242,20 @@ class _TeamsScreenState extends State<TeamsScreen> {
           ),
         ],
       ),
-      // 1. Get myTeamId first via real-time stream of user teams
       body: StreamBuilder<List<TeamModel>>(
         stream: currentUid.isNotEmpty
-            ? _teamService.getUserTeamsStream(currentUid)
+           ? _teamService.getUserTeamsStream(currentUid)
             : Stream.value([]),
         builder: (context, userTeamsSnap) {
-          final userTeams = userTeamsSnap.data ?? [];
+          final userTeams = userTeamsSnap.data?? [];
           final myLeaderTeams = userTeams.where((t) => t.isLeader(currentUid)).toList();
-          final myTeam = myLeaderTeams.isNotEmpty ? myLeaderTeams.first : null;
-          final String myTeamId = myTeam?.id ?? '';
-          final String myTeamName = myTeam?.name ?? '';
+          final myTeam = myLeaderTeams.isNotEmpty? myLeaderTeams.first : null;
+          final String myTeamId = myTeam?.id?? '';
+          final String myTeamName = myTeam?.name?? '';
           final String myTeamUuid = SupabaseService.toUuid(myTeamId);
 
           return Column(
             children: [
-              // Top Bar: Create Team Action & Game Filter
               Container(
                 padding: const EdgeInsets.fromLTRB(16, 12, 16, 10),
                 decoration: const BoxDecoration(
@@ -321,8 +289,6 @@ class _TeamsScreenState extends State<TeamsScreen> {
                       ),
                     ),
                     const SizedBox(height: 10),
-
-                    // Search Box
                     Container(
                       height: 40,
                       decoration: BoxDecoration(
@@ -338,7 +304,7 @@ class _TeamsScreenState extends State<TeamsScreen> {
                           hintStyle: const TextStyle(color: Color(0xFF65676B), fontSize: 13),
                           prefixIcon: const Icon(Icons.search_rounded, color: Color(0xFF65676B), size: 18),
                           suffixIcon: _searchQuery.isNotEmpty
-                              ? IconButton(
+                             ? IconButton(
                                   icon: const Icon(Icons.clear, color: Color(0xFF65676B), size: 16),
                                   onPressed: () {
                                     _searchController.clear();
@@ -353,8 +319,6 @@ class _TeamsScreenState extends State<TeamsScreen> {
                       ),
                     ),
                     const SizedBox(height: 10),
-
-                    // Game Filter Chips
                     SingleChildScrollView(
                       scrollDirection: Axis.horizontal,
                       child: Row(
@@ -366,8 +330,8 @@ class _TeamsScreenState extends State<TeamsScreen> {
                               label: Text(
                                 game,
                                 style: TextStyle(
-                                  color: isSel ? Colors.white : const Color(0xFF050505),
-                                  fontWeight: isSel ? FontWeight.bold : FontWeight.w600,
+                                  color: isSel? Colors.white : const Color(0xFF050505),
+                                  fontWeight: isSel? FontWeight.bold : FontWeight.w600,
                                   fontSize: 12,
                                 ),
                               ),
@@ -376,7 +340,7 @@ class _TeamsScreenState extends State<TeamsScreen> {
                               backgroundColor: const Color(0xFFE4E6EB),
                               shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
                               side: BorderSide(
-                                color: isSel ? const Color(0xFF1877F2) : const Color(0xFFCED0D4),
+                                color: isSel? const Color(0xFF1877F2) : const Color(0xFFCED0D4),
                               ),
                               onSelected: (val) {
                                 if (val) setState(() => _selectedGameFilter = game);
@@ -390,19 +354,18 @@ class _TeamsScreenState extends State<TeamsScreen> {
                 ),
               ),
 
-              // 1. INCOMING CHALLENGES: Supabase Realtime stream
               if (myTeamId.isNotEmpty)
                 StreamBuilder<List<Map<String, dynamic>>>(
                   stream: SupabaseService.client
-                      .from('challenges')
-                      .stream(primaryKey: ['id'])
-                      .eq('to_team_id', myTeamUuid),
+                     .from('challenges')
+                     .stream(primaryKey: ['id'])
+                     .eq('to_team_id', myTeamUuid),
                   builder: (context, challengesSnap) {
                     if (!challengesSnap.hasData) return const SizedBox.shrink();
                     final docs = challengesSnap.data!
-                        .where((d) => (d['status'] ?? '').toString().toLowerCase() == 'pending')
-                        .where((d) => !_acceptedChallengeIds.contains(d['id']?.toString()))
-                        .toList();
+                       .where((d) => (d['status']?? '').toString().toLowerCase() == 'pending')
+                       .where((d) =>!_acceptedChallengeIds.contains(d['id']?.toString()))
+                       .toList();
                     if (docs.isEmpty) return const SizedBox.shrink();
 
                     return Container(
@@ -459,11 +422,11 @@ class _TeamsScreenState extends State<TeamsScreen> {
                             ],
                           ),
                           const SizedBox(height: 10),
-                          ...docs.map((doc) {
+                         ...docs.map((doc) {
                             final challengeId = doc['id'];
-                            final fromTeamName = doc['from_team_name']?.toString() ?? 'Opponent Team';
-                            final fromTeamId = doc['from_team_id']?.toString() ?? '';
-                            final toTeamId = doc['to_team_id']?.toString() ?? myTeamId;
+                            final fromTeamName = doc['from_team_name']?.toString()?? 'Opponent Team';
+                            final fromTeamId = doc['from_team_id']?.toString()?? '';
+                            final toTeamId = doc['to_team_id']?.toString()?? myTeamId;
                             final isAccepting = _acceptingChallengeIds.contains(challengeId.toString());
 
                             return Container(
@@ -498,7 +461,7 @@ class _TeamsScreenState extends State<TeamsScreen> {
                                     children: [
                                       Expanded(
                                         child: OutlinedButton(
-                                          onPressed: isAccepting ? null : () => _handleRejectChallenge(challengeId.toString()),
+                                          onPressed: isAccepting? null : () => _handleRejectChallenge(challengeId.toString()),
                                           style: OutlinedButton.styleFrom(
                                             foregroundColor: const Color(0xFFFF4655),
                                             side: const BorderSide(color: Color(0xFFFF4655)),
@@ -513,7 +476,7 @@ class _TeamsScreenState extends State<TeamsScreen> {
                                       Expanded(
                                         child: ElevatedButton(
                                           onPressed: isAccepting
-                                              ? null
+                                             ? null
                                               : () => _handleAcceptChallenge(
                                                     challengeId: challengeId.toString(),
                                                     fromTeamId: fromTeamId,
@@ -530,7 +493,7 @@ class _TeamsScreenState extends State<TeamsScreen> {
                                             elevation: 0,
                                           ),
                                           child: isAccepting
-                                              ? const Row(
+                                             ? const Row(
                                                   mainAxisAlignment: MainAxisAlignment.center,
                                                   children: [
                                                     SizedBox(
@@ -560,21 +523,20 @@ class _TeamsScreenState extends State<TeamsScreen> {
                   },
                 ),
 
-              // 3. ACTIVE MATCH CONNECTION BANNER: Supabase Realtime stream
               if (myTeamId.isNotEmpty)
                 StreamBuilder<List<Map<String, dynamic>>>(
                   stream: SupabaseService.client
-                      .from('active_matches')
-                      .stream(primaryKey: ['id']),
+                     .from('active_matches')
+                     .stream(primaryKey: ['id']),
                   builder: (context, activeSnap) {
-                    final streamMatches = activeSnap.data ?? [];
+                    final streamMatches = activeSnap.data?? [];
                     final combinedMatches = [
-                      ..._optimisticActiveMatches,
-                      ...streamMatches,
+                     ..._optimisticActiveMatches,
+                     ...streamMatches,
                     ].where((m) {
-                      final st = (m['status'] ?? '').toString().toLowerCase();
+                      final st = (m['status']?? '').toString().toLowerCase();
                       return (st == 'active' || st == 'under_review') &&
-                          !_completedMatchIds.contains(m['id']?.toString());
+                         !_completedMatchIds.contains(m['id']?.toString());
                     }).toList();
 
                     final myActiveMatches = combinedMatches.where((m) {
@@ -583,8 +545,8 @@ class _TeamsScreenState extends State<TeamsScreen> {
                       if (participants is List) {
                         pList.addAll(participants.map((p) => p.toString().toLowerCase()));
                       }
-                      pList.add(m['team1_id']?.toString().toLowerCase() ?? '');
-                      pList.add(m['team2_id']?.toString().toLowerCase() ?? '');
+                      pList.add(m['team1_id']?.toString().toLowerCase()?? '');
+                      pList.add(m['team2_id']?.toString().toLowerCase()?? '');
                       return pList.contains(myTeamUuid.toLowerCase()) || pList.contains(myTeamId.toLowerCase());
                     }).fold<List<Map<String, dynamic>>>([], (uniqueList, item) {
                       final t1 = item['team1_id']?.toString().toLowerCase();
@@ -603,16 +565,15 @@ class _TeamsScreenState extends State<TeamsScreen> {
                     return Column(
                       children: myActiveMatches.map((match) {
                         final matchId = match['id'];
-                        final t1 = match['team1_id']?.toString() ?? '';
-                        final t2 = match['team2_id']?.toString() ?? '';
+                        final t1 = match['team1_id']?.toString()?? '';
+                        final t2 = match['team2_id']?.toString()?? '';
                         final opponentId = (t1.toLowerCase() == myTeamUuid.toLowerCase() || t1.toLowerCase() == myTeamId.toLowerCase())
-                            ? t2
+                           ? t2
                             : t1;
-                        final status = (match['status'] ?? '').toString().toLowerCase();
-                        final proofStatus = (match['proof_status'] ?? '').toString().toLowerCase();
-                        final adminNote = match['admin_note']?.toString() ?? 'Invalid proof screenshot';
+                        final status = (match['status']?? '').toString().toLowerCase();
+                        final proofStatus = (match['proof_status']?? '').toString().toLowerCase();
+                        final adminNote = match['admin_note']?.toString()?? 'Invalid proof screenshot';
 
-                        // Case 3: under_review & accepted -> 3 second auto-hide
                         if (status == 'under_review' && proofStatus == 'accepted') {
                           if (!_autoCompletingMatchIds.contains(matchId.toString())) {
                             _autoCompletingMatchIds.add(matchId.toString());
@@ -637,13 +598,6 @@ class _TeamsScreenState extends State<TeamsScreen> {
                               color: const Color(0xFFE8F5E9),
                               borderRadius: BorderRadius.circular(12),
                               border: Border.all(color: const Color(0xFF2E7D32), width: 1.5),
-                              boxShadow: [
-                                BoxShadow(
-                                  color: const Color(0xFF2E7D32).withOpacity(0.08),
-                                  blurRadius: 6,
-                                  offset: const Offset(0, 2),
-                                ),
-                              ],
                             ),
                             child: Row(
                               children: [
@@ -672,7 +626,6 @@ class _TeamsScreenState extends State<TeamsScreen> {
                           );
                         }
 
-                        // Case 4: under_review & rejected -> Red banner + "Add Proof Again" button
                         if (status == 'under_review' && proofStatus == 'rejected') {
                           return Container(
                             margin: const EdgeInsets.fromLTRB(16, 4, 16, 8),
@@ -681,13 +634,6 @@ class _TeamsScreenState extends State<TeamsScreen> {
                               color: const Color(0xFFFFEBEE),
                               borderRadius: BorderRadius.circular(12),
                               border: Border.all(color: const Color(0xFFFF4655), width: 1.5),
-                              boxShadow: [
-                                BoxShadow(
-                                  color: const Color(0xFFFF4655).withOpacity(0.08),
-                                  blurRadius: 6,
-                                  offset: const Offset(0, 2),
-                                ),
-                              ],
                             ),
                             child: Column(
                               crossAxisAlignment: CrossAxisAlignment.start,
@@ -705,14 +651,6 @@ class _TeamsScreenState extends State<TeamsScreen> {
                                           fontSize: 13,
                                         ),
                                       ),
-                                    ),
-                                    Container(
-                                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-                                      decoration: BoxDecoration(
-                                        color: const Color(0xFFFF4655),
-                                        borderRadius: BorderRadius.circular(10),
-                                      ),
-                                      child: const Text('REJECTED', style: TextStyle(color: Colors.white, fontWeight: FontWeight.w900, fontSize: 10)),
                                     ),
                                   ],
                                 ),
@@ -756,7 +694,6 @@ class _TeamsScreenState extends State<TeamsScreen> {
                           );
                         }
 
-                        // Case 2: under_review & pending -> Yellow banner "⏳ Your Proof Under Review - Admin confirmation ka wait hai" + View Proof
                         if (status == 'under_review') {
                           final proofUrl = match['proof_url']?.toString();
                           return Container(
@@ -766,13 +703,6 @@ class _TeamsScreenState extends State<TeamsScreen> {
                               color: const Color(0xFFFFF8E1),
                               borderRadius: BorderRadius.circular(12),
                               border: Border.all(color: const Color(0xFFFFB300), width: 1.5),
-                              boxShadow: [
-                                BoxShadow(
-                                  color: const Color(0xFFFFB300).withOpacity(0.08),
-                                  blurRadius: 6,
-                                  offset: const Offset(0, 2),
-                                ),
-                              ],
                             ),
                             child: Row(
                               children: [
@@ -794,7 +724,7 @@ class _TeamsScreenState extends State<TeamsScreen> {
                                       FutureBuilder<TeamModel?>(
                                         future: _teamService.getTeam(opponentId),
                                         builder: (context, opSnap) {
-                                          final opponentName = opSnap.data?.name ?? match['opponent_name']?.toString() ?? 'Opponent';
+                                          final opponentName = opSnap.data?.name?? match['opponent_name']?.toString()?? 'Opponent';
                                           return Text(
                                             'vs $opponentName • Admin confirmation ka wait hai',
                                             style: const TextStyle(
@@ -807,7 +737,7 @@ class _TeamsScreenState extends State<TeamsScreen> {
                                     ],
                                   ),
                                 ),
-                                if (proofUrl != null && proofUrl.isNotEmpty) ...[
+                                if (proofUrl!= null && proofUrl.isNotEmpty)...[
                                   const SizedBox(width: 6),
                                   InkWell(
                                     onTap: () => _showProofImageDialog(context, proofUrl),
@@ -834,22 +764,13 @@ class _TeamsScreenState extends State<TeamsScreen> {
                                       ),
                                     ),
                                   ),
-                                ] else ...[
-                                  Container(
-                                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-                                    decoration: BoxDecoration(
-                                      color: const Color(0xFFFFB300),
-                                      borderRadius: BorderRadius.circular(10),
-                                    ),
-                                    child: const Text('REVIEW', style: TextStyle(color: Colors.black, fontWeight: FontWeight.w900, fontSize: 10)),
-                                  ),
                                 ],
                               ],
                             ),
                           );
                         }
 
-                        // Case 1: status == 'active' -> Green banner "Active Match vs Opponent - Match is Live" (already hai)
+                        // ACTIVE - View Opponent = Personal Link (Private Room)
                         return Container(
                           margin: const EdgeInsets.fromLTRB(16, 4, 16, 8),
                           padding: const EdgeInsets.all(12),
@@ -857,13 +778,6 @@ class _TeamsScreenState extends State<TeamsScreen> {
                             color: const Color(0xFFE8F5E9),
                             borderRadius: BorderRadius.circular(12),
                             border: Border.all(color: const Color(0xFF2E7D32), width: 1.5),
-                            boxShadow: [
-                              BoxShadow(
-                                color: const Color(0xFF2E7D32).withOpacity(0.08),
-                                blurRadius: 6,
-                                offset: const Offset(0, 2),
-                              ),
-                            ],
                           ),
                           child: Column(
                             crossAxisAlignment: CrossAxisAlignment.start,
@@ -876,7 +790,7 @@ class _TeamsScreenState extends State<TeamsScreen> {
                                     child: FutureBuilder<TeamModel?>(
                                       future: _teamService.getTeam(opponentId),
                                       builder: (context, opSnap) {
-                                        final opponentName = opSnap.data?.name ?? match['opponent_name']?.toString() ?? 'Opponent';
+                                        final opponentName = opSnap.data?.name?? match['opponent_name']?.toString()?? 'Opponent';
                                         return Text(
                                           '🔥 Active Match vs $opponentName - Match is Live',
                                           style: const TextStyle(
@@ -905,10 +819,16 @@ class _TeamsScreenState extends State<TeamsScreen> {
                                   if (opponentId.isNotEmpty)
                                     OutlinedButton.icon(
                                       onPressed: () {
+                                        // PERSONAL LINK ADDED HERE - View Opponent = Private Room
                                         Navigator.push(
                                           context,
                                           MaterialPageRoute(
-                                            builder: (_) => TeamProfileScreen(teamId: opponentId),
+                                            builder: (_) => PrivateMatchRoomScreen(
+                                              matchId: matchId.toString(),
+                                              opponentId: opponentId,
+                                              myTeamId: myTeamId,
+                                              myTeamName: myTeamName,
+                                            ),
                                           ),
                                         );
                                       },
@@ -923,7 +843,6 @@ class _TeamsScreenState extends State<TeamsScreen> {
                                       label: const Text('View Opponent', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 11)),
                                     ),
                                   const SizedBox(width: 8),
-                                  // 4. END MATCH button for leaders
                                   ElevatedButton.icon(
                                     onPressed: () async {
                                       final ended = await EndMatchBottomSheet.show(
@@ -939,13 +858,6 @@ class _TeamsScreenState extends State<TeamsScreen> {
                                             _completedMatchIds.add(matchId.toString());
                                             _optimisticActiveMatches.clear();
                                           });
-                                          ScaffoldMessenger.of(context).showSnackBar(
-                                            const SnackBar(
-                                              content: Text('Proof bhej diya gaya! Under Review.'),
-                                              backgroundColor: Color(0xFF2E7D32),
-                                              duration: Duration(seconds: 4),
-                                            ),
-                                          );
                                         }
                                       }
                                     },
@@ -970,31 +882,29 @@ class _TeamsScreenState extends State<TeamsScreen> {
                   },
                 ),
 
-              // 2. SENDER SIDE: Pending challenge red banner & All Teams List
               Expanded(
                 child: StreamBuilder<List<Map<String, dynamic>>>(
                   stream: myTeamId.isNotEmpty
-                      ? SupabaseService.client
-                          .from('challenges')
-                          .stream(primaryKey: ['id'])
-                          .eq('from_team_id', myTeamUuid)
+                     ? SupabaseService.client
+                         .from('challenges')
+                         .stream(primaryKey: ['id'])
+                         .eq('from_team_id', myTeamUuid)
                       : Stream.value([]),
                   builder: (context, sentSnap) {
-                    final sentDocs = sentSnap.data ?? [];
+                    final sentDocs = sentSnap.data?? [];
                     final activePendingList = sentDocs
-                        .where((d) => (d['status'] ?? '').toString().toLowerCase() == 'pending')
-                        .where((d) => !_cancelledChallengeIds.contains(d['id']?.toString()))
-                        .toList();
+                       .where((d) => (d['status']?? '').toString().toLowerCase() == 'pending')
+                       .where((d) =>!_cancelledChallengeIds.contains(d['id']?.toString()))
+                       .toList();
 
                     final bool hasPending = activePendingList.isNotEmpty;
 
                     return Column(
                       children: [
                         if (hasPending)
-                          ...activePendingList.map((doc) {
-                            final challengeId = doc['id']?.toString() ?? '';
-                            final toTeamName = doc['to_team_name']?.toString() ?? 'Opponent Team';
-
+                         ...activePendingList.map((doc) {
+                            final challengeId = doc['id']?.toString()?? '';
+                            final toTeamName = doc['to_team_name']?.toString()?? 'Opponent Team';
                             return Container(
                               margin: const EdgeInsets.fromLTRB(16, 4, 16, 8),
                               padding: const EdgeInsets.all(12),
@@ -1002,13 +912,6 @@ class _TeamsScreenState extends State<TeamsScreen> {
                                 color: const Color(0xFFE8F4FD),
                                 borderRadius: BorderRadius.circular(12),
                                 border: Border.all(color: const Color(0xFF1877F2), width: 1.2),
-                                boxShadow: [
-                                  BoxShadow(
-                                    color: const Color(0xFF1877F2).withOpacity(0.08),
-                                    blurRadius: 4,
-                                    offset: const Offset(0, 1),
-                                  ),
-                                ],
                               ),
                               child: Column(
                                 crossAxisAlignment: CrossAxisAlignment.start,
@@ -1060,8 +963,6 @@ class _TeamsScreenState extends State<TeamsScreen> {
                               ),
                             );
                           }),
-
-                        // All Teams List
                         Expanded(
                           child: StreamBuilder<List<TeamModel>>(
                             stream: _teamService.getTeamsStream(
@@ -1072,9 +973,7 @@ class _TeamsScreenState extends State<TeamsScreen> {
                               if (snapshot.connectionState == ConnectionState.waiting) {
                                 return const Center(child: CircularProgressIndicator(color: Color(0xFF1877F2)));
                               }
-
-                              final teams = snapshot.data ?? [];
-
+                              final teams = snapshot.data?? [];
                               if (teams.isEmpty) {
                                 return Center(
                                   child: Padding(
@@ -1093,36 +992,16 @@ class _TeamsScreenState extends State<TeamsScreen> {
                                         ),
                                         const SizedBox(height: 16),
                                         Text(
-                                          _selectedGameFilter != 'All'
-                                              ? 'No teams found for $_selectedGameFilter'
+                                          _selectedGameFilter!= 'All'
+                                             ? 'No teams found for $_selectedGameFilter'
                                               : 'No Teams Registered Yet',
                                           style: const TextStyle(color: Color(0xFF050505), fontSize: 16, fontWeight: FontWeight.bold),
-                                        ),
-                                        const SizedBox(height: 8),
-                                        const Text(
-                                          'سب سے پہلے اپنی ٹیم بنائیں اور دوسری ٹیموں کے ساتھ مقابلہ کریں!',
-                                          textAlign: TextAlign.center,
-                                          style: TextStyle(color: Color(0xFF65676B), fontSize: 13),
-                                        ),
-                                        const SizedBox(height: 20),
-                                        ElevatedButton.icon(
-                                          onPressed: _openCreateTeamDialog,
-                                          style: ElevatedButton.styleFrom(
-                                            backgroundColor: const Color(0xFF1877F2),
-                                            foregroundColor: Colors.white,
-                                            padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
-                                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-                                            elevation: 0,
-                                          ),
-                                          icon: const Icon(Icons.add, color: Colors.white),
-                                          label: const Text('Create First Team', style: TextStyle(fontWeight: FontWeight.bold)),
                                         ),
                                       ],
                                     ),
                                   ),
                                 );
                               }
-
                               return ListView.builder(
                                 padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
                                 itemCount: teams.length,
@@ -1137,12 +1016,11 @@ class _TeamsScreenState extends State<TeamsScreen> {
                                     },
                                     orElse: () => {},
                                   );
-
                                   return TeamCard(
                                     team: team,
                                     myTeamId: myTeamId,
                                     myTeamName: myTeamName,
-                                    pendingChallenge: matchingPending.isNotEmpty ? matchingPending : null,
+                                    pendingChallenge: matchingPending.isNotEmpty? matchingPending : null,
                                     onCancelChallenge: _handleCancelChallenge,
                                   );
                                 },
@@ -1158,6 +1036,206 @@ class _TeamsScreenState extends State<TeamsScreen> {
             ],
           );
         },
+      ),
+    );
+  }
+}
+
+// PRIVATE ROOM - PERSONAL LINK SCREEN (View Opponent ke andar)
+class PrivateMatchRoomScreen extends StatefulWidget {
+  final String matchId;
+  final String opponentId;
+  final String myTeamId;
+  final String myTeamName;
+  const PrivateMatchRoomScreen({
+    super.key,
+    required this.matchId,
+    required this.opponentId,
+    required this.myTeamId,
+    required this.myTeamName,
+  });
+
+  @override
+  State<PrivateMatchRoomScreen> createState() => _PrivateMatchRoomScreenState();
+}
+
+class _PrivateMatchRoomScreenState extends State<PrivateMatchRoomScreen> {
+  final TeamService _teamService = TeamService();
+  final TextEditingController _msgController = TextEditingController();
+  final TextEditingController _uidController = TextEditingController();
+  final TextEditingController _passController = TextEditingController();
+
+  Future<void> _sendMessage() async {
+    if (_msgController.text.trim().isEmpty) return;
+    final text = _msgController.text.trim();
+    _msgController.clear();
+    try {
+      await SupabaseService.client.from('match_messages').insert({
+        'match_id': widget.matchId,
+        'sender_team_id': SupabaseService.toUuid(widget.myTeamId),
+        'message': text,
+        'created_at': DateTime.now().toUtc().toIso8601String(),
+      });
+    } catch (e) {
+      debugPrint('Send error: $e');
+    }
+  }
+
+  void _showUidDialog() {
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: const Color(0xFF131A29),
+        title: const Text('UID / Password Share Karo', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 14)),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            TextField(controller: _uidController, style: const TextStyle(color: Colors.white), decoration: const InputDecoration(hintText: 'Room UID / ID', hintStyle: TextStyle(color: Colors.white54))),
+            const SizedBox(height: 10),
+            TextField(controller: _passController, style: const TextStyle(color: Colors.white), decoration: const InputDecoration(hintText: 'Password (if any)', hintStyle: TextStyle(color: Colors.white54))),
+          ],
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Cancel')),
+          ElevatedButton(
+            onPressed: () async {
+              final uid = _uidController.text.trim();
+              final pass = _passController.text.trim();
+              if (uid.isEmpty) return;
+              Navigator.pop(ctx);
+              await SupabaseService.client.from('match_messages').insert({
+                'match_id': widget.matchId,
+                'sender_team_id': SupabaseService.toUuid(widget.myTeamId),
+                'message': '🎮 ROOM UID: $uid | PASS: ${pass.isEmpty? 'No Pass' : pass}',
+                'created_at': DateTime.now().toUtc().toIso8601String(),
+                'is_uid_share': true,
+              });
+              _uidController.clear();
+              _passController.clear();
+            },
+            style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFFFFD600)),
+            child: const Text('Share', style: TextStyle(color: Colors.black, fontWeight: FontWeight.bold)),
+          ),
+        ],
+      ),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      backgroundColor: const Color(0xFF0B0E16),
+      appBar: AppBar(
+        backgroundColor: const Color(0xFF131A29),
+        iconTheme: const IconThemeData(color: Colors.white),
+        title: FutureBuilder<TeamModel?>(
+          future: _teamService.getTeam(widget.opponentId),
+          builder: (context, snap) {
+            final oppName = snap.data?.name?? 'Opponent';
+            return Text('${widget.myTeamName} VS $oppName', style: const TextStyle(color: Colors.white, fontSize: 14, fontWeight: FontWeight.bold));
+          },
+        ),
+      ),
+      body: Column(
+        children: [
+          Container(
+            width: double.infinity,
+            margin: const EdgeInsets.all(12),
+            padding: const EdgeInsets.all(12),
+            decoration: BoxDecoration(
+              color: const Color(0xFF131A29),
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(color: const Color(0xFF2A3245)),
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Text('Private Room • UID / Password Share', style: TextStyle(color: Color(0xFF00FF88), fontWeight: FontWeight.bold, fontSize: 12)),
+                const SizedBox(height: 8),
+                Container(
+                  padding: const EdgeInsets.all(10),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFFFFF8E1),
+                    borderRadius: BorderRadius.circular(8),
+                    border: Border.all(color: const Color(0xFFFFD600)),
+                  ),
+                  child: const Text('Ye chat bilkul private hai. Sirf tum aur opponent dekh sakte ho. Yahan Room UID/Password share karo.',
+                      style: TextStyle(color: Color(0xFF5D4037), fontSize: 11, fontWeight: FontWeight.w600)),
+                ),
+                const SizedBox(height: 10),
+                SizedBox(
+                  width: double.infinity,
+                  child: ElevatedButton.icon(
+                    onPressed: _showUidDialog,
+                    style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFFFFD600), foregroundColor: Colors.black, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8))),
+                    icon: const Icon(Icons.vpn_key_rounded, size: 16),
+                    label: const Text('UID / Password Share Karo', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12)),
+                  ),
+                ),
+              ],
+            ),
+          ),
+          Expanded(
+            child: StreamBuilder<List<Map<String, dynamic>>>(
+              stream: SupabaseService.client.from('match_messages').stream(primaryKey: ['id']).eq('match_id', widget.matchId),
+              builder: (context, snap) {
+                final msgs = (snap.data?? [])..sort((a, b) => (a['created_at']?? '').toString().compareTo(b['created_at']?? '').toString());
+                if (msgs.isEmpty) {
+                  return const Center(child: Text('No messages yet. UID share karo! 🎮', style: TextStyle(color: Colors.white54, fontSize: 12)));
+                }
+                return ListView.builder(
+                  padding: const EdgeInsets.all(12),
+                  itemCount: msgs.length,
+                  itemBuilder: (context, i) {
+                    final m = msgs[i];
+                    final isMe = m['sender_team_id']?.toString().toLowerCase() == SupabaseService.toUuid(widget.myTeamId).toLowerCase();
+                    final isUid = m['is_uid_share'] == true;
+                    return Align(
+                      alignment: isMe? Alignment.centerRight : Alignment.centerLeft,
+                      child: Container(
+                        margin: const EdgeInsets.only(bottom: 8),
+                        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                        decoration: BoxDecoration(
+                          color: isUid? const Color(0xFFFFD600) : (isMe? const Color(0xFF1877F2) : const Color(0xFF2A3245)),
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                        child: Text(m['message']?.toString()?? '', style: TextStyle(color: isUid? Colors.black : Colors.white, fontSize: 12, fontWeight: isUid? FontWeight.bold : FontWeight.w500)),
+                      ),
+                    );
+                  },
+                );
+              },
+            ),
+          ),
+          Container(
+            padding: const EdgeInsets.fromLTRB(12, 8, 12, 12),
+            decoration: const BoxDecoration(color: Color(0xFF131A29), border: Border(top: BorderSide(color: Color(0xFF2A3245)))),
+            child: Row(
+              children: [
+                Expanded(
+                  child: TextField(
+                    controller: _msgController,
+                    style: const TextStyle(color: Colors.white, fontSize: 13),
+                    decoration: InputDecoration(
+                      hintText: 'Message likho...',
+                      hintStyle: const TextStyle(color: Colors.white54, fontSize: 12),
+                      filled: true,
+                      fillColor: const Color(0xFF1E2538),
+                      border: OutlineInputBorder(borderRadius: BorderRadius.circular(20), borderSide: BorderSide.none),
+                      contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+                    ),
+                    onSubmitted: (_) => _sendMessage(),
+                  ),
+                ),
+                const SizedBox(width: 8),
+                CircleAvatar(
+                  backgroundColor: const Color(0xFF1877F2),
+                  child: IconButton(icon: const Icon(Icons.send_rounded, color: Colors.white, size: 18), onPressed: _sendMessage),
+                ),
+              ],
+            ),
+          ),
+        ],
       ),
     );
   }
