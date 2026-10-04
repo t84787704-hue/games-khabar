@@ -158,10 +158,10 @@ class _EndMatchBottomSheetState extends State<EndMatchBottomSheet> {
             .from('match_proofs')
             .getPublicUrl(fileName);
       } catch (e) {
-        debugPrint('[EndMatchDialog] match_proofs upload error: $e, falling back to screenshots');
+        debugPrint('[EndMatchDialog] match_proofs client.storage upload error: $e, trying REST upload');
         proofUrl = await SupabaseService.uploadFile(
           file: _pickedImage!,
-          bucket: SupabaseService.bucketScreenshots,
+          bucket: 'match_proofs',
           customFileName: fileName,
         );
       }

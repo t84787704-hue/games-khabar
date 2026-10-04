@@ -322,11 +322,13 @@ class _TeamProfileScreenState extends State<TeamProfileScreen> {
                     widget.teamId == myTeamId ||
                     myLeaderTeams.any((t) => t.id == widget.teamId);
 
-                // Opponent calculation (Bug 2 fix):
+                // Opponent calculation (Bug 2 fix: if viewing J17 profile, opponent is Jf19):
                 final t1 = activeMatch['team1_id']?.toString() ?? '';
                 final t2 = activeMatch['team2_id']?.toString() ?? '';
-                final isTeam1Me = (t1.toLowerCase() == myUuid || t1.toLowerCase() == myRawId);
-                final opponentTeamId = isTeam1Me ? t2 : t1;
+                final bool isT1ThisTeam = (targetUuid.isNotEmpty && (t1.toLowerCase() == targetUuid || t1.toLowerCase() == targetRawId)) ||
+                    (myUuid.isNotEmpty && (t1.toLowerCase() == myUuid || t1.toLowerCase() == myRawId));
+                final opponentTeamId = isT1ThisTeam ? t2 : t1;
+
                 final bool isMatchLeader = hasActiveMatch && (
                   isLeader ||
                   myLeaderTeams.any((t) {
@@ -406,31 +408,22 @@ class _TeamProfileScreenState extends State<TeamProfileScreen> {
                                     const Icon(Icons.local_fire_department_rounded, color: Color(0xFF00FF88), size: 22),
                                     const SizedBox(width: 8),
                                     Expanded(
-                                      child: isMyOwnTeam
-                                          ? FutureBuilder<TeamModel?>(
-                                              future: _teamService.getTeam(opponentTeamId),
-                                              builder: (context, opSnap) {
-                                                final opName = opSnap.data?.name ??
-                                                    activeMatch['opponent_name']?.toString() ??
-                                                    'Opponent Team';
-                                                return Text(
-                                                  '🔥 Active Match vs $opName - Match is Live',
-                                                  style: const TextStyle(
-                                                    color: Color(0xFF00FF88),
-                                                    fontWeight: FontWeight.bold,
-                                                    fontSize: 14,
-                                                  ),
-                                                );
-                                              },
-                                            )
-                                          : Text(
-                                              '🔥 Active Match vs ${team.name} - Match is Live',
-                                              style: const TextStyle(
-                                                color: Color(0xFF00FF88),
-                                                fontWeight: FontWeight.bold,
-                                                fontSize: 14,
-                                              ),
+                                      child: FutureBuilder<TeamModel?>(
+                                        future: _teamService.getTeam(opponentTeamId),
+                                        builder: (context, opSnap) {
+                                          final opName = opSnap.data?.name ??
+                                              activeMatch['opponent_name']?.toString() ??
+                                              (!isMyOwnTeam ? team.name : 'Opponent Team');
+                                          return Text(
+                                            '🔥 Active Match vs $opName - Match is Live',
+                                            style: const TextStyle(
+                                              color: Color(0xFF00FF88),
+                                              fontWeight: FontWeight.bold,
+                                              fontSize: 14,
                                             ),
+                                          );
+                                        },
+                                      ),
                                     ),
                                     Container(
                                       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),

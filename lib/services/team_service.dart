@@ -127,6 +127,59 @@ class TeamService {
     });
   }
 
+  /// Get single team future (checks Firestore doc, or Supabase UUID/ID)
+  Future<TeamModel?> getTeam(String teamId) async {
+    try {
+      if (teamId.isEmpty) return null;
+      final doc = await _teamsRef.doc(teamId).get();
+      if (doc.exists) return TeamModel.fromFirestore(doc);
+
+      // Check Firestore where 'id' or other fields might match
+      final querySnap = await _teamsRef.where('id', isEqualTo: teamId).limit(1).get();
+      if (querySnap.docs.isNotEmpty) {
+        return TeamModel.fromFirestore(querySnap.docs.first);
+      }
+
+      // Fallback: check Supabase teams table
+      try {
+        final tUuid = SupabaseService.toUuid(teamId);
+        final supaTeam = await SupabaseService.client
+            .from('teams')
+            .select()
+            .or('id.eq.$tUuid,team_id.eq.$teamId')
+            .maybeSingle();
+
+        if (supaTeam != null) {
+          return TeamModel(
+            id: supaTeam['team_id']?.toString() ?? supaTeam['id']?.toString() ?? teamId,
+            name: supaTeam['name']?.toString() ?? 'Team',
+            tag: supaTeam['tag']?.toString() ?? '',
+            logo: supaTeam['logo_url']?.toString() ?? '',
+            game: supaTeam['game']?.toString() ?? '',
+            description: supaTeam['bio']?.toString() ?? '',
+            requirements: '',
+            leaderId: supaTeam['leader_id']?.toString() ?? '',
+            leaderName: supaTeam['leader_name']?.toString() ?? '',
+            members: [supaTeam['leader_id']?.toString() ?? ''],
+            pendingJoinRequests: const [],
+            wins: (supaTeam['wins'] as num?)?.toInt() ?? 0,
+            losses: (supaTeam['losses'] as num?)?.toInt() ?? 0,
+            draws: (supaTeam['draws'] as num?)?.toInt() ?? 0,
+            points: (supaTeam['points'] as num?)?.toInt() ?? 0,
+            createdAt: DateTime.tryParse(supaTeam['created_at']?.toString() ?? '') ?? DateTime.now(),
+          );
+        }
+      } catch (e) {
+        debugPrint('[TeamService] Supabase fallback getTeam error: $e');
+      }
+
+      return null;
+    } catch (e) {
+      debugPrint('[TeamService] Error getting team $teamId: $e');
+      return null;
+    }
+  }
+
   /// Send Join Request to a team
   Future<bool> requestToJoinTeam({
     required String teamId,
