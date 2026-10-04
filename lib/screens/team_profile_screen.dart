@@ -316,6 +316,7 @@ class _TeamProfileScreenState extends State<TeamProfileScreen> {
                   },
                   orElse: () => {},
                 );
+                final bool hasActiveMatch = activeMatch.isNotEmpty;
                 final bool isViewedMyTeam = isLeader ||
                     (myTeamId.isNotEmpty &&
                         (widget.teamId.toLowerCase() == myTeamId.toLowerCase() ||
