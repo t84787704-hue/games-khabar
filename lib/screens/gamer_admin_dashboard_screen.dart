@@ -14,6 +14,9 @@ import '../services/coin_wallet_service.dart';
 import '../services/gamer_auth_service.dart';
 import '../services/coin_reward_service.dart';
 import '../services/notification_service.dart';
+import '../services/supabase_service.dart';
+import '../services/team_service.dart';
+import '../models/team_model.dart';
 import 'admin/admin_team_matches_screen.dart';
 
 class GamerAdminDashboardScreen extends StatefulWidget {
@@ -159,6 +162,8 @@ class _GamerAdminDashboardScreenState extends State<GamerAdminDashboardScreen>
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       _buildHeader(),
+                      const SizedBox(height: 14),
+                      _buildPendingProofsReviewSection(),
                       const SizedBox(height: 14),
                       _buildStatsCards(),
                       const SizedBox(height: 16),
@@ -348,6 +353,120 @@ class _GamerAdminDashboardScreenState extends State<GamerAdminDashboardScreen>
           ),
         ],
       ),
+    );
+  }
+
+  Widget _buildPendingProofsReviewSection() {
+    return StreamBuilder<List<Map<String, dynamic>>>(
+      stream: SupabaseService.client
+          .from('active_matches')
+          .stream(primaryKey: ['id']),
+      builder: (context, snapshot) {
+        final matches = snapshot.data ?? [];
+        final pendingProofs = matches.where((m) {
+          final st = (m['status'] ?? '').toString().toLowerCase();
+          final pst = (m['proof_status'] ?? '').toString().toLowerCase();
+          return st == 'under_review' && (pst == 'pending' || pst.isEmpty);
+        }).toList();
+
+        return Container(
+          width: double.infinity,
+          margin: const EdgeInsets.only(bottom: 4),
+          padding: const EdgeInsets.all(14),
+          decoration: BoxDecoration(
+            color: const Color(0xFF131A29),
+            borderRadius: BorderRadius.circular(16),
+            border: Border.all(
+              color: pendingProofs.isNotEmpty ? const Color(0xFFFFB800) : const Color(0xFF2A3447),
+              width: pendingProofs.isNotEmpty ? 1.5 : 1.0,
+            ),
+            boxShadow: [
+              if (pendingProofs.isNotEmpty)
+                BoxShadow(
+                  color: const Color(0xFFFFB800).withOpacity(0.12),
+                  blurRadius: 10,
+                  offset: const Offset(0, 3),
+                ),
+            ],
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                children: [
+                  Container(
+                    padding: const EdgeInsets.all(8),
+                    decoration: BoxDecoration(
+                      color: pendingProofs.isNotEmpty
+                          ? const Color(0xFFFFB800).withOpacity(0.15)
+                          : const Color(0xFF1B2436),
+                      borderRadius: BorderRadius.circular(10),
+                    ),
+                    child: Icon(
+                      Icons.fact_check_rounded,
+                      color: pendingProofs.isNotEmpty ? const Color(0xFFFFB800) : const Color(0xFF00FF88),
+                      size: 20,
+                    ),
+                  ),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        const Text(
+                          'Pending Proofs Review',
+                          style: TextStyle(
+                            color: Colors.white,
+                            fontSize: 15,
+                            fontWeight: FontWeight.w900,
+                          ),
+                        ),
+                        const SizedBox(height: 2),
+                        Text(
+                          pendingProofs.isNotEmpty
+                              ? '${pendingProofs.length} match proof(s) awaiting verification'
+                              : 'No match proofs pending review',
+                          style: const TextStyle(
+                            color: Color(0xFF8B949E),
+                            fontSize: 11,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                    decoration: BoxDecoration(
+                      color: pendingProofs.isNotEmpty
+                          ? const Color(0xFFFFB800)
+                          : const Color(0xFF00FF88).withOpacity(0.2),
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    child: Text(
+                      pendingProofs.isNotEmpty ? '${pendingProofs.length} PENDING' : 'ALL CLEAR ✅',
+                      style: TextStyle(
+                        color: pendingProofs.isNotEmpty ? Colors.black : const Color(0xFF00FF88),
+                        fontWeight: FontWeight.w900,
+                        fontSize: 11,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+              if (pendingProofs.isNotEmpty) ...[
+                const SizedBox(height: 14),
+                const Divider(color: Color(0xFF2A3447), height: 1),
+                const SizedBox(height: 12),
+                ...pendingProofs.map((match) => _AdminPendingProofCard(
+                  key: ValueKey(match['id']),
+                  match: match,
+                  teamService: TeamService(),
+                )),
+              ],
+            ],
+          ),
+        );
+      },
     );
   }
 
@@ -3074,6 +3193,468 @@ class _AdminRankActionButtonsState extends State<_AdminRankActionButtons> {
           ],
         ),
       ],
+    );
+  }
+}
+
+class _AdminPendingProofCard extends StatefulWidget {
+  final Map<String, dynamic> match;
+  final TeamService teamService;
+
+  const _AdminPendingProofCard({
+    super.key,
+    required this.match,
+    required this.teamService,
+  });
+
+  @override
+  State<_AdminPendingProofCard> createState() => _AdminPendingProofCardState();
+}
+
+class _AdminPendingProofCardState extends State<_AdminPendingProofCard> {
+  final TextEditingController _reasonController = TextEditingController();
+  bool _isProcessing = false;
+
+  @override
+  void dispose() {
+    _reasonController.dispose();
+    super.dispose();
+  }
+
+  void _showImageDialog(BuildContext context, String imageUrl) {
+    showDialog(
+      context: context,
+      builder: (ctx) => Dialog(
+        backgroundColor: const Color(0xFF131A29),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Padding(
+              padding: const EdgeInsets.all(12),
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  const Text('Proof Screenshot 📸', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 14)),
+                  IconButton(
+                    icon: const Icon(Icons.close, color: Colors.white54, size: 20),
+                    onPressed: () => Navigator.pop(ctx),
+                  ),
+                ],
+              ),
+            ),
+            InteractiveViewer(
+              child: ClipRRect(
+                borderRadius: const BorderRadius.vertical(bottom: Radius.circular(16)),
+                child: CachedNetworkImage(
+                  imageUrl: imageUrl,
+                  fit: BoxFit.contain,
+                  placeholder: (c, u) => const SizedBox(height: 200, child: Center(child: CircularProgressIndicator(color: Color(0xFF00FF88)))),
+                  errorWidget: (c, u, e) => const SizedBox(height: 200, child: Center(child: Icon(Icons.broken_image, color: Colors.white30))),
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Future<void> _updateTeamStatsInDb({
+    required String teamId,
+    required int addW,
+    required int addL,
+    required int addD,
+    required int addPts,
+  }) async {
+    // 1. Supabase teams table
+    try {
+      final tUuid = SupabaseService.toUuid(teamId);
+      final res = await SupabaseService.client
+          .from('teams')
+          .select('wins, losses, draws, points')
+          .eq('id', tUuid)
+          .maybeSingle();
+
+      if (res != null) {
+        final currentWins = (res['wins'] as num?)?.toInt() ?? 0;
+        final currentLosses = (res['losses'] as num?)?.toInt() ?? 0;
+        final currentDraws = (res['draws'] as num?)?.toInt() ?? 0;
+        final currentPoints = (res['points'] as num?)?.toInt() ?? 0;
+
+        await SupabaseService.client.from('teams').update({
+          'wins': currentWins + addW,
+          'losses': currentLosses + addL,
+          'draws': currentDraws + addD,
+          'points': currentPoints + addPts,
+        }).eq('id', tUuid);
+      }
+    } catch (e) {
+      debugPrint('[AdminProof] Supabase team stats update error: $e');
+    }
+
+    // 2. Firestore teams collection
+    try {
+      final firestore = FirebaseFirestore.instance;
+      final docRef = firestore.collection('teams').doc(teamId);
+      final docSnap = await docRef.get();
+      if (docSnap.exists) {
+        await docRef.update({
+          'wins': FieldValue.increment(addW),
+          'losses': FieldValue.increment(addL),
+          'draws': FieldValue.increment(addD),
+          'points': FieldValue.increment(addPts),
+        });
+      }
+    } catch (e) {
+      debugPrint('[AdminProof] Firestore team stats update error: $e');
+    }
+  }
+
+  Future<void> _handleAccept() async {
+    if (_isProcessing) return;
+    setState(() => _isProcessing = true);
+
+    try {
+      final matchId = widget.match['id'];
+      final team1Id = (widget.match['team1_id'] ?? '').toString();
+      final team2Id = (widget.match['team2_id'] ?? '').toString();
+      final winnerId = (widget.match['winner_team_id'] ?? '').toString();
+      final result = (widget.match['result'] ?? '').toString().toLowerCase();
+
+      // 1. Update Supabase active_matches table
+      try {
+        await SupabaseService.client.from('active_matches').update({
+          'proof_status': 'accepted',
+          'status': 'completed',
+        }).eq('id', matchId);
+      } catch (e) {
+        debugPrint('[AdminProof] Accept update with proof_status error: $e, trying status only');
+        await SupabaseService.client.from('active_matches').update({
+          'status': 'completed',
+        }).eq('id', matchId);
+      }
+
+      // 2. Update Win/Loss/Points on Teams
+      if (result == 'win' || (winnerId.isNotEmpty && result != 'draw')) {
+        final t1Uuid = SupabaseService.toUuid(team1Id);
+        final isT1Winner = (winnerId == team1Id || winnerId == t1Uuid);
+        final winTeam = isT1Winner ? team1Id : team2Id;
+        final loseTeam = isT1Winner ? team2Id : team1Id;
+
+        await _updateTeamStatsInDb(teamId: winTeam, addW: 1, addL: 0, addD: 0, addPts: 3);
+        await _updateTeamStatsInDb(teamId: loseTeam, addW: 0, addL: 1, addD: 0, addPts: 0);
+      } else if (result == 'loss') {
+        final isT1Submitter = (winnerId == team2Id || winnerId == SupabaseService.toUuid(team2Id));
+        final winTeam = isT1Submitter ? team2Id : team1Id;
+        final loseTeam = isT1Submitter ? team1Id : team2Id;
+
+        await _updateTeamStatsInDb(teamId: winTeam, addW: 1, addL: 0, addD: 0, addPts: 3);
+        await _updateTeamStatsInDb(teamId: loseTeam, addW: 0, addL: 1, addD: 0, addPts: 0);
+      } else {
+        // Draw: both teams get +1 D, +1 Pt
+        await _updateTeamStatsInDb(teamId: team1Id, addW: 0, addL: 0, addD: 1, addPts: 1);
+        await _updateTeamStatsInDb(teamId: team2Id, addW: 0, addL: 0, addD: 1, addPts: 1);
+      }
+
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('✅ Proof accepted! Match completed and team points updated.'),
+            backgroundColor: Color(0xFF00FF88),
+          ),
+        );
+      }
+    } catch (e) {
+      debugPrint('[AdminProof] Accept error: $e');
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Error accepting proof: $e'),
+            backgroundColor: const Color(0xFFFF4655),
+          ),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _isProcessing = false);
+    }
+  }
+
+  Future<void> _handleReject() async {
+    if (_isProcessing) return;
+    setState(() => _isProcessing = true);
+
+    try {
+      final matchId = widget.match['id'];
+      final reason = _reasonController.text.trim();
+      final finalReason = reason.isNotEmpty ? reason : 'Proof screenshot was unclear or invalid';
+
+      try {
+        await SupabaseService.client.from('active_matches').update({
+          'proof_status': 'rejected',
+          'admin_note': finalReason,
+        }).eq('id', matchId);
+      } catch (e) {
+        debugPrint('[AdminProof] Reject update error: $e');
+      }
+
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('❌ Proof rejected with note: $finalReason'),
+            backgroundColor: const Color(0xFFFF4655),
+          ),
+        );
+      }
+    } catch (e) {
+      debugPrint('[AdminProof] Reject error: $e');
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Error rejecting proof: $e'),
+            backgroundColor: const Color(0xFFFF4655),
+          ),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _isProcessing = false);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final t1 = (widget.match['team1_id'] ?? '').toString();
+    final t2 = (widget.match['team2_id'] ?? '').toString();
+    final result = (widget.match['result'] ?? 'WIN').toString().toUpperCase();
+    final proofUrl = widget.match['proof_url']?.toString();
+    final dateRaw = widget.match['ended_at'] ?? widget.match['created_at'];
+    String formattedDate = '';
+    if (dateRaw != null) {
+      try {
+        final dt = DateTime.parse(dateRaw.toString()).toLocal();
+        formattedDate = DateFormat('dd MMM, hh:mm a').format(dt);
+      } catch (_) {
+        formattedDate = dateRaw.toString();
+      }
+    }
+
+    return Container(
+      margin: const EdgeInsets.only(bottom: 12),
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: const Color(0xFF1B2436),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: const Color(0xFF2A3447)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          // Row 1: vs Teams Names
+          Row(
+            children: [
+              Expanded(
+                child: FutureBuilder<List<TeamModel?>>(
+                  future: Future.wait([
+                    widget.teamService.getTeam(t1),
+                    widget.teamService.getTeam(t2),
+                  ]),
+                  builder: (context, snap) {
+                    final t1Name = snap.data?[0]?.name ?? widget.match['team1_name'] ?? 'Team 1';
+                    final t2Name = snap.data?[1]?.name ?? widget.match['team2_name'] ?? 'Team 2';
+                    return Text(
+                      '$t1Name  ⚔️  $t2Name',
+                      style: const TextStyle(
+                        color: Colors.white,
+                        fontWeight: FontWeight.bold,
+                        fontSize: 14,
+                      ),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    );
+                  },
+                ),
+              ),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                decoration: BoxDecoration(
+                  color: const Color(0xFF00FF88).withOpacity(0.18),
+                  borderRadius: BorderRadius.circular(6),
+                  border: Border.all(color: const Color(0xFF00FF88).withOpacity(0.4)),
+                ),
+                child: Text(
+                  'Claim: $result',
+                  style: const TextStyle(
+                    color: Color(0xFF00FF88),
+                    fontWeight: FontWeight.bold,
+                    fontSize: 11,
+                  ),
+                ),
+              ),
+            ],
+          ),
+          if (formattedDate.isNotEmpty) ...[
+            const SizedBox(height: 4),
+            Text(
+              'Submitted: $formattedDate',
+              style: const TextStyle(color: Color(0xFF8B949E), fontSize: 11),
+            ),
+          ],
+          const SizedBox(height: 10),
+
+          // Row 2: Proof Image from match_proofs bucket
+          if (proofUrl != null && proofUrl.isNotEmpty) ...[
+            GestureDetector(
+              onTap: () => _showImageDialog(context, proofUrl),
+              child: Stack(
+                alignment: Alignment.bottomRight,
+                children: [
+                  ClipRRect(
+                    borderRadius: BorderRadius.circular(10),
+                    child: CachedNetworkImage(
+                      imageUrl: proofUrl,
+                      height: 160,
+                      width: double.infinity,
+                      fit: BoxFit.cover,
+                      placeholder: (c, u) => Container(
+                        height: 160,
+                        color: const Color(0xFF10141D),
+                        child: const Center(
+                          child: CircularProgressIndicator(color: Color(0xFF00FF88)),
+                        ),
+                      ),
+                      errorWidget: (c, u, e) => Container(
+                        height: 100,
+                        color: const Color(0xFF10141D),
+                        child: const Center(
+                          child: Row(
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            children: [
+                              Icon(Icons.broken_image, color: Colors.white30),
+                              SizedBox(width: 8),
+                              Text('Could not load image', style: TextStyle(color: Colors.white30, fontSize: 12)),
+                            ],
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
+                  Container(
+                    margin: const EdgeInsets.all(8),
+                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                    decoration: BoxDecoration(
+                      color: Colors.black.withOpacity(0.75),
+                      borderRadius: BorderRadius.circular(6),
+                    ),
+                    child: const Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Icon(Icons.zoom_in, color: Colors.white, size: 14),
+                        SizedBox(width: 4),
+                        Text('Tap to View', style: TextStyle(color: Colors.white, fontSize: 10, fontWeight: FontWeight.bold)),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(height: 10),
+          ] else ...[
+            Container(
+              height: 60,
+              decoration: BoxDecoration(
+                color: const Color(0xFF10141D),
+                borderRadius: BorderRadius.circular(8),
+              ),
+              child: const Center(
+                child: Text('No screenshot attached', style: TextStyle(color: Colors.white38, fontSize: 12)),
+              ),
+            ),
+            const SizedBox(height: 10),
+          ],
+
+          // Row 3: Reject Reason TextField
+          TextField(
+            controller: _reasonController,
+            style: const TextStyle(color: Colors.white, fontSize: 12.5),
+            decoration: InputDecoration(
+              hintText: 'Reject reason (ضروری اگر Reject کرنا ہو)...',
+              hintStyle: const TextStyle(color: Colors.white38, fontSize: 12),
+              filled: true,
+              fillColor: const Color(0xFF10141D),
+              contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+              border: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(8),
+                borderSide: const BorderSide(color: Color(0xFF2A3447)),
+              ),
+              enabledBorder: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(8),
+                borderSide: const BorderSide(color: Color(0xFF2A3447)),
+              ),
+              focusedBorder: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(8),
+                borderSide: const BorderSide(color: Color(0xFFFF4655)),
+              ),
+            ),
+          ),
+          const SizedBox(height: 10),
+
+          // Row 4: Accept and Reject buttons
+          if (_isProcessing)
+            const Center(
+              child: Padding(
+                padding: EdgeInsets.all(8),
+                child: CircularProgressIndicator(color: Color(0xFF00FF88)),
+              ),
+            )
+          else
+            Row(
+              children: [
+                // Reject Button ❌
+                Expanded(
+                  child: SizedBox(
+                    height: 40,
+                    child: ElevatedButton.icon(
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: const Color(0xFFFF4655),
+                        foregroundColor: Colors.white,
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                        elevation: 0,
+                      ),
+                      icon: const Icon(Icons.close_rounded, size: 16),
+                      label: const Text(
+                        'Reject ❌',
+                        style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12),
+                      ),
+                      onPressed: _handleReject,
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 10),
+                // Accept Button ✅
+                Expanded(
+                  child: SizedBox(
+                    height: 40,
+                    child: ElevatedButton.icon(
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: const Color(0xFF00FF88),
+                        foregroundColor: Colors.black,
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                        elevation: 0,
+                      ),
+                      icon: const Icon(Icons.check_rounded, size: 16, color: Colors.black),
+                      label: const Text(
+                        'Accept ✅',
+                        style: TextStyle(fontWeight: FontWeight.w900, fontSize: 12),
+                      ),
+                      onPressed: _handleAccept,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+        ],
+      ),
     );
   }
 }

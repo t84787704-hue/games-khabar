@@ -178,33 +178,29 @@ class _EndMatchBottomSheetState extends State<EndMatchBottomSheet> {
         winnerTeamId = null; // draw
       }
 
-      // 4. Update active_matches table in Supabase
+      // 4. Update active_matches table in Supabase to under_review with proof_status pending
       try {
         await SupabaseService.client.from('active_matches').update({
-          'status': 'completed',
+          'status': 'under_review',
+          'proof_status': 'pending',
           if (winnerTeamId != null) 'winner_team_id': winnerTeamId,
           if (proofUrl != null) 'proof_url': proofUrl,
           'result': _selectedResult,
           'ended_at': DateTime.now().toUtc().toIso8601String(),
         }).eq('id', widget.activeMatchId);
       } catch (e) {
-        debugPrint('[EndMatchDialog] Full active_matches update failed: $e, fallback status: completed');
+        debugPrint('[EndMatchDialog] Update with proof_status failed: $e, fallback status under_review');
         await SupabaseService.client.from('active_matches').update({
-          'status': 'completed',
+          'status': 'under_review',
+          if (winnerTeamId != null) 'winner_team_id': winnerTeamId,
+          if (proofUrl != null) 'proof_url': proofUrl,
+          'result': _selectedResult,
+          'ended_at': DateTime.now().toUtc().toIso8601String(),
         }).eq('id', widget.activeMatchId);
       }
 
-      // 5. Update team stats
-      if (_selectedResult == 'win') {
-        await _updateTeamStatsInDb(teamId: widget.myTeamId, addW: 1, addL: 0, addD: 0, addPts: 3);
-        await _updateTeamStatsInDb(teamId: widget.opponentId, addW: 0, addL: 1, addD: 0, addPts: 0);
-      } else if (_selectedResult == 'loss') {
-        await _updateTeamStatsInDb(teamId: widget.myTeamId, addW: 0, addL: 1, addD: 0, addPts: 0);
-        await _updateTeamStatsInDb(teamId: widget.opponentId, addW: 1, addL: 0, addD: 0, addPts: 3);
-      } else {
-        await _updateTeamStatsInDb(teamId: widget.myTeamId, addW: 0, addL: 0, addD: 1, addPts: 1);
-        await _updateTeamStatsInDb(teamId: widget.opponentId, addW: 0, addL: 0, addD: 1, addPts: 1);
-      }
+      // Note: Team points update has been removed from user side as instructed.
+      // Points/Win/Loss are now verified and updated by Admin on Accept in Admin Panel.
 
       if (mounted) {
         Navigator.pop(context, true);
