@@ -112,8 +112,9 @@ class _TeamCardState extends State<TeamCard> {
           pList.addAll(participants.map((p) => p.toString()));
         }
         pList.add(m['team1_id']?.toString() ?? '');
-        pList.add(m['team2_id']?.toString() ?? '');
-        return pList.contains(effectiveMyTeamId) && pList.contains(widget.team.id);
+        final pLower = pList.map((p) => p.toLowerCase()).toList();
+        return pLower.contains(effectiveMyTeamId.toLowerCase()) &&
+            (pLower.contains(effectiveTargetId.toLowerCase()) || pLower.contains(widget.team.id.toLowerCase()));
       });
 
       if (hasActiveMatch) {
@@ -278,16 +279,17 @@ class _TeamCardState extends State<TeamCard> {
   }
 
   Widget _buildChallengeButton(String currentUid) {
-    return OutlinedButton.icon(
-      style: OutlinedButton.styleFrom(
-        foregroundColor: const Color(0xFF1877F2),
-        side: const BorderSide(color: Color(0xFF1877F2)),
-        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+    return ElevatedButton.icon(
+      style: ElevatedButton.styleFrom(
+        backgroundColor: const Color(0xFF1877F2),
+        foregroundColor: Colors.white,
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
         minimumSize: const Size(0, 32),
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+        elevation: 0,
       ),
-      icon: const Icon(Icons.flash_on_rounded, size: 13, color: Color(0xFF1877F2)),
-      label: const Text('Challenge', style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold)),
+      icon: const Icon(Icons.flash_on_rounded, size: 14, color: Colors.white),
+      label: const Text('CHALLENGE', style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold)),
       onPressed: () => _handleChallenge(currentUid),
     );
   }
@@ -299,6 +301,10 @@ class _TeamCardState extends State<TeamCard> {
     final isLeader = team.isLeader(currentUid);
     final isMember = team.isMember(currentUid);
     final hasRequested = team.hasRequestedJoin(currentUid);
+    final bool isMyOwnTeam = isLeader ||
+        (widget.myTeamId.isNotEmpty &&
+            (team.id.toLowerCase() == widget.myTeamId.toLowerCase() ||
+             SupabaseService.toUuid(team.id).toLowerCase() == SupabaseService.toUuid(widget.myTeamId).toLowerCase()));
 
     return Container(
       margin: const EdgeInsets.only(bottom: 10),
@@ -445,7 +451,7 @@ class _TeamCardState extends State<TeamCard> {
                 ],
 
                 // 2. RED BANNER: Realtime Supabase check if pending challenge already sent to this team
-                if (!isLeader && !isMember && currentUid.isNotEmpty && widget.myTeamId.isNotEmpty) ...[
+                if (!isMyOwnTeam && currentUid.isNotEmpty && widget.myTeamId.isNotEmpty) ...[
                   if (widget.onCancelChallenge != null) ...[
                     if (widget.pendingChallenge != null)
                       _buildRedBanner(widget.pendingChallenge!['id']?.toString() ?? ''),
@@ -514,7 +520,7 @@ class _TeamCardState extends State<TeamCard> {
                     const SizedBox(width: 8),
 
                     // Join / Challenge / Active Match / Manage Button
-                    if (isLeader) ...[
+                    if (isMyOwnTeam) ...[
                       Container(
                         padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
                         decoration: BoxDecoration(
@@ -525,19 +531,6 @@ class _TeamCardState extends State<TeamCard> {
                         child: const Text(
                           'YOUR TEAM',
                           style: TextStyle(color: Color(0xFF1877F2), fontWeight: FontWeight.bold, fontSize: 11),
-                        ),
-                      ),
-                    ] else if (isMember) ...[
-                      Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-                        decoration: BoxDecoration(
-                          color: const Color(0xFFE4E6EB),
-                          borderRadius: BorderRadius.circular(8),
-                          border: Border.all(color: const Color(0xFFCED0D4)),
-                        ),
-                        child: const Text(
-                          'MEMBER',
-                          style: TextStyle(color: Color(0xFF050505), fontWeight: FontWeight.bold, fontSize: 11),
                         ),
                       ),
                     ] else ...[
@@ -573,28 +566,27 @@ class _TeamCardState extends State<TeamCard> {
                             orElse: () => {},
                           );
 
-                          // If active match found with opponent: show "ACTIVE MATCH" green button + "View Match" button
+                          // If active match found with opponent: show "LIVE" badge + "View Match" button
                           if (activeMatchWithOpponent.isNotEmpty) {
                             return Row(
                               mainAxisSize: MainAxisSize.min,
                               children: [
                                 Container(
-                                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
+                                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 5),
                                   decoration: BoxDecoration(
-                                    color: const Color(0xFFE8F5E9),
+                                    color: const Color(0xFF00FF88),
                                     borderRadius: BorderRadius.circular(8),
-                                    border: Border.all(color: const Color(0xFF2E7D32)),
                                   ),
                                   child: const Row(
                                     mainAxisSize: MainAxisSize.min,
                                     children: [
-                                      Icon(Icons.local_fire_department_rounded, size: 14, color: Color(0xFF2E7D32)),
+                                      Icon(Icons.local_fire_department_rounded, size: 14, color: Colors.black),
                                       SizedBox(width: 4),
                                       Text(
-                                        'ACTIVE MATCH',
+                                        'LIVE',
                                         style: TextStyle(
-                                          color: Color(0xFF2E7D32),
-                                          fontWeight: FontWeight.bold,
+                                          color: Colors.black,
+                                          fontWeight: FontWeight.w900,
                                           fontSize: 11,
                                         ),
                                       ),

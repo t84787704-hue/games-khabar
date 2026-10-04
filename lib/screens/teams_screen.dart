@@ -240,9 +240,7 @@ class _TeamsScreenState extends State<TeamsScreen> {
         builder: (context, userTeamsSnap) {
           final userTeams = userTeamsSnap.data ?? [];
           final myLeaderTeams = userTeams.where((t) => t.isLeader(currentUid)).toList();
-          final myTeam = myLeaderTeams.isNotEmpty
-              ? myLeaderTeams.first
-              : (userTeams.isNotEmpty ? userTeams.first : null);
+          final myTeam = myLeaderTeams.isNotEmpty ? myLeaderTeams.first : null;
           final String myTeamId = myTeam?.id ?? '';
           final String myTeamName = myTeam?.name ?? '';
           final String myTeamUuid = SupabaseService.toUuid(myTeamId);

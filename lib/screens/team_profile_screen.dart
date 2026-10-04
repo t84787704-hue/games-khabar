@@ -316,11 +316,11 @@ class _TeamProfileScreenState extends State<TeamProfileScreen> {
                   },
                   orElse: () => {},
                 );
-                final bool hasActiveMatch = activeMatch.isNotEmpty;
-                final bool isMyOwnTeam = isLeader ||
-                    isMember ||
-                    widget.teamId == myTeamId ||
-                    myLeaderTeams.any((t) => t.id == widget.teamId);
+                final bool isViewedMyTeam = isLeader ||
+                    (myTeamId.isNotEmpty &&
+                        (widget.teamId.toLowerCase() == myTeamId.toLowerCase() ||
+                         targetUuid == SupabaseService.toUuid(myTeamId).toLowerCase()));
+                final bool isMyOwnTeam = isViewedMyTeam;
 
                 // Opponent calculation (Bug 2 fix: if viewing J17 profile, opponent is Jf19):
                 final t1 = activeMatch['team1_id']?.toString() ?? '';
@@ -372,7 +372,7 @@ class _TeamProfileScreenState extends State<TeamProfileScreen> {
                       else if (!isMyOwnTeam) ...[
                         IconButton(
                           tooltip: 'Challenge Team',
-                          icon: const Icon(Icons.flash_on_rounded, color: Color(0xFFFF4655)),
+                          icon: const Icon(Icons.flash_on_rounded, color: Color(0xFF1877F2)),
                           onPressed: () => _handleChallenge(team, currentUid),
                         ),
                       ],
@@ -978,132 +978,7 @@ class _TeamProfileScreenState extends State<TeamProfileScreen> {
                 ),
                 const SizedBox(height: 16),
 
-                // Action Buttons (Join Request / Challenge on Opponent Profile)
-                if (!isMyOwnTeam) ...[
-                  Row(
-                    children: [
-                      // Join Request Button
-                      Expanded(
-                        child: ElevatedButton.icon(
-                          onPressed: (hasRequested || _isActionLoading) ? null : () => _handleJoinRequest(team, currentUid),
-                          style: ElevatedButton.styleFrom(
-                            backgroundColor: hasRequested ? Colors.white24 : const Color(0xFF00FF88),
-                            foregroundColor: Colors.black,
-                            padding: const EdgeInsets.symmetric(vertical: 12),
-                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-                          ),
-                          icon: Icon(hasRequested ? Icons.hourglass_top_rounded : Icons.person_add_rounded, size: 18),
-                          label: Text(
-                            hasRequested ? 'REQUESTED' : 'JOIN REQUEST',
-                            style: const TextStyle(fontWeight: FontWeight.w900, fontSize: 12.5),
-                          ),
-                        ),
-                      ),
-                      const SizedBox(width: 10),
 
-                      // Challenge / Requested / Active Match Button
-                      if (hasActiveMatch) ...[
-                        Expanded(
-                          child: Container(
-                            padding: const EdgeInsets.symmetric(vertical: 12),
-                            decoration: BoxDecoration(
-                              color: const Color(0xFF1B5E20).withOpacity(0.4),
-                              borderRadius: BorderRadius.circular(10),
-                              border: Border.all(color: const Color(0xFF00FF88)),
-                            ),
-                            child: const Row(
-                              mainAxisAlignment: MainAxisAlignment.center,
-                              children: [
-                                Icon(Icons.local_fire_department_rounded, color: Color(0xFF00FF88), size: 18),
-                                SizedBox(width: 6),
-                                Text(
-                                  'ACTIVE MATCH',
-                                  style: TextStyle(color: Color(0xFF00FF88), fontWeight: FontWeight.w900, fontSize: 12.5),
-                                ),
-                              ],
-                            ),
-                          ),
-                        ),
-                      ] else ...[
-                        Expanded(
-                          child: StreamBuilder<List<Map<String, dynamic>>>(
-                            stream: myTeamId.isNotEmpty
-                                ? SupabaseService.client
-                                    .from('challenges')
-                                    .stream(primaryKey: ['id'])
-                                    .eq('from_team_id', SupabaseService.toUuid(myTeamId))
-                                : Stream.value([]),
-                            builder: (context, cSnap) {
-                              final challenges = cSnap.data ?? [];
-                              final targetUuid = SupabaseService.toUuid(widget.teamId).toLowerCase();
-                              final rawTeamId = widget.teamId.toLowerCase();
-                              final pendingDoc = challenges.firstWhere(
-                                (d) {
-                                  final toId = d['to_team_id']?.toString().toLowerCase();
-                                  final st = (d['status'] ?? '').toString().toLowerCase();
-                                  final id = d['id']?.toString() ?? '';
-                                  return (toId == targetUuid || toId == rawTeamId) &&
-                                      st == 'pending' &&
-                                      !_cancelledChallengeIds.contains(id);
-                                },
-                                orElse: () => {},
-                              );
-
-                              if (pendingDoc.isNotEmpty) {
-                                return Row(
-                                  children: [
-                                    Expanded(
-                                      child: Container(
-                                        padding: const EdgeInsets.symmetric(vertical: 12),
-                                        decoration: BoxDecoration(
-                                          color: Colors.white24,
-                                          borderRadius: BorderRadius.circular(10),
-                                        ),
-                                        child: const Center(
-                                          child: Text(
-                                            'REQUESTED',
-                                            style: TextStyle(color: Colors.white70, fontWeight: FontWeight.w900, fontSize: 12),
-                                          ),
-                                        ),
-                                      ),
-                                    ),
-                                    const SizedBox(width: 6),
-                                    ElevatedButton(
-                                      style: ElevatedButton.styleFrom(
-                                        backgroundColor: const Color(0xFFFF4655),
-                                        foregroundColor: Colors.white,
-                                        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 12),
-                                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-                                      ),
-                                      onPressed: () => _cancelChallenge(pendingDoc['id']?.toString() ?? ''),
-                                      child: const Text('CANCEL', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 11)),
-                                    ),
-                                  ],
-                                );
-                              }
-
-                              return ElevatedButton.icon(
-                                onPressed: () => _handleChallenge(team, currentUid),
-                                style: ElevatedButton.styleFrom(
-                                  backgroundColor: const Color(0xFFFF4655),
-                                  foregroundColor: Colors.white,
-                                  padding: const EdgeInsets.symmetric(vertical: 12),
-                                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-                                ),
-                                icon: const Icon(Icons.flash_on_rounded, size: 18),
-                                label: const Text(
-                                  'CHALLENGE ⚔️',
-                                  style: const TextStyle(fontWeight: FontWeight.w900, fontSize: 12.5),
-                                ),
-                              );
-                            },
-                          ),
-                        ),
-                      ],
-                    ],
-                  ),
-                  const SizedBox(height: 16),
-                ],
 
                 // Team Description
                 if (team.description.isNotEmpty) ...[
@@ -1258,6 +1133,261 @@ class _TeamProfileScreenState extends State<TeamProfileScreen> {
                   ),
                 ),
                       ],
+                    ),
+                  ),
+                  bottomNavigationBar: Container(
+                    padding: EdgeInsets.only(
+                      left: 16,
+                      right: 16,
+                      top: 10,
+                      bottom: MediaQuery.of(context).padding.bottom + 10,
+                    ),
+                    decoration: const BoxDecoration(
+                      color: Color(0xFF131A29),
+                      border: Border(top: BorderSide(color: Color(0xFF2A3447), width: 1)),
+                    ),
+                    child: Builder(
+                      builder: (context) {
+                        // 1. If viewedTeamId == myTeamId: show "YOUR TEAM"
+                        if (isViewedMyTeam) {
+                          return Container(
+                            width: double.infinity,
+                            height: 48,
+                            decoration: BoxDecoration(
+                              color: const Color(0xFF1877F2).withOpacity(0.15),
+                              borderRadius: BorderRadius.circular(10),
+                              border: Border.all(color: const Color(0xFF1877F2), width: 1.2),
+                            ),
+                            child: const Center(
+                              child: Row(
+                                mainAxisAlignment: MainAxisAlignment.center,
+                                children: [
+                                  Icon(Icons.shield_rounded, color: Color(0xFF1877F2), size: 18),
+                                  SizedBox(width: 8),
+                                  Text(
+                                    'YOUR TEAM (آپ کی اپنی ٹیم)',
+                                    style: TextStyle(
+                                      color: Color(0xFF1877F2),
+                                      fontWeight: FontWeight.bold,
+                                      fontSize: 14,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          );
+                        }
+
+                        // 2. Else if active match exists with this team: show 2 buttons: "View Opponent" and "End Match"
+                        if (hasActiveMatch) {
+                          return Row(
+                            children: [
+                              if (opponentTeamId.isNotEmpty)
+                                Expanded(
+                                  child: SizedBox(
+                                    height: 46,
+                                    child: OutlinedButton.icon(
+                                      onPressed: () {
+                                        Navigator.push(
+                                          context,
+                                          MaterialPageRoute(
+                                            builder: (_) => TeamProfileScreen(teamId: opponentTeamId),
+                                          ),
+                                        );
+                                      },
+                                      style: OutlinedButton.styleFrom(
+                                        foregroundColor: const Color(0xFF00FF88),
+                                        side: const BorderSide(color: Color(0xFF00FF88), width: 1.2),
+                                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                                      ),
+                                      icon: const Icon(Icons.visibility_rounded, size: 16),
+                                      label: const Text(
+                                        'View Opponent',
+                                        style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13),
+                                      ),
+                                    ),
+                                  ),
+                                ),
+                              if (opponentTeamId.isNotEmpty) const SizedBox(width: 10),
+                              if (isMatchLeader)
+                                Expanded(
+                                  child: SizedBox(
+                                    height: 46,
+                                    child: ElevatedButton.icon(
+                                      style: ElevatedButton.styleFrom(
+                                        backgroundColor: const Color(0xFFFF4655),
+                                        foregroundColor: Colors.white,
+                                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                                        elevation: 0,
+                                      ),
+                                      icon: const Icon(Icons.stop_circle_rounded, size: 16),
+                                      label: const Text(
+                                        'End Match',
+                                        style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13),
+                                      ),
+                                      onPressed: () async {
+                                        final activeMatchId = activeMatch['id']?.toString() ?? '';
+                                        final ended = await EndMatchBottomSheet.show(
+                                          context,
+                                          activeMatchId: activeMatchId,
+                                          myTeamId: myTeamId.isNotEmpty ? myTeamId : widget.teamId,
+                                          opponentId: opponentTeamId,
+                                          myTeamName: isMyOwnTeam
+                                              ? team.name
+                                              : (myLeaderTeams.isNotEmpty ? myLeaderTeams.first.name : 'My Team'),
+                                          opponentName: isMyOwnTeam
+                                              ? (activeMatch['opponent_name'] ?? 'Opponent')
+                                              : team.name,
+                                        );
+                                        if (ended == true) {
+                                          if (mounted) {
+                                            setState(() {
+                                              _completedMatchIds.add(activeMatchId);
+                                              _optimisticActiveMatches.clear();
+                                            });
+                                            ScaffoldMessenger.of(context).showSnackBar(
+                                              const SnackBar(
+                                                content: Text('Proof bhej diya gaya, opponent confirmation ka wait karo'),
+                                                backgroundColor: Color(0xFF00FF88),
+                                                duration: Duration(seconds: 4),
+                                              ),
+                                            );
+                                          }
+                                        }
+                                      },
+                                    ),
+                                  ),
+                                ),
+                            ],
+                          );
+                        }
+
+                        // 3. Else: show big blue button "Challenge Karo - چیلنج کریں" + Join Team button
+                        return StreamBuilder<List<Map<String, dynamic>>>(
+                          stream: myTeamId.isNotEmpty
+                              ? SupabaseService.client
+                                  .from('challenges')
+                                  .stream(primaryKey: ['id'])
+                                  .eq('from_team_id', SupabaseService.toUuid(myTeamId))
+                              : Stream.value([]),
+                          builder: (context, cSnap) {
+                            final challenges = cSnap.data ?? [];
+                            final rawTeamId = widget.teamId.toLowerCase();
+                            final pendingDoc = challenges.firstWhere(
+                              (d) {
+                                final toId = d['to_team_id']?.toString().toLowerCase();
+                                final st = (d['status'] ?? '').toString().toLowerCase();
+                                final id = d['id']?.toString() ?? '';
+                                return (toId == targetUuid || toId == rawTeamId) &&
+                                    st == 'pending' &&
+                                    !_cancelledChallengeIds.contains(id);
+                              },
+                              orElse: () => {},
+                            );
+
+                            final bool isPending = pendingDoc.isNotEmpty;
+
+                            return Row(
+                              children: [
+                                // Join Team Button
+                                if (!team.isMember(currentUid)) ...[
+                                  Expanded(
+                                    flex: 2,
+                                    child: SizedBox(
+                                      height: 46,
+                                      child: OutlinedButton.icon(
+                                        onPressed: (hasRequested || _isActionLoading)
+                                            ? null
+                                            : () => _handleJoinRequest(team, currentUid),
+                                        style: OutlinedButton.styleFrom(
+                                          foregroundColor: Colors.white,
+                                          side: const BorderSide(color: Color(0xFF2A3447)),
+                                          backgroundColor: const Color(0xFF1B2436),
+                                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                                        ),
+                                        icon: Icon(
+                                          hasRequested ? Icons.hourglass_top_rounded : Icons.person_add_rounded,
+                                          size: 16,
+                                          color: hasRequested ? const Color(0xFFFFB800) : const Color(0xFF00FF88),
+                                        ),
+                                        label: Text(
+                                          hasRequested ? 'Requested' : 'Join Team',
+                                          style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 12),
+                                        ),
+                                      ),
+                                    ),
+                                  ),
+                                  const SizedBox(width: 10),
+                                ],
+
+                                // Big Blue Button: Challenge Karo - چیلنج کریں
+                                Expanded(
+                                  flex: 3,
+                                  child: SizedBox(
+                                    height: 46,
+                                    child: isPending
+                                        ? Row(
+                                            children: [
+                                              Expanded(
+                                                child: Container(
+                                                  height: 46,
+                                                  decoration: BoxDecoration(
+                                                    color: const Color(0xFF1B2436),
+                                                    borderRadius: BorderRadius.circular(10),
+                                                    border: Border.all(color: const Color(0xFFFFB800)),
+                                                  ),
+                                                  child: const Center(
+                                                    child: Text(
+                                                      'REQUESTED ⏳',
+                                                      style: TextStyle(
+                                                        color: Color(0xFFFFB800),
+                                                        fontWeight: FontWeight.w900,
+                                                        fontSize: 12,
+                                                      ),
+                                                    ),
+                                                  ),
+                                                ),
+                                              ),
+                                              const SizedBox(width: 8),
+                                              SizedBox(
+                                                height: 46,
+                                                child: ElevatedButton(
+                                                  style: ElevatedButton.styleFrom(
+                                                    backgroundColor: const Color(0xFFFF4655),
+                                                    foregroundColor: Colors.white,
+                                                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                                                    elevation: 0,
+                                                  ),
+                                                  onPressed: () => _cancelChallenge(pendingDoc['id']?.toString() ?? ''),
+                                                  child: const Text('CANCEL', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 11)),
+                                                ),
+                                              ),
+                                            ],
+                                          )
+                                        : ElevatedButton.icon(
+                                            onPressed: () => _handleChallenge(team, currentUid),
+                                            style: ElevatedButton.styleFrom(
+                                              backgroundColor: const Color(0xFF1877F2), // Big Blue Button
+                                              foregroundColor: Colors.white,
+                                              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                                              elevation: 0,
+                                            ),
+                                            icon: const Icon(Icons.flash_on_rounded, size: 18, color: Colors.white),
+                                            label: const Text(
+                                              'Challenge Karo - چیلنج کریں',
+                                              style: TextStyle(
+                                                fontWeight: FontWeight.w900,
+                                                fontSize: 13,
+                                              ),
+                                            ),
+                                          ),
+                                  ),
+                                ),
+                              ],
+                            );
+                          },
+                        );
+                      },
                     ),
                   ),
                 );
