@@ -8,6 +8,7 @@ import '../services/gamer_auth_service.dart';
 import '../services/team_service.dart';
 import '../services/supabase_service.dart';
 import '../widgets/send_team_match_challenge_dialog.dart';
+import '../widgets/end_match_dialog.dart';
 import 'gamer_profile_screen.dart';
 
 class TeamProfileScreen extends StatefulWidget {
@@ -25,6 +26,7 @@ class _TeamProfileScreenState extends State<TeamProfileScreen> {
   final Set<String> _cancelledChallengeIds = {};
   final Set<String> _acceptingChallengeIds = {};
   final Set<String> _acceptedChallengeIds = {};
+  final Set<String> _completedMatchIds = {};
   final List<Map<String, dynamic>> _optimisticActiveMatches = [];
 
   Future<void> _handleAcceptChallenge({
@@ -293,7 +295,8 @@ class _TeamProfileScreenState extends State<TeamProfileScreen> {
                 final activeMatches = [
                   ..._optimisticActiveMatches,
                   ...streamMatches,
-                ];
+                ].where((m) => m['status'] == 'active' && !_completedMatchIds.contains(m['id']?.toString())).toList();
+
                 final targetUuid = SupabaseService.toUuid(widget.teamId).toLowerCase();
                 final targetRawId = widget.teamId.toLowerCase();
                 final myUuid = myTeamId.isNotEmpty ? SupabaseService.toUuid(myTeamId).toLowerCase() : '';
@@ -318,9 +321,12 @@ class _TeamProfileScreenState extends State<TeamProfileScreen> {
                     isMember ||
                     widget.teamId == myTeamId ||
                     myLeaderTeams.any((t) => t.id == widget.teamId);
-                final String matchVsName = (isMyOwnTeam && activeMatch['opponent_name'] != null && activeMatch['opponent_name'].toString().isNotEmpty)
-                    ? activeMatch['opponent_name'].toString()
-                    : team.name;
+
+                // Opponent calculation (Bug 2 fix):
+                final t1 = activeMatch['team1_id']?.toString() ?? '';
+                final t2 = activeMatch['team2_id']?.toString() ?? '';
+                final isTeam1Me = (t1.toLowerCase() == myUuid || t1.toLowerCase() == myRawId);
+                final opponentTeamId = isTeam1Me ? t2 : t1;
                 final bool isMatchLeader = hasActiveMatch && (
                   isLeader ||
                   myLeaderTeams.any((t) {
@@ -400,14 +406,31 @@ class _TeamProfileScreenState extends State<TeamProfileScreen> {
                                     const Icon(Icons.local_fire_department_rounded, color: Color(0xFF00FF88), size: 22),
                                     const SizedBox(width: 8),
                                     Expanded(
-                                      child: Text(
-                                        '🔥 Active Match vs $matchVsName - Match is Live',
-                                        style: const TextStyle(
-                                          color: Color(0xFF00FF88),
-                                          fontWeight: FontWeight.bold,
-                                          fontSize: 14,
-                                        ),
-                                      ),
+                                      child: isMyOwnTeam
+                                          ? FutureBuilder<TeamModel?>(
+                                              future: _teamService.getTeam(opponentTeamId),
+                                              builder: (context, opSnap) {
+                                                final opName = opSnap.data?.name ??
+                                                    activeMatch['opponent_name']?.toString() ??
+                                                    'Opponent Team';
+                                                return Text(
+                                                  '🔥 Active Match vs $opName - Match is Live',
+                                                  style: const TextStyle(
+                                                    color: Color(0xFF00FF88),
+                                                    fontWeight: FontWeight.bold,
+                                                    fontSize: 14,
+                                                  ),
+                                                );
+                                              },
+                                            )
+                                          : Text(
+                                              '🔥 Active Match vs ${team.name} - Match is Live',
+                                              style: const TextStyle(
+                                                color: Color(0xFF00FF88),
+                                                fontWeight: FontWeight.bold,
+                                                fontSize: 14,
+                                              ),
+                                            ),
                                     ),
                                     Container(
                                       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
@@ -434,32 +457,30 @@ class _TeamProfileScreenState extends State<TeamProfileScreen> {
                                       icon: const Icon(Icons.stop_circle_rounded, size: 16),
                                       label: const Text('End Match', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12)),
                                       onPressed: () async {
-                                        final confirm = await showDialog<bool>(
-                                          context: context,
-                                          builder: (ctx) => AlertDialog(
-                                            backgroundColor: const Color(0xFF161B22),
-                                            title: const Text('End Match?', style: TextStyle(color: Colors.white)),
-                                            content: const Text('Are you sure you want to end this active match?', style: TextStyle(color: Colors.white70)),
-                                            actions: [
-                                              TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Cancel', style: TextStyle(color: Colors.grey))),
-                                              ElevatedButton(
-                                                style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFFFF4655)),
-                                                onPressed: () => Navigator.pop(ctx, true),
-                                                child: const Text('End Match', style: TextStyle(color: Colors.white)),
-                                              ),
-                                            ],
-                                          ),
+                                        final activeMatchId = activeMatch['id']?.toString() ?? '';
+                                        final ended = await EndMatchBottomSheet.show(
+                                          context,
+                                          activeMatchId: activeMatchId,
+                                          myTeamId: myTeamId.isNotEmpty ? myTeamId : widget.teamId,
+                                          opponentId: opponentTeamId,
+                                          myTeamName: isMyOwnTeam
+                                              ? team.name
+                                              : (myLeaderTeams.isNotEmpty ? myLeaderTeams.first.name : 'My Team'),
+                                          opponentName: isMyOwnTeam
+                                              ? (activeMatch['opponent_name'] ?? 'Opponent')
+                                              : team.name,
                                         );
-                                        if (confirm == true) {
-                                          await SupabaseService.client
-                                              .from('active_matches')
-                                              .update({'status': 'completed'})
-                                              .eq('id', activeMatch['id']);
+                                        if (ended == true) {
                                           if (mounted) {
+                                            setState(() {
+                                              _completedMatchIds.add(activeMatchId);
+                                              _optimisticActiveMatches.clear();
+                                            });
                                             ScaffoldMessenger.of(context).showSnackBar(
                                               const SnackBar(
-                                                content: Text('✅ Match marked as completed!'),
+                                                content: Text('Proof bhej diya gaya, opponent confirmation ka wait karo'),
                                                 backgroundColor: Color(0xFF00FF88),
+                                                duration: Duration(seconds: 4),
                                               ),
                                             );
                                           }

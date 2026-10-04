@@ -83,3 +83,37 @@ GRANT ALL ON ALL ROUTINES IN SCHEMA public TO anon, authenticated;
 -- Default privileges for future tables
 ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT ALL ON TABLES TO anon, authenticated;
 ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT ALL ON SEQUENCES TO anon, authenticated;
+
+-- 8. STORAGE BUCKET: match_proofs
+INSERT INTO storage.buckets (id, name, public)
+VALUES ('match_proofs', 'match_proofs', true)
+ON CONFLICT (id) DO UPDATE SET public = true;
+
+-- Storage RLS: allow authenticated/anon upload and public read
+DROP POLICY IF EXISTS "Public Read match_proofs" ON storage.objects;
+CREATE POLICY "Public Read match_proofs" 
+ON storage.objects FOR SELECT 
+USING (bucket_id = 'match_proofs');
+
+DROP POLICY IF EXISTS "Allow Upload match_proofs" ON storage.objects;
+CREATE POLICY "Allow Upload match_proofs" 
+ON storage.objects FOR INSERT 
+WITH CHECK (bucket_id = 'match_proofs');
+
+DROP POLICY IF EXISTS "Allow Update match_proofs" ON storage.objects;
+CREATE POLICY "Allow Update match_proofs" 
+ON storage.objects FOR UPDATE 
+USING (bucket_id = 'match_proofs');
+
+-- 9. ACTIVE MATCHES: ensure columns and allow update
+ALTER TABLE public.active_matches ADD COLUMN IF NOT EXISTS winner_team_id TEXT;
+ALTER TABLE public.active_matches ADD COLUMN IF NOT EXISTS proof_url TEXT;
+ALTER TABLE public.active_matches ADD COLUMN IF NOT EXISTS result TEXT;
+ALTER TABLE public.active_matches ADD COLUMN IF NOT EXISTS ended_at TIMESTAMPTZ;
+
+DROP POLICY IF EXISTS "Enable update active_matches" ON public.active_matches;
+CREATE POLICY "Enable update active_matches" 
+ON public.active_matches FOR UPDATE 
+USING (true) 
+WITH CHECK (true);
+

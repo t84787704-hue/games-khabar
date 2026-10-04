@@ -5,6 +5,7 @@ import '../models/team_model.dart';
 import '../services/team_service.dart';
 import '../widgets/team_card.dart';
 import '../widgets/create_team_dialog.dart';
+import '../widgets/end_match_dialog.dart';
 import 'my_team_matches_screen.dart';
 import 'team_leaderboard_screen.dart';
 import 'team_profile_screen.dart';
@@ -43,6 +44,7 @@ class _TeamsScreenState extends State<TeamsScreen> {
   final Set<String> _cancelledChallengeIds = {};
   final Set<String> _acceptingChallengeIds = {};
   final Set<String> _acceptedChallengeIds = {};
+  final Set<String> _completedMatchIds = {};
   final List<Map<String, dynamic>> _optimisticActiveMatches = [];
 
   Future<void> _handleAcceptChallenge({
@@ -532,7 +534,7 @@ class _TeamsScreenState extends State<TeamsScreen> {
                     final combinedMatches = [
                       ..._optimisticActiveMatches,
                       ...streamMatches,
-                    ];
+                    ].where((m) => m['status'] == 'active' && !_completedMatchIds.contains(m['id']?.toString())).toList();
                     final myActiveMatches = combinedMatches.where((m) {
                       if (m['status'] != 'active') return false;
                       final participants = m['participants'];
@@ -588,14 +590,20 @@ class _TeamsScreenState extends State<TeamsScreen> {
                                 children: [
                                   const Icon(Icons.local_fire_department_rounded, color: Color(0xFF2E7D32), size: 20),
                                   const SizedBox(width: 8),
-                                  const Expanded(
-                                    child: Text(
-                                      '🔥 Active Match in Progress - Match is Live',
-                                      style: TextStyle(
-                                        color: Color(0xFF2E7D32),
-                                        fontWeight: FontWeight.bold,
-                                        fontSize: 13.5,
-                                      ),
+                                  Expanded(
+                                    child: FutureBuilder<TeamModel?>(
+                                      future: _teamService.getTeam(opponentId),
+                                      builder: (context, opSnap) {
+                                        final opponentName = opSnap.data?.name ?? match['opponent_name']?.toString() ?? 'Opponent';
+                                        return Text(
+                                          '🔥 Active Match vs $opponentName - Match is Live',
+                                          style: const TextStyle(
+                                            color: Color(0xFF2E7D32),
+                                            fontWeight: FontWeight.bold,
+                                            fontSize: 13.5,
+                                          ),
+                                        );
+                                      },
                                     ),
                                   ),
                                   Container(
@@ -636,29 +644,25 @@ class _TeamsScreenState extends State<TeamsScreen> {
                                   // 4. END MATCH button for leaders
                                   ElevatedButton.icon(
                                     onPressed: () async {
-                                      final confirm = await showDialog<bool>(
-                                        context: context,
-                                        builder: (ctx) => AlertDialog(
-                                          title: const Text('End Match?'),
-                                          content: const Text('Are you sure you want to end this active match?'),
-                                          actions: [
-                                            TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Cancel')),
-                                            ElevatedButton(
-                                              style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFFFF4655)),
-                                              onPressed: () => Navigator.pop(ctx, true),
-                                              child: const Text('End Match', style: TextStyle(color: Colors.white)),
-                                            ),
-                                          ],
-                                        ),
+                                      final ended = await EndMatchBottomSheet.show(
+                                        context,
+                                        activeMatchId: matchId.toString(),
+                                        myTeamId: myTeamId,
+                                        opponentId: opponentId,
+                                        myTeamName: myTeamName,
                                       );
-                                      if (confirm == true) {
-                                        await SupabaseService.client
-                                            .from('active_matches')
-                                            .update({'status': 'completed'})
-                                            .eq('id', matchId);
+                                      if (ended == true) {
                                         if (mounted) {
+                                          setState(() {
+                                            _completedMatchIds.add(matchId.toString());
+                                            _optimisticActiveMatches.clear();
+                                          });
                                           ScaffoldMessenger.of(context).showSnackBar(
-                                            const SnackBar(content: Text('Match marked as completed!'), backgroundColor: Color(0xFF2E7D32)),
+                                            const SnackBar(
+                                              content: Text('Proof bhej diya gaya, opponent confirmation ka wait karo'),
+                                              backgroundColor: Color(0xFF2E7D32),
+                                              duration: Duration(seconds: 4),
+                                            ),
                                           );
                                         }
                                       }
