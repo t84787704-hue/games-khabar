@@ -1,9 +1,8 @@
 import 'package:flutter/material.dart';
-import 'package:firebase_auth/firebase_auth.dart';
 import 'package:intl/intl.dart';
-import '../constants/gamer_theme.dart';
-import '../models/team_match_model.dart';
-import '../services/team_match_service.dart';
+import '../services/supabase_service.dart';
+import '../services/team_service.dart';
+import '../models/team_model.dart';
 import 'team_match_room_screen.dart';
 
 class MyTeamMatchesScreen extends StatefulWidget {
@@ -13,54 +12,26 @@ class MyTeamMatchesScreen extends StatefulWidget {
   State<MyTeamMatchesScreen> createState() => _MyTeamMatchesScreenState();
 }
 
-class _MyTeamMatchesScreenState extends State<MyTeamMatchesScreen>
-    with SingleTickerProviderStateMixin {
-  final TeamMatchService _matchService = TeamMatchService();
-  late TabController _tabController;
+class _MyTeamMatchesScreenState extends State<MyTeamMatchesScreen> {
+  final TeamService _teamService = TeamService();
+  bool _isLoading = false;
 
-  @override
-  void initState() {
-    super.initState();
-    _tabController = TabController(length: 2, vsync: this);
-  }
-
-  @override
-  void dispose() {
-    _tabController.dispose();
-    super.dispose();
-  }
-
-  Color _getStatusColor(String status) {
-    switch (status) {
-      case 'Pending':
-        return const Color(0xFFFFB020);
-      case 'Accepted':
-        return const Color(0xFF00FF88);
-      case 'Live':
-        return const Color(0xFFFF4655);
-      case 'Proof Submitted':
-        return const Color(0xFF38BDF8);
-      case 'Verified':
-        return const Color(0xFF00FF88);
-      case 'Disputed':
-        return const Color(0xFFFF4655);
-      case 'Rejected':
-      case 'Cancelled':
-        return Colors.grey;
-      default:
-        return const Color(0xFFFF6B00);
-    }
+  Future<void> _refresh() async {
+    setState(() {});
+    await Future.delayed(const Duration(milliseconds: 300));
   }
 
   @override
   Widget build(BuildContext context) {
-    final currentUid = FirebaseAuth.instance.currentUser?.uid ?? '';
-
     return Scaffold(
       backgroundColor: const Color(0xFF0B0F17),
       appBar: AppBar(
         backgroundColor: const Color(0xFF131A29),
         elevation: 0,
+        leading: IconButton(
+          icon: const Icon(Icons.arrow_back_ios_new_rounded, color: Colors.white, size: 20),
+          onPressed: () => Navigator.pop(context),
+        ),
         title: const Row(
           children: [
             Text('⚔️', style: TextStyle(fontSize: 20)),
@@ -70,555 +41,382 @@ class _MyTeamMatchesScreenState extends State<MyTeamMatchesScreen>
               style: TextStyle(
                 color: Colors.white,
                 fontWeight: FontWeight.w900,
-                fontSize: 15,
+                fontSize: 16,
                 letterSpacing: 0.5,
               ),
             ),
           ],
         ),
-        bottom: TabBar(
-          controller: _tabController,
-          indicatorColor: const Color(0xFFFF6B00),
-          labelColor: const Color(0xFFFF6B00),
-          unselectedLabelColor: const Color(0xFF8B949E),
-          indicatorWeight: 3,
-          tabs: const [
-            Tab(
-              icon: Icon(Icons.flash_on_rounded, size: 18),
-              text: 'Active Matches',
-            ),
-            Tab(
-              icon: Icon(Icons.history_rounded, size: 18),
-              text: 'Match History',
-            ),
-          ],
-        ),
       ),
-      body: StreamBuilder<List<TeamMatch>>(
-        stream: _matchService.getUserTeamMatchesStream(currentUid),
-        builder: (context, snapshot) {
-          if (snapshot.connectionState == ConnectionState.waiting) {
-            return const Center(
-              child: CircularProgressIndicator(color: Color(0xFFFF6B00)),
-            );
-          }
+      body: RefreshIndicator(
+        color: const Color(0xFFFF6B00),
+        backgroundColor: const Color(0xFF131A29),
+        onRefresh: _refresh,
+        child: StreamBuilder<List<Map<String, dynamic>>>(
+          stream: SupabaseService.client
+              .from('active_matches')
+              .stream(primaryKey: ['id']),
+          builder: (context, snapshot) {
+            if (snapshot.connectionState == ConnectionState.waiting && !snapshot.hasData) {
+              return const Center(
+                child: CircularProgressIndicator(color: Color(0xFFFF6B00)),
+              );
+            }
 
-          final allMatches = snapshot.data ?? [];
+            final allMatches = snapshot.data ?? [];
+            // Filter strictly: status in ['active', 'under_review']
+            final activeMatches = allMatches.where((m) {
+              final status = (m['status'] ?? '').toString().toLowerCase();
+              return status == 'active' || status == 'under_review';
+            }).toList();
 
-          // Separate active vs history matches
-          // Active: Pending, Accepted, Live, Proof Submitted, Disputed
-          // History: Verified, Rejected, Cancelled
-          final activeMatches = allMatches.where((m) => m.isActive).toList();
-          final historyMatches = allMatches.where((m) => m.isHistory).toList();
+            // Sort by created_at ascending (desc: false)
+            activeMatches.sort((a, b) {
+              final aDate = a['created_at']?.toString() ?? '';
+              final bDate = b['created_at']?.toString() ?? '';
+              return aDate.compareTo(bDate);
+            });
 
-          return TabBarView(
-            controller: _tabController,
-            children: [
-              _buildMatchList(
-                matches: activeMatches,
-                currentUid: currentUid,
-                emptyTitle: 'No Active Matches',
-                emptySubtitle:
-                    'فی الوقت کوئی ایکٹو چیلنج یا لائیو میچ نہیں ہے۔ نئی ٹیموں کو چیلنج بھیجیں!',
-                isActiveTab: true,
-              ),
-              _buildMatchList(
-                matches: historyMatches,
-                currentUid: currentUid,
-                emptyTitle: 'No Match History',
-                emptySubtitle:
-                    'مکمل ہو چکے اور سابقہ میچز کا ریکارڈ یہاں نظر آئے گا۔',
-                isActiveTab: false,
-              ),
-            ],
-          );
-        },
-      ),
-    );
-  }
-
-  Widget _buildMatchList({
-    required List<TeamMatch> matches,
-    required String currentUid,
-    required String emptyTitle,
-    required String emptySubtitle,
-    required bool isActiveTab,
-  }) {
-    if (matches.isEmpty) {
-      return Center(
-        child: Padding(
-          padding: const EdgeInsets.all(32),
-          child: Column(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              Container(
-                padding: const EdgeInsets.all(20),
-                decoration: BoxDecoration(
-                  color: const Color(0xFF161F2E),
-                  shape: BoxShape.circle,
-                  border: Border.all(color: const Color(0xFF2A3447)),
-                ),
-                child: Text(
-                  isActiveTab ? '⚔️' : '📜',
-                  style: const TextStyle(fontSize: 40),
-                ),
-              ),
-              const SizedBox(height: 16),
-              Text(
-                emptyTitle,
-                style: const TextStyle(
-                  color: Colors.white,
-                  fontSize: 18,
-                  fontWeight: FontWeight.bold,
-                ),
-              ),
-              const SizedBox(height: 8),
-              Text(
-                emptySubtitle,
-                textAlign: TextAlign.center,
-                style: const TextStyle(color: Color(0xFF8B949E), fontSize: 13),
-              ),
-            ],
-          ),
-        ),
-      );
-    }
-
-    return ListView.builder(
-      padding: const EdgeInsets.all(16),
-      itemCount: matches.length,
-      itemBuilder: (context, index) {
-        final match = matches[index];
-        final statusColor = _getStatusColor(match.status);
-        final isTeam1Leader = match.isTeam1Leader(currentUid);
-        final isTeam2Leader = match.isTeam2Leader(currentUid);
-        final isLeader = isTeam1Leader || isTeam2Leader;
-
-        return InkWell(
-          onTap: () {
-            Navigator.push(
-              context,
-              MaterialPageRoute(
-                builder: (_) => TeamMatchRoomScreen(matchId: match.matchId),
-              ),
-            );
-          },
-          borderRadius: BorderRadius.circular(16),
-          child: Container(
-            margin: const EdgeInsets.only(bottom: 14),
-            padding: const EdgeInsets.all(16),
-            decoration: BoxDecoration(
-              color: const Color(0xFF131A29),
-              borderRadius: BorderRadius.circular(16),
-              border: Border.all(
-                color: match.isLive
-                    ? const Color(0xFFFF4655).withOpacity(0.5)
-                    : const Color(0xFF2A3447),
-                width: match.isLive ? 1.5 : 1.0,
-              ),
-            ),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                // Header: Game & Status
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  children: [
-                    Container(
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 8,
-                        vertical: 4,
-                      ),
-                      decoration: BoxDecoration(
-                        color: const Color(0xFFFF6B00).withOpacity(0.18),
-                        borderRadius: BorderRadius.circular(6),
-                      ),
-                      child: Text(
-                        '${match.game} • ${match.mode}',
-                        style: const TextStyle(
-                          color: Color(0xFFFF6B00),
-                          fontWeight: FontWeight.w900,
-                          fontSize: 11,
-                        ),
-                      ),
-                    ),
-                    Row(
-                      children: [
-                        if (match.isLive) ...[
-                          Container(
-                            width: 8,
-                            height: 8,
-                            margin: const EdgeInsets.only(right: 6),
-                            decoration: const BoxDecoration(
-                              color: Color(0xFFFF4655),
-                              shape: BoxShape.circle,
-                            ),
-                          ),
-                        ],
-                        Container(
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: 8,
-                            vertical: 3,
-                          ),
-                          decoration: BoxDecoration(
-                            color: statusColor.withOpacity(0.18),
-                            borderRadius: BorderRadius.circular(8),
-                            border: Border.all(color: statusColor),
-                          ),
-                          child: Text(
-                            match.status.toUpperCase(),
-                            style: TextStyle(
-                              color: statusColor,
-                              fontWeight: FontWeight.w900,
-                              fontSize: 10.5,
-                            ),
-                          ),
-                        ),
-                      ],
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 12),
-
-                // Teams Row
-                Row(
-                  children: [
-                    Expanded(
-                      child: Text(
-                        match.team1Name,
-                        style: const TextStyle(
-                          color: Colors.white,
-                          fontWeight: FontWeight.w900,
-                          fontSize: 15,
-                        ),
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                      ),
-                    ),
-                    const Padding(
-                      padding: EdgeInsets.symmetric(horizontal: 10),
-                      child: Text(
-                        'VS',
-                        style: TextStyle(
-                          color: Color(0xFFFF4655),
-                          fontWeight: FontWeight.w900,
-                          fontSize: 15,
-                        ),
-                      ),
-                    ),
-                    Expanded(
-                      child: Text(
-                        match.team2Name,
-                        style: const TextStyle(
-                          color: Colors.white,
-                          fontWeight: FontWeight.w900,
-                          fontSize: 15,
-                        ),
-                        textAlign: TextAlign.end,
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                      ),
-                    ),
-                  ],
-                ),
-
-                // History & Dispute Details (Winner, Loser, Proof Attempts, Rejection Reason)
-                if (match.isHistory || match.proofAttempts > 0 || (match.adminNote != null && match.adminNote!.isNotEmpty && !match.isProofSubmitted)) ...[
-                  const SizedBox(height: 10),
-                  Container(
-                    width: double.infinity,
-                    padding: const EdgeInsets.all(10),
-                    decoration: BoxDecoration(
-                      color: const Color(0xFF0F141E),
-                      borderRadius: BorderRadius.circular(10),
-                      border: Border.all(
-                        color: match.isVerified
-                            ? const Color(0xFF00FF88).withOpacity(0.3)
-                            : (match.isRejected ? const Color(0xFFFF4655).withOpacity(0.3) : const Color(0xFF2A3447)),
-                      ),
-                    ),
+            if (activeMatches.isEmpty) {
+              return Center(
+                child: SingleChildScrollView(
+                  physics: const AlwaysScrollableScrollPhysics(),
+                  child: Padding(
+                    padding: const EdgeInsets.all(32),
                     child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
+                      mainAxisAlignment: MainAxisAlignment.center,
                       children: [
-                        // Winner & Loser if verified
-                        if (match.isVerified && match.winnerName != null) ...[
-                          Row(
-                            children: [
-                              const Icon(Icons.emoji_events_rounded, color: Color(0xFF00FF88), size: 16),
-                              const SizedBox(width: 6),
-                              Text(
-                                'Winner: ${match.winnerName}',
-                                style: const TextStyle(color: Color(0xFF00FF88), fontWeight: FontWeight.bold, fontSize: 12),
-                              ),
-                              const SizedBox(width: 8),
-                              Text(
-                                '• Loser: ${match.winnerId == match.team1Id ? match.team2Name : match.team1Name}',
-                                style: const TextStyle(color: Color(0xFF8B949E), fontSize: 11),
-                              ),
-                            ],
+                        Container(
+                          padding: const EdgeInsets.all(20),
+                          decoration: BoxDecoration(
+                            color: const Color(0xFF161F2E),
+                            shape: BoxShape.circle,
+                            border: Border.all(color: const Color(0xFF2A3447)),
                           ),
-                        ],
-
-                        // Attempts row
-                        if (match.proofAttempts > 0) ...[
-                          const SizedBox(height: 4),
-                          Row(
-                            children: [
-                              Icon(
-                                Icons.camera_alt_outlined,
-                                size: 13,
-                                color: match.proofAttempts >= 2 ? const Color(0xFFFF4655) : const Color(0xFFFFB020),
-                              ),
-                              const SizedBox(width: 5),
-                              Text(
-                                'Proof Attempts: ${match.proofAttempts}/2 ${match.proofAttempts >= 2 ? "(Max limit reached)" : ""}',
-                                style: TextStyle(
-                                  color: match.proofAttempts >= 2 ? const Color(0xFFFF4655) : const Color(0xFFFFB020),
-                                  fontSize: 11,
-                                  fontWeight: FontWeight.bold,
-                                ),
-                              ),
-                            ],
+                          child: const Text('⚔️', style: TextStyle(fontSize: 40)),
+                        ),
+                        const SizedBox(height: 16),
+                        const Text(
+                          'No Active Matches',
+                          style: TextStyle(
+                            color: Colors.white,
+                            fontSize: 18,
+                            fontWeight: FontWeight.bold,
                           ),
-                        ],
-
-                        // New proof submitted banner (waiting for admin)
-                        if (match.isProofSubmitted) ...[
-                          const SizedBox(height: 5),
-                          Row(
-                            children: [
-                              const Icon(Icons.hourglass_top_rounded, size: 13, color: Color(0xFF38BDF8)),
-                              const SizedBox(width: 5),
-                              Expanded(
-                                child: Text(
-                                  match.proofAttempts >= 2
-                                      ? 'آپ کا نیا ثبوت ایڈمن کے پاس چلا گیا ہے، براہ کرم انتظار کریں'
-                                      : 'آپ کا ثبوت ایڈمن کے پاس چلا گیا ہے، براہ کرم انتظار کریں',
-                                  style: const TextStyle(color: Color(0xFF38BDF8), fontSize: 11, fontWeight: FontWeight.bold),
-                                ),
-                              ),
-                            ],
-                          ),
-                        ],
-
-                        // If permanently rejected (2/2 rejected)
-                        if (match.isPermanentlyRejected) ...[
-                          const SizedBox(height: 5),
-                          const Row(
-                            children: [
-                              Icon(Icons.cancel_outlined, size: 13, color: Color(0xFFFF4655)),
-                              SizedBox(width: 5),
-                              Expanded(
-                                child: Text(
-                                  'آپ کے دونوں ثبوت مسترد ہو گئے ہیں، یہ میچ ختم ہو گیا',
-                                  style: TextStyle(color: Color(0xFFFF4655), fontSize: 11, fontWeight: FontWeight.bold),
-                                ),
-                              ),
-                            ],
-                          ),
-                        ],
-
-                        // Admin Decision / Reject reason (Only show if NOT in Proof Submitted state)
-                        if (match.adminNote != null && match.adminNote!.isNotEmpty && !match.isProofSubmitted) ...[
-                          const SizedBox(height: 5),
-                          Row(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              const Icon(Icons.info_outline, size: 14, color: Color(0xFFFF4655)),
-                              const SizedBox(width: 5),
-                              Expanded(
-                                child: Text(
-                                  'Admin Note: ${match.adminNote}',
-                                  style: const TextStyle(color: Color(0xFFFF4655), fontSize: 11),
-                                ),
-                              ),
-                            ],
-                          ),
-                        ],
+                        ),
+                        const SizedBox(height: 8),
+                        const Text(
+                          'فی الوقت کوئی ایکٹو چیلنج یا لائیو میچ نہیں ہے۔ نئی ٹیموں کو چیلنج بھیجیں!',
+                          textAlign: TextAlign.center,
+                          style: TextStyle(color: Color(0xFF8B949E), fontSize: 13),
+                        ),
                       ],
                     ),
                   ),
-                ],
-                const SizedBox(height: 12),
-
-                // Footer Row: Match Time & Buttons
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  children: [
-                    Row(
-                      children: [
-                        const Icon(
-                          Icons.access_time_rounded,
-                          size: 14,
-                          color: Color(0xFF8B949E),
-                        ),
-                        const SizedBox(width: 5),
-                        Text(
-                          DateFormat('dd MMM, hh:mm a').format(match.matchTime),
-                          style: const TextStyle(
-                            color: Color(0xFF8B949E),
-                            fontSize: 12,
-                          ),
-                        ),
-                      ],
-                    ),
-                    Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        // If Pending and user is Team 1 leader, allow Cancel button right from card
-                        if (match.isPending && isTeam1Leader) ...[
-                          InkWell(
-                            onTap: () => _confirmCancelChallenge(match, currentUid),
-                            child: Container(
-                              margin: const EdgeInsets.only(right: 8),
-                              padding: const EdgeInsets.symmetric(
-                                horizontal: 9,
-                                vertical: 4,
-                              ),
-                              decoration: BoxDecoration(
-                                color: const Color(0xFFFF4655).withOpacity(0.12),
-                                borderRadius: BorderRadius.circular(8),
-                                border: Border.all(
-                                  color: const Color(0xFFFF4655),
-                                ),
-                              ),
-                              child: const Row(
-                                mainAxisSize: MainAxisSize.min,
-                                children: [
-                                  Icon(
-                                    Icons.close_rounded,
-                                    size: 12,
-                                    color: Color(0xFFFF4655),
-                                  ),
-                                  SizedBox(width: 3),
-                                  Text(
-                                    'CANCEL',
-                                    style: TextStyle(
-                                      color: Color(0xFFFF4655),
-                                      fontWeight: FontWeight.w900,
-                                      fontSize: 10.5,
-                                    ),
-                                  ),
-                                ],
-                              ),
-                            ),
-                          ),
-                        ],
-                        // If Live, show Open Room badge
-                        Container(
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: 10,
-                            vertical: 4,
-                          ),
-                          decoration: BoxDecoration(
-                            color: match.isLive
-                                ? const Color(0xFFFF4655).withOpacity(0.18)
-                                : const Color(0xFF00FF88).withOpacity(0.15),
-                            borderRadius: BorderRadius.circular(8),
-                            border: Border.all(
-                              color: match.isLive
-                                  ? const Color(0xFFFF4655)
-                                  : const Color(0xFF00FF88),
-                            ),
-                          ),
-                          child: Row(
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              Text(
-                                match.isLive ? 'OPEN LIVE ROOM' : 'OPEN ROOM',
-                                style: TextStyle(
-                                  color: match.isLive
-                                      ? const Color(0xFFFF4655)
-                                      : const Color(0xFF00FF88),
-                                  fontWeight: FontWeight.w900,
-                                  fontSize: 11,
-                                ),
-                              ),
-                              const SizedBox(width: 4),
-                              Icon(
-                                Icons.arrow_forward_ios_rounded,
-                                size: 10,
-                                color: match.isLive
-                                    ? const Color(0xFFFF4655)
-                                    : const Color(0xFF00FF88),
-                              ),
-                            ],
-                          ),
-                        ),
-                      ],
-                    ),
-                  ],
                 ),
-              ],
-            ),
-          ),
-        );
-      },
+              );
+            }
+
+            return ListView.builder(
+              padding: const EdgeInsets.all(16),
+              physics: const AlwaysScrollableScrollPhysics(),
+              itemCount: activeMatches.length,
+              itemBuilder: (context, index) {
+                final match = activeMatches[index];
+                return _buildActiveMatchCard(match);
+              },
+            );
+          },
+        ),
+      ),
     );
   }
 
-  void _confirmCancelChallenge(TeamMatch match, String currentUid) {
-    showDialog(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        backgroundColor: const Color(0xFF161F2E),
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-        title: const Row(
-          children: [
-            Icon(Icons.warning_amber_rounded, color: Color(0xFFFF4655), size: 22),
-            SizedBox(width: 8),
-            Text(
-              'چیلنج Cancel کریں؟',
-              style: TextStyle(
-                color: Colors.white,
-                fontWeight: FontWeight.bold,
-                fontSize: 16,
+  Widget _buildActiveMatchCard(Map<String, dynamic> match) {
+    final matchId = match['id']?.toString() ?? '';
+    final t1 = (match['team1_id'] ?? '').toString();
+    final t2 = (match['team2_id'] ?? '').toString();
+    final status = (match['status'] ?? '').toString().toLowerCase();
+    final proofStatus = (match['proof_status'] ?? '').toString().toLowerCase();
+    final adminNote = match['admin_note']?.toString();
+    final game = match['game']?.toString() ?? 'BGMI';
+    final mode = match['mode']?.toString() ?? '4v4';
+
+    final int attempts = (match['proof_attempts'] as num?)?.toInt() ??
+        (proofStatus == 'rejected' ? 2 : (status == 'under_review' ? 1 : 0));
+
+    DateTime matchDate = DateTime.now();
+    final dateRaw = match['created_at'];
+    if (dateRaw != null) {
+      try {
+        matchDate = DateTime.parse(dateRaw.toString()).toLocal();
+      } catch (_) {}
+    }
+
+    // Badge configuration
+    String badgeText = 'LIVE';
+    Color badgeColor = const Color(0xFFFF4655);
+    if (status == 'under_review') {
+      if (proofStatus == 'rejected') {
+        badgeText = 'PROOF REJECTED';
+        badgeColor = const Color(0xFFFF4655);
+      } else {
+        badgeText = 'PROOF SUBMITTED';
+        badgeColor = const Color(0xFF38BDF8);
+      }
+    }
+
+    return Container(
+      margin: const EdgeInsets.only(bottom: 14),
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: const Color(0xFF131A29),
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(
+          color: badgeColor.withOpacity(0.4),
+          width: 1.2,
+        ),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.2),
+            blurRadius: 8,
+            offset: const Offset(0, 3),
+          ),
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          // Header: BGMI • 4v4 badge & Status badge
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 4),
+                decoration: BoxDecoration(
+                  color: const Color(0xFFFF6B00).withOpacity(0.18),
+                  borderRadius: BorderRadius.circular(6),
+                  border: Border.all(color: const Color(0xFFFF6B00).withOpacity(0.4)),
+                ),
+                child: Text(
+                  '$game • $mode',
+                  style: const TextStyle(
+                    color: Color(0xFFFF6B00),
+                    fontWeight: FontWeight.w900,
+                    fontSize: 11,
+                  ),
+                ),
+              ),
+              Row(
+                children: [
+                  if (status == 'active') ...[
+                    Container(
+                      width: 8,
+                      height: 8,
+                      margin: const EdgeInsets.only(right: 6),
+                      decoration: const BoxDecoration(
+                        color: Color(0xFFFF4655),
+                        shape: BoxShape.circle,
+                      ),
+                    ),
+                  ],
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                    decoration: BoxDecoration(
+                      color: badgeColor.withOpacity(0.18),
+                      borderRadius: BorderRadius.circular(8),
+                      border: Border.all(color: badgeColor),
+                    ),
+                    child: Text(
+                      badgeText,
+                      style: TextStyle(
+                        color: badgeColor,
+                        fontWeight: FontWeight.w900,
+                        fontSize: 10.5,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ],
+          ),
+          const SizedBox(height: 14),
+
+          // Teams Row: Team1 VS Team2 (e.g. Jf19 VS J17)
+          FutureBuilder<List<TeamModel?>>(
+            future: Future.wait([
+              _teamService.getTeam(t1),
+              _teamService.getTeam(t2),
+            ]),
+            builder: (context, snap) {
+              final t1Name = snap.data?[0]?.name ?? match['team1_name'] ?? 'Team 1';
+              final t2Name = snap.data?[1]?.name ?? match['team2_name'] ?? 'Team 2';
+
+              return Row(
+                children: [
+                  Expanded(
+                    child: Text(
+                      t1Name,
+                      style: const TextStyle(
+                        color: Colors.white,
+                        fontWeight: FontWeight.w900,
+                        fontSize: 15,
+                      ),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ),
+                  const Padding(
+                    padding: EdgeInsets.symmetric(horizontal: 10),
+                    child: Text(
+                      'VS',
+                      style: TextStyle(
+                        color: Color(0xFFFF4655),
+                        fontWeight: FontWeight.w900,
+                        fontSize: 15,
+                      ),
+                    ),
+                  ),
+                  Expanded(
+                    child: Text(
+                      t2Name,
+                      style: const TextStyle(
+                        color: Colors.white,
+                        fontWeight: FontWeight.w900,
+                        fontSize: 15,
+                      ),
+                      textAlign: TextAlign.end,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ),
+                ],
+              );
+            },
+          ),
+
+          // Proof Under Review / Attempts Box
+          if (status == 'under_review') ...[
+            const SizedBox(height: 12),
+            Container(
+              width: double.infinity,
+              padding: const EdgeInsets.all(10),
+              decoration: BoxDecoration(
+                color: const Color(0xFF0F141E),
+                borderRadius: BorderRadius.circular(10),
+                border: Border.all(
+                  color: proofStatus == 'rejected'
+                      ? const Color(0xFFFF4655).withOpacity(0.3)
+                      : const Color(0xFF38BDF8).withOpacity(0.3),
+                ),
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  // Proof Attempts: 1/2 or 2/2 Max limit reached
+                  Row(
+                    children: [
+                      Icon(
+                        Icons.camera_alt_outlined,
+                        size: 13,
+                        color: attempts >= 2 ? const Color(0xFFFF4655) : const Color(0xFFFFB020),
+                      ),
+                      const SizedBox(width: 5),
+                      Text(
+                        'Proof Attempts: $attempts/2 ${attempts >= 2 ? "(Max limit reached)" : ""}',
+                        style: TextStyle(
+                          color: attempts >= 2 ? const Color(0xFFFF4655) : const Color(0xFFFFB020),
+                          fontSize: 11,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 6),
+
+                  // Urdu text
+                  Row(
+                    children: [
+                      Icon(
+                        proofStatus == 'rejected' ? Icons.info_outline : Icons.hourglass_top_rounded,
+                        size: 13,
+                        color: proofStatus == 'rejected' ? const Color(0xFFFF4655) : const Color(0xFF38BDF8),
+                      ),
+                      const SizedBox(width: 5),
+                      Expanded(
+                        child: Text(
+                          proofStatus == 'rejected'
+                              ? (adminNote != null && adminNote.isNotEmpty
+                                  ? 'ثبوت مسترد: $adminNote - براہ کرم نیا ثبوت اپلوڈ کریں'
+                                  : 'آپ کا ثبوت مسترد ہو گیا ہے، براہ کرم نیا ثبوت اپلوڈ کریں')
+                              : 'آپ کا نیا ثبوت ایڈمن کے پاس چلا گیا ہے، براہ کرم انتظار کریں',
+                          style: TextStyle(
+                            color: proofStatus == 'rejected' ? const Color(0xFFFF4655) : const Color(0xFF38BDF8),
+                            fontSize: 11,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ],
               ),
             ),
           ],
-        ),
-        content: Text(
-          'کیا آپ واقعی ${match.team2Name} کو بھیجا گیا چیلنج Cancel کرنا چاہتے ہیں؟',
-          style: const TextStyle(color: Color(0xFF8B949E), fontSize: 13),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(ctx),
-            child: const Text('Back', style: TextStyle(color: Colors.grey)),
-          ),
-          ElevatedButton(
-            style: ElevatedButton.styleFrom(
-              backgroundColor: const Color(0xFFFF4655),
-              foregroundColor: Colors.white,
-            ),
-            onPressed: () async {
-              Navigator.pop(ctx);
-              final success = await _matchService.cancelChallenge(
-                match.matchId,
-                cancelledByUid: currentUid,
-              );
-              if (mounted) {
-                if (success) {
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(
-                      content: Text('چیلنج کامیابی سے Cancel ہو گیا!'),
-                      backgroundColor: Color(0xFFFF6B00),
+
+          const SizedBox(height: 12),
+
+          // Footer: Date & OPEN ROOM button
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Row(
+                children: [
+                  const Icon(
+                    Icons.access_time_rounded,
+                    size: 14,
+                    color: Color(0xFF8B949E),
+                  ),
+                  const SizedBox(width: 5),
+                  Text(
+                    DateFormat('dd MMM, hh:mm a').format(matchDate),
+                    style: const TextStyle(
+                      color: Color(0xFF8B949E),
+                      fontSize: 12,
+                    ),
+                  ),
+                ],
+              ),
+              ElevatedButton.icon(
+                onPressed: () {
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (_) => TeamMatchRoomScreen(matchId: matchId),
                     ),
                   );
-                } else {
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(
-                      content: Text('چیلنج Cancel کرنے میں خرابی ہوئی'),
-                      backgroundColor: Color(0xFFFF4655),
-                    ),
-                  );
-                }
-              }
-            },
-            child: const Text(
-              'Cancel Challenge',
-              style: TextStyle(fontWeight: FontWeight.bold),
-            ),
+                },
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: const Color(0xFFFF4655),
+                  foregroundColor: Colors.white,
+                  padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+                  minimumSize: const Size(0, 34),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  elevation: 0,
+                ),
+                icon: const Icon(Icons.meeting_room_rounded, size: 14),
+                label: const Text(
+                  'OPEN ROOM',
+                  style: TextStyle(
+                    fontWeight: FontWeight.w900,
+                    fontSize: 11,
+                    letterSpacing: 0.5,
+                  ),
+                ),
+              ),
+            ],
           ),
         ],
       ),

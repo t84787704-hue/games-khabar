@@ -183,13 +183,14 @@ class _EndMatchBottomSheetState extends State<EndMatchBottomSheet> {
         await SupabaseService.client.from('active_matches').update({
           'status': 'under_review',
           'proof_status': 'pending',
+          'submitted_by_team_id': myUuid,
           if (winnerTeamId != null) 'winner_team_id': winnerTeamId,
           if (proofUrl != null) 'proof_url': proofUrl,
           'result': _selectedResult,
           'ended_at': DateTime.now().toUtc().toIso8601String(),
         }).eq('id', widget.activeMatchId);
       } catch (e) {
-        debugPrint('[EndMatchDialog] Update with proof_status failed: $e, fallback status under_review');
+        debugPrint('[EndMatchDialog] Update with proof_status/submitted_by failed: $e, fallback status under_review');
         await SupabaseService.client.from('active_matches').update({
           'status': 'under_review',
           if (winnerTeamId != null) 'winner_team_id': winnerTeamId,

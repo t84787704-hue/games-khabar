@@ -6,8 +6,10 @@ import '../services/team_service.dart';
 import '../widgets/team_card.dart';
 import '../widgets/create_team_dialog.dart';
 import '../widgets/end_match_dialog.dart';
+import 'package:cached_network_image/cached_network_image.dart';
 import 'my_team_matches_screen.dart';
 import 'team_leaderboard_screen.dart';
+import 'leaderboard_screen.dart';
 import 'team_profile_screen.dart';
 
 class TeamsScreen extends StatefulWidget {
@@ -47,6 +49,46 @@ class _TeamsScreenState extends State<TeamsScreen> {
   final Set<String> _completedMatchIds = {};
   final Set<String> _autoCompletingMatchIds = {};
   final List<Map<String, dynamic>> _optimisticActiveMatches = [];
+
+  void _showProofImageDialog(BuildContext context, String imageUrl) {
+    showDialog(
+      context: context,
+      builder: (ctx) => Dialog(
+        backgroundColor: const Color(0xFF131A29),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Padding(
+              padding: const EdgeInsets.all(12),
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  const Text('Match Proof 📸', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 14)),
+                  IconButton(
+                    icon: const Icon(Icons.close, color: Colors.white54, size: 20),
+                    onPressed: () => Navigator.pop(ctx),
+                  ),
+                ],
+              ),
+            ),
+            InteractiveViewer(
+              child: ClipRRect(
+                borderRadius: const BorderRadius.vertical(bottom: Radius.circular(16)),
+                child: CachedNetworkImage(
+                  imageUrl: imageUrl,
+                  fit: BoxFit.contain,
+                  placeholder: (c, u) => const SizedBox(height: 200, child: Center(child: CircularProgressIndicator(color: Color(0xFF00FF88)))),
+                  errorWidget: (c, u, e) => const SizedBox(height: 200, child: Center(child: Icon(Icons.broken_image, color: Colors.white30))),
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
 
   Future<void> _handleAcceptChallenge({
     required String challengeId,
@@ -222,12 +264,12 @@ class _TeamsScreenState extends State<TeamsScreen> {
             },
           ),
           IconButton(
-            tooltip: 'Team Leaderboard',
+            tooltip: 'TOP 100 TEAMS Leaderboard',
             icon: const Icon(Icons.emoji_events_rounded, color: Color(0xFF65676B)),
             onPressed: () {
               Navigator.push(
                 context,
-                MaterialPageRoute(builder: (_) => const TeamLeaderboardScreen()),
+                MaterialPageRoute(builder: (_) => const LeaderboardScreen()),
               );
             },
           ),
@@ -612,7 +654,7 @@ class _TeamsScreenState extends State<TeamsScreen> {
                                 const SizedBox(width: 8),
                                 const Expanded(
                                   child: Text(
-                                    '✅ Proof Accepted - You Are Win! 🏆',
+                                    '✅ Your Proof Accepted - You Are Win! 🏆',
                                     style: TextStyle(
                                       color: Color(0xFF2E7D32),
                                       fontWeight: FontWeight.bold,
@@ -717,8 +759,9 @@ class _TeamsScreenState extends State<TeamsScreen> {
                           );
                         }
 
-                        // Case 2: under_review & pending -> Yellow banner "⏳ Your Proof Under Review"
+                        // Case 2: under_review & pending -> Yellow banner "⏳ Your Proof Under Review - Admin confirmation ka wait hai" + View Proof
                         if (status == 'under_review') {
+                          final proofUrl = match['proof_url']?.toString();
                           return Container(
                             margin: const EdgeInsets.fromLTRB(16, 4, 16, 8),
                             padding: const EdgeInsets.all(12),
@@ -743,11 +786,11 @@ class _TeamsScreenState extends State<TeamsScreen> {
                                     crossAxisAlignment: CrossAxisAlignment.start,
                                     children: [
                                       const Text(
-                                        '⏳ Your Proof Under Review',
+                                        '⏳ Your Proof Under Review - Admin confirmation ka wait hai',
                                         style: TextStyle(
                                           color: Color(0xFFB78103),
                                           fontWeight: FontWeight.bold,
-                                          fontSize: 13.5,
+                                          fontSize: 13,
                                         ),
                                       ),
                                       const SizedBox(height: 2),
@@ -756,7 +799,7 @@ class _TeamsScreenState extends State<TeamsScreen> {
                                         builder: (context, opSnap) {
                                           final opponentName = opSnap.data?.name ?? match['opponent_name']?.toString() ?? 'Opponent';
                                           return Text(
-                                            'vs $opponentName • Admin verification in progress',
+                                            'vs $opponentName • Admin confirmation ka wait hai',
                                             style: const TextStyle(
                                               color: Color(0xFF8D6E63),
                                               fontSize: 11,
@@ -767,14 +810,43 @@ class _TeamsScreenState extends State<TeamsScreen> {
                                     ],
                                   ),
                                 ),
-                                Container(
-                                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-                                  decoration: BoxDecoration(
-                                    color: const Color(0xFFFFB300),
-                                    borderRadius: BorderRadius.circular(10),
+                                if (proofUrl != null && proofUrl.isNotEmpty) ...[
+                                  const SizedBox(width: 6),
+                                  InkWell(
+                                    onTap: () => _showProofImageDialog(context, proofUrl),
+                                    child: Container(
+                                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                                      decoration: BoxDecoration(
+                                        color: const Color(0xFFFFB300),
+                                        borderRadius: BorderRadius.circular(8),
+                                      ),
+                                      child: const Row(
+                                        mainAxisSize: MainAxisSize.min,
+                                        children: [
+                                          Icon(Icons.visibility_rounded, size: 13, color: Colors.black),
+                                          SizedBox(width: 3),
+                                          Text(
+                                            'View Proof',
+                                            style: TextStyle(
+                                              color: Colors.black,
+                                              fontWeight: FontWeight.bold,
+                                              fontSize: 10.5,
+                                            ),
+                                          ),
+                                        ],
+                                      ),
+                                    ),
                                   ),
-                                  child: const Text('REVIEW', style: TextStyle(color: Colors.black, fontWeight: FontWeight.w900, fontSize: 10)),
-                                ),
+                                ] else ...[
+                                  Container(
+                                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                                    decoration: BoxDecoration(
+                                      color: const Color(0xFFFFB300),
+                                      borderRadius: BorderRadius.circular(10),
+                                    ),
+                                    child: const Text('REVIEW', style: TextStyle(color: Colors.black, fontWeight: FontWeight.w900, fontSize: 10)),
+                                  ),
+                                ],
                               ],
                             ),
                           );

@@ -3267,13 +3267,14 @@ class _AdminPendingProofCardState extends State<_AdminPendingProofCard> {
     required int addL,
     required int addD,
     required int addPts,
+    int addTotalMatches = 1,
   }) async {
     // 1. Supabase teams table
     try {
       final tUuid = SupabaseService.toUuid(teamId);
       final res = await SupabaseService.client
           .from('teams')
-          .select('wins, losses, draws, points')
+          .select('wins, losses, draws, points, total_matches')
           .eq('id', tUuid)
           .maybeSingle();
 
@@ -3282,13 +3283,25 @@ class _AdminPendingProofCardState extends State<_AdminPendingProofCard> {
         final currentLosses = (res['losses'] as num?)?.toInt() ?? 0;
         final currentDraws = (res['draws'] as num?)?.toInt() ?? 0;
         final currentPoints = (res['points'] as num?)?.toInt() ?? 0;
+        final currentTotalMatches = (res['total_matches'] as num?)?.toInt() ?? 0;
 
-        await SupabaseService.client.from('teams').update({
-          'wins': currentWins + addW,
-          'losses': currentLosses + addL,
-          'draws': currentDraws + addD,
-          'points': currentPoints + addPts,
-        }).eq('id', tUuid);
+        try {
+          await SupabaseService.client.from('teams').update({
+            'wins': currentWins + addW,
+            'losses': currentLosses + addL,
+            'draws': currentDraws + addD,
+            'points': currentPoints + addPts,
+            'total_matches': currentTotalMatches + addTotalMatches,
+          }).eq('id', tUuid);
+        } catch (_) {
+          // If total_matches column doesn't exist yet
+          await SupabaseService.client.from('teams').update({
+            'wins': currentWins + addW,
+            'losses': currentLosses + addL,
+            'draws': currentDraws + addD,
+            'points': currentPoints + addPts,
+          }).eq('id', tUuid);
+        }
       }
     } catch (e) {
       debugPrint('[AdminProof] Supabase team stats update error: $e');
@@ -3305,6 +3318,7 @@ class _AdminPendingProofCardState extends State<_AdminPendingProofCard> {
           'losses': FieldValue.increment(addL),
           'draws': FieldValue.increment(addD),
           'points': FieldValue.increment(addPts),
+          'totalMatches': FieldValue.increment(addTotalMatches),
         });
       }
     } catch (e) {
@@ -3320,48 +3334,40 @@ class _AdminPendingProofCardState extends State<_AdminPendingProofCard> {
       final matchId = widget.match['id'];
       final team1Id = (widget.match['team1_id'] ?? '').toString();
       final team2Id = (widget.match['team2_id'] ?? '').toString();
-      final winnerId = (widget.match['winner_team_id'] ?? '').toString();
-      final result = (widget.match['result'] ?? '').toString().toLowerCase();
+      final submittedByRaw = (widget.match['submitted_by_team_id'] ?? widget.match['winner_team_id'])?.toString();
+      final winnerId = (submittedByRaw != null && submittedByRaw.isNotEmpty)
+          ? submittedByRaw
+          : (widget.match['winner_team_id'] ?? '').toString();
+      final winnerUuid = winnerId.isNotEmpty ? SupabaseService.toUuid(winnerId) : null;
 
-      // 1. Update Supabase active_matches table
+      // 1. Update Supabase active_matches table: proof_status='accepted', status='completed', winner_team_id=submitted_by_team_id
       try {
         await SupabaseService.client.from('active_matches').update({
           'proof_status': 'accepted',
           'status': 'completed',
+          if (winnerUuid != null) 'winner_team_id': winnerUuid,
         }).eq('id', matchId);
       } catch (e) {
         debugPrint('[AdminProof] Accept update with proof_status error: $e, trying status only');
         await SupabaseService.client.from('active_matches').update({
           'status': 'completed',
+          if (winnerUuid != null) 'winner_team_id': winnerUuid,
         }).eq('id', matchId);
       }
 
-      // 2. Update Win/Loss/Points on Teams
-      if (result == 'win' || (winnerId.isNotEmpty && result != 'draw')) {
-        final t1Uuid = SupabaseService.toUuid(team1Id);
-        final isT1Winner = (winnerId == team1Id || winnerId == t1Uuid);
-        final winTeam = isT1Winner ? team1Id : team2Id;
-        final loseTeam = isT1Winner ? team2Id : team1Id;
+      // 2. Update teams table: winner wins+1, points+3, total_matches+1 / loser total_matches+1
+      final t1Uuid = SupabaseService.toUuid(team1Id);
+      final isT1Winner = (winnerId == team1Id || winnerId == t1Uuid);
+      final winTeam = isT1Winner ? team1Id : team2Id;
+      final loseTeam = isT1Winner ? team2Id : team1Id;
 
-        await _updateTeamStatsInDb(teamId: winTeam, addW: 1, addL: 0, addD: 0, addPts: 3);
-        await _updateTeamStatsInDb(teamId: loseTeam, addW: 0, addL: 1, addD: 0, addPts: 0);
-      } else if (result == 'loss') {
-        final isT1Submitter = (winnerId == team2Id || winnerId == SupabaseService.toUuid(team2Id));
-        final winTeam = isT1Submitter ? team2Id : team1Id;
-        final loseTeam = isT1Submitter ? team1Id : team2Id;
-
-        await _updateTeamStatsInDb(teamId: winTeam, addW: 1, addL: 0, addD: 0, addPts: 3);
-        await _updateTeamStatsInDb(teamId: loseTeam, addW: 0, addL: 1, addD: 0, addPts: 0);
-      } else {
-        // Draw: both teams get +1 D, +1 Pt
-        await _updateTeamStatsInDb(teamId: team1Id, addW: 0, addL: 0, addD: 1, addPts: 1);
-        await _updateTeamStatsInDb(teamId: team2Id, addW: 0, addL: 0, addD: 1, addPts: 1);
-      }
+      await _updateTeamStatsInDb(teamId: winTeam, addW: 1, addL: 0, addD: 0, addPts: 3, addTotalMatches: 1);
+      await _updateTeamStatsInDb(teamId: loseTeam, addW: 0, addL: 1, addD: 0, addPts: 0, addTotalMatches: 1);
 
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
-            content: Text('✅ Proof accepted! Match completed and team points updated.'),
+            content: Text('✅ Proof accepted! Match completed and team stats updated.'),
             backgroundColor: Color(0xFF00FF88),
           ),
         );
@@ -3495,9 +3501,26 @@ class _AdminPendingProofCardState extends State<_AdminPendingProofCard> {
           ),
           if (formattedDate.isNotEmpty) ...[
             const SizedBox(height: 4),
-            Text(
-              'Submitted: $formattedDate',
-              style: const TextStyle(color: Color(0xFF8B949E), fontSize: 11),
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                FutureBuilder<TeamModel?>(
+                  future: (widget.match['submitted_by_team_id'] ?? widget.match['winner_team_id']) != null
+                      ? widget.teamService.getTeam((widget.match['submitted_by_team_id'] ?? widget.match['winner_team_id']).toString())
+                      : Future.value(null),
+                  builder: (context, snap) {
+                    final subName = snap.data?.name ?? (widget.match['submitted_by_team_id'] != null ? 'Team' : 'Submitter');
+                    return Text(
+                      'Submitted By: $subName',
+                      style: const TextStyle(color: Color(0xFF38BDF8), fontWeight: FontWeight.bold, fontSize: 11.5),
+                    );
+                  },
+                ),
+                Text(
+                  'Date: $formattedDate',
+                  style: const TextStyle(color: Color(0xFF8B949E), fontSize: 11),
+                ),
+              ],
             ),
           ],
           const SizedBox(height: 10),
@@ -3623,7 +3646,7 @@ class _AdminPendingProofCardState extends State<_AdminPendingProofCard> {
                       ),
                       icon: const Icon(Icons.close_rounded, size: 16),
                       label: const Text(
-                        'Reject ❌',
+                        'Reject Proof ❌',
                         style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12),
                       ),
                       onPressed: _handleReject,
@@ -3644,7 +3667,7 @@ class _AdminPendingProofCardState extends State<_AdminPendingProofCard> {
                       ),
                       icon: const Icon(Icons.check_rounded, size: 16, color: Colors.black),
                       label: const Text(
-                        'Accept ✅',
+                        'Accept Proof ✅',
                         style: TextStyle(fontWeight: FontWeight.w900, fontSize: 12),
                       ),
                       onPressed: _handleAccept,
