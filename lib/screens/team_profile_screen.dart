@@ -22,6 +22,140 @@ class TeamProfileScreen extends StatefulWidget {
 class _TeamProfileScreenState extends State<TeamProfileScreen> {
   final TeamService _teamService = TeamService();
   bool _isActionLoading = false;
+  final Set<String> _cancelledChallengeIds = {};
+  final Set<String> _acceptingChallengeIds = {};
+  final Set<String> _acceptedChallengeIds = {};
+  final List<Map<String, dynamic>> _optimisticActiveMatches = [];
+
+  Future<void> _handleAcceptChallenge({
+    required String challengeId,
+    required String fromTeamId,
+    required String toTeamId,
+    required String fromTeamName,
+  }) async {
+    final cId = challengeId.trim();
+    if (_acceptingChallengeIds.contains(cId)) return;
+
+    // 1. Immediately setState: isAccepting=true, disable both Accept and Reject buttons
+    setState(() {
+      _acceptingChallengeIds.add(cId);
+    });
+
+    try {
+      // 2. Do operations with await in order:
+      // Update challenge status to accepted
+      await SupabaseService.client
+          .from('challenges')
+          .update({'status': 'accepted'})
+          .eq('id', cId);
+
+      // Check duplicate first: existing = await supabase.from('active_matches').select().eq('status','active').or('and(team1_id.eq.${from},team2_id.eq.${to}),and(team1_id.eq.${to},team2_id.eq.${from})')
+      final t1 = SupabaseService.toUuid(fromTeamId);
+      final t2 = SupabaseService.toUuid(toTeamId);
+
+      final existing = await SupabaseService.client
+          .from('active_matches')
+          .select()
+          .eq('status', 'active')
+          .or('and(team1_id.eq.$t1,team2_id.eq.$t2),and(team1_id.eq.$t2,team2_id.eq.$t1)');
+
+      final bool hasExisting = (existing as List).isNotEmpty;
+
+      // If existing empty: insert
+      if (!hasExisting) {
+        await SupabaseService.client.from('active_matches').insert({
+          'team1_id': t1,
+          'team2_id': t2,
+          'participants': [t1, t2],
+          'status': 'active',
+          'created_at': DateTime.now().toUtc().toIso8601String(),
+        });
+      }
+
+      // 3. Optimistic UI: Immediately after await, setState hide Incoming banner and show Active Match banner (don't wait for stream). Show snackbar "Match Started! Live ho gaya"
+      if (mounted) {
+        setState(() {
+          _acceptedChallengeIds.add(cId);
+          if (!hasExisting) {
+            _optimisticActiveMatches.add({
+              'id': 'opt-${DateTime.now().millisecondsSinceEpoch}',
+              'team1_id': t1,
+              'team2_id': t2,
+              'participants': [t1, t2],
+              'status': 'active',
+              'opponent_name': fromTeamName,
+            });
+          }
+        });
+
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(hasExisting ? 'Already Active' : 'Match Started! Live ho gaya'),
+            backgroundColor: const Color(0xFF00FF88),
+            duration: const Duration(seconds: 3),
+          ),
+        );
+      }
+    } catch (e) {
+      debugPrint('[TeamProfileScreen] Error accepting challenge: $e');
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Error: $e'), backgroundColor: const Color(0xFFFF4655)),
+        );
+      }
+    } finally {
+      // 4. On success: isAccepting=false
+      if (mounted) {
+        setState(() {
+          _acceptingChallengeIds.remove(cId);
+        });
+      }
+    }
+  }
+
+  Future<void> _handleRejectChallenge(String challengeId) async {
+    final cId = challengeId.trim();
+    setState(() {
+      _acceptedChallengeIds.add(cId);
+    });
+    try {
+      await SupabaseService.client
+          .from('challenges')
+          .update({'status': 'rejected'})
+          .eq('id', cId);
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Challenge rejected')),
+        );
+      }
+    } catch (e) {
+      debugPrint('[TeamProfileScreen] Error rejecting challenge: $e');
+    }
+  }
+
+  Future<void> _cancelChallenge(String challengeId) async {
+    setState(() {
+      _cancelledChallengeIds.add(challengeId);
+    });
+    try {
+      await SupabaseService.client
+          .from('challenges')
+          .delete()
+          .eq('id', challengeId);
+      await Future.delayed(const Duration(milliseconds: 500));
+      if (mounted) setState(() {});
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Challenge Cancel ho gaya'),
+            backgroundColor: Color(0xFF1877F2),
+          ),
+        );
+      }
+    } catch (e) {
+      debugPrint('[TeamProfileScreen] Error cancelling challenge: $e');
+    }
+  }
 
   Future<void> _handleJoinRequest(TeamModel team, String currentUid) async {
     final currentGamer = GamerAuthService().currentGamer;
@@ -155,7 +289,11 @@ class _TeamProfileScreenState extends State<TeamProfileScreen> {
                   .stream(primaryKey: ['id'])
                   .eq('status', 'active'),
               builder: (context, activeSnap) {
-                final activeMatches = activeSnap.data ?? [];
+                final streamMatches = activeSnap.data ?? [];
+                final activeMatches = [
+                  ..._optimisticActiveMatches,
+                  ...streamMatches,
+                ];
                 final targetUuid = SupabaseService.toUuid(widget.teamId).toLowerCase();
                 final targetRawId = widget.teamId.toLowerCase();
                 final myUuid = myTeamId.isNotEmpty ? SupabaseService.toUuid(myTeamId).toLowerCase() : '';
@@ -180,6 +318,9 @@ class _TeamProfileScreenState extends State<TeamProfileScreen> {
                     isMember ||
                     widget.teamId == myTeamId ||
                     myLeaderTeams.any((t) => t.id == widget.teamId);
+                final String matchVsName = (isMyOwnTeam && activeMatch['opponent_name'] != null && activeMatch['opponent_name'].toString().isNotEmpty)
+                    ? activeMatch['opponent_name'].toString()
+                    : team.name;
                 final bool isMatchLeader = hasActiveMatch && (
                   isLeader ||
                   myLeaderTeams.any((t) {
@@ -260,7 +401,7 @@ class _TeamProfileScreenState extends State<TeamProfileScreen> {
                                     const SizedBox(width: 8),
                                     Expanded(
                                       child: Text(
-                                        '🔥 Active Match vs ${team.name} - Match is Live',
+                                        '🔥 Active Match vs $matchVsName - Match is Live',
                                         style: const TextStyle(
                                           color: Color(0xFF00FF88),
                                           fontWeight: FontWeight.bold,
@@ -342,6 +483,7 @@ class _TeamProfileScreenState extends State<TeamProfileScreen> {
                               if (!outSnap.hasData) return const SizedBox.shrink();
                               final outgoingList = outSnap.data!
                                   .where((d) => (d['status'] ?? '').toString().toLowerCase() == 'pending')
+                                  .where((d) => !_cancelledChallengeIds.contains(d['id']?.toString()))
                                   .toList();
                               if (outgoingList.isEmpty) return const SizedBox.shrink();
 
@@ -450,21 +592,7 @@ class _TeamProfileScreenState extends State<TeamProfileScreen> {
                                             ),
                                             const SizedBox(width: 6),
                                             ElevatedButton(
-                                              onPressed: () async {
-                                                await SupabaseService.client
-                                                    .from('challenges')
-                                                    .delete()
-                                                    .eq('id', challengeId);
-                                                if (mounted) {
-                                                  setState(() {});
-                                                  ScaffoldMessenger.of(context).showSnackBar(
-                                                    const SnackBar(
-                                                      content: Text('🚫 چیلنج کامیابی سے Cancel کر دیا گیا ہے'),
-                                                      backgroundColor: Color(0xFF1877F2),
-                                                    ),
-                                                  );
-                                                }
-                                              },
+                                              onPressed: () => _cancelChallenge(challengeId.toString()),
                                               style: ElevatedButton.styleFrom(
                                                 backgroundColor: const Color(0xFFFF4655),
                                                 foregroundColor: Colors.white,
@@ -496,6 +624,7 @@ class _TeamProfileScreenState extends State<TeamProfileScreen> {
                               if (!incSnap.hasData) return const SizedBox.shrink();
                               final incomingList = incSnap.data!
                                   .where((d) => (d['status'] ?? '').toString().toLowerCase() == 'pending')
+                                  .where((d) => !_acceptedChallengeIds.contains(d['id']?.toString()))
                                   .toList();
                               if (incomingList.isEmpty) return const SizedBox.shrink();
 
@@ -558,6 +687,7 @@ class _TeamProfileScreenState extends State<TeamProfileScreen> {
                                       final fromTeamName = doc['from_team_name']?.toString() ?? 'Opponent Team';
                                       final fromTeamId = doc['from_team_id']?.toString() ?? '';
                                       final toTeamId = doc['to_team_id']?.toString() ?? widget.teamId;
+                                      final isAccepting = _acceptingChallengeIds.contains(challengeId.toString());
 
                                       return Container(
                                         margin: const EdgeInsets.only(bottom: 8),
@@ -591,18 +721,7 @@ class _TeamProfileScreenState extends State<TeamProfileScreen> {
                                               children: [
                                                 Expanded(
                                                   child: OutlinedButton(
-                                                    onPressed: () async {
-                                                      await SupabaseService.client
-                                                          .from('challenges')
-                                                          .update({'status': 'rejected'})
-                                                          .eq('id', challengeId);
-                                                      if (mounted) {
-                                                        setState(() {});
-                                                        ScaffoldMessenger.of(context).showSnackBar(
-                                                          const SnackBar(content: Text('Challenge rejected')),
-                                                        );
-                                                      }
-                                                    },
+                                                    onPressed: isAccepting ? null : () => _handleRejectChallenge(challengeId.toString()),
                                                     style: OutlinedButton.styleFrom(
                                                       foregroundColor: const Color(0xFFFF4655),
                                                       side: const BorderSide(color: Color(0xFFFF4655)),
@@ -616,40 +735,41 @@ class _TeamProfileScreenState extends State<TeamProfileScreen> {
                                                 const SizedBox(width: 10),
                                                 Expanded(
                                                   child: ElevatedButton(
-                                                    onPressed: () async {
-                                                      await SupabaseService.client
-                                                          .from('challenges')
-                                                          .update({'status': 'accepted'})
-                                                          .eq('id', challengeId);
-                                                      final t1 = SupabaseService.toUuid(fromTeamId);
-                                                      final t2 = SupabaseService.toUuid(toTeamId);
-                                                      await SupabaseService.client
-                                                          .from('active_matches')
-                                                          .insert({
-                                                            'team1_id': t1,
-                                                            'team2_id': t2,
-                                                            'participants': [t1, t2],
-                                                            'status': 'active',
-                                                          });
-                                                      if (mounted) {
-                                                        setState(() {});
-                                                        ScaffoldMessenger.of(context).showSnackBar(
-                                                          const SnackBar(
-                                                            content: Text('✅ Challenge Accepted! Active Match is Live.'),
-                                                            backgroundColor: Color(0xFF00FF88),
-                                                          ),
-                                                        );
-                                                      }
-                                                    },
+                                                    onPressed: isAccepting
+                                                        ? null
+                                                        : () => _handleAcceptChallenge(
+                                                              challengeId: challengeId.toString(),
+                                                              fromTeamId: fromTeamId,
+                                                              toTeamId: toTeamId,
+                                                              fromTeamName: fromTeamName,
+                                                            ),
                                                     style: ElevatedButton.styleFrom(
                                                       backgroundColor: const Color(0xFF00FF88),
                                                       foregroundColor: Colors.black,
+                                                      disabledBackgroundColor: const Color(0xFF00FF88).withOpacity(0.6),
+                                                      disabledForegroundColor: Colors.black87,
                                                       padding: const EdgeInsets.symmetric(vertical: 6),
                                                       minimumSize: const Size(0, 34),
                                                       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
                                                       elevation: 0,
                                                     ),
-                                                    child: const Text('ACCEPT', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12)),
+                                                    child: isAccepting
+                                                        ? const Row(
+                                                            mainAxisAlignment: MainAxisAlignment.center,
+                                                            children: [
+                                                              SizedBox(
+                                                                width: 14,
+                                                                height: 14,
+                                                                child: CircularProgressIndicator(
+                                                                  strokeWidth: 2,
+                                                                  valueColor: AlwaysStoppedAnimation<Color>(Colors.black),
+                                                                ),
+                                                              ),
+                                                              SizedBox(width: 8),
+                                                              Text('Accepting...', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12)),
+                                                            ],
+                                                          )
+                                                        : const Text('ACCEPT', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12)),
                                                   ),
                                                 ),
                                               ],
@@ -679,7 +799,10 @@ class _TeamProfileScreenState extends State<TeamProfileScreen> {
                                 (d) {
                                   final toId = d['to_team_id']?.toString().toLowerCase();
                                   final st = (d['status'] ?? '').toString().toLowerCase();
-                                  return (toId == targetUuid || toId == rawTeamId) && st == 'pending';
+                                  final id = d['id']?.toString() ?? '';
+                                  return (toId == targetUuid || toId == rawTeamId) &&
+                                      st == 'pending' &&
+                                      !_cancelledChallengeIds.contains(id);
                                 },
                                 orElse: () => {},
                               );
@@ -704,29 +827,30 @@ class _TeamProfileScreenState extends State<TeamProfileScreen> {
                                         style: TextStyle(color: Color(0xFFFF4655), fontWeight: FontWeight.bold, fontSize: 13),
                                       ),
                                     ),
-                                    OutlinedButton(
-                                      style: OutlinedButton.styleFrom(
-                                        foregroundColor: const Color(0xFFFF4655),
-                                        side: const BorderSide(color: Color(0xFFFF4655)),
-                                        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 2),
+                                    Container(
+                                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                                      decoration: BoxDecoration(
+                                        color: const Color(0xFFFF4655).withOpacity(0.12),
+                                        borderRadius: BorderRadius.circular(6),
+                                        border: Border.all(color: const Color(0xFFFF4655).withOpacity(0.4)),
+                                      ),
+                                      child: const Text(
+                                        'REQUESTED',
+                                        style: TextStyle(color: Color(0xFFFF4655), fontWeight: FontWeight.bold, fontSize: 11),
+                                      ),
+                                    ),
+                                    const SizedBox(width: 6),
+                                    ElevatedButton(
+                                      style: ElevatedButton.styleFrom(
+                                        backgroundColor: const Color(0xFFFF4655),
+                                        foregroundColor: Colors.white,
+                                        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
                                         minimumSize: const Size(0, 30),
                                         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(6)),
+                                        elevation: 0,
                                       ),
-                                      onPressed: () async {
-                                        await SupabaseService.client
-                                            .from('challenges')
-                                            .delete()
-                                            .eq('id', pendingDoc['id']);
-                                        if (mounted) {
-                                          ScaffoldMessenger.of(context).showSnackBar(
-                                            const SnackBar(
-                                              content: Text('🚫 چیلنج Cancel کر دیا گیا ہے'),
-                                              backgroundColor: Color(0xFF1877F2),
-                                            ),
-                                          );
-                                        }
-                                      },
-                                      child: const Text('Cancel', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 11)),
+                                      onPressed: () => _cancelChallenge(pendingDoc['id']?.toString() ?? ''),
+                                      child: const Text('CANCEL', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 11)),
                                     ),
                                   ],
                                 ),
@@ -903,7 +1027,10 @@ class _TeamProfileScreenState extends State<TeamProfileScreen> {
                                 (d) {
                                   final toId = d['to_team_id']?.toString().toLowerCase();
                                   final st = (d['status'] ?? '').toString().toLowerCase();
-                                  return (toId == targetUuid || toId == rawTeamId) && st == 'pending';
+                                  final id = d['id']?.toString() ?? '';
+                                  return (toId == targetUuid || toId == rawTeamId) &&
+                                      st == 'pending' &&
+                                      !_cancelledChallengeIds.contains(id);
                                 },
                                 orElse: () => {},
                               );
@@ -934,20 +1061,7 @@ class _TeamProfileScreenState extends State<TeamProfileScreen> {
                                         padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 12),
                                         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
                                       ),
-                                      onPressed: () async {
-                                        await SupabaseService.client
-                                            .from('challenges')
-                                            .delete()
-                                            .eq('id', pendingDoc['id']);
-                                        if (mounted) {
-                                          ScaffoldMessenger.of(context).showSnackBar(
-                                            const SnackBar(
-                                              content: Text('🚫 چیلنج Cancel کر دیا گیا ہے'),
-                                              backgroundColor: Color(0xFF1877F2),
-                                            ),
-                                          );
-                                        }
-                                      },
+                                      onPressed: () => _cancelChallenge(pendingDoc['id']?.toString() ?? ''),
                                       child: const Text('CANCEL', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 11)),
                                     ),
                                   ],

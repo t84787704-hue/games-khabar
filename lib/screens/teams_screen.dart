@@ -37,6 +37,152 @@ class _TeamsScreenState extends State<TeamsScreen> {
     super.dispose();
   }
 
+  bool _hasPending = false;
+  String? _pendingChallengeId;
+  bool _showRedBanner = false;
+  final Set<String> _cancelledChallengeIds = {};
+  final Set<String> _acceptingChallengeIds = {};
+  final Set<String> _acceptedChallengeIds = {};
+  final List<Map<String, dynamic>> _optimisticActiveMatches = [];
+
+  Future<void> _handleAcceptChallenge({
+    required String challengeId,
+    required String fromTeamId,
+    required String toTeamId,
+  }) async {
+    final cId = challengeId.trim();
+    if (_acceptingChallengeIds.contains(cId)) return;
+
+    // 1. Immediately setState: isAccepting=true, disable both Accept and Reject buttons
+    setState(() {
+      _acceptingChallengeIds.add(cId);
+    });
+
+    try {
+      // 2. Do operations with await in order:
+      // Update challenge status to accepted
+      await SupabaseService.client
+          .from('challenges')
+          .update({'status': 'accepted'})
+          .eq('id', cId);
+
+      // Check duplicate first: existing = await supabase.from('active_matches').select().eq('status','active').or('and(team1_id.eq.${from},team2_id.eq.${to}),and(team1_id.eq.${to},team2_id.eq.${from})')
+      final t1 = SupabaseService.toUuid(fromTeamId);
+      final t2 = SupabaseService.toUuid(toTeamId);
+
+      final existing = await SupabaseService.client
+          .from('active_matches')
+          .select()
+          .eq('status', 'active')
+          .or('and(team1_id.eq.$t1,team2_id.eq.$t2),and(team1_id.eq.$t2,team2_id.eq.$t1)');
+
+      final bool hasExisting = (existing as List).isNotEmpty;
+
+      // If existing empty: insert
+      if (!hasExisting) {
+        await SupabaseService.client.from('active_matches').insert({
+          'team1_id': t1,
+          'team2_id': t2,
+          'participants': [t1, t2],
+          'status': 'active',
+          'created_at': DateTime.now().toUtc().toIso8601String(),
+        });
+      }
+
+      // 3. Optimistic UI: Immediately after await, setState hide Incoming banner and show Active Match banner (don't wait for stream). Show snackbar "Match Started! Live ho gaya"
+      if (mounted) {
+        setState(() {
+          _acceptedChallengeIds.add(cId);
+          if (!hasExisting) {
+            _optimisticActiveMatches.add({
+              'id': 'opt-${DateTime.now().millisecondsSinceEpoch}',
+              'team1_id': t1,
+              'team2_id': t2,
+              'participants': [t1, t2],
+              'status': 'active',
+            });
+          }
+        });
+
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(hasExisting ? 'Already Active' : 'Match Started! Live ho gaya'),
+            backgroundColor: const Color(0xFF2E7D32),
+            duration: const Duration(seconds: 3),
+          ),
+        );
+      }
+    } catch (e) {
+      debugPrint('[TeamsScreen] Error accepting challenge: $e');
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Error: $e'), backgroundColor: const Color(0xFFFF4655)),
+        );
+      }
+    } finally {
+      // 4. On success: isAccepting=false
+      if (mounted) {
+        setState(() {
+          _acceptingChallengeIds.remove(cId);
+        });
+      }
+    }
+  }
+
+  Future<void> _handleRejectChallenge(String challengeId) async {
+    final cId = challengeId.trim();
+    setState(() {
+      _acceptedChallengeIds.add(cId);
+    });
+    try {
+      await SupabaseService.client
+          .from('challenges')
+          .update({'status': 'rejected'})
+          .eq('id', cId);
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Challenge rejected')),
+        );
+      }
+    } catch (e) {
+      debugPrint('[TeamsScreen] Error rejecting challenge: $e');
+    }
+  }
+
+  Future<void> _handleCancelChallenge(String challengeId) async {
+    // 1. First: hide instantly for UX
+    setState(() {
+      _hasPending = false;
+      _pendingChallengeId = null;
+      _showRedBanner = false;
+      _cancelledChallengeIds.add(challengeId);
+    });
+
+    try {
+      // 2. Then: delete from Supabase
+      await SupabaseService.client
+          .from('challenges')
+          .delete()
+          .eq('id', challengeId);
+
+      // 3. Small delay 500ms then refetch to confirm
+      await Future.delayed(const Duration(milliseconds: 500));
+      if (mounted) setState(() {});
+
+      // 4. Show snackbar "Challenge Cancel ho gaya"
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Challenge Cancel ho gaya'),
+            backgroundColor: Color(0xFF1877F2),
+          ),
+        );
+      }
+    } catch (e) {
+      debugPrint('[TeamsScreen] Error cancelling challenge: $e');
+    }
+  }
+
   void _openCreateTeamDialog() async {
     final created = await CreateTeamDialog.show(context);
     if (created == true) {
@@ -210,12 +356,12 @@ class _TeamsScreenState extends State<TeamsScreen> {
                   stream: SupabaseService.client
                       .from('challenges')
                       .stream(primaryKey: ['id'])
-                      .eq('to_team_id', myTeamUuid)
-                      .eq('status', 'pending'),
+                      .eq('to_team_id', myTeamUuid),
                   builder: (context, challengesSnap) {
                     if (!challengesSnap.hasData) return const SizedBox.shrink();
                     final docs = challengesSnap.data!
                         .where((d) => (d['status'] ?? '').toString().toLowerCase() == 'pending')
+                        .where((d) => !_acceptedChallengeIds.contains(d['id']?.toString()))
                         .toList();
                     if (docs.isEmpty) return const SizedBox.shrink();
 
@@ -278,6 +424,7 @@ class _TeamsScreenState extends State<TeamsScreen> {
                             final fromTeamName = doc['from_team_name']?.toString() ?? 'Opponent Team';
                             final fromTeamId = doc['from_team_id']?.toString() ?? '';
                             final toTeamId = doc['to_team_id']?.toString() ?? myTeamId;
+                            final isAccepting = _acceptingChallengeIds.contains(challengeId.toString());
 
                             return Container(
                               margin: const EdgeInsets.only(bottom: 8),
@@ -311,17 +458,7 @@ class _TeamsScreenState extends State<TeamsScreen> {
                                     children: [
                                       Expanded(
                                         child: OutlinedButton(
-                                          onPressed: () async {
-                                            await SupabaseService.client
-                                                .from('challenges')
-                                                .update({'status': 'rejected'})
-                                                .eq('id', challengeId);
-                                            if (mounted) {
-                                              ScaffoldMessenger.of(context).showSnackBar(
-                                                const SnackBar(content: Text('Challenge rejected')),
-                                              );
-                                            }
-                                          },
+                                          onPressed: isAccepting ? null : () => _handleRejectChallenge(challengeId.toString()),
                                           style: OutlinedButton.styleFrom(
                                             foregroundColor: const Color(0xFFFF4655),
                                             side: const BorderSide(color: Color(0xFFFF4655)),
@@ -335,39 +472,40 @@ class _TeamsScreenState extends State<TeamsScreen> {
                                       const SizedBox(width: 10),
                                       Expanded(
                                         child: ElevatedButton(
-                                          onPressed: () async {
-                                            await SupabaseService.client
-                                                .from('challenges')
-                                                .update({'status': 'accepted'})
-                                                .eq('id', challengeId);
-                                            final t1 = SupabaseService.toUuid(fromTeamId);
-                                            final t2 = SupabaseService.toUuid(toTeamId);
-                                            await SupabaseService.client
-                                                .from('active_matches')
-                                                .insert({
-                                                  'team1_id': t1,
-                                                  'team2_id': t2,
-                                                  'participants': [t1, t2],
-                                                  'status': 'active',
-                                                });
-                                            if (mounted) {
-                                              ScaffoldMessenger.of(context).showSnackBar(
-                                                const SnackBar(
-                                                  content: Text('✅ Challenge Accepted! Active Match is Live.'),
-                                                  backgroundColor: Color(0xFF2E7D32),
-                                                ),
-                                              );
-                                            }
-                                          },
+                                          onPressed: isAccepting
+                                              ? null
+                                              : () => _handleAcceptChallenge(
+                                                    challengeId: challengeId.toString(),
+                                                    fromTeamId: fromTeamId,
+                                                    toTeamId: toTeamId,
+                                                  ),
                                           style: ElevatedButton.styleFrom(
                                             backgroundColor: const Color(0xFF1877F2),
                                             foregroundColor: Colors.white,
+                                            disabledBackgroundColor: const Color(0xFF1877F2).withOpacity(0.6),
+                                            disabledForegroundColor: Colors.white70,
                                             padding: const EdgeInsets.symmetric(vertical: 6),
                                             minimumSize: const Size(0, 34),
                                             shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
                                             elevation: 0,
                                           ),
-                                          child: const Text('Accept', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12)),
+                                          child: isAccepting
+                                              ? const Row(
+                                                  mainAxisAlignment: MainAxisAlignment.center,
+                                                  children: [
+                                                    SizedBox(
+                                                      width: 14,
+                                                      height: 14,
+                                                      child: CircularProgressIndicator(
+                                                        strokeWidth: 2,
+                                                        valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
+                                                      ),
+                                                    ),
+                                                    SizedBox(width: 8),
+                                                    Text('Accepting...', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12)),
+                                                  ],
+                                                )
+                                              : const Text('Accept', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12)),
                                         ),
                                       ),
                                     ],
@@ -390,8 +528,12 @@ class _TeamsScreenState extends State<TeamsScreen> {
                       .stream(primaryKey: ['id'])
                       .eq('status', 'active'),
                   builder: (context, activeSnap) {
-                    if (!activeSnap.hasData) return const SizedBox.shrink();
-                    final myActiveMatches = activeSnap.data!.where((m) {
+                    final streamMatches = activeSnap.data ?? [];
+                    final combinedMatches = [
+                      ..._optimisticActiveMatches,
+                      ...streamMatches,
+                    ];
+                    final myActiveMatches = combinedMatches.where((m) {
                       if (m['status'] != 'active') return false;
                       final participants = m['participants'];
                       final List<String> pList = [];
@@ -401,7 +543,17 @@ class _TeamsScreenState extends State<TeamsScreen> {
                       pList.add(m['team1_id']?.toString().toLowerCase() ?? '');
                       pList.add(m['team2_id']?.toString().toLowerCase() ?? '');
                       return pList.contains(myTeamUuid.toLowerCase()) || pList.contains(myTeamId.toLowerCase());
-                    }).toList();
+                    }).fold<List<Map<String, dynamic>>>([], (uniqueList, item) {
+                      final t1 = item['team1_id']?.toString().toLowerCase();
+                      final t2 = item['team2_id']?.toString().toLowerCase();
+                      final alreadyAdded = uniqueList.any((u) {
+                        final u1 = u['team1_id']?.toString().toLowerCase();
+                        final u2 = u['team2_id']?.toString().toLowerCase();
+                        return (u1 == t1 && u2 == t2) || (u1 == t2 && u2 == t1);
+                      });
+                      if (!alreadyAdded) uniqueList.add(item);
+                      return uniqueList;
+                    });
 
                     if (myActiveMatches.isEmpty) return const SizedBox.shrink();
 
@@ -532,185 +684,192 @@ class _TeamsScreenState extends State<TeamsScreen> {
                   },
                 ),
 
-              // 2. SENDER SIDE: Pending challenge red banner
-              if (myTeamId.isNotEmpty)
-                StreamBuilder<List<Map<String, dynamic>>>(
-                  stream: SupabaseService.client
-                      .from('challenges')
-                      .stream(primaryKey: ['id'])
-                      .eq('from_team_id', myTeamUuid),
+              // 2. SENDER SIDE: Pending challenge red banner & All Teams List
+              Expanded(
+                child: StreamBuilder<List<Map<String, dynamic>>>(
+                  stream: myTeamId.isNotEmpty
+                      ? SupabaseService.client
+                          .from('challenges')
+                          .stream(primaryKey: ['id'])
+                          .eq('from_team_id', myTeamUuid)
+                      : Stream.value([]),
                   builder: (context, sentSnap) {
-                    if (!sentSnap.hasData) return const SizedBox.shrink();
-                    final sentDocs = sentSnap.data!
+                    final sentDocs = sentSnap.data ?? [];
+                    final activePendingList = sentDocs
                         .where((d) => (d['status'] ?? '').toString().toLowerCase() == 'pending')
+                        .where((d) => !_cancelledChallengeIds.contains(d['id']?.toString()))
                         .toList();
-                    if (sentDocs.isEmpty) return const SizedBox.shrink();
+
+                    final bool hasPending = activePendingList.isNotEmpty;
 
                     return Column(
-                      children: sentDocs.map((doc) {
-                        final challengeId = doc['id'];
-                        final toTeamName = doc['to_team_name']?.toString() ?? 'Opponent Team';
+                      children: [
+                        if (hasPending)
+                          ...activePendingList.map((doc) {
+                            final challengeId = doc['id']?.toString() ?? '';
+                            final toTeamName = doc['to_team_name']?.toString() ?? 'Opponent Team';
 
-                        return Container(
-                          margin: const EdgeInsets.fromLTRB(16, 4, 16, 8),
-                          padding: const EdgeInsets.all(12),
-                          decoration: BoxDecoration(
-                            color: const Color(0xFFFEF2F2),
-                            borderRadius: BorderRadius.circular(12),
-                            border: Border.all(color: const Color(0xFFFF4655), width: 1.2),
-                            boxShadow: [
-                              BoxShadow(
-                                color: const Color(0xFFFF4655).withOpacity(0.08),
-                                blurRadius: 4,
-                                offset: const Offset(0, 1),
-                              ),
-                            ],
-                          ),
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Row(
-                                children: [
-                                  Container(
-                                    padding: const EdgeInsets.all(5),
-                                    decoration: BoxDecoration(
-                                      color: const Color(0xFFFF4655).withOpacity(0.12),
-                                      borderRadius: BorderRadius.circular(6),
-                                    ),
-                                    child: const Icon(Icons.warning_amber_rounded, color: Color(0xFFFF4655), size: 18),
+                            return Container(
+                              margin: const EdgeInsets.fromLTRB(16, 4, 16, 8),
+                              padding: const EdgeInsets.all(12),
+                              decoration: BoxDecoration(
+                                color: const Color(0xFFFEF2F2),
+                                borderRadius: BorderRadius.circular(12),
+                                border: Border.all(color: const Color(0xFFFF4655), width: 1.2),
+                                boxShadow: [
+                                  BoxShadow(
+                                    color: const Color(0xFFFF4655).withOpacity(0.08),
+                                    blurRadius: 4,
+                                    offset: const Offset(0, 1),
                                   ),
-                                  const SizedBox(width: 8),
-                                  const Expanded(
-                                    child: Text(
-                                      'Aap ne pehle hi challenge bheja hai',
-                                      style: TextStyle(
-                                        color: Color(0xFFFF4655),
-                                        fontWeight: FontWeight.bold,
-                                        fontSize: 13.5,
+                                ],
+                              ),
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Row(
+                                    children: [
+                                      Container(
+                                        padding: const EdgeInsets.all(5),
+                                        decoration: BoxDecoration(
+                                          color: const Color(0xFFFF4655).withOpacity(0.12),
+                                          borderRadius: BorderRadius.circular(6),
+                                        ),
+                                        child: const Icon(Icons.warning_amber_rounded, color: Color(0xFFFF4655), size: 18),
+                                      ),
+                                      const SizedBox(width: 8),
+                                      const Expanded(
+                                        child: Text(
+                                          'Aap ne pehle hi challenge bheja hai',
+                                          style: TextStyle(
+                                            color: Color(0xFFFF4655),
+                                            fontWeight: FontWeight.bold,
+                                            fontSize: 13.5,
+                                          ),
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                  const SizedBox(height: 6),
+                                  Text(
+                                    'آپ نے $toTeamName کو چیلنج بھیجا ہوا ہے۔ جواب کا انتظار ہے یا چیلنج واپس لے سکتے ہیں۔',
+                                    style: const TextStyle(color: Color(0xFF4B5563), fontSize: 12),
+                                  ),
+                                  const SizedBox(height: 8),
+                                  Align(
+                                    alignment: Alignment.centerRight,
+                                    child: OutlinedButton.icon(
+                                      onPressed: () => _handleCancelChallenge(challengeId),
+                                      style: OutlinedButton.styleFrom(
+                                        foregroundColor: const Color(0xFFFF4655),
+                                        side: const BorderSide(color: Color(0xFFFF4655), width: 1.2),
+                                        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+                                        minimumSize: const Size(0, 32),
+                                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                                        backgroundColor: Colors.white,
+                                      ),
+                                      icon: const Icon(Icons.close_rounded, size: 15),
+                                      label: const Text(
+                                        'CANCEL CHALLENGE (چیلنج منسوخ کریں)',
+                                        style: TextStyle(fontWeight: FontWeight.bold, fontSize: 11.5),
                                       ),
                                     ),
                                   ),
                                 ],
                               ),
-                              const SizedBox(height: 6),
-                              Text(
-                                'آپ نے $toTeamName کو چیلنج بھیجا ہوا ہے۔ جواب کا انتظار ہے یا چیلنج واپس لے سکتے ہیں۔',
-                                style: const TextStyle(color: Color(0xFF4B5563), fontSize: 12),
-                              ),
-                              const SizedBox(height: 8),
-                              Align(
-                                alignment: Alignment.centerRight,
-                                child: OutlinedButton.icon(
-                                  onPressed: () async {
-                                    await SupabaseService.client
-                                        .from('challenges')
-                                        .delete()
-                                        .eq('id', challengeId);
-                                    if (mounted) {
-                                      ScaffoldMessenger.of(context).showSnackBar(
-                                        const SnackBar(
-                                          content: Text('🚫 چیلنج کامیابی سے Cancel کر دیا گیا ہے'),
-                                          backgroundColor: Color(0xFF1877F2),
+                            );
+                          }),
+
+                        // All Teams List
+                        Expanded(
+                          child: StreamBuilder<List<TeamModel>>(
+                            stream: _teamService.getTeamsStream(
+                              gameFilter: _selectedGameFilter,
+                              searchQuery: _searchQuery,
+                            ),
+                            builder: (context, snapshot) {
+                              if (snapshot.connectionState == ConnectionState.waiting) {
+                                return const Center(child: CircularProgressIndicator(color: Color(0xFF1877F2)));
+                              }
+
+                              final teams = snapshot.data ?? [];
+
+                              if (teams.isEmpty) {
+                                return Center(
+                                  child: Padding(
+                                    padding: const EdgeInsets.all(32),
+                                    child: Column(
+                                      mainAxisAlignment: MainAxisAlignment.center,
+                                      children: [
+                                        Container(
+                                          padding: const EdgeInsets.all(20),
+                                          decoration: BoxDecoration(
+                                            color: const Color(0xFFE4E6EB),
+                                            shape: BoxShape.circle,
+                                            border: Border.all(color: const Color(0xFFCED0D4)),
+                                          ),
+                                          child: const Icon(Icons.shield_rounded, size: 44, color: Color(0xFF65676B)),
                                         ),
-                                      );
-                                    }
-                                  },
-                                  style: OutlinedButton.styleFrom(
-                                    foregroundColor: const Color(0xFFFF4655),
-                                    side: const BorderSide(color: Color(0xFFFF4655), width: 1.2),
-                                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
-                                    minimumSize: const Size(0, 32),
-                                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-                                    backgroundColor: Colors.white,
+                                        const SizedBox(height: 16),
+                                        Text(
+                                          _selectedGameFilter != 'All'
+                                              ? 'No teams found for $_selectedGameFilter'
+                                              : 'No Teams Registered Yet',
+                                          style: const TextStyle(color: Color(0xFF050505), fontSize: 16, fontWeight: FontWeight.bold),
+                                        ),
+                                        const SizedBox(height: 8),
+                                        const Text(
+                                          'سب سے پہلے اپنی ٹیم بنائیں اور دوسری ٹیموں کے ساتھ مقابلہ کریں!',
+                                          textAlign: TextAlign.center,
+                                          style: TextStyle(color: Color(0xFF65676B), fontSize: 13),
+                                        ),
+                                        const SizedBox(height: 20),
+                                        ElevatedButton.icon(
+                                          onPressed: _openCreateTeamDialog,
+                                          style: ElevatedButton.styleFrom(
+                                            backgroundColor: const Color(0xFF1877F2),
+                                            foregroundColor: Colors.white,
+                                            padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+                                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                                            elevation: 0,
+                                          ),
+                                          icon: const Icon(Icons.add, color: Colors.white),
+                                          label: const Text('Create First Team', style: TextStyle(fontWeight: FontWeight.bold)),
+                                        ),
+                                      ],
+                                    ),
                                   ),
-                                  icon: const Icon(Icons.close_rounded, size: 15),
-                                  label: const Text(
-                                    'CANCEL CHALLENGE (چیلنج منسوخ کریں)',
-                                    style: TextStyle(fontWeight: FontWeight.bold, fontSize: 11.5),
-                                  ),
-                                ),
-                              ),
-                            ],
-                          ),
-                        );
-                      }).toList(),
-                    );
-                  },
-                ),
+                                );
+                              }
 
-              // All Teams List
-              Expanded(
-                child: StreamBuilder<List<TeamModel>>(
-                  stream: _teamService.getTeamsStream(
-                    gameFilter: _selectedGameFilter,
-                    searchQuery: _searchQuery,
-                  ),
-                  builder: (context, snapshot) {
-                    if (snapshot.connectionState == ConnectionState.waiting) {
-                      return const Center(child: CircularProgressIndicator(color: Color(0xFF1877F2)));
-                    }
+                              return ListView.builder(
+                                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                                itemCount: teams.length,
+                                itemBuilder: (context, index) {
+                                  final team = teams[index];
+                                  final targetUuid = SupabaseService.toUuid(team.id).toLowerCase();
+                                  final rawTeamId = team.id.toLowerCase();
+                                  final matchingPending = activePendingList.firstWhere(
+                                    (d) {
+                                      final toId = d['to_team_id']?.toString().toLowerCase();
+                                      return toId == targetUuid || toId == rawTeamId;
+                                    },
+                                    orElse: () => {},
+                                  );
 
-                    final teams = snapshot.data ?? [];
-
-                    if (teams.isEmpty) {
-                      return Center(
-                        child: Padding(
-                          padding: const EdgeInsets.all(32),
-                          child: Column(
-                            mainAxisAlignment: MainAxisAlignment.center,
-                            children: [
-                              Container(
-                                padding: const EdgeInsets.all(20),
-                                decoration: BoxDecoration(
-                                  color: const Color(0xFFE4E6EB),
-                                  shape: BoxShape.circle,
-                                  border: Border.all(color: const Color(0xFFCED0D4)),
-                                ),
-                                child: const Icon(Icons.shield_rounded, size: 44, color: Color(0xFF65676B)),
-                              ),
-                              const SizedBox(height: 16),
-                              Text(
-                                _selectedGameFilter != 'All'
-                                    ? 'No teams found for $_selectedGameFilter'
-                                    : 'No Teams Registered Yet',
-                                style: const TextStyle(color: Color(0xFF050505), fontSize: 16, fontWeight: FontWeight.bold),
-                              ),
-                              const SizedBox(height: 8),
-                              const Text(
-                                'سب سے پہلے اپنی ٹیم بنائیں اور دوسری ٹیموں کے ساتھ مقابلہ کریں!',
-                                textAlign: TextAlign.center,
-                                style: TextStyle(color: Color(0xFF65676B), fontSize: 13),
-                              ),
-                              const SizedBox(height: 20),
-                              ElevatedButton.icon(
-                                onPressed: _openCreateTeamDialog,
-                                style: ElevatedButton.styleFrom(
-                                  backgroundColor: const Color(0xFF1877F2),
-                                  foregroundColor: Colors.white,
-                                  padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
-                                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-                                  elevation: 0,
-                                ),
-                                icon: const Icon(Icons.add, color: Colors.white),
-                                label: const Text('Create First Team', style: TextStyle(fontWeight: FontWeight.bold)),
-                              ),
-                            ],
+                                  return TeamCard(
+                                    team: team,
+                                    myTeamId: myTeamId,
+                                    myTeamName: myTeamName,
+                                    pendingChallenge: matchingPending.isNotEmpty ? matchingPending : null,
+                                    onCancelChallenge: _handleCancelChallenge,
+                                  );
+                                },
+                              );
+                            },
                           ),
                         ),
-                      );
-                    }
-
-                    return ListView.builder(
-                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-                      itemCount: teams.length,
-                      itemBuilder: (context, index) {
-                        final team = teams[index];
-                        return TeamCard(
-                          team: team,
-                          myTeamId: myTeamId,
-                          myTeamName: myTeamName,
-                        );
-                      },
+                      ],
                     );
                   },
                 ),

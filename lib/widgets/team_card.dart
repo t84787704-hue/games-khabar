@@ -10,12 +10,16 @@ class TeamCard extends StatefulWidget {
   final TeamModel team;
   final String myTeamId;
   final String myTeamName;
+  final Map<String, dynamic>? pendingChallenge;
+  final Future<void> Function(String challengeId)? onCancelChallenge;
 
   const TeamCard({
     super.key,
     required this.team,
     this.myTeamId = '',
     this.myTeamName = '',
+    this.pendingChallenge,
+    this.onCancelChallenge,
   });
 
   @override
@@ -152,6 +156,140 @@ class _TeamCardState extends State<TeamCard> {
         );
       }
     }
+  }
+
+  final Set<String> _localCancelledIds = {};
+
+  Future<void> _cancelChallengeLocally(String challengeId) async {
+    setState(() {
+      _localCancelledIds.add(challengeId);
+    });
+    try {
+      await SupabaseService.client.from('challenges').delete().eq('id', challengeId);
+      await Future.delayed(const Duration(milliseconds: 500));
+      if (mounted) setState(() {});
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Challenge Cancel ho gaya'),
+            backgroundColor: Color(0xFF1877F2),
+          ),
+        );
+      }
+    } catch (e) {
+      debugPrint('[TeamCard] Error cancelling challenge: $e');
+    }
+  }
+
+  Widget _buildRedBanner(String challengeId) {
+    return Container(
+      margin: const EdgeInsets.only(top: 8),
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+      decoration: BoxDecoration(
+        color: const Color(0xFFFEF2F2),
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: const Color(0xFFFF4655).withOpacity(0.5)),
+      ),
+      child: Row(
+        children: [
+          const Icon(Icons.warning_amber_rounded, color: Color(0xFFFF4655), size: 14),
+          const SizedBox(width: 6),
+          const Expanded(
+            child: Text(
+              'Aap ne pehle hi challenge bheja hai',
+              style: TextStyle(color: Color(0xFFFF4655), fontSize: 11, fontWeight: FontWeight.bold),
+            ),
+          ),
+          InkWell(
+            onTap: () {
+              if (widget.onCancelChallenge != null) {
+                widget.onCancelChallenge!(challengeId);
+              } else {
+                _cancelChallengeLocally(challengeId);
+              }
+            },
+            child: const Padding(
+              padding: EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+              child: Text(
+                'Cancel',
+                style: TextStyle(
+                  color: Color(0xFFFF4655),
+                  fontSize: 11.5,
+                  fontWeight: FontWeight.w900,
+                  decoration: TextDecoration.underline,
+                ),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildRequestedButton(String challengeId) {
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Container(
+          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
+          decoration: BoxDecoration(
+            color: const Color(0xFFE4E6EB),
+            borderRadius: BorderRadius.circular(8),
+            border: Border.all(color: const Color(0xFFCED0D4)),
+          ),
+          child: const Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(Icons.hourglass_top_rounded, size: 12, color: Color(0xFF65676B)),
+              SizedBox(width: 4),
+              Text(
+                'Requested',
+                style: TextStyle(
+                  color: Color(0xFF65676B),
+                  fontWeight: FontWeight.bold,
+                  fontSize: 11,
+                ),
+              ),
+            ],
+          ),
+        ),
+        const SizedBox(width: 6),
+        OutlinedButton.icon(
+          style: OutlinedButton.styleFrom(
+            foregroundColor: const Color(0xFFFF4655),
+            side: const BorderSide(color: Color(0xFFFF4655), width: 1.2),
+            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+            minimumSize: const Size(0, 32),
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+            backgroundColor: const Color(0xFFFEF2F2),
+          ),
+          icon: const Icon(Icons.close_rounded, size: 13, color: Color(0xFFFF4655)),
+          label: const Text('Cancel', style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold)),
+          onPressed: () {
+            if (widget.onCancelChallenge != null) {
+              widget.onCancelChallenge!(challengeId);
+            } else {
+              _cancelChallengeLocally(challengeId);
+            }
+          },
+        ),
+      ],
+    );
+  }
+
+  Widget _buildChallengeButton(String currentUid) {
+    return OutlinedButton.icon(
+      style: OutlinedButton.styleFrom(
+        foregroundColor: const Color(0xFF1877F2),
+        side: const BorderSide(color: Color(0xFF1877F2)),
+        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+        minimumSize: const Size(0, 32),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+      ),
+      icon: const Icon(Icons.flash_on_rounded, size: 13, color: Color(0xFF1877F2)),
+      label: const Text('Challenge', style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold)),
+      onPressed: () => _handleChallenge(currentUid),
+    );
   }
 
   @override
@@ -307,79 +445,38 @@ class _TeamCardState extends State<TeamCard> {
                 ],
 
                 // 2. RED BANNER: Realtime Supabase check if pending challenge already sent to this team
-                if (!isLeader && !isMember && currentUid.isNotEmpty && widget.myTeamId.isNotEmpty)
-                  StreamBuilder<List<Map<String, dynamic>>>(
-                    stream: SupabaseService.client
-                        .from('challenges')
-                        .stream(primaryKey: ['id'])
-                        .eq('from_team_id', SupabaseService.toUuid(widget.myTeamId)),
-                    builder: (context, cSnap) {
-                      final challenges = cSnap.data ?? [];
-                      final targetUuid = SupabaseService.toUuid(team.id).toLowerCase();
-                      final rawTeamId = team.id.toLowerCase();
-                      final pendingDoc = challenges.firstWhere(
-                        (d) {
-                          final toId = d['to_team_id']?.toString().toLowerCase();
-                          final st = (d['status'] ?? '').toString().toLowerCase();
-                          return (toId == targetUuid || toId == rawTeamId) && st == 'pending';
-                        },
-                        orElse: () => {},
-                      );
+                if (!isLeader && !isMember && currentUid.isNotEmpty && widget.myTeamId.isNotEmpty) ...[
+                  if (widget.onCancelChallenge != null) ...[
+                    if (widget.pendingChallenge != null)
+                      _buildRedBanner(widget.pendingChallenge!['id']?.toString() ?? ''),
+                  ] else ...[
+                    StreamBuilder<List<Map<String, dynamic>>>(
+                      stream: SupabaseService.client
+                          .from('challenges')
+                          .stream(primaryKey: ['id'])
+                          .eq('from_team_id', SupabaseService.toUuid(widget.myTeamId)),
+                      builder: (context, cSnap) {
+                        final challenges = cSnap.data ?? [];
+                        final targetUuid = SupabaseService.toUuid(team.id).toLowerCase();
+                        final rawTeamId = team.id.toLowerCase();
+                        final pendingDoc = challenges.firstWhere(
+                          (d) {
+                            final toId = d['to_team_id']?.toString().toLowerCase();
+                            final st = (d['status'] ?? '').toString().toLowerCase();
+                            final id = d['id']?.toString() ?? '';
+                            return (toId == targetUuid || toId == rawTeamId) &&
+                                st == 'pending' &&
+                                !_localCancelledIds.contains(id);
+                          },
+                          orElse: () => {},
+                        );
 
-                      if (pendingDoc.isEmpty) return const SizedBox.shrink();
-
-                      return Container(
-                        margin: const EdgeInsets.only(top: 8),
-                        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-                        decoration: BoxDecoration(
-                          color: const Color(0xFFFEF2F2),
-                          borderRadius: BorderRadius.circular(8),
-                          border: Border.all(color: const Color(0xFFFF4655).withOpacity(0.5)),
-                        ),
-                        child: Row(
-                          children: [
-                            const Icon(Icons.warning_amber_rounded, color: Color(0xFFFF4655), size: 14),
-                            const SizedBox(width: 6),
-                            const Expanded(
-                              child: Text(
-                                'Aap ne pehle hi challenge bheja hai',
-                                style: TextStyle(color: Color(0xFFFF4655), fontSize: 11, fontWeight: FontWeight.bold),
-                              ),
-                            ),
-                            InkWell(
-                              onTap: () async {
-                                final cId = pendingDoc['id'];
-                                await SupabaseService.client
-                                    .from('challenges')
-                                    .delete()
-                                    .eq('id', cId);
-                                if (mounted) {
-                                  ScaffoldMessenger.of(context).showSnackBar(
-                                    const SnackBar(
-                                      content: Text('🚫 چیلنج کامیابی سے Cancel کر دیا گیا ہے'),
-                                      backgroundColor: Color(0xFF1877F2),
-                                    ),
-                                  );
-                                }
-                              },
-                              child: const Padding(
-                                padding: EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                                child: Text(
-                                  'Cancel',
-                                  style: TextStyle(
-                                    color: Color(0xFFFF4655),
-                                    fontSize: 11.5,
-                                    fontWeight: FontWeight.w900,
-                                    decoration: TextDecoration.underline,
-                                  ),
-                                ),
-                              ),
-                            ),
-                          ],
-                        ),
-                      );
-                    },
-                  ),
+                        if (pendingDoc.isEmpty) return const SizedBox.shrink();
+                        return _buildRedBanner(pendingDoc['id']?.toString() ?? '');
+                      },
+                    ),
+                  ],
+                ],
 
                 const SizedBox(height: 12),
                 const Divider(color: Color(0xFFE4E6EB), height: 1),
@@ -530,6 +627,13 @@ class _TeamCardState extends State<TeamCard> {
                           }
 
                           // 2. SENDER SIDE: CHECK PENDING CHALLENGE VIA REALTIME
+                          if (widget.onCancelChallenge != null) {
+                            if (widget.pendingChallenge != null) {
+                              return _buildRequestedButton(widget.pendingChallenge!['id']?.toString() ?? '');
+                            }
+                            return _buildChallengeButton(currentUid);
+                          }
+
                           return StreamBuilder<List<Map<String, dynamic>>>(
                             stream: widget.myTeamId.isNotEmpty
                                 ? SupabaseService.client
@@ -545,81 +649,19 @@ class _TeamCardState extends State<TeamCard> {
                                 (d) {
                                   final toId = d['to_team_id']?.toString().toLowerCase();
                                   final st = (d['status'] ?? '').toString().toLowerCase();
-                                  return (toId == targetUuid || toId == rawTeamId) && st == 'pending';
+                                  final id = d['id']?.toString() ?? '';
+                                  return (toId == targetUuid || toId == rawTeamId) &&
+                                      st == 'pending' &&
+                                      !_localCancelledIds.contains(id);
                                 },
                                 orElse: () => {},
                               );
 
                               if (pendingDoc.isNotEmpty) {
-                                return Row(
-                                  mainAxisSize: MainAxisSize.min,
-                                  children: [
-                                    Container(
-                                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
-                                      decoration: BoxDecoration(
-                                        color: const Color(0xFFE4E6EB),
-                                        borderRadius: BorderRadius.circular(8),
-                                        border: Border.all(color: const Color(0xFFCED0D4)),
-                                      ),
-                                      child: const Row(
-                                        mainAxisSize: MainAxisSize.min,
-                                        children: [
-                                          Icon(Icons.hourglass_top_rounded, size: 12, color: Color(0xFF65676B)),
-                                          SizedBox(width: 4),
-                                          Text(
-                                            'Requested',
-                                            style: TextStyle(
-                                              color: Color(0xFF65676B),
-                                              fontWeight: FontWeight.bold,
-                                              fontSize: 11,
-                                            ),
-                                          ),
-                                        ],
-                                      ),
-                                    ),
-                                    const SizedBox(width: 6),
-                                    OutlinedButton.icon(
-                                      style: OutlinedButton.styleFrom(
-                                        foregroundColor: const Color(0xFFFF4655),
-                                        side: const BorderSide(color: Color(0xFFFF4655), width: 1.2),
-                                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                                        minimumSize: const Size(0, 32),
-                                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-                                        backgroundColor: const Color(0xFFFEF2F2),
-                                      ),
-                                      icon: const Icon(Icons.close_rounded, size: 13, color: Color(0xFFFF4655)),
-                                      label: const Text('Cancel', style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold)),
-                                      onPressed: () async {
-                                        await SupabaseService.client
-                                            .from('challenges')
-                                            .delete()
-                                            .eq('id', pendingDoc['id']);
-                                        if (mounted) {
-                                          ScaffoldMessenger.of(context).showSnackBar(
-                                            const SnackBar(
-                                              content: Text('🚫 چیلنج کامیابی سے Cancel کر دیا گیا ہے'),
-                                              backgroundColor: Color(0xFF1877F2),
-                                            ),
-                                          );
-                                        }
-                                      },
-                                    ),
-                                  ],
-                                );
+                                return _buildRequestedButton(pendingDoc['id']?.toString() ?? '');
                               }
 
-                              return OutlinedButton.icon(
-                                style: OutlinedButton.styleFrom(
-                                  foregroundColor: const Color(0xFF1877F2),
-                                  side: const BorderSide(color: Color(0xFF1877F2)),
-                                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                                  minimumSize: const Size(0, 32),
-                                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-                                ),
-                                icon: const Icon(Icons.flash_on_rounded, size: 13, color: Color(0xFF1877F2)),
-                                label: const Text('Challenge', style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold)),
-                                onPressed: () => _handleChallenge(currentUid),
-                              );
+                              return _buildChallengeButton(currentUid);
                             },
                           );
                         },
