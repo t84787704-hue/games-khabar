@@ -126,28 +126,24 @@ class _TeamsScreenState extends State<TeamsScreen> {
 
       // If existing empty: insert
       if (!hasExisting) {
-        await SupabaseService.client.from('active_matches').insert({
+        final newMatch = await SupabaseService.client.from('active_matches').insert({
           'team1_id': t1,
           'team2_id': t2,
           'participants': [t1, t2],
           'status': 'active',
+          'game': 'BGMI',
           'created_at': DateTime.now().toUtc().toIso8601String(),
-        });
+        }).select().maybeSingle();
+
+        if (newMatch != null) {
+          _optimisticActiveMatches.add(newMatch);
+        }
       }
 
       // 3. Optimistic UI: Immediately after await, setState hide Incoming banner and show Active Match banner (don't wait for stream). Show snackbar "Match Started! Live ho gaya"
       if (mounted) {
         setState(() {
           _acceptedChallengeIds.add(cId);
-          if (!hasExisting) {
-            _optimisticActiveMatches.add({
-              'id': 'opt-${DateTime.now().millisecondsSinceEpoch}',
-              'team1_id': t1,
-              'team2_id': t2,
-              'participants': [t1, t2],
-              'status': 'active',
-            });
-          }
         });
 
         ScaffoldMessenger.of(context).showSnackBar(

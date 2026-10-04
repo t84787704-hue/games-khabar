@@ -79,18 +79,30 @@ class _TeamCardState extends State<TeamCard> {
     final effectiveMyTeamName = widget.myTeamName.isNotEmpty ? widget.myTeamName : effectiveMyTeam.name;
 
     try {
-      // 1. Check in Supabase if challenge already exists in pending/requested/active/under_review
-      final existingCheck = await SupabaseService.client
-          .from('challenges')
-          .select()
-          .eq('from_team_id', effectiveMyTeamId)
-          .eq('to_team_id', effectiveTargetId)
-          .inFilter('status', ['pending', 'requested', 'active', 'under_review']);
+      // 1. Challenge button click pe pehle check karo:
+      List<dynamic> existing = [];
+      try {
+        existing = await SupabaseService.client
+            .from('challenges')
+            .select()
+            .eq('challenger_team_id', effectiveMyTeamId)
+            .eq('opponent_team_id', effectiveTargetId)
+            .inFilter('status', ['pending', 'requested', 'active', 'under_review']);
+      } catch (_) {
+        existing = await SupabaseService.client
+            .from('challenges')
+            .select()
+            .eq('from_team_id', effectiveMyTeamId)
+            .eq('to_team_id', effectiveTargetId)
+            .inFilter('status', ['pending', 'requested', 'active', 'under_review']);
+      }
 
-      if (existingCheck.isNotEmpty) {
-        final cId = existingCheck[0]['id']?.toString() ?? '';
+      // 3. IF existing NOT empty hai (complete/cancel kiye baghair dubara bhej raha hai):
+      //    - Insert MAT karo, block karo
+      //    - Show ERROR Banner Red: "⚠️ Aap ne pehle hi challenge bheja hai - Aap Jf19 ko pehle se challenge bhej chuke hain, isko complete ya cancel kiye baghair dubara nahi bhej sakte" + CANCEL button
+      if (existing.isNotEmpty) {
+        final cId = existing[0]['id']?.toString() ?? '';
         if (mounted) {
-          // Block duplicate and show Red Error Banner / Dialog
           showDialog(
             context: context,
             builder: (ctx) => AlertDialog(
@@ -104,7 +116,7 @@ class _TeamCardState extends State<TeamCard> {
                 ],
               ),
               content: Text(
-                '⚠️ Aap ne pehle hi challenge bheja hai - Aap ${widget.team.name} ko pehle se challenge bhej chuke hain, isko complete ya cancel kiye baghair dubara nahi bhej sakte.',
+                '⚠️ Aap ne pehle hi challenge bheja hai - Aap ${widget.team.name} ko pehle se challenge bhej chuke hain, isko complete ya cancel kiye baghair dubara nahi bhej sakte',
                 style: const TextStyle(color: Colors.white, fontSize: 13),
               ),
               actions: [
@@ -134,44 +146,30 @@ class _TeamCardState extends State<TeamCard> {
         return;
       }
 
-      // 2. Check if active match already exists
-      final activeCheck = await SupabaseService.client
-          .from('active_matches')
-          .select()
-          .eq('status', 'active');
-
-      final hasActiveMatch = activeCheck.any((m) {
-        final participants = m['participants'];
-        final List<String> pList = [];
-        if (participants is List) {
-          pList.addAll(participants.map((p) => p.toString()));
-        }
-        pList.add(m['team1_id']?.toString() ?? '');
-        final pLower = pList.map((p) => p.toLowerCase()).toList();
-        return pLower.contains(effectiveMyTeamId.toLowerCase()) &&
-            (pLower.contains(effectiveTargetId.toLowerCase()) || pLower.contains(widget.team.id.toLowerCase()));
-      });
-
-      if (hasActiveMatch) {
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-              content: Text('🔥 Is team ke sath pehle se hi Active Match chal raha hai!'),
-              backgroundColor: Color(0xFF2E7D32),
-            ),
-          );
-        }
-        return;
+      // 2. IF existing empty hai (koi pending nahi):
+      //    - Insert karo: supabase.from('challenges').insert({'challenger_team_id': myTeamId, 'opponent_team_id': targetTeamId, 'status': 'pending', 'game': 'BGMI'})
+      //    - Show SUCCESS Banner Green/Blue: "✅ Aapka challenge bhej diya gaya hai - Jf19 ko challenge bhej diya gaya hai, jawab ka intezar hai" + CANCEL CHALLENGE button
+      //    - Button ko "Requested" + "Cancel" me change karo
+      try {
+        await SupabaseService.client.from('challenges').insert({
+          'challenger_team_id': effectiveMyTeamId,
+          'opponent_team_id': effectiveTargetId,
+          'from_team_id': effectiveMyTeamId,
+          'to_team_id': effectiveTargetId,
+          'from_team_name': effectiveMyTeamName,
+          'to_team_name': widget.team.name,
+          'status': 'pending',
+          'game': 'BGMI',
+        });
+      } catch (_) {
+        await SupabaseService.client.from('challenges').insert({
+          'from_team_id': effectiveMyTeamId,
+          'to_team_id': effectiveTargetId,
+          'from_team_name': effectiveMyTeamName,
+          'to_team_name': widget.team.name,
+          'status': 'pending',
+        });
       }
-
-      // 3. Insert challenge into Supabase challenges table
-      await SupabaseService.client.from('challenges').insert({
-        'from_team_id': effectiveMyTeamId,
-        'to_team_id': effectiveTargetId,
-        'from_team_name': effectiveMyTeamName,
-        'to_team_name': widget.team.name,
-        'status': 'pending',
-      });
 
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
