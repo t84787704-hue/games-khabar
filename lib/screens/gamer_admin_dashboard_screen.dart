@@ -3426,6 +3426,61 @@ class _AdminPendingProofCardState extends State<_AdminPendingProofCard> {
         });
       } catch (_) {}
 
+      // Send in-app notification to the team that submitted the proof
+      try {
+        final team1Id = (widget.match['team1_id'] ?? '').toString();
+        final team2Id = (widget.match['team2_id'] ?? '').toString();
+        String submitterTeamId = (widget.match['submitted_by_team_id'] ?? '').toString();
+        if (submitterTeamId.isEmpty) {
+          final result = (widget.match['result'] ?? 'win').toString().toLowerCase();
+          final winnerId = (widget.match['winner_team_id'] ?? '').toString();
+          if (result == 'win' && winnerId.isNotEmpty) {
+            submitterTeamId = winnerId;
+          } else if (result == 'loss' && winnerId.isNotEmpty) {
+            submitterTeamId = (winnerId == team1Id) ? team2Id : team1Id;
+          } else {
+            submitterTeamId = winnerId.isNotEmpty ? winnerId : team1Id;
+          }
+        }
+
+        final submitterTeam = await widget.teamService.getTeam(submitterTeamId);
+        final submitterName = submitterTeam?.name ?? 'Team';
+
+        final Set<String> targetUids = {};
+        if (submitterTeam != null) {
+          if (submitterTeam.leaderId.isNotEmpty) {
+            targetUids.add(submitterTeam.leaderId);
+          }
+          for (final m in submitterTeam.members) {
+            if (m.isNotEmpty) targetUids.add(m);
+          }
+        }
+
+        if (targetUids.isEmpty) {
+          final t1 = await widget.teamService.getTeam(team1Id);
+          final t2 = await widget.teamService.getTeam(team2Id);
+          if (t1 != null && t1.leaderId.isNotEmpty) targetUids.add(t1.leaderId);
+          if (t2 != null && t2.leaderId.isNotEmpty) targetUids.add(t2.leaderId);
+        }
+
+        for (final uid in targetUids) {
+          await NotificationService().createNotification(
+            userId: uid,
+            title: '❌ Match Proof Rejected ($submitterName)',
+            body: 'Admin ne aapka match proof reject kar diya hai. Wajah: $finalReason. Barah-e-karam apna Team profile khol kar dubara proof upload karein.',
+            type: 'proof_rejected',
+            additionalData: {
+              'matchId': matchId.toString(),
+              'senderUid': 'admin',
+              'senderName': '🛡️ Admin',
+              'reason': finalReason,
+            },
+          );
+        }
+      } catch (notifErr) {
+        debugPrint('[AdminProof] Error sending rejection notification: $notifErr');
+      }
+
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(

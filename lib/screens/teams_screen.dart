@@ -504,7 +504,7 @@ class _TeamsScreenState extends State<TeamsScreen> {
 
                     final myActiveMatches = dedupMap.values.where((m) {
                       final status = (m["status"] ?? "").toString().toLowerCase();
-                      if (status != "active" && status != "under_review") return false;
+                      if (status != "active" && status != "under_review" && status != "rejected") return false;
                       if (_completedMatchIds.contains(m["id"]?.toString())) return false;
 
                       final List<String> pList = [];
@@ -561,8 +561,8 @@ class _TeamsScreenState extends State<TeamsScreen> {
                           );
                         }
 
-                        // Case 4: under_review & rejected -> Red banner + Add Proof Again
-                        if (status == "under_review" && proofStatus == "rejected") {
+                        // Case 4: rejected -> Red banner + Add Proof Again
+                        if (status == "rejected" || (status == "under_review" && proofStatus == "rejected")) {
                           return Container(
                             margin: const EdgeInsets.fromLTRB(16, 4, 16, 8),
                             padding: const EdgeInsets.all(12),

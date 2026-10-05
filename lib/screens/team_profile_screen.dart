@@ -310,7 +310,7 @@ class _TeamProfileScreenState extends State<TeamProfileScreen> {
                   ...streamMatches,
                 ].where((m) {
                   final st = (m['status'] ?? '').toString().toLowerCase();
-                  return (st == 'active' || st == 'under_review') &&
+                  return (st == 'active' || st == 'under_review' || st == 'rejected') &&
                       !_completedMatchIds.contains(m['id']?.toString());
                 }).toList();
 
@@ -486,7 +486,7 @@ class _TeamProfileScreenState extends State<TeamProfileScreen> {
                               }
 
                               // State 4: under_review & rejected -> Red banner + Add Proof Again button
-                              if (matchStatus == 'under_review' && proofStatus == 'rejected') {
+                              if (matchStatus == 'rejected' || (matchStatus == 'under_review' && proofStatus == 'rejected')) {
                                 return Container(
                                   margin: const EdgeInsets.only(bottom: 14),
                                   padding: const EdgeInsets.all(14),
