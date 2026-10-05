@@ -79,13 +79,22 @@ class _TeamProfileScreenState extends State<TeamProfileScreen> {
             .inFilter('status', ['active', 'under_review']);
 
         if (existingMatches.isEmpty) {
-          await SupabaseService.client.from('active_matches').insert({
+          final matchPayload = <String, dynamic>{
             'team1_id': t1Uuid,
             'team2_id': t2Uuid,
             'participants': [t1Uuid, t2Uuid],
             'status': 'active',
-            'game': 'BGMI',
-          }).select().maybeSingle();
+          };
+          try {
+            await SupabaseService.client.from('active_matches').insert(matchPayload).select().maybeSingle();
+          } catch (insertErr) {
+            debugPrint('[TeamProfileScreen] Insert with participants notice: $insertErr');
+            await SupabaseService.client.from('active_matches').insert({
+              'team1_id': t1Uuid,
+              'team2_id': t2Uuid,
+              'status': 'active',
+            }).select().maybeSingle();
+          }
         }
       }
 
