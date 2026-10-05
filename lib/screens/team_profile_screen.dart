@@ -30,6 +30,77 @@ class _TeamProfileScreenState extends State<TeamProfileScreen> {
   final Set<String> _completedMatchIds = {};
   final Set<String> _autoCompletingMatchIds = {};
   final List<Map<String, dynamic>> _optimisticActiveMatches = [];
+  final Map<String, Map<String, String>> _profileCache = {};
+
+  Future<Map<String, String>> _fetchUserProfile(String uid) async {
+    final cleanUid = uid.trim();
+    if (cleanUid.isEmpty) {
+      return {'username': 'Player', 'gamerId': 'ID not set', 'avatar': ''};
+    }
+    if (_profileCache.containsKey(cleanUid)) {
+      return _profileCache[cleanUid]!;
+    }
+
+    String username = 'Player';
+    String gamerId = 'ID not set';
+    String avatar = '';
+
+    // 1. Query Supabase profiles table
+    try {
+      final sbProfile = await SupabaseService.client
+          .from('profiles')
+          .select()
+          .eq('id', cleanUid)
+          .maybeSingle();
+
+      if (sbProfile != null) {
+        final u = sbProfile['username']?.toString() ?? sbProfile['display_name']?.toString();
+        if (u != null && u.isNotEmpty) {
+          username = u;
+        }
+        final g = sbProfile['gamer_id']?.toString() ?? sbProfile['game_id']?.toString();
+        if (g != null && g.isNotEmpty) {
+          gamerId = g;
+        }
+        final a = sbProfile['avatar_url']?.toString();
+        if (a != null && a.isNotEmpty) {
+          avatar = a;
+        }
+      }
+    } catch (e) {
+      debugPrint('[TeamProfileScreen] Supabase profile query error: $e');
+    }
+
+    // 2. Fallback to GamerAuthService if gamerId is missing or username is default
+    if (gamerId == 'ID not set' || username == 'Player') {
+      try {
+        final gUser = await GamerAuthService().getUserProfile(cleanUid);
+        if (gUser != null) {
+          if (username == 'Player') {
+            if (gUser.username.isNotEmpty) {
+              username = gUser.username;
+            } else if (gUser.displayName.isNotEmpty) {
+              username = gUser.displayName;
+            }
+          }
+          if (gamerId == 'ID not set' && gUser.gameId.isNotEmpty) {
+            gamerId = gUser.gameId;
+          }
+          if (avatar.isEmpty && gUser.photoUrl.isNotEmpty) {
+            avatar = gUser.photoUrl;
+          }
+        }
+      } catch (_) {}
+    }
+
+    final result = {
+      'username': username,
+      'gamerId': gamerId,
+      'avatar': avatar,
+    };
+    _profileCache[cleanUid] = result;
+    return result;
+  }
 
   Future<void> _handleAcceptChallenge({
     required String challengeId,
@@ -1294,36 +1365,61 @@ class _TeamProfileScreenState extends State<TeamProfileScreen> {
                     ),
                     child: Column(
                       children: team.pendingJoinRequests.map((uid) {
-                        return Padding(
-                          padding: const EdgeInsets.symmetric(vertical: 6),
-                          child: Row(
-                            children: [
-                              const CircleAvatar(
-                                radius: 16,
-                                backgroundColor: Color(0xFF26334D),
-                                child: Icon(Icons.person, color: Colors.white70, size: 18),
+                        return FutureBuilder<Map<String, String>>(
+                          future: _fetchUserProfile(uid),
+                          builder: (context, snap) {
+                            final userData = snap.data;
+                            final isLoading = snap.connectionState == ConnectionState.waiting;
+                            final gamerId = userData?['gamerId'];
+                            final displayGamerId = isLoading
+                                ? 'Loading...'
+                                : 'Gamer ID: ${gamerId != null && gamerId.isNotEmpty ? gamerId : 'ID not set'}';
+                            final displayUsername = userData?['username'] ?? 'Player';
+
+                            return Padding(
+                              padding: const EdgeInsets.symmetric(vertical: 6),
+                              child: Row(
+                                children: [
+                                  const CircleAvatar(
+                                    radius: 16,
+                                    backgroundColor: Color(0xFF26334D),
+                                    child: Icon(Icons.person, color: Colors.white70, size: 18),
+                                  ),
+                                  const SizedBox(width: 10),
+                                  Expanded(
+                                    child: Column(
+                                      crossAxisAlignment: CrossAxisAlignment.start,
+                                      children: [
+                                        Text(
+                                          displayGamerId,
+                                          style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 13),
+                                        ),
+                                        if (!isLoading && displayUsername != 'Player') ...[
+                                          const SizedBox(height: 2),
+                                          Text(
+                                            displayUsername,
+                                            style: const TextStyle(color: Color(0xFF8B949E), fontSize: 11),
+                                          ),
+                                        ],
+                                      ],
+                                    ),
+                                  ),
+                                  IconButton(
+                                    icon: const Icon(Icons.close_rounded, color: Color(0xFFFF4655), size: 20),
+                                    onPressed: () => _teamService.rejectJoinRequest(teamId: team.id, userId: uid),
+                                  ),
+                                  IconButton(
+                                    icon: const Icon(Icons.check_rounded, color: Color(0xFF00FF88), size: 22),
+                                    onPressed: () => _teamService.acceptJoinRequest(
+                                      teamId: team.id,
+                                      userId: uid,
+                                      userName: displayUsername,
+                                    ),
+                                  ),
+                                ],
                               ),
-                              const SizedBox(width: 10),
-                              Expanded(
-                                child: Text(
-                                  'Gamer ID: ${uid.substring(0, 8)}...',
-                                  style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 13),
-                                ),
-                              ),
-                              IconButton(
-                                icon: const Icon(Icons.close_rounded, color: Color(0xFFFF4655), size: 20),
-                                onPressed: () => _teamService.rejectJoinRequest(teamId: team.id, userId: uid),
-                              ),
-                              IconButton(
-                                icon: const Icon(Icons.check_rounded, color: Color(0xFF00FF88), size: 22),
-                                onPressed: () => _teamService.acceptJoinRequest(
-                                  teamId: team.id,
-                                  userId: uid,
-                                  userName: 'Player',
-                                ),
-                              ),
-                            ],
-                          ),
+                            );
+                          },
                         );
                       }).toList(),
                     ),
@@ -1363,36 +1459,49 @@ class _TeamProfileScreenState extends State<TeamProfileScreen> {
                       }
 
                       final isThisLeader = memberId == team.leaderId;
+                      final bool isDefaultName = memberName == 'Player' || memberName == 'Member' || memberName.isEmpty;
 
-                      return ListTile(
-                        leading: CircleAvatar(
-                          radius: 18,
-                          backgroundColor: const Color(0xFF26334D),
-                          backgroundImage: memberAvatar.isNotEmpty ? NetworkImage(memberAvatar) : null,
-                          child: memberAvatar.isEmpty
-                              ? Text(memberName.isNotEmpty ? memberName[0].toUpperCase() : 'M',
-                                  style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold))
-                              : null,
-                        ),
-                        title: Text(
-                          memberName,
-                          style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 13.5),
-                        ),
-                        trailing: Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-                          decoration: BoxDecoration(
-                            color: isThisLeader ? const Color(0xFFFF6B00).withOpacity(0.2) : Colors.white10,
-                            borderRadius: BorderRadius.circular(6),
-                          ),
-                          child: Text(
-                            isThisLeader ? '👑 LEADER' : role.toUpperCase(),
-                            style: TextStyle(
-                              color: isThisLeader ? const Color(0xFFFF6B00) : Colors.white70,
-                              fontWeight: FontWeight.bold,
-                              fontSize: 10.5,
+                      return FutureBuilder<Map<String, String>>(
+                        future: isDefaultName ? _fetchUserProfile(memberId) : Future.value({'username': memberName, 'avatar': memberAvatar}),
+                        builder: (context, snap) {
+                          final resolvedName = (snap.data?['username'] != null && snap.data!['username'] != 'Player')
+                              ? snap.data!['username']!
+                              : (isDefaultName ? (snap.connectionState == ConnectionState.waiting ? '...' : memberName) : memberName);
+                          final resolvedAvatar = (snap.data?['avatar'] != null && snap.data!['avatar']!.isNotEmpty)
+                              ? snap.data!['avatar']!
+                              : memberAvatar;
+
+                          return ListTile(
+                            leading: CircleAvatar(
+                              radius: 18,
+                              backgroundColor: const Color(0xFF26334D),
+                              backgroundImage: resolvedAvatar.isNotEmpty ? NetworkImage(resolvedAvatar) : null,
+                              child: resolvedAvatar.isEmpty
+                                  ? Text(resolvedName.isNotEmpty ? resolvedName[0].toUpperCase() : 'M',
+                                      style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold))
+                                  : null,
                             ),
-                          ),
-                        ),
+                            title: Text(
+                              resolvedName,
+                              style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 13.5),
+                            ),
+                            trailing: Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                              decoration: BoxDecoration(
+                                color: isThisLeader ? const Color(0xFFFF6B00).withOpacity(0.2) : Colors.white10,
+                                borderRadius: BorderRadius.circular(6),
+                              ),
+                              child: Text(
+                                isThisLeader ? '👑 LEADER' : role.toUpperCase(),
+                                style: TextStyle(
+                                  color: isThisLeader ? const Color(0xFFFF6B00) : Colors.white70,
+                                  fontWeight: FontWeight.bold,
+                                  fontSize: 10.5,
+                                ),
+                              ),
+                            ),
+                          );
+                        },
                       );
                     },
                   ),
