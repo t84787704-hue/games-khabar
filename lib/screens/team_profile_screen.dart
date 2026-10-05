@@ -35,6 +35,7 @@ class _TeamProfileScreenState extends State<TeamProfileScreen> {
     required String fromTeamId,
     required String toTeamId,
     required String fromTeamName,
+    Map<String, dynamic>? challengeData,
   }) async {
     final cId = challengeId.trim();
     if (_acceptingChallengeIds.contains(cId)) return;
@@ -45,57 +46,23 @@ class _TeamProfileScreenState extends State<TeamProfileScreen> {
     });
 
     try {
-      // 2. Do operations with await in order:
-      // Update challenge status to accepted
-      await SupabaseService.client
-          .from('challenges')
-          .update({'status': 'accepted'})
-          .eq('id', cId);
-
-      // Check duplicate first: existing = await supabase.from('active_matches').select().eq('status','active').or('and(team1_id.eq.${from},team2_id.eq.${to}),and(team1_id.eq.${to},team2_id.eq.${from})')
-      final t1 = SupabaseService.toUuid(fromTeamId);
-      final t2 = SupabaseService.toUuid(toTeamId);
-
-      final existing = await SupabaseService.client
-          .from('active_matches')
-          .select()
-          .eq('status', 'active')
-          .or('and(team1_id.eq.$t1,team2_id.eq.$t2),and(team1_id.eq.$t2,team2_id.eq.$t1)');
-
-      final bool hasExisting = (existing as List).isNotEmpty;
-
-      // If existing empty: insert
-      if (!hasExisting) {
-        await SupabaseService.client.from('active_matches').insert({
-          'team1_id': t1,
-          'team2_id': t2,
-          'participants': [t1, t2],
-          'status': 'active',
-          'created_at': DateTime.now().toUtc().toIso8601String(),
-        });
-      }
+      final targetChallengeId = challengeData?['id']?.toString() ?? cId;
+      final matchId = await SupabaseService.client.rpc(
+        'accept_challenge_safe',
+        params: {'p_challenge_id': targetChallengeId},
+      );
 
       // 3. Optimistic UI: Immediately after await, setState hide Incoming banner and show Active Match banner (don't wait for stream). Show snackbar "Match Started! Live ho gaya"
       if (mounted) {
         setState(() {
           _acceptedChallengeIds.add(cId);
-          if (!hasExisting) {
-            _optimisticActiveMatches.add({
-              'id': 'opt-${DateTime.now().millisecondsSinceEpoch}',
-              'team1_id': t1,
-              'team2_id': t2,
-              'participants': [t1, t2],
-              'status': 'active',
-              'opponent_name': fromTeamName,
-            });
-          }
         });
 
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(hasExisting ? 'Already Active' : 'Match Started! Live ho gaya'),
-            backgroundColor: const Color(0xFF00FF88),
-            duration: const Duration(seconds: 3),
+          const SnackBar(
+            content: Text('Match Started! Live ho gaya'),
+            backgroundColor: Color(0xFF00FF88),
+            duration: Duration(seconds: 3),
           ),
         );
       }
@@ -951,6 +918,7 @@ class _TeamProfileScreenState extends State<TeamProfileScreen> {
                                                               fromTeamId: fromTeamId,
                                                               toTeamId: toTeamId,
                                                               fromTeamName: fromTeamName,
+                                                              challengeData: doc,
                                                             ),
                                                     style: ElevatedButton.styleFrom(
                                                       backgroundColor: const Color(0xFF00FF88),
