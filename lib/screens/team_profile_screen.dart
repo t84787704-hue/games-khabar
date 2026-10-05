@@ -10,6 +10,7 @@ import '../services/supabase_service.dart';
 import '../widgets/send_team_match_challenge_dialog.dart';
 import '../widgets/end_match_dialog.dart';
 import 'gamer_profile_screen.dart';
+import 'teams_screen.dart';
 
 class TeamProfileScreen extends StatefulWidget {
   final String teamId;
@@ -361,7 +362,30 @@ class _TeamProfileScreenState extends State<TeamProfileScreen> {
                       style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w900, fontSize: 16),
                     ),
                     actions: [
-                      if (hasActiveMatch)
+                      if (hasActiveMatch) ...[
+                        IconButton(
+                          tooltip: 'Team DM 💬',
+                          icon: const Icon(Icons.chat_bubble_rounded, color: Color(0xFF00FF88), size: 22),
+                          onPressed: () {
+                            final activeMatchId = activeMatch['id']?.toString() ?? '';
+                            Navigator.push(
+                              context,
+                              MaterialPageRoute(
+                                builder: (_) => PrivateMatchRoomScreen(
+                                  matchId: activeMatchId,
+                                  myTeamId: myTeamId.isNotEmpty ? myTeamId : widget.teamId,
+                                  myTeamName: isMyOwnTeam
+                                      ? team.name
+                                      : (myLeaderTeams.isNotEmpty ? myLeaderTeams.first.name : 'My Team'),
+                                  opponentId: opponentTeamId,
+                                  opponentName: isMyOwnTeam
+                                      ? (activeMatch['opponent_name'] ?? 'Opponent')
+                                      : team.name,
+                                ),
+                              ),
+                            );
+                          },
+                        ),
                         Padding(
                           padding: const EdgeInsets.only(right: 12),
                           child: Center(
@@ -375,7 +399,8 @@ class _TeamProfileScreenState extends State<TeamProfileScreen> {
                               child: const Text('MATCH LIVE', style: TextStyle(color: Color(0xFF00FF88), fontWeight: FontWeight.bold, fontSize: 11)),
                             ),
                           ),
-                        )
+                        ),
+                      ]
                       else if (!isMyOwnTeam) ...[
                         IconButton(
                           tooltip: 'Challenge Team',
@@ -633,51 +658,83 @@ class _TeamProfileScreenState extends State<TeamProfileScreen> {
                                         ),
                                       ],
                                     ),
-                                    if (isMatchLeader) ...[
-                                      const SizedBox(height: 10),
-                                      Align(
-                                        alignment: Alignment.centerRight,
-                                        child: ElevatedButton.icon(
+                                    const SizedBox(height: 10),
+                                    Row(
+                                      mainAxisAlignment: MainAxisAlignment.end,
+                                      children: [
+                                        ElevatedButton.icon(
                                           style: ElevatedButton.styleFrom(
-                                            backgroundColor: const Color(0xFFFF4655),
+                                            backgroundColor: const Color(0xFF1877F2),
                                             foregroundColor: Colors.white,
                                             padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
                                             shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                                            elevation: 0,
                                           ),
-                                          icon: const Icon(Icons.stop_circle_rounded, size: 16),
-                                          label: const Text('End Match', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12)),
-                                          onPressed: () async {
-                                            final ended = await EndMatchBottomSheet.show(
+                                          icon: const Icon(Icons.chat_bubble_rounded, size: 15),
+                                          label: const Text('Team DM 💬', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12)),
+                                          onPressed: () {
+                                            Navigator.push(
                                               context,
-                                              activeMatchId: activeMatchId,
-                                              myTeamId: myTeamId.isNotEmpty ? myTeamId : widget.teamId,
-                                              opponentId: opponentTeamId,
-                                              myTeamName: isMyOwnTeam
-                                                  ? team.name
-                                                  : (myLeaderTeams.isNotEmpty ? myLeaderTeams.first.name : 'My Team'),
-                                              opponentName: isMyOwnTeam
-                                                  ? (activeMatch['opponent_name'] ?? 'Opponent')
-                                                  : team.name,
+                                              MaterialPageRoute(
+                                                builder: (_) => PrivateMatchRoomScreen(
+                                                  matchId: activeMatchId,
+                                                  myTeamId: myTeamId.isNotEmpty ? myTeamId : widget.teamId,
+                                                  myTeamName: isMyOwnTeam
+                                                      ? team.name
+                                                      : (myLeaderTeams.isNotEmpty ? myLeaderTeams.first.name : 'My Team'),
+                                                  opponentId: opponentTeamId,
+                                                  opponentName: isMyOwnTeam
+                                                      ? (activeMatch['opponent_name'] ?? 'Opponent')
+                                                      : team.name,
+                                                ),
+                                              ),
                                             );
-                                            if (ended == true) {
-                                              if (mounted) {
-                                                setState(() {
-                                                  _completedMatchIds.add(activeMatchId);
-                                                  _optimisticActiveMatches.clear();
-                                                });
-                                                ScaffoldMessenger.of(context).showSnackBar(
-                                                  const SnackBar(
-                                                    content: Text('Proof bhej diya gaya! Under Review.'),
-                                                    backgroundColor: Color(0xFF00FF88),
-                                                    duration: Duration(seconds: 4),
-                                                  ),
-                                                );
-                                              }
-                                            }
                                           },
                                         ),
-                                      ),
-                                    ],
+                                        if (isMatchLeader) ...[
+                                          const SizedBox(width: 8),
+                                          ElevatedButton.icon(
+                                            style: ElevatedButton.styleFrom(
+                                              backgroundColor: const Color(0xFFFF4655),
+                                              foregroundColor: Colors.white,
+                                              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+                                              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                                            ),
+                                            icon: const Icon(Icons.stop_circle_rounded, size: 16),
+                                            label: const Text('End Match', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12)),
+                                            onPressed: () async {
+                                              final ended = await EndMatchBottomSheet.show(
+                                                context,
+                                                activeMatchId: activeMatchId,
+                                                myTeamId: myTeamId.isNotEmpty ? myTeamId : widget.teamId,
+                                                opponentId: opponentTeamId,
+                                                myTeamName: isMyOwnTeam
+                                                    ? team.name
+                                                    : (myLeaderTeams.isNotEmpty ? myLeaderTeams.first.name : 'My Team'),
+                                                opponentName: isMyOwnTeam
+                                                    ? (activeMatch['opponent_name'] ?? 'Opponent')
+                                                    : team.name,
+                                              );
+                                              if (ended == true) {
+                                                if (mounted) {
+                                                  setState(() {
+                                                    _completedMatchIds.add(activeMatchId);
+                                                    _optimisticActiveMatches.clear();
+                                                  });
+                                                  ScaffoldMessenger.of(context).showSnackBar(
+                                                    const SnackBar(
+                                                      content: Text('Proof bhej diya gaya! Under Review.'),
+                                                      backgroundColor: Color(0xFF00FF88),
+                                                      duration: Duration(seconds: 4),
+                                                    ),
+                                                  );
+                                                }
+                                              }
+                                            },
+                                          ),
+                                        ],
+                                      ],
+                                    ),
                                   ],
                                 ),
                               );
@@ -1380,37 +1437,48 @@ class _TeamProfileScreenState extends State<TeamProfileScreen> {
                           );
                         }
 
-                        // 2. Else if active match exists with this team: show 2 buttons: "View Opponent" and "End Match"
+                        // 2. Else if active match exists with this team: show 2 buttons: "Team DM 💬" and "End Match"
                         if (hasActiveMatch) {
                           return Row(
                             children: [
-                              if (opponentTeamId.isNotEmpty)
-                                Expanded(
-                                  child: SizedBox(
-                                    height: 46,
-                                    child: OutlinedButton.icon(
-                                      onPressed: () {
-                                        Navigator.push(
-                                          context,
-                                          MaterialPageRoute(
-                                            builder: (_) => TeamProfileScreen(teamId: opponentTeamId),
+                              Expanded(
+                                child: SizedBox(
+                                  height: 46,
+                                  child: ElevatedButton.icon(
+                                    onPressed: () {
+                                      final activeMatchId = activeMatch['id']?.toString() ?? '';
+                                      Navigator.push(
+                                        context,
+                                        MaterialPageRoute(
+                                          builder: (_) => PrivateMatchRoomScreen(
+                                            matchId: activeMatchId,
+                                            myTeamId: myTeamId.isNotEmpty ? myTeamId : widget.teamId,
+                                            myTeamName: isMyOwnTeam
+                                                ? team.name
+                                                : (myLeaderTeams.isNotEmpty ? myLeaderTeams.first.name : 'My Team'),
+                                            opponentId: opponentTeamId,
+                                            opponentName: isMyOwnTeam
+                                                ? (activeMatch['opponent_name'] ?? 'Opponent')
+                                                : team.name,
                                           ),
-                                        );
-                                      },
-                                      style: OutlinedButton.styleFrom(
-                                        foregroundColor: const Color(0xFF00FF88),
-                                        side: const BorderSide(color: Color(0xFF00FF88), width: 1.2),
-                                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-                                      ),
-                                      icon: const Icon(Icons.visibility_rounded, size: 16),
-                                      label: const Text(
-                                        'View Opponent',
-                                        style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13),
-                                      ),
+                                        ),
+                                      );
+                                    },
+                                    style: ElevatedButton.styleFrom(
+                                      backgroundColor: const Color(0xFF1877F2),
+                                      foregroundColor: Colors.white,
+                                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                                      elevation: 0,
+                                    ),
+                                    icon: const Icon(Icons.chat_bubble_rounded, size: 16),
+                                    label: const Text(
+                                      'Team DM 💬',
+                                      style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13),
                                     ),
                                   ),
                                 ),
-                              if (opponentTeamId.isNotEmpty) const SizedBox(width: 10),
+                              ),
+                              const SizedBox(width: 10),
                               if (isMatchLeader)
                                 Expanded(
                                   child: SizedBox(

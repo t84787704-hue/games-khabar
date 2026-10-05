@@ -3,6 +3,7 @@ import '../services/supabase_service.dart';
 import '../services/team_service.dart';
 import '../models/team_model.dart';
 import 'match_chat_screen.dart';
+import 'teams_screen.dart';
 
 class TeamMatchesScreen extends StatefulWidget {
   const TeamMatchesScreen({super.key});
@@ -154,9 +155,25 @@ class _TeamMatchesScreenState extends State<TeamMatchesScreen> {
         final t1Name = t1Joined ?? snap.data?[0]?.name ?? match['team1_name'] ?? 'Team 1';
         final t2Name = t2Joined ?? snap.data?[1]?.name ?? match['team2_name'] ?? 'Team 2';
 
-        return Container(
+        return InkWell(
+          borderRadius: BorderRadius.circular(14),
+          onTap: () {
+            Navigator.push(
+              context,
+              MaterialPageRoute(
+                builder: (_) => PrivateMatchRoomScreen(
+                  matchId: matchId,
+                  myTeamId: t1,
+                  myTeamName: t1Name,
+                  opponentId: t2,
+                  opponentName: t2Name,
+                ),
+              ),
+            );
+          },
+          child: Container(
             margin: const EdgeInsets.only(bottom: 12),
-            padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 18),
+            padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
             decoration: BoxDecoration(
               color: const Color(0xFF131A29),
               borderRadius: BorderRadius.circular(14),
@@ -169,53 +186,70 @@ class _TeamMatchesScreenState extends State<TeamMatchesScreen> {
                 ),
               ],
             ),
-            child: Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            child: Column(
               children: [
-                // Team 1 Name
-                Expanded(
-                  child: Text(
-                    t1Name,
-                    style: const TextStyle(
-                      color: Colors.white,
-                      fontWeight: FontWeight.bold,
-                      fontSize: 16,
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    // Team 1 Name
+                    Expanded(
+                      child: Text(
+                        t1Name,
+                        style: const TextStyle(
+                          color: Colors.white,
+                          fontWeight: FontWeight.bold,
+                          fontSize: 16,
+                        ),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                      ),
                     ),
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                  ),
-                ),
 
-                // VS
-                const Padding(
-                  padding: EdgeInsets.symmetric(horizontal: 14),
-                  child: Text(
-                    'VS',
-                    style: TextStyle(
-                      color: Color(0xFFFF4655),
-                      fontWeight: FontWeight.bold,
-                      fontSize: 16,
+                    // VS
+                    const Padding(
+                      padding: EdgeInsets.symmetric(horizontal: 14),
+                      child: Text(
+                        'VS',
+                        style: TextStyle(
+                          color: Color(0xFFFF4655),
+                          fontWeight: FontWeight.bold,
+                          fontSize: 16,
+                        ),
+                      ),
                     ),
-                  ),
-                ),
 
-                // Team 2 Name
-                Expanded(
-                  child: Text(
-                    t2Name,
-                    style: const TextStyle(
-                      color: Colors.white,
-                      fontWeight: FontWeight.bold,
-                      fontSize: 16,
+                    // Team 2 Name
+                    Expanded(
+                      child: Text(
+                        t2Name,
+                        style: const TextStyle(
+                          color: Colors.white,
+                          fontWeight: FontWeight.bold,
+                          fontSize: 16,
+                        ),
+                        textAlign: TextAlign.end,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                      ),
                     ),
-                    textAlign: TextAlign.end,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                  ),
+                  ],
+                ),
+                const SizedBox(height: 8),
+                const Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    Icon(Icons.chat_bubble_rounded, size: 12, color: Color(0xFF1877F2)),
+                    SizedBox(width: 5),
+                    Text(
+                      'Tap to open Team DM 💬',
+                      style: TextStyle(color: Color(0xFF1877F2), fontSize: 11.5, fontWeight: FontWeight.bold),
+                    ),
+                  ],
                 ),
               ],
             ),
-          );
+          ),
+        );
         },
       );
   }

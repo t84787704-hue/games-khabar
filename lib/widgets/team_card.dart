@@ -5,6 +5,7 @@ import '../services/team_service.dart';
 import '../services/supabase_service.dart';
 import '../services/gamer_auth_service.dart';
 import '../screens/team_profile_screen.dart';
+import '../screens/teams_screen.dart';
 
 class TeamCard extends StatefulWidget {
   final TeamModel team;
@@ -623,20 +624,27 @@ class _TeamCardState extends State<TeamCard> {
                                 const SizedBox(width: 6),
                                 ElevatedButton.icon(
                                   style: ElevatedButton.styleFrom(
-                                    backgroundColor: const Color(0xFF2E7D32),
+                                    backgroundColor: const Color(0xFF1877F2),
                                     foregroundColor: Colors.white,
                                     padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
                                     minimumSize: const Size(0, 32),
                                     shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
                                     elevation: 0,
                                   ),
-                                  icon: const Icon(Icons.sports_esports_rounded, size: 14),
-                                  label: const Text('View Match', style: TextStyle(fontSize: 11.5, fontWeight: FontWeight.bold)),
+                                  icon: const Icon(Icons.chat_bubble_rounded, size: 14),
+                                  label: const Text('Team DM 💬', style: TextStyle(fontSize: 11.5, fontWeight: FontWeight.bold)),
                                   onPressed: () {
+                                    final matchId = activeMatchWithOpponent['id']?.toString() ?? '';
                                     Navigator.push(
                                       context,
                                       MaterialPageRoute(
-                                        builder: (_) => TeamProfileScreen(teamId: team.id),
+                                        builder: (_) => PrivateMatchRoomScreen(
+                                          matchId: matchId,
+                                          myTeamId: widget.myTeamId,
+                                          myTeamName: widget.myTeamName,
+                                          opponentId: team.id,
+                                          opponentName: team.name,
+                                        ),
                                       ),
                                     );
                                   },

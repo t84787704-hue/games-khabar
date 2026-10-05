@@ -574,9 +574,9 @@ class _TeamsScreenState extends State<TeamsScreen> {
                                             builder: (_) => PrivateMatchRoomScreen(matchId: matchId.toString(), myTeamId: myTeamId, myTeamName: myTeamName, opponentId: opponentId, opponentName: opponentName),
                                           ),
                                         ),
-                                        style: OutlinedButton.styleFrom(foregroundColor: const Color(0xFF2E7D32), side: const BorderSide(color: Color(0xFF2E7D32)), padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4), minimumSize: const Size(0, 32), shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8))),
+                                        style: OutlinedButton.styleFrom(foregroundColor: const Color(0xFF1877F2), side: const BorderSide(color: Color(0xFF1877F2)), padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4), minimumSize: const Size(0, 32), shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8))),
                                         icon: const Icon(Icons.chat_bubble_rounded, size: 14),
-                                        label: const Text("View Opponent", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 11)),
+                                        label: const Text("Team DM 💬", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 11)),
                                       );
                                     },
                                   ),
@@ -742,6 +742,28 @@ class _PrivateMatchRoomScreenState extends State<PrivateMatchRoomScreen> {
   final TextEditingController _messageController = TextEditingController();
   final ScrollController _scrollController = ScrollController();
   bool _isSending = false;
+  String _myTeamName = '';
+  String _opponentName = '';
+
+  @override
+  void initState() {
+    super.initState();
+    _myTeamName = widget.myTeamName.isNotEmpty ? widget.myTeamName : 'My Team';
+    _opponentName = widget.opponentName.isNotEmpty ? widget.opponentName : 'Opponent';
+    _resolveTeamNames();
+  }
+
+  Future<void> _resolveTeamNames() async {
+    final teamService = TeamService();
+    if ((_myTeamName == 'My Team' || _myTeamName.isEmpty) && widget.myTeamId.isNotEmpty) {
+      final t = await teamService.getTeam(widget.myTeamId);
+      if (t != null && mounted) setState(() => _myTeamName = t.name);
+    }
+    if ((_opponentName == 'Opponent' || _opponentName.isEmpty) && widget.opponentId.isNotEmpty) {
+      final t = await teamService.getTeam(widget.opponentId);
+      if (t != null && mounted) setState(() => _opponentName = t.name);
+    }
+  }
 
   @override
   void dispose() {
@@ -772,7 +794,7 @@ class _PrivateMatchRoomScreenState extends State<PrivateMatchRoomScreen> {
     final payload = {
       "match_id": widget.matchId,
       "sender_team_id": SupabaseService.toUuid(widget.myTeamId),
-      "sender_team_name": widget.myTeamName,
+      "sender_team_name": _myTeamName.isNotEmpty ? _myTeamName : widget.myTeamName,
       "message": msg,
       "created_at": DateTime.now().toUtc().toIso8601String(),
     };
@@ -875,7 +897,7 @@ class _PrivateMatchRoomScreenState extends State<PrivateMatchRoomScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final title = "${widget.myTeamName} VS ${widget.opponentName} - Private Room";
+    final title = "$_myTeamName VS $_opponentName - Private Room";
     final myTeamUuid = SupabaseService.toUuid(widget.myTeamId).toLowerCase();
 
     return Scaffold(
