@@ -10,23 +10,15 @@ ALTER TABLE public.challenges ADD COLUMN IF NOT EXISTS challenger_team_id UUID;
 ALTER TABLE public.challenges ADD COLUMN IF NOT EXISTS opponent_team_id UUID;
 ALTER TABLE public.challenges ADD COLUMN IF NOT EXISTS game TEXT DEFAULT 'BGMI';
 
+-- match_messages table
 CREATE TABLE IF NOT EXISTS public.match_messages (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    match_id UUID REFERENCES public.active_matches(id) ON DELETE CASCADE,
-    sender_team_id UUID REFERENCES public.teams(id),
-    message TEXT,
-    message_type TEXT DEFAULT 'text',
+    match_id TEXT NOT NULL,
+    sender_team_id TEXT NOT NULL,
+    sender_team_name TEXT,
+    message TEXT NOT NULL,
     created_at TIMESTAMPTZ DEFAULT NOW()
 );
 
--- Enable RLS and permissive policies for match_messages
-ALTER TABLE public.match_messages ENABLE ROW LEVEL SECURITY;
-
-DO $$
-BEGIN
-    IF NOT EXISTS (
-        SELECT 1 FROM pg_policies WHERE tablename = 'match_messages' AND policyname = 'Allow all access to match_messages'
-    ) THEN
-        CREATE POLICY "Allow all access to match_messages" ON public.match_messages FOR ALL USING (true) WITH CHECK (true);
-    END IF;
-END $$;
+ALTER TABLE public.match_messages ADD COLUMN IF NOT EXISTS sender_team_name TEXT;
+ALTER TABLE public.match_messages DISABLE ROW LEVEL SECURITY;

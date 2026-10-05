@@ -154,23 +154,7 @@ class _TeamMatchesScreenState extends State<TeamMatchesScreen> {
         final t1Name = t1Joined ?? snap.data?[0]?.name ?? match['team1_name'] ?? 'Team 1';
         final t2Name = t2Joined ?? snap.data?[1]?.name ?? match['team2_name'] ?? 'Team 2';
 
-        return InkWell(
-          onTap: () {
-            Navigator.push(
-              context,
-              MaterialPageRoute(
-                builder: (_) => MatchChatScreen(
-                  matchId: matchId,
-                  team1Id: t1,
-                  team2Id: t2,
-                  team1Name: t1Name,
-                  team2Name: t2Name,
-                ),
-              ),
-            );
-          },
-          borderRadius: BorderRadius.circular(14),
-          child: Container(
+        return Container(
             margin: const EdgeInsets.only(bottom: 12),
             padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 18),
             decoration: BoxDecoration(
@@ -231,9 +215,8 @@ class _TeamMatchesScreenState extends State<TeamMatchesScreen> {
                 ),
               ],
             ),
-          ),
-        );
-      },
-    );
+          );
+        },
+      );
   }
 }
