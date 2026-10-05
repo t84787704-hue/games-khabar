@@ -79,7 +79,38 @@ class _TeamsScreenState extends State<TeamsScreen> {
 
     try {
       final targetChallengeId = challengeData?["id"]?.toString() ?? cId;
-      await SupabaseService.client.rpc("accept_challenge_safe", params: {"p_challenge_id": targetChallengeId});
+      bool rpcSuccess = false;
+      try {
+        await SupabaseService.client.rpc("accept_challenge_safe", params: {"p_challenge_id": targetChallengeId});
+        rpcSuccess = true;
+      } catch (rpcErr) {
+        debugPrint("[TeamsScreen] accept_challenge_safe RPC notice: $rpcErr");
+      }
+
+      if (!rpcSuccess) {
+        await SupabaseService.client.from("challenges").update({"status": "accepted"}).eq("id", targetChallengeId);
+
+        final t1 = (challengeData?["from_team_id"] ?? fromTeamId).toString();
+        final t2 = (challengeData?["to_team_id"] ?? toTeamId).toString();
+        final t1Uuid = SupabaseService.toUuid(t1);
+        final t2Uuid = SupabaseService.toUuid(t2);
+
+        final existingMatches = await SupabaseService.client
+            .from("active_matches")
+            .select()
+            .or('and(team1_id.eq.$t1Uuid,team2_id.eq.$t2Uuid),and(team1_id.eq.$t2Uuid,team2_id.eq.$t1Uuid)')
+            .inFilter("status", ["active", "under_review"]);
+
+        if (existingMatches.isEmpty) {
+          await SupabaseService.client.from("active_matches").insert({
+            "team1_id": t1Uuid,
+            "team2_id": t2Uuid,
+            "participants": [t1Uuid, t2Uuid],
+            "status": "active",
+            "game": "BGMI",
+          }).select().maybeSingle();
+        }
+      }
 
       if (mounted) {
         setState(() => _acceptedChallengeIds.add(cId));

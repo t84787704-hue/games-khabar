@@ -85,16 +85,11 @@ class _TeamCardState extends State<TeamCard> {
         existing = await SupabaseService.client
             .from('challenges')
             .select()
-            .eq('challenger_team_id', effectiveMyTeamId)
-            .eq('opponent_team_id', effectiveTargetId)
-            .inFilter('status', ['pending', 'requested', 'active', 'under_review']);
-      } catch (_) {
-        existing = await SupabaseService.client
-            .from('challenges')
-            .select()
             .eq('from_team_id', effectiveMyTeamId)
             .eq('to_team_id', effectiveTargetId)
             .inFilter('status', ['pending', 'requested', 'active', 'under_review']);
+      } catch (_) {
+        existing = [];
       }
 
       // 3. IF existing NOT empty hai (complete/cancel kiye baghair dubara bhej raha hai):
@@ -147,13 +142,11 @@ class _TeamCardState extends State<TeamCard> {
       }
 
       // 2. IF existing empty hai (koi pending nahi):
-      //    - Insert karo: supabase.from('challenges').insert({'challenger_team_id': myTeamId, 'opponent_team_id': targetTeamId, 'status': 'pending', 'game': 'BGMI'})
+      //    - Insert karo into challenges
       //    - Show SUCCESS Banner Green/Blue: "✅ Aapka challenge bhej diya gaya hai - Jf19 ko challenge bhej diya gaya hai, jawab ka intezar hai" + CANCEL CHALLENGE button
       //    - Button ko "Requested" + "Cancel" me change karo
       try {
         await SupabaseService.client.from('challenges').insert({
-          'challenger_team_id': effectiveMyTeamId,
-          'opponent_team_id': effectiveTargetId,
           'from_team_id': effectiveMyTeamId,
           'to_team_id': effectiveTargetId,
           'from_team_name': effectiveMyTeamName,
