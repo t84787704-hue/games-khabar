@@ -3398,12 +3398,33 @@ class _AdminPendingProofCardState extends State<_AdminPendingProofCard> {
 
       try {
         await SupabaseService.client.from('active_matches').update({
+          'status': 'rejected',
           'proof_status': 'rejected',
           'admin_note': finalReason,
         }).eq('id', matchId);
       } catch (e) {
-        debugPrint('[AdminProof] Reject update error: $e');
+        debugPrint('[AdminProof] Reject update with extra columns failed: $e, falling back to status only');
+        await SupabaseService.client.from('active_matches').update({
+          'status': 'rejected',
+        }).eq('id', matchId);
       }
+
+      // Also sync to team_matches in Supabase if exists
+      try {
+        await SupabaseService.client.from('team_matches').update({
+          'status': 'rejected',
+          'admin_note': finalReason,
+        }).eq('id', matchId);
+      } catch (_) {}
+
+      // Also sync to Firestore team_matches if exists
+      try {
+        await FirebaseFirestore.instance.collection('team_matches').doc(matchId.toString()).update({
+          'status': 'rejected',
+          'adminNote': finalReason,
+          'rejectedAt': FieldValue.serverTimestamp(),
+        });
+      } catch (_) {}
 
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
