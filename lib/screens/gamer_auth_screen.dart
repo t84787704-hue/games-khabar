@@ -47,14 +47,42 @@ class _GamerAuthScreenState extends State<GamerAuthScreen> {
     });
 
     try {
-      await GamerAuthService().signInWithGoogle();
-      // On mobile OAuth with externalApplication launch mode, callback returns via deep link
-      // Check post auth if session immediately active
+      await GamerAuthService().signInWithGoogle().timeout(
+        const Duration(seconds: 6),
+        onTimeout: () {
+          debugPrint('OAuth launch timed out waiting on app return');
+        },
+      );
       await _handlePostAuth();
     } catch (e) {
       if (mounted) {
         setState(() {
-          _errorMessage = 'Google Sign In failed: $e';
+          _errorMessage = 'Google Sign In could not complete: $e';
+        });
+      }
+    } finally {
+      if (mounted) {
+        setState(() => _isLoading = false);
+      }
+    }
+  }
+
+  Future<void> _continueAsGuest() async {
+    setState(() {
+      _isLoading = true;
+      _errorMessage = null;
+    });
+
+    try {
+      await GamerAuthService().signInAnonymouslyOrGuest();
+      if (!mounted) return;
+      Navigator.of(context).pushReplacement(
+        MaterialPageRoute(builder: (_) => const GamerMainNavigationScreen()),
+      );
+    } catch (e) {
+      if (mounted) {
+        setState(() {
+          _errorMessage = 'Guest login error: $e';
         });
       }
     } finally {
@@ -217,10 +245,53 @@ class _GamerAuthScreenState extends State<GamerAuthScreen> {
                           ),
                   ),
                 ),
+                const SizedBox(height: 16),
+
+                // OR Divider
+                Row(
+                  children: [
+                    Expanded(child: Divider(color: Colors.white.withOpacity(0.15))),
+                    Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 12),
+                      child: Text(
+                        'OR',
+                        style: TextStyle(
+                          color: GamerTheme.textMuted,
+                          fontSize: 12,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                    ),
+                    Expanded(child: Divider(color: Colors.white.withOpacity(0.15))),
+                  ],
+                ),
+                const SizedBox(height: 16),
+
+                // Quick Guest / Instant Play Button
+                SizedBox(
+                  width: double.infinity,
+                  height: 50,
+                  child: OutlinedButton.icon(
+                    onPressed: _isLoading ? null : _continueAsGuest,
+                    icon: const Icon(Icons.flash_on_rounded, color: GamerTheme.accentOrange, size: 20),
+                    label: const Text(
+                      'Play as Guest (Instant Access)',
+                      style: TextStyle(
+                        color: Colors.white,
+                        fontWeight: FontWeight.bold,
+                        fontSize: 14,
+                      ),
+                    ),
+                    style: OutlinedButton.styleFrom(
+                      side: BorderSide(color: GamerTheme.accentOrange.withOpacity(0.6), width: 1.5),
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                    ),
+                  ),
+                ),
                 const SizedBox(height: 18),
 
                 const Text(
-                  'Sign in with your Google account to access your Gamer ID profile, teams, and matches.',
+                  'Sign in with Google to sync your rank, teams, and tournament matches across devices.',
                   textAlign: TextAlign.center,
                   style: TextStyle(
                     color: GamerTheme.textMuted,

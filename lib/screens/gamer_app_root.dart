@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../constants/gamer_theme.dart';
@@ -17,6 +18,8 @@ class GamerAppRoot extends StatefulWidget {
 
 class _GamerAppRootState extends State<GamerAppRoot> {
   final GamerAuthService _authService = GamerAuthService();
+  bool _forceTimeout = false;
+  Timer? _timeoutTimer;
 
   @override
   void initState() {
@@ -26,45 +29,71 @@ class _GamerAppRootState extends State<GamerAppRoot> {
     } catch (e) {
       debugPrint('Auth service init error: $e');
     }
+
+    // Strict safety timeout: loading screen MUST disappear within 2 seconds
+    _timeoutTimer = Timer(const Duration(milliseconds: 2000), () {
+      if (mounted) {
+        setState(() {
+          _forceTimeout = true;
+          _authService.isLoadingNotifier.value = false;
+        });
+      }
+    });
+  }
+
+  @override
+  void dispose() {
+    _timeoutTimer?.cancel();
+    super.dispose();
   }
 
   @override
   Widget build(BuildContext context) {
-    return StreamBuilder<User?>(
-      stream: _authService.authStateChanges,
-      builder: (context, authSnapshot) {
-        if (authSnapshot.hasError) {
-          debugPrint('Auth snapshot error: ${authSnapshot.error}');
-          return const GamerAuthScreen();
-        }
+    if (_forceTimeout) {
+      // Once timeout triggers, immediately route user without spinning
+      final user = _authService.currentUser;
+      if (user == null) {
+        return const GamerAuthScreen();
+      }
+      final gamer = _authService.currentGamer;
+      if (gamer != null && gamer.isBanned) {
+        return BannedScreen(reason: gamer.bannedReason);
+      }
+      return const GamerMainNavigationScreen();
+    }
 
-        if (authSnapshot.connectionState == ConnectionState.waiting) {
-          return const _GamerLoadingScreen();
-        }
-
-        final user = authSnapshot.data;
-        if (user == null) {
-          return const GamerAuthScreen();
-        }
-
-        // User is logged in to Firebase Auth. Check if they have created their Gamer ID
-        return ValueListenableBuilder<bool>(
-          valueListenable: _authService.isLoadingNotifier,
-          builder: (context, isLoading, _) {
-            if (isLoading) {
-              return const _GamerLoadingScreen();
+    return ValueListenableBuilder<bool>(
+      valueListenable: _authService.isLoadingNotifier,
+      builder: (context, isLoading, _) {
+        return ValueListenableBuilder<User?>(
+          valueListenable: _authService.authUserNotifier,
+          builder: (context, user, _) {
+            // 1. If no user is logged in:
+            if (user == null) {
+              if (isLoading && !_forceTimeout) {
+                return _GamerLoadingScreen(onSkip: () {
+                  setState(() => _forceTimeout = true);
+                });
+              }
+              return const GamerAuthScreen();
             }
 
+            // 2. User is logged in, but still syncing profile from Supabase
+            if (isLoading && !_forceTimeout) {
+              return _GamerLoadingScreen(onSkip: () {
+                setState(() => _forceTimeout = true);
+              });
+            }
+
+            // 3. User is logged in and profile is loaded
             return ValueListenableBuilder<GamerUser?>(
               valueListenable: _authService.currentGamerNotifier,
               builder: (context, gamer, _) {
-                // If user is banned, immediately lock them on BannedScreen
                 if (gamer != null && gamer.isBanned) {
                   return BannedScreen(reason: gamer.bannedReason);
                 }
 
                 if (gamer == null || gamer.username.isEmpty) {
-                  // After first login, force user to Create ID screen if username not exists
                   return const CreateGamerIdScreen();
                 }
 
@@ -78,8 +107,31 @@ class _GamerAppRootState extends State<GamerAppRoot> {
   }
 }
 
-class _GamerLoadingScreen extends StatelessWidget {
-  const _GamerLoadingScreen();
+class _GamerLoadingScreen extends StatefulWidget {
+  final VoidCallback? onSkip;
+  const _GamerLoadingScreen({this.onSkip});
+
+  @override
+  State<_GamerLoadingScreen> createState() => _GamerLoadingScreenState();
+}
+
+class _GamerLoadingScreenState extends State<_GamerLoadingScreen> {
+  bool _showSkipButton = false;
+  Timer? _skipTimer;
+
+  @override
+  void initState() {
+    super.initState();
+    _skipTimer = Timer(const Duration(milliseconds: 1800), () {
+      if (mounted) setState(() => _showSkipButton = true);
+    });
+  }
+
+  @override
+  void dispose() {
+    _skipTimer?.cancel();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -129,6 +181,20 @@ class _GamerLoadingScreen extends StatelessWidget {
                 color: GamerTheme.accentBlue,
               ),
             ),
+            if (_showSkipButton && widget.onSkip != null) ...[
+              const SizedBox(height: 24),
+              TextButton(
+                onPressed: widget.onSkip,
+                style: TextButton.styleFrom(
+                  foregroundColor: GamerTheme.accentOrange,
+                  padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
+                ),
+                child: const Text(
+                  'Tap to Continue →',
+                  style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
+                ),
+              ),
+            ],
           ],
         ),
       ),

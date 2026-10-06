@@ -228,10 +228,15 @@ class _CreateGamerIdScreenState extends State<CreateGamerIdScreen> {
     });
 
     _debounceTimer = Timer(const Duration(milliseconds: 400), () async {
-      final available = await GamerAuthService().isUsernameAvailable(
-        clean,
-        currentUid: widget.existingUser?.uid ?? GamerAuthService().currentUid,
-      );
+      bool available = true;
+      try {
+        available = await GamerAuthService().isUsernameAvailable(
+          clean,
+          currentUid: widget.existingUser?.uid ?? GamerAuthService().currentUid,
+        ).timeout(const Duration(seconds: 2), onTimeout: () => true);
+      } catch (_) {
+        available = true;
+      }
 
       if (!mounted) return;
       setState(() {

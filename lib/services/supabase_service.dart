@@ -14,11 +14,19 @@ class SupabaseService {
   static const String supabaseUrl = 'https://dxdkitnroypbblazblja.supabase.co';
   static const String supabaseAnonKey = 'sb_publishable_gL8ImGd6TS-gdPOr92leHQ_Cwjiw25Y';
 
-  /// Official Supabase client instance
-  static final SupabaseClient client = SupabaseClient(
+  static final SupabaseClient _fallbackClient = SupabaseClient(
     supabaseUrl,
     supabaseAnonKey,
   );
+
+  /// Official Supabase client instance
+  static SupabaseClient get client {
+    try {
+      return Supabase.instance.client;
+    } catch (_) {
+      return _fallbackClient;
+    }
+  }
   static SupabaseClient get _supabase => client;
 
   /// Converts any string ID into a valid RFC 4122 UUID deterministically.

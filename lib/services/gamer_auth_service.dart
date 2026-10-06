@@ -16,6 +16,7 @@ class GamerAuthService {
 
   final ValueNotifier<GamerUser?> currentGamerNotifier = ValueNotifier<GamerUser?>(null);
   final ValueNotifier<bool> isLoadingNotifier = ValueNotifier<bool>(true);
+  final ValueNotifier<User?> authUserNotifier = ValueNotifier<User?>(null);
 
   StreamSubscription<AuthState>? _authSubscription;
 
@@ -30,7 +31,9 @@ class GamerAuthService {
     _authSubscription?.cancel();
     _authSubscription = _supabase.auth.onAuthStateChange.listen((data) async {
       final user = data.session?.user;
+      authUserNotifier.value = user;
       if (user != null) {
+        isLoadingNotifier.value = true;
         await _syncAndLoadUser(user);
       } else {
         currentGamerNotifier.value = null;
@@ -39,9 +42,12 @@ class GamerAuthService {
     });
 
     final initialUser = _supabase.auth.currentUser;
+    authUserNotifier.value = initialUser;
     if (initialUser != null) {
+      isLoadingNotifier.value = true;
       await _syncAndLoadUser(initialUser);
     } else {
+      currentGamerNotifier.value = null;
       isLoadingNotifier.value = false;
     }
   }
@@ -52,16 +58,35 @@ class GamerAuthService {
       final uid = user.id;
       final email = user.email ?? '';
 
-      // Check if user exists in Supabase users table
-      final existingData = await _supabase.from('users').select().or('id.eq.$uid,uid.eq.$uid').maybeSingle();
+      Map<String, dynamic>? existingData;
+      try {
+        existingData = await _supabase
+            .from('users')
+            .select()
+            .eq('id', uid)
+            .maybeSingle()
+            .timeout(const Duration(seconds: 2), onTimeout: () => null);
+
+        if (existingData == null) {
+          existingData = await _supabase
+              .from('users')
+              .select()
+              .eq('uid', uid)
+              .maybeSingle()
+              .timeout(const Duration(seconds: 2), onTimeout: () => null);
+        }
+      } catch (e) {
+        debugPrint('[GamerAuthService] Existing user query warning: $e');
+      }
+
+      final meta = user.userMetadata ?? {};
+      final defaultUsername = email.contains('@')
+          ? email.split('@').first
+          : 'gamer_${uid.length >= 5 ? uid.substring(0, 5) : uid}';
+      final defaultDisplayName = (meta['full_name'] ?? meta['name'] ?? meta['display_name'] ?? defaultUsername).toString();
+      final avatarUrl = (meta['avatar_url'] ?? meta['picture'] ?? '').toString();
 
       if (existingData == null) {
-        // If new user: create row in users table with default username from email
-        final defaultUsername = email.contains('@') ? email.split('@').first : 'gamer_${uid.substring(0, 5)}';
-        final meta = user.userMetadata ?? {};
-        final defaultDisplayName = meta['full_name'] ?? meta['name'] ?? meta['display_name'] ?? defaultUsername;
-        final avatarUrl = meta['avatar_url'] ?? meta['picture'] ?? '';
-
         final newUserData = <String, dynamic>{
           'id': uid,
           'uid': uid,
@@ -79,7 +104,9 @@ class GamerAuthService {
           'updated_at': DateTime.now().toIso8601String(),
         };
 
-        await _supabase.from('users').insert(newUserData);
+        try {
+          await _supabase.from('users').upsert(newUserData).timeout(const Duration(seconds: 2));
+        } catch (_) {}
         final gamer = GamerUser.fromMap(newUserData, uid);
         currentGamerNotifier.value = gamer;
       } else {
@@ -87,10 +114,27 @@ class GamerAuthService {
         currentGamerNotifier.value = gamer;
       }
 
-      // Store FCM push notification token in Supabase users table
-      NotificationService().saveUserFcmToken(uid);
+      // Store FCM push notification token safely
+      try {
+        NotificationService().saveUserFcmToken(uid);
+      } catch (_) {}
     } catch (e) {
       debugPrint('[GamerAuthService] Error syncing user: $e');
+      // Fallback: Ensure user profile is never left null so UI is not stuck
+      if (currentGamerNotifier.value == null) {
+        final meta = user.userMetadata ?? {};
+        final email = user.email ?? '';
+        final uname = email.contains('@') ? email.split('@').first : 'gamer_${user.id.substring(0, 4)}';
+        currentGamerNotifier.value = GamerUser(
+          uid: user.id,
+          username: uname,
+          displayName: (meta['full_name'] ?? meta['name'] ?? uname).toString(),
+          photoUrl: (meta['avatar_url'] ?? '').toString(),
+          coverUrl: '',
+          bio: '',
+          coins: 100,
+        );
+      }
     } finally {
       isLoadingNotifier.value = false;
     }
@@ -126,7 +170,12 @@ class GamerAuthService {
     if (clean.length < 3) return false;
 
     try {
-      final res = await _supabase.from('users').select('id, uid, username').eq('username', clean).limit(1);
+      final res = await _supabase
+          .from('users')
+          .select('id, uid, username')
+          .eq('username', clean)
+          .limit(1)
+          .timeout(const Duration(seconds: 2), onTimeout: () => []);
       if (res.isNotEmpty) {
         final row = res.first;
         final rowUid = row['uid'] ?? row['id'];
@@ -154,6 +203,44 @@ class GamerAuthService {
       debugPrint('[GamerAuthService] Supabase Google OAuth Error: $e');
       rethrow;
     }
+  }
+
+  /// Guest / Instant Sign In (Ensures user can immediately enter app without being stuck)
+  Future<GamerUser> signInAnonymouslyOrGuest() async {
+    isLoadingNotifier.value = true;
+    try {
+      final res = await _supabase.auth.signInAnonymously().timeout(
+        const Duration(seconds: 3),
+        onTimeout: () => throw Exception('Anonymous login timeout'),
+      );
+      final user = res.user;
+      if (user != null) {
+        await _syncAndLoadUser(user);
+        final gamer = currentGamer;
+        if (gamer != null) return gamer;
+      }
+    } catch (e) {
+      debugPrint('[GamerAuthService] Guest/Anonymous Supabase fallback: $e');
+    }
+
+    // Local instant guest session:
+    final guestUid = 'guest_${DateTime.now().millisecondsSinceEpoch.toString().substring(6)}';
+    final guestGamer = GamerUser(
+      uid: guestUid,
+      username: 'gamer_$guestUid',
+      displayName: 'Guest Gamer',
+      photoUrl: '',
+      coverUrl: '',
+      bio: 'Gamer on the rise! 🎮',
+      favoriteGame: 'PUBG Mobile',
+      selectedGame: 'PUBG Mobile',
+      selectedRank: 'Bronze',
+      rank: 'Bronze',
+      coins: 100,
+    );
+    currentGamerNotifier.value = guestGamer;
+    isLoadingNotifier.value = false;
+    return guestGamer;
   }
 
   /// Alias for signInWithGoogle
