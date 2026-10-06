@@ -3,20 +3,15 @@ import 'dart:math';
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:cached_network_image/cached_network_image.dart';
-import 'package:games_khabar/compat/cloud_firestore.dart';
-import 'package:games_khabar/compat/firebase_auth.dart';
-import 'package:games_khabar/compat/firebase_storage.dart';
 import 'package:intl/intl.dart';
 import 'package:share_plus/share_plus.dart';
-import 'package:url_launcher/url_launcher.dart';
 import '../constants/gamer_theme.dart';
 import '../models/gamer_user_model.dart';
-import '../models/gamer_post_model.dart';
 import '../services/theme_service.dart';
 import '../services/gamer_auth_service.dart';
 import '../services/gamer_social_service.dart';
+import '../services/supabase_service.dart';
 import '../widgets/gamer_avatar.dart';
-import '../widgets/post_card.dart';
 import '../widgets/rank_badge_widget.dart';
 import '../services/verification_service.dart';
 import '../models/challenge_model.dart';
@@ -33,7 +28,7 @@ import 'follow_us_screen.dart';
 import '../widgets/coin_history_sheet.dart';
 
 class GamerProfileScreen extends StatefulWidget {
-  final String? userId; // If null, displays currently logged in user's profile
+  final String? userId;
 
   const GamerProfileScreen({super.key, this.userId});
 
@@ -41,7 +36,8 @@ class GamerProfileScreen extends StatefulWidget {
   State<GamerProfileScreen> createState() => _GamerProfileScreenState();
 }
 
-class _GamerProfileScreenState extends State<GamerProfileScreen> with SingleTickerProviderStateMixin {
+class _GamerProfileScreenState extends State<GamerProfileScreen>
+    with SingleTickerProviderStateMixin {
   late TabController _tabController;
   final GamerAuthService _authService = GamerAuthService();
   final GamerSocialService _socialService = GamerSocialService();
@@ -60,6 +56,68 @@ class _GamerProfileScreenState extends State<GamerProfileScreen> with SingleTick
   void dispose() {
     _tabController.dispose();
     super.dispose();
+  }
+
+  /// Fetches a GamerUser directly from Supabase.
+  Future<GamerUser?> _fetchGamerFromSupabase(String userId) async {
+    if (userId.isEmpty) return null;
+    try {
+      final uuid = SupabaseService.toUuid(userId);
+      final row = await SupabaseService.client
+          .from('users')
+          .select()
+          .eq('id', uuid)
+          .maybeSingle();
+
+      if (row == null) return null;
+
+      return GamerUser(
+        uid: userId,
+        username: (row['username'] ?? 'gamer').toString(),
+        displayName: (row['display_name'] ?? row['username'] ?? 'Gamer').toString(),
+        photoUrl: (row['avatar_url'] ?? '').toString(),
+        coverUrl: (row['cover_url'] ?? '').toString(),
+        bio: (row['bio'] ?? '').toString(),
+        favoriteGame: (row['favorite_game'] ?? 'BGMI').toString(),
+        selectedGame: (row['selected_game'] ?? '').toString(),
+        selectedRank: (row['selected_rank'] ?? '').toString(),
+        rank: (row['rank'] ?? '').toString(),
+        rankScreenshot: (row['rank_screenshot'] ?? '').toString(),
+        rankStatus: (row['rank_status'] ?? 'None').toString(),
+        rankVerifiedBy: (row['rank_verified_by'] ?? '').toString(),
+        rankRejectReason: (row['rank_reject_reason'] ?? '').toString(),
+        isRankVerified: row['is_rank_verified'] == true,
+        gameId: (row['game_id'] ?? '').toString(),
+        coins: (row['coins'] as num?)?.toInt() ?? 0,
+        followersCount: (row['followers_count'] as num?)?.toInt() ?? 0,
+        followingCount: (row['following_count'] as num?)?.toInt() ?? 0,
+        postsCount: (row['posts_count'] as num?)?.toInt() ?? 0,
+        likesReceived: (row['likes_received'] as num?)?.toInt() ?? 0,
+        reportsCount: (row['reports_count'] as num?)?.toInt() ?? 0,
+        isVerified: row['is_verified'] == true,
+        verificationStatus: (row['blue_tick_status'] ?? 'none').toString(),
+        activeFrame: (row['active_frame'] ?? '').toString(),
+        unlockedFrames: List<String>.from(row['unlocked_frames'] ?? []),
+        activeBadge: (row['active_badge'] ?? '').toString(),
+        unlockedBadges: List<String>.from(row['unlocked_badges'] ?? []),
+        chatColor: (row['chat_color'] ?? '#00FF66').toString(),
+        unlockedChatColors: List<String>.from(row['unlocked_chat_colors'] ?? []),
+        isVipMember: row['is_vip_member'] == true,
+        kdRatio: (row['kd_ratio'] as num?)?.toDouble() ?? 0.0,
+        createdAt: DateTime.tryParse((row['created_at'] ?? '').toString()),
+      );
+    } catch (e) {
+      debugPrint('[ProfileScreen] Supabase fetch error: $e');
+      return null;
+    }
+  }
+
+  /// Stream a GamerUser from Supabase (polling every 5 seconds).
+  Stream<GamerUser?> _gamerStream(String userId) async* {
+    while (true) {
+      yield await _fetchGamerFromSupabase(userId);
+      await Future.delayed(const Duration(seconds: 5));
+    }
   }
 
   void _showChangeCoverSheet(BuildContext context, GamerUser user) {
@@ -109,10 +167,17 @@ class _GamerProfileScreenState extends State<GamerProfileScreen> with SingleTick
                       color: Color(0xFFE7F3FF),
                       shape: BoxShape.circle,
                     ),
-                    child: const Icon(Icons.photo_library_rounded, color: Color(0xFF1877F2), size: 20),
+                    child: const Icon(Icons.photo_library_rounded,
+                        color: Color(0xFF1877F2), size: 20),
                   ),
-                  title: const Text('Choose from Gallery', style: TextStyle(color: Color(0xFF050505), fontWeight: FontWeight.bold, fontSize: 14)),
-                  subtitle: const Text('Upload your custom gaming banner', style: TextStyle(color: Color(0xFF65676B), fontSize: 11)),
+                  title: const Text('Choose from Gallery',
+                      style: TextStyle(
+                          color: Color(0xFF050505),
+                          fontWeight: FontWeight.bold,
+                          fontSize: 14)),
+                  subtitle: const Text('Upload your custom gaming banner',
+                      style: TextStyle(
+                          color: Color(0xFF65676B), fontSize: 11)),
                   onTap: () {
                     Navigator.pop(ctx);
                     _pickAndUploadCoverPhoto(user);
@@ -126,13 +191,21 @@ class _GamerProfileScreenState extends State<GamerProfileScreen> with SingleTick
                       color: Color(0xFFE7F3FF),
                       shape: BoxShape.circle,
                     ),
-                    child: const Icon(Icons.sports_esports_rounded, color: Color(0xFF1877F2), size: 20),
+                    child: const Icon(Icons.sports_esports_rounded,
+                        color: Color(0xFF1877F2), size: 20),
                   ),
-                  title: const Text('BGMI Erangel Scrims Banner', style: TextStyle(color: Color(0xFF050505), fontWeight: FontWeight.bold, fontSize: 14)),
-                  subtitle: const Text('Official action theme', style: TextStyle(color: Color(0xFF65676B), fontSize: 11)),
+                  title: const Text('BGMI Erangel Scrims Banner',
+                      style: TextStyle(
+                          color: Color(0xFF050505),
+                          fontWeight: FontWeight.bold,
+                          fontSize: 14)),
+                  subtitle: const Text('Official action theme',
+                      style: TextStyle(
+                          color: Color(0xFF65676B), fontSize: 11)),
                   onTap: () {
                     Navigator.pop(ctx);
-                    _setPresetCover(user, 'https://images.unsplash.com/photo-1542751371-adc38448a05e?w=1200&auto=format&fit=crop&q=80');
+                    _setPresetCover(user,
+                        'https://images.unsplash.com/photo-1542751371-adc38448a05e?w=1200&auto=format&fit=crop&q=80');
                   },
                 ),
                 ListTile(
@@ -142,13 +215,21 @@ class _GamerProfileScreenState extends State<GamerProfileScreen> with SingleTick
                       color: Color(0xFFE7F3FF),
                       shape: BoxShape.circle,
                     ),
-                    child: const Icon(Icons.military_tech_rounded, color: Color(0xFF1877F2), size: 20),
+                    child: const Icon(Icons.military_tech_rounded,
+                        color: Color(0xFF1877F2), size: 20),
                   ),
-                  title: const Text('BGMI Battlegrounds Cyber Banner', style: TextStyle(color: Color(0xFF050505), fontWeight: FontWeight.bold, fontSize: 14)),
-                  subtitle: const Text('Action battleground style', style: TextStyle(color: Color(0xFF65676B), fontSize: 11)),
+                  title: const Text('BGMI Battlegrounds Cyber Banner',
+                      style: TextStyle(
+                          color: Color(0xFF050505),
+                          fontWeight: FontWeight.bold,
+                          fontSize: 14)),
+                  subtitle: const Text('Action battleground style',
+                      style: TextStyle(
+                          color: Color(0xFF65676B), fontSize: 11)),
                   onTap: () {
                     Navigator.pop(ctx);
-                    _setPresetCover(user, 'https://images.unsplash.com/photo-1538481199705-c710c4e965fc?w=1200&auto=format&fit=crop&q=80');
+                    _setPresetCover(user,
+                        'https://images.unsplash.com/photo-1538481199705-c710c4e965fc?w=1200&auto=format&fit=crop&q=80');
                   },
                 ),
               ],
@@ -175,7 +256,11 @@ class _GamerProfileScreenState extends State<GamerProfileScreen> with SingleTick
         const SnackBar(
           content: Row(
             children: [
-              SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white)),
+              SizedBox(
+                  width: 16,
+                  height: 16,
+                  child: CircularProgressIndicator(
+                      strokeWidth: 2, color: Colors.white)),
               SizedBox(width: 12),
               Text('Uploading cover photo...'),
             ],
@@ -189,9 +274,11 @@ class _GamerProfileScreenState extends State<GamerProfileScreen> with SingleTick
       final finalUrl = uploadedUrl.isNotEmpty ? uploadedUrl : '';
 
       if (finalUrl.isNotEmpty) {
-        await FirebaseFirestore.instance.collection('users').doc(user.uid).set({
-          'coverUrl': finalUrl,
-        }, SetOptions(merge: true));
+        final uuid = SupabaseService.toUuid(user.uid);
+        await SupabaseService.client.from('users').update({
+          'cover_url': finalUrl,
+          'updated_at': DateTime.now().toIso8601String(),
+        }).eq('id', uuid);
 
         if (mounted) {
           ScaffoldMessenger.of(context).hideCurrentSnackBar();
@@ -201,6 +288,7 @@ class _GamerProfileScreenState extends State<GamerProfileScreen> with SingleTick
               backgroundColor: GamerTheme.accentGreen,
             ),
           );
+          setState(() {});
         }
       }
     } catch (e) {
@@ -217,9 +305,11 @@ class _GamerProfileScreenState extends State<GamerProfileScreen> with SingleTick
 
   Future<void> _setPresetCover(GamerUser user, String coverUrl) async {
     try {
-      await FirebaseFirestore.instance.collection('users').doc(user.uid).set({
-        'coverUrl': coverUrl,
-      }, SetOptions(merge: true));
+      final uuid = SupabaseService.toUuid(user.uid);
+      await SupabaseService.client.from('users').update({
+        'cover_url': coverUrl,
+        'updated_at': DateTime.now().toIso8601String(),
+      }).eq('id', uuid);
 
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -228,6 +318,7 @@ class _GamerProfileScreenState extends State<GamerProfileScreen> with SingleTick
             backgroundColor: GamerTheme.accentGreen,
           ),
         );
+        setState(() {});
       }
     } catch (e) {
       if (mounted) {
@@ -241,55 +332,6 @@ class _GamerProfileScreenState extends State<GamerProfileScreen> with SingleTick
     }
   }
 
-  void _triggerLiveVerificationCheck(GamerUser user) {
-    if (_lastCheckedUid == user.uid && _liveProgress != null) return;
-    _lastCheckedUid = user.uid;
-    _liveProgress = VerificationService.getProgressFromUser(user);
-    
-    // Asynchronously perform live count check and auto-verify if eligible
-    WidgetsBinding.instance.addPostFrameCallback((_) async {
-      if (!mounted) return;
-      setState(() => _isCheckingVerification = true);
-      final wasVerified = user.isVerified;
-      final progress = await VerificationService.checkAndAutoVerify(user);
-      if (!mounted) return;
-      setState(() {
-        _liveProgress = progress;
-        _isCheckingVerification = false;
-      });
-
-      // If user earned the tick just now, show celebratory animation!
-      if (!wasVerified && progress.isVerified) {
-        _showCelebrationDialog();
-      }
-    });
-  }
-
-  Future<void> _manualRefreshVerification(GamerUser user) async {
-    setState(() => _isCheckingVerification = true);
-    final wasVerified = user.isVerified;
-    final progress = await VerificationService.checkAndAutoVerify(user);
-    if (!mounted) return;
-    setState(() {
-      _liveProgress = progress;
-      _isCheckingVerification = false;
-    });
-
-    if (!wasVerified && progress.isVerified) {
-      _showCelebrationDialog();
-    } else {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(progress.isVerified
-              ? '🎉 You are officially verified!'
-              : '${progress.completedRequirementsCount} of 6 requirements completed. Keep going!'),
-          backgroundColor: progress.isVerified ? const Color(0xFF1877F2) : const Color(0xFF65676B),
-          duration: const Duration(seconds: 2),
-        ),
-      );
-    }
-  }
-
   void _showCelebrationDialog() {
     showGeneralDialog(
       context: context,
@@ -300,7 +342,8 @@ class _GamerProfileScreenState extends State<GamerProfileScreen> with SingleTick
         return const SizedBox.shrink();
       },
       transitionBuilder: (ctx, anim1, anim2, child) {
-        final curved = CurvedAnimation(parent: anim1, curve: Curves.easeOutBack);
+        final curved =
+            CurvedAnimation(parent: anim1, curve: Curves.easeOutBack);
         return ScaleTransition(
           scale: curved,
           child: AlertDialog(
@@ -312,7 +355,6 @@ class _GamerProfileScreenState extends State<GamerProfileScreen> with SingleTick
               mainAxisSize: MainAxisSize.min,
               children: [
                 const SizedBox(height: 12),
-                // Glowing blue verified badge
                 Container(
                   padding: const EdgeInsets.all(18),
                   decoration: const BoxDecoration(
@@ -364,12 +406,14 @@ class _GamerProfileScreenState extends State<GamerProfileScreen> with SingleTick
                       backgroundColor: const Color(0xFF1877F2),
                       foregroundColor: Colors.white,
                       elevation: 0,
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                      shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(10)),
                     ),
                     onPressed: () => Navigator.pop(ctx),
                     child: const Text(
                       'Awesome! Let\'s Flex 🎮',
-                      style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
+                      style: TextStyle(
+                          fontWeight: FontWeight.bold, fontSize: 14),
                     ),
                   ),
                 ),
@@ -381,201 +425,35 @@ class _GamerProfileScreenState extends State<GamerProfileScreen> with SingleTick
     );
   }
 
-  void _showLinkGameIdDialog(GamerUser user) {
-    final controller = TextEditingController(text: user.gameId);
-    String selectedGame = user.favoriteGame;
-
-    showDialog(
-      context: context,
-      builder: (ctx) => StatefulBuilder(
-        builder: (ctx, setDialogState) => AlertDialog(
-          backgroundColor: Colors.white,
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-          title: const Row(
-            children: [
-              Icon(Icons.sports_esports_rounded, color: Color(0xFF1877F2), size: 22),
-              SizedBox(width: 8),
-              Text('Link Game ID', style: TextStyle(color: Color(0xFF050505), fontSize: 18, fontWeight: FontWeight.bold)),
-            ],
-          ),
-          content: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              const Text(
-                'Requirement 2: Link your Character UID or in-game nickname (e.g. BGMI: shadow_hunter, FF: 51293847).',
-                style: TextStyle(color: Color(0xFF65676B), fontSize: 12, height: 1.3),
-              ),
-              const SizedBox(height: 16),
-              const Text('GAME', style: TextStyle(color: Color(0xFF65676B), fontSize: 11, fontWeight: FontWeight.bold)),
-              const SizedBox(height: 6),
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 12),
-                decoration: BoxDecoration(
-                  color: const Color(0xFFF0F2F5),
-                  borderRadius: BorderRadius.circular(10),
-                  border: Border.all(color: const Color(0xFFCED0D4)),
-                ),
-                child: DropdownButtonHideUnderline(
-                  child: DropdownButton<String>(
-                    value: GamerTheme.favoriteGames.contains(selectedGame) ? selectedGame : 'BGMI',
-                    isExpanded: true,
-                    dropdownColor: Colors.white,
-                    items: GamerTheme.favoriteGames.map((g) {
-                      return DropdownMenuItem<String>(
-                        value: g,
-                        child: Text(g, style: const TextStyle(color: Color(0xFF050505), fontWeight: FontWeight.bold)),
-                      );
-                    }).toList(),
-                    onChanged: (v) {
-                      if (v != null) setDialogState(() => selectedGame = v);
-                    },
-                  ),
-                ),
-              ),
-              const SizedBox(height: 14),
-              const Text('IN-GAME ID / CHARACTER UID', style: TextStyle(color: Color(0xFF65676B), fontSize: 11, fontWeight: FontWeight.bold)),
-              const SizedBox(height: 6),
-              TextField(
-                controller: controller,
-                style: const TextStyle(color: Color(0xFF050505), fontSize: 14),
-                decoration: InputDecoration(
-                  hintText: 'e.g. shadow_hunter',
-                  hintStyle: const TextStyle(color: Color(0xFF8A8D91)),
-                  filled: true,
-                  fillColor: const Color(0xFFF0F2F5),
-                  contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
-                  border: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: const BorderSide(color: Color(0xFFCED0D4))),
-                  enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: const BorderSide(color: Color(0xFFCED0D4))),
-                  focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: const BorderSide(color: Color(0xFF1877F2))),
-                ),
-              ),
-            ],
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(ctx),
-              child: const Text('Cancel', style: TextStyle(color: Color(0xFF65676B))),
-            ),
-            ElevatedButton(
-              style: ElevatedButton.styleFrom(
-                backgroundColor: const Color(0xFF1877F2),
-                foregroundColor: Colors.white,
-                elevation: 0,
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-              ),
-              onPressed: () async {
-                final text = controller.text.trim();
-                if (text.isEmpty) return;
-                Navigator.pop(ctx);
-                await VerificationService.linkGameId(
-                  userId: user.uid,
-                  gameId: text,
-                  gameName: selectedGame,
-                );
-                _manualRefreshVerification(user);
-              },
-              child: const Text('Save & Verify', style: TextStyle(color: Colors.black, fontWeight: FontWeight.bold)),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  void _showVerificationRequirementsDialog() {
-    showDialog(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        backgroundColor: Colors.white,
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(16),
-        ),
-        title: const Row(
-          children: [
-            Icon(Icons.verified, color: Color(0xFF1877F2), size: 22),
-            SizedBox(width: 8),
-            Text('Verification Requirements', style: TextStyle(color: Color(0xFF050505), fontSize: 17, fontWeight: FontWeight.bold)),
-          ],
-        ),
-        content: SingleChildScrollView(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              const Text(
-                'Gamers ID requires authenticity and community standing before awarding the official Blue Tick ✓:',
-                style: TextStyle(color: Color(0xFF65676B), fontSize: 12.5, height: 1.35),
-              ),
-              const SizedBox(height: 16),
-              _buildRuleItem('1. Complete Profile', 'Must have a real photo avatar (not placeholder letter) and a gaming bio.'),
-              const SizedBox(height: 12),
-              _buildRuleItem('2. Linked Game ID', 'Must link at least 1 verified in-game Character ID / UID (e.g. BGMI: shadow_hunter).'),
-              const SizedBox(height: 12),
-              _buildRuleItem('3. Active Gamer', 'Must publish at least 10 gaming posts and receive 100+ likes from the community.'),
-              const SizedBox(height: 12),
-              _buildRuleItem('4. Community Standing', 'Must have 20+ followers to prove community trust.'),
-              const SizedBox(height: 12),
-              _buildRuleItem('5. Account Age (Trust)', 'Account must be at least 15 days old to prevent bots and spammers.'),
-              const SizedBox(height: 12),
-              _buildRuleItem('6. Clean Record', 'Zero toxic conduct reports or suspensions in the last 30 days.'),
-            ],
-          ),
-        ),
-        actions: [
-          ElevatedButton(
-            style: ElevatedButton.styleFrom(
-              backgroundColor: const Color(0xFF1877F2),
-              foregroundColor: Colors.white,
-              elevation: 0,
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-            ),
-            onPressed: () => Navigator.pop(ctx),
-            child: const Text('Got It', style: TextStyle(fontWeight: FontWeight.bold)),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildRuleItem(String title, String desc) {
-    return Row(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        const Padding(
-          padding: EdgeInsets.only(top: 2),
-          child: Icon(Icons.check_circle, color: Color(0xFF1877F2), size: 16),
-        ),
-        const SizedBox(width: 8),
-        Expanded(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(title, style: const TextStyle(color: Color(0xFF050505), fontSize: 13, fontWeight: FontWeight.bold)),
-              const SizedBox(height: 2),
-              Text(desc, style: const TextStyle(color: Color(0xFF65676B), fontSize: 11.5, height: 1.3)),
-            ],
-          ),
-        ),
-      ],
-    );
-  }
-
   void _show1v1ChallengeDialog(GamerUser targetUser) {
     final currentGamer = _authService.currentGamer;
     if (currentGamer == null) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Please create your Gamer ID to challenge players!')),
+        const SnackBar(
+            content:
+                Text('Please create your Gamer ID to challenge players!')),
       );
       return;
     }
 
-    String selectedGame = targetUser.favoriteGame.isNotEmpty ? targetUser.favoriteGame : 'BGMI';
+    String selectedGame = targetUser.favoriteGame.isNotEmpty
+        ? targetUser.favoriteGame
+        : 'BGMI';
     String selectedMode = 'TDM 1v1 Warehouse';
     String selectedWeapon = 'M416 Only';
 
-    final modes = ['TDM 1v1 Warehouse', 'TDM 1v1 Hangar', 'Room 1v1 Erangel', 'Sniper 1v1 Ruins'];
-    final weapons = ['M416 Only', 'Sniper / AWM Only', 'Shotgun Only', 'All Weapons Allowed'];
+    final modes = [
+      'TDM 1v1 Warehouse',
+      'TDM 1v1 Hangar',
+      'Room 1v1 Erangel',
+      'Sniper 1v1 Ruins'
+    ];
+    final weapons = [
+      'M416 Only',
+      'Sniper / AWM Only',
+      'Shotgun Only',
+      'All Weapons Allowed'
+    ];
 
     showDialog(
       context: context,
@@ -650,11 +528,15 @@ class _GamerProfileScreenState extends State<GamerProfileScreen> with SingleTick
                           children: [
                             Text(
                               targetUser.displayName,
-                              style: const TextStyle(color: Color(0xFF050505), fontWeight: FontWeight.bold, fontSize: 13),
+                              style: const TextStyle(
+                                  color: Color(0xFF050505),
+                                  fontWeight: FontWeight.bold,
+                                  fontSize: 13),
                             ),
                             Text(
                               'Rank: ${targetUser.rank} • UID: ${targetUser.gameId.isEmpty ? "Not set" : targetUser.gameId}',
-                              style: const TextStyle(color: Color(0xFF65676B), fontSize: 11),
+                              style: const TextStyle(
+                                  color: Color(0xFF65676B), fontSize: 11),
                             ),
                           ],
                         ),
@@ -663,7 +545,11 @@ class _GamerProfileScreenState extends State<GamerProfileScreen> with SingleTick
                   ),
                 ),
                 const SizedBox(height: 16),
-                const Text('SELECT MAP / MODE', style: TextStyle(color: Color(0xFF65676B), fontSize: 11, fontWeight: FontWeight.w800)),
+                const Text('SELECT MAP / MODE',
+                    style: TextStyle(
+                        color: Color(0xFF65676B),
+                        fontSize: 11,
+                        fontWeight: FontWeight.w800)),
                 const SizedBox(height: 6),
                 Container(
                   padding: const EdgeInsets.symmetric(horizontal: 12),
@@ -677,13 +563,25 @@ class _GamerProfileScreenState extends State<GamerProfileScreen> with SingleTick
                       value: selectedMode,
                       isExpanded: true,
                       dropdownColor: Colors.white,
-                      items: modes.map((m) => DropdownMenuItem(value: m, child: Text(m, style: const TextStyle(color: Color(0xFF050505), fontSize: 13)))).toList(),
-                      onChanged: (v) => setDialogState(() => selectedMode = v ?? selectedMode),
+                      items: modes
+                          .map((m) => DropdownMenuItem(
+                              value: m,
+                              child: Text(m,
+                                  style: const TextStyle(
+                                      color: Color(0xFF050505),
+                                      fontSize: 13))))
+                          .toList(),
+                      onChanged: (v) => setDialogState(
+                          () => selectedMode = v ?? selectedMode),
                     ),
                   ),
                 ),
                 const SizedBox(height: 14),
-                const Text('WEAPON RULE', style: TextStyle(color: Color(0xFF65676B), fontSize: 11, fontWeight: FontWeight.w800)),
+                const Text('WEAPON RULE',
+                    style: TextStyle(
+                        color: Color(0xFF65676B),
+                        fontSize: 11,
+                        fontWeight: FontWeight.w800)),
                 const SizedBox(height: 6),
                 Container(
                   padding: const EdgeInsets.symmetric(horizontal: 12),
@@ -697,30 +595,17 @@ class _GamerProfileScreenState extends State<GamerProfileScreen> with SingleTick
                       value: selectedWeapon,
                       isExpanded: true,
                       dropdownColor: Colors.white,
-                      items: weapons.map((w) => DropdownMenuItem(value: w, child: Text(w, style: const TextStyle(color: Color(0xFF050505), fontSize: 13)))).toList(),
-                      onChanged: (v) => setDialogState(() => selectedWeapon = v ?? selectedWeapon),
+                      items: weapons
+                          .map((w) => DropdownMenuItem(
+                              value: w,
+                              child: Text(w,
+                                  style: const TextStyle(
+                                      color: Color(0xFF050505),
+                                      fontSize: 13))))
+                          .toList(),
+                      onChanged: (v) => setDialogState(
+                          () => selectedWeapon = v ?? selectedWeapon),
                     ),
-                  ),
-                ),
-                const SizedBox(height: 16),
-                Container(
-                  padding: const EdgeInsets.all(10),
-                  decoration: BoxDecoration(
-                    color: const Color(0xFFE7F3FF),
-                    borderRadius: BorderRadius.circular(10),
-                    border: Border.all(color: const Color(0xFF1877F2).withOpacity(0.2)),
-                  ),
-                  child: const Row(
-                    children: [
-                      Icon(Icons.info_outline_rounded, color: Color(0xFF1877F2), size: 16),
-                      SizedBox(width: 8),
-                      Expanded(
-                        child: Text(
-                          'An instant invite will appear in their notifications to accept or decline.',
-                          style: TextStyle(color: Color(0xFF65676B), fontSize: 11.5, height: 1.3),
-                        ),
-                      ),
-                    ],
                   ),
                 ),
               ],
@@ -729,15 +614,18 @@ class _GamerProfileScreenState extends State<GamerProfileScreen> with SingleTick
           actions: [
             TextButton(
               onPressed: () => Navigator.pop(ctx),
-              child: const Text('Cancel', style: TextStyle(color: Color(0xFF65676B))),
+              child: const Text('Cancel',
+                  style: TextStyle(color: Color(0xFF65676B))),
             ),
             ElevatedButton(
               style: ElevatedButton.styleFrom(
                 backgroundColor: const Color(0xFF1877F2),
                 foregroundColor: Colors.white,
                 elevation: 0,
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-                padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 10),
+                shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(8)),
+                padding: const EdgeInsets.symmetric(
+                    horizontal: 18, vertical: 10),
               ),
               onPressed: () async {
                 Navigator.pop(ctx);
@@ -757,7 +645,8 @@ class _GamerProfileScreenState extends State<GamerProfileScreen> with SingleTick
                 if (!mounted) return;
                 ScaffoldMessenger.of(context).showSnackBar(
                   SnackBar(
-                    content: Text('⚔️ 1v1 Challenge Sent to ${targetUser.displayName}!'),
+                    content: Text(
+                        '⚔️ 1v1 Challenge Sent to ${targetUser.displayName}!'),
                     backgroundColor: const Color(0xFF1877F2),
                     duration: const Duration(seconds: 3),
                   ),
@@ -766,9 +655,13 @@ class _GamerProfileScreenState extends State<GamerProfileScreen> with SingleTick
               child: const Row(
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  Icon(Icons.flash_on_rounded, color: Colors.white, size: 16),
+                  Icon(Icons.flash_on_rounded,
+                      color: Colors.white, size: 16),
                   SizedBox(width: 4),
-                  Text('SEND 1v1 ⚔️', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+                  Text('SEND 1v1 ⚔️',
+                      style: TextStyle(
+                          color: Colors.white,
+                          fontWeight: FontWeight.bold)),
                 ],
               ),
             ),
@@ -779,7 +672,8 @@ class _GamerProfileScreenState extends State<GamerProfileScreen> with SingleTick
   }
 
   void _shareProfile(GamerUser user) {
-    final text = '🎮 Check out ${user.displayName}\'s Gamer ID on Gamers ID!\n\n'
+    final text =
+        '🎮 Check out ${user.displayName}\'s Gamer ID on Gamers ID!\n\n'
         'Handle: @${user.username}\n'
         'Game: ${user.favoriteGame} | Rank: ${user.rank}\n'
         'Bio: ${user.bio}\n\n'
@@ -792,39 +686,50 @@ class _GamerProfileScreenState extends State<GamerProfileScreen> with SingleTick
       context: context,
       builder: (ctx) => AlertDialog(
         backgroundColor: Colors.white,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-        title: const Text('Log Out', style: TextStyle(color: Color(0xFF050505), fontWeight: FontWeight.bold)),
-        content: const Text('Are you sure you want to log out of Gamers ID?', style: TextStyle(color: Color(0xFF65676B))),
+        shape:
+            RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        title: const Text('Log Out',
+            style: TextStyle(
+                color: Color(0xFF050505), fontWeight: FontWeight.bold)),
+        content: const Text(
+            'Are you sure you want to log out of Gamers ID?',
+            style: TextStyle(color: Color(0xFF65676B))),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(ctx),
-            child: const Text('Cancel', style: TextStyle(color: Color(0xFF65676B))),
+            child: const Text('Cancel',
+                style: TextStyle(color: Color(0xFF65676B))),
           ),
           ElevatedButton(
             style: ElevatedButton.styleFrom(
               backgroundColor: Colors.red,
               foregroundColor: Colors.white,
               elevation: 0,
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+              shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(8)),
             ),
             onPressed: () async {
               Navigator.pop(ctx);
               await _authService.signOut();
               if (mounted) {
                 Navigator.of(context).pushAndRemoveUntil(
-                  MaterialPageRoute(builder: (_) => const GamerAuthScreen()),
+                  MaterialPageRoute(
+                      builder: (_) => const GamerAuthScreen()),
                   (route) => false,
                 );
               }
             },
-            child: const Text('Log Out', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+            child: const Text('Log Out',
+                style: TextStyle(
+                    color: Colors.white, fontWeight: FontWeight.bold)),
           ),
         ],
       ),
     );
   }
 
-  Widget _buildStatColumn(String count, String label, VoidCallback? onTap) {
+  Widget _buildStatColumn(
+      String count, String label, VoidCallback? onTap) {
     return InkWell(
       onTap: onTap,
       borderRadius: BorderRadius.circular(8),
@@ -862,12 +767,14 @@ class _GamerProfileScreenState extends State<GamerProfileScreen> with SingleTick
     final isOwnProfile = currentUid == targetUid;
 
     return StreamBuilder<GamerUser?>(
-      stream: _authService.userProfileStream(targetUid),
+      stream: _gamerStream(targetUid),
       builder: (context, snapshot) {
-        if (snapshot.connectionState == ConnectionState.waiting && !snapshot.hasData) {
+        if (snapshot.connectionState == ConnectionState.waiting &&
+            !snapshot.hasData) {
           return const Scaffold(
             backgroundColor: Color(0xFFF0F2F5),
-            body: Center(child: CircularProgressIndicator(color: Color(0xFF1877F2))),
+            body: Center(
+                child: CircularProgressIndicator(color: Color(0xFF1877F2))),
           );
         }
 
@@ -891,9 +798,11 @@ class _GamerProfileScreenState extends State<GamerProfileScreen> with SingleTick
               child: Column(
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
-                  const Icon(Icons.sentiment_dissatisfied_rounded, color: Color(0xFF65676B), size: 54),
+                  const Icon(Icons.sentiment_dissatisfied_rounded,
+                      color: Color(0xFF65676B), size: 54),
                   const SizedBox(height: 12),
-                  const Text('Gamer ID not found or not set up yet.', style: TextStyle(color: Color(0xFF050505))),
+                  const Text('Gamer ID not found or not set up yet.',
+                      style: TextStyle(color: Color(0xFF050505))),
                   const SizedBox(height: 16),
                   if (isOwnProfile)
                     ElevatedButton(
@@ -904,10 +813,13 @@ class _GamerProfileScreenState extends State<GamerProfileScreen> with SingleTick
                       ),
                       onPressed: () {
                         Navigator.of(context).push(
-                          MaterialPageRoute(builder: (_) => const CreateGamerIdScreen()),
+                          MaterialPageRoute(
+                              builder: (_) =>
+                                  const CreateGamerIdScreen()),
                         );
                       },
-                      child: const Text('Create Your Gamer ID', style: TextStyle(fontWeight: FontWeight.bold)),
+                      child: const Text('Create Your Gamer ID',
+                          style: TextStyle(fontWeight: FontWeight.bold)),
                     ),
                 ],
               ),
@@ -915,13 +827,13 @@ class _GamerProfileScreenState extends State<GamerProfileScreen> with SingleTick
           );
         }
 
-        final gameColor = GamerTheme.gameColors[user.favoriteGame] ?? const Color(0xFF1877F2);
-        final gameEmoji = GamerTheme.gameEmojis[user.favoriteGame] ?? '🎮';
+        final gameColor = GamerTheme.gameColors[user.favoriteGame] ??
+            const Color(0xFF1877F2);
+        final gameEmoji =
+            GamerTheme.gameEmojis[user.favoriteGame] ?? '🎮';
 
         return Scaffold(
           backgroundColor: const Color(0xFFF0F2F5),
-          extendBody: false,
-          extendBodyBehindAppBar: false,
           body: NestedScrollView(
             headerSliverBuilder: (context, innerBoxIsScrolled) {
               return [
@@ -931,7 +843,8 @@ class _GamerProfileScreenState extends State<GamerProfileScreen> with SingleTick
                   backgroundColor: Colors.white,
                   elevation: 1,
                   automaticallyImplyLeading: !isOwnProfile,
-                  iconTheme: const IconThemeData(color: Color(0xFF65676B)),
+                  iconTheme:
+                      const IconThemeData(color: Color(0xFF65676B)),
                   actions: [
                     Padding(
                       padding: const EdgeInsets.only(right: 12),
@@ -941,7 +854,8 @@ class _GamerProfileScreenState extends State<GamerProfileScreen> with SingleTick
                           shape: const CircleBorder(),
                           clipBehavior: Clip.antiAlias,
                           child: InkWell(
-                            onTap: () => _showProfileSettingsMenu(user, isOwnProfile),
+                            onTap: () => _showProfileSettingsMenu(
+                                user, isOwnProfile),
                             child: Container(
                               width: 38,
                               height: 38,
@@ -954,7 +868,8 @@ class _GamerProfileScreenState extends State<GamerProfileScreen> with SingleTick
                                 ),
                                 boxShadow: [
                                   BoxShadow(
-                                    color: Colors.black.withOpacity(0.08),
+                                    color: Colors.black
+                                        .withOpacity(0.08),
                                     blurRadius: 4,
                                     offset: const Offset(0, 1),
                                   ),
@@ -975,13 +890,15 @@ class _GamerProfileScreenState extends State<GamerProfileScreen> with SingleTick
                     background: Stack(
                       clipBehavior: Clip.none,
                       children: [
-                        // BGMI Pro Cover Banner - completely clean & unobstructed, tap to view full screen
                         GestureDetector(
                           onTap: () {
                             final cover = user.coverUrl.isNotEmpty
                                 ? user.coverUrl
                                 : 'https://images.unsplash.com/photo-1542751371-adc38448a05e?w=1200&auto=format&fit=crop&q=80';
-                            _showFullScreenPhotoViewer(imageUrl: cover, title: '${user.displayName} • Cover Photo');
+                            _showFullScreenPhotoViewer(
+                                imageUrl: cover,
+                                title:
+                                    '${user.displayName} • Cover Photo');
                           },
                           child: Container(
                             height: 175,
@@ -1000,7 +917,10 @@ class _GamerProfileScreenState extends State<GamerProfileScreen> with SingleTick
                                   child: SizedBox(
                                     width: 24,
                                     height: 24,
-                                    child: CircularProgressIndicator(strokeWidth: 2, color: Color(0xFF1877F2)),
+                                    child:
+                                        CircularProgressIndicator(
+                                            strokeWidth: 2,
+                                            color: Color(0xFF1877F2)),
                                   ),
                                 ),
                               ),
@@ -1011,24 +931,27 @@ class _GamerProfileScreenState extends State<GamerProfileScreen> with SingleTick
                             ),
                           ),
                         ),
-
-                        // Avatar overlapping cover with clean white Facebook-style ring - tap to view full screen
                         Positioned(
                           top: 129,
                           left: 20,
                           child: GestureDetector(
                             onTap: () {
                               if (user.photoUrl.isNotEmpty) {
-                                _showFullScreenPhotoViewer(imageUrl: user.photoUrl, title: '${user.displayName} • Profile Photo');
+                                _showFullScreenPhotoViewer(
+                                    imageUrl: user.photoUrl,
+                                    title:
+                                        '${user.displayName} • Profile Photo');
                               }
                             },
                             child: Container(
                               decoration: BoxDecoration(
                                 shape: BoxShape.circle,
-                                border: Border.all(color: Colors.white, width: 4),
+                                border: Border.all(
+                                    color: Colors.white, width: 4),
                                 boxShadow: [
                                   BoxShadow(
-                                    color: Colors.black.withOpacity(0.12),
+                                    color: Colors.black
+                                        .withOpacity(0.12),
                                     blurRadius: 8,
                                     offset: const Offset(0, 2),
                                   ),
@@ -1050,14 +973,12 @@ class _GamerProfileScreenState extends State<GamerProfileScreen> with SingleTick
                   ),
                 ),
 
-                // User Info & Badges Section
                 SliverToBoxAdapter(
                   child: Padding(
                     padding: const EdgeInsets.fromLTRB(20, 8, 20, 12),
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        // Display Name + Rank Badge (Only ACE gold badge next to Fua)
                         Row(
                           children: [
                             Flexible(
@@ -1071,7 +992,10 @@ class _GamerProfileScreenState extends State<GamerProfileScreen> with SingleTick
                                 overflow: TextOverflow.ellipsis,
                               ),
                             ),
-                            if (!user.isOwnerUser && user.isRankApproved && user.rank.isNotEmpty && user.rank.toLowerCase() != 'none') ...[
+                            if (!user.isOwnerUser &&
+                                user.isRankApproved &&
+                                user.rank.isNotEmpty &&
+                                user.rank.toLowerCase() != 'none') ...[
                               const SizedBox(width: 6),
                               RankBadgeWidget(
                                 badge: user.getRankBadge(),
@@ -1081,44 +1005,17 @@ class _GamerProfileScreenState extends State<GamerProfileScreen> with SingleTick
                             ],
                             if (user.activeBadge.isNotEmpty) ...[
                               const SizedBox(width: 6),
-                              GamerBadgeWidget(badgeId: user.activeBadge, scale: 1.0),
+                              GamerBadgeWidget(
+                                  badgeId: user.activeBadge, scale: 1.0),
                             ],
                             if (user.hasBlueTick) ...[
                               const SizedBox(width: 5),
-                              const Icon(Icons.verified, color: Color(0xFF1877F2), size: 18),
-                            ],
-                            if (user.isOwnerUser) ...[
-                              const SizedBox(width: 6),
-                              Container(
-                                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-                                decoration: BoxDecoration(
-                                  color: const Color(0xFFFEF7E0),
-                                  borderRadius: BorderRadius.circular(12),
-                                  border: Border.all(color: const Color(0xFFF9AB00)),
-                                ),
-                                child: const Row(
-                                  mainAxisSize: MainAxisSize.min,
-                                  children: [
-                                    Text('👑', style: TextStyle(fontSize: 11)),
-                                    SizedBox(width: 3),
-                                    Text(
-                                      'LEGEND',
-                                      style: TextStyle(
-                                        color: Color(0xFFB06000),
-                                        fontSize: 10.5,
-                                        fontWeight: FontWeight.w900,
-                                        letterSpacing: 0.8,
-                                      ),
-                                    ),
-                                  ],
-                                ),
-                              ),
+                              const Icon(Icons.verified,
+                                  color: Color(0xFF1877F2), size: 18),
                             ],
                           ],
                         ),
                         const SizedBox(height: 2),
-
-                        // @username
                         Text(
                           '@${user.username}',
                           style: const TextStyle(
@@ -1127,8 +1024,6 @@ class _GamerProfileScreenState extends State<GamerProfileScreen> with SingleTick
                             fontWeight: FontWeight.w700,
                           ),
                         ),
-
-                        // Bio
                         if (user.bio.isNotEmpty) ...[
                           const SizedBox(height: 10),
                           Text(
@@ -1140,58 +1035,30 @@ class _GamerProfileScreenState extends State<GamerProfileScreen> with SingleTick
                             ),
                           ),
                         ],
-
                         const SizedBox(height: 12),
-
-                        // Favorite Game Badge, Rank Chip & App Rank (auto)
                         Wrap(
                           spacing: 8,
                           runSpacing: 6,
                           crossAxisAlignment: WrapCrossAlignment.center,
                           children: [
-                            // Owner Legend Badge Chip
-                            if (user.isOwnerUser) ...[
+                            if (user.favoriteGame.isNotEmpty)
                               Container(
-                                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
-                                decoration: BoxDecoration(
-                                  gradient: const LinearGradient(
-                                    colors: [Color(0xFF2A1C0A), Color(0xFF3F2B12)],
-                                  ),
-                                  borderRadius: BorderRadius.circular(8),
-                                  border: Border.all(color: const Color(0xFFFFD700), width: 1.2),
-                                ),
-                                child: const Row(
-                                  mainAxisSize: MainAxisSize.min,
-                                  children: [
-                                    Text('👑', style: TextStyle(fontSize: 13)),
-                                    SizedBox(width: 5),
-                                    Text(
-                                      'VERIFIED OWNER & CREATOR',
-                                      style: TextStyle(
-                                        color: Color(0xFFFFD700),
-                                        fontWeight: FontWeight.w900,
-                                        fontSize: 11.5,
-                                        letterSpacing: 0.5,
-                                      ),
-                                    ),
-                                  ],
-                                ),
-                              ),
-                            ],
-
-                            // Favorite Game Badge
-                            if (!user.isOwnerUser && user.favoriteGame.isNotEmpty)
-                              Container(
-                                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+                                padding: const EdgeInsets.symmetric(
+                                    horizontal: 10, vertical: 5),
                                 decoration: BoxDecoration(
                                   color: gameColor.withOpacity(0.15),
-                                  borderRadius: BorderRadius.circular(8),
-                                  border: Border.all(color: gameColor.withOpacity(0.6)),
+                                  borderRadius:
+                                      BorderRadius.circular(8),
+                                  border: Border.all(
+                                      color:
+                                          gameColor.withOpacity(0.6)),
                                 ),
                                 child: Row(
                                   mainAxisSize: MainAxisSize.min,
                                   children: [
-                                    Text(gameEmoji, style: const TextStyle(fontSize: 13)),
+                                    Text(gameEmoji,
+                                        style: const TextStyle(
+                                            fontSize: 13)),
                                     const SizedBox(width: 6),
                                     Text(
                                       user.favoriteGame,
@@ -1204,274 +1071,45 @@ class _GamerProfileScreenState extends State<GamerProfileScreen> with SingleTick
                                   ],
                                 ),
                               ),
-
-                            // Rank Badge with Verification Status (Only for non-owner: verified or pending)
-                            if (!user.isOwnerUser && user.rank.isNotEmpty && user.rank.toLowerCase() != 'none' && user.rank.toLowerCase() != 'skip') ...[
-                              if (user.isRankApproved) ...[
-                                Container(
-                                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
-                                  decoration: BoxDecoration(
-                                    color: const Color(0xFF00FF88).withOpacity(0.12),
-                                    borderRadius: BorderRadius.circular(8),
-                                    border: Border.all(color: const Color(0xFF00FF88).withOpacity(0.5)),
-                                  ),
-                                  child: Row(
-                                    mainAxisSize: MainAxisSize.min,
-                                    children: [
-                                      const Icon(Icons.military_tech_rounded, color: Color(0xFF00FF88), size: 16),
-                                      const SizedBox(width: 4),
-                                      Text(
-                                        user.selectedGame.isNotEmpty ? '${user.selectedGame}: ${user.rank}' : user.rank,
-                                        style: const TextStyle(
-                                          color: Color(0xFF00FF88),
-                                          fontWeight: FontWeight.w800,
-                                          fontSize: 12,
-                                        ),
-                                      ),
-                                      const SizedBox(width: 5),
-                                      const Icon(Icons.verified_rounded, color: Color(0xFF00FF88), size: 14),
-                                      const SizedBox(width: 2),
-                                      const Text(
-                                        'Verified',
-                                        style: TextStyle(
-                                          color: Color(0xFF00FF88),
-                                          fontWeight: FontWeight.w900,
-                                          fontSize: 11,
-                                        ),
-                                      ),
-                                    ],
-                                  ),
-                                ),
-                              ] else if (user.isRankPending || user.rankStatus.toLowerCase() == 'pending') ...[
-                                Container(
-                                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
-                                  decoration: BoxDecoration(
-                                    color: const Color(0xFFFFD700).withOpacity(0.14),
-                                    borderRadius: BorderRadius.circular(8),
-                                    border: Border.all(color: const Color(0xFFFFD700).withOpacity(0.6)),
-                                  ),
-                                  child: Row(
-                                    mainAxisSize: MainAxisSize.min,
-                                    children: [
-                                      const Icon(Icons.military_tech_rounded, color: Color(0xFFFFD700), size: 16),
-                                      const SizedBox(width: 4),
-                                      Text(
-                                        user.selectedGame.isNotEmpty ? '${user.selectedGame}: ${user.rank}' : user.rank,
-                                        style: const TextStyle(
-                                          color: Color(0xFFFFD700),
-                                          fontWeight: FontWeight.w800,
-                                          fontSize: 12,
-                                        ),
-                                      ),
-                                      const SizedBox(width: 6),
-                                      const Icon(Icons.hourglass_top_rounded, color: Color(0xFFFFD700), size: 13),
-                                      const SizedBox(width: 3),
-                                      const Text(
-                                        'Rank Verification Pending',
-                                        style: TextStyle(
-                                          color: Color(0xFFFFD700),
-                                          fontWeight: FontWeight.w800,
-                                          fontSize: 11,
-                                        ),
-                                      ),
-                                    ],
-                                  ),
-                                ),
-                              ] else if (user.isRankRejected) ...[
-                                Container(
-                                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
-                                  decoration: BoxDecoration(
-                                    color: const Color(0xFFFF4655).withOpacity(0.12),
-                                    borderRadius: BorderRadius.circular(8),
-                                    border: Border.all(color: const Color(0xFFFF4655).withOpacity(0.5)),
-                                  ),
-                                  child: Row(
-                                    mainAxisSize: MainAxisSize.min,
-                                    children: [
-                                      const Icon(Icons.error_outline_rounded, color: Color(0xFFFF4655), size: 15),
-                                      const SizedBox(width: 4),
-                                      Text(
-                                        user.selectedGame.isNotEmpty ? '${user.selectedGame}: ${user.rank} (Rejected)' : '${user.rank} (Rejected)',
-                                        style: const TextStyle(
-                                          color: Color(0xFFFF4655),
-                                          fontWeight: FontWeight.w800,
-                                          fontSize: 12,
-                                        ),
-                                      ),
-                                    ],
-                                  ),
-                                ),
-                              ],
-                            ],
-
-                            // Verified Game Ranks Badges (Only for non-owner)
-                            if (!user.isOwnerUser)
-                              ...user.games
-                                  .where((g) => g.isVerified || g.status == 'approved')
-                                  .map((g) {
-                              final gColor = _getGameAccentColor(g.gameName);
-                              return Container(
-                                padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 5),
-                                decoration: BoxDecoration(
-                                  color: gColor.withOpacity(0.14),
-                                  borderRadius: BorderRadius.circular(8),
-                                  border: Border.all(color: gColor.withOpacity(0.5)),
-                                ),
-                                child: Row(
-                                  mainAxisSize: MainAxisSize.min,
-                                  children: [
-                                    Icon(_getGameIcon(g.gameName), color: gColor, size: 13),
-                                    const SizedBox(width: 5),
-                                    Text(
-                                      '${g.gameName}: ${g.verifiedRank.isNotEmpty ? g.verifiedRank : g.claimedRank}',
-                                      style: TextStyle(
-                                        color: gColor,
-                                        fontWeight: FontWeight.w800,
-                                        fontSize: 11.5,
-                                      ),
-                                    ),
-                                    const SizedBox(width: 4),
-                                    const Icon(Icons.check_circle_rounded, color: Color(0xFF00FF88), size: 12),
-                                  ],
-                                ),
-                              );
-                            }),
                           ],
                         ),
-
-                        // Gamer Coins Balance & Full History Banner (Tap to view complete history)
-                        StreamBuilder<DocumentSnapshot>(
-                          stream: FirebaseFirestore.instance
-                              .collection('users')
-                              .doc(targetUid)
-                              .snapshots(),
-                          builder: (context, coinSnap) {
-                            int coins = user.coins;
-                            if (coinSnap.hasData && coinSnap.data != null && coinSnap.data!.exists) {
-                              final data = coinSnap.data!.data() as Map<String, dynamic>? ?? {};
-                              final raw = data['gCoins'] ?? data['coins'];
-                              if (raw is num) coins = raw.toInt();
-                            }
-                            return InkWell(
-                              onTap: () => CoinHistorySheet.show(context, userId: targetUid),
-                              borderRadius: BorderRadius.circular(14),
-                              child: Container(
-                                margin: const EdgeInsets.only(top: 12),
-                                padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-                                decoration: BoxDecoration(
-                                  gradient: LinearGradient(
-                                    colors: [
-                                      const Color(0xFFFFD700).withOpacity(0.14),
-                                      const Color(0xFF1E293B),
-                                    ],
-                                    begin: Alignment.centerLeft,
-                                    end: Alignment.centerRight,
-                                  ),
-                                  borderRadius: BorderRadius.circular(14),
-                                  border: Border.all(color: const Color(0xFFFFD700).withOpacity(0.4)),
-                                ),
-                                child: Row(
-                                  children: [
-                                    Container(
-                                      padding: const EdgeInsets.all(8),
-                                      decoration: BoxDecoration(
-                                        color: const Color(0xFFFFD700).withOpacity(0.2),
-                                        shape: BoxShape.circle,
-                                      ),
-                                      child: const Text('🪙', style: TextStyle(fontSize: 18)),
-                                    ),
-                                    const SizedBox(width: 10),
-                                    Expanded(
-                                      child: Column(
-                                        crossAxisAlignment: CrossAxisAlignment.start,
-                                        children: [
-                                          const Text(
-                                            'G-COINS WALLET',
-                                            style: TextStyle(
-                                              color: GamerTheme.textMuted,
-                                              fontSize: 10,
-                                              fontWeight: FontWeight.w800,
-                                              letterSpacing: 0.8,
-                                            ),
-                                          ),
-                                          const SizedBox(height: 2),
-                                          Text(
-                                            '$coins Coins',
-                                            style: const TextStyle(
-                                              color: Color(0xFFFFD700),
-                                              fontWeight: FontWeight.w900,
-                                              fontSize: 16,
-                                            ),
-                                          ),
-                                        ],
-                                      ),
-                                    ),
-                                    Container(
-                                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
-                                      decoration: BoxDecoration(
-                                        color: const Color(0xFFFFD700),
-                                        borderRadius: BorderRadius.circular(8),
-                                      ),
-                                      child: const Row(
-                                        mainAxisSize: MainAxisSize.min,
-                                        children: [
-                                          Icon(Icons.history_rounded, size: 14, color: Colors.black),
-                                          SizedBox(width: 4),
-                                          Text(
-                                            'Coin History',
-                                            style: TextStyle(
-                                              color: Colors.black,
-                                              fontWeight: FontWeight.w900,
-                                              fontSize: 11,
-                                            ),
-                                          ),
-                                        ],
-                                      ),
-                                    ),
-                                  ],
-                                ),
-                              ),
-                            );
-                          },
-                        ),
-
                         const SizedBox(height: 16),
-
-                        // Followers / Following / Posts Counts
                         Container(
-                          padding: const EdgeInsets.symmetric(vertical: 12),
+                          padding:
+                              const EdgeInsets.symmetric(vertical: 12),
                           decoration: BoxDecoration(
                             color: Colors.white,
                             borderRadius: BorderRadius.circular(12),
-                            border: Border.all(color: const Color(0xFFCED0D4)),
+                            border: Border.all(
+                                color: const Color(0xFFCED0D4)),
                             boxShadow: [
                               BoxShadow(
-                                color: Colors.black.withOpacity(0.04),
+                                color:
+                                    Colors.black.withOpacity(0.04),
                                 blurRadius: 4,
                                 offset: const Offset(0, 1),
                               ),
                             ],
                           ),
                           child: Row(
-                            mainAxisAlignment: MainAxisAlignment.spaceAround,
+                            mainAxisAlignment:
+                                MainAxisAlignment.spaceAround,
                             children: [
-                              StreamBuilder<List<ProfileFeedItem>>(
-                                stream: ProfileService().getUserPostsAndClipsStream(
-                                  userId: user.uid,
-                                  username: user.username,
-                                ),
-                                builder: (context, snap) {
-                                  final totalCount = snap.hasData ? snap.data!.length : user.postsCount;
-                                  return _buildStatColumn('$totalCount', 'Posts', () {
-                                    _tabController.animateTo(0);
-                                  });
-                                },
-                              ),
-                              Container(height: 24, width: 1, color: const Color(0xFFCED0D4)),
-                              _buildStatColumn('${user.followersCount}', 'Followers', () {
+                              _buildStatColumn(
+                                  '${user.postsCount}', 'Posts', () {
+                                _tabController.animateTo(0);
+                              }),
+                              Container(
+                                  height: 24,
+                                  width: 1,
+                                  color: const Color(0xFFCED0D4)),
+                              _buildStatColumn(
+                                  '${user.followersCount}', 'Followers',
+                                  () {
                                 Navigator.of(context).push(
                                   MaterialPageRoute(
-                                    builder: (_) => FollowersFollowingScreen(
+                                    builder: (_) =>
+                                        FollowersFollowingScreen(
                                       userId: user.uid,
                                       displayName: user.displayName,
                                       initialTabIndex: 0,
@@ -1479,11 +1117,17 @@ class _GamerProfileScreenState extends State<GamerProfileScreen> with SingleTick
                                   ),
                                 );
                               }),
-                              Container(height: 24, width: 1, color: const Color(0xFFCED0D4)),
-                              _buildStatColumn('${user.followingCount}', 'Following', () {
+                              Container(
+                                  height: 24,
+                                  width: 1,
+                                  color: const Color(0xFFCED0D4)),
+                              _buildStatColumn(
+                                  '${user.followingCount}', 'Following',
+                                  () {
                                 Navigator.of(context).push(
                                   MaterialPageRoute(
-                                    builder: (_) => FollowersFollowingScreen(
+                                    builder: (_) =>
+                                        FollowersFollowingScreen(
                                       userId: user.uid,
                                       displayName: user.displayName,
                                       initialTabIndex: 1,
@@ -1494,28 +1138,37 @@ class _GamerProfileScreenState extends State<GamerProfileScreen> with SingleTick
                             ],
                           ),
                         ),
-
                         const SizedBox(height: 16),
-
-                        // Action Buttons: Edit / Change Cover / Share / Follow
                         Row(
                           children: [
                             if (isOwnProfile) ...[
                               Expanded(
                                 child: ElevatedButton.icon(
                                   style: ElevatedButton.styleFrom(
-                                    backgroundColor: const Color(0xFF1877F2),
+                                    backgroundColor:
+                                        const Color(0xFF1877F2),
                                     foregroundColor: Colors.white,
-                                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-                                    padding: const EdgeInsets.symmetric(vertical: 12),
+                                    shape: RoundedRectangleBorder(
+                                        borderRadius:
+                                            BorderRadius.circular(8)),
+                                    padding: const EdgeInsets.symmetric(
+                                        vertical: 12),
                                     elevation: 0,
                                   ),
-                                  icon: const Icon(Icons.edit_rounded, size: 18),
-                                  label: const Text('Edit Profile', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
+                                  icon: const Icon(Icons.edit_rounded,
+                                      size: 18),
+                                  label: const Text('Edit Profile',
+                                      style: TextStyle(
+                                          fontWeight: FontWeight.bold,
+                                          fontSize: 13)),
                                   onPressed: () {
                                     Navigator.of(context).push(
                                       MaterialPageRoute(
-                                        builder: (_) => CreateGamerIdScreen(isEditing: true, existingUser: user),
+                                        builder: (_) =>
+                                            CreateGamerIdScreen(
+                                          isEditing: true,
+                                          existingUser: user,
+                                        ),
                                       ),
                                     );
                                   },
@@ -1524,66 +1177,118 @@ class _GamerProfileScreenState extends State<GamerProfileScreen> with SingleTick
                               const SizedBox(width: 8),
                               OutlinedButton.icon(
                                 style: OutlinedButton.styleFrom(
-                                  backgroundColor: const Color(0xFFE4E6EB),
-                                  foregroundColor: const Color(0xFF050505),
+                                  backgroundColor:
+                                      const Color(0xFFE4E6EB),
+                                  foregroundColor:
+                                      const Color(0xFF050505),
                                   side: BorderSide.none,
-                                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-                                  padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 12),
+                                  shape: RoundedRectangleBorder(
+                                      borderRadius:
+                                          BorderRadius.circular(8)),
+                                  padding: const EdgeInsets.symmetric(
+                                      vertical: 12, horizontal: 12),
                                 ),
-                                icon: const Icon(Icons.add_photo_alternate_rounded, size: 18, color: Color(0xFF65676B)),
-                                label: const Text('Cover', style: TextStyle(color: Color(0xFF050505), fontWeight: FontWeight.bold, fontSize: 13)),
-                                onPressed: () => _showChangeCoverSheet(context, user),
+                                icon: const Icon(
+                                    Icons.add_photo_alternate_rounded,
+                                    size: 18,
+                                    color: Color(0xFF65676B)),
+                                label: const Text('Cover',
+                                    style: TextStyle(
+                                        color: Color(0xFF050505),
+                                        fontWeight: FontWeight.bold,
+                                        fontSize: 13)),
+                                onPressed: () =>
+                                    _showChangeCoverSheet(context, user),
                               ),
                               const SizedBox(width: 8),
                               OutlinedButton.icon(
                                 style: OutlinedButton.styleFrom(
-                                  backgroundColor: const Color(0xFFE4E6EB),
-                                  foregroundColor: const Color(0xFF050505),
+                                  backgroundColor:
+                                      const Color(0xFFE4E6EB),
+                                  foregroundColor:
+                                      const Color(0xFF050505),
                                   side: BorderSide.none,
-                                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-                                  padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 12),
+                                  shape: RoundedRectangleBorder(
+                                      borderRadius:
+                                          BorderRadius.circular(8)),
+                                  padding: const EdgeInsets.symmetric(
+                                      vertical: 12, horizontal: 12),
                                 ),
-                                icon: const Icon(Icons.share_rounded, size: 18, color: Color(0xFF65676B)),
-                                label: const Text('Share', style: TextStyle(color: Color(0xFF050505), fontWeight: FontWeight.bold, fontSize: 13)),
+                                icon: const Icon(Icons.share_rounded,
+                                    size: 18,
+                                    color: Color(0xFF65676B)),
+                                label: const Text('Share',
+                                    style: TextStyle(
+                                        color: Color(0xFF050505),
+                                        fontWeight: FontWeight.bold,
+                                        fontSize: 13)),
                                 onPressed: () => _shareProfile(user),
                               ),
                             ] else ...[
-                              // Follow / Unfollow Button
                               Expanded(
                                 flex: 3,
                                 child: StreamBuilder<bool>(
-                                  stream: _socialService.isFollowingStream(currentUid, user.uid),
+                                  stream: _socialService
+                                      .isFollowingStream(
+                                          currentUid, user.uid),
                                   builder: (context, snap) {
-                                    final isFollowing = snap.data ?? false;
+                                    final isFollowing =
+                                        snap.data ?? false;
                                     return ElevatedButton.icon(
                                       style: ElevatedButton.styleFrom(
-                                        backgroundColor: isFollowing ? const Color(0xFFE4E6EB) : const Color(0xFF1877F2),
-                                        foregroundColor: isFollowing ? const Color(0xFF050505) : Colors.white,
+                                        backgroundColor: isFollowing
+                                            ? const Color(0xFFE4E6EB)
+                                            : const Color(0xFF1877F2),
+                                        foregroundColor: isFollowing
+                                            ? const Color(0xFF050505)
+                                            : Colors.white,
                                         shape: RoundedRectangleBorder(
-                                          borderRadius: BorderRadius.circular(8),
-                                        ),
-                                        padding: const EdgeInsets.symmetric(vertical: 12),
+                                            borderRadius:
+                                                BorderRadius.circular(
+                                                    8)),
+                                        padding:
+                                            const EdgeInsets.symmetric(
+                                                vertical: 12),
                                         elevation: 0,
                                       ),
                                       icon: Icon(
-                                        isFollowing ? Icons.check_rounded : Icons.person_add_rounded,
+                                        isFollowing
+                                            ? Icons.check_rounded
+                                            : Icons.person_add_rounded,
                                         size: 16,
-                                        color: isFollowing ? const Color(0xFF34A853) : Colors.white,
+                                        color: isFollowing
+                                            ? const Color(0xFF34A853)
+                                            : Colors.white,
                                       ),
                                       label: Text(
-                                        isFollowing ? 'Following' : 'Follow',
+                                        isFollowing
+                                            ? 'Following'
+                                            : 'Follow',
                                         style: TextStyle(
                                           fontWeight: FontWeight.bold,
                                           fontSize: 12.5,
-                                          color: isFollowing ? const Color(0xFF050505) : Colors.white,
+                                          color: isFollowing
+                                              ? const Color(
+                                                  0xFF050505)
+                                              : Colors.white,
                                         ),
                                       ),
                                       onPressed: () async {
                                         if (currentUid.isEmpty) return;
                                         if (isFollowing) {
-                                          await _socialService.unfollowUser(currentUid: currentUid, targetUid: user.uid);
+                                          await _socialService
+                                              .unfollowUser(
+                                                  currentUid:
+                                                      currentUid,
+                                                  targetUid:
+                                                      user.uid);
                                         } else {
-                                          await _socialService.followUser(currentUid: currentUid, targetUid: user.uid);
+                                          await _socialService
+                                              .followUser(
+                                                  currentUid:
+                                                      currentUid,
+                                                  targetUid:
+                                                      user.uid);
                                         }
                                       },
                                     );
@@ -1591,19 +1296,26 @@ class _GamerProfileScreenState extends State<GamerProfileScreen> with SingleTick
                                 ),
                               ),
                               const SizedBox(width: 8),
-
-                              // 1v1 Challenge Button
                               Expanded(
                                 flex: 3,
                                 child: OutlinedButton.icon(
                                   style: OutlinedButton.styleFrom(
-                                    side: const BorderSide(color: Color(0xFFF87171), width: 1.2),
-                                    backgroundColor: const Color(0xFFFEE2E2),
-                                    foregroundColor: const Color(0xFFDC2626),
-                                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-                                    padding: const EdgeInsets.symmetric(vertical: 12),
+                                    side: const BorderSide(
+                                        color: Color(0xFFF87171),
+                                        width: 1.2),
+                                    backgroundColor:
+                                        const Color(0xFFFEE2E2),
+                                    foregroundColor:
+                                        const Color(0xFFDC2626),
+                                    shape: RoundedRectangleBorder(
+                                        borderRadius:
+                                            BorderRadius.circular(8)),
+                                    padding: const EdgeInsets.symmetric(
+                                        vertical: 12),
                                   ),
-                                  icon: const Text('⚔️', style: TextStyle(fontSize: 14)),
+                                  icon: const Text('⚔️',
+                                      style:
+                                          TextStyle(fontSize: 14)),
                                   label: const Text(
                                     '1v1 Battle',
                                     style: TextStyle(
@@ -1612,39 +1324,35 @@ class _GamerProfileScreenState extends State<GamerProfileScreen> with SingleTick
                                       color: Color(0xFFDC2626),
                                     ),
                                   ),
-                                  onPressed: () => _show1v1ChallengeDialog(user),
+                                  onPressed: () =>
+                                      _show1v1ChallengeDialog(user),
                                 ),
                               ),
                               const SizedBox(width: 8),
-
-                              // Share Button
                               IconButton(
                                 style: IconButton.styleFrom(
-                                  backgroundColor: const Color(0xFFE4E6EB),
+                                  backgroundColor:
+                                      const Color(0xFFE4E6EB),
                                   shape: RoundedRectangleBorder(
-                                    borderRadius: BorderRadius.circular(8),
+                                    borderRadius:
+                                        BorderRadius.circular(8),
                                   ),
                                   padding: const EdgeInsets.all(10),
                                 ),
-                                icon: const Icon(Icons.share_rounded, size: 18, color: Color(0xFF65676B)),
+                                icon: const Icon(Icons.share_rounded,
+                                    size: 18,
+                                    color: Color(0xFF65676B)),
                                 onPressed: () => _shareProfile(user),
                               ),
                             ],
                           ],
                         ),
-
-                        const SizedBox(height: 14),
-
-                        // Multi-Game Rank Verification Section
-                        _buildGameRanksSection(user, isOwnProfile),
-
                         const SizedBox(height: 16),
                       ],
                     ),
                   ),
                 ),
 
-                // Facebook-Style Tabs: Posts | About
                 SliverPersistentHeader(
                   pinned: true,
                   delegate: _SliverTabBarDelegate(
@@ -1654,10 +1362,18 @@ class _GamerProfileScreenState extends State<GamerProfileScreen> with SingleTick
                       indicatorWeight: 3,
                       labelColor: const Color(0xFF1877F2),
                       unselectedLabelColor: const Color(0xFF65676B),
-                      labelStyle: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
+                      labelStyle: const TextStyle(
+                          fontWeight: FontWeight.bold, fontSize: 14),
                       tabs: const [
-                        Tab(icon: Icon(Icons.grid_view_rounded, size: 18), text: 'Posts'),
-                        Tab(icon: Icon(Icons.info_outline_rounded, size: 18), text: 'About'),
+                        Tab(
+                            icon: Icon(Icons.grid_view_rounded,
+                                size: 18),
+                            text: 'Posts'),
+                        Tab(
+                            icon: Icon(
+                                Icons.info_outline_rounded,
+                                size: 18),
+                            text: 'About'),
                       ],
                     ),
                   ),
@@ -1667,13 +1383,10 @@ class _GamerProfileScreenState extends State<GamerProfileScreen> with SingleTick
             body: TabBarView(
               controller: _tabController,
               children: [
-                // Tab 1: Posts Tab (Shows merged text posts & video clips)
                 PostsTab(
                   user: user,
                   isOwnProfile: isOwnProfile,
                 ),
-
-                // Tab 2: About Tab (Facebook-style info card)
                 SingleChildScrollView(
                   padding: const EdgeInsets.all(20),
                   child: Column(
@@ -1693,272 +1406,14 @@ class _GamerProfileScreenState extends State<GamerProfileScreen> with SingleTick
                         color: gameColor,
                       ),
                       const SizedBox(height: 12),
-                      if (user.rank.isNotEmpty &&
-                          user.rank.toLowerCase() != 'none' &&
-                          user.rank.toLowerCase() != 'skip' &&
-                          (user.isRankApproved || user.isRankPending || user.rankStatus.toLowerCase() == 'pending')) ...[
-                        _buildAboutCard(
-                          icon: Icons.military_tech_outlined,
-                          title: 'Competitive Rank',
-                          value: user.isRankApproved
-                              ? '${user.selectedGame.isNotEmpty ? "${user.selectedGame}: " : ""}${user.rank} (Verified ✓)'
-                              : '${user.selectedGame.isNotEmpty ? "${user.selectedGame}: " : ""}${user.rank} (Pending Verification)',
-                          color: user.isRankApproved ? const Color(0xFF00FF88) : const Color(0xFFFFD700),
-                        ),
-                        const SizedBox(height: 12),
-                      ],
-                      const SizedBox(height: 12),
                       _buildAboutCard(
                         icon: Icons.calendar_today_outlined,
                         title: 'Member Since',
                         value: user.createdAt != null
-                            ? DateFormat('MMMM yyyy').format(user.createdAt!)
+                            ? DateFormat('MMMM yyyy')
+                                .format(user.createdAt!)
                             : '2026',
                         color: GamerTheme.accentBlue,
-                      ),
-                      const SizedBox(height: 24),
-                      Material(
-                        color: Colors.transparent,
-                        child: InkWell(
-                          borderRadius: BorderRadius.circular(12),
-                          onTap: () {
-                            Navigator.push(
-                              context,
-                              MaterialPageRoute(builder: (_) => VerificationScreen(user: user)),
-                            );
-                          },
-                          child: Container(
-                            padding: const EdgeInsets.all(16),
-                            decoration: BoxDecoration(
-                              color: Colors.white,
-                              borderRadius: BorderRadius.circular(12),
-                              border: Border.all(
-                                color: const Color(0xFFCED0D4),
-                                width: 1.0,
-                              ),
-                              boxShadow: [
-                                BoxShadow(
-                                  color: Colors.black.withOpacity(0.04),
-                                  blurRadius: 4,
-                                  offset: const Offset(0, 1),
-                                ),
-                              ],
-                            ),
-                            child: Row(
-                              children: [
-                                Container(
-                                  padding: const EdgeInsets.all(12),
-                                  decoration: const BoxDecoration(
-                                    color: Color(0xFFE7F3FF),
-                                    shape: BoxShape.circle,
-                                  ),
-                                  child: const Icon(
-                                    Icons.verified_user_rounded,
-                                    color: Color(0xFF1877F2),
-                                    size: 24,
-                                  ),
-                                ),
-                                const SizedBox(width: 14),
-                                Expanded(
-                                  child: Column(
-                                    crossAxisAlignment: CrossAxisAlignment.start,
-                                    children: [
-                                      Row(
-                                        children: [
-                                          Text(
-                                            user.isVerifiedBadge
-                                                ? 'Official Verified Gamer ID'
-                                                : (user.isPendingVerification ? 'Verification Under Review 24h' : 'Blue Tick Verification'),
-                                            style: const TextStyle(
-                                              color: Color(0xFF050505),
-                                              fontWeight: FontWeight.bold,
-                                              fontSize: 14,
-                                            ),
-                                          ),
-                                          const SizedBox(width: 6),
-                                          if (user.isVerifiedBadge)
-                                            const Icon(Icons.verified, color: Color(0xFF1877F2), size: 16)
-                                          else if (user.isPendingVerification)
-                                            Container(
-                                              padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1),
-                                              decoration: BoxDecoration(
-                                                color: const Color(0xFFFEF7E0),
-                                                borderRadius: BorderRadius.circular(4),
-                                                border: Border.all(color: const Color(0xFFF9AB00)),
-                                              ),
-                                              child: const Text('24H REVIEW', style: TextStyle(color: Color(0xFFB06000), fontSize: 8.5, fontWeight: FontWeight.bold)),
-                                            ),
-                                        ],
-                                      ),
-                                      const SizedBox(height: 2),
-                                      Text(
-                                        user.isVerifiedBadge
-                                            ? 'Blue Tick active • All 6 BGMI integrity requirements verified.'
-                                            : (user.isPendingVerification
-                                                ? 'Application submitted • Verifying requirements in 24h.'
-                                                : 'View 6 requirements checklist & apply for Blue Tick ✓'),
-                                        style: const TextStyle(color: Color(0xFF65676B), fontSize: 11),
-                                      ),
-                                    ],
-                                  ),
-                                ),
-                                const SizedBox(width: 8),
-                                const Icon(Icons.arrow_forward_ios_rounded, color: Color(0xFF65676B), size: 14),
-                              ],
-                            ),
-                          ),
-                        ),
-                      ),
-                      // Day / Night Mode Setting Card
-                      const SizedBox(height: 12),
-                      ValueListenableBuilder<ThemeMode>(
-                        valueListenable: ThemeService.themeModeNotifier,
-                        builder: (context, mode, _) {
-                          final isDark = mode == ThemeMode.dark;
-                          return Container(
-                            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-                            decoration: BoxDecoration(
-                              color: isDark ? const Color(0xFF1E293B) : Colors.white,
-                              borderRadius: BorderRadius.circular(12),
-                              border: Border.all(
-                                color: const Color(0xFFCED0D4),
-                              ),
-                              boxShadow: [
-                                BoxShadow(
-                                  color: Colors.black.withOpacity(0.04),
-                                  blurRadius: 4,
-                                  offset: const Offset(0, 1),
-                                ),
-                              ],
-                            ),
-                            child: Row(
-                              children: [
-                                Container(
-                                  padding: const EdgeInsets.all(10),
-                                  decoration: BoxDecoration(
-                                    color: isDark ? const Color(0xFF334155) : const Color(0xFFFEF7E0),
-                                    borderRadius: BorderRadius.circular(10),
-                                  ),
-                                  child: Icon(
-                                    isDark ? Icons.dark_mode_rounded : Icons.light_mode_rounded,
-                                    color: isDark ? const Color(0xFFFFD700) : const Color(0xFFF59E0B),
-                                    size: 22,
-                                  ),
-                                ),
-                                const SizedBox(width: 14),
-                                Expanded(
-                                  child: Column(
-                                    crossAxisAlignment: CrossAxisAlignment.start,
-                                    children: [
-                                      Text(
-                                        isDark ? 'Night Mode' : 'Day Mode (Default)',
-                                        style: TextStyle(
-                                          fontWeight: FontWeight.bold,
-                                          fontSize: 14,
-                                          color: isDark ? Colors.white : const Color(0xFF050505),
-                                        ),
-                                      ),
-                                      const SizedBox(height: 2),
-                                      Text(
-                                        isDark
-                                            ? 'Dark aesthetic for night gaming sessions'
-                                            : 'Bright, clean interface for daytime gaming',
-                                        style: const TextStyle(
-                                          color: Color(0xFF65676B),
-                                          fontSize: 11,
-                                        ),
-                                      ),
-                                    ],
-                                  ),
-                                ),
-                                Switch.adaptive(
-                                  value: isDark,
-                                  activeColor: const Color(0xFF1877F2),
-                                  onChanged: (val) {
-                                    ThemeService.setTheme(val);
-                                  },
-                                ),
-                              ],
-                            ),
-                          );
-                        },
-                      ),
-                      // Follow Us Social Card
-                      const SizedBox(height: 12),
-                      Material(
-                        color: Colors.transparent,
-                        child: InkWell(
-                          borderRadius: BorderRadius.circular(12),
-                          onTap: () {
-                            Navigator.push(
-                              context,
-                              MaterialPageRoute(builder: (_) => const FollowUsScreen()),
-                            );
-                          },
-                          child: Container(
-                            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
-                            decoration: BoxDecoration(
-                              color: Colors.white,
-                              borderRadius: BorderRadius.circular(12),
-                              border: Border.all(
-                                color: const Color(0xFFCED0D4),
-                              ),
-                              boxShadow: [
-                                BoxShadow(
-                                  color: Colors.black.withOpacity(0.04),
-                                  blurRadius: 4,
-                                  offset: const Offset(0, 1),
-                                ),
-                              ],
-                            ),
-                            child: Row(
-                              children: [
-                                Container(
-                                  padding: const EdgeInsets.all(10),
-                                  decoration: const BoxDecoration(
-                                    color: Color(0xFFE7F3FF),
-                                    shape: BoxShape.circle,
-                                  ),
-                                  child: const Icon(
-                                    Icons.share_rounded,
-                                    color: Color(0xFF1877F2),
-                                    size: 20,
-                                  ),
-                                ),
-                                const SizedBox(width: 14),
-                                Expanded(
-                                  child: Column(
-                                    crossAxisAlignment: CrossAxisAlignment.start,
-                                    children: [
-                                      Text(
-                                        'Follow Us',
-                                        style: TextStyle(
-                                          fontWeight: FontWeight.bold,
-                                          fontSize: 14,
-                                          color: Color(0xFF050505),
-                                        ),
-                                      ),
-                                      SizedBox(height: 2),
-                                      Text(
-                                        'YouTube, Instagram, TikTok & Facebook channels',
-                                        style: TextStyle(
-                                          color: Color(0xFF65676B),
-                                          fontSize: 11,
-                                        ),
-                                      ),
-                                    ],
-                                  ),
-                                ),
-                                SizedBox(width: 8),
-                                Icon(
-                                  Icons.arrow_forward_ios_rounded,
-                                  color: Color(0xFF65676B),
-                                  size: 14,
-                                ),
-                              ],
-                            ),
-                          ),
-                        ),
                       ),
                     ],
                   ),
@@ -2005,9 +1460,17 @@ class _GamerProfileScreenState extends State<GamerProfileScreen> with SingleTick
           Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Text(title, style: const TextStyle(color: Color(0xFF65676B), fontSize: 11, fontWeight: FontWeight.bold)),
+              Text(title,
+                  style: const TextStyle(
+                      color: Color(0xFF65676B),
+                      fontSize: 11,
+                      fontWeight: FontWeight.bold)),
               const SizedBox(height: 2),
-              Text(value, style: const TextStyle(color: Color(0xFF050505), fontSize: 14.5, fontWeight: FontWeight.w800)),
+              Text(value,
+                  style: const TextStyle(
+                      color: Color(0xFF050505),
+                      fontSize: 14.5,
+                      fontWeight: FontWeight.w800)),
             ],
           ),
         ],
@@ -2015,347 +1478,16 @@ class _GamerProfileScreenState extends State<GamerProfileScreen> with SingleTick
     );
   }
 
-  // ===================== MULTI-GAME RANK VERIFICATION =====================
-
-  static const Map<String, List<String>> _kGameRankOptions = {
-    'BGMI': [
-      'Crown I',
-      'Crown II',
-      'Crown III',
-      'Crown IV',
-      'Crown V',
-      'ACE',
-      'ACE Master',
-      'ACE Dominator',
-      'Conqueror',
-      'Top 100 Conqueror',
-    ],
-    'PUBG Mobile': [
-      'Crown I',
-      'Crown II',
-      'Crown III',
-      'Crown IV',
-      'Crown V',
-      'ACE',
-      'ACE Master',
-      'ACE Dominator',
-      'Conqueror',
-      'Top 100 Conqueror',
-    ],
-    'Free Fire': [
-      'Diamond V',
-      'Heroic',
-      'Elite Heroic',
-      'Master',
-      'Elite Master',
-      'Grandmaster',
-      'Top 300 Grandmaster',
-      'Top 100 Grandmaster',
-      'Regional Top',
-      'World Top',
-    ],
-    'COD Mobile': [
-      'Pro III',
-      'Pro IV',
-      'Pro V',
-      'Master I',
-      'Master II',
-      'Master III',
-      'Master IV',
-      'Master V',
-      'Legendary',
-      'Top 5000 Legendary',
-    ],
-    'Valorant': [
-      'Diamond 3',
-      'Ascendant 1',
-      'Ascendant 2',
-      'Ascendant 3',
-      'Immortal 1',
-      'Immortal 2',
-      'Immortal 3',
-      'Radiant',
-      'Top 500 Radiant',
-      'Regional Radiant',
-    ],
-  };
-
-  IconData _getGameIcon(String gameName) {
-    switch (gameName) {
-      case 'BGMI':
-      case 'PUBG Mobile':
-        return Icons.sports_esports_rounded;
-      case 'Free Fire':
-        return Icons.local_fire_department_rounded;
-      case 'COD Mobile':
-        return Icons.military_tech_rounded;
-      case 'Valorant':
-        return Icons.change_history_rounded;
-      default:
-        return Icons.videogame_asset_rounded;
-    }
-  }
-
-  Color _getGameAccentColor(String gameName) {
-    switch (gameName) {
-      case 'BGMI':
-        return const Color(0xFFFF8A00);
-      case 'PUBG Mobile':
-        return const Color(0xFFFFB800);
-      case 'Free Fire':
-        return const Color(0xFFFF334B);
-      case 'COD Mobile':
-        return const Color(0xFF00FF88);
-      case 'Valorant':
-        return const Color(0xFFFF4655);
-      default:
-        return const Color(0xFF1877F2);
-    }
-  }
-
-  Widget _buildGameRanksSection(GamerUser user, bool isOwnProfile) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Row(
-          children: [
-            const Icon(Icons.military_tech_rounded, size: 16, color: Color(0xFF1877F2)),
-            const SizedBox(width: 6),
-            const Text(
-              'VERIFIED GAME RANKS',
-              style: TextStyle(
-                color: Color(0xFF65676B),
-                fontSize: 12,
-                fontWeight: FontWeight.bold,
-                letterSpacing: 0.8,
-              ),
-            ),
-            const Spacer(),
-            if (isOwnProfile)
-              OutlinedButton.icon(
-                onPressed: () => _showAddVerifyGameRankSheet(user),
-                style: OutlinedButton.styleFrom(
-                  side: const BorderSide(color: Color(0xFF1877F2), width: 1.0),
-                  backgroundColor: const Color(0xFFE7F3FF),
-                  foregroundColor: const Color(0xFF1877F2),
-                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                  minimumSize: Size.zero,
-                  tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-                ),
-                icon: const Icon(Icons.add_moderator_rounded, size: 14),
-                label: const Text(
-                  'Add / Verify Game Rank',
-                  style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold),
-                ),
-              ),
-          ],
-        ),
-        const SizedBox(height: 10),
-
-        if (user.games.isEmpty) ...[
-          Container(
-            width: double.infinity,
-            padding: const EdgeInsets.all(16),
-            decoration: BoxDecoration(
-              color: Colors.white,
-              borderRadius: BorderRadius.circular(12),
-              border: Border.all(color: const Color(0xFFCED0D4)),
-              boxShadow: [
-                BoxShadow(
-                  color: Colors.black.withOpacity(0.04),
-                  blurRadius: 4,
-                  offset: const Offset(0, 1),
-                ),
-              ],
-            ),
-            child: Column(
-              children: [
-                const Icon(Icons.shield_outlined, color: Color(0xFF65676B), size: 30),
-                const SizedBox(height: 8),
-                const Text(
-                  'No verified game ranks yet (Optional)',
-                  style: TextStyle(color: Color(0xFF050505), fontWeight: FontWeight.bold, fontSize: 13),
-                ),
-                const SizedBox(height: 4),
-                Text(
-                  isOwnProfile
-                      ? 'Submit your in-game UID and rank screenshot proof to get official verified status! (100% Optional for Pro Players)'
-                      : 'This player has not verified any competitive game ranks yet.',
-                  textAlign: TextAlign.center,
-                  style: const TextStyle(color: Color(0xFF65676B), fontSize: 11.5),
-                ),
-                if (isOwnProfile) ...[
-                  const SizedBox(height: 12),
-                  ElevatedButton.icon(
-                    onPressed: () => _showAddVerifyGameRankSheet(user),
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: const Color(0xFF1877F2),
-                      foregroundColor: Colors.white,
-                      elevation: 0,
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-                      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                    ),
-                    icon: const Icon(Icons.add_photo_alternate_rounded, size: 16),
-                    label: const Text(
-                      'Add / Verify Game Rank',
-                      style: TextStyle(fontWeight: FontWeight.bold, fontSize: 11.5),
-                    ),
-                  ),
-                ],
-              ],
-            ),
-          ),
-        ] else ...[
-          Column(
-            children: user.games.map((game) {
-              final isApproved = game.status == 'approved' || game.isVerified;
-              final isPending = game.status == 'pending';
-              final isRejected = game.status == 'rejected';
-              final gameColor = _getGameAccentColor(game.gameName);
-
-              final Color statusBg = isApproved
-                  ? const Color(0xFFE6F4EA)
-                  : (isPending ? const Color(0xFFFEF7E0) : const Color(0xFFFCE8E6));
-
-              final Color statusBorder = isApproved
-                  ? const Color(0xFF34A853)
-                  : (isPending ? const Color(0xFFF9AB00) : const Color(0xFFEA4335));
-
-              final Color statusText = isApproved
-                  ? const Color(0xFF137333)
-                  : (isPending ? const Color(0xFFB06000) : const Color(0xFFC5221F));
-
-              final String statusLabel = isApproved
-                  ? 'Verified ✓'
-                  : (isPending ? 'Pending' : 'Rejected');
-
-              return Container(
-                margin: const EdgeInsets.only(bottom: 8),
-                padding: const EdgeInsets.all(12),
-                decoration: BoxDecoration(
-                  color: Colors.white,
-                  borderRadius: BorderRadius.circular(12),
-                  border: Border.all(color: const Color(0xFFCED0D4)),
-                  boxShadow: [
-                    BoxShadow(
-                      color: Colors.black.withOpacity(0.04),
-                      blurRadius: 4,
-                      offset: const Offset(0, 1),
-                    ),
-                  ],
-                ),
-                child: Row(
-                  children: [
-                    // Game Logo / Icon
-                    Container(
-                      padding: const EdgeInsets.all(10),
-                      decoration: BoxDecoration(
-                        color: const Color(0xFFF0F2F5),
-                        borderRadius: BorderRadius.circular(10),
-                      ),
-                      child: Icon(_getGameIcon(game.gameName), color: const Color(0xFF1877F2), size: 20),
-                    ),
-                    const SizedBox(width: 12),
-
-                    // Game Details
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Row(
-                            children: [
-                              Text(
-                                game.gameName,
-                                style: const TextStyle(
-                                  color: Color(0xFF050505),
-                                  fontWeight: FontWeight.bold,
-                                  fontSize: 13,
-                                ),
-                              ),
-                              const SizedBox(width: 8),
-                              Container(
-                                padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                                decoration: BoxDecoration(
-                                  color: statusBg,
-                                  borderRadius: BorderRadius.circular(6),
-                                  border: Border.all(color: statusBorder.withOpacity(0.5)),
-                                ),
-                                child: Text(
-                                  statusLabel,
-                                  style: TextStyle(
-                                    color: statusText,
-                                    fontSize: 10.5,
-                                    fontWeight: FontWeight.bold,
-                                  ),
-                                ),
-                              ),
-                            ],
-                          ),
-                          const SizedBox(height: 3),
-                          Text(
-                            'UID: ${game.gameId}',
-                            style: const TextStyle(color: Color(0xFF65676B), fontSize: 11.5, fontWeight: FontWeight.w600),
-                          ),
-                          const SizedBox(height: 2),
-                          Row(
-                            children: [
-                              Text(
-                                isApproved && game.verifiedRank.isNotEmpty
-                                    ? 'Verified Rank: ${game.verifiedRank}'
-                                    : 'Claimed Rank: ${game.claimedRank}',
-                                style: TextStyle(
-                                  color: isApproved ? const Color(0xFF137333) : const Color(0xFF050505),
-                                  fontSize: 11.5,
-                                  fontWeight: FontWeight.w700,
-                                ),
-                              ),
-                              if (isApproved) ...[
-                                const SizedBox(width: 4),
-                                const Icon(Icons.check_circle_rounded, color: Color(0xFF34A853), size: 13),
-                              ],
-                            ],
-                          ),
-                          if (isRejected && game.rejectReason != null && game.rejectReason!.isNotEmpty) ...[
-                            const SizedBox(height: 3),
-                            Text(
-                              'Reason: ${game.rejectReason}',
-                              style: const TextStyle(color: Color(0xFFC5221F), fontSize: 11),
-                            ),
-                          ],
-                        ],
-                      ),
-                    ),
-
-                    // Proof thumbnail button if screenshot exists
-                    if (game.screenshotUrl.isNotEmpty) ...[
-                      const SizedBox(width: 8),
-                      IconButton(
-                        tooltip: 'View Screenshot Proof',
-                        icon: const Icon(Icons.photo_library_outlined, size: 20, color: Color(0xFF1877F2)),
-                        onPressed: () => _showScreenshotProofDialog(
-                          imageUrl: game.screenshotUrl,
-                          title: '${game.gameName} Rank Proof • UID: ${game.gameId}',
-                        ),
-                      ),
-                    ],
-                  ],
-                ),
-              );
-            }).toList(),
-          ),
-        ],
-      ],
-    );
-  }
-
-  void _showFullScreenPhotoViewer({required String imageUrl, required String title}) {
+  void _showFullScreenPhotoViewer(
+      {required String imageUrl, required String title}) {
     showDialog(
       context: context,
       builder: (ctx) => Dialog(
         backgroundColor: Colors.black.withOpacity(0.92),
-        insetPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 24),
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        insetPadding:
+            const EdgeInsets.symmetric(horizontal: 12, vertical: 24),
+        shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(16)),
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
@@ -2366,12 +1498,16 @@ class _GamerProfileScreenState extends State<GamerProfileScreen> with SingleTick
                   Expanded(
                     child: Text(
                       title,
-                      style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 14),
+                      style: const TextStyle(
+                          color: Colors.white,
+                          fontWeight: FontWeight.bold,
+                          fontSize: 14),
                       overflow: TextOverflow.ellipsis,
                     ),
                   ),
                   IconButton(
-                    icon: const Icon(Icons.close, color: Colors.white, size: 22),
+                    icon: const Icon(Icons.close,
+                        color: Colors.white, size: 22),
                     onPressed: () => Navigator.pop(ctx),
                   ),
                 ],
@@ -2388,95 +1524,22 @@ class _GamerProfileScreenState extends State<GamerProfileScreen> with SingleTick
                   boundaryMargin: const EdgeInsets.all(20),
                   minScale: 0.8,
                   maxScale: 4.0,
-                  child: imageUrl.startsWith('http')
-                      ? CachedNetworkImage(
-                          imageUrl: imageUrl,
-                          fit: BoxFit.contain,
-                          placeholder: (_, __) => const Center(
-                            child: Padding(
-                              padding: EdgeInsets.all(48),
-                              child: CircularProgressIndicator(color: GamerTheme.accentOrange),
-                            ),
-                          ),
-                          errorWidget: (_, __, ___) => const Padding(
-                            padding: EdgeInsets.all(48),
-                            child: Icon(Icons.broken_image_rounded, color: Colors.red, size: 48),
-                          ),
-                        )
-                      : Image.file(
-                          File(imageUrl),
-                          fit: BoxFit.contain,
-                          errorBuilder: (_, __, ___) => const Padding(
-                            padding: EdgeInsets.all(48),
-                            child: Icon(Icons.broken_image_rounded, color: Colors.red, size: 48),
-                          ),
-                        ),
-                ),
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  void _showScreenshotProofDialog({required String imageUrl, required String title}) {
-    showDialog(
-      context: context,
-      builder: (ctx) => Dialog(
-        backgroundColor: const Color(0xFF10141D),
-        insetPadding: const EdgeInsets.all(16),
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Padding(
-              padding: const EdgeInsets.fromLTRB(16, 12, 8, 12),
-              child: Row(
-                children: [
-                  Expanded(
-                    child: Text(
-                      title,
-                      style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 13.5),
-                      overflow: TextOverflow.ellipsis,
+                  child: CachedNetworkImage(
+                    imageUrl: imageUrl,
+                    fit: BoxFit.contain,
+                    placeholder: (_, __) => const Center(
+                      child: Padding(
+                        padding: EdgeInsets.all(48),
+                        child: CircularProgressIndicator(
+                            color: GamerTheme.accentOrange),
+                      ),
+                    ),
+                    errorWidget: (_, __, ___) => const Padding(
+                      padding: EdgeInsets.all(48),
+                      child: Icon(Icons.broken_image_rounded,
+                          color: Colors.red, size: 48),
                     ),
                   ),
-                  IconButton(
-                    icon: const Icon(Icons.close, color: Colors.white70, size: 20),
-                    onPressed: () => Navigator.pop(ctx),
-                  ),
-                ],
-              ),
-            ),
-            Flexible(
-              child: ClipRRect(
-                borderRadius: const BorderRadius.only(
-                  bottomLeft: Radius.circular(16),
-                  bottomRight: Radius.circular(16),
-                ),
-                child: InteractiveViewer(
-                  maxScale: 4.0,
-                  child: imageUrl.startsWith('http')
-                      ? CachedNetworkImage(
-                          imageUrl: imageUrl,
-                          fit: BoxFit.contain,
-                          placeholder: (_, __) => const Padding(
-                            padding: EdgeInsets.all(48),
-                            child: CircularProgressIndicator(color: Color(0xFF1877F2)),
-                          ),
-                          errorWidget: (_, __, ___) => const Padding(
-                            padding: EdgeInsets.all(48),
-                            child: Icon(Icons.broken_image_rounded, color: Colors.red, size: 48),
-                          ),
-                        )
-                      : Image.file(
-                          File(imageUrl),
-                          fit: BoxFit.contain,
-                          errorBuilder: (_, __, ___) => const Padding(
-                            padding: EdgeInsets.all(48),
-                            child: Icon(Icons.broken_image_rounded, color: Colors.red, size: 48),
-                          ),
-                        ),
                 ),
               ),
             ),
@@ -2502,7 +1565,6 @@ class _GamerProfileScreenState extends State<GamerProfileScreen> with SingleTick
             child: Column(
               mainAxisSize: MainAxisSize.min,
               children: [
-                // Top drag bar
                 Container(
                   width: 44,
                   height: 4.5,
@@ -2522,7 +1584,8 @@ class _GamerProfileScreenState extends State<GamerProfileScreen> with SingleTick
                           color: Color(0xFFE7F3FF),
                           shape: BoxShape.circle,
                         ),
-                        child: const Icon(Icons.tune_rounded, color: Color(0xFF1877F2), size: 20),
+                        child: const Icon(Icons.tune_rounded,
+                            color: Color(0xFF1877F2), size: 20),
                       ),
                       const SizedBox(width: 12),
                       const Expanded(
@@ -2536,7 +1599,8 @@ class _GamerProfileScreenState extends State<GamerProfileScreen> with SingleTick
                         ),
                       ),
                       IconButton(
-                        icon: const Icon(Icons.close_rounded, color: Color(0xFF65676B), size: 22),
+                        icon: const Icon(Icons.close_rounded,
+                            color: Color(0xFF65676B), size: 22),
                         onPressed: () => Navigator.pop(ctx),
                       ),
                     ],
@@ -2544,8 +1608,6 @@ class _GamerProfileScreenState extends State<GamerProfileScreen> with SingleTick
                 ),
                 const SizedBox(height: 8),
                 const Divider(color: Color(0xFFCED0D4), height: 1),
-
-                // 1. My Gamer ID (Profile / Dashboard)
                 ListTile(
                   leading: Container(
                     padding: const EdgeInsets.all(8),
@@ -2553,83 +1615,82 @@ class _GamerProfileScreenState extends State<GamerProfileScreen> with SingleTick
                       color: Color(0xFFE7F3FF),
                       shape: BoxShape.circle,
                     ),
-                    child: const Icon(Icons.person_pin_rounded, color: Color(0xFF1877F2), size: 20),
+                    child: const Icon(Icons.person_pin_rounded,
+                        color: Color(0xFF1877F2), size: 20),
                   ),
                   title: Text(
-                    isOwnProfile ? 'My Gamer Profile' : '@${user.username}\'s Profile',
-                    style: const TextStyle(color: Color(0xFF050505), fontWeight: FontWeight.bold, fontSize: 14),
+                    isOwnProfile
+                        ? 'My Gamer Profile'
+                        : '@${user.username}\'s Profile',
+                    style: const TextStyle(
+                        color: Color(0xFF050505),
+                        fontWeight: FontWeight.bold,
+                        fontSize: 14),
                   ),
                   subtitle: Text(
                     'Level ${user.level} • ${user.favoriteGame}',
-                    style: const TextStyle(color: Color(0xFF65676B), fontSize: 12),
+                    style: const TextStyle(
+                        color: Color(0xFF65676B), fontSize: 12),
                   ),
-                  trailing: const Icon(Icons.arrow_forward_ios_rounded, color: Color(0xFF65676B), size: 14),
+                  trailing: const Icon(Icons.arrow_forward_ios_rounded,
+                      color: Color(0xFF65676B), size: 14),
                   onTap: () {
                     Navigator.pop(ctx);
                     if (isOwnProfile) {
                       Navigator.of(context).push(
                         MaterialPageRoute(
-                          builder: (_) => CreateGamerIdScreen(isEditing: true, existingUser: user),
+                          builder: (_) => CreateGamerIdScreen(
+                            isEditing: true,
+                            existingUser: user,
+                          ),
                         ),
                       );
                     }
                   },
                 ),
-
-                // 2. Coin (G-Coins Wallet & History)
-                StreamBuilder<DocumentSnapshot>(
-                  stream: FirebaseFirestore.instance
-                      .collection('users')
-                      .doc(user.uid)
-                      .snapshots(),
-                  builder: (context, coinSnap) {
-                    int coins = user.coins;
-                    if (coinSnap.hasData && coinSnap.data != null && coinSnap.data!.exists) {
-                      final data = coinSnap.data!.data() as Map<String, dynamic>? ?? {};
-                      final raw = data['gCoins'] ?? data['coins'];
-                      if (raw is num) coins = raw.toInt();
-                    }
-                    return ListTile(
-                      leading: Container(
-                        padding: const EdgeInsets.all(8),
-                        decoration: const BoxDecoration(
-                          color: Color(0xFFFEF7E0),
-                          shape: BoxShape.circle,
-                        ),
-                        child: const Text('🪙', style: TextStyle(fontSize: 18)),
+                ListTile(
+                  leading: Container(
+                    padding: const EdgeInsets.all(8),
+                    decoration: const BoxDecoration(
+                      color: Color(0xFFFEF7E0),
+                      shape: BoxShape.circle,
+                    ),
+                    child: const Text('🪙',
+                        style: TextStyle(fontSize: 18)),
+                  ),
+                  title: const Text(
+                    'G-Coins Wallet',
+                    style: TextStyle(
+                        color: Color(0xFF050505),
+                        fontWeight: FontWeight.bold,
+                        fontSize: 14),
+                  ),
+                  subtitle: Text(
+                    '${user.coins} Coins • Tap for Transaction History',
+                    style: const TextStyle(
+                        color: Color(0xFF65676B), fontSize: 12),
+                  ),
+                  trailing: Container(
+                    padding: const EdgeInsets.symmetric(
+                        horizontal: 10, vertical: 4),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFFE4E6EB),
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    child: Text(
+                      '${user.coins}',
+                      style: const TextStyle(
+                        color: Color(0xFF050505),
+                        fontWeight: FontWeight.bold,
+                        fontSize: 12,
                       ),
-                      title: const Text(
-                        'G-Coins Wallet',
-                        style: TextStyle(color: Color(0xFF050505), fontWeight: FontWeight.bold, fontSize: 14),
-                      ),
-                      subtitle: Text(
-                        '$coins Coins • Tap for Transaction History',
-                        style: const TextStyle(color: Color(0xFF65676B), fontSize: 12),
-                      ),
-                      trailing: Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                        decoration: BoxDecoration(
-                          color: const Color(0xFFE4E6EB),
-                          borderRadius: BorderRadius.circular(12),
-                        ),
-                        child: Text(
-                          '$coins',
-                          style: const TextStyle(
-                            color: Color(0xFF050505),
-                            fontWeight: FontWeight.bold,
-                            fontSize: 12,
-                          ),
-                        ),
-                      ),
-                      onTap: () {
-                        Navigator.pop(ctx);
-                        CoinHistorySheet.show(context, userId: user.uid);
-                      },
-                    );
+                    ),
+                  ),
+                  onTap: () {
+                    Navigator.pop(ctx);
+                    CoinHistorySheet.show(context, userId: user.uid);
                   },
                 ),
-
-                // 3. Share (Profile)
                 ListTile(
                   leading: Container(
                     padding: const EdgeInsets.all(8),
@@ -2637,24 +1698,28 @@ class _GamerProfileScreenState extends State<GamerProfileScreen> with SingleTick
                       color: Color(0xFFE7F3FF),
                       shape: BoxShape.circle,
                     ),
-                    child: const Icon(Icons.share_rounded, color: Color(0xFF1877F2), size: 20),
+                    child: const Icon(Icons.share_rounded,
+                        color: Color(0xFF1877F2), size: 20),
                   ),
                   title: const Text(
                     'Share Profile',
-                    style: TextStyle(color: Color(0xFF050505), fontWeight: FontWeight.bold, fontSize: 14),
+                    style: TextStyle(
+                        color: Color(0xFF050505),
+                        fontWeight: FontWeight.bold,
+                        fontSize: 14),
                   ),
                   subtitle: const Text(
                     'Share Gamer ID link with friends & squad',
-                    style: TextStyle(color: Color(0xFF65676B), fontSize: 12),
+                    style: TextStyle(
+                        color: Color(0xFF65676B), fontSize: 12),
                   ),
-                  trailing: const Icon(Icons.arrow_forward_ios_rounded, color: Color(0xFF65676B), size: 14),
+                  trailing: const Icon(Icons.arrow_forward_ios_rounded,
+                      color: Color(0xFF65676B), size: 14),
                   onTap: () {
                     Navigator.pop(ctx);
                     _shareProfile(user);
                   },
                 ),
-
-                // 4. Day / Night Mode (Light / Dark)
                 ValueListenableBuilder<ThemeMode>(
                   valueListenable: ThemeService.themeModeNotifier,
                   builder: (context, mode, _) {
@@ -2667,18 +1732,26 @@ class _GamerProfileScreenState extends State<GamerProfileScreen> with SingleTick
                           shape: BoxShape.circle,
                         ),
                         child: Icon(
-                          isDark ? Icons.light_mode_rounded : Icons.dark_mode_rounded,
+                          isDark
+                              ? Icons.light_mode_rounded
+                              : Icons.dark_mode_rounded,
                           color: const Color(0xFFF59E0B),
                           size: 20,
                         ),
                       ),
                       title: Text(
                         isDark ? 'Day Mode' : 'Night Mode',
-                        style: const TextStyle(color: Color(0xFF050505), fontWeight: FontWeight.bold, fontSize: 14),
+                        style: const TextStyle(
+                            color: Color(0xFF050505),
+                            fontWeight: FontWeight.bold,
+                            fontSize: 14),
                       ),
                       subtitle: Text(
-                        isDark ? 'Switch to bright display theme' : 'Switch to dark gaming theme',
-                        style: const TextStyle(color: Color(0xFF65676B), fontSize: 12),
+                        isDark
+                            ? 'Switch to bright display theme'
+                            : 'Switch to dark gaming theme',
+                        style: const TextStyle(
+                            color: Color(0xFF65676B), fontSize: 12),
                       ),
                       trailing: Switch.adaptive(
                         value: isDark,
@@ -2693,8 +1766,6 @@ class _GamerProfileScreenState extends State<GamerProfileScreen> with SingleTick
                     );
                   },
                 ),
-
-                // 5. Saved Posts & Articles
                 ListTile(
                   leading: Container(
                     padding: const EdgeInsets.all(8),
@@ -2702,27 +1773,38 @@ class _GamerProfileScreenState extends State<GamerProfileScreen> with SingleTick
                       color: Color(0xFFE7F3FF),
                       shape: BoxShape.circle,
                     ),
-                    child: const Icon(Icons.bookmark_rounded, color: Color(0xFF1877F2), size: 20),
+                    child: const Icon(Icons.bookmark_rounded,
+                        color: Color(0xFF1877F2), size: 20),
                   ),
                   title: const Text(
                     'Saved Posts & News',
-                    style: TextStyle(color: Color(0xFF050505), fontWeight: FontWeight.bold, fontSize: 14),
+                    style: TextStyle(
+                        color: Color(0xFF050505),
+                        fontWeight: FontWeight.bold,
+                        fontSize: 14),
                   ),
                   subtitle: const Text(
                     'View your bookmarked clips & articles',
-                    style: TextStyle(color: Color(0xFF65676B), fontSize: 12),
+                    style: TextStyle(
+                        color: Color(0xFF65676B), fontSize: 12),
                   ),
-                  trailing: const Icon(Icons.arrow_forward_ios_rounded, color: Color(0xFF65676B), size: 14),
+                  trailing: const Icon(Icons.arrow_forward_ios_rounded,
+                      color: Color(0xFF65676B), size: 14),
                   onTap: () {
                     Navigator.pop(ctx);
                     Navigator.of(context).push(
                       MaterialPageRoute(
                         builder: (_) => Scaffold(
-                          backgroundColor: const Color(0xFFF0F2F5),
+                          backgroundColor:
+                              const Color(0xFFF0F2F5),
                           appBar: AppBar(
                             backgroundColor: Colors.white,
                             elevation: 1,
-                            title: const Text('Saved Posts & News', style: TextStyle(color: Color(0xFF1877F2), fontWeight: FontWeight.bold, fontSize: 18)),
+                            title: const Text('Saved Posts & News',
+                                style: TextStyle(
+                                    color: Color(0xFF1877F2),
+                                    fontWeight: FontWeight.bold,
+                                    fontSize: 18)),
                           ),
                           body: const SavedNewsTabScreen(),
                         ),
@@ -2730,8 +1812,6 @@ class _GamerProfileScreenState extends State<GamerProfileScreen> with SingleTick
                     );
                   },
                 ),
-
-                // 6. Settings (General & Profile Settings)
                 ListTile(
                   leading: Container(
                     padding: const EdgeInsets.all(8),
@@ -2739,17 +1819,23 @@ class _GamerProfileScreenState extends State<GamerProfileScreen> with SingleTick
                       color: Color(0xFFE4E6EB),
                       shape: BoxShape.circle,
                     ),
-                    child: const Icon(Icons.settings_rounded, color: Color(0xFF65676B), size: 20),
+                    child: const Icon(Icons.settings_rounded,
+                        color: Color(0xFF65676B), size: 20),
                   ),
                   title: const Text(
                     'Settings & Preferences',
-                    style: TextStyle(color: Color(0xFF050505), fontWeight: FontWeight.bold, fontSize: 14),
+                    style: TextStyle(
+                        color: Color(0xFF050505),
+                        fontWeight: FontWeight.bold,
+                        fontSize: 14),
                   ),
                   subtitle: const Text(
                     'Follow Us, sound, notifications & accounts',
-                    style: TextStyle(color: Color(0xFF65676B), fontSize: 12),
+                    style: TextStyle(
+                        color: Color(0xFF65676B), fontSize: 12),
                   ),
-                  trailing: const Icon(Icons.arrow_forward_ios_rounded, color: Color(0xFF65676B), size: 14),
+                  trailing: const Icon(Icons.arrow_forward_ios_rounded,
+                      color: Color(0xFF65676B), size: 14),
                   onTap: () {
                     Navigator.pop(ctx);
                     Navigator.of(context).push(
@@ -2759,8 +1845,6 @@ class _GamerProfileScreenState extends State<GamerProfileScreen> with SingleTick
                     );
                   },
                 ),
-
-                // 7. Logout (Only for own profile)
                 if (isOwnProfile) ...[
                   const Divider(color: Color(0xFFCED0D4), height: 16),
                   ListTile(
@@ -2770,15 +1854,20 @@ class _GamerProfileScreenState extends State<GamerProfileScreen> with SingleTick
                         color: Color(0xFFFEE2E2),
                         shape: BoxShape.circle,
                       ),
-                      child: const Icon(Icons.logout_rounded, color: Color(0xFFDC2626), size: 20),
+                      child: const Icon(Icons.logout_rounded,
+                          color: Color(0xFFDC2626), size: 20),
                     ),
                     title: const Text(
                       'Log Out',
-                      style: TextStyle(color: Color(0xFFDC2626), fontWeight: FontWeight.bold, fontSize: 14),
+                      style: TextStyle(
+                          color: Color(0xFFDC2626),
+                          fontWeight: FontWeight.bold,
+                          fontSize: 14),
                     ),
                     subtitle: const Text(
                       'Sign out of Gamers ID Network',
-                      style: TextStyle(color: Color(0xFF65676B), fontSize: 12),
+                      style: TextStyle(
+                          color: Color(0xFF65676B), fontSize: 12),
                     ),
                     onTap: () {
                       Navigator.pop(ctx);
@@ -2793,546 +1882,7 @@ class _GamerProfileScreenState extends State<GamerProfileScreen> with SingleTick
       },
     );
   }
-
-  void _showAddVerifyGameRankSheet(GamerUser user) {
-    showModalBottomSheet(
-      context: context,
-      isScrollControlled: true,
-      backgroundColor: Colors.transparent,
-      builder: (sheetContext) => AddVerifyGameRankSheet(user: user),
-    );
-  }
 }
-
-class AddVerifyGameRankSheet extends StatefulWidget {
-  final GamerUser user;
-
-  const AddVerifyGameRankSheet({super.key, required this.user});
-
-  @override
-  State<AddVerifyGameRankSheet> createState() => _AddVerifyGameRankSheetState();
-}
-
-class _AddVerifyGameRankSheetState extends State<AddVerifyGameRankSheet> {
-  final _formKey = GlobalKey<FormState>();
-  String _selectedGame = 'BGMI';
-  late String _selectedRank;
-  late TextEditingController _gameIdController;
-  File? _pickedScreenshot;
-  bool _isSubmitting = false;
-  String? _errorMessage;
-
-  @override
-  void initState() {
-    super.initState();
-    _selectedRank = _GamerProfileScreenState._kGameRankOptions['BGMI']!.first;
-    _gameIdController = TextEditingController(text: widget.user.gameId);
-  }
-
-  @override
-  void dispose() {
-    _gameIdController.dispose();
-    super.dispose();
-  }
-
-  Future<void> _pickScreenshot() async {
-    try {
-      final picker = ImagePicker();
-      final picked = await picker.pickImage(
-        source: ImageSource.gallery,
-        imageQuality: 85,
-      );
-      if (picked != null) {
-        setState(() {
-          _pickedScreenshot = File(picked.path);
-          _errorMessage = null;
-        });
-      }
-    } catch (e) {
-      setState(() {
-        _errorMessage = 'Could not select image: $e';
-      });
-    }
-  }
-
-  Future<void> _submitVerification() async {
-    if (!_formKey.currentState!.validate()) return;
-
-    if (_pickedScreenshot == null) {
-      setState(() {
-        _errorMessage = 'Rank screenshot proof is required. Please upload your in-game profile screenshot.';
-      });
-      return;
-    }
-
-    setState(() {
-      _isSubmitting = true;
-      _errorMessage = null;
-    });
-
-    try {
-      final cleanGameName = _selectedGame.replaceAll(RegExp(r'\s+'), '_').toLowerCase();
-      final timestamp = DateTime.now().millisecondsSinceEpoch;
-      final fileName = '${cleanGameName}_$timestamp.jpg';
-
-      String downloadUrl = '';
-      try {
-        final storageRef = FirebaseStorage.instance
-            .ref()
-            .child('rank_verifications')
-            .child(widget.user.uid)
-            .child(fileName);
-
-        final uploadTask = await storageRef.putFile(_pickedScreenshot!);
-        downloadUrl = await uploadTask.ref.getDownloadURL();
-      } catch (storageError) {
-        debugPrint('FirebaseStorage upload note: $storageError. Using local file path fallback.');
-        downloadUrl = _pickedScreenshot!.path;
-      }
-
-      // Update user doc games array
-      final docRef = FirebaseFirestore.instance.collection('users').doc(widget.user.uid);
-      final docSnap = await docRef.get();
-      final currentData = docSnap.data() ?? {};
-      final rawGames = currentData['games'] as List? ?? [];
-      final List<Map<String, dynamic>> gamesList = [];
-      bool replaced = false;
-      final entryId = 'game_${DateTime.now().millisecondsSinceEpoch}_${Random().nextInt(9999)}';
-
-      for (final g in rawGames) {
-        if (g is Map) {
-          final map = Map<String, dynamic>.from(g);
-          if (map['gameName'] == _selectedGame) {
-            gamesList.add({
-              'id': map['id'] ?? entryId,
-              'gameName': _selectedGame,
-              'gameId': _gameIdController.text.trim(),
-              'claimedRank': _selectedRank,
-              'verifiedRank': '',
-              'isVerified': false,
-              'screenshotUrl': downloadUrl,
-              'status': 'pending',
-              'submittedAt': Timestamp.now(),
-              'ownerUid': widget.user.uid,
-            });
-            replaced = true;
-          } else {
-            gamesList.add(map);
-          }
-        }
-      }
-
-      if (!replaced) {
-        gamesList.add({
-          'id': entryId,
-          'gameName': _selectedGame,
-          'gameId': _gameIdController.text.trim(),
-          'claimedRank': _selectedRank,
-          'verifiedRank': '',
-          'isVerified': false,
-          'screenshotUrl': downloadUrl,
-          'status': 'pending',
-          'submittedAt': Timestamp.now(),
-          'ownerUid': widget.user.uid,
-        });
-      }
-
-      await docRef.set({
-        'games': gamesList,
-        if (widget.user.gameId.isEmpty) 'gameId': _gameIdController.text.trim(),
-        'rank': _selectedRank,
-        'rankScreenshot': downloadUrl,
-        'rankStatus': 'Pending',
-        'isRankVerified': false,
-        'rankRejectReason': '',
-        'updatedAt': FieldValue.serverTimestamp(),
-      }, SetOptions(merge: true));
-
-      if (mounted) {
-        Navigator.pop(context);
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(
-              'Submitted $_selectedGame rank verification ($_selectedRank)! Pending admin review.',
-            ),
-            backgroundColor: const Color(0xFF00FF88),
-          ),
-        );
-      }
-    } catch (e) {
-      if (mounted) {
-        setState(() {
-          _isSubmitting = false;
-          _errorMessage = 'Error submitting verification: $e';
-        });
-      }
-    }
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final bottomInset = MediaQuery.of(context).viewInsets.bottom;
-    final availableRanks = _GamerProfileScreenState._kGameRankOptions[_selectedGame] ?? ['Crown I'];
-
-    return Container(
-      padding: EdgeInsets.fromLTRB(20, 16, 20, 20 + bottomInset),
-      decoration: const BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
-        border: Border(top: BorderSide(color: Color(0xFFCED0D4), width: 1)),
-      ),
-      child: Form(
-        key: _formKey,
-        child: SingleChildScrollView(
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              // Top drag indicator
-              Center(
-                child: Container(
-                  width: 40,
-                  height: 4,
-                  margin: const EdgeInsets.only(bottom: 14),
-                  decoration: BoxDecoration(
-                    color: const Color(0xFFCED0D4),
-                    borderRadius: BorderRadius.circular(2),
-                  ),
-                ),
-              ),
-
-              // Title Row
-              Row(
-                children: [
-                  Container(
-                    padding: const EdgeInsets.all(8),
-                    decoration: const BoxDecoration(
-                      color: Color(0xFFE7F3FF),
-                      shape: BoxShape.circle,
-                    ),
-                    child: const Icon(Icons.verified_user_rounded, color: Color(0xFF1877F2), size: 20),
-                  ),
-                  const SizedBox(width: 10),
-                  const Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          'Add / Verify Game Rank',
-                          style: TextStyle(color: Color(0xFF050505), fontWeight: FontWeight.bold, fontSize: 16),
-                        ),
-                        Text(
-                          'Upload screenshot proof to verify in-game UID & Rank',
-                          style: TextStyle(color: Color(0xFF65676B), fontSize: 11),
-                        ),
-                      ],
-                    ),
-                  ),
-                  IconButton(
-                    icon: const Icon(Icons.close, color: Color(0xFF65676B)),
-                    onPressed: () => Navigator.pop(context),
-                  ),
-                ],
-              ),
-
-              const SizedBox(height: 18),
-
-              // a) Select Game Dropdown
-              const Text(
-                '1. Select Game',
-                style: TextStyle(color: Color(0xFF050505), fontWeight: FontWeight.bold, fontSize: 13),
-              ),
-              const SizedBox(height: 6),
-              DropdownButtonFormField<String>(
-                value: _selectedGame,
-                dropdownColor: Colors.white,
-                style: const TextStyle(color: Color(0xFF050505), fontWeight: FontWeight.bold, fontSize: 14),
-                decoration: InputDecoration(
-                  filled: true,
-                  fillColor: const Color(0xFFF0F2F5),
-                  contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-                  border: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(10),
-                    borderSide: const BorderSide(color: Color(0xFFCED0D4)),
-                  ),
-                  enabledBorder: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(10),
-                    borderSide: const BorderSide(color: Color(0xFFCED0D4)),
-                  ),
-                  focusedBorder: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(10),
-                    borderSide: const BorderSide(color: Color(0xFF1877F2)),
-                  ),
-                ),
-                items: ['BGMI', 'PUBG Mobile', 'Free Fire', 'COD Mobile', 'Valorant'].map((g) {
-                  return DropdownMenuItem<String>(
-                    value: g,
-                    child: Row(
-                      children: [
-                        const Icon(Icons.sports_esports_rounded, size: 16, color: Color(0xFF1877F2)),
-                        const SizedBox(width: 8),
-                        Text(g),
-                      ],
-                    ),
-                  );
-                }).toList(),
-                onChanged: (val) {
-                  if (val != null) {
-                    setState(() {
-                      _selectedGame = val;
-                      _selectedRank = _GamerProfileScreenState._kGameRankOptions[val]!.first;
-                    });
-                  }
-                },
-              ),
-
-              const SizedBox(height: 14),
-
-              // b) Enter Game UID/ID
-              const Text(
-                '2. In-Game UID / Player ID',
-                style: TextStyle(color: Color(0xFF050505), fontWeight: FontWeight.bold, fontSize: 13),
-              ),
-              const SizedBox(height: 6),
-              TextFormField(
-                controller: _gameIdController,
-                style: const TextStyle(color: Color(0xFF050505), fontSize: 14, fontWeight: FontWeight.w600),
-                keyboardType: TextInputType.text,
-                decoration: InputDecoration(
-                  hintText: 'Enter your exact in-game UID (e.g. 5123456789)',
-                  hintStyle: const TextStyle(color: Color(0xFF8A8D91), fontSize: 13),
-                  prefixIcon: const Icon(Icons.tag_rounded, color: Color(0xFF1877F2), size: 18),
-                  filled: true,
-                  fillColor: const Color(0xFFF0F2F5),
-                  contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-                  border: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(10),
-                    borderSide: const BorderSide(color: Color(0xFFCED0D4)),
-                  ),
-                  enabledBorder: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(10),
-                    borderSide: const BorderSide(color: Color(0xFFCED0D4)),
-                  ),
-                  focusedBorder: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(10),
-                    borderSide: const BorderSide(color: Color(0xFF1877F2)),
-                  ),
-                ),
-                validator: (val) {
-                  if (val == null || val.trim().isEmpty) {
-                    return 'Please enter your in-game UID';
-                  }
-                  return null;
-                },
-              ),
-
-              const SizedBox(height: 14),
-
-              // c) Select Claimed Rank Dropdown
-              const Text(
-                '3. Claimed In-Game Rank',
-                style: TextStyle(color: Color(0xFF050505), fontWeight: FontWeight.bold, fontSize: 13),
-              ),
-              const SizedBox(height: 6),
-              DropdownButtonFormField<String>(
-                value: availableRanks.contains(_selectedRank) ? _selectedRank : availableRanks.first,
-                dropdownColor: Colors.white,
-                style: const TextStyle(color: Color(0xFF050505), fontWeight: FontWeight.bold, fontSize: 14),
-                decoration: InputDecoration(
-                  filled: true,
-                  fillColor: const Color(0xFFF0F2F5),
-                  contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-                  border: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(10),
-                    borderSide: const BorderSide(color: Color(0xFFCED0D4)),
-                  ),
-                  enabledBorder: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(10),
-                    borderSide: const BorderSide(color: Color(0xFFCED0D4)),
-                  ),
-                  focusedBorder: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(10),
-                    borderSide: const BorderSide(color: Color(0xFF1877F2)),
-                  ),
-                ),
-                items: availableRanks.map((r) {
-                  return DropdownMenuItem<String>(
-                    value: r,
-                    child: Row(
-                      children: [
-                        const Icon(Icons.military_tech_rounded, size: 16, color: Color(0xFF1877F2)),
-                        const SizedBox(width: 8),
-                        Text(r),
-                      ],
-                    ),
-                  );
-                }).toList(),
-                onChanged: (val) {
-                  if (val != null) {
-                    setState(() => _selectedRank = val);
-                  }
-                },
-              ),
-
-              const SizedBox(height: 16),
-
-              // d) Upload Screenshot (required)
-              Row(
-                children: [
-                  const Text(
-                    '4. Upload Screenshot Proof',
-                    style: TextStyle(color: Color(0xFF050505), fontWeight: FontWeight.bold, fontSize: 13),
-                  ),
-                  const SizedBox(width: 6),
-                  Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                    decoration: BoxDecoration(
-                      color: const Color(0xFFE7F3FF),
-                      borderRadius: BorderRadius.circular(4),
-                    ),
-                    child: const Text(
-                      'REQUIRED',
-                      style: TextStyle(color: Color(0xFF1877F2), fontSize: 9.5, fontWeight: FontWeight.bold),
-                    ),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 4),
-              const Text(
-                'Must show your Game ID + Rank clearly on screen',
-                style: TextStyle(color: Color(0xFF65676B), fontSize: 11.5),
-              ),
-              const SizedBox(height: 8),
-
-              // Screenshot Picker Box
-              InkWell(
-                onTap: _pickScreenshot,
-                borderRadius: BorderRadius.circular(12),
-                child: Container(
-                  width: double.infinity,
-                  height: 120,
-                  decoration: BoxDecoration(
-                    color: const Color(0xFFF0F2F5),
-                    borderRadius: BorderRadius.circular(12),
-                    border: Border.all(
-                      color: _pickedScreenshot != null ? const Color(0xFF1877F2) : const Color(0xFFCED0D4),
-                      width: 1.5,
-                    ),
-                  ),
-                  child: _pickedScreenshot != null
-                      ? ClipRRect(
-                          borderRadius: BorderRadius.circular(11),
-                          child: Stack(
-                            fit: StackFit.expand,
-                            children: [
-                              Image.file(_pickedScreenshot!, fit: BoxFit.cover),
-                              Container(
-                                color: Colors.black.withOpacity(0.3),
-                              ),
-                              Positioned(
-                                bottom: 8,
-                                right: 8,
-                                child: Container(
-                                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                                  decoration: BoxDecoration(
-                                    color: Colors.white,
-                                    borderRadius: BorderRadius.circular(6),
-                                    border: Border.all(color: const Color(0xFF1877F2)),
-                                  ),
-                                  child: const Row(
-                                    mainAxisSize: MainAxisSize.min,
-                                    children: [
-                                      Icon(Icons.check_circle_rounded, color: Color(0xFF1877F2), size: 14),
-                                      SizedBox(width: 4),
-                                      Text(
-                                        'Change Photo',
-                                        style: TextStyle(color: Color(0xFF050505), fontSize: 11, fontWeight: FontWeight.bold),
-                                      ),
-                                    ],
-                                  ),
-                                ),
-                              ),
-                            ],
-                          ),
-                        )
-                      : const Column(
-                          mainAxisAlignment: MainAxisAlignment.center,
-                          children: [
-                            Icon(Icons.add_photo_alternate_rounded, color: Color(0xFF1877F2), size: 36),
-                            SizedBox(height: 6),
-                            Text(
-                              'Tap to upload rank screenshot proof',
-                              style: TextStyle(color: Color(0xFF050505), fontWeight: FontWeight.bold, fontSize: 12.5),
-                            ),
-                            SizedBox(height: 2),
-                            Text(
-                              'JPG, PNG supported',
-                              style: TextStyle(color: Color(0xFF65676B), fontSize: 11),
-                            ),
-                          ],
-                        ),
-                ),
-              ),
-
-              if (_errorMessage != null) ...[
-                const SizedBox(height: 10),
-                Container(
-                  padding: const EdgeInsets.all(10),
-                  decoration: BoxDecoration(
-                    color: const Color(0xFFFFEBEE),
-                    borderRadius: BorderRadius.circular(8),
-                    border: Border.all(color: const Color(0xFFFFCDD2)),
-                  ),
-                  child: Row(
-                    children: [
-                      const Icon(Icons.error_outline_rounded, color: Colors.red, size: 16),
-                      SizedBox(width: 8),
-                      Expanded(
-                        child: Text(
-                          _errorMessage!,
-                          style: const TextStyle(color: Colors.red, fontSize: 11.5),
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              ],
-
-              const SizedBox(height: 20),
-
-              // e) Submit Button
-              SizedBox(
-                width: double.infinity,
-                child: ElevatedButton.icon(
-                  onPressed: _isSubmitting ? null : _submitVerification,
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: const Color(0xFF1877F2),
-                    foregroundColor: Colors.white,
-                    padding: const EdgeInsets.symmetric(vertical: 14),
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-                    elevation: 0,
-                  ),
-                  icon: _isSubmitting
-                      ? const SizedBox(
-                          width: 18,
-                          height: 18,
-                          child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2),
-                        )
-                      : const Icon(Icons.send_rounded, size: 18),
-                  label: Text(
-                    _isSubmitting ? 'Submitting Verification...' : 'Submit Rank Verification',
-                    style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
-                  ),
-                ),
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-}
-
 
 class _SliverTabBarDelegate extends SliverPersistentHeaderDelegate {
   final TabBar tabBar;
@@ -3346,7 +1896,8 @@ class _SliverTabBarDelegate extends SliverPersistentHeaderDelegate {
   double get maxExtent => tabBar.preferredSize.height;
 
   @override
-  Widget build(BuildContext context, double shrinkOffset, bool overlapsContent) {
+  Widget build(
+      BuildContext context, double shrinkOffset, bool overlapsContent) {
     return Container(
       color: Colors.white,
       child: tabBar,
