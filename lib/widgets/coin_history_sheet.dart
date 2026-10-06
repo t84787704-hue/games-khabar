@@ -1,6 +1,4 @@
 import 'package:flutter/material.dart';
-import 'package:firebase_auth/firebase_auth.dart';
-import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:intl/intl.dart';
 import '../constants/gamer_theme.dart';
 import '../models/coin_transaction_model.dart';
@@ -8,6 +6,7 @@ import '../models/coin_wallet_model.dart';
 import '../services/coin_wallet_service.dart';
 import '../services/coin_reward_service.dart';
 import '../services/gamer_auth_service.dart';
+import '../services/supabase_service.dart';
 import '../screens/coin_store_screen.dart';
 
 class CoinHistorySheet extends StatefulWidget {
@@ -18,7 +17,7 @@ class CoinHistorySheet extends StatefulWidget {
   static Future<void> show(BuildContext context, {String? userId}) async {
     final targetUid = userId?.isNotEmpty == true
         ? userId!
-        : (FirebaseAuth.instance.currentUser?.uid ?? GamerAuthService().currentUid ?? '');
+        : (GamerAuthService().currentUid ?? '');
 
     await showModalBottomSheet(
       context: context,
@@ -42,61 +41,31 @@ class _CoinHistorySheetState extends State<CoinHistorySheet> {
     try {
       final currentUserId = widget.userId.isNotEmpty
           ? widget.userId
-          : (FirebaseAuth.instance.currentUser?.uid ?? GamerAuthService().currentUid ?? '');
+          : (GamerAuthService().currentUid ?? '');
       if (currentUserId.isEmpty) throw 'User not logged in';
 
-      // 1. Sum all transactions
-      final QuerySnapshot txs = await FirebaseFirestore.instance
-          .collection('transactions')
-          .where('userId', isEqualTo: currentUserId)
-          .get();
-
+      // 1. Sum all transactions from Supabase
       int total = 0;
-      for (var doc in txs.docs) {
-        final data = doc.data() as Map<String, dynamic>? ?? {};
-        final dynamic rawAmount = data['amount'];
-        if (rawAmount is num) {
-          total += rawAmount.toInt();
-        }
-      }
-
-      // Also check coin_transactions in case some were saved there
       try {
-        final QuerySnapshot txs2 = await FirebaseFirestore.instance
-            .collection('coin_transactions')
-            .where('userId', isEqualTo: currentUserId)
-            .get();
-        final Set<String> existingIds = txs.docs.map((d) => d.id).toSet();
-        for (var doc in txs2.docs) {
-          if (!existingIds.contains(doc.id)) {
-            final data = doc.data() as Map<String, dynamic>? ?? {};
-            final dynamic rawAmount = data['amount'];
-            if (rawAmount is num) {
-              total += rawAmount.toInt();
-            }
+        final txRows = await SupabaseService.client
+            .from('coin_transactions')
+            .select('amount')
+            .or('user_id.eq.$currentUserId,userId.eq.$currentUserId');
+
+        for (var row in txRows) {
+          final dynamic rawAmount = row['amount'];
+          if (rawAmount is num) {
+            total += rawAmount.toInt();
           }
         }
       } catch (_) {}
 
-      // 2. Force update gCoins to match sum
-      await FirebaseFirestore.instance.collection('users').doc(currentUserId).set({
-        'gCoins': total,
-        'coins': total,
-        'inEscrow': 0,
-        'lastSyncedAt': FieldValue.serverTimestamp(),
-      }, SetOptions(merge: true));
-
+      // 2. Force update coins in Supabase users table
       try {
-        await FirebaseFirestore.instance.collection('wallets').doc(currentUserId).set({
+        await SupabaseService.client.from('users').update({
           'coins': total,
-          'gCoins': total,
-          'updatedAt': FieldValue.serverTimestamp(),
-        }, SetOptions(merge: true));
-        await FirebaseFirestore.instance.collection('coin_wallets').doc(currentUserId).set({
-          'coins': total,
-          'gCoins': total,
-          'updatedAt': FieldValue.serverTimestamp(),
-        }, SetOptions(merge: true));
+          'updated_at': DateTime.now().toIso8601String(),
+        }).or('id.eq.$currentUserId,uid.eq.$currentUserId');
       } catch (_) {}
 
       // Update in-memory state if this device is the user
@@ -214,23 +183,21 @@ class _CoinHistorySheetState extends State<CoinHistorySheet> {
           ),
           const SizedBox(height: 14),
 
-          // Wallet Stats & Balance Banner (Single Source of Truth: users collection)
-          StreamBuilder<DocumentSnapshot>(
-            stream: FirebaseFirestore.instance
-                .collection('users')
-                .doc(widget.userId)
-                .snapshots(),
+          // Wallet Stats & Balance Banner (Single Source of Truth: Supabase users table)
+          StreamBuilder<List<Map<String, dynamic>>>(
+            stream: SupabaseService.client
+                .from('users')
+                .stream(primaryKey: ['id'])
+                .eq('id', widget.userId),
             builder: (context, userSnap) {
               int currentCoins = 0;
               int inEscrow = 0;
-              if (userSnap.hasData && userSnap.data != null && userSnap.data!.exists) {
-                final data = userSnap.data!.data() as Map<String, dynamic>?;
-                if (data != null) {
-                  final rawCoins = data['gCoins'] ?? data['coins'];
-                  if (rawCoins is num) currentCoins = rawCoins.toInt();
-                  final rawEscrow = data['inEscrow'];
-                  if (rawEscrow is num) inEscrow = rawEscrow.toInt();
-                }
+              if (userSnap.hasData && userSnap.data != null && userSnap.data!.isNotEmpty) {
+                final data = userSnap.data!.first;
+                final rawCoins = data['coins'] ?? data['gCoins'];
+                if (rawCoins is num) currentCoins = rawCoins.toInt();
+                final rawEscrow = data['inEscrow'] ?? data['in_escrow'];
+                if (rawEscrow is num) inEscrow = rawEscrow.toInt();
               }
 
               return StreamBuilder<List<CoinTransaction>>(
