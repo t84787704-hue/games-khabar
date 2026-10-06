@@ -1,4 +1,4 @@
-import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:games_khabar/compat/cloud_firestore.dart';
 import '../data/game_bots_100.dart';
 import '../data/fallback_images.dart';
 

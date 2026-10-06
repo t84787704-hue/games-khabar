@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import 'package:firebase_auth/firebase_auth.dart';
+import 'package:games_khabar/compat/firebase_auth.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:intl/intl.dart';
 import '../constants/gamer_theme.dart';
@@ -24,6 +24,7 @@ class TeamProfileScreen extends StatefulWidget {
 class _TeamProfileScreenState extends State<TeamProfileScreen> {
   final TeamService _teamService = TeamService();
   bool _isActionLoading = false;
+  bool _hasRequestedLocally = false;
   final Set<String> _cancelledChallengeIds = {};
   final Set<String> _acceptingChallengeIds = {};
   final Set<String> _acceptedChallengeIds = {};
@@ -245,16 +246,40 @@ class _TeamProfileScreenState extends State<TeamProfileScreen> {
   }
 
   Future<void> _handleJoinRequest(TeamModel team, String currentUid) async {
+    final effectiveUid = currentUid.trim().isNotEmpty
+        ? currentUid.trim()
+        : (FirebaseAuth.instance.currentUser?.uid ??
+            (GamerAuthService().currentUid ??
+                (SupabaseService.client.auth.currentUser?.id ?? '')));
+
+    if (effectiveUid.isEmpty) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('براہ کرم پہلے لاگ ان کریں'),
+            backgroundColor: Color(0xFFFF4655),
+          ),
+        );
+      }
+      return;
+    }
+
     final currentGamer = GamerAuthService().currentGamer;
     final userName = currentGamer?.displayName ?? currentGamer?.username ?? 'Gamer';
 
     setState(() => _isActionLoading = true);
     final success = await _teamService.requestToJoinTeam(
       teamId: team.id,
-      userId: currentUid,
+      userId: effectiveUid,
       userName: userName,
+      teamName: team.name,
     );
-    setState(() => _isActionLoading = false);
+    setState(() {
+      _isActionLoading = false;
+      if (success) {
+        _hasRequestedLocally = true;
+      }
+    });
 
     if (mounted) {
       if (success) {
@@ -336,7 +361,9 @@ class _TeamProfileScreenState extends State<TeamProfileScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final currentUid = FirebaseAuth.instance.currentUser?.uid ?? '';
+    final currentUid = FirebaseAuth.instance.currentUser?.uid ??
+        (GamerAuthService().currentUid ??
+            (SupabaseService.client.auth.currentUser?.id ?? ''));
 
     return StreamBuilder<TeamModel?>(
       stream: _teamService.getTeamStream(widget.teamId),
@@ -1679,32 +1706,41 @@ class _TeamProfileScreenState extends State<TeamProfileScreen> {
                               children: [
                                 // Join Team Button
                                 if (!team.isMember(currentUid)) ...[
-                                  Expanded(
-                                    flex: 2,
-                                    child: SizedBox(
-                                      height: 46,
-                                      child: OutlinedButton.icon(
-                                        onPressed: (hasRequested || _isActionLoading)
-                                            ? null
-                                            : () => _handleJoinRequest(team, currentUid),
-                                        style: OutlinedButton.styleFrom(
-                                          foregroundColor: Colors.white,
-                                          side: const BorderSide(color: Color(0xFF2A3447)),
-                                          backgroundColor: const Color(0xFF1B2436),
-                                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-                                        ),
-                                        icon: Icon(
-                                          hasRequested ? Icons.hourglass_top_rounded : Icons.person_add_rounded,
-                                          size: 16,
-                                          color: hasRequested ? const Color(0xFFFFB800) : const Color(0xFF00FF88),
-                                        ),
-                                        label: Text(
-                                          hasRequested ? 'Requested' : 'Join Team',
-                                          style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 12),
+                                  Builder(builder: (context) {
+                                    final bool isRequested = hasRequested || _hasRequestedLocally;
+                                    return Expanded(
+                                      flex: 2,
+                                      child: SizedBox(
+                                        height: 46,
+                                        child: OutlinedButton.icon(
+                                          onPressed: (isRequested || _isActionLoading)
+                                              ? null
+                                              : () => _handleJoinRequest(team, currentUid),
+                                          style: OutlinedButton.styleFrom(
+                                            foregroundColor: Colors.white,
+                                            side: BorderSide(
+                                              color: isRequested ? const Color(0xFFFFB800).withOpacity(0.5) : const Color(0xFF2A3447),
+                                            ),
+                                            backgroundColor: const Color(0xFF1B2436),
+                                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                                          ),
+                                          icon: Icon(
+                                            isRequested ? Icons.hourglass_top_rounded : Icons.person_add_rounded,
+                                            size: 16,
+                                            color: isRequested ? const Color(0xFFFFB800) : const Color(0xFF00FF88),
+                                          ),
+                                          label: Text(
+                                            isRequested ? 'Requested ⏳' : 'Join Team',
+                                            style: TextStyle(
+                                              fontWeight: FontWeight.bold,
+                                              fontSize: 12,
+                                              color: isRequested ? const Color(0xFFFFB800) : Colors.white,
+                                            ),
+                                          ),
                                         ),
                                       ),
-                                    ),
-                                  ),
+                                    );
+                                  }),
                                   const SizedBox(width: 10),
                                 ],
 

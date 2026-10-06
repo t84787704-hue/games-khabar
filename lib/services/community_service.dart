@@ -1,6 +1,6 @@
 import 'dart:math';
-import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:firebase_auth/firebase_auth.dart';
+import 'package:games_khabar/compat/cloud_firestore.dart';
+import 'package:games_khabar/compat/firebase_auth.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../models/community_post_model.dart';
 import '../utils/admin_security.dart';

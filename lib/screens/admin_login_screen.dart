@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:firebase_core/firebase_core.dart';
-import 'package:firebase_auth/firebase_auth.dart';
+import 'package:games_khabar/compat/firebase_auth.dart';
 import '../utils/admin_security.dart';
 import '../firebase_options.dart';
 

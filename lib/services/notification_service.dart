@@ -1,10 +1,10 @@
 import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:firebase_core/firebase_core.dart';
-import 'package:firebase_auth/firebase_auth.dart';
+import '../compat/firebase_auth.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
-import 'package:cloud_firestore/cloud_firestore.dart';
+import '../compat/cloud_firestore.dart';
 import 'package:http/http.dart' as http;
 import '../models/news_model.dart';
 import 'firestore_service.dart';
@@ -92,19 +92,21 @@ class NotificationService {
     _listenForSquadNotifications();
   }
 
-  /// Saves FCM device token to Firestore users/{uid}
+  /// Saves FCM device token to Supabase users table
   Future<void> saveUserFcmToken([String? explicitUid]) async {
     try {
-      final uid = explicitUid ?? FirebaseAuth.instance.currentUser?.uid;
+      final uid = explicitUid ?? SupabaseService.client.auth.currentUser?.id;
       if (uid == null || uid.isEmpty) return;
       final token = await _fcm?.getToken();
       if (token != null && token.isNotEmpty) {
-        await FirebaseFirestore.instance.collection('users').doc(uid).set({
-          'fcmToken': token,
-          'lastTokenUpdate': FieldValue.serverTimestamp(),
-        }, SetOptions(merge: true));
+        await SupabaseService.client.from('users').update({
+          'fcm_token': token,
+          'updated_at': DateTime.now().toIso8601String(),
+        }).or('id.eq.$uid,uid.eq.$uid');
       }
-    } catch (_) {}
+    } catch (e) {
+      debugPrint('[NotificationService] Error saving FCM token to Supabase: $e');
+    }
   }
 
   /// Real-time listener for current user's squad notifications (e.g. requests, accepts)

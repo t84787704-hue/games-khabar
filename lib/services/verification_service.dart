@@ -1,6 +1,6 @@
 import 'dart:math';
-import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:firebase_auth/firebase_auth.dart';
+import 'package:games_khabar/compat/cloud_firestore.dart';
+import 'package:games_khabar/compat/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import '../models/gamer_user_model.dart';
 

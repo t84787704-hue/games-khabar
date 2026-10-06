@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
-import 'package:firebase_auth/firebase_auth.dart';
-import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:cloud_functions/cloud_functions.dart';
+import 'package:games_khabar/compat/firebase_auth.dart';
+import 'package:games_khabar/compat/cloud_firestore.dart';
 import '../models/news_model.dart';
 import '../services/firestore_service.dart';
 import '../services/auto_news_scraper.dart';
@@ -470,11 +469,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
                                               setSheetState(() => _isSyncing = true);
                                               setState(() => _isSyncing = true);
                                               try {
-                                                final functions = FirebaseFunctions.instance;
-                                                final callable = functions.httpsCallable('manualSyncFeeds');
-                                                final result = await callable.call();
-
-                                                final count = result.data is Map ? result.data['count'] : null;
+                                                final count = await AutoNewsScraper().runScraper();
                                                 if (context.mounted) {
                                                   ScaffoldMessenger.of(context).showSnackBar(
                                                     SnackBar(

@@ -2,11 +2,7 @@ import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 import 'package:flutter/foundation.dart';
-import 'package:firebase_auth/firebase_auth.dart';
-import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:firebase_storage/firebase_storage.dart';
-import 'package:google_sign_in/google_sign_in.dart';
-import 'package:shared_preferences/shared_preferences.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 import '../models/gamer_user_model.dart';
 import 'supabase_service.dart';
 import 'notification_service.dart';
@@ -16,82 +12,91 @@ class GamerAuthService {
   factory GamerAuthService() => _instance;
   GamerAuthService._internal();
 
-  final FirebaseAuth _auth = FirebaseAuth.instance;
-  final FirebaseFirestore _firestore = FirebaseFirestore.instance;
-  final FirebaseStorage _storage = FirebaseStorage.instance;
-  final GoogleSignIn _googleSignIn = GoogleSignIn();
+  SupabaseClient get _supabase => SupabaseService.client;
 
   final ValueNotifier<GamerUser?> currentGamerNotifier = ValueNotifier<GamerUser?>(null);
   final ValueNotifier<bool> isLoadingNotifier = ValueNotifier<bool>(true);
 
-  StreamSubscription<DocumentSnapshot>? _userDocSubscription;
+  StreamSubscription<AuthState>? _authSubscription;
 
-  User? get currentUser => _auth.currentUser;
-  String? get currentUid => _auth.currentUser?.uid;
-  bool get isAuthenticated => _auth.currentUser != null;
+  User? get currentUser => _supabase.auth.currentUser;
+  String? get currentUid => _supabase.auth.currentUser?.id;
+  bool get isAuthenticated => _supabase.auth.currentUser != null;
   GamerUser? get currentGamer => currentGamerNotifier.value;
 
-  Stream<User?> get authStateChanges => _auth.authStateChanges();
+  Stream<User?> get authStateChanges => _supabase.auth.onAuthStateChange.map((event) => event.session?.user);
 
   Future<void> init() async {
-    _auth.authStateChanges().listen((user) async {
-      _userDocSubscription?.cancel();
-      _userDocSubscription = null;
-
+    _authSubscription?.cancel();
+    _authSubscription = _supabase.auth.onAuthStateChange.listen((data) async {
+      final user = data.session?.user;
       if (user != null) {
-        // Setup real-time listener for current user's document
-        _listenToUserDoc(user.uid);
+        await _syncAndLoadUser(user);
       } else {
         currentGamerNotifier.value = null;
         isLoadingNotifier.value = false;
       }
     });
+
+    final initialUser = _supabase.auth.currentUser;
+    if (initialUser != null) {
+      await _syncAndLoadUser(initialUser);
+    } else {
+      isLoadingNotifier.value = false;
+    }
   }
 
-  void _listenToUserDoc(String uid) {
-    _userDocSubscription?.cancel();
+  /// Internal sync and load user profile from Supabase users table
+  Future<void> _syncAndLoadUser(User user) async {
+    try {
+      final uid = user.id;
+      final email = user.email ?? '';
 
-    // Safety timeout: Never allow loading screen to hang forever
-    Future.delayed(const Duration(seconds: 4), () {
-      if (isLoadingNotifier.value) {
-        debugPrint('[AuthService] Loading safety timeout triggered.');
-        isLoadingNotifier.value = false;
+      // Check if user exists in Supabase users table
+      final existingData = await _supabase.from('users').select().or('id.eq.$uid,uid.eq.$uid').maybeSingle();
+
+      if (existingData == null) {
+        // If new user: create row in users table with default username from email
+        final defaultUsername = email.contains('@') ? email.split('@').first : 'gamer_${uid.substring(0, 5)}';
+        final meta = user.userMetadata ?? {};
+        final defaultDisplayName = meta['full_name'] ?? meta['name'] ?? meta['display_name'] ?? defaultUsername;
+        final avatarUrl = meta['avatar_url'] ?? meta['picture'] ?? '';
+
+        final newUserData = <String, dynamic>{
+          'id': uid,
+          'uid': uid,
+          'email': email,
+          'username': defaultUsername,
+          'display_name': defaultDisplayName,
+          'avatar_url': avatarUrl,
+          'cover_url': '',
+          'bio': '',
+          'coins': 100,
+          'is_verified': false,
+          'is_admin': email.toLowerCase().trim() == 'tufailm483@gmail.com',
+          'is_banned': false,
+          'created_at': DateTime.now().toIso8601String(),
+          'updated_at': DateTime.now().toIso8601String(),
+        };
+
+        await _supabase.from('users').insert(newUserData);
+        final gamer = GamerUser.fromMap(newUserData, uid);
+        currentGamerNotifier.value = gamer;
+      } else {
+        final gamer = GamerUser.fromMap(existingData, uid);
+        currentGamerNotifier.value = gamer;
       }
-    });
 
-    _userDocSubscription = _firestore.collection('users').doc(uid).snapshots().listen(
-      (doc) {
-        if (doc.exists && doc.data() != null) {
-          final data = doc.data()!;
-          if (data['coins'] == null) {
-            _firestore.collection('users').doc(uid).set({'coins': 100}, SetOptions(merge: true));
-          }
-          final gamer = GamerUser.fromFirestore(doc);
-          if (gamer.isOwnerUser && (!gamer.isBlueTickVerified || gamer.blueTickStatus != 'approved')) {
-            _firestore.collection('users').doc(uid).set({
-              'isBlueTickVerified': true,
-              'blueTickVerified': true,
-              'blueTickStatus': 'approved',
-              'isVerified': true,
-              'isVerifiedBlue': true,
-              'verificationStatus': 'verified',
-              'isOwner': true,
-            }, SetOptions(merge: true));
-          }
-          currentGamerNotifier.value = gamer;
-          isLoadingNotifier.value = false;
-        } else {
-          currentGamerNotifier.value = null;
-          isLoadingNotifier.value = false;
-        }
-      },
-      onError: (err) {
-        debugPrint('[AuthService] Error in user doc listener: $err');
-        isLoadingNotifier.value = false;
-      },
-    );
+      // Store FCM push notification token in Supabase users table
+      NotificationService().saveUserFcmToken(uid);
+    } catch (e) {
+      debugPrint('[GamerAuthService] Error syncing user: $e');
+    } finally {
+      isLoadingNotifier.value = false;
+    }
   }
 
+  /// Refresh current gamer profile from Supabase
   Future<GamerUser?> refreshCurrentGamer() async {
     final uid = currentUid;
     if (uid == null) {
@@ -101,247 +106,58 @@ class GamerAuthService {
     }
 
     try {
-      final doc = await _firestore.collection('users').doc(uid).get();
-      if (doc.exists && doc.data() != null) {
-        final data = doc.data()!;
-        if (data['coins'] == null) {
-          await _firestore.collection('users').doc(uid).set({'coins': 100}, SetOptions(merge: true));
-        }
-        final gamer = GamerUser.fromFirestore(doc);
+      final userData = await _supabase.from('users').select().or('id.eq.$uid,uid.eq.$uid').maybeSingle();
+      if (userData != null) {
+        final gamer = GamerUser.fromMap(userData, uid);
         currentGamerNotifier.value = gamer;
         isLoadingNotifier.value = false;
         return gamer;
-      } else {
-        // User is logged in to FirebaseAuth but has not created Gamer ID yet
-        currentGamerNotifier.value = null;
-        isLoadingNotifier.value = false;
-        return null;
       }
     } catch (e) {
-      debugPrint('Error fetching gamer user: $e');
-      isLoadingNotifier.value = false;
-      return null;
+      debugPrint('[GamerAuthService] Error refreshing gamer: $e');
     }
+    isLoadingNotifier.value = false;
+    return null;
   }
 
-  /// Checks live if a username is available in Firestore & Supabase
+  /// Checks live if a username is available in Supabase
   Future<bool> isUsernameAvailable(String username, {String? currentUid}) async {
     final clean = username.toLowerCase().trim();
     if (clean.length < 3) return false;
 
     try {
-      final sbUsers = await SupabaseService.query('users', filters: {'username': 'eq.$clean'}, limit: 1);
-      if (sbUsers.isNotEmpty) {
-        if (currentUid != null && sbUsers.first['uid'] == currentUid) {
-          return true;
+      final res = await _supabase.from('users').select('id, uid, username').eq('username', clean).limit(1);
+      if (res.isNotEmpty) {
+        final row = res.first;
+        final rowUid = row['uid'] ?? row['id'];
+        if (currentUid != null && rowUid == currentUid) {
+          return true; // User's own username
         }
         return false;
       }
-    } catch (_) {}
-
-    try {
-      final query = await _firestore
-          .collection('users')
-          .where('username', isEqualTo: clean)
-          .limit(1)
-          .get();
-
-      if (query.docs.isEmpty) return true;
-      if (currentUid != null && query.docs.first.id == currentUid) {
-        return true; // It's their own username
-      }
-      return false;
+      return true;
     } catch (e) {
       debugPrint('Error checking username: $e');
       return true;
     }
   }
 
-  /// Login with Email & Password
-  /// Catches 'invalid-credential' or 'user-token-expired', signs out, clears local storage,
-  /// performs auto-retry once after signOut, and returns user-friendly Urdu message.
-  Future<UserCredential> login(String email, String password, {bool isRetry = false}) async {
+  /// Google Sign In (via Supabase OAuth)
+  Future<void> signInWithGoogle() async {
     try {
-      final cred = await _auth.signInWithEmailAndPassword(
-        email: email.trim(),
-        password: password,
+      await _supabase.auth.signInWithOAuth(
+        OAuthProvider.google,
+        redirectTo: 'io.supabase.gameskhabar://login-callback',
+        authScreenLaunchMode: LaunchMode.externalApplication,
       );
-      // Synchronize with Supabase Auth
-      try {
-        await SupabaseService.signInWithEmail(email: email.trim(), password: password);
-      } catch (sbErr) {
-        debugPrint('Supabase signin sync notice: $sbErr');
-      }
-      await refreshCurrentGamer();
-      return cred;
-    } on FirebaseAuthException catch (e) {
-      if (e.code == 'invalid-credential' || e.code == 'user-token-expired') {
-        debugPrint('[AuthService] Caught ${e.code}. Signing out and clearing local storage...');
-        try {
-          await _auth.signOut();
-        } catch (_) {}
-        try {
-          final prefs = await SharedPreferences.getInstance();
-          await prefs.clear();
-        } catch (storageErr) {
-          debugPrint('[AuthService] Storage clear error: $storageErr');
-        }
-
-        // Add auto-retry once after signOut
-        if (!isRetry) {
-          try {
-            debugPrint('[AuthService] Auto-retrying login once after signOut...');
-            return await login(email, password, isRetry: true);
-          } catch (retryErr) {
-            debugPrint('[AuthService] Retry failed: $retryErr');
-          }
-        }
-
-        // Then show user friendly message in Urdu instead of raw Firebase error
-        throw FirebaseAuthException(
-          code: e.code,
-          message: 'Session khatam ho gaya hai, dobara login karen',
-        );
-      }
-      rethrow;
-    }
-  }
-
-  /// Sign In with Email & Password (delegates to login)
-  Future<UserCredential> signInWithEmail(String email, String password) => login(email, password);
-
-  /// Sign Up with Email & Password
-  Future<UserCredential> signUpWithEmail(String email, String password) async {
-    final cred = await _auth.createUserWithEmailAndPassword(
-      email: email.trim(),
-      password: password,
-    );
-    // Synchronize with Supabase Auth and insert into public.users table immediately
-    try {
-      final cleanEmail = email.trim();
-      final defaultUsername = cleanEmail.split('@').first;
-      final authRes = await SupabaseService.signUpWithEmail(
-        email: cleanEmail,
-        password: password,
-        userMetadata: {
-          'app': 'GAMERS ID NETWORK',
-          'username': defaultUsername,
-          'display_name': defaultUsername,
-        },
-      );
-
-      final supabaseAuthId = authRes?['user']?['id']?.toString();
-      if (supabaseAuthId != null) {
-        await SupabaseService.upsertUser({
-          'id': supabaseAuthId,
-          'uid': supabaseAuthId,
-          'email': cleanEmail,
-          'username': defaultUsername,
-          'display_name': defaultUsername,
-          'avatar_url': null,
-          'coins': 100,
-          'created_at': DateTime.now().toIso8601String(),
-        });
-        debugPrint('[AuthService] Supabase user row created successfully: $supabaseAuthId');
-      }
-    } catch (sbErr) {
-      debugPrint('Supabase signup & user sync notice: $sbErr');
-    }
-    await refreshCurrentGamer();
-    return cred;
-  }
-
-  /// Google Sign In / loginWithGoogle
-  /// First calls GoogleSignIn().signOut() then GoogleSignIn().signIn() to force account chooser
-  Future<UserCredential?> loginWithGoogle() async {
-    try {
-      try {
-        await _googleSignIn.signOut();
-      } catch (_) {}
-
-      final GoogleSignInAccount? googleUser = await _googleSignIn.signIn();
-      if (googleUser == null) return null; // User cancelled
-
-      final GoogleSignInAuthentication googleAuth = await googleUser.authentication;
-      final OAuthCredential credential = GoogleAuthProvider.credential(
-        accessToken: googleAuth.accessToken,
-        idToken: googleAuth.idToken,
-      );
-
-      final cred = await _auth.signInWithCredential(credential);
-      print("LOGGED IN UID: ${cred.user?.uid} | EMAIL: ${cred.user?.email}");
-      await refreshCurrentGamer();
-      NotificationService().saveUserFcmToken(cred.user?.uid);
-      return cred;
     } catch (e) {
-      debugPrint('Google Sign In Error: $e');
+      debugPrint('[GamerAuthService] Supabase Google OAuth Error: $e');
       rethrow;
     }
   }
 
-  /// Alias for loginWithGoogle
-  Future<UserCredential?> signInWithGoogle() => loginWithGoogle();
-
-  /// Quick Anonymous / Guest Sign In for instant access and testing
-  Future<UserCredential> signInAnonymously() async {
-    final cred = await _auth.signInAnonymously();
-    await refreshCurrentGamer();
-    return cred;
-  }
-
-  /// Sign Up with Supabase Auth
-  Future<Map<String, dynamic>?> signUpWithSupabase({
-    required String email,
-    required String password,
-    String? username,
-    String? displayName,
-    String? avatarUrl,
-  }) async {
-    final cleanEmail = email.trim();
-    final defaultUsername = username ?? cleanEmail.split('@').first;
-    final defaultDisplayName = displayName ?? defaultUsername;
-
-    final res = await SupabaseService.signUpWithEmail(
-      email: cleanEmail,
-      password: password,
-      userMetadata: {
-        'username': defaultUsername,
-        'display_name': defaultDisplayName,
-        'app': 'GAMERS ID NETWORK',
-      },
-    );
-
-    final supabaseAuthId = res?['user']?['id']?.toString();
-    if (supabaseAuthId != null) {
-      try {
-        await SupabaseService.client.from('users').upsert({
-          'id': supabaseAuthId,
-          'uid': supabaseAuthId,
-          'email': cleanEmail,
-          'username': defaultUsername,
-          'display_name': defaultDisplayName,
-          'avatar_url': avatarUrl ?? '',
-          'created_at': DateTime.now().toIso8601String(),
-        });
-        debugPrint('[AuthService] Supabase user record created for $supabaseAuthId');
-      } catch (e) {
-        debugPrint('[AuthService] Error writing user to Supabase table: $e');
-      }
-    }
-    return res;
-  }
-
-  /// Sign In with Supabase Auth
-  Future<Map<String, dynamic>?> signInWithSupabase({
-    required String email,
-    required String password,
-  }) async {
-    final res = await SupabaseService.signInWithEmail(
-      email: email,
-      password: password,
-    );
-    return res;
-  }
+  /// Alias for signInWithGoogle
+  Future<void> loginWithGoogle() => signInWithGoogle();
 
   /// Uploads user avatar photo directly to Supabase Storage
   Future<String> uploadProfilePhoto(File imageFile, String uid) async {
@@ -356,19 +172,9 @@ class GamerAuthService {
         return url;
       }
     } catch (e) {
-      debugPrint('Supabase avatar upload notice: $e');
+      debugPrint('[GamerAuthService] Supabase avatar upload error: $e');
     }
-
-    try {
-      final ref = _storage.ref().child('gamer_profiles').child('$uid.jpg');
-      final metadata = SettableMetadata(contentType: 'image/jpeg');
-      final uploadTask = await ref.putFile(imageFile, metadata);
-      final downloadUrl = await uploadTask.ref.getDownloadURL();
-      return downloadUrl;
-    } catch (e) {
-      debugPrint('Storage upload failed: $e');
-      return '';
-    }
+    return '';
   }
 
   /// Uploads user cover photo directly to Supabase Storage
@@ -384,19 +190,9 @@ class GamerAuthService {
         return url;
       }
     } catch (e) {
-      debugPrint('Supabase cover upload notice: $e');
+      debugPrint('[GamerAuthService] Supabase cover upload error: $e');
     }
-
-    try {
-      final ref = _storage.ref().child('gamer_covers').child('$uid.jpg');
-      final metadata = SettableMetadata(contentType: 'image/jpeg');
-      final uploadTask = await ref.putFile(imageFile, metadata);
-      final downloadUrl = await uploadTask.ref.getDownloadURL();
-      return downloadUrl;
-    } catch (e) {
-      debugPrint('Storage cover upload failed: $e');
-      return '';
-    }
+    return '';
   }
 
   /// Uploads rank proof screenshot to Supabase Storage
@@ -405,121 +201,58 @@ class GamerAuthService {
       final url = await SupabaseService.uploadFile(
         file: imageFile,
         folder: 'rank_proofs',
-        bucket: SupabaseService.bucketMatchProofs,
+        bucket: SupabaseService.bucketScreenshots,
         customFileName: 'rank_${uid}_${DateTime.now().millisecondsSinceEpoch}.jpg',
       );
       if (url != null && url.isNotEmpty) {
         return url;
       }
     } catch (e) {
-      debugPrint('Supabase rank screenshot upload notice: $e');
+      debugPrint('[GamerAuthService] Supabase rank screenshot upload error: $e');
     }
-
-    try {
-      final timestamp = DateTime.now().millisecondsSinceEpoch;
-      final ref = _storage.ref().child('rank_proofs').child(uid).child('rank_$timestamp.jpg');
-      final metadata = SettableMetadata(contentType: 'image/jpeg');
-      final uploadTask = await ref.putFile(imageFile, metadata);
-      final downloadUrl = await uploadTask.ref.getDownloadURL();
-      return downloadUrl;
-    } catch (e) {
-      debugPrint('Storage rank screenshot upload failed: $e');
-      try {
-        final bytes = await imageFile.readAsBytes();
-        final base64String = base64Encode(bytes);
-        return 'data:image/jpeg;base64,$base64String';
-      } catch (b64Error) {
-        debugPrint('Base64 fallback failed: $b64Error');
-        return '';
-      }
-    }
+    return '';
   }
 
-  /// Creates or updates `users/{uid}` document
+  /// Creates or updates `users` record in Supabase
   Future<void> saveGamerProfile(GamerUser user) async {
-    final docRef = _firestore.collection('users').doc(user.uid);
-    final doc = await docRef.get();
-    final exists = doc.exists;
-
-    final userMap = user.toMap();
-    if (!exists) {
-      if (userMap['coins'] == null) userMap['coins'] = 100;
-      await docRef.set(userMap, SetOptions(merge: true));
-    } else {
-      final existingCoins = doc.data()?['coins'];
-      if (existingCoins != null) {
-        userMap['coins'] = existingCoins;
-      } else if (userMap['coins'] == null) {
-        userMap['coins'] = 100;
-      }
-      await docRef.update(userMap);
-    }
-
-    final realCoins = (userMap['coins'] as num?)?.toInt() ?? user.coins;
-    currentGamerNotifier.value = user.copyWith(coins: realCoins);
-
-    // Synchronize user profile with Supabase public.users table
     try {
-      final userEmail = userMap['email']?.toString() ?? user.email;
-      final currentSbId = await SupabaseService.getCurrentUserId();
-      final uuidRegex = RegExp(r'^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$');
-      final targetId = (currentSbId != null && uuidRegex.hasMatch(currentSbId))
-          ? currentSbId
-          : (uuidRegex.hasMatch(user.uid) ? user.uid : null);
-
-      if (targetId != null) {
-        final supabaseUser = <String, dynamic>{
-          'id': targetId,
-          'uid': targetId,
-          'username': user.username,
-          'email': userEmail,
-          'display_name': user.displayName,
-          'avatar_url': user.photoUrl.isNotEmpty ? user.photoUrl : null,
-          'cover_url': user.coverUrl.isNotEmpty ? user.coverUrl : null,
-          'bio': user.bio.isNotEmpty ? user.bio : null,
-          'game': (user.favoriteGame.isNotEmpty && user.favoriteGame != 'All Games') ? user.favoriteGame : null,
-          'rank': user.rank.isNotEmpty ? user.rank : null,
-          'coins': realCoins,
-          'is_verified': user.isVerified,
-          'updated_at': DateTime.now().toIso8601String(),
-        };
-        await SupabaseService.upsertUser(supabaseUser);
-      }
+      final payload = <String, dynamic>{
+        'id': user.uid,
+        'uid': user.uid,
+        'username': user.username,
+        'display_name': user.displayName,
+        'avatar_url': user.photoUrl,
+        'cover_url': user.coverUrl,
+        'bio': user.bio,
+        'game': (user.favoriteGame.isNotEmpty && user.favoriteGame != 'All Games') ? user.favoriteGame : null,
+        'rank': user.rank.isNotEmpty ? user.rank : null,
+        'coins': user.coins,
+        'is_verified': user.isVerified,
+        'updated_at': DateTime.now().toIso8601String(),
+      };
+      await _supabase.from('users').upsert(payload);
+      currentGamerNotifier.value = user;
     } catch (e) {
-      debugPrint('Supabase user sync error: $e');
+      debugPrint('[GamerAuthService] Error saving gamer profile in Supabase: $e');
     }
   }
 
-  /// Fetch any user's profile by UID
+  /// Fetch any user's profile by UID from Supabase
   Future<GamerUser?> getUserProfile(String uid) async {
     try {
-      final doc = await _firestore.collection('users').doc(uid).get();
-      if (doc.exists) {
-        final data = doc.data() ?? {};
-        if (data['coins'] == null) {
-          await _firestore.collection('users').doc(uid).set({'coins': 100}, SetOptions(merge: true));
-        }
-        return GamerUser.fromFirestore(doc);
+      final userData = await _supabase.from('users').select().or('id.eq.$uid,uid.eq.$uid').maybeSingle();
+      if (userData != null) {
+        return GamerUser.fromMap(userData, uid);
       }
     } catch (e) {
-      debugPrint('Firestore get user profile $uid notice: $e');
-    }
-
-    try {
-      final sbUser = await SupabaseService.getUser(uid);
-      if (sbUser != null) {
-        return GamerUser.fromMap(sbUser);
-      }
-    } catch (e) {
-      debugPrint('Supabase get user profile $uid error: $e');
+      debugPrint('[GamerAuthService] Supabase get user profile error: $e');
     }
     return null;
   }
 
-  /// Alias for getUserProfile
   Future<GamerUser?> fetchUserProfile(String uid) => getUserProfile(uid);
 
-  /// Updates profile fields for current user
+  /// Updates profile fields in Supabase
   Future<void> updateProfile({
     String? rank,
     double? kdRatio,
@@ -531,79 +264,46 @@ class GamerAuthService {
   }) async {
     final uid = currentUid;
     if (uid == null) return;
+
     final Map<String, dynamic> updates = {};
     if (rank != null) updates['rank'] = rank;
-    if (kdRatio != null) updates['kdRatio'] = kdRatio;
-    if (gameId != null) updates['gameId'] = gameId;
     if (bio != null) updates['bio'] = bio;
-    if (displayName != null) updates['displayName'] = displayName;
-    if (photoUrl != null) updates['photoUrl'] = photoUrl;
-    if (verificationStatus != null) updates['verificationStatus'] = verificationStatus;
+    if (displayName != null) updates['display_name'] = displayName;
+    if (photoUrl != null) updates['avatar_url'] = photoUrl;
+    if (verificationStatus != null) updates['is_verified'] = verificationStatus == 'verified';
 
     if (updates.isNotEmpty) {
+      updates['updated_at'] = DateTime.now().toIso8601String();
       try {
-        await _firestore.collection('users').doc(uid).update(updates);
+        await _supabase.from('users').update(updates).eq('id', uid);
         await refreshCurrentGamer();
       } catch (e) {
-        debugPrint('Error updating user profile $uid: $e');
-      }
-
-      // Sync updates to Supabase users table
-      try {
-        final Map<String, dynamic> sbUpdates = {};
-        if (rank != null) sbUpdates['gamer_rank'] = rank;
-        if (gameId != null) sbUpdates['game_id'] = gameId;
-        if (bio != null) sbUpdates['bio'] = bio;
-        if (displayName != null) sbUpdates['display_name'] = displayName;
-        if (photoUrl != null) sbUpdates['avatar_url'] = photoUrl;
-        if (verificationStatus != null) sbUpdates['is_verified'] = verificationStatus == 'verified';
-        if (sbUpdates.isNotEmpty) {
-          sbUpdates['updated_at'] = DateTime.now().toIso8601String();
-          await SupabaseService.update('users', sbUpdates, 'uid', uid);
-        }
-      } catch (e) {
-        debugPrint('Supabase updateProfile sync notice: $e');
+        debugPrint('[GamerAuthService] Error updating profile: $e');
       }
     }
   }
 
-  Stream<GamerUser?> userProfileStream(String uid) {
-    return _firestore.collection('users').doc(uid).snapshots().map((doc) {
-      if (doc.exists && doc.data() != null) {
-        return GamerUser.fromFirestore(doc);
-      }
-      return null;
-    });
+  Stream<GamerUser?> userProfileStream(String uid) async* {
+    while (true) {
+      final user = await getUserProfile(uid);
+      yield user;
+      await Future.delayed(const Duration(seconds: 4));
+    }
   }
 
-  /// Complete Logout / Sign Out
-  /// Signs out from FirebaseAuth, Supabase, GoogleSignIn, and calls GoogleSignIn().disconnect()
-  /// to ensure Google account chooser is displayed when logging in with another account.
+  /// Sign out
   Future<void> logout() async {
-    _userDocSubscription?.cancel();
-    _userDocSubscription = null;
+    try {
+      await _supabase.auth.signOut();
+    } catch (e) {
+      debugPrint('[GamerAuthService] Supabase signOut error: $e');
+    }
     try {
       await SupabaseService.signOut();
     } catch (_) {}
-    try {
-      await _auth.signOut();
-    } catch (e) {
-      debugPrint("FirebaseAuth signOut error: $e");
-    }
-    try {
-      await _googleSignIn.signOut();
-    } catch (e) {
-      debugPrint("GoogleSignIn signOut error: $e");
-    }
-    try {
-      await _googleSignIn.disconnect();
-    } catch (e) {
-      debugPrint("GoogleSignIn disconnect error: $e");
-    }
     currentGamerNotifier.value = null;
     isLoadingNotifier.value = false;
   }
 
-  /// Sign Out alias
   Future<void> signOut() => logout();
 }

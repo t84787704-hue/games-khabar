@@ -2,7 +2,7 @@ import 'dart:async';
 import 'dart:convert';
 import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
-import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:games_khabar/compat/cloud_firestore.dart';
 import 'package:translator/translator.dart';
 import 'package:xml/xml.dart' as xml;
 import 'package:html/parser.dart' as html_parser;

@@ -1,4 +1,4 @@
-import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:games_khabar/compat/cloud_firestore.dart';
 
 /// Status values:
 /// 'Pending' - Challenge sent, awaiting opponent team's response

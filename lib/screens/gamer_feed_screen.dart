@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:share_plus/share_plus.dart';
-import 'package:firebase_auth/firebase_auth.dart';
+import 'package:games_khabar/compat/firebase_auth.dart';
 import '../services/supabase_service.dart';
 
 class GamerFeedScreen extends StatefulWidget {

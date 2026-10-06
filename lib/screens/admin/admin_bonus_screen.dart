@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:games_khabar/compat/cloud_firestore.dart';
 import '../../services/theme_service.dart';
 
 class AdminBonusScreen extends StatefulWidget {

@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:games_khabar/compat/cloud_firestore.dart';
 import '../models/tournament_room_model.dart';
 import '../widgets/gamer_avatar.dart';
 import 'gamer_rooms_screen.dart';

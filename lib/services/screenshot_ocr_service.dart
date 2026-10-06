@@ -2,7 +2,7 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:google_mlkit_text_recognition/google_mlkit_text_recognition.dart';
-import 'package:firebase_storage/firebase_storage.dart';
+import 'package:games_khabar/compat/firebase_storage.dart';
 import '../models/tournament_room_model.dart';
 import '../constants/tournament_game_categories.dart';
 

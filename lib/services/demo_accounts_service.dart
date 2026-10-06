@@ -1,5 +1,5 @@
 import 'dart:math';
-import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:games_khabar/compat/cloud_firestore.dart';
 import 'package:flutter/foundation.dart';
 import '../models/gamer_user_model.dart';
 import '../models/gamer_post_model.dart';

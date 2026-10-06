@@ -1,5 +1,5 @@
 import 'dart:io';
-import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:games_khabar/compat/cloud_firestore.dart';
 import 'package:flutter/foundation.dart';
 import '../models/team_model.dart';
 import 'supabase_service.dart';
@@ -121,9 +121,18 @@ class TeamService {
 
   /// Get single team stream
   Stream<TeamModel?> getTeamStream(String teamId) {
-    return _teamsRef.doc(teamId).snapshots().map((doc) {
-      if (!doc.exists) return null;
-      return TeamModel.fromFirestore(doc);
+    if (teamId.isEmpty) return Stream.value(null);
+    return _teamsRef.doc(teamId).snapshots().asyncMap((doc) async {
+      if (doc.exists) return TeamModel.fromFirestore(doc);
+      // Fallback: search by 'id' or 'name'
+      var q = await _teamsRef.where('id', isEqualTo: teamId).limit(1).get();
+      if (q.docs.isEmpty) {
+        q = await _teamsRef.where('name', isEqualTo: teamId).limit(1).get();
+      }
+      if (q.docs.isNotEmpty) {
+        return TeamModel.fromFirestore(q.docs.first);
+      }
+      return null;
     });
   }
 
@@ -135,7 +144,10 @@ class TeamService {
       if (doc.exists) return TeamModel.fromFirestore(doc);
 
       // Check Firestore where 'id' or other fields might match
-      final querySnap = await _teamsRef.where('id', isEqualTo: teamId).limit(1).get();
+      var querySnap = await _teamsRef.where('id', isEqualTo: teamId).limit(1).get();
+      if (querySnap.docs.isEmpty) {
+        querySnap = await _teamsRef.where('name', isEqualTo: teamId).limit(1).get();
+      }
       if (querySnap.docs.isNotEmpty) {
         return TeamModel.fromFirestore(querySnap.docs.first);
       }
@@ -185,55 +197,135 @@ class TeamService {
     required String teamId,
     required String userId,
     required String userName,
+    String teamName = '',
   }) async {
-    try {
-      final doc = await _teamsRef.doc(teamId).get();
-      if (!doc.exists) return false;
-      final team = TeamModel.fromFirestore(doc);
+    final effectiveUserId = userId.trim().isNotEmpty
+        ? userId.trim()
+        : (FirebaseAuth.instance.currentUser?.uid ??
+            (GamerAuthService().currentUid ??
+                (SupabaseService.client.auth.currentUser?.id ?? '')));
 
-      if (team.isMember(userId) || team.hasRequestedJoin(userId)) {
-        return true;
-      }
-
-      await _teamsRef.doc(teamId).update({
-        'pendingJoinRequests': FieldValue.arrayUnion([userId]),
-      });
-
-      // Notify team leader
-      await _notificationsRef.add({
-        'recipientUid': team.leaderId,
-        'senderUid': userId,
-        'type': 'team_join_request',
-        'title': '🛡️ New Team Join Request',
-        'message': '$userName نے آپ کی ٹیم "${team.name}" میں شامل ہونے کی درخواست کی ہے۔',
-        'teamId': teamId,
-        'read': false,
-        'createdAt': FieldValue.serverTimestamp(),
-      });
-
-      // Sync join request & notification to Supabase
-      try {
-        await SupabaseService.createTeamJoinRequest(
-          teamId: teamId,
-          teamName: team.name,
-          userId: userId,
-          username: userName,
-        );
-        await SupabaseService.sendNotification({
-          'userId': team.leaderId,
-          'title': '🛡️ New Team Join Request',
-          'message': '$userName نے آپ کی ٹیم "${team.name}" میں شامل ہونے کی درخواست کی ہے۔',
-          'type': 'team_join_request',
-        });
-      } catch (e) {
-        debugPrint('[TeamService] Supabase join request sync notice: $e');
-      }
-
-      return true;
-    } catch (e) {
-      debugPrint('[TeamService] Error sending join request: $e');
+    if (effectiveUserId.isEmpty) {
+      debugPrint('[TeamService] Error: userId is empty for join request');
       return false;
     }
+
+    bool firestoreSuccess = false;
+    String resolvedTeamName = teamName;
+    String leaderId = '';
+
+    try {
+      DocumentReference teamDocRef = _teamsRef.doc(teamId);
+      DocumentSnapshot doc = await teamDocRef.get();
+      if (!doc.exists) {
+        var q = await _teamsRef.where('id', isEqualTo: teamId).limit(1).get();
+        if (q.docs.isEmpty) {
+          q = await _teamsRef.where('name', isEqualTo: teamId).limit(1).get();
+        }
+        if (q.docs.isEmpty && teamName.isNotEmpty) {
+          q = await _teamsRef.where('name', isEqualTo: teamName).limit(1).get();
+        }
+        if (q.docs.isNotEmpty) {
+          doc = q.docs.first;
+          teamDocRef = doc.reference;
+        } else {
+          // Comprehensive fallback: scan all teams
+          final allTeams = await _teamsRef.get();
+          for (final d in allTeams.docs) {
+            final data = d.data() as Map<String, dynamic>? ?? {};
+            final dName = (data['name'] ?? '').toString().toLowerCase();
+            final dTag = (data['tag'] ?? '').toString().toLowerCase();
+            final dUuid = SupabaseService.toUuid(d.id).toLowerCase();
+            final search = teamId.toLowerCase();
+            if (d.id == teamId ||
+                dName == search ||
+                dTag == search ||
+                dUuid == search ||
+                (teamName.isNotEmpty && dName == teamName.toLowerCase())) {
+              doc = d;
+              teamDocRef = d.reference;
+              break;
+            }
+          }
+        }
+      }
+
+      if (doc.exists) {
+        final team = TeamModel.fromFirestore(doc);
+        resolvedTeamName = team.name;
+        leaderId = team.leaderId;
+
+        if (team.isMember(effectiveUserId)) {
+          debugPrint('[TeamService] User $effectiveUserId is already a member of team ${team.name}');
+          return true;
+        }
+
+        if (team.hasRequestedJoin(effectiveUserId)) {
+          debugPrint('[TeamService] User $effectiveUserId has already requested to join team ${team.name}');
+          return true;
+        }
+
+        try {
+          await teamDocRef.update({
+            'pendingJoinRequests': FieldValue.arrayUnion([effectiveUserId]),
+          });
+          firestoreSuccess = true;
+        } catch (fErr) {
+          debugPrint('[TeamService] Firestore update pendingJoinRequests notice: $fErr');
+          try {
+            await teamDocRef.set({
+              'pendingJoinRequests': FieldValue.arrayUnion([effectiveUserId]),
+            }, SetOptions(merge: true));
+            firestoreSuccess = true;
+          } catch (setErr) {
+            debugPrint('[TeamService] Firestore set pendingJoinRequests error: $setErr');
+          }
+        }
+
+        // Notify team leader
+        if (team.leaderId.isNotEmpty && team.leaderId != effectiveUserId) {
+          try {
+            await _notificationsRef.add({
+              'recipientUid': team.leaderId,
+              'senderUid': effectiveUserId,
+              'type': 'team_join_request',
+              'title': '🛡️ New Team Join Request',
+              'message': '$userName نے آپ کی ٹیم "${team.name}" میں شامل ہونے کی درخواست کی ہے۔',
+              'teamId': team.id,
+              'read': false,
+              'createdAt': FieldValue.serverTimestamp(),
+            });
+          } catch (nErr) {
+            debugPrint('[TeamService] Firestore notification notice: $nErr');
+          }
+        }
+      }
+    } catch (e) {
+      debugPrint('[TeamService] Firestore team join error: $e');
+    }
+
+    // Always sync join request & notification to Supabase
+    bool supabaseSuccess = false;
+    try {
+      supabaseSuccess = await SupabaseService.createTeamJoinRequest(
+        teamId: teamId,
+        teamName: resolvedTeamName,
+        userId: effectiveUserId,
+        username: userName,
+      );
+      if (leaderId.isNotEmpty && leaderId != effectiveUserId) {
+        await SupabaseService.sendNotification({
+          'userId': leaderId,
+          'title': '🛡️ New Team Join Request',
+          'message': '$userName نے آپ کی ٹیم "${resolvedTeamName.isNotEmpty ? resolvedTeamName : 'Team'}" میں شامل ہونے کی درخواست کی ہے۔',
+          'type': 'team_join_request',
+        });
+      }
+    } catch (e) {
+      debugPrint('[TeamService] Supabase join request sync notice: $e');
+    }
+
+    return firestoreSuccess || supabaseSuccess;
   }
 
   /// Accept join request (Leader only)
@@ -244,8 +336,20 @@ class TeamService {
     String userAvatar = '',
   }) async {
     try {
-      await _teamsRef.doc(teamId).update({
-        'pendingJoinRequests': FieldValue.arrayRemove([userId]),
+      DocumentReference teamDocRef = _teamsRef.doc(teamId);
+      DocumentSnapshot doc = await teamDocRef.get();
+      if (!doc.exists) {
+        var q = await _teamsRef.where('id', isEqualTo: teamId).limit(1).get();
+        if (q.docs.isEmpty) {
+          q = await _teamsRef.where('name', isEqualTo: teamId).limit(1).get();
+        }
+        if (q.docs.isNotEmpty) {
+          teamDocRef = q.docs.first.reference;
+        }
+      }
+
+      await teamDocRef.update({
+        'pendingJoinRequests': FieldValue.arrayRemove([userId, SupabaseService.toUuid(userId)]),
         'members': FieldValue.arrayUnion([userId]),
         'memberDetails': FieldValue.arrayUnion([
           {
@@ -301,8 +405,20 @@ class TeamService {
     required String userId,
   }) async {
     try {
-      await _teamsRef.doc(teamId).update({
-        'pendingJoinRequests': FieldValue.arrayRemove([userId]),
+      DocumentReference teamDocRef = _teamsRef.doc(teamId);
+      DocumentSnapshot doc = await teamDocRef.get();
+      if (!doc.exists) {
+        var q = await _teamsRef.where('id', isEqualTo: teamId).limit(1).get();
+        if (q.docs.isEmpty) {
+          q = await _teamsRef.where('name', isEqualTo: teamId).limit(1).get();
+        }
+        if (q.docs.isNotEmpty) {
+          teamDocRef = q.docs.first.reference;
+        }
+      }
+
+      await teamDocRef.update({
+        'pendingJoinRequests': FieldValue.arrayRemove([userId, SupabaseService.toUuid(userId)]),
       });
 
       // Sync reject status to Supabase team_join_requests

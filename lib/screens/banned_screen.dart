@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import 'package:firebase_auth/firebase_auth.dart';
+import 'package:games_khabar/compat/firebase_auth.dart';
 import '../constants/gamer_theme.dart';
 import '../services/gamer_auth_service.dart';
 

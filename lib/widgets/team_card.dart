@@ -30,18 +30,44 @@ class TeamCard extends StatefulWidget {
 class _TeamCardState extends State<TeamCard> {
   final TeamService _teamService = TeamService();
   bool _isRequesting = false;
+  bool _localRequested = false;
 
   Future<void> _handleJoin(String currentUid) async {
+    final effectiveUid = currentUid.isNotEmpty
+        ? currentUid
+        : (SupabaseService.client.auth.currentUser?.id ??
+            FirebaseAuth.instance.currentUser?.uid ??
+            GamerAuthService().currentUid ??
+            '');
+
+    if (effectiveUid.isEmpty) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('براہ کرم پہلے لاگ ان کریں'),
+            backgroundColor: Color(0xFFFF4655),
+          ),
+        );
+      }
+      return;
+    }
+
     final currentGamer = GamerAuthService().currentGamer;
     final userName = currentGamer?.displayName ?? currentGamer?.username ?? 'Gamer';
 
     setState(() => _isRequesting = true);
     final success = await _teamService.requestToJoinTeam(
       teamId: widget.team.id,
-      userId: currentUid,
+      userId: effectiveUid,
       userName: userName,
+      teamName: widget.team.name,
     );
-    setState(() => _isRequesting = false);
+    setState(() {
+      _isRequesting = false;
+      if (success) {
+        _localRequested = true;
+      }
+    });
 
     if (mounted) {
       if (success) {
@@ -49,6 +75,13 @@ class _TeamCardState extends State<TeamCard> {
           const SnackBar(
             content: Text('✅ شمولیت کی درخواست بھیج دی گئی ہے!'),
             backgroundColor: Color(0xFF1877F2),
+          ),
+        );
+      } else {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('درخواست بھیجنے میں مسئلہ ہوا، دوبارہ کوشش کریں'),
+            backgroundColor: Color(0xFFFF4655),
           ),
         );
       }
@@ -325,7 +358,9 @@ class _TeamCardState extends State<TeamCard> {
   @override
   Widget build(BuildContext context) {
     final team = widget.team;
-    final currentUid = FirebaseAuth.instance.currentUser?.uid ?? '';
+    final currentUid = FirebaseAuth.instance.currentUser?.uid ??
+        (GamerAuthService().currentUid ??
+            (SupabaseService.client.auth.currentUser?.id ?? ''));
     final isLeader = team.isLeader(currentUid);
     final isMember = team.isMember(currentUid);
     final hasRequested = team.hasRequestedJoin(currentUid);
@@ -696,30 +731,33 @@ class _TeamCardState extends State<TeamCard> {
                       const SizedBox(width: 8),
 
                       // Join Button
-                      ElevatedButton.icon(
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: hasRequested ? const Color(0xFFE4E6EB) : const Color(0xFF1877F2),
-                          foregroundColor: hasRequested ? const Color(0xFF65676B) : Colors.white,
-                          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
-                          minimumSize: const Size(0, 32),
-                          elevation: 0,
-                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-                        ),
-                        icon: Icon(
-                          hasRequested ? Icons.hourglass_top_rounded : Icons.person_add_rounded,
-                          size: 14,
-                          color: hasRequested ? const Color(0xFF65676B) : Colors.white,
-                        ),
-                        label: Text(
-                          hasRequested ? 'Requested' : 'Join',
-                          style: TextStyle(
-                            fontWeight: FontWeight.bold,
-                            fontSize: 11.5,
-                            color: hasRequested ? const Color(0xFF65676B) : Colors.white,
+                      Builder(builder: (context) {
+                        final bool isRequested = hasRequested || _localRequested;
+                        return ElevatedButton.icon(
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: isRequested ? const Color(0xFFE4E6EB) : const Color(0xFF1877F2),
+                            foregroundColor: isRequested ? const Color(0xFF65676B) : Colors.white,
+                            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+                            minimumSize: const Size(0, 32),
+                            elevation: 0,
+                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
                           ),
-                        ),
-                        onPressed: (hasRequested || _isRequesting) ? null : () => _handleJoin(currentUid),
-                      ),
+                          icon: Icon(
+                            isRequested ? Icons.hourglass_top_rounded : Icons.person_add_rounded,
+                            size: 14,
+                            color: isRequested ? const Color(0xFF65676B) : Colors.white,
+                          ),
+                          label: Text(
+                            isRequested ? 'Requested ⏳' : 'Join',
+                            style: TextStyle(
+                              fontWeight: FontWeight.bold,
+                              fontSize: 11.5,
+                              color: isRequested ? const Color(0xFF65676B) : Colors.white,
+                            ),
+                          ),
+                          onPressed: (isRequested || _isRequesting) ? null : () => _handleJoin(currentUid),
+                        );
+                      }),
                     ],
                   ],
                 ),

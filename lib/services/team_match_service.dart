@@ -1,5 +1,5 @@
 import 'dart:io';
-import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:games_khabar/compat/cloud_firestore.dart';
 import 'package:flutter/foundation.dart';
 import '../models/team_match_model.dart';
 import '../models/team_ranking_model.dart';

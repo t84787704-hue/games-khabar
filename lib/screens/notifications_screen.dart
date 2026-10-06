@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:games_khabar/compat/cloud_firestore.dart';
 import 'package:intl/intl.dart';
 import '../constants/gamer_theme.dart';
 import '../services/gamer_auth_service.dart';

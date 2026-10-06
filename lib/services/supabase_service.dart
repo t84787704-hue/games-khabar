@@ -619,15 +619,26 @@ class SupabaseService {
     required String username,
     String? userAvatar,
   }) async {
+    final tUuid = toUuid(teamId);
+    final effectiveSupabaseUid = client.auth.currentUser?.id ?? toUuid(userId);
+
+    // Try Supabase client insert first (uses authenticated JWT session for RLS)
+    try {
+      await client.from('team_join_requests').insert({
+        'team_id': tUuid,
+        'user_id': effectiveSupabaseUid,
+        'status': 'pending',
+      });
+      return true;
+    } catch (e) {
+      debugPrint('[SupabaseService] client insert into team_join_requests error: $e');
+    }
+
+    // Fallback: REST insert without extra nonexistent columns
     return await insert('team_join_requests', {
-      'request_id': 'req_${teamId}_$userId',
-      'team_id': teamId,
-      if (teamName != null) 'team_name': teamName,
-      'user_id': userId,
-      'username': username,
-      if (userAvatar != null) 'user_avatar': userAvatar,
+      'team_id': tUuid,
+      'user_id': effectiveSupabaseUid,
       'status': 'pending',
-      'created_at': DateTime.now().toIso8601String(),
     });
   }
 

@@ -9,7 +9,7 @@ import '../services/theme_service.dart';
 import '../services/language_service.dart';
 import '../widgets/news_card.dart';
 import '../widgets/price_tracker_card.dart';
-import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:games_khabar/compat/cloud_firestore.dart';
 
 class FollowingScreen extends StatefulWidget {
   const FollowingScreen({super.key});
