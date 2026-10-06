@@ -1,5 +1,3 @@
-import 'package:games_khabar/compat/cloud_firestore.dart';
-
 class GamerChallenge {
   final String id;
   final String challengerId;
@@ -8,10 +6,10 @@ class GamerChallenge {
   final String challengedId;
   final String challengedName;
   final String challengedAvatar;
-  final String game; // e.g. BGMI
-  final String mode; // e.g. TDM 1v1 Warehouse
-  final String weaponRule; // e.g. M416 Only, Sniper Only
-  final String status; // 'pending', 'accepted', 'declined', 'completed'
+  final String game;
+  final String mode;
+  final String weaponRule;
+  final String status;
   final String? winnerId;
   final DateTime? createdAt;
 
@@ -35,48 +33,47 @@ class GamerChallenge {
   bool get isAccepted => status == 'accepted';
   bool get isCompleted => status == 'completed';
 
-  factory GamerChallenge.fromFirestore(DocumentSnapshot doc) {
-    final data = doc.data() as Map<String, dynamic>? ?? {};
+  factory GamerChallenge.fromSupabase(Map<String, dynamic> row) {
     DateTime? created;
-    final raw = data['createdAt'];
-    if (raw is Timestamp) {
-      created = raw.toDate();
-    } else if (raw is String) {
+    final raw = row['created_at'];
+    if (raw is String) {
       created = DateTime.tryParse(raw);
+    } else if (raw is DateTime) {
+      created = raw;
     }
 
     return GamerChallenge(
-      id: data['id'] ?? doc.id,
-      challengerId: data['challengerId'] ?? '',
-      challengerName: data['challengerName'] ?? 'Challenger',
-      challengerAvatar: data['challengerAvatar'] ?? '',
-      challengedId: data['challengedId'] ?? '',
-      challengedName: data['challengedName'] ?? 'Opponent',
-      challengedAvatar: data['challengedAvatar'] ?? '',
-      game: data['game'] ?? 'BGMI',
-      mode: data['mode'] ?? 'TDM 1v1 Warehouse',
-      weaponRule: data['weaponRule'] ?? 'M416 Only',
-      status: data['status'] ?? 'pending',
-      winnerId: data['winnerId'],
+      id: (row['id'] ?? '').toString(),
+      challengerId: (row['challenger_id'] ?? '').toString(),
+      challengerName: (row['challenger_name'] ?? 'Challenger').toString(),
+      challengerAvatar: (row['challenger_avatar'] ?? '').toString(),
+      challengedId: (row['challenged_id'] ?? '').toString(),
+      challengedName: (row['challenged_name'] ?? 'Opponent').toString(),
+      challengedAvatar: (row['challenged_avatar'] ?? '').toString(),
+      game: (row['game'] ?? 'BGMI').toString(),
+      mode: (row['mode'] ?? 'TDM 1v1 Warehouse').toString(),
+      weaponRule: (row['weapon_rule'] ?? 'M416 Only').toString(),
+      status: (row['status'] ?? 'pending').toString(),
+      winnerId: row['winner_id']?.toString(),
       createdAt: created,
     );
   }
 
-  Map<String, dynamic> toMap() {
+  Map<String, dynamic> toSupabase() {
     return {
       'id': id,
-      'challengerId': challengerId,
-      'challengerName': challengerName,
-      'challengerAvatar': challengerAvatar,
-      'challengedId': challengedId,
-      'challengedName': challengedName,
-      'challengedAvatar': challengedAvatar,
+      'challenger_id': challengerId,
+      'challenger_name': challengerName,
+      'challenger_avatar': challengerAvatar,
+      'challenged_id': challengedId,
+      'challenged_name': challengedName,
+      'challenged_avatar': challengedAvatar,
       'game': game,
       'mode': mode,
-      'weaponRule': weaponRule,
+      'weapon_rule': weaponRule,
       'status': status,
-      'winnerId': winnerId,
-      'createdAt': createdAt != null ? Timestamp.fromDate(createdAt!) : FieldValue.serverTimestamp(),
+      'winner_id': winnerId,
+      'created_at': (createdAt ?? DateTime.now()).toIso8601String(),
     };
   }
 
