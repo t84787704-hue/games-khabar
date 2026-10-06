@@ -1,109 +1,133 @@
-import 'package:games_khabar/compat/cloud_firestore.dart';
+import 'package:flutter/foundation.dart';
 import '../models/challenge_model.dart';
 import 'supabase_service.dart';
 
 class ChallengeService {
-  final FirebaseFirestore _firestore = FirebaseFirestore.instance;
-
-  CollectionReference get _challengesRef => _firestore.collection('challenges');
-  CollectionReference get _notificationsRef => _firestore.collection('notifications');
+  static final ChallengeService _instance = ChallengeService._internal();
+  factory ChallengeService() => _instance;
+  ChallengeService._internal();
 
   Future<void> sendChallenge(GamerChallenge challenge) async {
     try {
-      final docRef = challenge.id.isNotEmpty ? _challengesRef.doc(challenge.id) : _challengesRef.doc();
-      final finalChallenge = challenge.id.isEmpty ? challenge.copyWith(id: docRef.id) : challenge;
-      await docRef.set(finalChallenge.toMap());
+      final challengerUuid = SupabaseService.toUuid(challenge.challengerId);
+      final challengedUuid = SupabaseService.toUuid(challenge.challengedId);
 
-      // Send in-app notification to challenged user
-      await _notificationsRef.add({
-        'recipientUid': challenge.challengedId,
-        'senderUid': challenge.challengerId,
-        'type': 'challenge',
-        'message': 'challenged you to a 1v1 Battle (${challenge.mode}, ${challenge.weaponRule})!',
-        'challengeId': finalChallenge.id,
-        'read': false,
-        'createdAt': FieldValue.serverTimestamp(),
-      });
+      final inserted = await SupabaseService.client
+          .from('challenges')
+          .insert({
+        'challenger_id': challengerUuid,
+        'challenger_name': challenge.challengerName,
+        'challenger_avatar': challenge.challengerAvatar,
+        'challenged_id': challengedUuid,
+        'challenged_name': challenge.challengedName,
+        'challenged_avatar': challenge.challengedAvatar,
+        'game': challenge.game,
+        'mode': challenge.mode,
+        'weapon_rule': challenge.weaponRule,
+        'status': 'pending',
+        'created_at': DateTime.now().toIso8601String(),
+      }).select().single();
 
-      // Sync notification to Supabase
       try {
         await SupabaseService.sendNotification({
-          'userId': challenge.challengedId,
+          'userId': challengedUuid,
           'title': '⚔️ 1v1 Battle Challenge',
-          'message': 'challenged you to a 1v1 Battle (${challenge.mode}, ${challenge.weaponRule})!',
+          'message':
+              '${challenge.challengerName} challenged you to a 1v1 (${challenge.mode}, ${challenge.weaponRule})!',
           'type': 'challenge',
         });
-      } catch (_) {}
+      } catch (e) {
+        debugPrint('[ChallengeService] Notification error: $e');
+      }
+
+      debugPrint('[ChallengeService] Challenge sent: ${inserted['id']}');
     } catch (e) {
-      // Fallback
+      debugPrint('[ChallengeService] sendChallenge error: $e');
+      rethrow;
     }
   }
 
-  Future<void> acceptChallenge(String challengeId, {String? challengerUid, String? responderName}) async {
+  Future<void> acceptChallenge(
+    String challengeId, {
+    String? challengerUid,
+    String? responderName,
+  }) async {
     try {
-      await _challengesRef.doc(challengeId).update({
-        'status': 'accepted',
-        'acceptedAt': FieldValue.serverTimestamp(),
-      });
+      await SupabaseService.client
+          .from('challenges')
+          .update({'status': 'accepted'})
+          .eq('id', challengeId);
 
       if (challengerUid != null && challengerUid.isNotEmpty) {
-        await _notificationsRef.add({
-          'recipientUid': challengerUid,
-          'type': 'challenge_accepted',
-          'message': '${responderName ?? "Opponent"} accepted your 1v1 challenge! Room is ON.',
-          'challengeId': challengeId,
-          'read': false,
-          'createdAt': FieldValue.serverTimestamp(),
-        });
-
-        // Sync notification to Supabase
         try {
           await SupabaseService.sendNotification({
-            'userId': challengerUid,
+            'userId': SupabaseService.toUuid(challengerUid),
             'title': '✅ 1v1 Challenge Accepted',
-            'message': '${responderName ?? "Opponent"} accepted your 1v1 challenge! Room is ON.',
+            'message':
+                '${responderName ?? "Opponent"} accepted your 1v1 challenge! Room is ON.',
             'type': 'challenge_accepted',
           });
-        } catch (_) {}
+        } catch (e) {
+          debugPrint('[ChallengeService] Notification error: $e');
+        }
       }
-    } catch (_) {}
+    } catch (e) {
+      debugPrint('[ChallengeService] acceptChallenge error: $e');
+    }
   }
 
   Future<void> declineChallenge(String challengeId) async {
     try {
-      await _challengesRef.doc(challengeId).update({
-        'status': 'declined',
-      });
-    } catch (_) {}
+      await SupabaseService.client
+          .from('challenges')
+          .update({'status': 'declined'})
+          .eq('id', challengeId);
+    } catch (e) {
+      debugPrint('[ChallengeService] declineChallenge error: $e');
+    }
   }
 
   Future<void> setWinner(String challengeId, String winnerId) async {
     try {
-      await _challengesRef.doc(challengeId).update({
+      await SupabaseService.client.from('challenges').update({
         'status': 'completed',
-        'winnerId': winnerId,
-        'completedAt': FieldValue.serverTimestamp(),
-      });
-    } catch (_) {}
+        'winner_id': SupabaseService.toUuid(winnerId),
+      }).eq('id', challengeId);
+    } catch (e) {
+      debugPrint('[ChallengeService] setWinner error: $e');
+    }
   }
 
   Stream<List<GamerChallenge>> getUserChallengesStream(String userId) {
-    return _challengesRef
-        .orderBy('createdAt', descending: true)
-        .snapshots()
-        .map((snap) {
-      return snap.docs
-          .map((d) => GamerChallenge.fromFirestore(d))
-          .where((c) => c.challengerId == userId || c.challengedId == userId)
+    if (userId.isEmpty) return Stream.value([]);
+    final uuid = SupabaseService.toUuid(userId);
+    return SupabaseService.client
+        .from('challenges')
+        .stream(primaryKey: ['id'])
+        .order('created_at', ascending: false)
+        .map((rows) {
+      return rows
+          .where((r) =>
+              r['challenger_id']?.toString() == uuid ||
+              r['challenged_id']?.toString() == uuid)
+          .map((r) => GamerChallenge.fromSupabase(r))
           .toList();
     });
   }
 
   Stream<List<GamerChallenge>> getPendingIncomingChallenges(String userId) {
-    return _challengesRef
-        .where('challengedId', isEqualTo: userId)
-        .where('status', isEqualTo: 'pending')
-        .snapshots()
-        .map((snap) => snap.docs.map((d) => GamerChallenge.fromFirestore(d)).toList());
+    if (userId.isEmpty) return Stream.value([]);
+    final uuid = SupabaseService.toUuid(userId);
+    return SupabaseService.client
+        .from('challenges')
+        .stream(primaryKey: ['id'])
+        .map((rows) {
+      return rows
+          .where((r) =>
+              r['challenged_id']?.toString() == uuid &&
+              r['status']?.toString() == 'pending')
+          .map((r) => GamerChallenge.fromSupabase(r))
+          .toList();
+    });
   }
 }
