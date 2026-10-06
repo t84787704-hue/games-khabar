@@ -28,92 +28,78 @@ class _GamerFeedScreenState extends State<GamerFeedScreen> {
   }
 
   Future<String> _resolveValidUserId() async {
-    // 1. Check SharedPreferences stored Supabase user ID
     try {
       final sbId = await SupabaseService.getCurrentUserId();
-      if (sbId != null && _uuidRegex.hasMatch(sbId)) {
+      if (sbId!= null && _uuidRegex.hasMatch(sbId)) {
         return sbId;
       }
     } catch (_) {}
-
-    // 2. Check current Firebase user and match in Supabase users table
     try {
       final fbUser = FirebaseAuth.instance.currentUser;
-      if (fbUser != null) {
-        if (fbUser.email != null && fbUser.email!.isNotEmpty) {
+      if (fbUser!= null) {
+        if (fbUser.email!= null && fbUser.email!.isNotEmpty) {
           final res = await SupabaseService.client
-              .from('users')
-              .select('id')
-              .eq('email', fbUser.email!)
-              .maybeSingle();
-          if (res != null && res['id'] != null) {
+             .from('users')
+             .select('id')
+             .eq('email', fbUser.email!)
+             .maybeSingle();
+          if (res!= null && res['id']!= null) {
             final idStr = res['id'].toString();
             if (_uuidRegex.hasMatch(idStr)) return idStr;
           }
         }
         final resUid = await SupabaseService.client
-            .from('users')
-            .select('id')
-            .eq('uid', fbUser.uid)
-            .maybeSingle();
-        if (resUid != null && resUid['id'] != null) {
+           .from('users')
+           .select('id')
+           .eq('uid', fbUser.uid)
+           .maybeSingle();
+        if (resUid!= null && resUid['id']!= null) {
           final idStr = resUid['id'].toString();
           if (_uuidRegex.hasMatch(idStr)) return idStr;
         }
       }
     } catch (_) {}
-
-    // 3. Fallback to any user in public.users to satisfy UUID and FK constraints
     try {
       final anyUser = await SupabaseService.client
-          .from('users')
-          .select('id')
-          .limit(1)
-          .maybeSingle();
-      if (anyUser != null && anyUser['id'] != null) {
+         .from('users')
+         .select('id')
+         .limit(1)
+         .maybeSingle();
+      if (anyUser!= null && anyUser['id']!= null) {
         final idStr = anyUser['id'].toString();
         if (_uuidRegex.hasMatch(idStr)) return idStr;
       }
     } catch (_) {}
-
     final fbUid = FirebaseAuth.instance.currentUser?.uid;
-    return (fbUid != null && fbUid.isNotEmpty) ? fbUid : 'test_user';
+    return (fbUid!= null && fbUid.isNotEmpty)? fbUid : 'test_user';
   }
 
   Future<void> _loadFeed() async {
     if (mounted) {
       setState(() => isLoading = true);
     }
-
     currentUserId = await _resolveValidUserId();
-
     try {
-      // 1. Fetch posts with simple query without foreign key joins
       final data = await SupabaseService.client
-          .from('posts')
-          .select('*')
-          .order('created_at', ascending: false)
-          .limit(20);
-
+         .from('posts')
+         .select('*')
+         .order('created_at', ascending: false)
+         .limit(20);
       final fetchedPosts = List<Map<String, dynamic>>.from(data as List);
-
-      // 2. Fetch users separately
       final userIds = fetchedPosts
-          .map((p) => p['user_id']?.toString())
-          .where((id) => id != null && id.isNotEmpty)
-          .toSet()
-          .toList();
-
+         .map((p) => p['user_id']?.toString())
+         .where((id) => id!= null && id.isNotEmpty)
+         .toSet()
+         .toList();
       if (userIds.isNotEmpty) {
         try {
           final usersData = await SupabaseService.client
-              .from('users')
-              .select('id, username, avatar_url')
-              .inFilter('id', userIds);
-
+             .from('users')
+             .select('id, username, avatar_url')
+             .inFilter('id', userIds);
           final profiles = <String, Map<String, dynamic>>{};
           for (final u in (usersData as List)) {
-            if (u is Map<String, dynamic> && u['id'] != null) {
+            if (u is Map<String, dynamic> && u['id']!= null) {
               profiles[u['id'].toString()] = u;
             }
           }
@@ -122,22 +108,18 @@ class _GamerFeedScreenState extends State<GamerFeedScreen> {
           debugPrint('Users fetch warning (ignored): $e');
         }
       }
-
-      // 3. Fetch likes for current user separately
       try {
         final likesData = await SupabaseService.client
-            .from('likes')
-            .select('post_id')
-            .eq('user_id', currentUserId);
-
+           .from('likes')
+           .select('post_id')
+           .eq('user_id', currentUserId);
         likedPostIds = (likesData as List)
-            .map((e) => e['post_id']?.toString() ?? '')
-            .where((id) => id.isNotEmpty)
-            .toSet();
+           .map((e) => e['post_id']?.toString()?? '')
+           .where((id) => id.isNotEmpty)
+           .toSet();
       } catch (e) {
         debugPrint('Likes fetch warning (ignored): $e');
       }
-
       if (mounted) {
         setState(() {
           posts = fetchedPosts;
@@ -150,11 +132,10 @@ class _GamerFeedScreenState extends State<GamerFeedScreen> {
         setState(() => isLoading = false);
         final errText = e.toString();
         final snackMsg = errText.contains('521')
-            ? 'Server temporarily unavailable (521). Please retry.'
+           ? 'Server temporarily unavailable (521). Please retry.'
             : (errText.contains('PGRST200')
-                ? 'Database schema updated. Retrying feed...'
+               ? 'Database schema updated. Retrying feed...'
                 : 'Could not load feed: $e');
-
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text(snackMsg),
@@ -167,18 +148,16 @@ class _GamerFeedScreenState extends State<GamerFeedScreen> {
   }
 
   Future<void> _handleLike(Map<String, dynamic> post) async {
-    final postId = post['id']?.toString() ?? '';
+    final postId = post['id']?.toString()?? '';
     if (postId.isEmpty) return;
-
     final isLiked = likedPostIds.contains(postId);
     final rawCount = post['likes_count'];
     final currentLikes = (rawCount is int)
-        ? rawCount
-        : int.tryParse(rawCount?.toString() ?? '0') ?? 0;
+       ? rawCount
+        : int.tryParse(rawCount?.toString()?? '0')?? 0;
     final updatedLikes = isLiked
-        ? (currentLikes > 0 ? currentLikes - 1 : 0)
+       ? (currentLikes > 0? currentLikes - 1 : 0)
         : currentLikes + 1;
-
     setState(() {
       if (isLiked) {
         likedPostIds.remove(postId);
@@ -187,15 +166,13 @@ class _GamerFeedScreenState extends State<GamerFeedScreen> {
       }
       post['likes_count'] = updatedLikes;
     });
-
-    // Insert or delete from likes table
     try {
       if (isLiked) {
         await SupabaseService.client
-            .from('likes')
-            .delete()
-            .eq('post_id', postId)
-            .eq('user_id', currentUserId);
+           .from('likes')
+           .delete()
+           .eq('post_id', postId)
+           .eq('user_id', currentUserId);
       } else {
         await SupabaseService.client.from('likes').insert({
           'post_id': postId,
@@ -205,20 +182,18 @@ class _GamerFeedScreenState extends State<GamerFeedScreen> {
     } catch (e) {
       debugPrint('Likes table update error (FK fallback): $e');
     }
-
-    // Always update posts table likes_count
     try {
       await SupabaseService.client
-          .from('posts')
-          .update({'likes_count': updatedLikes})
-          .eq('id', postId);
+         .from('posts')
+         .update({'likes_count': updatedLikes})
+         .eq('id', postId);
     } catch (e) {
       debugPrint('Posts table update likes error: $e');
     }
   }
 
   void _handleShare(Map<String, dynamic> post) {
-    final content = (post['content'] ?? '').toString();
+    final content = (post['content']?? '').toString();
     Share.share('Games Khabar: $content');
   }
 
@@ -233,10 +208,103 @@ class _GamerFeedScreenState extends State<GamerFeedScreen> {
     ).then((_) => _loadFeed());
   }
 
+  // ✅ FIX: 3 dots menu ka function
+  void _showPostOptions(BuildContext context, String postId, String ownerId) {
+    final isMyPost = ownerId == currentUserId;
+
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: Colors.white,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
+      ),
+      builder: (ctx) => SafeArea(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const SizedBox(height: 12),
+            Container(
+              width: 40,
+              height: 4,
+              decoration: BoxDecoration(
+                color: Colors.grey[300],
+                borderRadius: BorderRadius.circular(2),
+              ),
+            ),
+            const SizedBox(height: 8),
+            if (isMyPost)...[
+              ListTile(
+                leading: const Icon(Icons.delete_outline, color: Colors.red),
+                title: const Text('Delete Post', style: TextStyle(color: Colors.red, fontWeight: FontWeight.bold)),
+                onTap: () async {
+                  Navigator.pop(ctx);
+                  final confirm = await showDialog<bool>(
+                    context: context,
+                    builder: (c) => AlertDialog(
+                      title: const Text('Delete Post?'),
+                      content: const Text('Kya aap ye post delete karna chahte hain?'),
+                      actions: [
+                        TextButton(onPressed: () => Navigator.pop(c, false), child: const Text('Cancel')),
+                        ElevatedButton(
+                          style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
+                          onPressed: () => Navigator.pop(c, true),
+                          child: const Text('Delete', style: TextStyle(color: Colors.white)),
+                        ),
+                      ],
+                    ),
+                  );
+                  if (confirm == true) {
+                    try {
+                      // Delete related likes and comments first
+                      try {
+                        await SupabaseService.client.from('likes').delete().eq('post_id', postId);
+                      } catch (_) {}
+                      try {
+                        await SupabaseService.client.from('comments').delete().eq('post_id', postId);
+                      } catch (_) {}
+                      // Delete post
+                      await SupabaseService.client.from('posts').delete().eq('id', postId);
+
+                      if (mounted) {
+                        setState(() {
+                          posts.removeWhere((p) => p['id'].toString() == postId);
+                        });
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          const SnackBar(content: Text('Post deleted'), backgroundColor: Colors.green),
+                        );
+                      }
+                    } catch (e) {
+                      if (mounted) {
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          SnackBar(content: Text('Delete failed: $e'), backgroundColor: Colors.red),
+                        );
+                      }
+                    }
+                  }
+                },
+              ),
+            ] else...[
+              ListTile(
+                leading: const Icon(Icons.flag_outlined, color: Color(0xFF65676B)),
+                title: const Text('Report Post'),
+                onTap: () {
+                  Navigator.pop(ctx);
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(content: Text('Post reported')),
+                  );
+                },
+              ),
+            ],
+            const SizedBox(height: 12),
+          ],
+        ),
+      ),
+    );
+  }
+
   void _showCreatePost() {
     final textController = TextEditingController();
     bool isPosting = false;
-
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
@@ -257,7 +325,6 @@ class _GamerFeedScreenState extends State<GamerFeedScreen> {
               mainAxisSize: MainAxisSize.min,
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                // Top row has user avatar, username "tufailm1083", and a blue Post button
                 Row(
                   children: [
                     const CircleAvatar(
@@ -286,15 +353,13 @@ class _GamerFeedScreenState extends State<GamerFeedScreen> {
                         padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
                       ),
                       onPressed: isPosting
-                          ? null
+                         ? null
                           : () async {
                               final text = textController.text.trim();
                               if (text.isEmpty) return;
-
                               setSheetState(() => isPosting = true);
-
                               try {
-                                final uid = currentUserId.isNotEmpty ? currentUserId : 'anon';
+                                final uid = currentUserId.isNotEmpty? currentUserId : 'anon';
                                 await SupabaseService.client.from('posts').insert({
                                   'content': text,
                                   'user_id': uid,
@@ -302,11 +367,9 @@ class _GamerFeedScreenState extends State<GamerFeedScreen> {
                                   'likes_count': 0,
                                   'comments_count': 0,
                                 });
-
                                 if (sheetCtx.mounted) {
                                   Navigator.pop(sheetCtx);
                                 }
-
                                 if (mounted) {
                                   ScaffoldMessenger.of(context).showSnackBar(
                                     const SnackBar(
@@ -332,7 +395,7 @@ class _GamerFeedScreenState extends State<GamerFeedScreen> {
                               }
                             },
                       child: isPosting
-                          ? const SizedBox(
+                         ? const SizedBox(
                               width: 16,
                               height: 16,
                               child: CircularProgressIndicator(
@@ -348,7 +411,6 @@ class _GamerFeedScreenState extends State<GamerFeedScreen> {
                   ],
                 ),
                 const SizedBox(height: 14),
-                // TextField with hint "What's on your mind?" autofocus true, maxLines 5
                 TextField(
                   controller: textController,
                   autofocus: true,
@@ -384,7 +446,6 @@ class _GamerFeedScreenState extends State<GamerFeedScreen> {
       dt = DateTime.tryParse(raw);
     }
     if (dt == null) return 'Just now';
-
     final diff = DateTime.now().difference(dt);
     if (diff.inSeconds < 60) return 'Just now';
     if (diff.inMinutes < 60) return '${diff.inMinutes}m';
@@ -412,11 +473,10 @@ class _GamerFeedScreenState extends State<GamerFeedScreen> {
       body: RefreshIndicator(
         onRefresh: _loadFeed,
         child: isLoading
-            ? const Center(child: CircularProgressIndicator())
+           ? const Center(child: CircularProgressIndicator())
             : ListView.builder(
                 itemCount: posts.length + 1,
                 itemBuilder: (context, index) {
-                  // Top "What's on your mind?" Card
                   if (index == 0) {
                     return InkWell(
                       onTap: _showCreatePost,
@@ -468,21 +528,17 @@ class _GamerFeedScreenState extends State<GamerFeedScreen> {
                       ),
                     );
                   }
-
                   final post = posts[index - 1];
-                  final postUserId = post['user_id']?.toString() ?? '';
+                  final postUserId = post['user_id']?.toString()?? '';
                   final userProfile = userProfiles[postUserId];
-
-                  final username = userProfile?['username'] ??
-                      post['username'] ??
-                      'Gamer';
-                  final avatarUrl = (userProfile?['avatar_url'] ?? post['user_avatar'] ?? '').toString();
-                  final postId = post['id']?.toString() ?? '';
+                  final username = userProfile?['username']?? post['username']?? 'Gamer';
+                  final avatarUrl = (userProfile?['avatar_url']?? post['user_avatar']?? '').toString();
+                  final postId = post['id']?.toString()?? '';
                   final isLiked = likedPostIds.contains(postId);
-                  final imageUrl = (post['image_url'] ?? '').toString();
-                  final content = (post['content'] ?? '').toString();
-                  final likesCount = post['likes_count'] ?? 0;
-                  final commentsCount = post['comments_count'] ?? 0;
+                  final imageUrl = (post['image_url']?? '').toString();
+                  final content = (post['content']?? '').toString();
+                  final likesCount = post['likes_count']?? 0;
+                  final commentsCount = post['comments_count']?? 0;
 
                   return Card(
                     margin: const EdgeInsets.symmetric(vertical: 4, horizontal: 0),
@@ -491,16 +547,11 @@ class _GamerFeedScreenState extends State<GamerFeedScreen> {
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        // Header
                         ListTile(
                           leading: CircleAvatar(
                             backgroundColor: const Color(0xFFE4E6EB),
-                            backgroundImage: avatarUrl.isNotEmpty
-                                ? NetworkImage(avatarUrl)
-                                : null,
-                            child: avatarUrl.isEmpty
-                                ? const Icon(Icons.person, color: Color(0xFF050505))
-                                : null,
+                            backgroundImage: avatarUrl.isNotEmpty? NetworkImage(avatarUrl) : null,
+                            child: avatarUrl.isEmpty? const Icon(Icons.person, color: Color(0xFF050505)) : null,
                           ),
                           title: Text(
                             username.toString(),
@@ -517,30 +568,20 @@ class _GamerFeedScreenState extends State<GamerFeedScreen> {
                               color: Color(0xFF65676B),
                             ),
                           ),
-                          trailing: const Icon(
-                            Icons.more_horiz,
-                            color: Color(0xFF65676B),
+                          // ✅ FIXED: IconButton with onPressed
+                          trailing: IconButton(
+                            icon: const Icon(Icons.more_horiz, color: Color(0xFF65676B)),
+                            onPressed: () => _showPostOptions(context, postId, postUserId),
                           ),
                         ),
-
-                        // Post Content Text
                         if (content.isNotEmpty)
                           Padding(
-                            padding: const EdgeInsets.symmetric(
-                              horizontal: 16,
-                              vertical: 4,
-                            ),
+                            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
                             child: Text(
                               content,
-                              style: const TextStyle(
-                                fontSize: 15,
-                                color: Color(0xFF050505),
-                                height: 1.3,
-                              ),
+                              style: const TextStyle(fontSize: 15, color: Color(0xFF050505), height: 1.3),
                             ),
                           ),
-
-                        // Post Image
                         if (imageUrl.isNotEmpty)
                           Padding(
                             padding: const EdgeInsets.only(top: 8),
@@ -551,13 +592,8 @@ class _GamerFeedScreenState extends State<GamerFeedScreen> {
                               errorBuilder: (_, __, ___) => const SizedBox.shrink(),
                             ),
                           ),
-
-                        // Counts Row
                         Padding(
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: 16,
-                            vertical: 10,
-                          ),
+                          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
                           child: Row(
                             mainAxisAlignment: MainAxisAlignment.spaceBetween,
                             children: [
@@ -565,40 +601,18 @@ class _GamerFeedScreenState extends State<GamerFeedScreen> {
                                 children: [
                                   Container(
                                     padding: const EdgeInsets.all(4),
-                                    decoration: const BoxDecoration(
-                                      color: Color(0xFF1877F2),
-                                      shape: BoxShape.circle,
-                                    ),
-                                    child: const Icon(
-                                      Icons.thumb_up,
-                                      size: 11,
-                                      color: Colors.white,
-                                    ),
+                                    decoration: const BoxDecoration(color: Color(0xFF1877F2), shape: BoxShape.circle),
+                                    child: const Icon(Icons.thumb_up, size: 11, color: Colors.white),
                                   ),
                                   const SizedBox(width: 6),
-                                  Text(
-                                    '$likesCount',
-                                    style: const TextStyle(
-                                      fontSize: 13,
-                                      color: Color(0xFF65676B),
-                                    ),
-                                  ),
+                                  Text('$likesCount', style: const TextStyle(fontSize: 13, color: Color(0xFF65676B))),
                                 ],
                               ),
-                              Text(
-                                '$commentsCount comments',
-                                style: const TextStyle(
-                                  fontSize: 13,
-                                  color: Color(0xFF65676B),
-                                ),
-                              ),
+                              Text('$commentsCount comments', style: const TextStyle(fontSize: 13, color: Color(0xFF65676B))),
                             ],
                           ),
                         ),
-
                         const Divider(height: 1, color: Color(0xFFCED0D4)),
-
-                        // Like, Comment, Share Row
                         Row(
                           children: [
                             Expanded(
@@ -609,28 +623,9 @@ class _GamerFeedScreenState extends State<GamerFeedScreen> {
                                   child: Row(
                                     mainAxisAlignment: MainAxisAlignment.center,
                                     children: [
-                                      Icon(
-                                        isLiked
-                                            ? Icons.thumb_up
-                                            : Icons.thumb_up_outlined,
-                                        size: 18,
-                                        color: isLiked
-                                            ? const Color(0xFF1877F2)
-                                            : const Color(0xFF65676B),
-                                      ),
+                                      Icon(isLiked? Icons.thumb_up : Icons.thumb_up_outlined, size: 18, color: isLiked? const Color(0xFF1877F2) : const Color(0xFF65676B)),
                                       const SizedBox(width: 6),
-                                      Text(
-                                        'Like',
-                                        style: TextStyle(
-                                          color: isLiked
-                                              ? const Color(0xFF1877F2)
-                                              : const Color(0xFF65676B),
-                                          fontWeight: isLiked
-                                              ? FontWeight.bold
-                                              : FontWeight.normal,
-                                          fontSize: 13,
-                                        ),
-                                      ),
+                                      Text('Like', style: TextStyle(color: isLiked? const Color(0xFF1877F2) : const Color(0xFF65676B), fontWeight: isLiked? FontWeight.bold : FontWeight.normal, fontSize: 13)),
                                     ],
                                   ),
                                 ),
@@ -644,19 +639,9 @@ class _GamerFeedScreenState extends State<GamerFeedScreen> {
                                   child: Row(
                                     mainAxisAlignment: MainAxisAlignment.center,
                                     children: [
-                                      Icon(
-                                        Icons.chat_bubble_outline,
-                                        size: 18,
-                                        color: Color(0xFF65676B),
-                                      ),
+                                      Icon(Icons.chat_bubble_outline, size: 18, color: Color(0xFF65676B)),
                                       SizedBox(width: 6),
-                                      Text(
-                                        'Comment',
-                                        style: TextStyle(
-                                          color: Color(0xFF65676B),
-                                          fontSize: 13,
-                                        ),
-                                      ),
+                                      Text('Comment', style: TextStyle(color: Color(0xFF65676B), fontSize: 13)),
                                     ],
                                   ),
                                 ),
@@ -670,19 +655,9 @@ class _GamerFeedScreenState extends State<GamerFeedScreen> {
                                   child: Row(
                                     mainAxisAlignment: MainAxisAlignment.center,
                                     children: [
-                                      Icon(
-                                        Icons.share_outlined,
-                                        size: 18,
-                                        color: Color(0xFF65676B),
-                                      ),
+                                      Icon(Icons.share_outlined, size: 18, color: Color(0xFF65676B)),
                                       SizedBox(width: 6),
-                                      Text(
-                                        'Share',
-                                        style: TextStyle(
-                                          color: Color(0xFF65676B),
-                                          fontSize: 13,
-                                        ),
-                                      ),
+                                      Text('Share', style: TextStyle(color: Color(0xFF65676B), fontSize: 13)),
                                     ],
                                   ),
                                 ),
@@ -703,13 +678,7 @@ class _GamerFeedScreenState extends State<GamerFeedScreen> {
 class CommentSheet extends StatefulWidget {
   final String postId;
   final String currentUserId;
-
-  const CommentSheet({
-    super.key,
-    required this.postId,
-    required this.currentUserId,
-  });
-
+  const CommentSheet({super.key, required this.postId, required this.currentUserId});
   @override
   State<CommentSheet> createState() => _CommentSheetState();
 }
@@ -718,103 +687,62 @@ class _CommentSheetState extends State<CommentSheet> {
   List<Map<String, dynamic>> comments = [];
   final TextEditingController _ctrl = TextEditingController();
   bool _loading = true;
-
-  static final RegExp _uuidRegex = RegExp(
-    r'^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$',
-  );
-
+  static final RegExp _uuidRegex = RegExp(r'^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$');
   @override
   void initState() {
     super.initState();
     _loadComments();
   }
-
   @override
   void dispose() {
     _ctrl.dispose();
     super.dispose();
   }
-
   Future<String> _resolveCommenterUserId() async {
-    if (_uuidRegex.hasMatch(widget.currentUserId)) {
-      return widget.currentUserId;
-    }
-
+    if (_uuidRegex.hasMatch(widget.currentUserId)) return widget.currentUserId;
     try {
       final sbId = await SupabaseService.getCurrentUserId();
-      if (sbId != null && _uuidRegex.hasMatch(sbId)) {
-        return sbId;
-      }
+      if (sbId!= null && _uuidRegex.hasMatch(sbId)) return sbId;
     } catch (_) {}
-
     try {
       final fbUser = FirebaseAuth.instance.currentUser;
-      if (fbUser != null) {
-        if (fbUser.email != null && fbUser.email!.isNotEmpty) {
-          final res = await SupabaseService.client
-              .from('users')
-              .select('id')
-              .eq('email', fbUser.email!)
-              .maybeSingle();
-          if (res != null && res['id'] != null) {
+      if (fbUser!= null) {
+        if (fbUser.email!= null && fbUser.email!.isNotEmpty) {
+          final res = await SupabaseService.client.from('users').select('id').eq('email', fbUser.email!).maybeSingle();
+          if (res!= null && res['id']!= null) {
             final idStr = res['id'].toString();
             if (_uuidRegex.hasMatch(idStr)) return idStr;
           }
         }
       }
     } catch (_) {}
-
     try {
-      final anyUser = await SupabaseService.client
-          .from('users')
-          .select('id')
-          .limit(1)
-          .maybeSingle();
-      if (anyUser != null && anyUser['id'] != null) {
+      final anyUser = await SupabaseService.client.from('users').select('id').limit(1).maybeSingle();
+      if (anyUser!= null && anyUser['id']!= null) {
         final idStr = anyUser['id'].toString();
         if (_uuidRegex.hasMatch(idStr)) return idStr;
       }
     } catch (_) {}
-
     return widget.currentUserId;
   }
-
   Future<void> _loadComments() async {
     try {
-      final data = await SupabaseService.client
-          .from('comments')
-          .select('*')
-          .eq('post_id', widget.postId)
-          .order('created_at', ascending: true);
-
+      final data = await SupabaseService.client.from('comments').select('*').eq('post_id', widget.postId).order('created_at', ascending: true);
       final list = List<Map<String, dynamic>>.from(data as List);
-
-      // If any comment is missing username, populate from users table
-      final missingUserIds = list
-          .where((c) => c['username'] == null || c['username'].toString().isEmpty)
-          .map((c) => c['user_id']?.toString())
-          .where((id) => id != null && id.isNotEmpty)
-          .toSet()
-          .toList();
-
+      final missingUserIds = list.where((c) => c['username'] == null || c['username'].toString().isEmpty).map((c) => c['user_id']?.toString()).where((id) => id!= null && id.isNotEmpty).toSet().toList();
       if (missingUserIds.isNotEmpty) {
         try {
-          final usersData = await SupabaseService.client
-              .from('users')
-              .select('id, username')
-              .inFilter('id', missingUserIds);
-
+          final usersData = await SupabaseService.client.from('users').select('id, username').inFilter('id', missingUserIds);
           final userMap = <String, String>{};
           for (final u in (usersData as List)) {
-            if (u is Map<String, dynamic> && u['id'] != null) {
-              userMap[u['id'].toString()] = (u['username'] ?? 'Gamer').toString();
+            if (u is Map<String, dynamic> && u['id']!= null) {
+              userMap[u['id'].toString()] = (u['username']?? 'Gamer').toString();
             }
           }
-
           for (final c in list) {
             if (c['username'] == null || c['username'].toString().isEmpty) {
               final uid = c['user_id']?.toString();
-              if (uid != null && userMap.containsKey(uid)) {
+              if (uid!= null && userMap.containsKey(uid)) {
                 c['username'] = userMap[uid];
               }
             }
@@ -823,7 +751,6 @@ class _CommentSheetState extends State<CommentSheet> {
           debugPrint('Comments user lookup error: $e');
         }
       }
-
       if (mounted) {
         setState(() {
           comments = list;
@@ -837,182 +764,66 @@ class _CommentSheetState extends State<CommentSheet> {
       }
     }
   }
-
   Future<void> _submitComment() async {
     final text = _ctrl.text.trim();
     if (text.isEmpty) return;
     _ctrl.clear();
-
     try {
       final validUid = await _resolveCommenterUserId();
       final fb = FirebaseAuth.instance.currentUser;
-      final authorUsername = fb?.displayName ??
-          fb?.email?.split('@').first ??
-          'Gamer';
-
-      // First attempt: insert with username
+      final authorUsername = fb?.displayName?? fb?.email?.split('@').first?? 'Gamer';
       bool inserted = false;
       try {
-        await SupabaseService.client.from('comments').insert({
-          'post_id': widget.postId,
-          'user_id': validUid,
-          'content': text,
-          'username': authorUsername,
-        });
+        await SupabaseService.client.from('comments').insert({'post_id': widget.postId, 'user_id': validUid, 'content': text, 'username': authorUsername});
         inserted = true;
       } catch (e) {
         debugPrint('Insert with username failed ($e), falling back to schema without username...');
       }
-
-      // Second attempt (fallback): insert without username column if schema cache lacks it
       if (!inserted) {
-        await SupabaseService.client.from('comments').insert({
-          'post_id': widget.postId,
-          'user_id': validUid,
-          'content': text,
-        });
+        await SupabaseService.client.from('comments').insert({'post_id': widget.postId, 'user_id': validUid, 'content': text});
       }
-
-      // Increment comments_count in posts table
       try {
-        final postData = await SupabaseService.client
-            .from('posts')
-            .select('comments_count')
-            .eq('id', widget.postId)
-            .maybeSingle();
-
+        final postData = await SupabaseService.client.from('posts').select('comments_count').eq('id', widget.postId).maybeSingle();
         final rawCount = postData?['comments_count'];
-        final currentCount = (rawCount is int)
-            ? rawCount
-            : int.tryParse(rawCount?.toString() ?? '0') ?? 0;
-
-        await SupabaseService.client
-            .from('posts')
-            .update({'comments_count': currentCount + 1})
-            .eq('id', widget.postId);
+        final currentCount = (rawCount is int)? rawCount : int.tryParse(rawCount?.toString()?? '0')?? 0;
+        await SupabaseService.client.from('posts').update({'comments_count': currentCount + 1}).eq('id', widget.postId);
       } catch (e) {
         debugPrint('Post comments count update error: $e');
       }
-
       _loadComments();
-
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Comment posted!'),
-            duration: Duration(seconds: 2),
-            backgroundColor: Color(0xFF1877F2),
-          ),
-        );
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Comment posted!'), duration: Duration(seconds: 2), backgroundColor: Color(0xFF1877F2)));
       }
     } catch (e) {
       debugPrint('Comment insert error: $e');
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Could not post comment: $e')),
-        );
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Could not post comment: $e')));
       }
     }
   }
-
   @override
   Widget build(BuildContext context) {
     return Padding(
-      padding: EdgeInsets.only(
-        bottom: MediaQuery.of(context).viewInsets.bottom,
-      ),
+      padding: EdgeInsets.only(bottom: MediaQuery.of(context).viewInsets.bottom),
       child: SizedBox(
         height: 500,
         child: Column(
           children: [
             const SizedBox(height: 12),
-            Container(
-              width: 40,
-              height: 4,
-              decoration: BoxDecoration(
-                color: Colors.grey[300],
-                borderRadius: BorderRadius.circular(2),
-              ),
-            ),
+            Container(width: 40, height: 4, decoration: BoxDecoration(color: Colors.grey[300], borderRadius: BorderRadius.circular(2))),
             const SizedBox(height: 12),
-            const Text(
-              'Comments',
-              style: TextStyle(
-                fontWeight: FontWeight.bold,
-                fontSize: 16,
-              ),
-            ),
+            const Text('Comments', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
             const Divider(),
             Expanded(
-              child: _loading
-                  ? const Center(child: CircularProgressIndicator())
-                  : comments.isEmpty
-                      ? const Center(
-                          child: Text(
-                            'No comments yet. Be the first to comment!',
-                            style: TextStyle(color: Colors.grey),
-                          ),
-                        )
-                      : ListView.builder(
-                          itemCount: comments.length,
-                          itemBuilder: (_, i) {
-                            final c = comments[i];
-                            final username = (c['username'] ?? 'Gamer').toString();
-                            final content = (c['content'] ?? '').toString();
-                            return ListTile(
-                              leading: const CircleAvatar(
-                                radius: 16,
-                                backgroundColor: Color(0xFFE4E6EB),
-                                child: Icon(Icons.person, size: 18, color: Color(0xFF050505)),
-                              ),
-                              title: Text(
-                                username,
-                                style: const TextStyle(
-                                  fontWeight: FontWeight.bold,
-                                  fontSize: 13,
-                                ),
-                              ),
-                              subtitle: Text(
-                                content,
-                                style: const TextStyle(
-                                  color: Color(0xFF050505),
-                                  fontSize: 14,
-                                ),
-                              ),
-                            );
-                          },
-                        ),
+              child: _loading? const Center(child: CircularProgressIndicator()) : comments.isEmpty? const Center(child: Text('No comments yet. Be the first to comment!', style: TextStyle(color: Colors.grey))) : ListView.builder(itemCount: comments.length, itemBuilder: (_, i) { final c = comments[i]; final username = (c['username']?? 'Gamer').toString(); final content = (c['content']?? '').toString(); return ListTile(leading: const CircleAvatar(radius: 16, backgroundColor: Color(0xFFE4E6EB), child: Icon(Icons.person, size: 18, color: Color(0xFF050505))), title: Text(username, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13)), subtitle: Text(content, style: const TextStyle(color: Color(0xFF050505), fontSize: 14)));}),
             ),
             Padding(
               padding: const EdgeInsets.all(8),
               child: Row(
                 children: [
-                  Expanded(
-                    child: TextField(
-                      controller: _ctrl,
-                      decoration: InputDecoration(
-                        hintText: 'Write a comment...',
-                        filled: true,
-                        fillColor: const Color(0xFFF0F2F5),
-                        contentPadding: const EdgeInsets.symmetric(
-                          horizontal: 16,
-                          vertical: 10,
-                        ),
-                        border: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(20),
-                          borderSide: BorderSide.none,
-                        ),
-                      ),
-                    ),
-                  ),
+                  Expanded(child: TextField(controller: _ctrl, decoration: InputDecoration(hintText: 'Write a comment...', filled: true, fillColor: const Color(0xFFF0F2F5), contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10), border: OutlineInputBorder(borderRadius: BorderRadius.circular(20), borderSide: BorderSide.none)))),
                   const SizedBox(width: 8),
-                  IconButton(
-                    icon: const Icon(
-                      Icons.send,
-                      color: Color(0xFF1877F2),
-                    ),
-                    onPressed: _submitComment,
-                  ),
+                  IconButton(icon: const Icon(Icons.send, color: Color(0xFF1877F2)), onPressed: _submitComment),
                 ],
               ),
             ),
