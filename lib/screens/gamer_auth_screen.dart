@@ -24,11 +24,20 @@ class _GamerAuthScreenState extends State<GamerAuthScreen> {
 
     try {
       // 2. Query public.users table for this user:
-      final profile = await SupabaseService.client
-          .from('users')
-          .select('id, username, display_name, avatar_url, is_banned, banned_reason')
-          .eq('id', authUser.id)
-          .maybeSingle();
+      Map<String, dynamic>? profile;
+      try {
+        profile = await SupabaseService.client
+            .from('users')
+            .select('id, username, display_name, avatar_url, is_banned, banned_reason')
+            .eq('id', authUser.id)
+            .maybeSingle();
+      } catch (_) {
+        profile = await SupabaseService.client
+            .from('users')
+            .select()
+            .eq('id', authUser.id)
+            .maybeSingle();
+      }
 
       if (!mounted) return;
 
@@ -51,22 +60,25 @@ class _GamerAuthScreenState extends State<GamerAuthScreen> {
       if (profile != null && username.isNotEmpty) {
         await GamerAuthService().refreshCurrentGamer();
         if (!mounted) return;
-        Navigator.of(context).pushReplacement(
+        Navigator.of(context).pushAndRemoveUntil(
           MaterialPageRoute(builder: (_) => const GamerMainNavigationScreen()),
+          (route) => false,
         );
         return;
       }
 
       // 5. If profile does NOT exist OR username is empty:
       //    → go to CreateGamerIdScreen
-      Navigator.of(context).pushReplacement(
+      Navigator.of(context).pushAndRemoveUntil(
         MaterialPageRoute(builder: (_) => const CreateGamerIdScreen()),
+        (route) => false,
       );
     } catch (e) {
       debugPrint('[GamerAuthScreen] Post auth check error: $e');
       if (!mounted) return;
-      Navigator.of(context).pushReplacement(
+      Navigator.of(context).pushAndRemoveUntil(
         MaterialPageRoute(builder: (_) => const CreateGamerIdScreen()),
+        (route) => false,
       );
     }
   }

@@ -58,11 +58,20 @@ class GamerAuthService {
       final authUserId = user.id;
 
       // 1. Query public.users table for this user matching authUser.id
-      final profile = await _supabase
-          .from('users')
-          .select('id, username, display_name, avatar_url, is_banned, banned_reason')
-          .eq('id', authUserId)
-          .maybeSingle();
+      Map<String, dynamic>? profile;
+      try {
+        profile = await _supabase
+            .from('users')
+            .select('id, username, display_name, avatar_url, is_banned, banned_reason')
+            .eq('id', authUserId)
+            .maybeSingle();
+      } catch (_) {
+        profile = await _supabase
+            .from('users')
+            .select()
+            .eq('id', authUserId)
+            .maybeSingle();
+      }
 
       if (profile != null) {
         final gamer = GamerUser.fromMap(profile, authUserId);
@@ -95,11 +104,20 @@ class GamerAuthService {
 
     try {
       // 2. Query public.users table for this user matching authUser.id
-      final profile = await _supabase
-          .from('users')
-          .select('id, username, display_name, avatar_url, is_banned, banned_reason')
-          .eq('id', authUser.id)
-          .maybeSingle();
+      Map<String, dynamic>? profile;
+      try {
+        profile = await _supabase
+            .from('users')
+            .select('id, username, display_name, avatar_url, is_banned, banned_reason')
+            .eq('id', authUser.id)
+            .maybeSingle();
+      } catch (_) {
+        profile = await _supabase
+            .from('users')
+            .select()
+            .eq('id', authUser.id)
+            .maybeSingle();
+      }
 
       if (profile != null) {
         final gamer = GamerUser.fromMap(profile, authUser.id);

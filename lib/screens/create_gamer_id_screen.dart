@@ -502,8 +502,22 @@ class _CreateGamerIdScreenState extends State<CreateGamerIdScreen> {
         await prefs.setStringList('user_unlocked_badges_$uid', _unlockedBadges);
       } catch (_) {}
 
-      if (!mounted) return;
+      saveSucceeded = true;
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Failed to save Gamer ID: $e'),
+            backgroundColor: GamerTheme.redAccent,
+          ),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _isSaving = false);
+    }
 
+    if (saveSucceeded) {
+      if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text(
@@ -518,21 +532,14 @@ class _CreateGamerIdScreenState extends State<CreateGamerIdScreen> {
       if (widget.isEditing) {
         Navigator.of(context).pop();
       } else {
-        Navigator.of(context).pushAndRemoveUntil(
-          MaterialPageRoute(builder: (_) => const GamerMainNavigationScreen()),
-          (route) => false,
-        );
+        await GamerAuthService().refreshCurrentGamer();
+        if (mounted) {
+          Navigator.of(context).pushAndRemoveUntil(
+            MaterialPageRoute(builder: (_) => const GamerMainNavigationScreen()),
+            (route) => false,
+          );
+        }
       }
-    } catch (e) {
-      if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('Failed to save Gamer ID: $e'),
-          backgroundColor: GamerTheme.redAccent,
-        ),
-      );
-    } finally {
-      if (mounted) setState(() => _isSaving = false);
     }
   }
 
