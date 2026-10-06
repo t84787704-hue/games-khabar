@@ -17,25 +17,55 @@ class _GamerAuthScreenState extends State<GamerAuthScreen> {
   String? _errorMessage;
 
   Future<void> _handlePostAuth() async {
-    final gamer = await GamerAuthService().refreshCurrentGamer();
-    if (!mounted) return;
+    // 1. Get current Supabase auth user
+    final authUser = SupabaseService.client.auth.currentUser;
+    if (authUser == null) return;
 
-    if (gamer != null && gamer.isBanned) {
-      Navigator.of(context).pushAndRemoveUntil(
-        MaterialPageRoute(builder: (_) => BannedScreen(reason: gamer.bannedReason)),
-        (route) => false,
-      );
-      return;
-    }
+    try {
+      // 2. Query public.users table for this user:
+      final profile = await SupabaseService.client
+          .from('users')
+          .select('id, username, display_name, avatar_url, is_banned, banned_reason')
+          .eq('id', authUser.id)
+          .maybeSingle();
 
-    if (gamer == null || gamer.username.isEmpty) {
-      // Force user to Create ID screen if username does not exist or empty
+      if (!mounted) return;
+
+      // 4. If profile exists AND is_banned = true:
+      if (profile != null && profile['is_banned'] == true) {
+        final reason = profile['banned_reason']?.toString() ?? 'Account suspended';
+        Navigator.of(context).pushAndRemoveUntil(
+          MaterialPageRoute(builder: (_) => BannedScreen(reason: reason)),
+          (route) => false,
+        );
+        return;
+      }
+
+      // Check if profile exists and username is not empty
+      final rawUsername = profile != null ? profile['username'] : null;
+      final username = rawUsername?.toString().trim() ?? '';
+
+      // 3. If profile exists AND username is not empty:
+      //    → go to GamerMainNavigationScreen (directly, no Create ID screen)
+      if (profile != null && username.isNotEmpty) {
+        await GamerAuthService().refreshCurrentGamer();
+        if (!mounted) return;
+        Navigator.of(context).pushReplacement(
+          MaterialPageRoute(builder: (_) => const GamerMainNavigationScreen()),
+        );
+        return;
+      }
+
+      // 5. If profile does NOT exist OR username is empty:
+      //    → go to CreateGamerIdScreen
       Navigator.of(context).pushReplacement(
         MaterialPageRoute(builder: (_) => const CreateGamerIdScreen()),
       );
-    } else {
+    } catch (e) {
+      debugPrint('[GamerAuthScreen] Post auth check error: $e');
+      if (!mounted) return;
       Navigator.of(context).pushReplacement(
-        MaterialPageRoute(builder: (_) => const GamerMainNavigationScreen()),
+        MaterialPageRoute(builder: (_) => const CreateGamerIdScreen()),
       );
     }
   }

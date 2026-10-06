@@ -56,10 +56,16 @@ class _GamerAppRootState extends State<GamerAppRoot> {
         return const GamerAuthScreen();
       }
       final gamer = _authService.currentGamer;
+      // 4. If profile exists AND is_banned = true:
       if (gamer != null && gamer.isBanned) {
         return BannedScreen(reason: gamer.bannedReason);
       }
-      return const GamerMainNavigationScreen();
+      // 3. If profile exists AND username is not empty:
+      if (gamer != null && gamer.username.trim().isNotEmpty) {
+        return const GamerMainNavigationScreen();
+      }
+      // 5. If profile does NOT exist OR username is empty:
+      return const CreateGamerIdScreen();
     }
 
     return ValueListenableBuilder<bool>(
@@ -89,15 +95,18 @@ class _GamerAppRootState extends State<GamerAppRoot> {
             return ValueListenableBuilder<GamerUser?>(
               valueListenable: _authService.currentGamerNotifier,
               builder: (context, gamer, _) {
+                // 4. If profile exists AND is_banned = true:
                 if (gamer != null && gamer.isBanned) {
                   return BannedScreen(reason: gamer.bannedReason);
                 }
 
-                if (gamer == null || gamer.username.isEmpty) {
-                  return const CreateGamerIdScreen();
+                // 3. If profile exists AND username is not empty:
+                if (gamer != null && gamer.username.trim().isNotEmpty) {
+                  return const GamerMainNavigationScreen();
                 }
 
-                return const GamerMainNavigationScreen();
+                // 5. If profile does NOT exist OR username is empty:
+                return const CreateGamerIdScreen();
               },
             );
           },

@@ -55,86 +55,29 @@ class GamerAuthService {
   /// Internal sync and load user profile from Supabase users table
   Future<void> _syncAndLoadUser(User user) async {
     try {
-      final uid = user.id;
-      final email = user.email ?? '';
+      final authUserId = user.id;
 
-      Map<String, dynamic>? existingData;
-      try {
-        existingData = await _supabase
-            .from('users')
-            .select()
-            .eq('id', uid)
-            .maybeSingle()
-            .timeout(const Duration(seconds: 2), onTimeout: () => null);
+      // 1. Query public.users table for this user matching authUser.id
+      final profile = await _supabase
+          .from('users')
+          .select('id, username, display_name, avatar_url, is_banned, banned_reason')
+          .eq('id', authUserId)
+          .maybeSingle();
 
-        if (existingData == null) {
-          existingData = await _supabase
-              .from('users')
-              .select()
-              .eq('uid', uid)
-              .maybeSingle()
-              .timeout(const Duration(seconds: 2), onTimeout: () => null);
-        }
-      } catch (e) {
-        debugPrint('[GamerAuthService] Existing user query warning: $e');
-      }
-
-      final meta = user.userMetadata ?? {};
-      final defaultUsername = email.contains('@')
-          ? email.split('@').first
-          : 'gamer_${uid.length >= 5 ? uid.substring(0, 5) : uid}';
-      final defaultDisplayName = (meta['full_name'] ?? meta['name'] ?? meta['display_name'] ?? defaultUsername).toString();
-      final avatarUrl = (meta['avatar_url'] ?? meta['picture'] ?? '').toString();
-
-      if (existingData == null) {
-        final newUserData = <String, dynamic>{
-          'id': uid,
-          'uid': uid,
-          'email': email,
-          'username': defaultUsername,
-          'display_name': defaultDisplayName,
-          'avatar_url': avatarUrl,
-          'cover_url': '',
-          'bio': '',
-          'coins': 100,
-          'is_verified': false,
-          'is_admin': email.toLowerCase().trim() == 'tufailm483@gmail.com',
-          'is_banned': false,
-          'created_at': DateTime.now().toIso8601String(),
-          'updated_at': DateTime.now().toIso8601String(),
-        };
-
-        try {
-          await _supabase.from('users').upsert(newUserData).timeout(const Duration(seconds: 2));
-        } catch (_) {}
-        final gamer = GamerUser.fromMap(newUserData, uid);
+      if (profile != null) {
+        final gamer = GamerUser.fromMap(profile, authUserId);
         currentGamerNotifier.value = gamer;
       } else {
-        final gamer = GamerUser.fromMap(existingData, uid);
-        currentGamerNotifier.value = gamer;
+        currentGamerNotifier.value = null;
       }
 
       // Store FCM push notification token safely
       try {
-        NotificationService().saveUserFcmToken(uid);
+        NotificationService().saveUserFcmToken(authUserId);
       } catch (_) {}
     } catch (e) {
       debugPrint('[GamerAuthService] Error syncing user: $e');
-      // Fallback: Ensure user profile is never left null so UI is not stuck
-      if (currentGamerNotifier.value == null) {
-        final meta = user.userMetadata ?? {};
-        final email = user.email ?? '';
-        final uname = email.contains('@') ? email.split('@').first : 'gamer_${user.id.substring(0, 4)}';
-        currentGamerNotifier.value = GamerUser(
-          uid: user.id,
-          username: uname,
-          displayName: (meta['full_name'] ?? meta['name'] ?? uname).toString(),
-          photoUrl: (meta['avatar_url'] ?? '').toString(),
-          coverUrl: '',
-          bio: '',
-          coins: 100,
-        );
-      }
+      currentGamerNotifier.value = null;
     } finally {
       isLoadingNotifier.value = false;
     }
@@ -142,17 +85,24 @@ class GamerAuthService {
 
   /// Refresh current gamer profile from Supabase
   Future<GamerUser?> refreshCurrentGamer() async {
-    final uid = currentUid;
-    if (uid == null) {
+    // 1. Get current Supabase auth user
+    final authUser = SupabaseService.client.auth.currentUser;
+    if (authUser == null) {
       currentGamerNotifier.value = null;
       isLoadingNotifier.value = false;
       return null;
     }
 
     try {
-      final userData = await _supabase.from('users').select().or('id.eq.$uid,uid.eq.$uid').maybeSingle();
-      if (userData != null) {
-        final gamer = GamerUser.fromMap(userData, uid);
+      // 2. Query public.users table for this user matching authUser.id
+      final profile = await _supabase
+          .from('users')
+          .select('id, username, display_name, avatar_url, is_banned, banned_reason')
+          .eq('id', authUser.id)
+          .maybeSingle();
+
+      if (profile != null) {
+        final gamer = GamerUser.fromMap(profile, authUser.id);
         currentGamerNotifier.value = gamer;
         isLoadingNotifier.value = false;
         return gamer;
@@ -160,6 +110,7 @@ class GamerAuthService {
     } catch (e) {
       debugPrint('[GamerAuthService] Error refreshing gamer: $e');
     }
+    currentGamerNotifier.value = null;
     isLoadingNotifier.value = false;
     return null;
   }

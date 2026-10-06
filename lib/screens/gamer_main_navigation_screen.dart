@@ -73,10 +73,16 @@ class _GamerMainNavigationScreenState extends State<GamerMainNavigationScreen> {
   }
 
   void _checkUsernameSetup() {
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      final gamer = GamerAuthService().currentGamer;
-      if (gamer == null || gamer.username.isEmpty) {
-        // Enforce Create ID Screen
+    WidgetsBinding.instance.addPostFrameCallback((_) async {
+      var gamer = GamerAuthService().currentGamer;
+      if (gamer == null || gamer.username.trim().isEmpty) {
+        final authUser = SupabaseService.client.auth.currentUser;
+        if (authUser != null) {
+          gamer = await GamerAuthService().refreshCurrentGamer();
+        }
+      }
+      if (mounted && (gamer == null || gamer.username.trim().isEmpty)) {
+        // Enforce Create ID Screen only if profile does not exist or username is empty
         Navigator.of(context).pushReplacement(
           MaterialPageRoute(builder: (_) => const CreateGamerIdScreen()),
         );
