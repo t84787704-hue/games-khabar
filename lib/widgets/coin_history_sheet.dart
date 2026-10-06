@@ -46,12 +46,14 @@ class _CoinHistorySheetState extends State<CoinHistorySheet> {
 
       // 1. Sum all transactions from Supabase
       int total = 0;
+      int txCount = 0;
       try {
         final txRows = await SupabaseService.client
             .from('coin_transactions')
             .select('amount')
             .or('user_id.eq.$currentUserId,userId.eq.$currentUserId');
 
+        txCount = txRows.length;
         for (var row in txRows) {
           final dynamic rawAmount = row['amount'];
           if (rawAmount is num) {
@@ -75,7 +77,7 @@ class _CoinHistorySheetState extends State<CoinHistorySheet> {
         CoinRewardService().coinsNotifier.value = total;
       }
 
-      debugPrint('SYNCED: gCoins set to $total from ${txs.docs.length} transactions');
+      debugPrint('SYNCED: gCoins set to $total from $txCount transactions');
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
