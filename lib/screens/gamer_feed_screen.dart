@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:share_plus/share_plus.dart';
 import 'package:games_khabar/compat/firebase_auth.dart';
 import '../services/supabase_service.dart';
+import 'gamer_profile_screen.dart';
 
 class GamerFeedScreen extends StatefulWidget {
   const GamerFeedScreen({super.key});
@@ -97,7 +98,7 @@ class _GamerFeedScreenState extends State<GamerFeedScreen> {
         }
       }
 
-      // 3. Fallback: any valid UUID from users table (satisfies FK)
+      // 3. Fallback: any valid UUID from users table
       if (currentUserId.isEmpty) {
         try {
           final anyUser = await SupabaseService.client
@@ -116,15 +117,16 @@ class _GamerFeedScreenState extends State<GamerFeedScreen> {
         } catch (_) {}
       }
 
-      // 4. Last resort: Firebase uid (only if valid UUID) else leave empty
-      if (currentUserId.isEmpty && fbUser != null && _uuidRegex.hasMatch(fbUser.uid)) {
+      // 4. Last resort
+      if (currentUserId.isEmpty &&
+          fbUser != null &&
+          _uuidRegex.hasMatch(fbUser.uid)) {
         currentUserId = fbUser.uid;
         currentUsername = fbUser.displayName ??
             fbUser.email?.split('@').first ??
             'Gamer';
       }
 
-      // Set display name fallback if empty
       if (currentUsername.trim().isEmpty) {
         currentUsername = 'Gamer';
       }
@@ -136,7 +138,6 @@ class _GamerFeedScreenState extends State<GamerFeedScreen> {
   Future<void> _loadFeed() async {
     if (mounted) setState(() => isLoading = true);
 
-    // Ensure user info resolved at least once
     if (currentUserId.isEmpty) {
       await _loadCurrentUserInfo();
     }
@@ -151,10 +152,11 @@ class _GamerFeedScreenState extends State<GamerFeedScreen> {
 
       final fetchedPosts = List<Map<String, dynamic>>.from(data as List);
 
-      // 2. Fetch users separately (only those with UUID user_ids)
+      // 2. Fetch users separately
       final userIds = fetchedPosts
           .map((p) => p['user_id']?.toString())
-          .where((id) => id != null && id.isNotEmpty && _uuidRegex.hasMatch(id))
+          .where((id) =>
+              id != null && id.isNotEmpty && _uuidRegex.hasMatch(id))
           .toSet()
           .toList();
 
@@ -177,7 +179,7 @@ class _GamerFeedScreenState extends State<GamerFeedScreen> {
         }
       }
 
-      // 3. Fetch likes for current user (only if valid UUID)
+      // 3. Fetch likes for current user
       if (currentUserId.isNotEmpty && _uuidRegex.hasMatch(currentUserId)) {
         try {
           final likesData = await SupabaseService.client
@@ -222,7 +224,22 @@ class _GamerFeedScreenState extends State<GamerFeedScreen> {
     }
   }
 
-  /// Toggle like with optimistic UI + rollback on failure.
+  /// Opens a user's profile screen.
+  void _openUserProfile(String userId, String username) {
+    if (userId.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('User not found')),
+      );
+      return;
+    }
+
+    Navigator.of(context).push(
+      MaterialPageRoute(
+        builder: (_) => GamerProfileScreen(userId: userId),
+      ),
+    );
+  }
+
   Future<void> _handleLike(Map<String, dynamic> post) async {
     final postId = post['id']?.toString() ?? '';
     if (postId.isEmpty) return;
@@ -243,10 +260,8 @@ class _GamerFeedScreenState extends State<GamerFeedScreen> {
         ? (currentLikes > 0 ? currentLikes - 1 : 0)
         : currentLikes + 1;
 
-    // Save previous state for rollback
     final previousLikes = currentLikes;
 
-    // Optimistic UI update
     setState(() {
       if (isLiked) {
         likedPostIds.remove(postId);
@@ -286,7 +301,6 @@ class _GamerFeedScreenState extends State<GamerFeedScreen> {
         debugPrint('Posts likes_count update error: $e');
       }
     } else {
-      // Rollback UI if likes table failed
       if (mounted) {
         setState(() {
           if (isLiked) {
@@ -306,7 +320,6 @@ class _GamerFeedScreenState extends State<GamerFeedScreen> {
     }
   }
 
-  /// Share post (updated API compatible with share_plus 10+).
   Future<void> _handleShare(Map<String, dynamic> post) async {
     final content = (post['content'] ?? '').toString();
     final postUserId = post['user_id']?.toString() ?? '';
@@ -353,11 +366,9 @@ https://play.google.com/store/apps/details?id=com.gameskhabar.app
         currentUsername: currentUsername,
       ),
     ).then((newCount) {
-      // Update only the affected post's comment count locally
       if (newCount is int && mounted) {
         setState(() {
-          final idx =
-              posts.indexWhere((p) => p['id'].toString() == postId);
+          final idx = posts.indexWhere((p) => p['id'].toString() == postId);
           if (idx != -1) {
             posts[idx]['comments_count'] = newCount;
           }
@@ -366,7 +377,6 @@ https://play.google.com/store/apps/details?id=com.gameskhabar.app
     });
   }
 
-  /// 3-dot menu — delete own post or report others.
   void _showPostOptions(BuildContext context, String postId, String ownerId) {
     final isMyPost = ownerId == currentUserId;
 
@@ -429,7 +439,6 @@ https://play.google.com/store/apps/details?id=com.gameskhabar.app
                   );
                   if (confirm == true) {
                     try {
-                      // Delete related likes and comments first
                       try {
                         await SupabaseService.client
                             .from('likes')
@@ -447,7 +456,6 @@ https://play.google.com/store/apps/details?id=com.gameskhabar.app
                         debugPrint('Comments delete warning: $e');
                       }
 
-                      // Delete post
                       await SupabaseService.client
                           .from('posts')
                           .delete()
@@ -501,7 +509,6 @@ https://play.google.com/store/apps/details?id=com.gameskhabar.app
     );
   }
 
-  /// Create post sheet — uses current user info dynamically.
   void _showCreatePost() {
     final textController = TextEditingController();
     bool isPosting = false;
@@ -535,7 +542,8 @@ https://play.google.com/store/apps/details?id=com.gameskhabar.app
                           ? NetworkImage(currentAvatarUrl)
                           : null,
                       child: currentAvatarUrl.isEmpty
-                          ? const Icon(Icons.person, color: Color(0xFF050505))
+                          ? const Icon(Icons.person,
+                              color: Color(0xFF050505))
                           : null,
                     ),
                     const SizedBox(width: 10),
@@ -601,7 +609,8 @@ https://play.google.com/store/apps/details?id=com.gameskhabar.app
                                 }
 
                                 if (mounted) {
-                                  ScaffoldMessenger.of(context).showSnackBar(
+                                  ScaffoldMessenger.of(context)
+                                      .showSnackBar(
                                     const SnackBar(
                                       content: Text('Post created!'),
                                       backgroundColor: Color(0xFF1877F2),
@@ -612,10 +621,12 @@ https://play.google.com/store/apps/details?id=com.gameskhabar.app
                               } catch (e) {
                                 debugPrint('Error creating post: $e');
                                 if (sheetCtx.mounted) {
-                                  setSheetState(() => isPosting = false);
+                                  setSheetState(
+                                      () => isPosting = false);
                                 }
                                 if (mounted) {
-                                  ScaffoldMessenger.of(context).showSnackBar(
+                                  ScaffoldMessenger.of(context)
+                                      .showSnackBar(
                                     SnackBar(
                                       content: Text(
                                         'Failed to create post: $e',
@@ -637,7 +648,8 @@ https://play.google.com/store/apps/details?id=com.gameskhabar.app
                             )
                           : const Text(
                               'Post',
-                              style: TextStyle(fontWeight: FontWeight.bold),
+                              style:
+                                  TextStyle(fontWeight: FontWeight.bold),
                             ),
                     ),
                   ],
@@ -710,7 +722,6 @@ https://play.google.com/store/apps/details?id=com.gameskhabar.app
             : ListView.builder(
                 itemCount: posts.length + 1,
                 itemBuilder: (context, index) {
-                  // Composer card
                   if (index == 0) {
                     return InkWell(
                       onTap: _showCreatePost,
@@ -731,9 +742,10 @@ https://play.google.com/store/apps/details?id=com.gameskhabar.app
                             children: [
                               CircleAvatar(
                                 backgroundColor: const Color(0xFFE4E6EB),
-                                backgroundImage: currentAvatarUrl.isNotEmpty
-                                    ? NetworkImage(currentAvatarUrl)
-                                    : null,
+                                backgroundImage:
+                                    currentAvatarUrl.isNotEmpty
+                                        ? NetworkImage(currentAvatarUrl)
+                                        : null,
                                 child: currentAvatarUrl.isEmpty
                                     ? const Icon(
                                         Icons.person,
@@ -787,32 +799,42 @@ https://play.google.com/store/apps/details?id=com.gameskhabar.app
                   final commentsCount = post['comments_count'] ?? 0;
 
                   return Card(
-                    margin:
-                        const EdgeInsets.symmetric(vertical: 4, horizontal: 0),
+                    margin: const EdgeInsets.symmetric(
+                        vertical: 4, horizontal: 0),
                     elevation: 0,
                     color: Colors.white,
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         ListTile(
-                          leading: CircleAvatar(
-                            backgroundColor: const Color(0xFFE4E6EB),
-                            backgroundImage: avatarUrl.isNotEmpty
-                                ? NetworkImage(avatarUrl)
-                                : null,
-                            child: avatarUrl.isEmpty
-                                ? const Icon(
-                                    Icons.person,
-                                    color: Color(0xFF050505),
-                                  )
-                                : null,
+                          contentPadding: const EdgeInsets.symmetric(
+                              horizontal: 12, vertical: 4),
+                          leading: GestureDetector(
+                            onTap: () => _openUserProfile(
+                                postUserId, username.toString()),
+                            child: CircleAvatar(
+                              backgroundColor: const Color(0xFFE4E6EB),
+                              backgroundImage: avatarUrl.isNotEmpty
+                                  ? NetworkImage(avatarUrl)
+                                  : null,
+                              child: avatarUrl.isEmpty
+                                  ? const Icon(
+                                      Icons.person,
+                                      color: Color(0xFF050505),
+                                    )
+                                  : null,
+                            ),
                           ),
-                          title: Text(
-                            username.toString(),
-                            style: const TextStyle(
-                              fontWeight: FontWeight.bold,
-                              fontSize: 15,
-                              color: Color(0xFF050505),
+                          title: GestureDetector(
+                            onTap: () => _openUserProfile(
+                                postUserId, username.toString()),
+                            child: Text(
+                              username.toString(),
+                              style: const TextStyle(
+                                fontWeight: FontWeight.bold,
+                                fontSize: 15,
+                                color: Color(0xFF050505),
+                              ),
                             ),
                           ),
                           subtitle: Text(
@@ -866,7 +888,8 @@ https://play.google.com/store/apps/details?id=com.gameskhabar.app
                             vertical: 10,
                           ),
                           child: Row(
-                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                            mainAxisAlignment:
+                                MainAxisAlignment.spaceBetween,
                             children: [
                               Row(
                                 children: [
@@ -902,17 +925,19 @@ https://play.google.com/store/apps/details?id=com.gameskhabar.app
                             ],
                           ),
                         ),
-                        const Divider(height: 1, color: Color(0xFFCED0D4)),
+                        const Divider(
+                            height: 1, color: Color(0xFFCED0D4)),
                         Row(
                           children: [
                             Expanded(
                               child: InkWell(
                                 onTap: () => _handleLike(post),
                                 child: Padding(
-                                  padding:
-                                      const EdgeInsets.symmetric(vertical: 10),
+                                  padding: const EdgeInsets.symmetric(
+                                      vertical: 10),
                                   child: Row(
-                                    mainAxisAlignment: MainAxisAlignment.center,
+                                    mainAxisAlignment:
+                                        MainAxisAlignment.center,
                                     children: [
                                       Icon(
                                         isLiked
@@ -945,10 +970,11 @@ https://play.google.com/store/apps/details?id=com.gameskhabar.app
                               child: InkWell(
                                 onTap: () => _showComments(postId),
                                 child: const Padding(
-                                  padding:
-                                      EdgeInsets.symmetric(vertical: 10),
+                                  padding: EdgeInsets.symmetric(
+                                      vertical: 10),
                                   child: Row(
-                                    mainAxisAlignment: MainAxisAlignment.center,
+                                    mainAxisAlignment:
+                                        MainAxisAlignment.center,
                                     children: [
                                       Icon(
                                         Icons.chat_bubble_outline,
@@ -972,10 +998,11 @@ https://play.google.com/store/apps/details?id=com.gameskhabar.app
                               child: InkWell(
                                 onTap: () => _handleShare(post),
                                 child: const Padding(
-                                  padding:
-                                      EdgeInsets.symmetric(vertical: 10),
+                                  padding: EdgeInsets.symmetric(
+                                      vertical: 10),
                                   child: Row(
-                                    mainAxisAlignment: MainAxisAlignment.center,
+                                    mainAxisAlignment:
+                                        MainAxisAlignment.center,
                                     children: [
                                       Icon(
                                         Icons.share_outlined,
@@ -1058,7 +1085,6 @@ class _CommentSheetState extends State<CommentSheet> {
 
       final list = List<Map<String, dynamic>>.from(data as List);
 
-      // Fill missing usernames from users table
       final missingUserIds = list
           .where((c) =>
               c['username'] == null || c['username'].toString().isEmpty)
@@ -1126,7 +1152,6 @@ class _CommentSheetState extends State<CommentSheet> {
     _ctrl.clear();
 
     try {
-      // Try insert with username first
       bool inserted = false;
       try {
         await SupabaseService.client.from('comments').insert({
@@ -1140,7 +1165,6 @@ class _CommentSheetState extends State<CommentSheet> {
         debugPrint('Insert with username failed ($e), trying without...');
       }
 
-      // Fallback if username column missing
       if (!inserted) {
         await SupabaseService.client.from('comments').insert({
           'post_id': widget.postId,
@@ -1149,10 +1173,8 @@ class _CommentSheetState extends State<CommentSheet> {
         });
       }
 
-      // Reload comments from server (source of truth)
       await _loadComments();
 
-      // Update posts.comments_count to actual value (safer than increment)
       try {
         await SupabaseService.client
             .from('posts')
@@ -1183,62 +1205,69 @@ class _CommentSheetState extends State<CommentSheet> {
     }
   }
 
+  /// Opens a user's profile from a comment.
+  void _openCommentUserProfile(String userId) {
+    if (userId.isEmpty) return;
+    Navigator.of(context).push(
+      MaterialPageRoute(
+        builder: (_) => GamerProfileScreen(userId: userId),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
-    return PopScope(
-      canPop: true,
-      onPopInvoked: (didPop) {
-        // Return the updated comment count to the parent when sheet closes
-        if (didPop) {
-          // Handled by Navigator.pop in the sheet's close
-        }
-      },
-      child: Padding(
-        padding: EdgeInsets.only(
-          bottom: MediaQuery.of(context).viewInsets.bottom,
-        ),
-        child: SizedBox(
-          height: 500,
-          child: Column(
-            children: [
-              const SizedBox(height: 12),
-              Container(
-                width: 40,
-                height: 4,
-                decoration: BoxDecoration(
-                  color: Colors.grey[300],
-                  borderRadius: BorderRadius.circular(2),
-                ),
+    return Padding(
+      padding: EdgeInsets.only(
+        bottom: MediaQuery.of(context).viewInsets.bottom,
+      ),
+      child: SizedBox(
+        height: 500,
+        child: Column(
+          children: [
+            const SizedBox(height: 12),
+            Container(
+              width: 40,
+              height: 4,
+              decoration: BoxDecoration(
+                color: Colors.grey[300],
+                borderRadius: BorderRadius.circular(2),
               ),
-              const SizedBox(height: 12),
-              const Text(
-                'Comments',
-                style: TextStyle(
-                  fontWeight: FontWeight.bold,
-                  fontSize: 16,
-                ),
+            ),
+            const SizedBox(height: 12),
+            const Text(
+              'Comments',
+              style: TextStyle(
+                fontWeight: FontWeight.bold,
+                fontSize: 16,
               ),
-              const Divider(),
-              Expanded(
-                child: _loading
-                    ? const Center(child: CircularProgressIndicator())
-                    : comments.isEmpty
-                        ? const Center(
-                            child: Text(
-                              'No comments yet. Be the first to comment!',
-                              style: TextStyle(color: Colors.grey),
-                            ),
-                          )
-                        : ListView.builder(
-                            itemCount: comments.length,
-                            itemBuilder: (_, i) {
-                              final c = comments[i];
-                              final username =
-                                  (c['username'] ?? 'Gamer').toString();
-                              final content =
-                                  (c['content'] ?? '').toString();
-                              return ListTile(
-                                leading: const CircleAvatar(
+            ),
+            const Divider(),
+            Expanded(
+              child: _loading
+                  ? const Center(child: CircularProgressIndicator())
+                  : comments.isEmpty
+                      ? const Center(
+                          child: Text(
+                            'No comments yet. Be the first to comment!',
+                            style: TextStyle(color: Colors.grey),
+                          ),
+                        )
+                      : ListView.builder(
+                          itemCount: comments.length,
+                          itemBuilder: (_, i) {
+                            final c = comments[i];
+                            final username =
+                                (c['username'] ?? 'Gamer').toString();
+                            final content =
+                                (c['content'] ?? '').toString();
+                            final commentUserId =
+                                (c['user_id'] ?? '').toString();
+                            return ListTile(
+                              leading: GestureDetector(
+                                onTap: () => _openCommentUserProfile(
+                                    commentUserId),
+                                child: const CircleAvatar(
                                   radius: 16,
                                   backgroundColor: Color(0xFFE4E6EB),
                                   child: Icon(
@@ -1247,72 +1276,76 @@ class _CommentSheetState extends State<CommentSheet> {
                                     color: Color(0xFF050505),
                                   ),
                                 ),
-                                title: Text(
+                              ),
+                              title: GestureDetector(
+                                onTap: () => _openCommentUserProfile(
+                                    commentUserId),
+                                child: Text(
                                   username,
                                   style: const TextStyle(
                                     fontWeight: FontWeight.bold,
                                     fontSize: 13,
                                   ),
                                 ),
-                                subtitle: Text(
-                                  content,
-                                  style: const TextStyle(
-                                    color: Color(0xFF050505),
-                                    fontSize: 14,
-                                  ),
+                              ),
+                              subtitle: Text(
+                                content,
+                                style: const TextStyle(
+                                  color: Color(0xFF050505),
+                                  fontSize: 14,
                                 ),
-                              );
-                            },
-                          ),
-              ),
-              Padding(
-                padding: const EdgeInsets.all(8),
-                child: Row(
-                  children: [
-                    Expanded(
-                      child: TextField(
-                        controller: _ctrl,
-                        enabled: !_isPosting,
-                        decoration: InputDecoration(
-                          hintText: 'Write a comment...',
-                          filled: true,
-                          fillColor: const Color(0xFFF0F2F5),
-                          contentPadding: const EdgeInsets.symmetric(
-                            horizontal: 16,
-                            vertical: 10,
-                          ),
-                          border: OutlineInputBorder(
-                            borderRadius: BorderRadius.circular(20),
-                            borderSide: BorderSide.none,
-                          ),
+                              ),
+                            );
+                          },
+                        ),
+            ),
+            Padding(
+              padding: const EdgeInsets.all(8),
+              child: Row(
+                children: [
+                  Expanded(
+                    child: TextField(
+                      controller: _ctrl,
+                      enabled: !_isPosting,
+                      decoration: InputDecoration(
+                        hintText: 'Write a comment...',
+                        filled: true,
+                        fillColor: const Color(0xFFF0F2F5),
+                        contentPadding: const EdgeInsets.symmetric(
+                          horizontal: 16,
+                          vertical: 10,
+                        ),
+                        border: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(20),
+                          borderSide: BorderSide.none,
                         ),
                       ),
                     ),
-                    const SizedBox(width: 8),
-                    _isPosting
-                        ? const Padding(
-                            padding: EdgeInsets.all(12),
-                            child: SizedBox(
-                              width: 20,
-                              height: 20,
-                              child: CircularProgressIndicator(
-                                strokeWidth: 2,
-                                color: Color(0xFF1877F2),
-                              ),
-                            ),
-                          )
-                        : IconButton(
-                            icon: const Icon(
-                              Icons.send,
+                  ),
+                  const SizedBox(width: 8),
+                  _isPosting
+                      ? const Padding(
+                          padding: EdgeInsets.all(12),
+                          child: SizedBox(
+                            width: 20,
+                            height: 20,
+                            child: CircularProgressIndicator(
+                              strokeWidth: 2,
                               color: Color(0xFF1877F2),
                             ),
-                            onPressed: _submitComment,
                           ),
-                  ],
-                ),
+                        )
+                      : IconButton(
+                          icon: const Icon(
+                            Icons.send,
+                            color: Color(0xFF1877F2),
+                          ),
+                          onPressed: _submitComment,
+                        ),
+                ],
               ),
-            ],
-          ),
+            ),
+          ],
         ),
       ),
     );
