@@ -268,6 +268,7 @@ String _resolveTableName(String collectionPath) {
   return c;
 }
 
+/// Converts FieldValue, Timestamp, DateTime into Supabase-friendly values.
 Map<String, dynamic> _cleanDataForSupabase(Map<String, dynamic> input) {
   final Map<String, dynamic> result = {};
   input.forEach((key, value) {
@@ -286,6 +287,289 @@ Map<String, dynamic> _cleanDataForSupabase(Map<String, dynamic> input) {
     } else {
       result[key] = value;
     }
+  });
+  return result;
+}
+
+/// Maps Firebase-style field names -> Supabase column names (write path).
+Map<String, dynamic> _firebaseToSupabaseFields(Map<String, dynamic> input) {
+  final Map<String, dynamic> result = {};
+  input.forEach((key, value) {
+    String newKey = key;
+    switch (key) {
+      case 'displayName':
+        newKey = 'display_name';
+        break;
+      case 'photoUrl':
+        newKey = 'avatar_url';
+        break;
+      case 'coverUrl':
+        newKey = 'cover_url';
+        break;
+      case 'isBanned':
+        newKey = 'is_banned';
+        break;
+      case 'isDemoAccount':
+        newKey = 'is_demo_account';
+        break;
+      case 'blueTickStatus':
+        newKey = 'blue_tick_status';
+        break;
+      case 'isBlueTickVerified':
+        newKey = 'is_blue_tick_verified';
+        break;
+      case 'blueTickVerified':
+        newKey = 'blue_tick_verified';
+        break;
+      case 'verificationStatus':
+        newKey = 'verification_status';
+        break;
+      case 'isVerifiedBlue':
+        newKey = 'is_verified_blue';
+        break;
+      case 'createdAt':
+        newKey = 'created_at';
+        break;
+      case 'updatedAt':
+        newKey = 'updated_at';
+        break;
+      case 'followersCount':
+        newKey = 'followers_count';
+        break;
+      case 'followingCount':
+        newKey = 'following_count';
+        break;
+      case 'postsCount':
+        newKey = 'posts_count';
+        break;
+      case 'likesReceived':
+        newKey = 'likes_received';
+        break;
+      case 'reportsCount':
+        newKey = 'reports_count';
+        break;
+      case 'rankStatus':
+        newKey = 'rank_status';
+        break;
+      case 'rankScreenshot':
+        newKey = 'rank_screenshot';
+        break;
+      case 'rankVerifiedBy':
+        newKey = 'rank_verified_by';
+        break;
+      case 'rankRejectReason':
+        newKey = 'rank_reject_reason';
+        break;
+      case 'isRankVerified':
+        newKey = 'is_rank_verified';
+        break;
+      case 'gameId':
+        newKey = 'game_id';
+        break;
+      case 'activeFrame':
+        newKey = 'active_frame';
+        break;
+      case 'unlockedFrames':
+        newKey = 'unlocked_frames';
+        break;
+      case 'activeBadge':
+        newKey = 'active_badge';
+        break;
+      case 'unlockedBadges':
+        newKey = 'unlocked_badges';
+        break;
+      case 'chatColor':
+        newKey = 'chat_color';
+        break;
+      case 'unlockedChatColors':
+        newKey = 'unlocked_chat_colors';
+        break;
+      case 'isVipMember':
+        newKey = 'is_vip_member';
+        break;
+      case 'vipTournamentPassUntil':
+        newKey = 'vip_tournament_pass_until';
+        break;
+      case 'leaderboardSpotlightUntil':
+        newKey = 'leaderboard_spotlight_until';
+        break;
+      case 'bannedAt':
+        newKey = 'banned_at';
+        break;
+      case 'bannedBy':
+        newKey = 'banned_by';
+        break;
+      case 'bannedReason':
+        newKey = 'banned_reason';
+        break;
+      case 'favoriteGame':
+        newKey = 'favorite_game';
+        break;
+      case 'selectedGame':
+        newKey = 'selected_game';
+        break;
+      case 'selectedRank':
+        newKey = 'selected_rank';
+        break;
+      case 'kdRatio':
+        newKey = 'kd_ratio';
+        break;
+      case 'isOwner':
+        newKey = 'is_owner';
+        break;
+      case 'isAdmin':
+        newKey = 'is_admin';
+        break;
+      case 'isSuperAdmin':
+        newKey = 'is_super_admin';
+        break;
+      case 'isVerified':
+        newKey = 'is_verified';
+        break;
+    }
+    result[newKey] = value;
+  });
+  return result;
+}
+
+/// Maps Supabase column names -> Firebase-style field names (read path),
+/// so GamerUser.fromFirestore() works with Supabase data.
+Map<String, dynamic> _supabaseToFirebaseFields(Map<String, dynamic> input) {
+  final Map<String, dynamic> result = {};
+  input.forEach((key, value) {
+    String newKey = key;
+    switch (key) {
+      case 'display_name':
+        newKey = 'displayName';
+        break;
+      case 'avatar_url':
+        newKey = 'photoUrl';
+        break;
+      case 'cover_url':
+        newKey = 'coverUrl';
+        break;
+      case 'is_banned':
+        newKey = 'isBanned';
+        break;
+      case 'is_demo_account':
+        newKey = 'isDemoAccount';
+        break;
+      case 'blue_tick_status':
+        newKey = 'blueTickStatus';
+        break;
+      case 'is_blue_tick_verified':
+        newKey = 'isBlueTickVerified';
+        break;
+      case 'blue_tick_verified':
+        newKey = 'blueTickVerified';
+        break;
+      case 'verification_status':
+        newKey = 'verificationStatus';
+        break;
+      case 'is_verified_blue':
+        newKey = 'isVerifiedBlue';
+        break;
+      case 'created_at':
+        newKey = 'createdAt';
+        break;
+      case 'updated_at':
+        newKey = 'updatedAt';
+        break;
+      case 'followers_count':
+        newKey = 'followersCount';
+        break;
+      case 'following_count':
+        newKey = 'followingCount';
+        break;
+      case 'posts_count':
+        newKey = 'postsCount';
+        break;
+      case 'likes_received':
+        newKey = 'likesReceived';
+        break;
+      case 'reports_count':
+        newKey = 'reportsCount';
+        break;
+      case 'rank_status':
+        newKey = 'rankStatus';
+        break;
+      case 'rank_screenshot':
+        newKey = 'rankScreenshot';
+        break;
+      case 'rank_verified_by':
+        newKey = 'rankVerifiedBy';
+        break;
+      case 'rank_reject_reason':
+        newKey = 'rankRejectReason';
+        break;
+      case 'is_rank_verified':
+        newKey = 'isRankVerified';
+        break;
+      case 'game_id':
+        newKey = 'gameId';
+        break;
+      case 'active_frame':
+        newKey = 'activeFrame';
+        break;
+      case 'unlocked_frames':
+        newKey = 'unlockedFrames';
+        break;
+      case 'active_badge':
+        newKey = 'activeBadge';
+        break;
+      case 'unlocked_badges':
+        newKey = 'unlockedBadges';
+        break;
+      case 'chat_color':
+        newKey = 'chatColor';
+        break;
+      case 'unlocked_chat_colors':
+        newKey = 'unlockedChatColors';
+        break;
+      case 'is_vip_member':
+        newKey = 'isVipMember';
+        break;
+      case 'vip_tournament_pass_until':
+        newKey = 'vipTournamentPassUntil';
+        break;
+      case 'leaderboard_spotlight_until':
+        newKey = 'leaderboardSpotlightUntil';
+        break;
+      case 'banned_at':
+        newKey = 'bannedAt';
+        break;
+      case 'banned_by':
+        newKey = 'bannedBy';
+        break;
+      case 'banned_reason':
+        newKey = 'bannedReason';
+        break;
+      case 'favorite_game':
+        newKey = 'favoriteGame';
+        break;
+      case 'selected_game':
+        newKey = 'selectedGame';
+        break;
+      case 'selected_rank':
+        newKey = 'selectedRank';
+        break;
+      case 'kd_ratio':
+        newKey = 'kdRatio';
+        break;
+      case 'is_owner':
+        newKey = 'isOwner';
+        break;
+      case 'is_admin':
+        newKey = 'isAdmin';
+        break;
+      case 'is_super_admin':
+        newKey = 'isSuperAdmin';
+        break;
+      case 'is_verified':
+        newKey = 'isVerified';
+        break;
+    }
+    result[newKey] = value;
   });
   return result;
 }
@@ -343,7 +627,7 @@ class Query<T extends Object?> {
   Query<T> orderBy(Object field, {bool descending = false}) {
     final q = Query<T>(collectionPath);
     q._filters.addAll(_filters);
-    q._orderByField = field.toString();
+    q._orderByField = _firebaseFieldToSupabase(field.toString());
     q._descending = descending;
     q._limitCount = _limitCount;
     return q;
@@ -358,12 +642,38 @@ class Query<T extends Object?> {
     return q;
   }
 
+  /// Converts Firebase field name to Supabase column name for query filters.
+  String _firebaseFieldToSupabase(String field) {
+    switch (field) {
+      case 'displayName':
+        return 'display_name';
+      case 'photoUrl':
+        return 'avatar_url';
+      case 'isBanned':
+        return 'is_banned';
+      case 'isDemoAccount':
+        return 'is_demo_account';
+      case 'blueTickStatus':
+        return 'blue_tick_status';
+      case 'createdAt':
+        return 'created_at';
+      case 'updatedAt':
+        return 'updated_at';
+      case 'favoriteGame':
+        return 'favorite_game';
+      case 'verificationStatus':
+        return 'verification_status';
+      default:
+        return field;
+    }
+  }
+
   Future<QuerySnapshot<T>> get([GetOptions? options]) async {
     final table = _resolveTableName(collectionPath);
     try {
       final filtersMap = <String, String>{};
       for (final f in _filters) {
-        final field = f['field'].toString();
+        final field = _firebaseFieldToSupabase(f['field'].toString());
         final val = f['val'];
         if (f['op'] == 'eq') {
           filtersMap[field] = 'eq.$val';
@@ -384,9 +694,10 @@ class Query<T extends Object?> {
 
       final docList = rows.map((r) {
         final docId = (r['id'] ?? r['uid'] ?? r['post_id'] ?? r['team_id'] ?? '').toString();
+        final mapped = _supabaseToFirebaseFields(r);
         return QueryDocumentSnapshot<T>(
           id: docId,
-          data: r,
+          data: mapped,
           exists: true,
           reference: DocumentReference<T>(collectionPath, docId),
         );
@@ -464,7 +775,7 @@ class DocumentReference<T extends Object?> {
       if (rows.isNotEmpty) {
         return DocumentSnapshot<T>(
           id: id,
-          data: rows.first,
+          data: _supabaseToFirebaseFields(rows.first),
           exists: true,
           reference: this,
         );
@@ -495,7 +806,8 @@ class DocumentReference<T extends Object?> {
   Future<void> set(dynamic data, [SetOptions? options]) async {
     final table = _resolveTableName(collectionPath);
     final mapData = data is Map<String, dynamic> ? data : <String, dynamic>{};
-    final clean = _cleanDataForSupabase(mapData);
+    final cleaned = _cleanDataForSupabase(mapData);
+    final clean = _firebaseToSupabaseFields(cleaned);
     if (!clean.containsKey('id') && !clean.containsKey('uid')) {
       clean['id'] = id;
     }
@@ -515,7 +827,8 @@ class DocumentReference<T extends Object?> {
 
   Future<void> update(Map<String, dynamic> data) async {
     final table = _resolveTableName(collectionPath);
-    final clean = _cleanDataForSupabase(data);
+    final cleaned = _cleanDataForSupabase(data);
+    final clean = _firebaseToSupabaseFields(cleaned);
     try {
       await SupabaseService.update(table, clean, 'id', id);
     } catch (e) {
