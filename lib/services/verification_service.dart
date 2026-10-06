@@ -671,6 +671,24 @@ class VerificationService {
     }
   }
 
+  /// Mark application as pending under review (used when user submits application form).
+  static Future<bool> setPendingUnderReview(String uid) async {
+    if (uid.isEmpty) return false;
+    try {
+      final uuid = SupabaseService.toUuid(uid);
+      await SupabaseService.client.from('users').update({
+        'blue_tick_status': 'pending',
+        'is_verified': false,
+        'updated_at': DateTime.now().toIso8601String(),
+      }).eq('id', uuid);
+      _verifiedCache[uid] = false;
+      return true;
+    } catch (e) {
+      debugPrint('Error setting pending review: $e');
+      return false;
+    }
+  }
+
   static Future<bool> linkGameId({
     required String userId,
     required String gameId,
