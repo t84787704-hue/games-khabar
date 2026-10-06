@@ -1,7 +1,6 @@
 import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import 'package:firebase_auth/firebase_auth.dart';
 import 'package:image_picker/image_picker.dart';
 import '../constants/gamer_theme.dart';
 import '../services/gamer_auth_service.dart';
@@ -56,7 +55,7 @@ class _CreateTeamDialogState extends State<CreateTeamDialog> {
   Future<void> _handleCreate() async {
     if (!_formKey.currentState!.validate()) return;
 
-    final currentUser = FirebaseAuth.instance.currentUser;
+    final currentUser = GamerAuthService().currentUser;
     final currentGamer = GamerAuthService().currentGamer;
 
     if (currentUser == null) {
@@ -68,11 +67,13 @@ class _CreateTeamDialogState extends State<CreateTeamDialog> {
 
     setState(() => _isLoading = true);
 
+    final meta = currentUser.userMetadata ?? {};
+    final metaName = (meta['full_name'] ?? meta['name'] ?? meta['display_name'] ?? '').toString();
+    final metaAvatar = (meta['avatar_url'] ?? meta['picture'] ?? '').toString();
     final leaderName = currentGamer?.displayName ??
         currentGamer?.username ??
-        currentUser.displayName ??
-        'Team Leader';
-    final leaderAvatar = currentGamer?.photoUrl ?? currentUser.photoURL ?? '';
+        (metaName.isNotEmpty ? metaName : 'Team Leader');
+    final leaderAvatar = currentGamer?.photoUrl ?? metaAvatar;
 
     final teamId = await TeamService().createTeam(
       name: _nameController.text.trim(),
@@ -81,7 +82,7 @@ class _CreateTeamDialogState extends State<CreateTeamDialog> {
       game: _selectedGame,
       description: _descController.text.trim(),
       requirements: _reqController.text.trim(),
-      leaderId: currentUser.uid,
+      leaderId: currentUser.id,
       leaderName: leaderName,
       leaderAvatar: leaderAvatar,
     );

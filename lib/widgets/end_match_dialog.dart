@@ -1,7 +1,6 @@
 import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
-import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../services/supabase_service.dart';
 
@@ -109,23 +108,6 @@ class _EndMatchBottomSheetState extends State<EndMatchBottomSheet> {
       }
     } catch (e) {
       debugPrint('[EndMatchDialog] Supabase team stats update error: $e');
-    }
-
-    // 2. Firestore teams collection
-    try {
-      final firestore = FirebaseFirestore.instance;
-      final docRef = firestore.collection('teams').doc(teamId);
-      final docSnap = await docRef.get();
-      if (docSnap.exists) {
-        await docRef.update({
-          'wins': FieldValue.increment(addW),
-          'losses': FieldValue.increment(addL),
-          'draws': FieldValue.increment(addD),
-          'points': FieldValue.increment(addPts),
-        });
-      }
-    } catch (e) {
-      debugPrint('[EndMatchDialog] Firestore team stats update error: $e');
     }
   }
 

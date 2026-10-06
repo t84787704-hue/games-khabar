@@ -136,9 +136,12 @@ class _CreateGamerIdScreenState extends State<CreateGamerIdScreen> {
     } else {
       final fbUser = GamerAuthService().currentUser;
       if (fbUser != null) {
-        _displayNameController.text = fbUser.displayName ?? '';
-        if (fbUser.photoURL != null && fbUser.photoURL!.isNotEmpty) {
-          _photoUrl = fbUser.photoURL!;
+        final meta = fbUser.userMetadata ?? {};
+        final fullName = (meta['full_name'] ?? meta['name'] ?? meta['display_name'] ?? '').toString();
+        final avatar = (meta['avatar_url'] ?? meta['picture'] ?? '').toString();
+        _displayNameController.text = fullName;
+        if (avatar.isNotEmpty) {
+          _photoUrl = avatar;
         }
       }
       _rankController.text = '';

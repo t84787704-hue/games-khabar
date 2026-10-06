@@ -80,9 +80,9 @@ class GetOptions {
 
 enum DocumentChangeType { added, modified, removed }
 
-class DocumentChange {
+class DocumentChange<T extends Object?> {
   final DocumentChangeType type;
-  final DocumentSnapshot doc;
+  final DocumentSnapshot<T> doc;
   final int oldIndex;
   final int newIndex;
 
@@ -95,11 +95,11 @@ class DocumentChange {
 }
 
 /// DocumentSnapshot compatibility class
-class DocumentSnapshot {
+class DocumentSnapshot<T extends Object?> {
   final String id;
   final Map<String, dynamic>? _data;
   final bool exists;
-  final DocumentReference reference;
+  final DocumentReference<T> reference;
 
   DocumentSnapshot({
     required this.id,
@@ -108,7 +108,7 @@ class DocumentSnapshot {
     required this.reference,
   }) : _data = data;
 
-  Map<String, dynamic>? data() => _data;
+  dynamic data() => _data;
 
   dynamic get(Object field) => _data?[field.toString()];
 
@@ -116,14 +116,14 @@ class DocumentSnapshot {
 }
 
 /// QuerySnapshot compatibility class
-class QuerySnapshot {
-  final List<DocumentSnapshot> docs;
-  final List<DocumentChange> docChanges;
+class QuerySnapshot<T extends Object?> {
+  final List<DocumentSnapshot<T>> docs;
+  final List<DocumentChange<T>> docChanges;
 
-  QuerySnapshot({required this.docs, List<DocumentChange>? changes})
+  QuerySnapshot({required this.docs, List<DocumentChange<T>>? changes})
       : docChanges = changes ??
             docs
-                .map((d) => DocumentChange(type: DocumentChangeType.added, doc: d))
+                .map((d) => DocumentChange<T>(type: DocumentChangeType.added, doc: d))
                 .toList();
 
   int get size => docs.length;
@@ -134,16 +134,16 @@ class FirebaseFirestore {
   static final FirebaseFirestore instance = FirebaseFirestore._();
   FirebaseFirestore._();
 
-  CollectionReference collection(String path) {
-    return CollectionReference(path);
+  CollectionReference<Map<String, dynamic>> collection(String path) {
+    return CollectionReference<Map<String, dynamic>>(path);
   }
 
-  DocumentReference doc(String path) {
+  DocumentReference<Map<String, dynamic>> doc(String path) {
     final segments = path.split('/');
     if (segments.length == 2) {
-      return CollectionReference(segments[0]).doc(segments[1]);
+      return CollectionReference<Map<String, dynamic>>(segments[0]).doc(segments[1]);
     }
-    return DocumentReference(path, path.split('/').last);
+    return DocumentReference<Map<String, dynamic>>(path, path.split('/').last);
   }
 
   WriteBatch batch() => WriteBatch();
@@ -226,7 +226,7 @@ Map<String, dynamic> _cleanDataForSupabase(Map<String, dynamic> input) {
 }
 
 /// Query compatibility class
-class Query {
+class Query<T extends Object?> {
   final String collectionPath;
   final List<Map<String, dynamic>> _filters = [];
   String? _orderByField;
@@ -235,7 +235,7 @@ class Query {
 
   Query(this.collectionPath);
 
-  Query where(
+  Query<T> where(
     Object field, {
     Object? isEqualTo,
     Object? isNotEqualTo,
@@ -249,7 +249,7 @@ class Query {
     List? whereNotIn,
     bool? isNull,
   }) {
-    final q = Query(collectionPath);
+    final q = Query<T>(collectionPath);
     q._filters.addAll(_filters);
     q._orderByField = _orderByField;
     q._descending = _descending;
@@ -268,8 +268,8 @@ class Query {
     return q;
   }
 
-  Query orderBy(Object field, {bool descending = false}) {
-    final q = Query(collectionPath);
+  Query<T> orderBy(Object field, {bool descending = false}) {
+    final q = Query<T>(collectionPath);
     q._filters.addAll(_filters);
     q._orderByField = field.toString();
     q._descending = descending;
@@ -277,8 +277,8 @@ class Query {
     return q;
   }
 
-  Query limit(int limit) {
-    final q = Query(collectionPath);
+  Query<T> limit(int limit) {
+    final q = Query<T>(collectionPath);
     q._filters.addAll(_filters);
     q._orderByField = _orderByField;
     q._descending = _descending;
@@ -286,7 +286,7 @@ class Query {
     return q;
   }
 
-  Future<QuerySnapshot> get([GetOptions? options]) async {
+  Future<QuerySnapshot<T>> get([GetOptions? options]) async {
     final table = _resolveTableName(collectionPath);
     try {
       final filtersMap = <String, String>{};
@@ -312,50 +312,59 @@ class Query {
 
       final docList = rows.map((r) {
         final docId = (r['id'] ?? r['uid'] ?? r['post_id'] ?? r['team_id'] ?? '').toString();
-        return DocumentSnapshot(
+        return DocumentSnapshot<T>(
           id: docId,
           data: r,
           exists: true,
-          reference: DocumentReference(collectionPath, docId),
+          reference: DocumentReference<T>(collectionPath, docId),
         );
       }).toList();
 
-      return QuerySnapshot(docs: docList);
+      return QuerySnapshot<T>(docs: docList);
     } catch (e) {
       debugPrint('[Compat Firestore] Query get error on $table: $e');
-      return QuerySnapshot(docs: []);
+      return QuerySnapshot<T>(docs: []);
     }
   }
 
-  Stream<QuerySnapshot> snapshots() async* {
+  Stream<QuerySnapshot<T>> snapshots() async* {
     while (true) {
       yield await get();
       await Future.delayed(const Duration(seconds: 4));
     }
   }
+
+  Query<R> withConverter<R extends Object?>({required dynamic fromFirestore, required dynamic toFirestore}) {
+    return Query<R>(collectionPath);
+  }
 }
 
 /// CollectionReference compatibility class
-class CollectionReference extends Query {
+class CollectionReference<T extends Object?> extends Query<T> {
   CollectionReference(super.collectionPath);
 
   String get id => collectionPath.split('/').last;
   String get path => collectionPath;
 
-  DocumentReference doc([String? id]) {
+  DocumentReference<T> doc([String? id]) {
     final docId = id ?? 'doc_${DateTime.now().millisecondsSinceEpoch}';
-    return DocumentReference(collectionPath, docId);
+    return DocumentReference<T>(collectionPath, docId);
   }
 
-  Future<DocumentReference> add(Map<String, dynamic> data) async {
+  Future<DocumentReference<T>> add(dynamic data) async {
     final ref = doc();
     await ref.set(data);
     return ref;
   }
+
+  @override
+  CollectionReference<R> withConverter<R extends Object?>({required dynamic fromFirestore, required dynamic toFirestore}) {
+    return CollectionReference<R>(collectionPath);
+  }
 }
 
 /// DocumentReference compatibility class
-class DocumentReference {
+class DocumentReference<T extends Object?> {
   final String collectionPath;
   final String id;
 
@@ -363,11 +372,11 @@ class DocumentReference {
 
   String get path => '$collectionPath/$id';
 
-  CollectionReference collection(String subcollectionPath) {
-    return CollectionReference('$collectionPath/$id/$subcollectionPath');
+  CollectionReference<Map<String, dynamic>> collection(String subcollectionPath) {
+    return CollectionReference<Map<String, dynamic>>('$collectionPath/$id/$subcollectionPath');
   }
 
-  Future<DocumentSnapshot> get([GetOptions? options]) async {
+  Future<DocumentSnapshot<T>> get([GetOptions? options]) async {
     final table = _resolveTableName(collectionPath);
     try {
       // 1. Check by id
@@ -381,14 +390,14 @@ class DocumentReference {
       }
 
       if (rows.isNotEmpty) {
-        return DocumentSnapshot(
+        return DocumentSnapshot<T>(
           id: id,
           data: rows.first,
           exists: true,
           reference: this,
         );
       }
-      return DocumentSnapshot(
+      return DocumentSnapshot<T>(
         id: id,
         data: null,
         exists: false,
@@ -396,13 +405,25 @@ class DocumentReference {
       );
     } catch (e) {
       debugPrint('[Compat Firestore] doc get error on $table/$id: $e');
-      return DocumentSnapshot(id: id, data: null, exists: false, reference: this);
+      return DocumentSnapshot<T>(id: id, data: null, exists: false, reference: this);
     }
   }
 
-  Future<void> set(Map<String, dynamic> data, [SetOptions? options]) async {
+  Stream<DocumentSnapshot<T>> snapshots() async* {
+    while (true) {
+      yield await get();
+      await Future.delayed(const Duration(seconds: 4));
+    }
+  }
+
+  DocumentReference<R> withConverter<R extends Object?>({required dynamic fromFirestore, required dynamic toFirestore}) {
+    return DocumentReference<R>(collectionPath, id);
+  }
+
+  Future<void> set(dynamic data, [SetOptions? options]) async {
     final table = _resolveTableName(collectionPath);
-    final clean = _cleanDataForSupabase(data);
+    final mapData = data is Map<String, dynamic> ? data : <String, dynamic>{};
+    final clean = _cleanDataForSupabase(mapData);
     if (!clean.containsKey('id') && !clean.containsKey('uid')) {
       clean['id'] = id;
     }
@@ -424,11 +445,7 @@ class DocumentReference {
     final table = _resolveTableName(collectionPath);
     final clean = _cleanDataForSupabase(data);
     try {
-      if (table == 'users') {
-        await SupabaseService.update(table, clean, 'id', id);
-      } else {
-        await SupabaseService.update(table, clean, 'id', id);
-      }
+      await SupabaseService.update(table, clean, 'id', id);
     } catch (e) {
       debugPrint('[Compat Firestore] doc update error on $table: $e');
     }
@@ -440,13 +457,6 @@ class DocumentReference {
       await SupabaseService.delete(table, 'id', id);
     } catch (e) {
       debugPrint('[Compat Firestore] doc delete error on $table: $e');
-    }
-  }
-
-  Stream<DocumentSnapshot> snapshots() async* {
-    while (true) {
-      yield await get();
-      await Future.delayed(const Duration(seconds: 4));
     }
   }
 }

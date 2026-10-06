@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import 'package:firebase_auth/firebase_auth.dart';
 import 'package:intl/intl.dart';
 import '../constants/gamer_theme.dart';
 import '../models/squad_post_model.dart';
@@ -21,7 +20,7 @@ class RequestsBottomSheet extends StatefulWidget {
 
   /// Helper to open RequestsBottomSheet only if isOwner
   static void show(BuildContext context, SquadPost squad) {
-    final currentUid = FirebaseAuth.instance.currentUser?.uid ?? GamerAuthService().currentUid ?? '';
+    final currentUid = GamerAuthService().currentUid ?? '';
     final isOwner = currentUid.isNotEmpty && (squad.ownerId == currentUid || squad.userId == currentUid);
     if (!isOwner) return; // Only owner can open
 
@@ -147,7 +146,7 @@ class _RequestsBottomSheetState extends State<RequestsBottomSheet> {
   @override
   Widget build(BuildContext context) {
     final squad = widget.squad;
-    final currentUid = FirebaseAuth.instance.currentUser?.uid ?? GamerAuthService().currentUid ?? '';
+    final currentUid = GamerAuthService().currentUid ?? '';
     final isOwner = currentUid.isNotEmpty && (squad.ownerId == currentUid || squad.userId == currentUid);
 
     return Container(

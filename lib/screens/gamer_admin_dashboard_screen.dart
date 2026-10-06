@@ -1544,7 +1544,7 @@ class _GamerAdminDashboardScreenState extends State<GamerAdminDashboardScreen>
   Future<void> _approveRankVerification(_RankQueueItem item) async {
     try {
       final targetDocId = item.game.ownerUid.isNotEmpty ? item.game.ownerUid : item.user.uid;
-      final currentAdmin = GamerAuthService().currentUser?.displayName ?? 'Admin';
+      final currentAdmin = GamerAuthService().currentGamer?.displayName ?? 'Admin';
 
       final Map<String, dynamic> updateData = {
         'rank': item.game.claimedRank,
@@ -1609,7 +1609,7 @@ class _GamerAdminDashboardScreenState extends State<GamerAdminDashboardScreen>
   Future<void> _rejectRankVerification(_RankQueueItem item, String reason) async {
     try {
       final targetDocId = item.game.ownerUid.isNotEmpty ? item.game.ownerUid : item.user.uid;
-      final currentAdmin = GamerAuthService().currentUser?.displayName ?? 'Admin';
+      final currentAdmin = GamerAuthService().currentGamer?.displayName ?? 'Admin';
       const defaultUrduMsg = 'آپ کا اسکرین شاٹ درست نہیں ہے، دوبارہ اپلوڈ کریں';
       final finalReason = reason.trim().isNotEmpty ? reason.trim() : defaultUrduMsg;
 

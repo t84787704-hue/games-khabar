@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import 'package:firebase_auth/firebase_auth.dart';
 import '../models/team_model.dart';
 import '../services/team_service.dart';
 import '../services/supabase_service.dart';
@@ -35,9 +34,8 @@ class _TeamCardState extends State<TeamCard> {
   Future<void> _handleJoin(String currentUid) async {
     final effectiveUid = currentUid.isNotEmpty
         ? currentUid
-        : (SupabaseService.client.auth.currentUser?.id ??
-            FirebaseAuth.instance.currentUser?.uid ??
-            GamerAuthService().currentUid ??
+        : (GamerAuthService().currentUid ??
+            SupabaseService.client.auth.currentUser?.id ??
             '');
 
     if (effectiveUid.isEmpty) {
@@ -358,9 +356,8 @@ class _TeamCardState extends State<TeamCard> {
   @override
   Widget build(BuildContext context) {
     final team = widget.team;
-    final currentUid = FirebaseAuth.instance.currentUser?.uid ??
-        (GamerAuthService().currentUid ??
-            (SupabaseService.client.auth.currentUser?.id ?? ''));
+    final currentUid = GamerAuthService().currentUid ??
+        (SupabaseService.client.auth.currentUser?.id ?? '');
     final isLeader = team.isLeader(currentUid);
     final isMember = team.isMember(currentUid);
     final hasRequested = team.hasRequestedJoin(currentUid);

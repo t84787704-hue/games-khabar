@@ -1,6 +1,4 @@
 import 'package:flutter/material.dart';
-import 'package:firebase_auth/firebase_auth.dart';
-import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:intl/intl.dart';
 import '../models/team_model.dart';
 import '../services/gamer_auth_service.dart';
@@ -115,7 +113,7 @@ class _SendTeamMatchChallengeDialogState extends State<SendTeamMatchChallengeDia
 
   Future<void> _submitChallenge() async {
     final myTeam = selectedMyTeam;
-    final currentUser = FirebaseAuth.instance.currentUser;
+    final currentUser = GamerAuthService().currentUser;
     final currentGamer = GamerAuthService().currentGamer;
 
     if (currentUser == null) {
@@ -442,15 +440,9 @@ class _SendTeamMatchChallengeDialogState extends State<SendTeamMatchChallengeDia
                           onPressed: () async {
                             final pId = pendingChallengeId;
                             if (pId == null) return;
-                            final uid = FirebaseAuth.instance.currentUser?.uid ?? '';
+                            final uid = GamerAuthService().currentUid ?? '';
                             try {
                               await SupabaseService.client.from('challenges').delete().eq('id', pId);
-                              try {
-                                await FirebaseFirestore.instance.collection('challenges').doc(pId).delete();
-                              } catch (_) {}
-                              try {
-                                await FirebaseFirestore.instance.collection('team_matches').doc(pId).delete();
-                              } catch (_) {}
                               await _matchService.cancelChallenge(pId, cancelledByUid: uid);
                               if (mounted) {
                                 ScaffoldMessenger.of(context).showSnackBar(

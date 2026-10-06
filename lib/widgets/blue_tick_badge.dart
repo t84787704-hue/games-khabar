@@ -1,8 +1,8 @@
-import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
+import '../services/supabase_service.dart';
 
 /// Renders the verified influencer Blue Tick icon (✓)
-/// ONLY IF the user document has isBlueTickVerified == true AND blueTickStatus == 'approved'.
+/// ONLY IF the user document has isBlueTickVerified == true / is_verified == true
 class UserBlueTickBadge extends StatelessWidget {
   final String userId;
   final double size;
@@ -15,26 +15,30 @@ class UserBlueTickBadge extends StatelessWidget {
     this.padding = const EdgeInsets.only(left: 3),
   });
 
-  /// Static helper to check raw firestore user document data
+  /// Static helper to check raw user document data
   static bool isApproved(Map<String, dynamic>? data) {
     if (data == null) return false;
-    final bool isBlue = data['isBlueTickVerified'] == true ||
+    final bool isBlue = data['is_verified'] == true ||
+        data['isBlueTickVerified'] == true ||
         data['blueTickVerified'] == true;
-    final String status = data['blueTickStatus']?.toString().toLowerCase().trim() ?? '';
-    return isBlue && status == 'approved';
+    final String status = (data['blueTickStatus'] ?? data['blue_tick_status'] ?? '').toString().toLowerCase().trim();
+    return isBlue || status == 'approved';
   }
 
   @override
   Widget build(BuildContext context) {
     if (userId.trim().isEmpty) return const SizedBox.shrink();
 
-    return StreamBuilder<DocumentSnapshot>(
-      stream: FirebaseFirestore.instance.collection('users').doc(userId).snapshots(),
+    return StreamBuilder<List<Map<String, dynamic>>>(
+      stream: SupabaseService.client
+          .from('users')
+          .stream(primaryKey: ['id'])
+          .eq('id', userId),
       builder: (context, snapshot) {
-        if (!snapshot.hasData || snapshot.data == null) {
+        if (!snapshot.hasData || snapshot.data == null || snapshot.data!.isEmpty) {
           return const SizedBox.shrink();
         }
-        final data = snapshot.data!.data() as Map<String, dynamic>?;
+        final data = snapshot.data!.first;
         if (!isApproved(data)) {
           return const SizedBox.shrink();
         }
