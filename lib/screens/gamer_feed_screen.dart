@@ -15,7 +15,9 @@ class _GamerFeedScreenState extends State<GamerFeedScreen> {
   Map<String, Map<String, dynamic>> userProfiles = {};
   Set<String> likedPostIds = {};
   bool isLoading = true;
-  String currentUserId = 'test_user';
+  String currentUserId = '';
+  String currentUsername = 'Gamer';
+  String currentAvatarUrl = '';
 
   static final RegExp _uuidRegex = RegExp(
     r'^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$',
@@ -24,82 +26,148 @@ class _GamerFeedScreenState extends State<GamerFeedScreen> {
   @override
   void initState() {
     super.initState();
-    _loadFeed();
+    _initScreen();
   }
 
-  Future<String> _resolveValidUserId() async {
+  Future<void> _initScreen() async {
+    await _loadCurrentUserInfo();
+    await _loadFeed();
+  }
+
+  /// Resolve current user's ID, username, and avatar once at startup.
+  Future<void> _loadCurrentUserInfo() async {
     try {
-      final sbId = await SupabaseService.getCurrentUserId();
-      if (sbId!= null && _uuidRegex.hasMatch(sbId)) {
-        return sbId;
-      }
-    } catch (_) {}
-    try {
+      // 1. SharedPreferences stored Supabase user ID
+      try {
+        final sbId = await SupabaseService.getCurrentUserId();
+        if (sbId != null && _uuidRegex.hasMatch(sbId)) {
+          currentUserId = sbId;
+        }
+      } catch (_) {}
+
       final fbUser = FirebaseAuth.instance.currentUser;
-      if (fbUser!= null) {
-        if (fbUser.email!= null && fbUser.email!.isNotEmpty) {
-          final res = await SupabaseService.client
-             .from('users')
-             .select('id')
-             .eq('email', fbUser.email!)
-             .maybeSingle();
-          if (res!= null && res['id']!= null) {
-            final idStr = res['id'].toString();
-            if (_uuidRegex.hasMatch(idStr)) return idStr;
+
+      // 2. Firebase user email -> Supabase users match
+      if (currentUserId.isEmpty && fbUser != null) {
+        if (fbUser.email != null && fbUser.email!.isNotEmpty) {
+          try {
+            final res = await SupabaseService.client
+                .from('users')
+                .select('id, username, avatar_url')
+                .eq('email', fbUser.email!)
+                .maybeSingle();
+            if (res != null && res['id'] != null) {
+              final idStr = res['id'].toString();
+              if (_uuidRegex.hasMatch(idStr)) {
+                currentUserId = idStr;
+                currentUsername =
+                    (res['username'] ?? '').toString().isNotEmpty
+                        ? res['username'].toString()
+                        : (fbUser.displayName ??
+                            fbUser.email?.split('@').first ??
+                            'Gamer');
+                currentAvatarUrl = (res['avatar_url'] ?? '').toString();
+              }
+            }
+          } catch (_) {}
+        }
+
+        // 2b. Firebase uid -> Supabase users match
+        if (currentUserId.isEmpty) {
+          try {
+            final resUid = await SupabaseService.client
+                .from('users')
+                .select('id, username, avatar_url')
+                .eq('uid', fbUser.uid)
+                .maybeSingle();
+            if (resUid != null && resUid['id'] != null) {
+              final idStr = resUid['id'].toString();
+              if (_uuidRegex.hasMatch(idStr)) {
+                currentUserId = idStr;
+                currentUsername =
+                    (resUid['username'] ?? '').toString().isNotEmpty
+                        ? resUid['username'].toString()
+                        : (fbUser.displayName ??
+                            fbUser.email?.split('@').first ??
+                            'Gamer');
+                currentAvatarUrl = (resUid['avatar_url'] ?? '').toString();
+              }
+            }
+          } catch (_) {}
+        }
+      }
+
+      // 3. Fallback: any valid UUID from users table (satisfies FK)
+      if (currentUserId.isEmpty) {
+        try {
+          final anyUser = await SupabaseService.client
+              .from('users')
+              .select('id, username, avatar_url')
+              .limit(1)
+              .maybeSingle();
+          if (anyUser != null && anyUser['id'] != null) {
+            final idStr = anyUser['id'].toString();
+            if (_uuidRegex.hasMatch(idStr)) {
+              currentUserId = idStr;
+              currentUsername = (anyUser['username'] ?? 'Gamer').toString();
+              currentAvatarUrl = (anyUser['avatar_url'] ?? '').toString();
+            }
           }
-        }
-        final resUid = await SupabaseService.client
-           .from('users')
-           .select('id')
-           .eq('uid', fbUser.uid)
-           .maybeSingle();
-        if (resUid!= null && resUid['id']!= null) {
-          final idStr = resUid['id'].toString();
-          if (_uuidRegex.hasMatch(idStr)) return idStr;
-        }
+        } catch (_) {}
       }
-    } catch (_) {}
-    try {
-      final anyUser = await SupabaseService.client
-         .from('users')
-         .select('id')
-         .limit(1)
-         .maybeSingle();
-      if (anyUser!= null && anyUser['id']!= null) {
-        final idStr = anyUser['id'].toString();
-        if (_uuidRegex.hasMatch(idStr)) return idStr;
+
+      // 4. Last resort: Firebase uid (only if valid UUID) else leave empty
+      if (currentUserId.isEmpty && fbUser != null && _uuidRegex.hasMatch(fbUser.uid)) {
+        currentUserId = fbUser.uid;
+        currentUsername = fbUser.displayName ??
+            fbUser.email?.split('@').first ??
+            'Gamer';
       }
-    } catch (_) {}
-    final fbUid = FirebaseAuth.instance.currentUser?.uid;
-    return (fbUid!= null && fbUid.isNotEmpty)? fbUid : 'test_user';
+
+      // Set display name fallback if empty
+      if (currentUsername.trim().isEmpty) {
+        currentUsername = 'Gamer';
+      }
+    } catch (e) {
+      debugPrint('User info resolve error: $e');
+    }
   }
 
   Future<void> _loadFeed() async {
-    if (mounted) {
-      setState(() => isLoading = true);
+    if (mounted) setState(() => isLoading = true);
+
+    // Ensure user info resolved at least once
+    if (currentUserId.isEmpty) {
+      await _loadCurrentUserInfo();
     }
-    currentUserId = await _resolveValidUserId();
+
     try {
+      // 1. Fetch posts
       final data = await SupabaseService.client
-         .from('posts')
-         .select('*')
-         .order('created_at', ascending: false)
-         .limit(20);
+          .from('posts')
+          .select('*')
+          .order('created_at', ascending: false)
+          .limit(20);
+
       final fetchedPosts = List<Map<String, dynamic>>.from(data as List);
+
+      // 2. Fetch users separately (only those with UUID user_ids)
       final userIds = fetchedPosts
-         .map((p) => p['user_id']?.toString())
-         .where((id) => id!= null && id.isNotEmpty)
-         .toSet()
-         .toList();
+          .map((p) => p['user_id']?.toString())
+          .where((id) => id != null && id.isNotEmpty && _uuidRegex.hasMatch(id))
+          .toSet()
+          .toList();
+
       if (userIds.isNotEmpty) {
         try {
           final usersData = await SupabaseService.client
-             .from('users')
-             .select('id, username, avatar_url')
-             .inFilter('id', userIds);
+              .from('users')
+              .select('id, username, avatar_url')
+              .inFilter('id', userIds);
+
           final profiles = <String, Map<String, dynamic>>{};
           for (final u in (usersData as List)) {
-            if (u is Map<String, dynamic> && u['id']!= null) {
+            if (u is Map<String, dynamic> && u['id'] != null) {
               profiles[u['id'].toString()] = u;
             }
           }
@@ -108,18 +176,24 @@ class _GamerFeedScreenState extends State<GamerFeedScreen> {
           debugPrint('Users fetch warning (ignored): $e');
         }
       }
-      try {
-        final likesData = await SupabaseService.client
-           .from('likes')
-           .select('post_id')
-           .eq('user_id', currentUserId);
-        likedPostIds = (likesData as List)
-           .map((e) => e['post_id']?.toString()?? '')
-           .where((id) => id.isNotEmpty)
-           .toSet();
-      } catch (e) {
-        debugPrint('Likes fetch warning (ignored): $e');
+
+      // 3. Fetch likes for current user (only if valid UUID)
+      if (currentUserId.isNotEmpty && _uuidRegex.hasMatch(currentUserId)) {
+        try {
+          final likesData = await SupabaseService.client
+              .from('likes')
+              .select('post_id')
+              .eq('user_id', currentUserId);
+
+          likedPostIds = (likesData as List)
+              .map((e) => e['post_id']?.toString() ?? '')
+              .where((id) => id.isNotEmpty)
+              .toSet();
+        } catch (e) {
+          debugPrint('Likes fetch warning (ignored): $e');
+        }
       }
+
       if (mounted) {
         setState(() {
           posts = fetchedPosts;
@@ -132,10 +206,11 @@ class _GamerFeedScreenState extends State<GamerFeedScreen> {
         setState(() => isLoading = false);
         final errText = e.toString();
         final snackMsg = errText.contains('521')
-           ? 'Server temporarily unavailable (521). Please retry.'
+            ? 'Server temporarily unavailable (521). Please retry.'
             : (errText.contains('PGRST200')
-               ? 'Database schema updated. Retrying feed...'
+                ? 'Database schema updated. Retrying feed...'
                 : 'Could not load feed: $e');
+
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text(snackMsg),
@@ -147,17 +222,31 @@ class _GamerFeedScreenState extends State<GamerFeedScreen> {
     }
   }
 
+  /// Toggle like with optimistic UI + rollback on failure.
   Future<void> _handleLike(Map<String, dynamic> post) async {
-    final postId = post['id']?.toString()?? '';
+    final postId = post['id']?.toString() ?? '';
     if (postId.isEmpty) return;
+
+    if (currentUserId.isEmpty || !_uuidRegex.hasMatch(currentUserId)) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Please login to like posts.')),
+      );
+      return;
+    }
+
     final isLiked = likedPostIds.contains(postId);
     final rawCount = post['likes_count'];
     final currentLikes = (rawCount is int)
-       ? rawCount
-        : int.tryParse(rawCount?.toString()?? '0')?? 0;
+        ? rawCount
+        : int.tryParse(rawCount?.toString() ?? '0') ?? 0;
     final updatedLikes = isLiked
-       ? (currentLikes > 0? currentLikes - 1 : 0)
+        ? (currentLikes > 0 ? currentLikes - 1 : 0)
         : currentLikes + 1;
+
+    // Save previous state for rollback
+    final previousLikes = currentLikes;
+
+    // Optimistic UI update
     setState(() {
       if (isLiked) {
         likedPostIds.remove(postId);
@@ -166,38 +255,64 @@ class _GamerFeedScreenState extends State<GamerFeedScreen> {
       }
       post['likes_count'] = updatedLikes;
     });
+
+    bool success = false;
+
     try {
       if (isLiked) {
         await SupabaseService.client
-           .from('likes')
-           .delete()
-           .eq('post_id', postId)
-           .eq('user_id', currentUserId);
+            .from('likes')
+            .delete()
+            .eq('post_id', postId)
+            .eq('user_id', currentUserId);
       } else {
         await SupabaseService.client.from('likes').insert({
           'post_id': postId,
           'user_id': currentUserId,
         });
       }
+      success = true;
     } catch (e) {
-      debugPrint('Likes table update error (FK fallback): $e');
+      debugPrint('Likes table update error: $e');
     }
-    try {
-      await SupabaseService.client
-         .from('posts')
-         .update({'likes_count': updatedLikes})
-         .eq('id', postId);
-    } catch (e) {
-      debugPrint('Posts table update likes error: $e');
+
+    if (success) {
+      try {
+        await SupabaseService.client
+            .from('posts')
+            .update({'likes_count': updatedLikes})
+            .eq('id', postId);
+      } catch (e) {
+        debugPrint('Posts likes_count update error: $e');
+      }
+    } else {
+      // Rollback UI if likes table failed
+      if (mounted) {
+        setState(() {
+          if (isLiked) {
+            likedPostIds.add(postId);
+          } else {
+            likedPostIds.remove(postId);
+          }
+          post['likes_count'] = previousLikes;
+        });
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Could not update like. Try again.'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
     }
   }
 
-  // ✅ FIXED SHARE - Professional format
-  void _handleShare(Map<String, dynamic> post) {
-    final content = (post['content']?? '').toString();
-    final postUserId = post['user_id']?.toString()?? '';
+  /// Share post (updated API compatible with share_plus 10+).
+  Future<void> _handleShare(Map<String, dynamic> post) async {
+    final content = (post['content'] ?? '').toString();
+    final postUserId = post['user_id']?.toString() ?? '';
     final userProfile = userProfiles[postUserId];
-    final username = userProfile?['username']?? post['username']?? 'Gamer';
+    final username =
+        userProfile?['username'] ?? post['username'] ?? 'Gamer';
 
     final shareText = '''
 🎮 Games Khabar - $username ki post
@@ -211,26 +326,61 @@ class _GamerFeedScreenState extends State<GamerFeedScreen> {
 📲 Download App:
 https://play.google.com/store/apps/details?id=com.gameskhabar.app
 
-#GamesKhabar #【entity-PUBG¦canonical_name=PUBG】 #【entity-BGMI¦canonical_name=BGMI】 #Esports
+#GamesKhabar #PUBG #BGMI #Esports
 ''';
 
-    Share.share(shareText.trim(), subject: 'Games Khabar - $username');
+    try {
+      // share_plus 10+ recommended API
+      await SharePlus.instance.share(
+        ShareParams(
+          text: shareText.trim(),
+          subject: 'Games Khabar - $username',
+        ),
+      );
+    } catch (_) {
+      // Fallback for older share_plus versions
+      try {
+        await Share.share(
+          shareText.trim(),
+          subject: 'Games Khabar - $username',
+        );
+      } catch (e) {
+        debugPrint('Share error: $e');
+      }
+    }
   }
 
   void _showComments(String postId) {
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
+      backgroundColor: Colors.white,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
+      ),
       builder: (_) => CommentSheet(
         postId: postId,
         currentUserId: currentUserId,
+        currentUsername: currentUsername,
       ),
-    ).then((_) => _loadFeed());
+    ).then((newCount) {
+      // Update only the affected post's comment count locally
+      if (newCount is int && mounted) {
+        setState(() {
+          final idx =
+              posts.indexWhere((p) => p['id'].toString() == postId);
+          if (idx != -1) {
+            posts[idx]['comments_count'] = newCount;
+          }
+        });
+      }
+    });
   }
 
-  // ✅ FIXED: 3 DOTS MENU - Delete working
+  /// 3-dot menu — delete own post or report others.
   void _showPostOptions(BuildContext context, String postId, String ownerId) {
     final isMyPost = ownerId == currentUserId;
+
     showModalBottomSheet(
       context: context,
       backgroundColor: Colors.white,
@@ -251,57 +401,107 @@ https://play.google.com/store/apps/details?id=com.gameskhabar.app
               ),
             ),
             const SizedBox(height: 8),
-            if (isMyPost)...[
+            if (isMyPost) ...[
               ListTile(
                 leading: const Icon(Icons.delete_outline, color: Colors.red),
-                title: const Text('Delete Post', style: TextStyle(color: Colors.red, fontWeight: FontWeight.bold)),
+                title: const Text(
+                  'Delete Post',
+                  style: TextStyle(
+                    color: Colors.red,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
                 onTap: () async {
                   Navigator.pop(ctx);
                   final confirm = await showDialog<bool>(
                     context: context,
                     builder: (c) => AlertDialog(
                       title: const Text('Delete Post?'),
-                      content: const Text('Kya aap ye post delete karna chahte hain?'),
+                      content: const Text(
+                        'Kya aap ye post delete karna chahte hain?',
+                      ),
                       actions: [
-                        TextButton(onPressed: () => Navigator.pop(c, false), child: const Text('Cancel')),
+                        TextButton(
+                          onPressed: () => Navigator.pop(c, false),
+                          child: const Text('Cancel'),
+                        ),
                         ElevatedButton(
-                          style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: Colors.red,
+                          ),
                           onPressed: () => Navigator.pop(c, true),
-                          child: const Text('Delete', style: TextStyle(color: Colors.white)),
+                          child: const Text(
+                            'Delete',
+                            style: TextStyle(color: Colors.white),
+                          ),
                         ),
                       ],
                     ),
                   );
                   if (confirm == true) {
                     try {
-                      try { await SupabaseService.client.from('likes').delete().eq('post_id', postId); } catch (_) {}
-                      try { await SupabaseService.client.from('comments').delete().eq('post_id', postId); } catch (_) {}
-                      await SupabaseService.client.from('posts').delete().eq('id', postId);
+                      // Delete related likes and comments first
+                      try {
+                        await SupabaseService.client
+                            .from('likes')
+                            .delete()
+                            .eq('post_id', postId);
+                      } catch (e) {
+                        debugPrint('Likes delete warning: $e');
+                      }
+                      try {
+                        await SupabaseService.client
+                            .from('comments')
+                            .delete()
+                            .eq('post_id', postId);
+                      } catch (e) {
+                        debugPrint('Comments delete warning: $e');
+                      }
+
+                      // Delete post
+                      await SupabaseService.client
+                          .from('posts')
+                          .delete()
+                          .eq('id', postId);
+
                       if (mounted) {
                         setState(() {
-                          posts.removeWhere((p) => p['id'].toString() == postId);
+                          posts.removeWhere(
+                            (p) => p['id'].toString() == postId,
+                          );
                         });
                         ScaffoldMessenger.of(context).showSnackBar(
-                          const SnackBar(content: Text('Post deleted'), backgroundColor: Colors.green),
+                          const SnackBar(
+                            content: Text('Post deleted'),
+                            backgroundColor: Colors.green,
+                          ),
                         );
                       }
                     } catch (e) {
                       if (mounted) {
                         ScaffoldMessenger.of(context).showSnackBar(
-                          SnackBar(content: Text('Delete failed: $e'), backgroundColor: Colors.red),
+                          SnackBar(
+                            content: Text('Delete failed: $e'),
+                            backgroundColor: Colors.red,
+                          ),
                         );
                       }
                     }
                   }
                 },
               ),
-            ] else...[
+            ] else ...[
               ListTile(
-                leading: const Icon(Icons.flag_outlined, color: Color(0xFF65676B)),
+                leading: const Icon(
+                  Icons.flag_outlined,
+                  color: Color(0xFF65676B),
+                ),
                 title: const Text('Report Post'),
                 onTap: () {
                   Navigator.pop(ctx);
-                  ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Post reported')));
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(content: Text('Post reported')),
+                  );
                 },
               ),
             ],
@@ -312,9 +512,11 @@ https://play.google.com/store/apps/details?id=com.gameskhabar.app
     );
   }
 
+  /// Create post sheet — uses current user info dynamically.
   void _showCreatePost() {
     final textController = TextEditingController();
     bool isPosting = false;
+
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
@@ -337,48 +539,117 @@ https://play.google.com/store/apps/details?id=com.gameskhabar.app
               children: [
                 Row(
                   children: [
-                    const CircleAvatar(
+                    CircleAvatar(
                       radius: 20,
-                      backgroundColor: Color(0xFFE4E6EB),
-                      child: Icon(Icons.person, color: Color(0xFF050505)),
+                      backgroundColor: const Color(0xFFE4E6EB),
+                      backgroundImage: currentAvatarUrl.isNotEmpty
+                          ? NetworkImage(currentAvatarUrl)
+                          : null,
+                      child: currentAvatarUrl.isEmpty
+                          ? const Icon(Icons.person, color: Color(0xFF050505))
+                          : null,
                     ),
                     const SizedBox(width: 10),
-                    const Text('tufailm1083', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16, color: Color(0xFF050505))),
-                    const Spacer(),
+                    Expanded(
+                      child: Text(
+                        currentUsername,
+                        overflow: TextOverflow.ellipsis,
+                        style: const TextStyle(
+                          fontWeight: FontWeight.bold,
+                          fontSize: 16,
+                          color: Color(0xFF050505),
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: 8),
                     ElevatedButton(
                       style: ElevatedButton.styleFrom(
                         backgroundColor: const Color(0xFF1877F2),
                         foregroundColor: Colors.white,
                         elevation: 0,
-                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-                        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(8),
+                        ),
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 16,
+                          vertical: 8,
+                        ),
                       ),
-                      onPressed: isPosting? null : () async {
-                        final text = textController.text.trim();
-                        if (text.isEmpty) return;
-                        setSheetState(() => isPosting = true);
-                        try {
-                          final uid = currentUserId.isNotEmpty? currentUserId : 'anon';
-                          await SupabaseService.client.from('posts').insert({
-                            'content': text,
-                            'user_id': uid,
-                            'username': 'tufailm1083',
-                            'likes_count': 0,
-                            'comments_count': 0,
-                          });
-                          if (sheetCtx.mounted) Navigator.pop(sheetCtx);
-                          if (mounted) {
-                            ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Post created!'), backgroundColor: Color(0xFF1877F2)));
-                            _loadFeed();
-                          }
-                        } catch (e) {
-                          if (sheetCtx.mounted) setSheetState(() => isPosting = false);
-                          if (mounted) {
-                            ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Failed to create post: $e'), backgroundColor: Colors.red));
-                          }
-                        }
-                      },
-                      child: isPosting? const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white)) : const Text('Post', style: TextStyle(fontWeight: FontWeight.bold)),
+                      onPressed: isPosting
+                          ? null
+                          : () async {
+                              final text = textController.text.trim();
+                              if (text.isEmpty) return;
+
+                              if (currentUserId.isEmpty ||
+                                  !_uuidRegex.hasMatch(currentUserId)) {
+                                ScaffoldMessenger.of(context).showSnackBar(
+                                  const SnackBar(
+                                    content: Text(
+                                      'Cannot post: user not logged in properly.',
+                                    ),
+                                    backgroundColor: Colors.red,
+                                  ),
+                                );
+                                return;
+                              }
+
+                              setSheetState(() => isPosting = true);
+
+                              try {
+                                await SupabaseService.client
+                                    .from('posts')
+                                    .insert({
+                                  'content': text,
+                                  'user_id': currentUserId,
+                                  'username': currentUsername,
+                                  'likes_count': 0,
+                                  'comments_count': 0,
+                                });
+
+                                if (sheetCtx.mounted) {
+                                  Navigator.pop(sheetCtx);
+                                }
+
+                                if (mounted) {
+                                  ScaffoldMessenger.of(context).showSnackBar(
+                                    const SnackBar(
+                                      content: Text('Post created!'),
+                                      backgroundColor: Color(0xFF1877F2),
+                                    ),
+                                  );
+                                  _loadFeed();
+                                }
+                              } catch (e) {
+                                debugPrint('Error creating post: $e');
+                                if (sheetCtx.mounted) {
+                                  setSheetState(() => isPosting = false);
+                                }
+                                if (mounted) {
+                                  ScaffoldMessenger.of(context).showSnackBar(
+                                    SnackBar(
+                                      content: Text(
+                                        'Failed to create post: $e',
+                                      ),
+                                      backgroundColor: Colors.red,
+                                    ),
+                                  );
+                                }
+                              }
+                            },
+                      child: isPosting
+                          ? const SizedBox(
+                              width: 16,
+                              height: 16,
+                              child: CircularProgressIndicator(
+                                strokeWidth: 2,
+                                color: Colors.white,
+                              ),
+                            )
+                          : const Text(
+                              'Post',
+                              style: TextStyle(fontWeight: FontWeight.bold),
+                            ),
                     ),
                   ],
                 ),
@@ -388,8 +659,18 @@ https://play.google.com/store/apps/details?id=com.gameskhabar.app
                   autofocus: true,
                   maxLines: 5,
                   minLines: 3,
-                  style: const TextStyle(color: Color(0xFF050505), fontSize: 16),
-                  decoration: const InputDecoration(hintText: "What's on your mind?", hintStyle: TextStyle(color: Color(0xFF65676B), fontSize: 16), border: InputBorder.none),
+                  style: const TextStyle(
+                    color: Color(0xFF050505),
+                    fontSize: 16,
+                  ),
+                  decoration: const InputDecoration(
+                    hintText: "What's on your mind?",
+                    hintStyle: TextStyle(
+                      color: Color(0xFF65676B),
+                      fontSize: 16,
+                    ),
+                    border: InputBorder.none,
+                  ),
                 ),
               ],
             ),
@@ -402,9 +683,13 @@ https://play.google.com/store/apps/details?id=com.gameskhabar.app
   String _formatTimeAgo(dynamic raw) {
     if (raw == null) return 'Just now';
     DateTime? dt;
-    if (raw is DateTime) dt = raw;
-    else if (raw is String) dt = DateTime.tryParse(raw);
+    if (raw is DateTime) {
+      dt = raw;
+    } else if (raw is String) {
+      dt = DateTime.tryParse(raw);
+    }
     if (dt == null) return 'Just now';
+
     final diff = DateTime.now().difference(dt);
     if (diff.inSeconds < 60) return 'Just now';
     if (diff.inMinutes < 60) return '${diff.inMinutes}m';
@@ -417,76 +702,336 @@ https://play.google.com/store/apps/details?id=com.gameskhabar.app
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: const Color(0xFFF0F2F5),
-      appBar: AppBar(backgroundColor: Colors.white, elevation: 1, title: const Text('Games Khabar', style: TextStyle(color: Color(0xFF1877F2), fontWeight: FontWeight.bold, fontSize: 22))),
+      appBar: AppBar(
+        backgroundColor: Colors.white,
+        elevation: 1,
+        title: const Text(
+          'Games Khabar',
+          style: TextStyle(
+            color: Color(0xFF1877F2),
+            fontWeight: FontWeight.bold,
+            fontSize: 22,
+          ),
+        ),
+      ),
       body: RefreshIndicator(
         onRefresh: _loadFeed,
-        child: isLoading? const Center(child: CircularProgressIndicator()) : ListView.builder(
-          itemCount: posts.length + 1,
-          itemBuilder: (context, index) {
-            if (index == 0) {
-              return InkWell(
-                onTap: _showCreatePost,
-                borderRadius: BorderRadius.circular(10),
-                child: Card(
-                  margin: const EdgeInsets.all(8),
-                  elevation: 0,
-                  color: Colors.white,
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-                  child: Padding(
-                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                    child: Row(children: [
-                      GestureDetector(onTap: _showCreatePost, child: const CircleAvatar(backgroundColor: Color(0xFFE4E6EB), child: Icon(Icons.person, color: Color(0xFF050505)))),
-                      const SizedBox(width: 12),
-                      Expanded(child: GestureDetector(onTap: _showCreatePost, child: Container(padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10), decoration: BoxDecoration(color: const Color(0xFFF0F2F5), borderRadius: BorderRadius.circular(20)), child: const Text("What's on your mind?", style: TextStyle(color: Color(0xFF65676B), fontSize: 14))))),
-                    ]),
-                  ),
-                ),
-              );
-            }
-            final post = posts[index - 1];
-            final postUserId = post['user_id']?.toString()?? '';
-            final userProfile = userProfiles[postUserId];
-            final username = userProfile?['username']?? post['username']?? 'Gamer';
-            final avatarUrl = (userProfile?['avatar_url']?? post['user_avatar']?? '').toString();
-            final postId = post['id']?.toString()?? '';
-            final isLiked = likedPostIds.contains(postId);
-            final imageUrl = (post['image_url']?? '').toString();
-            final content = (post['content']?? '').toString();
-            final likesCount = post['likes_count']?? 0;
-            final commentsCount = post['comments_count']?? 0;
-            return Card(
-              margin: const EdgeInsets.symmetric(vertical: 4, horizontal: 0),
-              elevation: 0,
-              color: Colors.white,
-              child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                ListTile(
-                  leading: CircleAvatar(backgroundColor: const Color(0xFFE4E6EB), backgroundImage: avatarUrl.isNotEmpty? NetworkImage(avatarUrl) : null, child: avatarUrl.isEmpty? const Icon(Icons.person, color: Color(0xFF050505)) : null),
-                  title: Text(username.toString(), style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 15, color: Color(0xFF050505))),
-                  subtitle: Text(_formatTimeAgo(post['created_at']), style: const TextStyle(fontSize: 12, color: Color(0xFF65676B))),
-                  trailing: IconButton(icon: const Icon(Icons.more_horiz, color: Color(0xFF65676B)), onPressed: () => _showPostOptions(context, postId, postUserId)),
-                ),
-                if (content.isNotEmpty) Padding(padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4), child: Text(content, style: const TextStyle(fontSize: 15, color: Color(0xFF050505), height: 1.3))),
-                if (imageUrl.isNotEmpty) Padding(padding: const EdgeInsets.only(top: 8), child: Image.network(imageUrl, width: double.infinity, fit: BoxFit.cover, errorBuilder: (_, __, ___) => const SizedBox.shrink())),
-                Padding(padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10), child: Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [Row(children: [Container(padding: const EdgeInsets.all(4), decoration: const BoxDecoration(color: Color(0xFF1877F2), shape: BoxShape.circle), child: const Icon(Icons.thumb_up, size: 11, color: Colors.white)), const SizedBox(width: 6), Text('$likesCount', style: const TextStyle(fontSize: 13, color: Color(0xFF65676B)))]), Text('$commentsCount comments', style: const TextStyle(fontSize: 13, color: Color(0xFF65676B)))])),
-                const Divider(height: 1, color: Color(0xFFCED0D4)),
-                Row(children: [
-                  Expanded(child: InkWell(onTap: () => _handleLike(post), child: Padding(padding: const EdgeInsets.symmetric(vertical: 10), child: Row(mainAxisAlignment: MainAxisAlignment.center, children: [Icon(isLiked? Icons.thumb_up : Icons.thumb_up_outlined, size: 18, color: isLiked? const Color(0xFF1877F2) : const Color(0xFF65676B)), const SizedBox(width: 6), Text('Like', style: TextStyle(color: isLiked? const Color(0xFF1877F2) : const Color(0xFF65676B), fontWeight: isLiked? FontWeight.bold : FontWeight.normal, fontSize: 13))])))),
-                  Expanded(child: InkWell(onTap: () => _showComments(postId), child: const Padding(padding: EdgeInsets.symmetric(vertical: 10), child: Row(mainAxisAlignment: MainAxisAlignment.center, children: [Icon(Icons.chat_bubble_outline, size: 18, color: Color(0xFF65676B)), SizedBox(width: 6), Text('Comment', style: TextStyle(color: Color(0xFF65676B), fontSize: 13))])))),
-                  Expanded(child: InkWell(onTap: () => _handleShare(post), child: const Padding(padding: EdgeInsets.symmetric(vertical: 10), child: Row(mainAxisAlignment: MainAxisAlignment.center, children: [Icon(Icons.share_outlined, size: 18, color: Color(0xFF65676B)), SizedBox(width: 6), Text('Share', style: TextStyle(color: Color(0xFF65676B), fontSize: 13))])))),
-                ]),
-              ]),
-            );
-          },
-        ),
+        child: isLoading
+            ? const Center(child: CircularProgressIndicator())
+            : ListView.builder(
+                itemCount: posts.length + 1,
+                itemBuilder: (context, index) {
+                  // Composer card
+                  if (index == 0) {
+                    return InkWell(
+                      onTap: _showCreatePost,
+                      borderRadius: BorderRadius.circular(10),
+                      child: Card(
+                        margin: const EdgeInsets.all(8),
+                        elevation: 0,
+                        color: Colors.white,
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(10),
+                        ),
+                        child: Padding(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 12,
+                            vertical: 8,
+                          ),
+                          child: Row(
+                            children: [
+                              CircleAvatar(
+                                backgroundColor: const Color(0xFFE4E6EB),
+                                backgroundImage: currentAvatarUrl.isNotEmpty
+                                    ? NetworkImage(currentAvatarUrl)
+                                    : null,
+                                child: currentAvatarUrl.isEmpty
+                                    ? const Icon(
+                                        Icons.person,
+                                        color: Color(0xFF050505),
+                                      )
+                                    : null,
+                              ),
+                              const SizedBox(width: 12),
+                              Expanded(
+                                child: Container(
+                                  padding: const EdgeInsets.symmetric(
+                                    horizontal: 14,
+                                    vertical: 10,
+                                  ),
+                                  decoration: BoxDecoration(
+                                    color: const Color(0xFFF0F2F5),
+                                    borderRadius: BorderRadius.circular(20),
+                                  ),
+                                  child: const Text(
+                                    "What's on your mind?",
+                                    style: TextStyle(
+                                      color: Color(0xFF65676B),
+                                      fontSize: 14,
+                                    ),
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+                    );
+                  }
+
+                  final post = posts[index - 1];
+                  final postUserId = post['user_id']?.toString() ?? '';
+                  final userProfile = userProfiles[postUserId];
+
+                  final username = userProfile?['username'] ??
+                      post['username'] ??
+                      'Gamer';
+                  final avatarUrl = (userProfile?['avatar_url'] ??
+                          post['user_avatar'] ??
+                          '')
+                      .toString();
+                  final postId = post['id']?.toString() ?? '';
+                  final isLiked = likedPostIds.contains(postId);
+                  final imageUrl = (post['image_url'] ?? '').toString();
+                  final content = (post['content'] ?? '').toString();
+                  final likesCount = post['likes_count'] ?? 0;
+                  final commentsCount = post['comments_count'] ?? 0;
+
+                  return Card(
+                    margin:
+                        const EdgeInsets.symmetric(vertical: 4, horizontal: 0),
+                    elevation: 0,
+                    color: Colors.white,
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        ListTile(
+                          leading: CircleAvatar(
+                            backgroundColor: const Color(0xFFE4E6EB),
+                            backgroundImage: avatarUrl.isNotEmpty
+                                ? NetworkImage(avatarUrl)
+                                : null,
+                            child: avatarUrl.isEmpty
+                                ? const Icon(
+                                    Icons.person,
+                                    color: Color(0xFF050505),
+                                  )
+                                : null,
+                          ),
+                          title: Text(
+                            username.toString(),
+                            style: const TextStyle(
+                              fontWeight: FontWeight.bold,
+                              fontSize: 15,
+                              color: Color(0xFF050505),
+                            ),
+                          ),
+                          subtitle: Text(
+                            _formatTimeAgo(post['created_at']),
+                            style: const TextStyle(
+                              fontSize: 12,
+                              color: Color(0xFF65676B),
+                            ),
+                          ),
+                          trailing: IconButton(
+                            icon: const Icon(
+                              Icons.more_horiz,
+                              color: Color(0xFF65676B),
+                            ),
+                            onPressed: () => _showPostOptions(
+                              context,
+                              postId,
+                              postUserId,
+                            ),
+                          ),
+                        ),
+                        if (content.isNotEmpty)
+                          Padding(
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 16,
+                              vertical: 4,
+                            ),
+                            child: Text(
+                              content,
+                              style: const TextStyle(
+                                fontSize: 15,
+                                color: Color(0xFF050505),
+                                height: 1.3,
+                              ),
+                            ),
+                          ),
+                        if (imageUrl.isNotEmpty)
+                          Padding(
+                            padding: const EdgeInsets.only(top: 8),
+                            child: Image.network(
+                              imageUrl,
+                              width: double.infinity,
+                              fit: BoxFit.cover,
+                              errorBuilder: (_, __, ___) =>
+                                  const SizedBox.shrink(),
+                            ),
+                          ),
+                        Padding(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 16,
+                            vertical: 10,
+                          ),
+                          child: Row(
+                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                            children: [
+                              Row(
+                                children: [
+                                  Container(
+                                    padding: const EdgeInsets.all(4),
+                                    decoration: const BoxDecoration(
+                                      color: Color(0xFF1877F2),
+                                      shape: BoxShape.circle,
+                                    ),
+                                    child: const Icon(
+                                      Icons.thumb_up,
+                                      size: 11,
+                                      color: Colors.white,
+                                    ),
+                                  ),
+                                  const SizedBox(width: 6),
+                                  Text(
+                                    '$likesCount',
+                                    style: const TextStyle(
+                                      fontSize: 13,
+                                      color: Color(0xFF65676B),
+                                    ),
+                                  ),
+                                ],
+                              ),
+                              Text(
+                                '$commentsCount comments',
+                                style: const TextStyle(
+                                  fontSize: 13,
+                                  color: Color(0xFF65676B),
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                        const Divider(height: 1, color: Color(0xFFCED0D4)),
+                        Row(
+                          children: [
+                            Expanded(
+                              child: InkWell(
+                                onTap: () => _handleLike(post),
+                                child: Padding(
+                                  padding:
+                                      const EdgeInsets.symmetric(vertical: 10),
+                                  child: Row(
+                                    mainAxisAlignment: MainAxisAlignment.center,
+                                    children: [
+                                      Icon(
+                                        isLiked
+                                            ? Icons.thumb_up
+                                            : Icons.thumb_up_outlined,
+                                        size: 18,
+                                        color: isLiked
+                                            ? const Color(0xFF1877F2)
+                                            : const Color(0xFF65676B),
+                                      ),
+                                      const SizedBox(width: 6),
+                                      Text(
+                                        'Like',
+                                        style: TextStyle(
+                                          color: isLiked
+                                              ? const Color(0xFF1877F2)
+                                              : const Color(0xFF65676B),
+                                          fontWeight: isLiked
+                                              ? FontWeight.bold
+                                              : FontWeight.normal,
+                                          fontSize: 13,
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                              ),
+                            ),
+                            Expanded(
+                              child: InkWell(
+                                onTap: () => _showComments(postId),
+                                child: const Padding(
+                                  padding:
+                                      EdgeInsets.symmetric(vertical: 10),
+                                  child: Row(
+                                    mainAxisAlignment: MainAxisAlignment.center,
+                                    children: [
+                                      Icon(
+                                        Icons.chat_bubble_outline,
+                                        size: 18,
+                                        color: Color(0xFF65676B),
+                                      ),
+                                      SizedBox(width: 6),
+                                      Text(
+                                        'Comment',
+                                        style: TextStyle(
+                                          color: Color(0xFF65676B),
+                                          fontSize: 13,
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                              ),
+                            ),
+                            Expanded(
+                              child: InkWell(
+                                onTap: () => _handleShare(post),
+                                child: const Padding(
+                                  padding:
+                                      EdgeInsets.symmetric(vertical: 10),
+                                  child: Row(
+                                    mainAxisAlignment: MainAxisAlignment.center,
+                                    children: [
+                                      Icon(
+                                        Icons.share_outlined,
+                                        size: 18,
+                                        color: Color(0xFF65676B),
+                                      ),
+                                      SizedBox(width: 6),
+                                      Text(
+                                        'Share',
+                                        style: TextStyle(
+                                          color: Color(0xFF65676B),
+                                          fontSize: 13,
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ],
+                    ),
+                  );
+                },
+              ),
       ),
     );
   }
 }
 
+// ─────────────────────────── CommentSheet ───────────────────────────
+
 class CommentSheet extends StatefulWidget {
   final String postId;
   final String currentUserId;
-  const CommentSheet({super.key, required this.postId, required this.currentUserId});
+  final String currentUsername;
+
+  const CommentSheet({
+    super.key,
+    required this.postId,
+    required this.currentUserId,
+    required this.currentUsername,
+  });
+
   @override
   State<CommentSheet> createState() => _CommentSheetState();
 }
@@ -495,67 +1040,291 @@ class _CommentSheetState extends State<CommentSheet> {
   List<Map<String, dynamic>> comments = [];
   final TextEditingController _ctrl = TextEditingController();
   bool _loading = true;
-  static final RegExp _uuidRegex = RegExp(r'^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$');
+  bool _isPosting = false;
+  int _commentsCount = 0;
+
+  static final RegExp _uuidRegex = RegExp(
+    r'^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$',
+  );
+
   @override
-  void initState() { super.initState(); _loadComments(); }
-  @override
-  void dispose() { _ctrl.dispose(); super.dispose(); }
-  Future<String> _resolveCommenterUserId() async {
-    if (_uuidRegex.hasMatch(widget.currentUserId)) return widget.currentUserId;
-    try { final sbId = await SupabaseService.getCurrentUserId(); if (sbId!= null && _uuidRegex.hasMatch(sbId)) return sbId; } catch (_) {}
-    try { final fbUser = FirebaseAuth.instance.currentUser; if (fbUser!= null && fbUser.email!= null && fbUser.email!.isNotEmpty) { final res = await SupabaseService.client.from('users').select('id').eq('email', fbUser.email!).maybeSingle(); if (res!= null && res['id']!= null) { final idStr = res['id'].toString(); if (_uuidRegex.hasMatch(idStr)) return idStr; } } } catch (_) {}
-    try { final anyUser = await SupabaseService.client.from('users').select('id').limit(1).maybeSingle(); if (anyUser!= null && anyUser['id']!= null) { final idStr = anyUser['id'].toString(); if (_uuidRegex.hasMatch(idStr)) return idStr; } } catch (_) {}
-    return widget.currentUserId;
+  void initState() {
+    super.initState();
+    _loadComments();
   }
+
+  @override
+  void dispose() {
+    _ctrl.dispose();
+    super.dispose();
+  }
+
   Future<void> _loadComments() async {
     try {
-      final data = await SupabaseService.client.from('comments').select('*').eq('post_id', widget.postId).order('created_at', ascending: true);
+      final data = await SupabaseService.client
+          .from('comments')
+          .select('*')
+          .eq('post_id', widget.postId)
+          .order('created_at', ascending: true);
+
       final list = List<Map<String, dynamic>>.from(data as List);
-      final missingUserIds = list.where((c) => c['username'] == null || c['username'].toString().isEmpty).map((c) => c['user_id']?.toString()).where((id) => id!= null && id.isNotEmpty).toSet().toList();
+
+      // Fill missing usernames from users table
+      final missingUserIds = list
+          .where((c) =>
+              c['username'] == null || c['username'].toString().isEmpty)
+          .map((c) => c['user_id']?.toString())
+          .where((id) =>
+              id != null && id.isNotEmpty && _uuidRegex.hasMatch(id))
+          .toSet()
+          .toList();
+
       if (missingUserIds.isNotEmpty) {
         try {
-          final usersData = await SupabaseService.client.from('users').select('id, username').inFilter('id', missingUserIds);
+          final usersData = await SupabaseService.client
+              .from('users')
+              .select('id, username')
+              .inFilter('id', missingUserIds);
+
           final userMap = <String, String>{};
-          for (final u in (usersData as List)) { if (u is Map<String, dynamic> && u['id']!= null) { userMap[u['id'].toString()] = (u['username']?? 'Gamer').toString(); } }
-          for (final c in list) { if (c['username'] == null || c['username'].toString().isEmpty) { final uid = c['user_id']?.toString(); if (uid!= null && userMap.containsKey(uid)) c['username'] = userMap[uid]; } }
-        } catch (e) { debugPrint('Comments user lookup error: $e'); }
+          for (final u in (usersData as List)) {
+            if (u is Map<String, dynamic> && u['id'] != null) {
+              userMap[u['id'].toString()] =
+                  (u['username'] ?? 'Gamer').toString();
+            }
+          }
+
+          for (final c in list) {
+            if (c['username'] == null ||
+                c['username'].toString().isEmpty) {
+              final uid = c['user_id']?.toString();
+              if (uid != null && userMap.containsKey(uid)) {
+                c['username'] = userMap[uid];
+              }
+            }
+          }
+        } catch (e) {
+          debugPrint('Comments user lookup error: $e');
+        }
       }
-      if (mounted) setState(() { comments = list; _loading = false; });
-    } catch (e) { debugPrint('Comments fetch error: $e'); if (mounted) setState(() => _loading = false); }
-  }
-  Future<void> _submitComment() async {
-    final text = _ctrl.text.trim();
-    if (text.isEmpty) return;
-    _ctrl.clear();
-    try {
-      final validUid = await _resolveCommenterUserId();
-      final fb = FirebaseAuth.instance.currentUser;
-      final authorUsername = fb?.displayName?? fb?.email?.split('@').first?? 'Gamer';
-      bool inserted = false;
-      try { await SupabaseService.client.from('comments').insert({'post_id': widget.postId, 'user_id': validUid, 'content': text, 'username': authorUsername}); inserted = true; } catch (e) { debugPrint('Insert with username failed ($e)'); }
-      if (!inserted) await SupabaseService.client.from('comments').insert({'post_id': widget.postId, 'user_id': validUid, 'content': text});
-      try { final postData = await SupabaseService.client.from('posts').select('comments_count').eq('id', widget.postId).maybeSingle(); final rawCount = postData?['comments_count']; final currentCount = (rawCount is int)? rawCount : int.tryParse(rawCount?.toString()?? '0')?? 0; await SupabaseService.client.from('posts').update({'comments_count': currentCount + 1}).eq('id', widget.postId); } catch (e) { debugPrint('Post comments count update error: $e'); }
-      _loadComments();
-      if (mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Comment posted!'), duration: Duration(seconds: 2), backgroundColor: Color(0xFF1877F2)));
+
+      if (mounted) {
+        setState(() {
+          comments = list;
+          _commentsCount = list.length;
+          _loading = false;
+        });
+      }
     } catch (e) {
-      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Could not post comment: $e')));
+      debugPrint('Comments fetch error: $e');
+      if (mounted) setState(() => _loading = false);
     }
   }
+
+  Future<void> _submitComment() async {
+    final text = _ctrl.text.trim();
+    if (text.isEmpty || _isPosting) return;
+
+    if (widget.currentUserId.isEmpty ||
+        !_uuidRegex.hasMatch(widget.currentUserId)) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Please login to comment.')),
+      );
+      return;
+    }
+
+    setState(() => _isPosting = true);
+    _ctrl.clear();
+
+    try {
+      // Try insert with username first
+      bool inserted = false;
+      try {
+        await SupabaseService.client.from('comments').insert({
+          'post_id': widget.postId,
+          'user_id': widget.currentUserId,
+          'content': text,
+          'username': widget.currentUsername,
+        });
+        inserted = true;
+      } catch (e) {
+        debugPrint('Insert with username failed ($e), trying without...');
+      }
+
+      // Fallback if username column missing
+      if (!inserted) {
+        await SupabaseService.client.from('comments').insert({
+          'post_id': widget.postId,
+          'user_id': widget.currentUserId,
+          'content': text,
+        });
+      }
+
+      // Reload comments from server (source of truth)
+      await _loadComments();
+
+      // Update posts.comments_count to actual value (safer than increment)
+      try {
+        await SupabaseService.client
+            .from('posts')
+            .update({'comments_count': _commentsCount})
+            .eq('id', widget.postId);
+      } catch (e) {
+        debugPrint('Post comments_count update error: $e');
+      }
+
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Comment posted!'),
+            duration: Duration(seconds: 2),
+            backgroundColor: Color(0xFF1877F2),
+          ),
+        );
+      }
+    } catch (e) {
+      debugPrint('Comment insert error: $e');
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Could not post comment: $e')),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _isPosting = false);
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
-    return Padding(
-      padding: EdgeInsets.only(bottom: MediaQuery.of(context).viewInsets.bottom),
-      child: SizedBox(
-        height: 500,
-        child: Column(children: [
-          const SizedBox(height: 12),
-          Container(width: 40, height: 4, decoration: BoxDecoration(color: Colors.grey[300], borderRadius: BorderRadius.circular(2))),
-          const SizedBox(height: 12),
-          const Text('Comments', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
-          const Divider(),
-          Expanded(child: _loading? const Center(child: CircularProgressIndicator()) : comments.isEmpty? const Center(child: Text('No comments yet. Be the first to comment!', style: TextStyle(color: Colors.grey))) : ListView.builder(itemCount: comments.length, itemBuilder: (_, i) { final c = comments[i]; final username = (c['username']?? 'Gamer').toString(); final content = (c['content']?? '').toString(); return ListTile(leading: const CircleAvatar(radius: 16, backgroundColor: Color(0xFFE4E6EB), child: Icon(Icons.person, size: 18, color: Color(0xFF050505))), title: Text(username, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13)), subtitle: Text(content, style: const TextStyle(color: Color(0xFF050505), fontSize: 14)));})),
-          Padding(padding: const EdgeInsets.all(8), child: Row(children: [Expanded(child: TextField(controller: _ctrl, decoration: InputDecoration(hintText: 'Write a comment...', filled: true, fillColor: const Color(0xFFF0F2F5), contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10), border: OutlineInputBorder(borderRadius: BorderRadius.circular(20), borderSide: BorderSide.none)))), const SizedBox(width: 8), IconButton(icon: const Icon(Icons.send, color: Color(0xFF1877F2)), onPressed: _submitComment)])),
-        ]),
+    return PopScope(
+      canPop: true,
+      onPopInvoked: (didPop) {
+        // Return the updated comment count to the parent when sheet closes
+        if (didPop) {
+          // Handled by Navigator.pop in the sheet's close
+        }
+      },
+      child: Padding(
+        padding: EdgeInsets.only(
+          bottom: MediaQuery.of(context).viewInsets.bottom,
+        ),
+        child: SizedBox(
+          height: 500,
+          child: Column(
+            children: [
+              const SizedBox(height: 12),
+              Container(
+                width: 40,
+                height: 4,
+                decoration: BoxDecoration(
+                  color: Colors.grey[300],
+                  borderRadius: BorderRadius.circular(2),
+                ),
+              ),
+              const SizedBox(height: 12),
+              const Text(
+                'Comments',
+                style: TextStyle(
+                  fontWeight: FontWeight.bold,
+                  fontSize: 16,
+                ),
+              ),
+              const Divider(),
+              Expanded(
+                child: _loading
+                    ? const Center(child: CircularProgressIndicator())
+                    : comments.isEmpty
+                        ? const Center(
+                            child: Text(
+                              'No comments yet. Be the first to comment!',
+                              style: TextStyle(color: Colors.grey),
+                            ),
+                          )
+                        : ListView.builder(
+                            itemCount: comments.length,
+                            itemBuilder: (_, i) {
+                              final c = comments[i];
+                              final username =
+                                  (c['username'] ?? 'Gamer').toString();
+                              final content =
+                                  (c['content'] ?? '').toString();
+                              return ListTile(
+                                leading: const CircleAvatar(
+                                  radius: 16,
+                                  backgroundColor: Color(0xFFE4E6EB),
+                                  child: Icon(
+                                    Icons.person,
+                                    size: 18,
+                                    color: Color(0xFF050505),
+                                  ),
+                                ),
+                                title: Text(
+                                  username,
+                                  style: const TextStyle(
+                                    fontWeight: FontWeight.bold,
+                                    fontSize: 13,
+                                  ),
+                                ),
+                                subtitle: Text(
+                                  content,
+                                  style: const TextStyle(
+                                    color: Color(0xFF050505),
+                                    fontSize: 14,
+                                  ),
+                                ),
+                              );
+                            },
+                          ),
+              ),
+              Padding(
+                padding: const EdgeInsets.all(8),
+                child: Row(
+                  children: [
+                    Expanded(
+                      child: TextField(
+                        controller: _ctrl,
+                        enabled: !_isPosting,
+                        decoration: InputDecoration(
+                          hintText: 'Write a comment...',
+                          filled: true,
+                          fillColor: const Color(0xFFF0F2F5),
+                          contentPadding: const EdgeInsets.symmetric(
+                            horizontal: 16,
+                            vertical: 10,
+                          ),
+                          border: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(20),
+                            borderSide: BorderSide.none,
+                          ),
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                    _isPosting
+                        ? const Padding(
+                            padding: EdgeInsets.all(12),
+                            child: SizedBox(
+                              width: 20,
+                              height: 20,
+                              child: CircularProgressIndicator(
+                                strokeWidth: 2,
+                                color: Color(0xFF1877F2),
+                              ),
+                            ),
+                          )
+                        : IconButton(
+                            icon: const Icon(
+                              Icons.send,
+                              color: Color(0xFF1877F2),
+                            ),
+                            onPressed: _submitComment,
+                          ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        ),
       ),
     );
   }
