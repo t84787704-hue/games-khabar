@@ -330,23 +330,12 @@ https://play.google.com/store/apps/details?id=com.gameskhabar.app
 ''';
 
     try {
-      // share_plus 10+ recommended API
-      await SharePlus.instance.share(
-        ShareParams(
-          text: shareText.trim(),
-          subject: 'Games Khabar - $username',
-        ),
+      await Share.share(
+        shareText.trim(),
+        subject: 'Games Khabar - $username',
       );
-    } catch (_) {
-      // Fallback for older share_plus versions
-      try {
-        await Share.share(
-          shareText.trim(),
-          subject: 'Games Khabar - $username',
-        );
-      } catch (e) {
-        debugPrint('Share error: $e');
-      }
+    } catch (e) {
+      debugPrint('Share error: $e');
     }
   }
 

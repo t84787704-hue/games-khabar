@@ -74,8 +74,60 @@ class SetOptions {
   const SetOptions({this.merge});
 }
 
+enum Source { serverAndCache, server, cache }
+
 class GetOptions {
-  const GetOptions();
+  final Source? source;
+  const GetOptions({this.source});
+}
+
+/// Filter compatibility class for Firestore queries
+class Filter {
+  final String? field;
+  final dynamic isEqualTo;
+  final dynamic isNotEqualTo;
+  final dynamic isLessThan;
+  final dynamic isLessThanOrEqualTo;
+  final dynamic isGreaterThan;
+  final dynamic isGreaterThanOrEqualTo;
+  final dynamic arrayContains;
+  final List? arrayContainsAny;
+  final List? whereIn;
+  final List? whereNotIn;
+  final bool? isNull;
+  final List<Filter>? orFilters;
+  final List<Filter>? andFilters;
+
+  Filter(
+    this.field, {
+    this.isEqualTo,
+    this.isNotEqualTo,
+    this.isLessThan,
+    this.isLessThanOrEqualTo,
+    this.isGreaterThan,
+    this.isGreaterThanOrEqualTo,
+    this.arrayContains,
+    this.arrayContainsAny,
+    this.whereIn,
+    this.whereNotIn,
+    this.isNull,
+    this.orFilters,
+    this.andFilters,
+  });
+
+  static Filter or(Filter a, Filter b, [Filter? c, Filter? d]) {
+    final list = [a, b];
+    if (c != null) list.add(c);
+    if (d != null) list.add(d);
+    return Filter(null, orFilters: list);
+  }
+
+  static Filter and(Filter a, Filter b, [Filter? c, Filter? d]) {
+    final list = [a, b];
+    if (c != null) list.add(c);
+    if (d != null) list.add(d);
+    return Filter(null, andFilters: list);
+  }
 }
 
 enum DocumentChangeType { added, modified, removed }
@@ -115,9 +167,22 @@ class DocumentSnapshot<T extends Object?> {
   dynamic operator [](Object field) => _data?[field.toString()];
 }
 
+/// QueryDocumentSnapshot compatibility class
+class QueryDocumentSnapshot<T extends Object?> extends DocumentSnapshot<T> {
+  QueryDocumentSnapshot({
+    required super.id,
+    super.data,
+    required super.exists,
+    required super.reference,
+  });
+
+  @override
+  dynamic data() => _data ?? <String, dynamic>{};
+}
+
 /// QuerySnapshot compatibility class
 class QuerySnapshot<T extends Object?> {
-  final List<DocumentSnapshot<T>> docs;
+  final List<QueryDocumentSnapshot<T>> docs;
   final List<DocumentChange<T>> docChanges;
 
   QuerySnapshot({required this.docs, List<DocumentChange<T>>? changes})
@@ -236,7 +301,7 @@ class Query<T extends Object?> {
   Query(this.collectionPath);
 
   Query<T> where(
-    Object field, {
+    dynamic field, {
     Object? isEqualTo,
     Object? isNotEqualTo,
     Object? isLessThan,
@@ -254,6 +319,13 @@ class Query<T extends Object?> {
     q._orderByField = _orderByField;
     q._descending = _descending;
     q._limitCount = _limitCount;
+
+    if (field is Filter) {
+      if (field.field != null && field.isEqualTo != null) {
+        q._filters.add({'field': field.field!, 'op': 'eq', 'val': field.isEqualTo});
+      }
+      return q;
+    }
 
     final fName = field.toString();
     if (isEqualTo != null) {
@@ -312,7 +384,7 @@ class Query<T extends Object?> {
 
       final docList = rows.map((r) {
         final docId = (r['id'] ?? r['uid'] ?? r['post_id'] ?? r['team_id'] ?? '').toString();
-        return DocumentSnapshot<T>(
+        return QueryDocumentSnapshot<T>(
           id: docId,
           data: r,
           exists: true,

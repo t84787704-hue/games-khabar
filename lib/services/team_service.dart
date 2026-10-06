@@ -201,9 +201,7 @@ class TeamService {
   }) async {
     final effectiveUserId = userId.trim().isNotEmpty
         ? userId.trim()
-        : (FirebaseAuth.instance.currentUser?.uid ??
-            (GamerAuthService().currentUid ??
-                (SupabaseService.client.auth.currentUser?.id ?? '')));
+        : (SupabaseService.client.auth.currentUser?.id ?? '');
 
     if (effectiveUserId.isEmpty) {
       debugPrint('[TeamService] Error: userId is empty for join request');

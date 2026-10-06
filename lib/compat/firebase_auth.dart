@@ -89,6 +89,14 @@ class FirebaseAuth {
     final current = currentUser;
     return UserCredential(user: current);
   }
+
+  Future<void> sendPasswordResetEmail({required String email}) async {
+    try {
+      await _sbClient.auth.resetPasswordForEmail(email.trim());
+    } catch (e) {
+      debugPrint('[Compat FirebaseAuth] reset password error: $e');
+    }
+  }
 }
 
 class User {
