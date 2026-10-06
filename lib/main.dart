@@ -1,7 +1,5 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import 'package:firebase_core/firebase_core.dart';
-import 'firebase_options.dart';
 import 'services/supabase_service.dart';
 import 'constants/gamer_theme.dart';
 import 'services/theme_service.dart';
@@ -15,39 +13,27 @@ import 'screens/banned_screen.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
-  
+
   SystemChrome.setEnabledSystemUIMode(
     SystemUiMode.manual,
     overlays: [SystemUiOverlay.top, SystemUiOverlay.bottom],
   );
 
-  // 1. Initialize Firebase
-  try {
-    await Firebase.initializeApp(
-      options: DefaultFirebaseOptions.currentPlatform,
-    );
-  } catch (e) {
-    try {
-      await Firebase.initializeApp();
-    } catch (e2) {
-      debugPrint('Firebase initialize fallback warning: $e2');
-    }
-  }
-
-  // 2. Initialize Supabase
+  // ✅ Sirf Supabase initialize karo (Firebase hata diya)
   try {
     await SupabaseService.init();
   } catch (e) {
     debugPrint('Supabase initialize error: $e');
   }
 
-  // 3. Initialize Language & Theme
+  // ✅ Language init
   try {
     await LanguageService.init();
   } catch (e) {
     debugPrint('LanguageService init error: $e');
   }
 
+  // ✅ Theme init
   try {
     await ThemeService.init();
   } catch (e) {
@@ -95,4 +81,3 @@ class GamersIdApp extends StatelessWidget {
     );
   }
 }
-
