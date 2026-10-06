@@ -4,6 +4,7 @@ import 'package:games_khabar/compat/firebase_auth.dart';
 import 'package:games_khabar/compat/cloud_firestore.dart';
 import '../constants/gamer_theme.dart';
 import '../services/gamer_auth_service.dart';
+import '../services/supabase_service.dart';
 import '../services/theme_service.dart';
 import 'gamer_feed_screen.dart';
 import 'teams_screen.dart';

@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import '../constants/gamer_theme.dart';
 import '../services/gamer_auth_service.dart';
+import '../services/supabase_service.dart';
 import 'create_gamer_id_screen.dart';
 import 'gamer_main_navigation_screen.dart';
 import 'banned_screen.dart';
