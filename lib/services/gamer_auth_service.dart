@@ -34,7 +34,7 @@ class GamerAuthService {
       authUserNotifier.value = user;
       if (user != null) {
         isLoadingNotifier.value = true;
-        await _syncAndLoadUser(user);
+        await refreshCurrentGamer();
       } else {
         currentGamerNotifier.value = null;
         isLoadingNotifier.value = false;
@@ -45,7 +45,7 @@ class GamerAuthService {
     authUserNotifier.value = initialUser;
     if (initialUser != null) {
       isLoadingNotifier.value = true;
-      await _syncAndLoadUser(initialUser);
+      await refreshCurrentGamer();
     } else {
       currentGamerNotifier.value = null;
       isLoadingNotifier.value = false;

@@ -515,7 +515,9 @@ class GamerUser {
 
     return GamerUser(
       uid: data['uid'] ?? data['id'] ?? fallbackUid ?? '',
-      username: data['tag'] ?? data['username'] ?? '',
+      username: (data['username'] != null && data['username'].toString().trim().isNotEmpty)
+          ? data['username'].toString().trim()
+          : (data['tag']?.toString().trim() ?? ''),
       displayName: data['bgmiName'] ?? data['displayName'] ?? data['display_name'] ?? '',
       photoUrl: data['avatar'] ?? data['photoUrl'] ?? data['avatar_url'] ?? '',
       coverUrl: data['coverUrl'] ?? data['cover_url'] ?? '',
