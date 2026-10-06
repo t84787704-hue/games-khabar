@@ -13,6 +13,13 @@ class TeamModel {
   final int points;
   final DateTime createdAt;
 
+  // Optional fields (populated from joins if needed)
+  final String leaderName;
+  final String leaderAvatar;
+  final List<String> members;
+  final List<Map<String, dynamic>> memberDetails;
+  final List<String> pendingJoinRequests;
+
   const TeamModel({
     required this.id,
     required this.name,
@@ -27,13 +34,48 @@ class TeamModel {
     this.draws = 0,
     this.points = 0,
     required this.createdAt,
+    this.leaderName = '',
+    this.leaderAvatar = '',
+    this.members = const [],
+    this.memberDetails = const [],
+    this.pendingJoinRequests = const [],
   });
 
+  int get memberCount => members.length;
   int get totalMatches => wins + losses + draws;
-  double get winRate =>
-      totalMatches > 0 ? (wins / totalMatches) * 100 : 0.0;
+  double get winRate => totalMatches > 0 ? (wins / totalMatches) * 100 : 0.0;
+
+  bool isLeader(String userId) => leaderId == userId;
+  bool isMember(String userId) => members.contains(userId) || leaderId == userId;
+  bool hasRequestedJoin(String userId) => pendingJoinRequests.contains(userId);
 
   factory TeamModel.fromSupabase(Map<String, dynamic> row) {
+    final rawMembers = row['members'];
+    final List<String> membersList = [];
+    if (rawMembers is List) {
+      for (final m in rawMembers) {
+        if (m != null) membersList.add(m.toString());
+      }
+    }
+
+    final rawRequests = row['pendingJoinRequests'];
+    final List<String> reqList = [];
+    if (rawRequests is List) {
+      for (final r in rawRequests) {
+        if (r != null) reqList.add(r.toString());
+      }
+    }
+
+    final rawMemberDetails = row['memberDetails'];
+    final List<Map<String, dynamic>> detailsList = [];
+    if (rawMemberDetails is List) {
+      for (final item in rawMemberDetails) {
+        if (item is Map) {
+          detailsList.add(Map<String, dynamic>.from(item));
+        }
+      }
+    }
+
     return TeamModel(
       id: (row['id'] ?? '').toString(),
       name: (row['name'] ?? 'Gamer Team').toString(),
@@ -47,10 +89,12 @@ class TeamModel {
       losses: (row['losses'] as num?)?.toInt() ?? 0,
       draws: (row['draws'] as num?)?.toInt() ?? 0,
       points: (row['points'] as num?)?.toInt() ?? 0,
-      createdAt: DateTime.tryParse(
-            (row['created_at'] ?? '').toString(),
-          ) ??
-          DateTime.now(),
+      createdAt: DateTime.tryParse((row['created_at'] ?? '').toString()) ?? DateTime.now(),
+      leaderName: (row['leader_name'] ?? '').toString(),
+      leaderAvatar: (row['leader_avatar'] ?? '').toString(),
+      members: membersList,
+      memberDetails: detailsList,
+      pendingJoinRequests: reqList,
     );
   }
 
@@ -83,6 +127,11 @@ class TeamModel {
     int? losses,
     int? draws,
     int? points,
+    String? leaderName,
+    String? leaderAvatar,
+    List<String>? members,
+    List<Map<String, dynamic>>? memberDetails,
+    List<String>? pendingJoinRequests,
   }) {
     return TeamModel(
       id: id,
@@ -98,6 +147,11 @@ class TeamModel {
       draws: draws ?? this.draws,
       points: points ?? this.points,
       createdAt: createdAt,
+      leaderName: leaderName ?? this.leaderName,
+      leaderAvatar: leaderAvatar ?? this.leaderAvatar,
+      members: members ?? this.members,
+      memberDetails: memberDetails ?? this.memberDetails,
+      pendingJoinRequests: pendingJoinRequests ?? this.pendingJoinRequests,
     );
   }
 }
