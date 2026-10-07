@@ -51,7 +51,10 @@ jobs:
           echo "keyPassword=${{ secrets.KEY_PASSWORD }}" >> android/key.properties
 
       - name: Show SHA
-        run: keytool -list -v -keystore android/app/upload-keystore.jks -alias ${{ secrets.KEY_ALIAS }} -storepass ${{ secrets.KEYSTORE_PASSWORD }} | grep -E "SHA1|SHA-256"
+        run: |
+          if [ -f android/app/upload-keystore.jks ]; then
+            keytool -list -v -keystore android/app/upload-keystore.jks -alias "${{ secrets.KEY_ALIAS }}" -storepass "${{ secrets.KEYSTORE_PASSWORD }}" 2>/dev/null | grep -E "SHA1|SHA-256" || true
+          fi
 
       - name: Build AAB
         run: flutter build appbundle --release --android-skip-build-dependency-validation
