@@ -621,40 +621,7 @@ class _CreateGamerIdScreenState extends State<CreateGamerIdScreen> {
                       ),
                     ),
 
-                    // Left Side: OFFICIAL GAMER PASS Badge
-                    Positioned(
-                      left: 16,
-                      top: 14,
-                      child: Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                        decoration: BoxDecoration(
-                          gradient: GamerTheme.blueOrangeGradient,
-                          borderRadius: BorderRadius.circular(20),
-                          boxShadow: [
-                            BoxShadow(
-                              color: Colors.black.withOpacity(0.5),
-                              blurRadius: 8,
-                            ),
-                          ],
-                        ),
-                        child: const Row(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            Icon(Icons.sports_esports_rounded, color: Colors.white, size: 14),
-                            SizedBox(width: 6),
-                            Text(
-                              'OFFICIAL GAMER PASS',
-                              style: TextStyle(
-                                color: Colors.white,
-                                fontWeight: FontWeight.w900,
-                                fontSize: 10.5,
-                                letterSpacing: 1.1,
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                    ),
+
 
                     // Right Side: Change Cover Photo Button (camera icon) like Facebook
                     Positioned(
