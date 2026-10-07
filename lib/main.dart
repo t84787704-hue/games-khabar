@@ -10,6 +10,8 @@ import 'screens/create_post_screen.dart';
 import 'screens/gamer_search_screen.dart';
 import 'screens/gamer_auth_screen.dart';
 import 'screens/banned_screen.dart';
+import 'screens/gamer_privacy_policy_screen.dart';
+import 'screens/gamer_terms_of_service_screen.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -74,6 +76,8 @@ class GamersIdApp extends StatelessWidget {
               '/create-post': (context) => const CreatePostScreen(),
               '/search': (context) => const GamerSearchScreen(),
               '/banned': (context) => const BannedScreen(),
+              '/privacy-policy': (context) => const GamerPrivacyPolicyScreen(),
+              '/terms': (context) => const GamerTermsOfServiceScreen(),
             },
           ),
         );
