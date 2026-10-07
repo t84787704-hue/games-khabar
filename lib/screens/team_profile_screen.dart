@@ -46,7 +46,6 @@ class _TeamProfileScreenState extends State<TeamProfileScreen> {
     String gamerId = 'ID not set';
     String avatar = '';
 
-    // 1. Query Supabase profiles table
     try {
       final sbProfile = await SupabaseService.client
           .from('profiles')
@@ -72,7 +71,6 @@ class _TeamProfileScreenState extends State<TeamProfileScreen> {
       debugPrint('[TeamProfileScreen] Supabase profile query error: $e');
     }
 
-    // 2. Fallback to GamerAuthService if gamerId is missing or username is default
     if (gamerId == 'ID not set' || username == 'Player') {
       try {
         final gUser = await GamerAuthService().getUserProfile(cleanUid);
@@ -113,7 +111,6 @@ class _TeamProfileScreenState extends State<TeamProfileScreen> {
     final cId = challengeId.trim();
     if (_acceptingChallengeIds.contains(cId)) return;
 
-    // 1. Immediately setState: isAccepting=true, disable both Accept and Reject buttons
     setState(() {
       _acceptingChallengeIds.add(cId);
     });
@@ -132,7 +129,6 @@ class _TeamProfileScreenState extends State<TeamProfileScreen> {
       }
 
       if (!rpcSuccess) {
-        // Fallback: update challenge to accepted and ensure active match exists
         await SupabaseService.client
             .from('challenges')
             .update({'status': 'accepted'})
@@ -143,7 +139,6 @@ class _TeamProfileScreenState extends State<TeamProfileScreen> {
         final t1Uuid = SupabaseService.toUuid(t1);
         final t2Uuid = SupabaseService.toUuid(t2);
 
-        // Check if an active match already exists between these 2 teams
         final existingMatches = await SupabaseService.client
             .from('active_matches')
             .select()
@@ -170,7 +165,6 @@ class _TeamProfileScreenState extends State<TeamProfileScreen> {
         }
       }
 
-      // 3. Optimistic UI: Immediately after await, setState hide Incoming banner and show Active Match banner (don't wait for stream). Show snackbar "Match Started! Live ho gaya"
       if (mounted) {
         setState(() {
           _acceptedChallengeIds.add(cId);
@@ -192,7 +186,6 @@ class _TeamProfileScreenState extends State<TeamProfileScreen> {
         );
       }
     } finally {
-      // 4. On success: isAccepting=false
       if (mounted) {
         setState(() {
           _acceptingChallengeIds.remove(cId);
@@ -396,7 +389,6 @@ class _TeamProfileScreenState extends State<TeamProfileScreen> {
             final myLeaderTeams = userTeams.where((t) => t.isLeader(currentUid)).toList();
             final myTeamId = myLeaderTeams.isNotEmpty ? myLeaderTeams.first.id : (userTeams.isNotEmpty ? userTeams.first.id : '');
 
-            // 3. REALTIME LISTENER FOR ACTIVE MATCHES
             return StreamBuilder<List<Map<String, dynamic>>>(
               stream: SupabaseService.client
                   .from('active_matches')
@@ -437,12 +429,25 @@ class _TeamProfileScreenState extends State<TeamProfileScreen> {
                          targetUuid == SupabaseService.toUuid(myTeamId).toLowerCase()));
                 final bool isMyOwnTeam = isViewedMyTeam;
 
-                // Opponent calculation (Bug 2 fix: if viewing J17 profile, opponent is Jf19):
+                // ============================================
+                // FIXED: Correctly determine MY team vs OPPONENT team
+                // Priority: MY team ID (from team_members) > viewed team ID.
+                // ============================================
                 final t1 = activeMatch['team1_id']?.toString() ?? '';
                 final t2 = activeMatch['team2_id']?.toString() ?? '';
-                final bool isT1ThisTeam = (targetUuid.isNotEmpty && (t1.toLowerCase() == targetUuid || t1.toLowerCase() == targetRawId)) ||
-                    (myUuid.isNotEmpty && (t1.toLowerCase() == myUuid || t1.toLowerCase() == myRawId));
-                final opponentTeamId = isT1ThisTeam ? t2 : t1;
+
+                final bool isMyTeamT1 = myUuid.isNotEmpty &&
+                    (t1.toLowerCase() == myUuid || t1.toLowerCase() == myRawId);
+                final bool isMyTeamT2 = myUuid.isNotEmpty &&
+                    (t2.toLowerCase() == myUuid || t2.toLowerCase() == myRawId);
+
+                final String myTeamIdInMatch = isMyTeamT1
+                    ? t1
+                    : (isMyTeamT2 ? t2 : (myTeamId.isNotEmpty ? myTeamId : widget.teamId));
+
+                final String opponentTeamId = isMyTeamT1
+                    ? t2
+                    : (isMyTeamT2 ? t1 : '');
 
                 final bool isMatchLeader = hasActiveMatch && (
                   isLeader ||
@@ -480,7 +485,7 @@ class _TeamProfileScreenState extends State<TeamProfileScreen> {
                               MaterialPageRoute(
                                 builder: (_) => PrivateMatchRoomScreen(
                                   matchId: activeMatchId,
-                                  myTeamId: myTeamId.isNotEmpty ? myTeamId : widget.teamId,
+                                  myTeamId: myTeamIdInMatch,
                                   myTeamName: isMyOwnTeam
                                       ? team.name
                                       : (myLeaderTeams.isNotEmpty ? myLeaderTeams.first.name : 'My Team'),
@@ -522,7 +527,6 @@ class _TeamProfileScreenState extends State<TeamProfileScreen> {
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        // 3. ACTIVE MATCH BANNER (4 States)
                         if (hasActiveMatch)
                           Builder(
                             builder: (context) {
@@ -531,7 +535,6 @@ class _TeamProfileScreenState extends State<TeamProfileScreen> {
                               final proofStatus = (activeMatch['proof_status'] ?? '').toString().toLowerCase();
                               final adminNote = activeMatch['admin_note']?.toString() ?? 'Invalid proof screenshot';
 
-                              // State 3: under_review & accepted -> 3s auto-hide
                               if (matchStatus == 'under_review' && proofStatus == 'accepted') {
                                 if (!_autoCompletingMatchIds.contains(activeMatchId)) {
                                   _autoCompletingMatchIds.add(activeMatchId);
@@ -583,7 +586,6 @@ class _TeamProfileScreenState extends State<TeamProfileScreen> {
                                 );
                               }
 
-                              // State 4: under_review & rejected -> Red banner + Add Proof Again button
                               if (matchStatus == 'rejected' || (matchStatus == 'under_review' && proofStatus == 'rejected')) {
                                 return Container(
                                   margin: const EdgeInsets.only(bottom: 14),
@@ -635,7 +637,7 @@ class _TeamProfileScreenState extends State<TeamProfileScreen> {
                                             final ended = await EndMatchBottomSheet.show(
                                               context,
                                               activeMatchId: activeMatchId,
-                                              myTeamId: myTeamId.isNotEmpty ? myTeamId : widget.teamId,
+                                              myTeamId: myTeamIdInMatch,
                                               opponentId: opponentTeamId,
                                               myTeamName: isMyOwnTeam
                                                   ? team.name
@@ -660,7 +662,6 @@ class _TeamProfileScreenState extends State<TeamProfileScreen> {
                                 );
                               }
 
-                              // State 2: under_review & pending -> Yellow banner
                               if (matchStatus == 'under_review') {
                                 return Container(
                                   margin: const EdgeInsets.only(bottom: 14),
@@ -714,7 +715,6 @@ class _TeamProfileScreenState extends State<TeamProfileScreen> {
                                 );
                               }
 
-                              // State 1: matchStatus == 'active' -> Green banner with Live badge and End Match button
                               return Container(
                                 margin: const EdgeInsets.only(bottom: 14),
                                 padding: const EdgeInsets.all(14),
@@ -785,7 +785,7 @@ class _TeamProfileScreenState extends State<TeamProfileScreen> {
                                               MaterialPageRoute(
                                                 builder: (_) => PrivateMatchRoomScreen(
                                                   matchId: activeMatchId,
-                                                  myTeamId: myTeamId.isNotEmpty ? myTeamId : widget.teamId,
+                                                  myTeamId: myTeamIdInMatch,
                                                   myTeamName: isMyOwnTeam
                                                       ? team.name
                                                       : (myLeaderTeams.isNotEmpty ? myLeaderTeams.first.name : 'My Team'),
@@ -813,7 +813,7 @@ class _TeamProfileScreenState extends State<TeamProfileScreen> {
                                               final ended = await EndMatchBottomSheet.show(
                                                 context,
                                                 activeMatchId: activeMatchId,
-                                                myTeamId: myTeamId.isNotEmpty ? myTeamId : widget.teamId,
+                                                myTeamId: myTeamIdInMatch,
                                                 opponentId: opponentTeamId,
                                                 myTeamName: isMyOwnTeam
                                                     ? team.name
@@ -848,7 +848,6 @@ class _TeamProfileScreenState extends State<TeamProfileScreen> {
                             },
                           ),
 
-                        // 1. IN MY OWN TEAM PROFILE: Outgoing Requests
                         if (isMyOwnTeam)
                           StreamBuilder<List<Map<String, dynamic>>>(
                             stream: SupabaseService.client
@@ -989,7 +988,6 @@ class _TeamProfileScreenState extends State<TeamProfileScreen> {
                             },
                           ),
 
-                        // 3. FOR RECEIVER: In J17's OWN TEAM PROFILE: Incoming Challenges
                         if (isMyOwnTeam)
                           StreamBuilder<List<Map<String, dynamic>>>(
                             stream: SupabaseService.client
@@ -1161,7 +1159,6 @@ class _TeamProfileScreenState extends State<TeamProfileScreen> {
                             },
                           ),
 
-                        // 2. RED BANNER ON OPPONENT PROFILE: Realtime Supabase check if pending challenge already sent to this team
                         if (!isMyOwnTeam && myTeamId.isNotEmpty)
                           StreamBuilder<List<Map<String, dynamic>>>(
                             stream: SupabaseService.client
@@ -1235,7 +1232,6 @@ class _TeamProfileScreenState extends State<TeamProfileScreen> {
                             },
                           ),
 
-                        // Team Header Profile Card
                         Container(
                           padding: const EdgeInsets.all(16),
                           decoration: BoxDecoration(
@@ -1247,298 +1243,290 @@ class _TeamProfileScreenState extends State<TeamProfileScreen> {
                             borderRadius: BorderRadius.circular(16),
                             border: Border.all(color: const Color(0xFF2A3447)),
                           ),
-                  child: Row(
-                    children: [
-                      // Team Logo
-                      Container(
-                        width: 72,
-                        height: 72,
-                        decoration: BoxDecoration(
-                          shape: BoxShape.circle,
-                          color: const Color(0xFF26334D),
-                          border: Border.all(color: const Color(0xFFFF6B00), width: 2),
-                          image: team.logo.isNotEmpty
-                              ? DecorationImage(image: NetworkImage(team.logo), fit: BoxFit.cover)
-                              : null,
-                        ),
-                        child: team.logo.isEmpty
-                            ? const Center(child: Icon(Icons.shield_rounded, color: Colors.white70, size: 36))
-                            : null,
-                      ),
-                      const SizedBox(width: 16),
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Row(
-                              children: [
-                                Flexible(
-                                  child: Text(
-                                    team.name,
-                                    style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w900, fontSize: 18),
-                                    overflow: TextOverflow.ellipsis,
-                                  ),
+                          child: Row(
+                            children: [
+                              Container(
+                                width: 72,
+                                height: 72,
+                                decoration: BoxDecoration(
+                                  shape: BoxShape.circle,
+                                  color: const Color(0xFF26334D),
+                                  border: Border.all(color: const Color(0xFFFF6B00), width: 2),
+                                  image: team.logo.isNotEmpty
+                                      ? DecorationImage(image: NetworkImage(team.logo), fit: BoxFit.cover)
+                                      : null,
                                 ),
-                                const SizedBox(width: 6),
-                                Container(
-                                  padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                                  decoration: BoxDecoration(
-                                    color: const Color(0xFFFF6B00).withOpacity(0.2),
-                                    borderRadius: BorderRadius.circular(6),
-                                  ),
-                                  child: Text(
-                                    team.tag,
-                                    style: const TextStyle(color: Color(0xFFFF6B00), fontWeight: FontWeight.w900, fontSize: 11),
-                                  ),
-                                ),
-                              ],
-                            ),
-                            const SizedBox(height: 4),
-                            Container(
-                              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-                              decoration: BoxDecoration(
-                                color: const Color(0xFF00FF88).withOpacity(0.15),
-                                borderRadius: BorderRadius.circular(6),
+                                child: team.logo.isEmpty
+                                    ? const Center(child: Icon(Icons.shield_rounded, color: Colors.white70, size: 36))
+                                    : null,
                               ),
-                              child: Text(
-                                'Game: ${team.game}',
-                                style: const TextStyle(color: Color(0xFF00FF88), fontWeight: FontWeight.bold, fontSize: 11),
-                              ),
-                            ),
-                            const SizedBox(height: 6),
-                            Text(
-                              '👑 Team Leader: ${team.leaderName}',
-                              style: const TextStyle(color: Color(0xFF8B949E), fontSize: 12),
-                            ),
-                          ],
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-                const SizedBox(height: 14),
-
-                // Win / Loss Record Banner
-                Container(
-                  padding: const EdgeInsets.all(14),
-                  decoration: BoxDecoration(
-                    color: const Color(0xFF161F2E),
-                    borderRadius: BorderRadius.circular(14),
-                    border: Border.all(color: const Color(0xFF2A3447)),
-                  ),
-                  child: Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceAround,
-                    children: [
-                      _buildRecordStat('WINS', '${team.wins}', const Color(0xFF00FF88)),
-                      _buildDivider(),
-                      _buildRecordStat('LOSSES', '${team.losses}', const Color(0xFFFF4655)),
-                      _buildDivider(),
-                      _buildRecordStat('DRAWS', '${team.draws}', const Color(0xFFFFB020)),
-                      _buildDivider(),
-                      _buildRecordStat('POINTS', '${team.points}', const Color(0xFFFF6B00)),
-                    ],
-                  ),
-                ),
-                const SizedBox(height: 16),
-
-
-
-                // Team Description
-                if (team.description.isNotEmpty) ...[
-                  _buildSectionHeader('ٹیم کی تفصیل (Description)'),
-                  Container(
-                    width: double.infinity,
-                    padding: const EdgeInsets.all(12),
-                    decoration: BoxDecoration(
-                      color: const Color(0xFF161F2E),
-                      borderRadius: BorderRadius.circular(10),
-                    ),
-                    child: Text(
-                      team.description,
-                      style: const TextStyle(color: Colors.white70, fontSize: 13, height: 1.4),
-                    ),
-                  ),
-                  const SizedBox(height: 16),
-                ],
-
-                // Team Requirements
-                if (team.requirements.isNotEmpty) ...[
-                  _buildSectionHeader('شمولیت کی شرائط (Requirements)'),
-                  Container(
-                    width: double.infinity,
-                    padding: const EdgeInsets.all(12),
-                    decoration: BoxDecoration(
-                      color: const Color(0xFF161F2E),
-                      borderRadius: BorderRadius.circular(10),
-                      border: Border.all(color: const Color(0xFFFFB020).withOpacity(0.3)),
-                    ),
-                    child: Text(
-                      team.requirements,
-                      style: const TextStyle(color: Colors.white70, fontSize: 13, height: 1.4),
-                    ),
-                  ),
-                  const SizedBox(height: 16),
-                ],
-
-                // Pending Join Requests (Visible only to Team Leader)
-                if (isLeader && team.pendingJoinRequests.isNotEmpty) ...[
-                  _buildSectionHeader('نئی شمولیت کی درخواستیں (${team.pendingJoinRequests.length})'),
-                  Container(
-                    padding: const EdgeInsets.all(10),
-                    decoration: BoxDecoration(
-                      color: const Color(0xFF1A1F2C),
-                      borderRadius: BorderRadius.circular(12),
-                      border: Border.all(color: const Color(0xFF00FF88).withOpacity(0.4)),
-                    ),
-                    child: Column(
-                      children: team.pendingJoinRequests.map((uid) {
-                        return FutureBuilder<Map<String, String>>(
-                          future: _fetchUserProfile(uid),
-                          builder: (context, snap) {
-                            final userData = snap.data;
-                            final isLoading = snap.connectionState == ConnectionState.waiting;
-                            final gamerId = userData?['gamerId'];
-                            final displayGamerId = isLoading
-                                ? 'Loading...'
-                                : 'Gamer ID: ${gamerId != null && gamerId.isNotEmpty ? gamerId : 'ID not set'}';
-                            final displayUsername = userData?['username'] ?? 'Player';
-
-                            return Padding(
-                              padding: const EdgeInsets.symmetric(vertical: 6),
-                              child: Row(
-                                children: [
-                                  const CircleAvatar(
-                                    radius: 16,
-                                    backgroundColor: Color(0xFF26334D),
-                                    child: Icon(Icons.person, color: Colors.white70, size: 18),
-                                  ),
-                                  const SizedBox(width: 10),
-                                  Expanded(
-                                    child: Column(
-                                      crossAxisAlignment: CrossAxisAlignment.start,
+                              const SizedBox(width: 16),
+                              Expanded(
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Row(
                                       children: [
-                                        Text(
-                                          displayGamerId,
-                                          style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 13),
-                                        ),
-                                        if (!isLoading && displayUsername != 'Player') ...[
-                                          const SizedBox(height: 2),
-                                          Text(
-                                            displayUsername,
-                                            style: const TextStyle(color: Color(0xFF8B949E), fontSize: 11),
+                                        Flexible(
+                                          child: Text(
+                                            team.name,
+                                            style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w900, fontSize: 18),
+                                            overflow: TextOverflow.ellipsis,
                                           ),
-                                        ],
+                                        ),
+                                        const SizedBox(width: 6),
+                                        Container(
+                                          padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                                          decoration: BoxDecoration(
+                                            color: const Color(0xFFFF6B00).withOpacity(0.2),
+                                            borderRadius: BorderRadius.circular(6),
+                                          ),
+                                          child: Text(
+                                            team.tag,
+                                            style: const TextStyle(color: Color(0xFFFF6B00), fontWeight: FontWeight.w900, fontSize: 11),
+                                          ),
+                                        ),
                                       ],
                                     ),
-                                  ),
-                                  IconButton(
-                                    icon: const Icon(Icons.close_rounded, color: Color(0xFFFF4655), size: 20),
-                                    onPressed: () => _teamService.rejectJoinRequest(teamId: team.id, userId: uid),
-                                  ),
-                                  IconButton(
-                                    icon: const Icon(Icons.check_rounded, color: Color(0xFF00FF88), size: 22),
-                                    onPressed: () => _teamService.acceptJoinRequest(
-                                      teamId: team.id,
-                                      userId: uid,
-                                      userName: displayUsername,
+                                    const SizedBox(height: 4),
+                                    Container(
+                                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                                      decoration: BoxDecoration(
+                                        color: const Color(0xFF00FF88).withOpacity(0.15),
+                                        borderRadius: BorderRadius.circular(6),
+                                      ),
+                                      child: Text(
+                                        'Game: ${team.game}',
+                                        style: const TextStyle(color: Color(0xFF00FF88), fontWeight: FontWeight.bold, fontSize: 11),
+                                      ),
                                     ),
-                                  ),
-                                ],
-                              ),
-                            );
-                          },
-                        );
-                      }).toList(),
-                    ),
-                  ),
-                  const SizedBox(height: 16),
-                ],
-
-                // Team Members List
-                _buildSectionHeader('ٹیم ممبران (${team.memberCount})'),
-                Container(
-                  decoration: BoxDecoration(
-                    color: const Color(0xFF161F2E),
-                    borderRadius: BorderRadius.circular(12),
-                    border: Border.all(color: const Color(0xFF2A3447)),
-                  ),
-                  child: ListView.separated(
-                    shrinkWrap: true,
-                    physics: const NeverScrollableScrollPhysics(),
-                    itemCount: team.memberDetails.isNotEmpty ? team.memberDetails.length : team.members.length,
-                    separatorBuilder: (c, i) => const Divider(color: Color(0xFF2A3447), height: 1),
-                    itemBuilder: (context, index) {
-                      String memberId = '';
-                      String memberName = 'Member';
-                      String memberAvatar = '';
-                      String role = 'Member';
-
-                      if (team.memberDetails.isNotEmpty && index < team.memberDetails.length) {
-                        final d = team.memberDetails[index];
-                        memberId = (d['id'] ?? '').toString();
-                        memberName = (d['name'] ?? 'Member').toString();
-                        memberAvatar = (d['avatar'] ?? '').toString();
-                        role = (d['role'] ?? 'Member').toString();
-                      } else {
-                        memberId = team.members[index];
-                        memberName = memberId == team.leaderId ? team.leaderName : 'Member';
-                        role = memberId == team.leaderId ? 'Leader' : 'Member';
-                      }
-
-                      final isThisLeader = memberId == team.leaderId;
-                      final bool isDefaultName = memberName == 'Player' || memberName == 'Member' || memberName.isEmpty;
-
-                      return FutureBuilder<Map<String, String>>(
-                        future: isDefaultName ? _fetchUserProfile(memberId) : Future.value({'username': memberName, 'avatar': memberAvatar}),
-                        builder: (context, snap) {
-                          final resolvedName = (snap.data?['username'] != null && snap.data!['username'] != 'Player')
-                              ? snap.data!['username']!
-                              : (isDefaultName ? (snap.connectionState == ConnectionState.waiting ? '...' : memberName) : memberName);
-                          final resolvedAvatar = (snap.data?['avatar'] != null && snap.data!['avatar']!.isNotEmpty)
-                              ? snap.data!['avatar']!
-                              : memberAvatar;
-
-                          return ListTile(
-                            leading: CircleAvatar(
-                              radius: 18,
-                              backgroundColor: const Color(0xFF26334D),
-                              backgroundImage: resolvedAvatar.isNotEmpty ? NetworkImage(resolvedAvatar) : null,
-                              child: resolvedAvatar.isEmpty
-                                  ? Text(resolvedName.isNotEmpty ? resolvedName[0].toUpperCase() : 'M',
-                                      style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold))
-                                  : null,
-                            ),
-                            title: Text(
-                              resolvedName,
-                              style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 13.5),
-                            ),
-                            trailing: Container(
-                              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-                              decoration: BoxDecoration(
-                                color: isThisLeader ? const Color(0xFFFF6B00).withOpacity(0.2) : Colors.white10,
-                                borderRadius: BorderRadius.circular(6),
-                              ),
-                              child: Text(
-                                isThisLeader ? '👑 LEADER' : role.toUpperCase(),
-                                style: TextStyle(
-                                  color: isThisLeader ? const Color(0xFFFF6B00) : Colors.white70,
-                                  fontWeight: FontWeight.bold,
-                                  fontSize: 10.5,
+                                    const SizedBox(height: 6),
+                                    Text(
+                                      '👑 Team Leader: ${team.leaderName}',
+                                      style: const TextStyle(color: Color(0xFF8B949E), fontSize: 12),
+                                    ),
+                                  ],
                                 ),
                               ),
+                            ],
+                          ),
+                        ),
+                        const SizedBox(height: 14),
+
+                        Container(
+                          padding: const EdgeInsets.all(14),
+                          decoration: BoxDecoration(
+                            color: const Color(0xFF161F2E),
+                            borderRadius: BorderRadius.circular(14),
+                            border: Border.all(color: const Color(0xFF2A3447)),
+                          ),
+                          child: Row(
+                            mainAxisAlignment: MainAxisAlignment.spaceAround,
+                            children: [
+                              _buildRecordStat('WINS', '${team.wins}', const Color(0xFF00FF88)),
+                              _buildDivider(),
+                              _buildRecordStat('LOSSES', '${team.losses}', const Color(0xFFFF4655)),
+                              _buildDivider(),
+                              _buildRecordStat('DRAWS', '${team.draws}', const Color(0xFFFFB020)),
+                              _buildDivider(),
+                              _buildRecordStat('POINTS', '${team.points}', const Color(0xFFFF6B00)),
+                            ],
+                          ),
+                        ),
+                        const SizedBox(height: 16),
+
+                        if (team.description.isNotEmpty) ...[
+                          _buildSectionHeader('ٹیم کی تفصیل (Description)'),
+                          Container(
+                            width: double.infinity,
+                            padding: const EdgeInsets.all(12),
+                            decoration: BoxDecoration(
+                              color: const Color(0xFF161F2E),
+                              borderRadius: BorderRadius.circular(10),
                             ),
-                          );
-                        },
-                      );
-                    },
+                            child: Text(
+                              team.description,
+                              style: const TextStyle(color: Colors.white70, fontSize: 13, height: 1.4),
+                            ),
+                          ),
+                          const SizedBox(height: 16),
+                        ],
+
+                        if (team.requirements.isNotEmpty) ...[
+                          _buildSectionHeader('شمولیت کی شرائط (Requirements)'),
+                          Container(
+                            width: double.infinity,
+                            padding: const EdgeInsets.all(12),
+                            decoration: BoxDecoration(
+                              color: const Color(0xFF161F2E),
+                              borderRadius: BorderRadius.circular(10),
+                              border: Border.all(color: const Color(0xFFFFB020).withOpacity(0.3)),
+                            ),
+                            child: Text(
+                              team.requirements,
+                              style: const TextStyle(color: Colors.white70, fontSize: 13, height: 1.4),
+                            ),
+                          ),
+                          const SizedBox(height: 16),
+                        ],
+
+                        if (isLeader && team.pendingJoinRequests.isNotEmpty) ...[
+                          _buildSectionHeader('نئی شمولیت کی درخواستیں (${team.pendingJoinRequests.length})'),
+                          Container(
+                            padding: const EdgeInsets.all(10),
+                            decoration: BoxDecoration(
+                              color: const Color(0xFF1A1F2C),
+                              borderRadius: BorderRadius.circular(12),
+                              border: Border.all(color: const Color(0xFF00FF88).withOpacity(0.4)),
+                            ),
+                            child: Column(
+                              children: team.pendingJoinRequests.map((uid) {
+                                return FutureBuilder<Map<String, String>>(
+                                  future: _fetchUserProfile(uid),
+                                  builder: (context, snap) {
+                                    final userData = snap.data;
+                                    final isLoading = snap.connectionState == ConnectionState.waiting;
+                                    final gamerId = userData?['gamerId'];
+                                    final displayGamerId = isLoading
+                                        ? 'Loading...'
+                                        : 'Gamer ID: ${gamerId != null && gamerId.isNotEmpty ? gamerId : 'ID not set'}';
+                                    final displayUsername = userData?['username'] ?? 'Player';
+
+                                    return Padding(
+                                      padding: const EdgeInsets.symmetric(vertical: 6),
+                                      child: Row(
+                                        children: [
+                                          const CircleAvatar(
+                                            radius: 16,
+                                            backgroundColor: Color(0xFF26334D),
+                                            child: Icon(Icons.person, color: Colors.white70, size: 18),
+                                          ),
+                                          const SizedBox(width: 10),
+                                          Expanded(
+                                            child: Column(
+                                              crossAxisAlignment: CrossAxisAlignment.start,
+                                              children: [
+                                                Text(
+                                                  displayGamerId,
+                                                  style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 13),
+                                                ),
+                                                if (!isLoading && displayUsername != 'Player') ...[
+                                                  const SizedBox(height: 2),
+                                                  Text(
+                                                    displayUsername,
+                                                    style: const TextStyle(color: Color(0xFF8B949E), fontSize: 11),
+                                                  ),
+                                                ],
+                                              ],
+                                            ),
+                                          ),
+                                          IconButton(
+                                            icon: const Icon(Icons.close_rounded, color: Color(0xFFFF4655), size: 20),
+                                            onPressed: () => _teamService.rejectJoinRequest(teamId: team.id, userId: uid),
+                                          ),
+                                          IconButton(
+                                            icon: const Icon(Icons.check_rounded, color: Color(0xFF00FF88), size: 22),
+                                            onPressed: () => _teamService.acceptJoinRequest(
+                                              teamId: team.id,
+                                              userId: uid,
+                                              userName: displayUsername,
+                                            ),
+                                          ),
+                                        ],
+                                      ),
+                                    );
+                                  },
+                                );
+                              }).toList(),
+                            ),
+                          ),
+                          const SizedBox(height: 16),
+                        ],
+
+                        _buildSectionHeader('ٹیم ممبران (${team.memberCount})'),
+                        Container(
+                          decoration: BoxDecoration(
+                            color: const Color(0xFF161F2E),
+                            borderRadius: BorderRadius.circular(12),
+                            border: Border.all(color: const Color(0xFF2A3447)),
+                          ),
+                          child: ListView.separated(
+                            shrinkWrap: true,
+                            physics: const NeverScrollableScrollPhysics(),
+                            itemCount: team.memberDetails.isNotEmpty ? team.memberDetails.length : team.members.length,
+                            separatorBuilder: (c, i) => const Divider(color: Color(0xFF2A3447), height: 1),
+                            itemBuilder: (context, index) {
+                              String memberId = '';
+                              String memberName = 'Member';
+                              String memberAvatar = '';
+                              String role = 'Member';
+
+                              if (team.memberDetails.isNotEmpty && index < team.memberDetails.length) {
+                                final d = team.memberDetails[index];
+                                memberId = (d['id'] ?? '').toString();
+                                memberName = (d['name'] ?? 'Member').toString();
+                                memberAvatar = (d['avatar'] ?? '').toString();
+                                role = (d['role'] ?? 'Member').toString();
+                              } else {
+                                memberId = team.members[index];
+                                memberName = memberId == team.leaderId ? team.leaderName : 'Member';
+                                role = memberId == team.leaderId ? 'Leader' : 'Member';
+                              }
+
+                              final isThisLeader = memberId == team.leaderId;
+                              final bool isDefaultName = memberName == 'Player' || memberName == 'Member' || memberName.isEmpty;
+
+                              return FutureBuilder<Map<String, String>>(
+                                future: isDefaultName ? _fetchUserProfile(memberId) : Future.value({'username': memberName, 'avatar': memberAvatar}),
+                                builder: (context, snap) {
+                                  final resolvedName = (snap.data?['username'] != null && snap.data!['username'] != 'Player')
+                                      ? snap.data!['username']!
+                                      : (isDefaultName ? (snap.connectionState == ConnectionState.waiting ? '...' : memberName) : memberName);
+                                  final resolvedAvatar = (snap.data?['avatar'] != null && snap.data!['avatar']!.isNotEmpty)
+                                      ? snap.data!['avatar']!
+                                      : memberAvatar;
+
+                                  return ListTile(
+                                    leading: CircleAvatar(
+                                      radius: 18,
+                                      backgroundColor: const Color(0xFF26334D),
+                                      backgroundImage: resolvedAvatar.isNotEmpty ? NetworkImage(resolvedAvatar) : null,
+                                      child: resolvedAvatar.isEmpty
+                                          ? Text(resolvedName.isNotEmpty ? resolvedName[0].toUpperCase() : 'M',
+                                              style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold))
+                                          : null,
+                                    ),
+                                    title: Text(
+                                      resolvedName,
+                                      style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 13.5),
+                                    ),
+                                    trailing: Container(
+                                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                                      decoration: BoxDecoration(
+                                        color: isThisLeader ? const Color(0xFFFF6B00).withOpacity(0.2) : Colors.white10,
+                                        borderRadius: BorderRadius.circular(6),
+                                      ),
+                                      child: Text(
+                                        isThisLeader ? '👑 LEADER' : role.toUpperCase(),
+                                        style: TextStyle(
+                                          color: isThisLeader ? const Color(0xFFFF6B00) : Colors.white70,
+                                          fontWeight: FontWeight.bold,
+                                          fontSize: 10.5,
+                                        ),
+                                      ),
+                                    ),
+                                  );
+                                },
+                              );
+                            },
+                          ),
+                        ),
+                        const SizedBox(height: 16),
+                        _buildMatchHistorySection(team, currentUid),
+                        const SizedBox(height: 20),
+                      ],
+                    ),
                   ),
-                ),
-                const SizedBox(height: 16),
-                _buildMatchHistorySection(team, currentUid),
-                const SizedBox(height: 20),
-              ],
-            ),
-          ),
                   bottomNavigationBar: Container(
                     padding: EdgeInsets.only(
                       left: 16,
@@ -1552,7 +1540,6 @@ class _TeamProfileScreenState extends State<TeamProfileScreen> {
                     ),
                     child: Builder(
                       builder: (context) {
-                        // 1. If viewedTeamId == myTeamId: show "YOUR TEAM"
                         if (isViewedMyTeam) {
                           return Container(
                             width: double.infinity,
@@ -1582,7 +1569,6 @@ class _TeamProfileScreenState extends State<TeamProfileScreen> {
                           );
                         }
 
-                        // 2. Else if active match exists with this team: show 2 buttons: "Team DM 💬" and "End Match"
                         if (hasActiveMatch) {
                           return Row(
                             children: [
@@ -1597,7 +1583,7 @@ class _TeamProfileScreenState extends State<TeamProfileScreen> {
                                         MaterialPageRoute(
                                           builder: (_) => PrivateMatchRoomScreen(
                                             matchId: activeMatchId,
-                                            myTeamId: myTeamId.isNotEmpty ? myTeamId : widget.teamId,
+                                            myTeamId: myTeamIdInMatch,
                                             myTeamName: isMyOwnTeam
                                                 ? team.name
                                                 : (myLeaderTeams.isNotEmpty ? myLeaderTeams.first.name : 'My Team'),
@@ -1645,7 +1631,7 @@ class _TeamProfileScreenState extends State<TeamProfileScreen> {
                                         final ended = await EndMatchBottomSheet.show(
                                           context,
                                           activeMatchId: activeMatchId,
-                                          myTeamId: myTeamId.isNotEmpty ? myTeamId : widget.teamId,
+                                          myTeamId: myTeamIdInMatch,
                                           opponentId: opponentTeamId,
                                           myTeamName: isMyOwnTeam
                                               ? team.name
@@ -1677,7 +1663,6 @@ class _TeamProfileScreenState extends State<TeamProfileScreen> {
                           );
                         }
 
-                        // 3. Else: show big blue button "Challenge Karo - چیلنج کریں" + Join Team button
                         return StreamBuilder<List<Map<String, dynamic>>>(
                           stream: myTeamId.isNotEmpty
                               ? SupabaseService.client
@@ -1704,7 +1689,6 @@ class _TeamProfileScreenState extends State<TeamProfileScreen> {
 
                             return Row(
                               children: [
-                                // Join Team Button
                                 if (!team.isMember(currentUid)) ...[
                                   Builder(builder: (context) {
                                     final bool isRequested = hasRequested || _hasRequestedLocally;
@@ -1744,7 +1728,6 @@ class _TeamProfileScreenState extends State<TeamProfileScreen> {
                                   const SizedBox(width: 10),
                                 ],
 
-                                // Big Blue Button: Challenge Karo - چیلنج کریں
                                 Expanded(
                                   flex: 3,
                                   child: SizedBox(
@@ -1791,7 +1774,7 @@ class _TeamProfileScreenState extends State<TeamProfileScreen> {
                                         : ElevatedButton.icon(
                                             onPressed: () => _handleChallenge(team, currentUid),
                                             style: ElevatedButton.styleFrom(
-                                              backgroundColor: const Color(0xFF1877F2), // Big Blue Button
+                                              backgroundColor: const Color(0xFF1877F2),
                                               foregroundColor: Colors.white,
                                               shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
                                               elevation: 0,
@@ -1925,7 +1908,6 @@ class _TeamProfileScreenState extends State<TeamProfileScreen> {
               return pList.contains(targetUuid) || pList.contains(targetRawId);
             }).toList();
 
-            // Sort newest first
             completedMatches.sort((a, b) {
               final aDate = a['ended_at'] ?? a['created_at'] ?? '';
               final bDate = b['ended_at'] ?? b['created_at'] ?? '';
@@ -1994,7 +1976,6 @@ class _TeamProfileScreenState extends State<TeamProfileScreen> {
                   ),
                   child: Row(
                     children: [
-                      // Proof Thumbnail
                       GestureDetector(
                         onTap: (proofUrl != null && proofUrl.isNotEmpty)
                             ? () => _showProofDialog(context, proofUrl)
@@ -2032,14 +2013,12 @@ class _TeamProfileScreenState extends State<TeamProfileScreen> {
                       ),
                       const SizedBox(width: 12),
 
-                      // Match Details: vs Opponent & Date
                       Expanded(
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
                             FutureBuilder<Map<String, String>>(
                               future: () async {
-                                // 1. Check joined team from match map
                                 if (!isT1 && m['team1'] is Map) {
                                   final name = m['team1']['name']?.toString() ?? '';
                                   final tag = m['team1']['tag']?.toString() ?? '';
@@ -2050,7 +2029,6 @@ class _TeamProfileScreenState extends State<TeamProfileScreen> {
                                   if (name.isNotEmpty) return {'name': name, 'tag': tag};
                                 }
 
-                                // 2. Query Supabase teams table
                                 try {
                                   final tUuid = SupabaseService.toUuid(opId);
                                   final sRes = await SupabaseService.client
@@ -2066,7 +2044,6 @@ class _TeamProfileScreenState extends State<TeamProfileScreen> {
                                   }
                                 } catch (_) {}
 
-                                // 3. Fallback to Firestore TeamService
                                 try {
                                   final fTeam = await _teamService.getTeam(opId);
                                   if (fTeam != null) {
@@ -2109,7 +2086,6 @@ class _TeamProfileScreenState extends State<TeamProfileScreen> {
                       ),
                       const SizedBox(width: 10),
 
-                      // Result Badge (Bada aur Clear WON 🏆 / LOST ❌)
                       Container(
                         padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
                         decoration: BoxDecoration(
