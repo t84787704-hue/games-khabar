@@ -26,6 +26,7 @@ import 'verification_screen.dart';
 import 'profile_screen.dart';
 import 'follow_us_screen.dart';
 import 'gamer_delete_account_screen.dart';
+import 'gamer_download_data_screen.dart';
 import '../widgets/coin_history_sheet.dart';
 
 class GamerProfileScreen extends StatefulWidget {
@@ -2188,6 +2189,41 @@ class _GamerProfileScreenState extends State<GamerProfileScreen>
                 ),
                 if (isOwnProfile) ...[
                   const Divider(color: Color(0xFFCED0D4), height: 16),
+                  ListTile(
+                    leading: Container(
+                      padding: const EdgeInsets.all(8),
+                      decoration: const BoxDecoration(
+                        color: Color(0xFFE7F3FF),
+                        shape: BoxShape.circle,
+                      ),
+                      child: const Icon(Icons.download_rounded,
+                          color: Color(0xFF1877F2), size: 20),
+                    ),
+                    title: const Text(
+                      'Download My Data',
+                      style: TextStyle(
+                          color: Color(0xFF050505),
+                          fontWeight: FontWeight.bold,
+                          fontSize: 14),
+                    ),
+                    subtitle: const Text(
+                      'Get a copy of your Gamers ID data (JSON)',
+                      style: TextStyle(
+                          color: Color(0xFF65676B), fontSize: 12),
+                    ),
+                    trailing: const Icon(Icons.arrow_forward_ios_rounded,
+                        color: Color(0xFF65676B), size: 14),
+                    onTap: () {
+                      Navigator.pop(ctx);
+                      Navigator.of(context).push(
+                        MaterialPageRoute(
+                          builder: (_) =>
+                              const GamerDownloadDataScreen(),
+                        ),
+                      );
+                    },
+                  ),
+                  const SizedBox(height: 4),
                   ListTile(
                     leading: Container(
                       padding: const EdgeInsets.all(8),
