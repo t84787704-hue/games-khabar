@@ -4,6 +4,7 @@ import 'package:intl/intl.dart';
 import '../models/chat_model.dart';
 import '../services/direct_message_service.dart';
 import '../services/gamer_auth_service.dart';
+import '../services/supabase_service.dart';
 
 class GamerChatScreen extends StatefulWidget {
   final String otherUserId;
@@ -216,10 +217,10 @@ class _GamerChatScreenState extends State<GamerChatScreen> {
                   itemCount: messages.length,
                   itemBuilder: (context, i) {
                     final m = messages[i];
-                    final isMyMsg = m.senderId == SupabaseService.toUuid(myUid) ||
-                        m.senderId == myUid;
+                    final myUuid = SupabaseService.toUuid(myUid);
+                    final isMyMsg =
+                        m.senderId == myUuid || m.senderId == myUid;
 
-                    // Date divider
                     bool showDate = false;
                     if (i == 0) {
                       showDate = true;
@@ -238,7 +239,8 @@ class _GamerChatScreenState extends State<GamerChatScreen> {
                         if (showDate)
                           Center(
                             child: Container(
-                              margin: const EdgeInsets.symmetric(vertical: 10),
+                              margin:
+                                  const EdgeInsets.symmetric(vertical: 10),
                               padding: const EdgeInsets.symmetric(
                                   horizontal: 12, vertical: 4),
                               decoration: BoxDecoration(
@@ -289,4 +291,153 @@ class _GamerChatScreenState extends State<GamerChatScreen> {
                           : '?',
                       style: const TextStyle(
                         fontSize: 32,
-                        fontWeight: FontWeight.b
+                        fontWeight: FontWeight.bold,
+                        color: Color(0xFF65676B),
+                      ),
+                    )
+                  : null,
+            ),
+            const SizedBox(height: 20),
+            Text(
+              widget.otherUserName,
+              style: const TextStyle(
+                color: Color(0xFF050505),
+                fontSize: 18,
+                fontWeight: FontWeight.bold,
+              ),
+            ),
+            const SizedBox(height: 8),
+            const Text(
+              'Say hi to start the conversation',
+              style: TextStyle(color: Color(0xFF65676B), fontSize: 13),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildMessageBubble(ChatMessage m, bool isMyMsg) {
+    return Align(
+      alignment: isMyMsg ? Alignment.centerRight : Alignment.centerLeft,
+      child: Container(
+        margin: const EdgeInsets.only(bottom: 8),
+        constraints:
+            BoxConstraints(maxWidth: MediaQuery.of(context).size.width * 0.75),
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+        decoration: BoxDecoration(
+          color: isMyMsg ? const Color(0xFF1877F2) : Colors.white,
+          borderRadius: BorderRadius.only(
+            topLeft: const Radius.circular(16),
+            topRight: const Radius.circular(16),
+            bottomLeft: isMyMsg
+                ? const Radius.circular(16)
+                : const Radius.circular(4),
+            bottomRight: isMyMsg
+                ? const Radius.circular(4)
+                : const Radius.circular(16),
+          ),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withOpacity(0.05),
+              blurRadius: 3,
+              offset: const Offset(0, 1),
+            ),
+          ],
+        ),
+        child: Column(
+          crossAxisAlignment:
+              isMyMsg ? CrossAxisAlignment.end : CrossAxisAlignment.start,
+          children: [
+            Text(
+              m.message,
+              style: TextStyle(
+                color: isMyMsg ? Colors.white : const Color(0xFF050505),
+                fontSize: 14,
+                height: 1.3,
+              ),
+            ),
+            const SizedBox(height: 4),
+            Text(
+              _formatTime(m.createdAt),
+              style: TextStyle(
+                color: isMyMsg
+                    ? Colors.white.withOpacity(0.7)
+                    : const Color(0xFF65676B),
+                fontSize: 10.5,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildInputBar() {
+    return Container(
+      padding: EdgeInsets.only(
+        left: 12,
+        right: 12,
+        top: 10,
+        bottom: MediaQuery.of(context).padding.bottom + 10,
+      ),
+      decoration: const BoxDecoration(
+        color: Colors.white,
+        border: Border(top: BorderSide(color: Color(0xFFE4E6EB), width: 1)),
+      ),
+      child: Row(
+        children: [
+          Expanded(
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 16),
+              decoration: BoxDecoration(
+                color: const Color(0xFFF0F2F5),
+                borderRadius: BorderRadius.circular(24),
+              ),
+              child: TextField(
+                controller: _messageController,
+                style: const TextStyle(fontSize: 14),
+                maxLines: 4,
+                minLines: 1,
+                textCapitalization: TextCapitalization.sentences,
+                decoration: const InputDecoration(
+                  hintText: 'Message...',
+                  hintStyle:
+                      TextStyle(color: Color(0xFF65676B), fontSize: 14),
+                  border: InputBorder.none,
+                  contentPadding: EdgeInsets.symmetric(vertical: 10),
+                ),
+                onSubmitted: (_) => _sendMessage(),
+              ),
+            ),
+          ),
+          const SizedBox(width: 8),
+          Material(
+            color: const Color(0xFF1877F2),
+            shape: const CircleBorder(),
+            child: InkWell(
+              customBorder: const CircleBorder(),
+              onTap: _isSending ? null : _sendMessage,
+              child: Container(
+                width: 44,
+                height: 44,
+                alignment: Alignment.center,
+                child: _isSending
+                    ? const SizedBox(
+                        width: 20,
+                        height: 20,
+                        child: CircularProgressIndicator(
+                          color: Colors.white,
+                          strokeWidth: 2,
+                        ),
+                      )
+                    : const Icon(Icons.send_rounded,
+                        color: Colors.white, size: 20),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
