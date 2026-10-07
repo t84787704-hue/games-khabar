@@ -296,11 +296,6 @@ class _TeamsScreenState extends State<TeamsScreen> {
         title: const Text("Teams", style: TextStyle(color: Color(0xFF1877F2), fontWeight: FontWeight.bold, fontSize: 22)),
         actions: [
           IconButton(
-            tooltip: "Team Matches",
-            icon: const Icon(Icons.sports_esports_rounded, color: Color(0xFF65676B)),
-            onPressed: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const TeamMatchesScreen())),
-          ),
-          IconButton(
             tooltip: "TOP 100 TEAMS Leaderboard",
             icon: const Icon(Icons.emoji_events_rounded, color: Color(0xFF65676B)),
             onPressed: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const LeaderboardScreen())),

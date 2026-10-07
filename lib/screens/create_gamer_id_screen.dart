@@ -9,7 +9,6 @@ import '../constants/gamer_theme.dart';
 import '../constants/mobile_games_rank_data.dart';
 import '../models/gamer_user_model.dart';
 import '../services/gamer_auth_service.dart';
-import '../services/supabase_service.dart';
 import '../widgets/gamer_avatar.dart';
 import 'coin_store_screen.dart';
 import 'gamer_main_navigation_screen.dart';
@@ -49,19 +48,23 @@ class _CreateGamerIdScreenState extends State<CreateGamerIdScreen> {
   String _rankRejectReason = '';
   bool _isSaving = false;
 
+  // Store perks: Profile Frame & Badge
   String _selectedFrame = '';
   List<String> _unlockedFrames = [];
   String _selectedBadge = '';
   List<String> _unlockedBadges = [];
 
+  // Live username availability check state
   Timer? _debounceTimer;
   bool _isCheckingUsername = false;
   bool? _isUsernameAvailable;
   String _usernameFeedback = '';
 
+  // BGMI Theme default cover image
   static const String _defaultBgmiCoverUrl =
       'https://images.unsplash.com/photo-1542751371-adc38448a05e?w=1200&auto=format&fit=crop&q=80';
 
+  // Gaming avatar presets (Helmet, Skull, Ninja, Crown, Crosshair)
   final List<Map<String, dynamic>> _gamingPresets = [
     {
       'id': 'preset:helmet',
@@ -100,6 +103,7 @@ class _CreateGamerIdScreenState extends State<CreateGamerIdScreen> {
     },
   ];
 
+  // Dynamic Ranks strictly per selected mobile game
   List<String> get _dynamicRanks {
     return MobileGamesRankData.getRanksForGame(_selectedRankGame);
   }
@@ -155,6 +159,23 @@ class _CreateGamerIdScreenState extends State<CreateGamerIdScreen> {
       final localFrames = prefs.getStringList('user_unlocked_frames_$uid') ?? [];
       final localBadge = prefs.getString('user_active_badge_$uid') ?? '';
       final localBadges = prefs.getStringList('user_unlocked_badges_$uid') ?? [];
+
+      final doc = await FirebaseFirestore.instance.collection('users').doc(uid).get();
+      if (doc.exists && mounted) {
+        final data = doc.data() ?? {};
+        final activeF = (data['activeFrame'] as String?) ?? localFrame;
+        final unF = List<String>.from(data['unlockedFrames'] ?? localFrames);
+        final activeB = (data['activeBadge'] as String?) ?? localBadge;
+        final unB = List<String>.from(data['unlockedBadges'] ?? localBadges);
+
+        setState(() {
+          _selectedFrame = activeF;
+          _unlockedFrames = unF;
+          _selectedBadge = activeB;
+          _unlockedBadges = unB;
+        });
+        return;
+      }
 
       if (mounted) {
         setState(() {
@@ -382,11 +403,8 @@ class _CreateGamerIdScreenState extends State<CreateGamerIdScreen> {
       return;
     }
 
-    setState(() => _isSaving = true);
-
     bool saveSucceeded = false;
-    String enteredRank = '';
-    String finalRank = '';
+    setState(() => _isSaving = true);
 
     try {
       String finalPhotoUrl = _photoUrl;
@@ -399,20 +417,21 @@ class _CreateGamerIdScreenState extends State<CreateGamerIdScreen> {
         finalCoverUrl = await GamerAuthService().uploadCoverPhoto(_pickedCoverFile!, uid);
       }
 
-      enteredRank = _rankController.text.trim();
+      // Rank & Screenshot verification logic
+      final enteredRank = _rankController.text.trim();
+      String finalRank = '';
       String finalRankScreenshot = _rankScreenshotUrl;
       String finalRankStatus = _rankStatus;
       String finalRankVerifiedBy = widget.existingUser?.rankVerifiedBy ?? '';
       String finalRankRejectReason = widget.existingUser?.rankRejectReason ?? '';
       bool isRankVerified = widget.existingUser?.isRankVerified ?? false;
 
-      if (enteredRank.isNotEmpty &&
-          enteredRank.toLowerCase() != 'none' &&
-          enteredRank.toLowerCase() != 'skip') {
+      if (enteredRank.isNotEmpty && enteredRank.toLowerCase() != 'none' && enteredRank.toLowerCase() != 'skip') {
         if (_pickedRankScreenshot != null) {
+          // Upload new screenshot proof
           finalRankScreenshot = await GamerAuthService().uploadRankScreenshot(_pickedRankScreenshot!, uid);
           finalRank = enteredRank;
-          finalRankStatus = 'Pending';
+          finalRankStatus = 'Pending'; // Mark Pending for Admin
           finalRankRejectReason = '';
           isRankVerified = false;
         } else if (finalRankScreenshot.isNotEmpty) {
@@ -422,12 +441,15 @@ class _CreateGamerIdScreenState extends State<CreateGamerIdScreen> {
             isRankVerified = false;
           }
         } else {
+          // User chose a rank but didn't upload a screenshot:
+          // Rule 3: Rank is not saved and left Optional
           finalRank = '';
           finalRankStatus = 'None';
           finalRankScreenshot = '';
           isRankVerified = false;
         }
       } else {
+        // Skipped
         finalRank = '';
         finalRankStatus = 'None';
         finalRankScreenshot = '';
@@ -441,9 +463,7 @@ class _CreateGamerIdScreenState extends State<CreateGamerIdScreen> {
             ? _displayNameController.text.trim()
             : rawUsername,
         photoUrl: finalPhotoUrl,
-        coverUrl: finalCoverUrl.isNotEmpty
-            ? finalCoverUrl
-            : (widget.existingUser?.coverUrl ?? ''),
+        coverUrl: finalCoverUrl.isNotEmpty ? finalCoverUrl : (widget.existingUser?.coverUrl ?? ''),
         bio: _bioController.text.trim(),
         favoriteGame: _selectedGame,
         selectedGame: finalRank.isNotEmpty ? _selectedRankGame : '',
@@ -460,9 +480,7 @@ class _CreateGamerIdScreenState extends State<CreateGamerIdScreen> {
         likesReceived: widget.existingUser?.likesReceived ?? 0,
         reportsCount: widget.existingUser?.reportsCount ?? 0,
         isVerified: widget.existingUser?.isVerified ?? false,
-        gameId: _gameIdController.text.trim().isNotEmpty
-            ? _gameIdController.text.trim()
-            : '12345',
+        gameId: _gameIdController.text.trim().isNotEmpty ? _gameIdController.text.trim() : '12345',
         createdAt: widget.existingUser?.createdAt ?? DateTime.now(),
         activeFrame: _selectedFrame,
         unlockedFrames: _unlockedFrames,
@@ -501,15 +519,10 @@ class _CreateGamerIdScreenState extends State<CreateGamerIdScreen> {
 
     if (saveSucceeded) {
       if (!mounted) return;
+
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text(
-            enteredRank.isNotEmpty && finalRank.isEmpty
-                ? 'Profile updated. Note: Rank was skipped because screenshot proof was not uploaded.'
-                : (widget.isEditing
-                    ? 'Gamer ID updated!'
-                    : 'Welcome to Gamers ID, @$rawUsername! 🎮'),
-          ),
+          content: Text(widget.isEditing ? 'Gamer ID updated!' : 'Welcome to Gamers ID, @$rawUsername! 🎮'),
           backgroundColor: GamerTheme.neonGreen,
         ),
       );
@@ -517,11 +530,15 @@ class _CreateGamerIdScreenState extends State<CreateGamerIdScreen> {
       if (widget.isEditing) {
         Navigator.of(context).pop();
       } else {
-        GamerAuthService().refreshCurrentGamer();
+        // Always navigate to main screen on save success
+        // (don't wait for refreshCurrentGamer)
         Navigator.of(context).pushAndRemoveUntil(
           MaterialPageRoute(builder: (_) => const GamerMainNavigationScreen()),
           (route) => false,
         );
+
+        // Refresh profile in background
+        GamerAuthService().refreshCurrentGamer();
       }
     }
   }
@@ -539,10 +556,7 @@ class _CreateGamerIdScreenState extends State<CreateGamerIdScreen> {
           if (isEditing)
             TextButton(
               onPressed: _isSaving ? null : _saveGamerId,
-              child: const Text('Save',
-                  style: TextStyle(
-                      color: GamerTheme.accentOrange,
-                      fontWeight: FontWeight.bold)),
+              child: const Text('Save', style: TextStyle(color: GamerTheme.accentOrange, fontWeight: FontWeight.bold)),
             ),
         ],
       ),
@@ -553,6 +567,7 @@ class _CreateGamerIdScreenState extends State<CreateGamerIdScreen> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
+                // 1. TOP: Cover Photo Banner (BGMI theme + OFFICIAL GAMER PASS badge + Change Cover Photo button like Facebook)
                 Stack(
                   children: [
                     Container(
@@ -570,11 +585,8 @@ class _CreateGamerIdScreenState extends State<CreateGamerIdScreen> {
                             CachedNetworkImage(
                               imageUrl: _coverUrl,
                               fit: BoxFit.cover,
-                              placeholder: (_, __) =>
-                                  Container(color: const Color(0xFF0F172A)),
-                              errorWidget: (_, __, ___) => Image.network(
-                                  _defaultBgmiCoverUrl,
-                                  fit: BoxFit.cover),
+                              placeholder: (_, __) => Container(color: const Color(0xFF0F172A)),
+                              errorWidget: (_, __, ___) => Image.network(_defaultBgmiCoverUrl, fit: BoxFit.cover),
                             )
                           else
                             Image.network(
@@ -583,17 +595,14 @@ class _CreateGamerIdScreenState extends State<CreateGamerIdScreen> {
                               errorBuilder: (_, __, ___) => Container(
                                 decoration: const BoxDecoration(
                                   gradient: LinearGradient(
-                                    colors: [
-                                      Color(0xFF0F2027),
-                                      Color(0xFF203A43),
-                                      Color(0xFF2C5364)
-                                    ],
+                                    colors: [Color(0xFF0F2027), Color(0xFF203A43), Color(0xFF2C5364)],
                                     begin: Alignment.topLeft,
                                     end: Alignment.bottomRight,
                                   ),
                                 ),
                               ),
                             ),
+                          // Dark Vignette & Gradient Overlay
                           Container(
                             decoration: BoxDecoration(
                               gradient: LinearGradient(
@@ -607,24 +616,21 @@ class _CreateGamerIdScreenState extends State<CreateGamerIdScreen> {
                               ),
                             ),
                           ),
+                          // Subtle BGMI Theme indicator
                           Positioned(
                             right: 14,
                             top: 14,
                             child: Container(
-                              padding: const EdgeInsets.symmetric(
-                                  horizontal: 8, vertical: 3),
+                              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
                               decoration: BoxDecoration(
                                 color: Colors.black.withOpacity(0.7),
                                 borderRadius: BorderRadius.circular(6),
-                                border: Border.all(
-                                    color: GamerTheme.accentOrange
-                                        .withOpacity(0.5)),
+                                border: Border.all(color: GamerTheme.accentOrange.withOpacity(0.5)),
                               ),
                               child: const Row(
                                 mainAxisSize: MainAxisSize.min,
                                 children: [
-                                  Icon(Icons.sports_esports_rounded,
-                                      color: GamerTheme.accentOrange, size: 12),
+                                  Icon(Icons.sports_esports_rounded, color: GamerTheme.accentOrange, size: 12),
                                   SizedBox(width: 4),
                                   Text(
                                     'BGMI THEME',
@@ -642,12 +648,13 @@ class _CreateGamerIdScreenState extends State<CreateGamerIdScreen> {
                         ],
                       ),
                     ),
+
+                    // Left Side: OFFICIAL GAMER PASS Badge
                     Positioned(
                       left: 16,
                       top: 14,
                       child: Container(
-                        padding: const EdgeInsets.symmetric(
-                            horizontal: 12, vertical: 6),
+                        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
                         decoration: BoxDecoration(
                           gradient: GamerTheme.blueOrangeGradient,
                           borderRadius: BorderRadius.circular(20),
@@ -661,8 +668,7 @@ class _CreateGamerIdScreenState extends State<CreateGamerIdScreen> {
                         child: const Row(
                           mainAxisSize: MainAxisSize.min,
                           children: [
-                            Icon(Icons.sports_esports_rounded,
-                                color: Colors.white, size: 14),
+                            Icon(Icons.sports_esports_rounded, color: Colors.white, size: 14),
                             SizedBox(width: 6),
                             Text(
                               'OFFICIAL GAMER PASS',
@@ -677,6 +683,8 @@ class _CreateGamerIdScreenState extends State<CreateGamerIdScreen> {
                         ),
                       ),
                     ),
+
+                    // Right Side: Change Cover Photo Button (camera icon) like Facebook
                     Positioned(
                       right: 14,
                       bottom: 12,
@@ -684,8 +692,7 @@ class _CreateGamerIdScreenState extends State<CreateGamerIdScreen> {
                         onTap: _pickCoverFromGallery,
                         borderRadius: BorderRadius.circular(20),
                         child: Container(
-                          padding: const EdgeInsets.symmetric(
-                              horizontal: 10, vertical: 6),
+                          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
                           decoration: BoxDecoration(
                             color: Colors.black.withOpacity(0.75),
                             borderRadius: BorderRadius.circular(20),
@@ -700,8 +707,7 @@ class _CreateGamerIdScreenState extends State<CreateGamerIdScreen> {
                           child: const Row(
                             mainAxisSize: MainAxisSize.min,
                             children: [
-                              Icon(Icons.camera_alt_rounded,
-                                  color: Colors.white, size: 14),
+                              Icon(Icons.camera_alt_rounded, color: Colors.white, size: 14),
                               SizedBox(width: 5),
                               Text(
                                 'Change Cover Photo',
@@ -719,12 +725,13 @@ class _CreateGamerIdScreenState extends State<CreateGamerIdScreen> {
                   ],
                 ),
 
+                // Form content with horizontal padding
                 Padding(
-                  padding:
-                      const EdgeInsets.symmetric(horizontal: 20, vertical: 18),
+                  padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 18),
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
+                      // 2. AVATAR: Keep F with orange glow and small camera icon, Upload Photo From Gallery text below
                       Center(
                         child: Column(
                           children: [
@@ -736,8 +743,7 @@ class _CreateGamerIdScreenState extends State<CreateGamerIdScreen> {
                                     shape: BoxShape.circle,
                                     boxShadow: [
                                       BoxShadow(
-                                        color: GamerTheme.accentOrange
-                                            .withOpacity(0.45),
+                                        color: GamerTheme.accentOrange.withOpacity(0.45),
                                         blurRadius: 18,
                                         spreadRadius: 3,
                                       ),
@@ -746,8 +752,7 @@ class _CreateGamerIdScreenState extends State<CreateGamerIdScreen> {
                                   child: GamerAvatar(
                                     photoUrl: _photoUrl,
                                     imageFile: _pickedImageFile,
-                                    displayName: _displayNameController
-                                            .text.isNotEmpty
+                                    displayName: _displayNameController.text.isNotEmpty
                                         ? _displayNameController.text
                                         : 'F',
                                     radius: 48,
@@ -756,6 +761,7 @@ class _CreateGamerIdScreenState extends State<CreateGamerIdScreen> {
                                     frameId: _selectedFrame,
                                   ),
                                 ),
+                                // Small camera icon on bottom-right of avatar
                                 Positioned(
                                   bottom: 0,
                                   right: 0,
@@ -765,19 +771,13 @@ class _CreateGamerIdScreenState extends State<CreateGamerIdScreen> {
                                     child: Container(
                                       padding: const EdgeInsets.all(7),
                                       decoration: const BoxDecoration(
-                                        gradient:
-                                            GamerTheme.flameOrangeGradient,
+                                        gradient: GamerTheme.flameOrangeGradient,
                                         shape: BoxShape.circle,
                                         boxShadow: [
-                                          BoxShadow(
-                                              color: Colors.black54,
-                                              blurRadius: 4),
+                                          BoxShadow(color: Colors.black54, blurRadius: 4),
                                         ],
                                       ),
-                                      child: const Icon(
-                                          Icons.camera_alt_rounded,
-                                          color: Colors.white,
-                                          size: 16),
+                                      child: const Icon(Icons.camera_alt_rounded, color: Colors.white, size: 16),
                                     ),
                                   ),
                                 ),
@@ -786,9 +786,7 @@ class _CreateGamerIdScreenState extends State<CreateGamerIdScreen> {
                             const SizedBox(height: 8),
                             TextButton.icon(
                               onPressed: _pickImageFromGallery,
-                              icon: const Icon(Icons.photo_library_rounded,
-                                  size: 16,
-                                  color: GamerTheme.accentOrange),
+                              icon: const Icon(Icons.photo_library_rounded, size: 16, color: GamerTheme.accentOrange),
                               label: const Text(
                                 'Upload Photo From Gallery',
                                 style: TextStyle(
@@ -798,6 +796,8 @@ class _CreateGamerIdScreenState extends State<CreateGamerIdScreen> {
                                 ),
                               ),
                             ),
+
+                            // 3. CHANGE AVATAR PRESETS: Replace human faces with gaming icons like helmet, skull, ninja, crown, crosshair
                             const SizedBox(height: 10),
                             const Text(
                               'PRO GAMER AVATAR PRESETS',
@@ -812,11 +812,9 @@ class _CreateGamerIdScreenState extends State<CreateGamerIdScreen> {
                             Row(
                               mainAxisAlignment: MainAxisAlignment.center,
                               children: _gamingPresets.map((preset) {
-                                final isSelected = _photoUrl == preset['id'] &&
-                                    _pickedImageFile == null;
+                                final isSelected = _photoUrl == preset['id'] && _pickedImageFile == null;
                                 return Padding(
-                                  padding: const EdgeInsets.symmetric(
-                                      horizontal: 5),
+                                  padding: const EdgeInsets.symmetric(horizontal: 5),
                                   child: InkWell(
                                     onTap: () {
                                       setState(() {
@@ -838,17 +836,13 @@ class _CreateGamerIdScreenState extends State<CreateGamerIdScreen> {
                                               end: Alignment.bottomRight,
                                             ),
                                             border: Border.all(
-                                              color: isSelected
-                                                  ? GamerTheme.accentOrange
-                                                  : Colors.white24,
+                                              color: isSelected ? GamerTheme.accentOrange : Colors.white24,
                                               width: isSelected ? 2.5 : 1,
                                             ),
                                             boxShadow: isSelected
                                                 ? [
                                                     BoxShadow(
-                                                      color: GamerTheme
-                                                          .accentOrange
-                                                          .withOpacity(0.5),
+                                                      color: GamerTheme.accentOrange.withOpacity(0.5),
                                                       blurRadius: 8,
                                                       spreadRadius: 1,
                                                     ),
@@ -867,13 +861,9 @@ class _CreateGamerIdScreenState extends State<CreateGamerIdScreen> {
                                         Text(
                                           preset['label'] as String,
                                           style: TextStyle(
-                                            color: isSelected
-                                                ? GamerTheme.accentOrange
-                                                : Colors.white70,
+                                            color: isSelected ? GamerTheme.accentOrange : Colors.white70,
                                             fontSize: 10,
-                                            fontWeight: isSelected
-                                                ? FontWeight.w900
-                                                : FontWeight.w600,
+                                            fontWeight: isSelected ? FontWeight.w900 : FontWeight.w600,
                                           ),
                                         ),
                                       ],
@@ -888,6 +878,7 @@ class _CreateGamerIdScreenState extends State<CreateGamerIdScreen> {
 
                       const SizedBox(height: 18),
 
+                      // 4. AVATAR FRAMES & PRESTIGE BADGES (STORE PERKS)
                       Container(
                         padding: const EdgeInsets.all(14),
                         decoration: BoxDecoration(
@@ -903,8 +894,7 @@ class _CreateGamerIdScreenState extends State<CreateGamerIdScreen> {
                               children: [
                                 const Row(
                                   children: [
-                                    Icon(Icons.workspace_premium_rounded,
-                                        color: Colors.amber, size: 18),
+                                    Icon(Icons.workspace_premium_rounded, color: Colors.amber, size: 18),
                                     SizedBox(width: 6),
                                     Text(
                                       'AVATAR FRAME',
@@ -920,30 +910,22 @@ class _CreateGamerIdScreenState extends State<CreateGamerIdScreen> {
                                 InkWell(
                                   onTap: () async {
                                     await Navigator.of(context).push(
-                                      MaterialPageRoute(
-                                          builder: (_) =>
-                                              const CoinStoreScreen()),
+                                      MaterialPageRoute(builder: (_) => const CoinStoreScreen()),
                                     );
                                     _loadStorePerks();
                                   },
                                   borderRadius: BorderRadius.circular(12),
                                   child: Container(
-                                    padding: const EdgeInsets.symmetric(
-                                        horizontal: 8, vertical: 4),
+                                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                                     decoration: BoxDecoration(
-                                      color: GamerTheme.neonGreen
-                                          .withOpacity(0.15),
+                                      color: GamerTheme.neonGreen.withOpacity(0.15),
                                       borderRadius: BorderRadius.circular(12),
-                                      border: Border.all(
-                                          color: GamerTheme.neonGreen
-                                              .withOpacity(0.5)),
+                                      border: Border.all(color: GamerTheme.neonGreen.withOpacity(0.5)),
                                     ),
                                     child: const Row(
                                       mainAxisSize: MainAxisSize.min,
                                       children: [
-                                        Icon(Icons.storefront_rounded,
-                                            color: GamerTheme.neonGreen,
-                                            size: 12),
+                                        Icon(Icons.storefront_rounded, color: GamerTheme.neonGreen, size: 12),
                                         SizedBox(width: 4),
                                         Text(
                                           'COIN STORE',
@@ -964,11 +946,36 @@ class _CreateGamerIdScreenState extends State<CreateGamerIdScreen> {
                               scrollDirection: Axis.horizontal,
                               child: Row(
                                 children: [
-                                  {'id': '', 'name': 'None', 'emoji': '🚫', 'color': Colors.white38},
-                                  {'id': 'neon_fire', 'name': 'Neon Fire', 'emoji': '🔥', 'color': Colors.deepOrangeAccent},
-                                  {'id': 'royal_crown', 'name': 'Royal Crown', 'emoji': '👑', 'color': Colors.amber},
-                                  {'id': 'cyber_glitch', 'name': 'Cyber Grid', 'emoji': '⚡', 'color': GamerTheme.neonGreen},
-                                  {'id': 'cosmic_void', 'name': 'Cosmic Nebula', 'emoji': '🌌', 'color': const Color(0xFFC084FC)},
+                                  {
+                                    'id': '',
+                                    'name': 'None',
+                                    'emoji': '🚫',
+                                    'color': Colors.white38,
+                                  },
+                                  {
+                                    'id': 'neon_fire',
+                                    'name': 'Neon Fire',
+                                    'emoji': '🔥',
+                                    'color': Colors.deepOrangeAccent,
+                                  },
+                                  {
+                                    'id': 'royal_crown',
+                                    'name': 'Royal Crown',
+                                    'emoji': '👑',
+                                    'color': Colors.amber,
+                                  },
+                                  {
+                                    'id': 'cyber_glitch',
+                                    'name': 'Cyber Grid',
+                                    'emoji': '⚡',
+                                    'color': GamerTheme.neonGreen,
+                                  },
+                                  {
+                                    'id': 'cosmic_void',
+                                    'name': 'Cosmic Nebula',
+                                    'emoji': '🌌',
+                                    'color': const Color(0xFFC084FC),
+                                  },
                                 ].map((f) {
                                   final id = f['id'] as String;
                                   final isNone = id.isEmpty;
@@ -1008,7 +1015,9 @@ class _CreateGamerIdScreenState extends State<CreateGamerIdScreen> {
                                           color: isEquipped ? color.withOpacity(0.2) : GamerTheme.bgDark,
                                           borderRadius: BorderRadius.circular(12),
                                           border: Border.all(
-                                            color: isEquipped ? color : (isUnlocked ? GamerTheme.borderLight : GamerTheme.borderDark),
+                                            color: isEquipped
+                                                ? color
+                                                : (isUnlocked ? GamerTheme.borderLight : GamerTheme.borderDark),
                                             width: isEquipped ? 2 : 1,
                                           ),
                                         ),
@@ -1040,6 +1049,7 @@ class _CreateGamerIdScreenState extends State<CreateGamerIdScreen> {
                             const SizedBox(height: 14),
                             const Divider(color: GamerTheme.borderDark, height: 1),
                             const SizedBox(height: 12),
+                            // BADGES ROW
                             const Row(
                               children: [
                                 Icon(Icons.military_tech_rounded, color: GamerTheme.accentBlue, size: 18),
@@ -1060,10 +1070,22 @@ class _CreateGamerIdScreenState extends State<CreateGamerIdScreen> {
                               scrollDirection: Axis.horizontal,
                               child: Row(
                                 children: [
-                                  {'id': '', 'name': 'None'},
-                                  {'id': 'pro_elite', 'name': 'PRO ELITE'},
-                                  {'id': 'kd_assassin', 'name': 'ASSASSIN 💀'},
-                                  {'id': 'room_champion', 'name': 'CHAMPION 🏆'},
+                                  {
+                                    'id': '',
+                                    'name': 'None',
+                                  },
+                                  {
+                                    'id': 'pro_elite',
+                                    'name': 'PRO ELITE',
+                                  },
+                                  {
+                                    'id': 'kd_assassin',
+                                    'name': 'ASSASSIN 💀',
+                                  },
+                                  {
+                                    'id': 'room_champion',
+                                    'name': 'CHAMPION 🏆',
+                                  },
                                 ].map((b) {
                                   final id = b['id'] as String;
                                   final isNone = id.isEmpty;
@@ -1102,7 +1124,9 @@ class _CreateGamerIdScreenState extends State<CreateGamerIdScreen> {
                                           color: isEquipped ? GamerTheme.accentBlue.withOpacity(0.2) : GamerTheme.bgDark,
                                           borderRadius: BorderRadius.circular(10),
                                           border: Border.all(
-                                            color: isEquipped ? GamerTheme.accentBlue : (isUnlocked ? GamerTheme.borderLight : GamerTheme.borderDark),
+                                            color: isEquipped
+                                                ? GamerTheme.accentBlue
+                                                : (isUnlocked ? GamerTheme.borderLight : GamerTheme.borderDark),
                                             width: isEquipped ? 2 : 1,
                                           ),
                                         ),
@@ -1131,6 +1155,7 @@ class _CreateGamerIdScreenState extends State<CreateGamerIdScreen> {
 
                       const SizedBox(height: 24),
 
+                      // 5. KEEP: Username @fua with Verified green tick
                       Row(
                         children: [
                           const Text(
@@ -1189,6 +1214,7 @@ class _CreateGamerIdScreenState extends State<CreateGamerIdScreen> {
 
                       const SizedBox(height: 20),
 
+                      // 5. KEEP: Display Name
                       const Text(
                         'DISPLAY NAME',
                         style: TextStyle(color: GamerTheme.textGray, fontSize: 12, fontWeight: FontWeight.w800, letterSpacing: 0.8),
@@ -1209,6 +1235,7 @@ class _CreateGamerIdScreenState extends State<CreateGamerIdScreen> {
 
                       const SizedBox(height: 20),
 
+                      // 5. KEEP: Favorite Game dropdown (Dynamic Ranks trigger)
                       const Text(
                         'FAVORITE GAME',
                         style: TextStyle(color: GamerTheme.textGray, fontSize: 12, fontWeight: FontWeight.w800, letterSpacing: 0.8),
@@ -1236,7 +1263,14 @@ class _CreateGamerIdScreenState extends State<CreateGamerIdScreen> {
                                   children: [
                                     Text(emoji, style: const TextStyle(fontSize: 18)),
                                     const SizedBox(width: 10),
-                                    Text(game, style: TextStyle(color: color, fontWeight: FontWeight.bold, fontSize: 14)),
+                                    Text(
+                                      game,
+                                      style: TextStyle(
+                                        color: color,
+                                        fontWeight: FontWeight.bold,
+                                        fontSize: 14,
+                                      ),
+                                    ),
                                   ],
                                 ),
                               );
@@ -1258,6 +1292,7 @@ class _CreateGamerIdScreenState extends State<CreateGamerIdScreen> {
 
                       const SizedBox(height: 20),
 
+                      // 4. MOBILE GAMES RANK / TIER & SCREENSHOT VERIFICATION
                       Row(
                         mainAxisAlignment: MainAxisAlignment.spaceBetween,
                         children: [
@@ -1267,13 +1302,24 @@ class _CreateGamerIdScreenState extends State<CreateGamerIdScreen> {
                               const SizedBox(width: 6),
                               const Text(
                                 'MOBILE GAMES RANK / TIER',
-                                style: TextStyle(color: GamerTheme.textGray, fontSize: 12, fontWeight: FontWeight.w800, letterSpacing: 0.8),
+                                style: TextStyle(
+                                  color: GamerTheme.textGray,
+                                  fontSize: 12,
+                                  fontWeight: FontWeight.w800,
+                                  letterSpacing: 0.8,
+                                ),
                               ),
                               const SizedBox(width: 8),
                               Container(
                                 padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                                decoration: const BoxDecoration(color: Colors.white10, borderRadius: BorderRadius.all(Radius.circular(6))),
-                                child: const Text('Optional / اختیاری', style: TextStyle(color: GamerTheme.textMuted, fontSize: 10, fontWeight: FontWeight.bold)),
+                                decoration: const BoxDecoration(
+                                  color: Colors.white10,
+                                  borderRadius: BorderRadius.all(Radius.circular(6)),
+                                ),
+                                child: const Text(
+                                  'Optional / اختیاری',
+                                  style: TextStyle(color: GamerTheme.textMuted, fontSize: 10, fontWeight: FontWeight.bold),
+                                ),
                               ),
                             ],
                           ),
@@ -1300,7 +1346,10 @@ class _CreateGamerIdScreenState extends State<CreateGamerIdScreen> {
                                   children: [
                                     Icon(Icons.close_rounded, size: 12, color: GamerTheme.textMuted),
                                     SizedBox(width: 4),
-                                    Text('Skip / چھوڑ دیں', style: TextStyle(color: GamerTheme.textMuted, fontSize: 11, fontWeight: FontWeight.w700)),
+                                    Text(
+                                      'Skip / چھوڑ دیں',
+                                      style: TextStyle(color: GamerTheme.textMuted, fontSize: 11, fontWeight: FontWeight.w700),
+                                    ),
                                   ],
                                 ),
                               ),
@@ -1309,6 +1358,7 @@ class _CreateGamerIdScreenState extends State<CreateGamerIdScreen> {
                       ),
                       const SizedBox(height: 8),
 
+                      // 1. GAME SELECTION DROPDOWN (15 Major Mobile Games)
                       Container(
                         padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 2),
                         decoration: BoxDecoration(
@@ -1318,7 +1368,9 @@ class _CreateGamerIdScreenState extends State<CreateGamerIdScreen> {
                         ),
                         child: DropdownButtonHideUnderline(
                           child: DropdownButton<String>(
-                            value: MobileGamesRankData.games.contains(_selectedRankGame) ? _selectedRankGame : MobileGamesRankData.games.first,
+                            value: MobileGamesRankData.games.contains(_selectedRankGame)
+                                ? _selectedRankGame
+                                : MobileGamesRankData.games.first,
                             isExpanded: true,
                             dropdownColor: const Color(0xFF161B26),
                             icon: const Icon(Icons.keyboard_arrow_down_rounded, color: Color(0xFF00FF88)),
@@ -1332,7 +1384,15 @@ class _CreateGamerIdScreenState extends State<CreateGamerIdScreen> {
                                     Text(emoji, style: const TextStyle(fontSize: 18)),
                                     const SizedBox(width: 10),
                                     Expanded(
-                                      child: Text(game, style: TextStyle(color: color, fontWeight: FontWeight.bold, fontSize: 13.5), overflow: TextOverflow.ellipsis),
+                                      child: Text(
+                                        game,
+                                        style: TextStyle(
+                                          color: color,
+                                          fontWeight: FontWeight.bold,
+                                          fontSize: 13.5,
+                                        ),
+                                        overflow: TextOverflow.ellipsis,
+                                      ),
                                     ),
                                   ],
                                 ),
@@ -1358,23 +1418,37 @@ class _CreateGamerIdScreenState extends State<CreateGamerIdScreen> {
 
                       const SizedBox(height: 12),
 
+                      // 2. RANK SELECTION (Top 10 Ranks for selected game)
                       Row(
                         mainAxisAlignment: MainAxisAlignment.spaceBetween,
                         children: [
-                          const Text('SELECT RANK / رینک منتخب کریں (Top 10)',
-                              style: TextStyle(color: GamerTheme.textGray, fontSize: 11, fontWeight: FontWeight.w800, letterSpacing: 0.6)),
+                          const Text(
+                            'SELECT RANK / رینک منتخب کریں (Top 10)',
+                            style: TextStyle(
+                              color: GamerTheme.textGray,
+                              fontSize: 11,
+                              fontWeight: FontWeight.w800,
+                              letterSpacing: 0.6,
+                            ),
+                          ),
                           Text(
                             _selectedRankGame.length > 20 ? '${_selectedRankGame.substring(0, 20)}...' : _selectedRankGame,
-                            style: TextStyle(color: MobileGamesRankData.getGameColor(_selectedRankGame), fontSize: 11, fontWeight: FontWeight.bold),
+                            style: TextStyle(
+                              color: MobileGamesRankData.getGameColor(_selectedRankGame),
+                              fontSize: 11,
+                              fontWeight: FontWeight.bold,
+                            ),
                           ),
                         ],
                       ),
                       const SizedBox(height: 8),
 
+                      // Top 10 Dynamic Rank Chips & Skip Option
                       Wrap(
                         spacing: 8,
                         runSpacing: 8,
                         children: [
+                          // Skip / No Rank chip
                           InkWell(
                             onTap: () {
                               setState(() {
@@ -1388,7 +1462,9 @@ class _CreateGamerIdScreenState extends State<CreateGamerIdScreen> {
                             child: Container(
                               padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
                               decoration: BoxDecoration(
-                                color: _rankController.text.trim().isEmpty ? GamerTheme.accentBlue.withOpacity(0.2) : GamerTheme.cardElevated,
+                                color: _rankController.text.trim().isEmpty
+                                    ? GamerTheme.accentBlue.withOpacity(0.2)
+                                    : GamerTheme.cardElevated,
                                 borderRadius: BorderRadius.circular(12),
                                 border: Border.all(
                                   color: _rankController.text.trim().isEmpty ? GamerTheme.accentBlue : GamerTheme.borderLight,
@@ -1414,6 +1490,7 @@ class _CreateGamerIdScreenState extends State<CreateGamerIdScreen> {
                               ),
                             ),
                           ),
+                          // Top 10 dynamic ranks for selected game
                           ..._dynamicRanks.map((rank) {
                             final isSelected = _rankController.text.trim() == rank;
                             final gameColor = MobileGamesRankData.getGameColor(_selectedRankGame);
@@ -1457,6 +1534,7 @@ class _CreateGamerIdScreenState extends State<CreateGamerIdScreen> {
                         ],
                       ),
 
+                      // SCREENSHOT PROOF UPLOAD (Mandatory when Rank is selected)
                       if (_rankController.text.trim().isNotEmpty) ...[
                         const SizedBox(height: 14),
                         Container(
@@ -1473,6 +1551,88 @@ class _CreateGamerIdScreenState extends State<CreateGamerIdScreen> {
                           child: Column(
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
+                              // Status Banner if previously reviewed or pending
+                              if (_rankStatus.toLowerCase() == 'pending') ...[
+                                Container(
+                                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                                  decoration: BoxDecoration(
+                                    color: const Color(0xFF332B00),
+                                    borderRadius: BorderRadius.circular(10),
+                                    border: Border.all(color: const Color(0xFFFFD700)),
+                                  ),
+                                  child: const Row(
+                                    children: [
+                                      Icon(Icons.hourglass_top_rounded, color: Color(0xFFFFD700), size: 16),
+                                      SizedBox(width: 8),
+                                      Expanded(
+                                        child: Text(
+                                          'Rank Verification Pending ⏳ (تصدیق کے لیے زیر التواء)',
+                                          style: TextStyle(color: Color(0xFFFFD700), fontWeight: FontWeight.bold, fontSize: 11.5),
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                                const SizedBox(height: 10),
+                              ] else if (_rankStatus.toLowerCase() == 'verified') ...[
+                                Container(
+                                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                                  decoration: BoxDecoration(
+                                    color: const Color(0xFF0D2818),
+                                    borderRadius: BorderRadius.circular(10),
+                                    border: Border.all(color: const Color(0xFF00FF88)),
+                                  ),
+                                  child: const Row(
+                                    children: [
+                                      Icon(Icons.verified_rounded, color: Color(0xFF00FF88), size: 16),
+                                      SizedBox(width: 8),
+                                      Expanded(
+                                        child: Text(
+                                          'Verified ✓ (آپ کا رینک تصدیق شدہ ہے)',
+                                          style: TextStyle(color: Color(0xFF00FF88), fontWeight: FontWeight.bold, fontSize: 11.5),
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                                const SizedBox(height: 10),
+                              ] else if (_rankStatus.toLowerCase() == 'rejected') ...[
+                                Container(
+                                  padding: const EdgeInsets.all(10),
+                                  decoration: BoxDecoration(
+                                    color: const Color(0xFF3A0D11),
+                                    borderRadius: BorderRadius.circular(10),
+                                    border: Border.all(color: const Color(0xFFFF4655)),
+                                  ),
+                                  child: Column(
+                                    crossAxisAlignment: CrossAxisAlignment.start,
+                                    children: [
+                                      const Row(
+                                        children: [
+                                          Icon(Icons.error_outline_rounded, color: Color(0xFFFF4655), size: 16),
+                                          SizedBox(width: 8),
+                                          Expanded(
+                                            child: Text(
+                                              'آپ کا اسکرین شاٹ درست نہیں ہے، دوبارہ اپلوڈ کریں',
+                                              style: TextStyle(color: Color(0xFFFF4655), fontWeight: FontWeight.bold, fontSize: 12),
+                                            ),
+                                          ),
+                                        ],
+                                      ),
+                                      if (_rankRejectReason.isNotEmpty) ...[
+                                        const SizedBox(height: 4),
+                                        Text(
+                                          'وجہ: $_rankRejectReason',
+                                          style: const TextStyle(color: Colors.white70, fontSize: 11),
+                                        ),
+                                      ],
+                                    ],
+                                  ),
+                                ),
+                                const SizedBox(height: 10),
+                              ],
+
+                              // Instructions notice
                               Container(
                                 padding: const EdgeInsets.all(10),
                                 decoration: BoxDecoration(
@@ -1494,17 +1654,88 @@ class _CreateGamerIdScreenState extends State<CreateGamerIdScreen> {
                                 ),
                               ),
                               const SizedBox(height: 12),
-                              if (_pickedRankScreenshot != null)
+
+                              // Image Preview or Upload Prompt
+                              if (_pickedRankScreenshot != null) ...[
                                 ClipRRect(
                                   borderRadius: BorderRadius.circular(10),
-                                  child: Image.file(_pickedRankScreenshot!, height: 140, width: double.infinity, fit: BoxFit.cover),
-                                )
-                              else if (_rankScreenshotUrl.isNotEmpty)
+                                  child: Stack(
+                                    children: [
+                                      Image.file(
+                                        _pickedRankScreenshot!,
+                                        height: 140,
+                                        width: double.infinity,
+                                        fit: BoxFit.cover,
+                                      ),
+                                      Positioned(
+                                        top: 6,
+                                        right: 6,
+                                        child: CircleAvatar(
+                                          radius: 14,
+                                          backgroundColor: Colors.black.withOpacity(0.7),
+                                          child: IconButton(
+                                            padding: EdgeInsets.zero,
+                                            icon: const Icon(Icons.close, size: 14, color: Colors.white),
+                                            onPressed: () => setState(() => _pickedRankScreenshot = null),
+                                          ),
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                                const SizedBox(height: 8),
+                                Row(
+                                  children: [
+                                    Expanded(
+                                      child: OutlinedButton.icon(
+                                        onPressed: _showRankScreenshotPickerSheet,
+                                        icon: const Icon(Icons.edit_rounded, size: 14, color: Color(0xFF00FF88)),
+                                        label: const Text('تصویر تبدیل کریں (Change Screenshot)', style: TextStyle(color: Color(0xFF00FF88), fontSize: 11.5)),
+                                        style: OutlinedButton.styleFrom(
+                                          side: const BorderSide(color: Color(0xFF00FF88)),
+                                          padding: const EdgeInsets.symmetric(vertical: 8),
+                                        ),
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ] else if (_rankScreenshotUrl.isNotEmpty) ...[
                                 ClipRRect(
                                   borderRadius: BorderRadius.circular(10),
-                                  child: CachedNetworkImage(imageUrl: _rankScreenshotUrl, height: 140, width: double.infinity, fit: BoxFit.cover),
-                                )
-                              else
+                                  child: CachedNetworkImage(
+                                    imageUrl: _rankScreenshotUrl,
+                                    height: 140,
+                                    width: double.infinity,
+                                    fit: BoxFit.cover,
+                                    placeholder: (_, __) => Container(
+                                      height: 140,
+                                      color: const Color(0xFF161B26),
+                                      child: const Center(child: CircularProgressIndicator(color: Color(0xFF00FF88), strokeWidth: 2)),
+                                    ),
+                                    errorWidget: (_, __, ___) => Container(
+                                      height: 140,
+                                      color: const Color(0xFF161B26),
+                                      child: const Center(child: Icon(Icons.broken_image, color: Colors.white38)),
+                                    ),
+                                  ),
+                                ),
+                                const SizedBox(height: 8),
+                                Row(
+                                  children: [
+                                    Expanded(
+                                      child: OutlinedButton.icon(
+                                        onPressed: _showRankScreenshotPickerSheet,
+                                        icon: const Icon(Icons.refresh_rounded, size: 14, color: Color(0xFF00FF88)),
+                                        label: const Text('نیا اسکرین شاٹ اپلوڈ کریں (Replace)', style: TextStyle(color: Color(0xFF00FF88), fontSize: 11.5)),
+                                        style: OutlinedButton.styleFrom(
+                                          side: const BorderSide(color: Color(0xFF00FF88)),
+                                          padding: const EdgeInsets.symmetric(vertical: 8),
+                                        ),
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ] else ...[
                                 InkWell(
                                   onTap: _showRankScreenshotPickerSheet,
                                   borderRadius: BorderRadius.circular(12),
@@ -1514,17 +1745,38 @@ class _CreateGamerIdScreenState extends State<CreateGamerIdScreen> {
                                     decoration: BoxDecoration(
                                       color: const Color(0xFF161B26),
                                       borderRadius: BorderRadius.circular(12),
-                                      border: Border.all(color: const Color(0xFFFF8A00).withOpacity(0.6), width: 1.5),
+                                      border: Border.all(
+                                        color: const Color(0xFFFF8A00).withOpacity(0.6),
+                                        style: BorderStyle.solid,
+                                        width: 1.5,
+                                      ),
                                     ),
                                     child: const Column(
                                       children: [
                                         Icon(Icons.add_photo_alternate_rounded, color: Color(0xFFFF8A00), size: 36),
                                         SizedBox(height: 8),
-                                        Text('اسکرین شاٹ اپلوڈ کریں', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 13)),
+                                        Text(
+                                          'اسکرین شاٹ اپلوڈ کریں (Upload Screenshot)',
+                                          style: TextStyle(
+                                            color: Colors.white,
+                                            fontWeight: FontWeight.bold,
+                                            fontSize: 13,
+                                          ),
+                                        ),
+                                        SizedBox(height: 4),
+                                        Text(
+                                          'رینک محفوظ کرنے کے لیے اسکرین شاٹ لازمی ہے',
+                                          style: TextStyle(
+                                            color: Color(0xFFFF8A00),
+                                            fontSize: 11,
+                                            fontWeight: FontWeight.w600,
+                                          ),
+                                        ),
                                       ],
                                     ),
                                   ),
                                 ),
+                              ],
                             ],
                           ),
                         ),
@@ -1532,17 +1784,25 @@ class _CreateGamerIdScreenState extends State<CreateGamerIdScreen> {
 
                       const SizedBox(height: 20),
 
+                      // 5. KEEP: Gamer Bio
                       Row(
                         mainAxisAlignment: MainAxisAlignment.spaceBetween,
                         children: [
-                          const Text('GAMER BIO', style: TextStyle(color: GamerTheme.textGray, fontSize: 12, fontWeight: FontWeight.w800, letterSpacing: 0.8)),
+                          const Text(
+                            'GAMER BIO',
+                            style: TextStyle(color: GamerTheme.textGray, fontSize: 12, fontWeight: FontWeight.w800, letterSpacing: 0.8),
+                          ),
                           ValueListenableBuilder<TextEditingValue>(
                             valueListenable: _bioController,
                             builder: (context, value, _) {
                               final count = value.text.length;
                               return Text(
                                 '$count/100',
-                                style: TextStyle(color: count > 100 ? GamerTheme.redAccent : GamerTheme.textMuted, fontSize: 11, fontWeight: FontWeight.bold),
+                                style: TextStyle(
+                                  color: count > 100 ? GamerTheme.redAccent : GamerTheme.textMuted,
+                                  fontSize: 11,
+                                  fontWeight: FontWeight.bold,
+                                ),
                               );
                             },
                           ),
@@ -1566,9 +1826,13 @@ class _CreateGamerIdScreenState extends State<CreateGamerIdScreen> {
 
                       const SizedBox(height: 20),
 
+                      // 5. KEEP: In-Game UID 12345 field. Remove BLUE TICK REQUIREMENT text, instead show small lock icon.
                       Row(
                         children: const [
-                          Text('IN-GAME CHARACTER ID / UID', style: TextStyle(color: GamerTheme.textGray, fontSize: 12, fontWeight: FontWeight.w800, letterSpacing: 0.8)),
+                          Text(
+                            'IN-GAME CHARACTER ID / UID',
+                            style: TextStyle(color: GamerTheme.textGray, fontSize: 12, fontWeight: FontWeight.w800, letterSpacing: 0.8),
+                          ),
                           SizedBox(width: 8),
                           Icon(Icons.lock_rounded, size: 14, color: GamerTheme.textMuted),
                         ],
@@ -1585,8 +1849,90 @@ class _CreateGamerIdScreenState extends State<CreateGamerIdScreen> {
                         ),
                       ),
 
+                      // NEW SECTION: "My Game Ranks"
+                      if (widget.existingUser != null) ...[
+                        const SizedBox(height: 24),
+                        Container(
+                          padding: const EdgeInsets.all(16),
+                          decoration: BoxDecoration(
+                            color: GamerTheme.cardDark,
+                            borderRadius: BorderRadius.circular(14),
+                            border: Border.all(color: const Color(0xFF00E5FF).withOpacity(0.3)),
+                          ),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Row(
+                                children: [
+                                  const Icon(Icons.shield_rounded, color: Color(0xFF00E5FF), size: 18),
+                                  const SizedBox(width: 8),
+                                  const Text(
+                                    'MY GAME RANKS',
+                                    style: TextStyle(
+                                      color: Colors.white,
+                                      fontWeight: FontWeight.w900,
+                                      fontSize: 13,
+                                      letterSpacing: 0.5,
+                                    ),
+                                  ),
+                                  const Spacer(),
+                                  OutlinedButton.icon(
+                                    onPressed: () {
+                                      showModalBottomSheet(
+                                        context: context,
+                                        isScrollControlled: true,
+                                        backgroundColor: Colors.transparent,
+                                        builder: (sheetContext) => AddVerifyGameRankSheet(user: widget.existingUser!),
+                                      );
+                                    },
+                                    style: OutlinedButton.styleFrom(
+                                      side: const BorderSide(color: Color(0xFF00E5FF)),
+                                      backgroundColor: const Color(0xFF00E5FF).withOpacity(0.1),
+                                      foregroundColor: const Color(0xFF00E5FF),
+                                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                                      minimumSize: Size.zero,
+                                      tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                                    ),
+                                    icon: const Icon(Icons.add_moderator_rounded, size: 14),
+                                    label: const Text('Add / Verify Game Rank', style: TextStyle(fontSize: 11.5, fontWeight: FontWeight.w800)),
+                                  ),
+                                ],
+                              ),
+                              const SizedBox(height: 10),
+                              if (widget.existingUser!.games.isEmpty)
+                                const Text(
+                                  'No game ranks submitted yet. Tap "Add / Verify Game Rank" to submit screenshot proof for BGMI, Free Fire, Valorant & more.',
+                                  style: TextStyle(color: GamerTheme.textMuted, fontSize: 12),
+                                )
+                              else
+                                Wrap(
+                                  spacing: 8,
+                                  runSpacing: 6,
+                                  children: widget.existingUser!.games.map((g) {
+                                    final isApproved = g.isVerified || g.status == 'approved';
+                                    final isPending = g.status == 'pending';
+                                    final color = isApproved
+                                        ? const Color(0xFF00FF88)
+                                        : (isPending ? const Color(0xFFFF8A00) : const Color(0xFFFF4655));
+                                    return Chip(
+                                      backgroundColor: color.withOpacity(0.12),
+                                      side: BorderSide(color: color.withOpacity(0.5)),
+                                      label: Text(
+                                        '${g.gameName}: ${g.verifiedRank.isNotEmpty ? g.verifiedRank : g.claimedRank} (${g.status})',
+                                        style: TextStyle(color: color, fontSize: 11, fontWeight: FontWeight.bold),
+                                      ),
+                                    );
+                                  }).toList(),
+                                ),
+                            ],
+                          ),
+                        ),
+                      ],
+
                       const SizedBox(height: 32),
 
+                      // 6. BUTTON: Save Changes gradient orange
                       SizedBox(
                         width: double.infinity,
                         height: 52,
@@ -1627,7 +1973,12 @@ class _CreateGamerIdScreenState extends State<CreateGamerIdScreen> {
                                         const SizedBox(width: 8),
                                         Text(
                                           isEditing ? 'Save Changes' : 'Save Changes & Join',
-                                          style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w900, fontSize: 16, letterSpacing: 0.5),
+                                          style: const TextStyle(
+                                            color: Colors.white,
+                                            fontWeight: FontWeight.w900,
+                                            fontSize: 16,
+                                            letterSpacing: 0.5,
+                                          ),
                                         ),
                                       ],
                                     ),
@@ -1642,487 +1993,6 @@ class _CreateGamerIdScreenState extends State<CreateGamerIdScreen> {
                 ),
               ],
             ),
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-// ═══════════════════════════════════════════════════════
-// ADD VERIFY GAME RANK SHEET
-// ═══════════════════════════════════════════════════════
-class AddVerifyGameRankSheet extends StatefulWidget {
-  final GamerUser user;
-
-  const AddVerifyGameRankSheet({super.key, required this.user});
-
-  @override
-  State<AddVerifyGameRankSheet> createState() =>
-      _AddVerifyGameRankSheetState();
-}
-
-class _AddVerifyGameRankSheetState extends State<AddVerifyGameRankSheet> {
-  final _formKey = GlobalKey<FormState>();
-  String _selectedGame = 'BGMI';
-  late String _selectedRank;
-  late TextEditingController _gameIdController;
-  File? _pickedScreenshot;
-  bool _isSubmitting = false;
-  String? _errorMessage;
-
-  static const Map<String, List<String>> _kGameRankOptions = {
-    'BGMI': [
-      'Crown I', 'Crown II', 'Crown III', 'Crown IV', 'Crown V',
-      'ACE', 'ACE Master', 'ACE Dominator', 'Conqueror',
-      'Top 100 Conqueror',
-    ],
-    'PUBG Mobile': [
-      'Crown I', 'Crown II', 'Crown III', 'Crown IV', 'Crown V',
-      'ACE', 'ACE Master', 'ACE Dominator', 'Conqueror',
-      'Top 100 Conqueror',
-    ],
-    'Free Fire': [
-      'Diamond V', 'Heroic', 'Elite Heroic', 'Master',
-      'Elite Master', 'Grandmaster', 'Top 300 Grandmaster',
-      'Top 100 Grandmaster', 'Regional Top', 'World Top',
-    ],
-    'COD Mobile': [
-      'Pro III', 'Pro IV', 'Pro V',
-      'Master I', 'Master II', 'Master III', 'Master IV', 'Master V',
-      'Legendary', 'Top 5000 Legendary',
-    ],
-    'Valorant': [
-      'Diamond 3', 'Ascendant 1', 'Ascendant 2', 'Ascendant 3',
-      'Immortal 1', 'Immortal 2', 'Immortal 3', 'Radiant',
-      'Top 500 Radiant', 'Regional Radiant',
-    ],
-  };
-
-  @override
-  void initState() {
-    super.initState();
-    _selectedRank = _kGameRankOptions['BGMI']!.first;
-    _gameIdController = TextEditingController(text: widget.user.gameId);
-  }
-
-  @override
-  void dispose() {
-    _gameIdController.dispose();
-    super.dispose();
-  }
-
-  Future<void> _pickScreenshot() async {
-    try {
-      final picker = ImagePicker();
-      final picked = await picker.pickImage(
-        source: ImageSource.gallery,
-        imageQuality: 85,
-      );
-      if (picked != null) {
-        setState(() {
-          _pickedScreenshot = File(picked.path);
-          _errorMessage = null;
-        });
-      }
-    } catch (e) {
-      setState(() => _errorMessage = 'Could not select image: $e');
-    }
-  }
-
-  Future<void> _submitVerification() async {
-    if (!_formKey.currentState!.validate()) return;
-
-    if (_pickedScreenshot == null) {
-      setState(() => _errorMessage =
-          'Rank screenshot proof is required.');
-      return;
-    }
-
-    setState(() {
-      _isSubmitting = true;
-      _errorMessage = null;
-    });
-
-    try {
-      String downloadUrl = '';
-      try {
-        downloadUrl = await SupabaseService.uploadFile(
-              file: _pickedScreenshot!,
-              folder: 'rank_verifications',
-              bucket: SupabaseService.bucketMatchProofs,
-            ) ??
-            '';
-      } catch (e) {
-        debugPrint('Upload error: $e');
-      }
-
-      if (downloadUrl.isEmpty) {
-        setState(() {
-          _isSubmitting = false;
-          _errorMessage = 'Failed to upload screenshot.';
-        });
-        return;
-      }
-
-      final uuid = SupabaseService.toUuid(widget.user.uid);
-      await SupabaseService.client.from('users').update({
-        'rank': _selectedRank,
-        'rank_screenshot': downloadUrl,
-        'rank_status': 'pending',
-        'is_rank_verified': false,
-        'game_id': _gameIdController.text.trim(),
-        'favorite_game': _selectedGame,
-        'selected_game': _selectedGame,
-        'selected_rank': _selectedRank,
-        'updated_at': DateTime.now().toIso8601String(),
-      }).eq('id', uuid);
-
-      if (mounted) {
-        Navigator.pop(context);
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(
-              'Submitted $_selectedGame rank verification ($_selectedRank)! Pending admin review.',
-            ),
-            backgroundColor: const Color(0xFF00FF88),
-          ),
-        );
-      }
-    } catch (e) {
-      if (mounted) {
-        setState(() {
-          _isSubmitting = false;
-          _errorMessage = 'Error submitting verification: $e';
-        });
-      }
-    }
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final bottomInset = MediaQuery.of(context).viewInsets.bottom;
-    final availableRanks =
-        _kGameRankOptions[_selectedGame] ?? ['Crown I'];
-
-    return Container(
-      padding: EdgeInsets.fromLTRB(20, 16, 20, 20 + bottomInset),
-      decoration: const BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
-        border: Border(
-          top: BorderSide(color: Color(0xFFCED0D4), width: 1),
-        ),
-      ),
-      child: Form(
-        key: _formKey,
-        child: SingleChildScrollView(
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Center(
-                child: Container(
-                  width: 40,
-                  height: 4,
-                  margin: const EdgeInsets.only(bottom: 14),
-                  decoration: BoxDecoration(
-                    color: const Color(0xFFCED0D4),
-                    borderRadius: BorderRadius.circular(2),
-                  ),
-                ),
-              ),
-              Row(
-                children: [
-                  Container(
-                    padding: const EdgeInsets.all(8),
-                    decoration: const BoxDecoration(
-                      color: Color(0xFFE7F3FF),
-                      shape: BoxShape.circle,
-                    ),
-                    child: const Icon(Icons.verified_user_rounded,
-                        color: Color(0xFF1877F2), size: 20),
-                  ),
-                  const SizedBox(width: 10),
-                  const Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          'Add / Verify Game Rank',
-                          style: TextStyle(
-                            color: Color(0xFF050505),
-                            fontWeight: FontWeight.bold,
-                            fontSize: 16,
-                          ),
-                        ),
-                        Text(
-                          'Upload screenshot proof to verify in-game UID & Rank',
-                          style: TextStyle(
-                              color: Color(0xFF65676B), fontSize: 11),
-                        ),
-                      ],
-                    ),
-                  ),
-                  IconButton(
-                    icon: const Icon(Icons.close,
-                        color: Color(0xFF65676B)),
-                    onPressed: () => Navigator.pop(context),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 18),
-              const Text('1. Select Game',
-                  style: TextStyle(
-                      color: Color(0xFF050505),
-                      fontWeight: FontWeight.bold,
-                      fontSize: 13)),
-              const SizedBox(height: 6),
-              DropdownButtonFormField<String>(
-                value: _selectedGame,
-                dropdownColor: Colors.white,
-                style: const TextStyle(
-                    color: Color(0xFF050505),
-                    fontWeight: FontWeight.bold,
-                    fontSize: 14),
-                decoration: InputDecoration(
-                  filled: true,
-                  fillColor: const Color(0xFFF0F2F5),
-                  contentPadding: const EdgeInsets.symmetric(
-                      horizontal: 14, vertical: 12),
-                  border: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(10),
-                    borderSide:
-                        const BorderSide(color: Color(0xFFCED0D4)),
-                  ),
-                ),
-                items: _kGameRankOptions.keys.map((g) {
-                  return DropdownMenuItem<String>(
-                    value: g,
-                    child: Row(
-                      children: [
-                        const Icon(Icons.sports_esports_rounded,
-                            size: 16, color: Color(0xFF1877F2)),
-                        const SizedBox(width: 8),
-                        Text(g),
-                      ],
-                    ),
-                  );
-                }).toList(),
-                onChanged: (val) {
-                  if (val != null) {
-                    setState(() {
-                      _selectedGame = val;
-                      _selectedRank =
-                          _kGameRankOptions[val]!.first;
-                    });
-                  }
-                },
-              ),
-              const SizedBox(height: 14),
-              const Text('2. In-Game UID / Player ID',
-                  style: TextStyle(
-                      color: Color(0xFF050505),
-                      fontWeight: FontWeight.bold,
-                      fontSize: 13)),
-              const SizedBox(height: 6),
-              TextFormField(
-                controller: _gameIdController,
-                style: const TextStyle(
-                    color: Color(0xFF050505),
-                    fontSize: 14,
-                    fontWeight: FontWeight.w600),
-                decoration: InputDecoration(
-                  hintText: 'Enter your exact in-game UID',
-                  hintStyle: const TextStyle(
-                      color: Color(0xFF8A8D91), fontSize: 13),
-                  prefixIcon: const Icon(Icons.tag_rounded,
-                      color: Color(0xFF1877F2), size: 18),
-                  filled: true,
-                  fillColor: const Color(0xFFF0F2F5),
-                  contentPadding: const EdgeInsets.symmetric(
-                      horizontal: 14, vertical: 12),
-                  border: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(10),
-                    borderSide:
-                        const BorderSide(color: Color(0xFFCED0D4)),
-                  ),
-                ),
-                validator: (val) {
-                  if (val == null || val.trim().isEmpty) {
-                    return 'Please enter your in-game UID';
-                  }
-                  return null;
-                },
-              ),
-              const SizedBox(height: 14),
-              const Text('3. Claimed In-Game Rank',
-                  style: TextStyle(
-                      color: Color(0xFF050505),
-                      fontWeight: FontWeight.bold,
-                      fontSize: 13)),
-              const SizedBox(height: 6),
-              DropdownButtonFormField<String>(
-                value: availableRanks.contains(_selectedRank)
-                    ? _selectedRank
-                    : availableRanks.first,
-                dropdownColor: Colors.white,
-                style: const TextStyle(
-                    color: Color(0xFF050505),
-                    fontWeight: FontWeight.bold,
-                    fontSize: 14),
-                decoration: InputDecoration(
-                  filled: true,
-                  fillColor: const Color(0xFFF0F2F5),
-                  contentPadding: const EdgeInsets.symmetric(
-                      horizontal: 14, vertical: 12),
-                  border: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(10),
-                    borderSide:
-                        const BorderSide(color: Color(0xFFCED0D4)),
-                  ),
-                ),
-                items: availableRanks.map((r) {
-                  return DropdownMenuItem<String>(
-                    value: r,
-                    child: Row(
-                      children: [
-                        const Icon(Icons.military_tech_rounded,
-                            size: 16, color: Color(0xFF1877F2)),
-                        const SizedBox(width: 8),
-                        Text(r),
-                      ],
-                    ),
-                  );
-                }).toList(),
-                onChanged: (val) {
-                  if (val != null) {
-                    setState(() => _selectedRank = val);
-                  }
-                },
-              ),
-              const SizedBox(height: 16),
-              Row(
-                children: [
-                  const Text('4. Upload Screenshot Proof',
-                      style: TextStyle(
-                          color: Color(0xFF050505),
-                          fontWeight: FontWeight.bold,
-                          fontSize: 13)),
-                  const SizedBox(width: 6),
-                  Container(
-                    padding: const EdgeInsets.symmetric(
-                        horizontal: 6, vertical: 2),
-                    decoration: BoxDecoration(
-                      color: const Color(0xFFE7F3FF),
-                      borderRadius: BorderRadius.circular(4),
-                    ),
-                    child: const Text(
-                      'REQUIRED',
-                      style: TextStyle(
-                          color: Color(0xFF1877F2),
-                          fontSize: 9.5,
-                          fontWeight: FontWeight.bold),
-                    ),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 8),
-              InkWell(
-                onTap: _pickScreenshot,
-                borderRadius: BorderRadius.circular(12),
-                child: Container(
-                  width: double.infinity,
-                  height: 120,
-                  decoration: BoxDecoration(
-                    color: const Color(0xFFF0F2F5),
-                    borderRadius: BorderRadius.circular(12),
-                    border: Border.all(
-                      color: _pickedScreenshot != null
-                          ? const Color(0xFF1877F2)
-                          : const Color(0xFFCED0D4),
-                      width: 1.5,
-                    ),
-                  ),
-                  child: _pickedScreenshot != null
-                      ? ClipRRect(
-                          borderRadius: BorderRadius.circular(11),
-                          child: Image.file(_pickedScreenshot!,
-                              fit: BoxFit.cover),
-                        )
-                      : const Column(
-                          mainAxisAlignment: MainAxisAlignment.center,
-                          children: [
-                            Icon(Icons.add_photo_alternate_rounded,
-                                color: Color(0xFF1877F2), size: 36),
-                            SizedBox(height: 6),
-                            Text('Tap to upload screenshot proof',
-                                style: TextStyle(
-                                    color: Color(0xFF050505),
-                                    fontWeight: FontWeight.bold,
-                                    fontSize: 12.5)),
-                          ],
-                        ),
-                ),
-              ),
-              if (_errorMessage != null) ...[
-                const SizedBox(height: 10),
-                Container(
-                  padding: const EdgeInsets.all(10),
-                  decoration: BoxDecoration(
-                    color: const Color(0xFFFFEBEE),
-                    borderRadius: BorderRadius.circular(8),
-                    border:
-                        Border.all(color: const Color(0xFFFFCDD2)),
-                  ),
-                  child: Row(
-                    children: [
-                      const Icon(Icons.error_outline_rounded,
-                          color: Colors.red, size: 16),
-                      const SizedBox(width: 8),
-                      Expanded(
-                        child: Text(
-                          _errorMessage!,
-                          style: const TextStyle(
-                              color: Colors.red, fontSize: 11.5),
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              ],
-              const SizedBox(height: 20),
-              SizedBox(
-                width: double.infinity,
-                child: ElevatedButton.icon(
-                  onPressed:
-                      _isSubmitting ? null : _submitVerification,
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: const Color(0xFF1877F2),
-                    foregroundColor: Colors.white,
-                    padding: const EdgeInsets.symmetric(vertical: 14),
-                    shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(10)),
-                    elevation: 0,
-                  ),
-                  icon: _isSubmitting
-                      ? const SizedBox(
-                          width: 18,
-                          height: 18,
-                          child: CircularProgressIndicator(
-                              color: Colors.white, strokeWidth: 2),
-                        )
-                      : const Icon(Icons.send_rounded, size: 18),
-                  label: Text(
-                    _isSubmitting
-                        ? 'Submitting Verification...'
-                        : 'Submit Rank Verification',
-                    style: const TextStyle(
-                        fontWeight: FontWeight.bold, fontSize: 14),
-                  ),
-                ),
-              ),
-            ],
           ),
         ),
       ),
