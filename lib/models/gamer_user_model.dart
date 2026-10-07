@@ -33,13 +33,13 @@ class GamerRankBadge {
 
 class UserGameRank {
   final String id;
-  final String gameName; // BGMI, PUBG Mobile, Free Fire, COD Mobile, Valorant
+  final String gameName;
   final String gameId;
   final String claimedRank;
   final String verifiedRank;
   final bool isVerified;
   final String screenshotUrl;
-  final String status; // 'pending' | 'approved' | 'rejected'
+  final String status;
   final DateTime? submittedAt;
   final String? rejectReason;
   final String ownerUid;
@@ -94,8 +94,10 @@ class UserGameRank {
       'isVerified': isVerified,
       'screenshotUrl': screenshotUrl,
       'status': status,
-      'submittedAt': submittedAt != null ? Timestamp.fromDate(submittedAt!) : Timestamp.now(),
-      if (rejectReason != null && rejectReason!.isNotEmpty) 'rejectReason': rejectReason,
+      'submittedAt':
+          submittedAt != null ? Timestamp.fromDate(submittedAt!) : Timestamp.now(),
+      if (rejectReason != null && rejectReason!.isNotEmpty)
+        'rejectReason': rejectReason,
       if (ownerUid.isNotEmpty) 'ownerUid': ownerUid,
     };
   }
@@ -148,13 +150,13 @@ class GamerUser {
   final int likesReceived;
   final int reportsCount;
   final bool isVerified;
-  final String verificationStatus; // 'none', 'pending', 'verified', 'rejected'
+  final String verificationStatus;
   final bool isVerifiedBlue;
   final bool isBlueTickVerified;
-  final String blueTickStatus; // 'none', 'pending', 'approved', 'rejected'
+  final String blueTickStatus;
   final bool isRankVerified;
   final String rankScreenshot;
-  final String rankStatus; // 'None', 'Pending', 'Verified', 'Rejected'
+  final String rankStatus;
   final String rankVerifiedBy;
   final String rankRejectReason;
   final bool isAdmin;
@@ -182,6 +184,18 @@ class GamerUser {
   final bool isVipMember;
   final DateTime? vipTournamentPassUntil;
   final DateTime? leaderboardSpotlightUntil;
+
+  // ═══════════════════════════════════════════════════════════
+  // PRIVACY FIELDS — Play Store ready
+  // ═══════════════════════════════════════════════════════════
+  final bool isRankPublic;
+  final bool isUidPublic;
+  final bool isCoinsPublic;
+  final bool isMemberSincePublic;
+  final bool isFollowingPublic;
+  final bool isFollowersPublic;
+  final bool isBioPublic;
+  final bool isGamePublic;
 
   const GamerUser({
     required this.uid,
@@ -236,23 +250,35 @@ class GamerUser {
     this.isVipMember = false,
     this.vipTournamentPassUntil,
     this.leaderboardSpotlightUntil,
+    // Privacy defaults
+    this.isRankPublic = true,
+    this.isUidPublic = false,
+    this.isCoinsPublic = false,
+    this.isMemberSincePublic = false,
+    this.isFollowingPublic = true,
+    this.isFollowersPublic = true,
+    this.isBioPublic = true,
+    this.isGamePublic = true,
   });
 
-  bool get isPendingVerification => verificationStatus == 'pending' || blueTickStatus == 'pending';
-  bool get isRejectedVerification => verificationStatus == 'rejected' || blueTickStatus == 'rejected';
+  bool get isPendingVerification =>
+      verificationStatus == 'pending' || blueTickStatus == 'pending';
+  bool get isRejectedVerification =>
+      verificationStatus == 'rejected' || blueTickStatus == 'rejected';
 
   bool get isRankPending => rankStatus.toLowerCase() == 'pending';
-  bool get isRankApproved => rankStatus.toLowerCase() == 'verified' || isRankVerified;
+  bool get isRankApproved =>
+      rankStatus.toLowerCase() == 'verified' || isRankVerified;
   bool get isRankRejected => rankStatus.toLowerCase() == 'rejected';
 
-  /// Owner verification flag: true for owner/admin or tufailm483
   bool get isOwnerUser {
     if (isOwner) return true;
     if (isAdmin) return true;
     final auth = FirebaseAuth.instance.currentUser;
     if (auth != null) {
       final authEmail = auth.email?.trim().toLowerCase() ?? '';
-      if (authEmail == 'tufailm483@gmail.com' && (uid.isEmpty || auth.uid == uid)) {
+      if (authEmail == 'tufailm483@gmail.com' &&
+          (uid.isEmpty || auth.uid == uid)) {
         return true;
       }
     }
@@ -260,46 +286,48 @@ class GamerUser {
     final d = displayName.toLowerCase().trim();
     return u == 'owner' || u == 'tufail' || u == 'tufailm483' || d == 'owner';
   }
-  
-  /// Blue tick (influencer checkmark ✓) is shown if isOwnerUser OR if approved
+
   bool get hasBlueTick =>
       isOwnerUser ||
       ((isBlueTickVerified || isVerifiedBlue) &&
-      (blueTickStatus == 'approved' || verificationStatus == 'verified'));
+          (blueTickStatus == 'approved' || verificationStatus == 'verified'));
 
   bool get isVerifiedBadge => hasBlueTick;
 
   String get avatarUrl => photoUrl;
   String get gameName => favoriteGame.isNotEmpty ? favoriteGame : selectedGame;
   String get gamerRank => rank.isNotEmpty ? rank : selectedRank;
+
   String get email {
     final auth = FirebaseAuth.instance.currentUser;
-    if (auth != null && (uid.isEmpty || auth.uid == uid) && auth.email != null) {
+    if (auth != null &&
+        (uid.isEmpty || auth.uid == uid) &&
+        auth.email != null) {
       return auth.email!;
     }
     return '';
   }
 
-  // App Rank (auto) calculation: removed per user directive.
-  // User ranks are strictly based on user selection and Admin verification.
   int get appPoints => (level * 100) + coins + (postsCount * 10);
 
   static String calculateAppRank(int points) => '';
 
-  String get appRank => isRankApproved ? (selectedRank.isNotEmpty ? selectedRank : rank) : '';
+  String get appRank =>
+      isRankApproved ? (selectedRank.isNotEmpty ? selectedRank : rank) : '';
 
-  /// Returns highest verified game rank if any exists, else verified rank
   String get verifiedOrAppRank {
-    final verifiedGames = games.where((g) => g.isVerified || g.status == 'approved').toList();
+    final verifiedGames =
+        games.where((g) => g.isVerified || g.status == 'approved').toList();
     if (verifiedGames.isNotEmpty) {
       final top = verifiedGames.first;
       return top.verifiedRank.isNotEmpty ? top.verifiedRank : top.claimedRank;
     }
-    return isRankApproved ? (selectedRank.isNotEmpty ? selectedRank : rank) : '';
+    return isRankApproved
+        ? (selectedRank.isNotEmpty ? selectedRank : rank)
+        : '';
   }
 
   GamerRankBadge getRankBadge() {
-    // Owner doesn't show competitive game rank badges
     if (isOwnerUser) {
       return const GamerRankBadge(
         type: RankBadgeType.none,
@@ -312,8 +340,9 @@ class GamerUser {
       );
     }
 
-    // Only verified ranks or K/D King can show a rank badge
-    if (!isRankApproved && kdRatio <= 5.0 && rankBadgeType != RankBadgeType.kdKing) {
+    if (!isRankApproved &&
+        kdRatio <= 5.0 &&
+        rankBadgeType != RankBadgeType.kdKing) {
       return const GamerRankBadge(
         type: RankBadgeType.none,
         label: '',
@@ -325,8 +354,12 @@ class GamerUser {
       );
     }
 
-    final lowerRank = (selectedRank.isNotEmpty ? selectedRank : rank).toLowerCase().trim();
-    if (kdRatio > 5.0 || rankBadgeType == RankBadgeType.kdKing || lowerRank.contains('kd king') || lowerRank.contains('5+')) {
+    final lowerRank =
+        (selectedRank.isNotEmpty ? selectedRank : rank).toLowerCase().trim();
+    if (kdRatio > 5.0 ||
+        rankBadgeType == RankBadgeType.kdKing ||
+        lowerRank.contains('kd king') ||
+        lowerRank.contains('5+')) {
       return const GamerRankBadge(
         type: RankBadgeType.kdKing,
         label: 'K/D King',
@@ -338,7 +371,8 @@ class GamerUser {
       );
     }
 
-    if (rankBadgeType == RankBadgeType.conqueror || lowerRank.contains('conqueror')) {
+    if (rankBadgeType == RankBadgeType.conqueror ||
+        lowerRank.contains('conqueror')) {
       return const GamerRankBadge(
         type: RankBadgeType.conqueror,
         label: 'Conqueror',
@@ -362,7 +396,10 @@ class GamerUser {
       );
     }
 
-    if (lowerRank.contains('crown') || lowerRank.contains('master') || lowerRank.contains('heroic') || lowerRank.contains('legendary')) {
+    if (lowerRank.contains('crown') ||
+        lowerRank.contains('master') ||
+        lowerRank.contains('heroic') ||
+        lowerRank.contains('legendary')) {
       return GamerRankBadge(
         type: RankBadgeType.ace,
         label: selectedRank.isNotEmpty ? selectedRank : rank,
@@ -398,21 +435,16 @@ class GamerUser {
         if (diff > 0) return diff;
       }
     }
-    if (username.toLowerCase() == 'fua' || displayName.toLowerCase() == 'fua') {
+    if (username.toLowerCase() == 'fua' ||
+        displayName.toLowerCase() == 'fua') {
       return 14;
     }
     return createdAt != null ? 1 : 0;
   }
 
-  bool get hasAvatar {
-    // If avatar is F initial letter or preset or photo or letter avatar, consider it as valid avatar, don't show Missing
-    return true;
-  }
-
+  bool get hasAvatar => true;
   bool get hasBio => bio.trim().isNotEmpty;
-
   bool get hasGameIdLinked => gameId.trim().isNotEmpty;
-
   bool get noReports => reportsCount == 0;
 
   static RankBadgeType _parseRankBadgeType(String? val) {
@@ -431,7 +463,8 @@ class GamerUser {
   }
 
   factory GamerUser.fromFirestore(DocumentSnapshot doc) {
-    return GamerUser.fromMap(doc.data() as Map<String, dynamic>? ?? {}, doc.id);
+    return GamerUser.fromMap(
+        doc.data() as Map<String, dynamic>? ?? {}, doc.id);
   }
 
   factory GamerUser.fromMap(Map<String, dynamic> data, [String? fallbackUid]) {
@@ -465,15 +498,25 @@ class GamerUser {
         data['role']?.toString().toLowerCase() == 'owner' ||
         data['isAdmin'] == true ||
         rawEmail == 'tufailm483@gmail.com' ||
-        (authUser != null && authUser.email?.toLowerCase().trim() == 'tufailm483@gmail.com' && ((fallbackUid ?? '') == authUser.uid || data['uid'] == authUser.uid));
+        (authUser != null &&
+            authUser.email?.toLowerCase().trim() == 'tufailm483@gmail.com' &&
+            ((fallbackUid ?? '') == authUser.uid ||
+                data['uid'] == authUser.uid));
 
-    final rawStatus = data['verificationStatus']?.toString().toLowerCase().trim();
-    final bool rawBlueTick = isOwner || data['isBlueTickVerified'] == true || data['blueTickVerified'] == true;
-    final String rawBlueStatus = data['blueTickStatus']?.toString().toLowerCase().trim() ?? '';
-    final bool hasApprovedBlueTick = isOwner || (rawBlueTick && (rawBlueStatus == 'approved'));
-    final String status = isOwner ? 'verified' : (rawStatus != null && rawStatus.isNotEmpty
-        ? rawStatus
-        : (hasApprovedBlueTick ? 'verified' : 'none'));
+    final rawStatus =
+        data['verificationStatus']?.toString().toLowerCase().trim();
+    final bool rawBlueTick = isOwner ||
+        data['isBlueTickVerified'] == true ||
+        data['blueTickVerified'] == true;
+    final String rawBlueStatus =
+        data['blueTickStatus']?.toString().toLowerCase().trim() ?? '';
+    final bool hasApprovedBlueTick =
+        isOwner || (rawBlueTick && (rawBlueStatus == 'approved'));
+    final String status = isOwner
+        ? 'verified'
+        : (rawStatus != null && rawStatus.isNotEmpty
+            ? rawStatus
+            : (hasApprovedBlueTick ? 'verified' : 'none'));
 
     final rawGames = data['games'];
     List<UserGameRank> parsedGames = [];
@@ -491,7 +534,8 @@ class GamerUser {
         parsedGames.any((g) => g.isVerified || g.status == 'approved');
 
     final int userLevel = (data['level'] as num?)?.toInt() ?? 1;
-    final String rawRank = data['tier']?.toString() ?? data['rank']?.toString() ?? '';
+    final String rawRank =
+        data['tier']?.toString() ?? data['rank']?.toString() ?? '';
     final String resolvedRank = rawRank.isNotEmpty ? rawRank : 'Bronze';
 
     DateTime? vipPassExpires;
@@ -515,18 +559,25 @@ class GamerUser {
 
     return GamerUser(
       uid: data['uid'] ?? data['id'] ?? fallbackUid ?? '',
-      username: (data['username'] != null && data['username'].toString().trim().isNotEmpty)
+      username: (data['username'] != null &&
+              data['username'].toString().trim().isNotEmpty)
           ? data['username'].toString().trim()
           : (data['tag']?.toString().trim() ?? ''),
-      displayName: data['bgmiName'] ?? data['displayName'] ?? data['display_name'] ?? '',
+      displayName:
+          data['bgmiName'] ?? data['displayName'] ?? data['display_name'] ?? '',
       photoUrl: data['avatar'] ?? data['photoUrl'] ?? data['avatar_url'] ?? '',
       coverUrl: data['coverUrl'] ?? data['cover_url'] ?? '',
       bio: data['bio'] ?? '',
       favoriteGame: data['favoriteGame'] ?? data['game'] ?? 'BGMI',
-      selectedGame: data['selectedGame']?.toString() ?? data['favoriteGame']?.toString() ?? data['game']?.toString() ?? 'BGMI',
+      selectedGame: data['selectedGame']?.toString() ??
+          data['favoriteGame']?.toString() ??
+          data['game']?.toString() ??
+          'BGMI',
       rank: resolvedRank,
       selectedRank: data['selectedRank']?.toString() ?? resolvedRank,
-      kdRatio: (data['kd'] as num?)?.toDouble() ?? (data['kdRatio'] as num?)?.toDouble() ?? 0.0,
+      kdRatio: (data['kd'] as num?)?.toDouble() ??
+          (data['kdRatio'] as num?)?.toDouble() ??
+          0.0,
       rankBadgeType: _parseRankBadgeType(data['rankBadgeType']?.toString()),
       followersCount: (data['followersCount'] as num?)?.toInt() ?? 0,
       followingCount: (data['followingCount'] as num?)?.toInt() ?? 0,
@@ -537,23 +588,29 @@ class GamerUser {
       verificationStatus: status,
       isVerifiedBlue: hasApprovedBlueTick,
       isBlueTickVerified: rawBlueTick,
-      blueTickStatus: rawBlueStatus.isNotEmpty ? rawBlueStatus : (hasApprovedBlueTick ? 'approved' : 'none'),
-      isRankVerified: rawRankVerified || (data['rankStatus']?.toString().toLowerCase() == 'verified'),
+      blueTickStatus: rawBlueStatus.isNotEmpty
+          ? rawBlueStatus
+          : (hasApprovedBlueTick ? 'approved' : 'none'),
+      isRankVerified: rawRankVerified ||
+          (data['rankStatus']?.toString().toLowerCase() == 'verified'),
       rankScreenshot: data['rankScreenshot']?.toString() ?? '',
-      rankStatus: data['rankStatus']?.toString() ?? (rawRankVerified ? 'Verified' : 'None'),
+      rankStatus: data['rankStatus']?.toString() ??
+          (rawRankVerified ? 'Verified' : 'None'),
       rankVerifiedBy: data['rankVerifiedBy']?.toString() ?? '',
       rankRejectReason: data['rankRejectReason']?.toString() ?? '',
       isAdmin: data['isAdmin'] == true,
       isOwner: isOwner,
       isBanned: data['isBanned'] == true || data['is_banned'] == true,
       bannedAt: bannedTimestamp,
-      bannedReason: data['bannedReason']?.toString() ?? data['banned_reason']?.toString(),
+      bannedReason: data['bannedReason']?.toString() ??
+          data['banned_reason']?.toString(),
       bannedBy: data['bannedBy']?.toString(),
       isDemoAccount: data['isDemoAccount'] == true,
       clipsCount: (data['clipsCount'] as num?)?.toInt() ?? 0,
       squadRoomsCount: (data['squadRoomsCount'] as num?)?.toInt() ?? 0,
       verificationAppliedAt: appliedAt,
-      gameId: (data['bgmiUid'] ?? data['gameId'] ?? data['inGameId'] ?? '').toString(),
+      gameId: (data['bgmiUid'] ?? data['gameId'] ?? data['inGameId'] ?? '')
+          .toString(),
       coins: (data['coins'] as num?)?.toInt() ?? 100,
       level: userLevel,
       games: parsedGames,
@@ -566,10 +623,20 @@ class GamerUser {
       activeBadge: data['activeBadge']?.toString() ?? '',
       unlockedBadges: List<String>.from(data['unlockedBadges'] ?? []),
       chatColor: data['chatColor']?.toString() ?? '#00FF66',
-      unlockedChatColors: List<String>.from(data['unlockedChatColors'] ?? []),
+      unlockedChatColors:
+          List<String>.from(data['unlockedChatColors'] ?? []),
       isVipMember: isVip,
       vipTournamentPassUntil: vipPassExpires,
       leaderboardSpotlightUntil: spotlightExpires,
+      // Privacy fields
+      isRankPublic: data['is_rank_public'] != false,
+      isUidPublic: data['is_uid_public'] == true,
+      isCoinsPublic: data['is_coins_public'] == true,
+      isMemberSincePublic: data['is_member_since_public'] == true,
+      isFollowingPublic: data['is_following_public'] != false,
+      isFollowersPublic: data['is_followers_public'] != false,
+      isBioPublic: data['is_bio_public'] != false,
+      isGamePublic: data['is_game_public'] != false,
     );
   }
 
@@ -612,12 +679,15 @@ class GamerUser {
       'isOwner': isOwner || isOwnerUser,
       'isBanned': isBanned,
       if (bannedAt != null) 'bannedAt': Timestamp.fromDate(bannedAt!),
-      if (bannedReason != null && bannedReason!.isNotEmpty) 'bannedReason': bannedReason,
+      if (bannedReason != null && bannedReason!.isNotEmpty)
+        'bannedReason': bannedReason,
       if (bannedBy != null && bannedBy!.isNotEmpty) 'bannedBy': bannedBy,
       'isDemoAccount': isDemoAccount,
       'clipsCount': clipsCount,
       'squadRoomsCount': squadRoomsCount,
-      'verificationAppliedAt': verificationAppliedAt != null ? Timestamp.fromDate(verificationAppliedAt!) : null,
+      'verificationAppliedAt': verificationAppliedAt != null
+          ? Timestamp.fromDate(verificationAppliedAt!)
+          : null,
       'gameId': gameId.trim(),
       'bgmiUid': gameId.trim(),
       'coins': coins,
@@ -631,8 +701,11 @@ class GamerUser {
       'chatColor': chatColor,
       'unlockedChatColors': unlockedChatColors,
       'isVipMember': isVipMember,
-      if (vipTournamentPassUntil != null) 'vipTournamentPassUntil': Timestamp.fromDate(vipTournamentPassUntil!),
-      if (leaderboardSpotlightUntil != null) 'leaderboardSpotlightUntil': Timestamp.fromDate(leaderboardSpotlightUntil!),
+      if (vipTournamentPassUntil != null)
+        'vipTournamentPassUntil': Timestamp.fromDate(vipTournamentPassUntil!),
+      if (leaderboardSpotlightUntil != null)
+        'leaderboardSpotlightUntil':
+            Timestamp.fromDate(leaderboardSpotlightUntil!),
       'games': games.map((g) => g.toMap()).toList(),
       'verificationProgress': {
         'postsCount': postsCount,
@@ -646,8 +719,19 @@ class GamerUser {
         'squadRoomsCount': squadRoomsCount,
         'verificationStatus': verificationStatus,
       },
-      'createdAt': createdAt != null ? Timestamp.fromDate(createdAt!) : FieldValue.serverTimestamp(),
+      'createdAt': createdAt != null
+          ? Timestamp.fromDate(createdAt!)
+          : FieldValue.serverTimestamp(),
       'updatedAt': FieldValue.serverTimestamp(),
+      // Privacy fields
+      'is_rank_public': isRankPublic,
+      'is_uid_public': isUidPublic,
+      'is_coins_public': isCoinsPublic,
+      'is_member_since_public': isMemberSincePublic,
+      'is_following_public': isFollowingPublic,
+      'is_followers_public': isFollowersPublic,
+      'is_bio_public': isBioPublic,
+      'is_game_public': isGamePublic,
     };
   }
 
@@ -704,6 +788,14 @@ class GamerUser {
     bool? isVipMember,
     DateTime? vipTournamentPassUntil,
     DateTime? leaderboardSpotlightUntil,
+    bool? isRankPublic,
+    bool? isUidPublic,
+    bool? isCoinsPublic,
+    bool? isMemberSincePublic,
+    bool? isFollowingPublic,
+    bool? isFollowersPublic,
+    bool? isBioPublic,
+    bool? isGamePublic,
   }) {
     return GamerUser(
       uid: uid ?? this.uid,
@@ -742,7 +834,8 @@ class GamerUser {
       isDemoAccount: isDemoAccount ?? this.isDemoAccount,
       clipsCount: clipsCount ?? this.clipsCount,
       squadRoomsCount: squadRoomsCount ?? this.squadRoomsCount,
-      verificationAppliedAt: verificationAppliedAt ?? this.verificationAppliedAt,
+      verificationAppliedAt:
+          verificationAppliedAt ?? this.verificationAppliedAt,
       gameId: gameId ?? this.gameId,
       coins: coins ?? this.coins,
       level: level ?? this.level,
@@ -756,8 +849,18 @@ class GamerUser {
       chatColor: chatColor ?? this.chatColor,
       unlockedChatColors: unlockedChatColors ?? this.unlockedChatColors,
       isVipMember: isVipMember ?? this.isVipMember,
-      vipTournamentPassUntil: vipTournamentPassUntil ?? this.vipTournamentPassUntil,
-      leaderboardSpotlightUntil: leaderboardSpotlightUntil ?? this.leaderboardSpotlightUntil,
+      vipTournamentPassUntil:
+          vipTournamentPassUntil ?? this.vipTournamentPassUntil,
+      leaderboardSpotlightUntil:
+          leaderboardSpotlightUntil ?? this.leaderboardSpotlightUntil,
+      isRankPublic: isRankPublic ?? this.isRankPublic,
+      isUidPublic: isUidPublic ?? this.isUidPublic,
+      isCoinsPublic: isCoinsPublic ?? this.isCoinsPublic,
+      isMemberSincePublic: isMemberSincePublic ?? this.isMemberSincePublic,
+      isFollowingPublic: isFollowingPublic ?? this.isFollowingPublic,
+      isFollowersPublic: isFollowersPublic ?? this.isFollowersPublic,
+      isBioPublic: isBioPublic ?? this.isBioPublic,
+      isGamePublic: isGamePublic ?? this.isGamePublic,
     );
   }
 }
