@@ -65,7 +65,8 @@ class GamerSocialService {
           'created_at': DateTime.now().toIso8601String(),
         };
         await _supabase.from('users').upsert(insertPayload);
-        debugPrint('[GamerSocialService] Synced user to Supabase: $userId ($validUuid)');
+        debugPrint(
+            '[GamerSocialService] Synced user to Supabase: $userId ($validUuid)');
       }
     } catch (e) {
       debugPrint('[GamerSocialService] Note on user sync: $e');
@@ -120,47 +121,37 @@ class GamerSocialService {
 
       debugPrint('[Follow] Inserting: $followerUuid -> $followingUuid');
 
+      // Prevent duplicate follow
+      final existing = await _supabase
+          .from('follows')
+          .select('id')
+          .eq('follower_id', followerUuid)
+          .eq('following_id', followingUuid)
+          .maybeSingle();
+      if (existing != null) {
+        debugPrint('[Follow] Already following, skipping');
+        return;
+      }
+
       // Insert into follows table
       await _supabase.from('follows').insert({
         'follower_id': followerUuid,
         'following_id': followingUuid,
       });
 
-      // Update following_count for current user (increment by 1)
-      try {
-        final currentUser = await _supabase
-            .from('users')
-            .select('following_count')
-            .eq('id', followerUuid)
-            .maybeSingle();
-        final currentCount =
-            (currentUser?['following_count'] as num?)?.toInt() ?? 0;
-        await _supabase
-            .from('users')
-            .update({'following_count': currentCount + 1})
-            .eq('id', followerUuid);
-        debugPrint('[Follow] Updated following_count: ${currentCount + 1}');
-      } catch (e) {
-        debugPrint('[Follow] Update following_count error: $e');
-      }
+      // Update following_count for current user
+      await _incrementCounter(
+        userId: followerUuid,
+        column: 'following_count',
+        delta: 1,
+      );
 
-      // Update followers_count for target user (increment by 1)
-      try {
-        final targetUser = await _supabase
-            .from('users')
-            .select('followers_count')
-            .eq('id', followingUuid)
-            .maybeSingle();
-        final targetCount =
-            (targetUser?['followers_count'] as num?)?.toInt() ?? 0;
-        await _supabase
-            .from('users')
-            .update({'followers_count': targetCount + 1})
-            .eq('id', followingUuid);
-        debugPrint('[Follow] Updated followers_count: ${targetCount + 1}');
-      } catch (e) {
-        debugPrint('[Follow] Update followers_count error: $e');
-      }
+      // Update followers_count for target user
+      await _incrementCounter(
+        userId: followingUuid,
+        column: 'followers_count',
+        delta: 1,
+      );
 
       debugPrint('[Follow] Success!');
     } catch (e) {
@@ -186,45 +177,60 @@ class GamerSocialService {
           .eq('follower_id', followerUuid)
           .eq('following_id', followingUuid);
 
-      // Decrement following_count for current user
-      try {
-        final currentUser = await _supabase
-            .from('users')
-            .select('following_count')
-            .eq('id', followerUuid)
-            .maybeSingle();
-        final currentCount =
-            (currentUser?['following_count'] as num?)?.toInt() ?? 0;
-        await _supabase
-            .from('users')
-            .update({
-              'following_count': currentCount > 0 ? currentCount - 1 : 0,
-            })
-            .eq('id', followerUuid);
-      } catch (e) {
-        debugPrint('[Unfollow] Update following_count error: $e');
-      }
+      // Update following_count for current user
+      await _incrementCounter(
+        userId: followerUuid,
+        column: 'following_count',
+        delta: -1,
+      );
 
-      // Decrement followers_count for target user
-      try {
-        final targetUser = await _supabase
-            .from('users')
-            .select('followers_count')
-            .eq('id', followingUuid)
-            .maybeSingle();
-        final targetCount =
-            (targetUser?['followers_count'] as num?)?.toInt() ?? 0;
-        await _supabase
-            .from('users')
-            .update({
-              'followers_count': targetCount > 0 ? targetCount - 1 : 0,
-            })
-            .eq('id', followingUuid);
-      } catch (e) {
-        debugPrint('[Unfollow] Update followers_count error: $e');
-      }
+      // Update followers_count for target user
+      await _incrementCounter(
+        userId: followingUuid,
+        column: 'followers_count',
+        delta: -1,
+      );
     } catch (e) {
       debugPrint('Error unfollowing user: $e');
+    }
+  }
+
+  /// Safely increment/decrement a counter column on the users table.
+  /// Tries RPC first (atomic), falls back to manual fetch+update.
+  Future<void> _incrementCounter({
+    required String userId,
+    required String column,
+    required int delta,
+  }) async {
+    final rpcName = delta > 0
+        ? (column == 'following_count'
+            ? 'increment_following_count'
+            : 'increment_followers_count')
+        : (column == 'following_count'
+            ? 'decrement_following_count'
+            : 'decrement_followers_count');
+
+    try {
+      await _supabase.rpc(rpcName, params: {'user_id': userId});
+      debugPrint('[Counter] RPC $rpcName success for $userId');
+      return;
+    } catch (e) {
+      debugPrint('[Counter] RPC $rpcName failed: $e — using manual fallback');
+    }
+
+    // Manual fallback
+    try {
+      final row = await _supabase
+          .from('users')
+          .select(column)
+          .eq('id', userId)
+          .maybeSingle();
+      final current = (row?[column] as num?)?.toInt() ?? 0;
+      final updated = (current + delta).clamp(0, 999999999);
+      await _supabase.from('users').update({column: updated}).eq('id', userId);
+      debugPrint('[Counter] Manual $column=$updated for $userId');
+    } catch (e) {
+      debugPrint('[Counter] Manual update failed: $e');
     }
   }
 
@@ -240,8 +246,9 @@ class GamerSocialService {
             .from('follows')
             .select('following_id')
             .eq('follower_id', followerUuid);
-        final list =
-            (res as List).map((item) => item['following_id'].toString()).toList();
+        final list = (res as List)
+            .map((item) => item['following_id'].toString())
+            .toList();
         yield list;
       } catch (e) {
         yield [];
@@ -313,7 +320,8 @@ class GamerSocialService {
           .select()
           .single();
 
-      debugPrint('[GamerSocialService] Post saved successfully: ${response['id']}');
+      debugPrint(
+          '[GamerSocialService] Post saved successfully: ${response['id']}');
       feedRefreshNotifier.value++;
       return response['id'].toString();
     } catch (e) {
@@ -329,8 +337,10 @@ class GamerSocialService {
         if (gameTag != null && gameTag != 'All') {
           query = query.eq('game', gameTag);
         }
-        final data = await query.order('created_at', ascending: false).limit(100);
-        final list = (data as List).map((map) => GamerPost.fromMap(map)).toList();
+        final data =
+            await query.order('created_at', ascending: false).limit(100);
+        final list =
+            (data as List).map((map) => GamerPost.fromMap(map)).toList();
         yield list;
       } catch (e) {
         debugPrint('[GamerSocialService] getAllPosts error: $e');
@@ -342,11 +352,13 @@ class GamerSocialService {
   Stream<List<GamerPost>> getVideosStream({String? gameTag}) async* {
     while (true) {
       try {
-        var query = _supabase.from('posts').select().not('video_url', 'is', null);
+        var query =
+            _supabase.from('posts').select().not('video_url', 'is', null);
         if (gameTag != null && gameTag != 'All') {
           query = query.eq('game', gameTag);
         }
-        final data = await query.order('created_at', ascending: false).limit(100);
+        final data =
+            await query.order('created_at', ascending: false).limit(100);
         final list = (data as List)
             .map((map) => GamerPost.fromMap(map))
             .where((p) => p.videoUrl != null && p.videoUrl!.trim().isNotEmpty)
@@ -359,16 +371,19 @@ class GamerSocialService {
     }
   }
 
-  Stream<List<GamerPost>> getUserPostsStream(String userId, [String? username]) async* {
+  /// FIXED: only returns posts whose user_id exactly equals this user's UUID.
+  Stream<List<GamerPost>> getUserPostsStream(String userId,
+      [String? username]) async* {
     while (true) {
       try {
         final uuid = stringToUuid(userId);
         final data = await _supabase
             .from('posts')
             .select()
-            .or('user_id.eq.$userId,user_id.eq.$uuid')
+            .eq('user_id', uuid) // strict match — no more foreign posts
             .order('created_at', ascending: false);
-        final list = (data as List).map((map) => GamerPost.fromMap(map)).toList();
+        final list =
+            (data as List).map((map) => GamerPost.fromMap(map)).toList();
         yield list;
       } catch (e) {
         debugPrint('[GamerSocialService] getUserPostsStream error: $e');
@@ -377,7 +392,8 @@ class GamerSocialService {
     }
   }
 
-  Future<void> deletePost({required String postId, required String userId}) async {
+  Future<void> deletePost(
+      {required String postId, required String userId}) async {
     try {
       await _supabase.from('posts').delete().eq('id', postId);
     } catch (e) {
