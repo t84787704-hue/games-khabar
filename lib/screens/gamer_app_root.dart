@@ -1,13 +1,20 @@
 import 'package:flutter/material.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../constants/gamer_theme.dart';
 import '../services/gamer_auth_service.dart';
 import '../models/gamer_user_model.dart';
+import 'gamer_age_gate_screen.dart';
 import 'gamer_auth_screen.dart';
 import 'create_gamer_id_screen.dart';
 import 'gamer_main_navigation_screen.dart';
 import 'banned_screen.dart';
 
+/// Root navigator that decides which screen to show on app start:
+/// 
+/// 1. First check: Age gate (13+) — if not verified, show AgeGate
+/// 2. Then check auth state (Supabase)
+/// 3. Then check profile + banned state
 class GamerAppRoot extends StatefulWidget {
   const GamerAppRoot({super.key});
 
@@ -18,14 +25,58 @@ class GamerAppRoot extends StatefulWidget {
 class _GamerAppRootState extends State<GamerAppRoot> {
   final GamerAuthService _authService = GamerAuthService();
 
+  bool _ageGateChecked = false;
+  bool _ageVerified = false;
+
   @override
   void initState() {
     super.initState();
-    _authService.init();
+    _checkAgeGate();
+  }
+
+  Future<void> _checkAgeGate() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final verified = prefs.getBool('age_verified') ?? false;
+      if (mounted) {
+        setState(() {
+          _ageVerified = verified;
+          _ageGateChecked = true;
+        });
+      }
+
+      // Now start auth listener
+      await _authService.init();
+    } catch (e) {
+      debugPrint('[AppRoot] AgeGate check error: $e');
+      if (mounted) {
+        setState(() {
+          _ageGateChecked = true;
+          _ageVerified = false;
+        });
+      }
+    }
+  }
+
+  void _onAgeVerified() {
+    if (mounted) {
+      setState(() => _ageVerified = true);
+    }
   }
 
   @override
   Widget build(BuildContext context) {
+    // 1. Age Gate not yet checked → loading
+    if (!_ageGateChecked) {
+      return const _GamerLoadingScreen();
+    }
+
+    // 2. Age Gate not verified → show age gate
+    if (!_ageVerified) {
+      return GamerAgeGateScreen(onVerified: _onAgeVerified);
+    }
+
+    // 3. Age verified → proceed to normal auth flow
     return ValueListenableBuilder<bool>(
       valueListenable: _authService.isLoadingNotifier,
       builder: (context, isLoading, _) {
