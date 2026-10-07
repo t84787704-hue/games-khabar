@@ -28,13 +28,11 @@ class ChatMessage {
     this.mediaUrl,
   });
 
-  // Alias getters
+  // Alias getters to support various naming conventions across screens
   String get text => message;
   String get content => message;
   DateTime get timestamp => createdAt;
   DateTime get time => createdAt;
-
-  // ---------- FACTORY ----------
 
   factory ChatMessage.fromMap(Map<String, dynamic> map) {
     return ChatMessage(
@@ -130,7 +128,7 @@ class ChatConversation implements Comparable<ChatConversation> {
     this.isVerified = false,
   });
 
-  // Alias getters
+  // Alias getters to support various naming conventions across screens
   String get conversationId => id;
   String get peerId => otherUserId;
   String get userId => otherUserId;
@@ -146,8 +144,6 @@ class ChatConversation implements Comparable<ChatConversation> {
   DateTime get updatedAt => lastMessageAt;
   DateTime get createdAt => lastMessageAt;
   DateTime get lastMessageTime => lastMessageAt;
-
-  // ---------- FACTORY ----------
 
   factory ChatConversation.fromMap(Map<String, dynamic> map) {
     final rawAvatar = map['other_user_avatar']?.toString() ??
