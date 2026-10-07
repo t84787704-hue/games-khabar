@@ -25,6 +25,7 @@ import 'saved_news_tab_screen.dart';
 import 'verification_screen.dart';
 import 'profile_screen.dart';
 import 'follow_us_screen.dart';
+import 'gamer_delete_account_screen.dart';
 import '../widgets/coin_history_sheet.dart';
 
 class GamerProfileScreen extends StatefulWidget {
@@ -58,7 +59,6 @@ class _GamerProfileScreenState extends State<GamerProfileScreen>
     super.dispose();
   }
 
-  /// Fetches a GamerUser directly from Supabase with all privacy fields.
   Future<GamerUser?> _fetchGamerFromSupabase(String userId) async {
     if (userId.isEmpty) return null;
     try {
@@ -74,7 +74,8 @@ class _GamerProfileScreenState extends State<GamerProfileScreen>
       return GamerUser(
         uid: userId,
         username: (row['username'] ?? 'gamer').toString(),
-        displayName: (row['display_name'] ?? row['username'] ?? 'Gamer').toString(),
+        displayName:
+            (row['display_name'] ?? row['username'] ?? 'Gamer').toString(),
         photoUrl: (row['avatar_url'] ?? '').toString(),
         coverUrl: (row['cover_url'] ?? '').toString(),
         bio: (row['bio'] ?? '').toString(),
@@ -101,11 +102,12 @@ class _GamerProfileScreenState extends State<GamerProfileScreen>
         activeBadge: (row['active_badge'] ?? '').toString(),
         unlockedBadges: List<String>.from(row['unlocked_badges'] ?? []),
         chatColor: (row['chat_color'] ?? '#00FF66').toString(),
-        unlockedChatColors: List<String>.from(row['unlocked_chat_colors'] ?? []),
+        unlockedChatColors:
+            List<String>.from(row['unlocked_chat_colors'] ?? []),
         isVipMember: row['is_vip_member'] == true,
         kdRatio: (row['kd_ratio'] as num?)?.toDouble() ?? 0.0,
-        createdAt: DateTime.tryParse((row['created_at'] ?? '').toString()),
-        // Privacy fields from DB
+        createdAt:
+            DateTime.tryParse((row['created_at'] ?? '').toString()),
         isRankPublic: row['is_rank_public'] != false,
         isUidPublic: row['is_uid_public'] == true,
         isCoinsPublic: row['is_coins_public'] == true,
@@ -128,9 +130,6 @@ class _GamerProfileScreenState extends State<GamerProfileScreen>
     }
   }
 
-  // ═══════════════════════════════════════════════════════════
-  // PRIVACY UPDATE — Saves privacy toggles to Supabase
-  // ═══════════════════════════════════════════════════════════
   Future<void> _updatePrivacy({
     bool? isRankPublic,
     bool? isUidPublic,
@@ -190,7 +189,6 @@ class _GamerProfileScreenState extends State<GamerProfileScreen>
     }
   }
 
-  /// Privacy Settings Sheet — Play Store ready
   void _showPrivacySettingsSheet(GamerUser user) {
     showModalBottomSheet(
       context: context,
@@ -266,13 +264,13 @@ class _GamerProfileScreenState extends State<GamerProfileScreen>
                         alignment: Alignment.centerLeft,
                         child: Text(
                           'Choose what others can see on your profile',
-                          style: TextStyle(color: Color(0xFF65676B), fontSize: 12),
+                          style:
+                              TextStyle(color: Color(0xFF65676B), fontSize: 12),
                         ),
                       ),
                     ),
                     const SizedBox(height: 12),
                     const Divider(color: Color(0xFFCED0D4), height: 1),
-
                     _buildPrivacyTile(
                       icon: Icons.military_tech_rounded,
                       title: 'Show My Rank',
@@ -1110,7 +1108,6 @@ class _GamerProfileScreenState extends State<GamerProfileScreen>
         final gameEmoji =
             GamerTheme.gameEmojis[user.favoriteGame] ?? '🎮';
 
-        // Privacy checks — hide if not public AND not own profile
         final bool canShowBio = isOwnProfile || user.isBioPublic;
         final bool canShowGame = isOwnProfile || user.isGamePublic;
         final bool canShowRank = isOwnProfile || user.isRankPublic;
@@ -1263,7 +1260,6 @@ class _GamerProfileScreenState extends State<GamerProfileScreen>
                     ),
                   ),
                 ),
-
                 SliverToBoxAdapter(
                   child: Padding(
                     padding: const EdgeInsets.fromLTRB(20, 8, 20, 12),
@@ -1650,7 +1646,6 @@ class _GamerProfileScreenState extends State<GamerProfileScreen>
                     ),
                   ),
                 ),
-
                 SliverPersistentHeader(
                   pinned: true,
                   delegate: _SliverTabBarDelegate(
@@ -1964,7 +1959,6 @@ class _GamerProfileScreenState extends State<GamerProfileScreen>
                     }
                   },
                 ),
-                // ═══════ PRIVACY SETTINGS — Play Store Ready ═══════
                 if (isOwnProfile)
                   ListTile(
                     leading: Container(
@@ -2194,6 +2188,41 @@ class _GamerProfileScreenState extends State<GamerProfileScreen>
                 ),
                 if (isOwnProfile) ...[
                   const Divider(color: Color(0xFFCED0D4), height: 16),
+                  ListTile(
+                    leading: Container(
+                      padding: const EdgeInsets.all(8),
+                      decoration: const BoxDecoration(
+                        color: Color(0xFFFFEBEE),
+                        shape: BoxShape.circle,
+                      ),
+                      child: const Icon(Icons.delete_forever_rounded,
+                          color: Color(0xFFDC2626), size: 20),
+                    ),
+                    title: const Text(
+                      'Delete Account',
+                      style: TextStyle(
+                          color: Color(0xFFDC2626),
+                          fontWeight: FontWeight.bold,
+                          fontSize: 14),
+                    ),
+                    subtitle: const Text(
+                      'Permanently delete your Gamer ID (30-day grace)',
+                      style: TextStyle(
+                          color: Color(0xFF65676B), fontSize: 12),
+                    ),
+                    trailing: const Icon(Icons.arrow_forward_ios_rounded,
+                        color: Color(0xFF65676B), size: 14),
+                    onTap: () {
+                      Navigator.pop(ctx);
+                      Navigator.of(context).push(
+                        MaterialPageRoute(
+                          builder: (_) =>
+                              const GamerDeleteAccountScreen(),
+                        ),
+                      );
+                    },
+                  ),
+                  const SizedBox(height: 4),
                   ListTile(
                     leading: Container(
                       padding: const EdgeInsets.all(8),
