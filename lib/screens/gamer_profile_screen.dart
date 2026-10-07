@@ -47,17 +47,55 @@ class _GamerProfileScreenState extends State<GamerProfileScreen>
   bool _isBlockedByThem = false;
   bool _loadingBlockStatus = true;
 
+  // ✅ FIX: Cached user + initial fetch tracking to avoid "not found" glitch
+  GamerUser? _cachedUser;
+  bool _initialFetchDone = false;
+  String _lastFetchedUid = '';
+
   @override
   void initState() {
     super.initState();
     _tabController = TabController(length: 2, vsync: this);
     _checkBlockStatus();
+    _prefetchCurrentUser();
   }
 
   @override
   void dispose() {
     _tabController.dispose();
     super.dispose();
+  }
+
+  /// ✅ FIX: Pre-fetch current user so profile shows instantly
+  /// when app returns from background.
+  Future<void> _prefetchCurrentUser() async {
+    final uid = widget.userId ?? (_authService.currentUid ?? '');
+
+    if (uid.isEmpty) {
+      // Auth may not be initialized yet — wait 500ms and retry
+      await Future.delayed(const Duration(milliseconds: 500));
+      final retryUid = widget.userId ?? (_authService.currentUid ?? '');
+      if (retryUid.isEmpty) {
+        if (mounted) setState(() => _initialFetchDone = true);
+        return;
+      }
+      final user = await _fetchGamerFromSupabase(retryUid);
+      if (!mounted) return;
+      setState(() {
+        _cachedUser = user;
+        _lastFetchedUid = retryUid;
+        _initialFetchDone = true;
+      });
+      return;
+    }
+
+    final user = await _fetchGamerFromSupabase(uid);
+    if (!mounted) return;
+    setState(() {
+      _cachedUser = user;
+      _lastFetchedUid = uid;
+      _initialFetchDone = true;
+    });
   }
 
   Future<void> _checkBlockStatus() async {
@@ -143,9 +181,20 @@ class _GamerProfileScreenState extends State<GamerProfileScreen>
     }
   }
 
+  /// ✅ FIX: yield cached user if fetch returns null, so screen
+  /// never shows "not found" during transient network/auth gaps.
   Stream<GamerUser?> _gamerStream(String userId) async* {
+    if (userId.isEmpty) {
+      yield _cachedUser;
+      return;
+    }
     while (true) {
-      yield await _fetchGamerFromSupabase(userId);
+      final user = await _fetchGamerFromSupabase(userId);
+      if (user != null && mounted) {
+        _cachedUser = user;
+        _lastFetchedUid = userId;
+      }
+      yield user ?? _cachedUser;
       await Future.delayed(const Duration(seconds: 5));
     }
   }
@@ -308,7 +357,6 @@ class _GamerProfileScreenState extends State<GamerProfileScreen>
   // PRIVACY SETTINGS SHEET — FIXED VERSION
   // ==========================================
   void _showPrivacySettingsSheet(GamerUser user) {
-    // Local mutable state — persists across sheet rebuilds
     bool rankPublic = user.isRankPublic;
     bool uidPublic = user.isUidPublic;
     bool coinsPublic = user.isCoinsPublic;
@@ -863,7 +911,8 @@ class _GamerProfileScreenState extends State<GamerProfileScreen>
       stream: _gamerStream(targetUid),
       builder: (context, snapshot) {
         if (snapshot.connectionState == ConnectionState.waiting &&
-            !snapshot.hasData) {
+            !snapshot.hasData &&
+            _cachedUser == null) {
           return const Scaffold(
             backgroundColor: Color(0xFFF0F2F5),
             body: Center(
@@ -871,8 +920,18 @@ class _GamerProfileScreenState extends State<GamerProfileScreen>
           );
         }
 
-        final user = snapshot.data;
+        // ✅ FIX: use cached user as fallback while stream is loading
+        final user = snapshot.data ?? _cachedUser;
         if (user == null) {
+          // If initial fetch isn't done yet, show loading instead of "not found"
+          if (!_initialFetchDone) {
+            return const Scaffold(
+              backgroundColor: Color(0xFFF0F2F5),
+              body: Center(
+                  child: CircularProgressIndicator(color: Color(0xFF1877F2))),
+            );
+          }
+
           return Scaffold(
             backgroundColor: const Color(0xFFF0F2F5),
             appBar: AppBar(
