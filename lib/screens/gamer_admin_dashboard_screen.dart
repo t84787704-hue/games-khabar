@@ -581,7 +581,7 @@ class _GamerAdminDashboardScreenState extends State<GamerAdminDashboardScreen>
     );
   }
 
-  // ===================== TAB 1: USERS LIST =====================
+  // ===================== TAB 1: USERS LIST (SUPABASE) =====================
   Widget _buildUsersTab() {
     return Column(
       children: [
@@ -589,15 +589,18 @@ class _GamerAdminDashboardScreenState extends State<GamerAdminDashboardScreen>
           padding: const EdgeInsets.fromLTRB(16, 12, 16, 8),
           child: TextField(
             controller: _searchController,
-            onChanged: (val) => setState(() => _userSearchQuery = val.toLowerCase().trim()),
+            onChanged: (val) =>
+                setState(() => _userSearchQuery = val.toLowerCase().trim()),
             style: const TextStyle(color: Colors.white, fontSize: 13),
             decoration: InputDecoration(
               hintText: 'Search users by name, @username, or tag...',
               hintStyle: const TextStyle(color: Color(0xFF8B949E), fontSize: 13),
-              prefixIcon: const Icon(Icons.search_rounded, color: Color(0xFF8B949E), size: 20),
+              prefixIcon: const Icon(Icons.search_rounded,
+                  color: Color(0xFF8B949E), size: 20),
               suffixIcon: _userSearchQuery.isNotEmpty
                   ? IconButton(
-                      icon: const Icon(Icons.clear, color: Color(0xFF8B949E), size: 18),
+                      icon: const Icon(Icons.clear,
+                          color: Color(0xFF8B949E), size: 18),
                       onPressed: () {
                         _searchController.clear();
                         setState(() => _userSearchQuery = '');
@@ -606,7 +609,8 @@ class _GamerAdminDashboardScreenState extends State<GamerAdminDashboardScreen>
                   : null,
               filled: true,
               fillColor: const Color(0xFF10141D),
-              contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+              contentPadding:
+                  const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
               border: OutlineInputBorder(
                 borderRadius: BorderRadius.circular(12),
                 borderSide: const BorderSide(color: Color(0xFF1F2B3E)),
@@ -628,7 +632,6 @@ class _GamerAdminDashboardScreenState extends State<GamerAdminDashboardScreen>
           padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
           child: Row(
             children: [
-              // Seed 10 Pro Demo Accounts button
               Expanded(
                 child: ElevatedButton.icon(
                   onPressed: _isSeedingDemo ? null : _handleSeedDemoAccounts,
@@ -636,44 +639,52 @@ class _GamerAdminDashboardScreenState extends State<GamerAdminDashboardScreen>
                     backgroundColor: const Color(0xFF00FF88).withOpacity(0.12),
                     foregroundColor: const Color(0xFF00FF88),
                     side: const BorderSide(color: Color(0xFF00FF88), width: 1.2),
-                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 10),
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                    padding: const EdgeInsets.symmetric(
+                        horizontal: 10, vertical: 10),
+                    shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(10)),
                   ),
                   icon: _isSeedingDemo
                       ? const SizedBox(
                           width: 14,
                           height: 14,
-                          child: CircularProgressIndicator(strokeWidth: 2, color: Color(0xFF00FF88)),
+                          child: CircularProgressIndicator(
+                              strokeWidth: 2, color: Color(0xFF00FF88)),
                         )
                       : const Icon(Icons.group_add_rounded, size: 16),
                   label: Text(
                     _isSeedingDemo ? 'Seeding...' : 'Seed 10 Pro Demo',
-                    style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 11.5),
+                    style: const TextStyle(
+                        fontWeight: FontWeight.bold, fontSize: 11.5),
                   ),
                 ),
               ),
               const SizedBox(width: 8),
-              // Delete All Demo Accounts button
               Expanded(
                 child: ElevatedButton.icon(
-                  onPressed: _isDeletingDemo ? null : _handleDeleteAllDemoAccounts,
+                  onPressed:
+                      _isDeletingDemo ? null : _handleDeleteAllDemoAccounts,
                   style: ElevatedButton.styleFrom(
                     backgroundColor: const Color(0xFFFF4655).withOpacity(0.12),
                     foregroundColor: const Color(0xFFFF4655),
                     side: const BorderSide(color: Color(0xFFFF4655), width: 1.2),
-                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 10),
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                    padding: const EdgeInsets.symmetric(
+                        horizontal: 10, vertical: 10),
+                    shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(10)),
                   ),
                   icon: _isDeletingDemo
                       ? const SizedBox(
                           width: 14,
                           height: 14,
-                          child: CircularProgressIndicator(strokeWidth: 2, color: Color(0xFFFF4655)),
+                          child: CircularProgressIndicator(
+                              strokeWidth: 2, color: Color(0xFFFF4655)),
                         )
                       : const Icon(Icons.delete_sweep_rounded, size: 16),
                   label: Text(
                     _isDeletingDemo ? 'Deleting...' : 'Delete All Demo',
-                    style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 11.5),
+                    style: const TextStyle(
+                        fontWeight: FontWeight.bold, fontSize: 11.5),
                   ),
                 ),
               ),
@@ -682,39 +693,102 @@ class _GamerAdminDashboardScreenState extends State<GamerAdminDashboardScreen>
         ),
         const SizedBox(height: 4),
 
+        // ✅ SUPABASE: Users Stream (Firestore ki jagah)
         Expanded(
-          child: StreamBuilder<QuerySnapshot>(
-            stream: FirebaseFirestore.instance.collection('users').snapshots(),
+          child: StreamBuilder<List<Map<String, dynamic>>>(
+            stream: SupabaseService.client.from('users').stream(primaryKey: ['id']),
             builder: (context, snapshot) {
-              if (snapshot.connectionState == ConnectionState.waiting && !snapshot.hasData) {
+              // Error state
+              if (snapshot.hasError) {
+                return Center(
+                  child: Padding(
+                    padding: const EdgeInsets.all(32),
+                    child: Column(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        const Icon(Icons.error_outline_rounded,
+                            color: Color(0xFFFF4655), size: 48),
+                        const SizedBox(height: 14),
+                        const Text(
+                          'Could not load users',
+                          style: TextStyle(
+                              color: Colors.white,
+                              fontWeight: FontWeight.bold,
+                              fontSize: 15),
+                        ),
+                        const SizedBox(height: 6),
+                        Text(
+                          '${snapshot.error}',
+                          textAlign: TextAlign.center,
+                          style: const TextStyle(
+                              color: Color(0xFF8B949E), fontSize: 12),
+                        ),
+                      ],
+                    ),
+                  ),
+                );
+              }
+
+              // Loading state
+              if (snapshot.connectionState == ConnectionState.waiting &&
+                  !snapshot.hasData) {
                 return const Center(
                   child: CircularProgressIndicator(color: Color(0xFF00FF88)),
                 );
               }
 
-              final docs = snapshot.data?.docs ?? [];
-              List<GamerUser> users = docs.map((d) => GamerUser.fromFirestore(d)).toList();
+              final docs = snapshot.data ?? [];
+              List<GamerUser> users =
+                  docs.map((d) => GamerUser.fromMap(d)).toList();
 
-              // Ensure @fua is included if empty
-              if (users.isEmpty) {
-                users.add(
-                  GamerUser(
-                    uid: FirebaseAuth.instance.currentUser?.uid ?? 'sample_fua',
-                    username: 'fua',
-                    displayName: 'Fua',
-                    coins: 400,
-                    rank: 'Ace',
-                    createdAt: DateTime.now().subtract(const Duration(days: 14)),
-                  ),
-                );
-              }
-
+              // Search filter
               if (_userSearchQuery.isNotEmpty) {
                 users = users.where((u) {
                   return u.displayName.toLowerCase().contains(_userSearchQuery) ||
                       u.username.toLowerCase().contains(_userSearchQuery) ||
                       u.uid.toLowerCase().contains(_userSearchQuery);
                 }).toList();
+              }
+
+              // ✅ EMPTY STATE (Team Matches jaisa)
+              if (users.isEmpty) {
+                return Center(
+                  child: Padding(
+                    padding: const EdgeInsets.all(32),
+                    child: Column(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        Container(
+                          padding: const EdgeInsets.all(18),
+                          decoration: BoxDecoration(
+                            color: const Color(0xFF10141D),
+                            shape: BoxShape.circle,
+                            border: Border.all(color: const Color(0xFF1F2B3E)),
+                          ),
+                          child: const Icon(Icons.people_outline_rounded,
+                              color: Color(0xFF8B949E), size: 40),
+                        ),
+                        const SizedBox(height: 14),
+                        const Text(
+                          'No users found',
+                          style: TextStyle(
+                              color: Colors.white,
+                              fontWeight: FontWeight.bold,
+                              fontSize: 15),
+                        ),
+                        const SizedBox(height: 6),
+                        Text(
+                          _userSearchQuery.isNotEmpty
+                              ? 'Try a different search term'
+                              : 'No users registered yet',
+                          textAlign: TextAlign.center,
+                          style: const TextStyle(
+                              color: Color(0xFF8B949E), fontSize: 12),
+                        ),
+                      ],
+                    ),
+                  ),
+                );
               }
 
               return ListView.separated(
@@ -865,7 +939,6 @@ class _GamerAdminDashboardScreenState extends State<GamerAdminDashboardScreen>
           Row(
             mainAxisAlignment: MainAxisAlignment.end,
             children: [
-              // Ban / Unban button
               OutlinedButton.icon(
                 onPressed: () => _toggleBanUser(user),
                 style: OutlinedButton.styleFrom(
@@ -939,14 +1012,12 @@ class _GamerAdminDashboardScreenState extends State<GamerAdminDashboardScreen>
   Widget _buildRankVerifyTab() {
     return Column(
       children: [
-        // Top Search & Filters
         Container(
           padding: const EdgeInsets.fromLTRB(16, 12, 16, 8),
           color: const Color(0xFF0B0F14),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              // Search Bar
               TextField(
                 controller: _rankSearchController,
                 style: const TextStyle(color: Colors.white, fontSize: 13),
@@ -983,7 +1054,6 @@ class _GamerAdminDashboardScreenState extends State<GamerAdminDashboardScreen>
               ),
               const SizedBox(height: 10),
 
-              // Game Filter Chips & History Toggle
               SingleChildScrollView(
                 scrollDirection: Axis.horizontal,
                 child: Row(
@@ -1014,7 +1084,6 @@ class _GamerAdminDashboardScreenState extends State<GamerAdminDashboardScreen>
                       ),
                     ],
                     const SizedBox(width: 6),
-                    // Pending vs All toggle
                     FilterChip(
                       label: Text(_showOnlyPendingRanks ? '⏳ Pending' : '📋 All History'),
                       selected: _showOnlyPendingRanks,
@@ -1040,7 +1109,6 @@ class _GamerAdminDashboardScreenState extends State<GamerAdminDashboardScreen>
           ),
         ),
 
-        // Requests List
         Expanded(
           child: StreamBuilder<QuerySnapshot>(
             stream: FirebaseFirestore.instance.collection('users').snapshots(),
@@ -1059,7 +1127,6 @@ class _GamerAdminDashboardScreenState extends State<GamerAdminDashboardScreen>
                   allItems.add(_RankQueueItem(user: user, game: game, gameIndex: i));
                 }
 
-                // Also include user's primary rank if submitted with screenshot or pending
                 final bool hasGameForRank = user.games.any(
                   (g) => g.claimedRank.toLowerCase() == user.rank.toLowerCase(),
                 );
@@ -1094,20 +1161,16 @@ class _GamerAdminDashboardScreenState extends State<GamerAdminDashboardScreen>
                 }
               }
 
-              // Apply Filters
               final filtered = allItems.where((item) {
-                // Pending filter
                 if (_showOnlyPendingRanks && item.game.status != 'pending') {
                   return false;
                 }
 
-                // Game Name filter
                 if (_selectedRankGameFilter != 'All' &&
                     item.game.gameName.toLowerCase() != _selectedRankGameFilter.toLowerCase()) {
                   return false;
                 }
 
-                // Search query
                 if (_rankSearchQuery.isNotEmpty) {
                   final uName = item.user.username.toLowerCase();
                   final dName = item.user.displayName.toLowerCase();
@@ -1124,7 +1187,6 @@ class _GamerAdminDashboardScreenState extends State<GamerAdminDashboardScreen>
                 return true;
               }).toList();
 
-              // Sort: pending first, then by submittedAt desc
               filtered.sort((a, b) {
                 if (a.game.status == 'pending' && b.game.status != 'pending') return -1;
                 if (a.game.status != 'pending' && b.game.status == 'pending') return 1;
@@ -1214,7 +1276,6 @@ class _GamerAdminDashboardScreenState extends State<GamerAdminDashboardScreen>
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // User Info & Status
           Row(
             children: [
               GamerAvatar(
@@ -1261,7 +1322,6 @@ class _GamerAdminDashboardScreenState extends State<GamerAdminDashboardScreen>
           const Divider(color: Color(0xFF1F2B3E), height: 1),
           const SizedBox(height: 10),
 
-          // Game Name + Game UID + Claimed Rank
           Row(
             children: [
               Container(
@@ -1304,7 +1364,6 @@ class _GamerAdminDashboardScreenState extends State<GamerAdminDashboardScreen>
 
           const SizedBox(height: 8),
 
-          // Claimed Rank & Verified Rank Info
           Row(
             children: [
               const Text(
@@ -1353,7 +1412,6 @@ class _GamerAdminDashboardScreenState extends State<GamerAdminDashboardScreen>
 
           const SizedBox(height: 10),
 
-          // Screenshot Thumbnail (Tappable for full screen zoom)
           if (game.screenshotUrl.isNotEmpty) ...[
             GestureDetector(
               onTap: () => _showScreenshotViewerDialog(
@@ -1431,7 +1489,6 @@ class _GamerAdminDashboardScreenState extends State<GamerAdminDashboardScreen>
             ),
           ],
 
-          // Rejection reason banner if rejected
           if (isRejected && game.rejectReason != null && game.rejectReason!.isNotEmpty) ...[
             const SizedBox(height: 10),
             Container(
@@ -1456,7 +1513,6 @@ class _GamerAdminDashboardScreenState extends State<GamerAdminDashboardScreen>
             ),
           ],
 
-          // Approve / Reject Actions (when pending)
           if (isPending) ...[
             const SizedBox(height: 12),
             _AdminRankActionButtons(
@@ -1575,7 +1631,6 @@ class _GamerAdminDashboardScreenState extends State<GamerAdminDashboardScreen>
         SetOptions(merge: true),
       );
 
-      // Send in-app notification to user
       try {
         await NotificationService().createNotification(
           userId: targetDocId,
@@ -1638,8 +1693,6 @@ class _GamerAdminDashboardScreenState extends State<GamerAdminDashboardScreen>
         SetOptions(merge: true),
       );
 
-      // Per user explicit instruction (Rule 7):
-      // "اگر ایڈمن Reject کرے، تو صارف کو پیغام جائے: 'آپ کا اسکرین شاٹ درست نہیں ہے، دوبارہ اپلوڈ کریں'۔"
       try {
         await NotificationService().createNotification(
           userId: targetDocId,
@@ -1680,7 +1733,6 @@ class _GamerAdminDashboardScreenState extends State<GamerAdminDashboardScreen>
         final docs = snapshot.data?.docs ?? [];
         final allUsers = docs.map((d) => GamerUser.fromFirestore(d)).toList();
 
-        // Requests that need review (pending and NOT yet approved)
         final bool isKiroApproved = allUsers.any(
             (u) => (u.username == 'kiro_yt' || u.uid == 'demo_01' || u.uid == 'sample_kiro_yt') && u.hasBlueTick);
         final bool isShadowApproved = allUsers.any(
@@ -1690,7 +1742,6 @@ class _GamerAdminDashboardScreenState extends State<GamerAdminDashboardScreen>
             .where((u) => !u.hasBlueTick && (u.verificationStatus == 'pending' || u.blueTickStatus == 'pending'))
             .toList();
 
-        // Add Kiro_YT if not yet approved and not in requests list
         if (!isKiroApproved && !requests.any((u) => u.username == 'kiro_yt')) {
           final kiroUser = allUsers.firstWhere(
             (u) => u.username == 'kiro_yt' || u.uid == 'demo_01',
@@ -1709,7 +1760,6 @@ class _GamerAdminDashboardScreenState extends State<GamerAdminDashboardScreen>
           requests.add(kiroUser);
         }
 
-        // Add ShadowNova if not yet approved and not in requests list
         if (!isShadowApproved && !requests.any((u) => u.username == 'shadownova' || u.username == 'shadow_nova')) {
           final shadowUser = allUsers.firstWhere(
             (u) => u.username == 'shadownova' || u.username == 'shadow_nova' || u.uid == 'demo_02',
@@ -1823,7 +1873,6 @@ class _GamerAdminDashboardScreenState extends State<GamerAdminDashboardScreen>
           Row(
             mainAxisAlignment: MainAxisAlignment.end,
             children: [
-              // Reject Button
               OutlinedButton.icon(
                 onPressed: () => _rejectVerification(user),
                 style: OutlinedButton.styleFrom(
@@ -1836,7 +1885,6 @@ class _GamerAdminDashboardScreenState extends State<GamerAdminDashboardScreen>
                 label: const Text('Reject', style: TextStyle(fontWeight: FontWeight.bold)),
               ),
               const SizedBox(width: 10),
-              // Approve Button
               ElevatedButton.icon(
                 onPressed: () => _approveVerification(user),
                 style: ElevatedButton.styleFrom(
@@ -2124,20 +2172,12 @@ class _AdminCoinsVaultTabState extends State<_AdminCoinsVaultTab> {
     super.dispose();
   }
 
-  /// Searches for a user in Firestore across:
-  /// 1. Document ID (UID)
-  /// 2. 'uid' field
-  /// 3. 'username' field (case-insensitive, strips '@')
-  /// 4. 'tag' field
-  /// 5. 'email' field
-  /// 6. Comprehensive in-memory fallback scan across users collection
   Future<Map<String, dynamic>?> _findUser(String input) async {
     final raw = input.trim();
     if (raw.isEmpty) return null;
 
     final firestore = FirebaseFirestore.instance;
 
-    // 1. Direct document ID (UID) lookup
     try {
       final docSnap = await firestore.collection('users').doc(raw).get();
       if (docSnap.exists && docSnap.data() != null) {
@@ -2147,7 +2187,6 @@ class _AdminCoinsVaultTabState extends State<_AdminCoinsVaultTab> {
       }
     } catch (_) {}
 
-    // 2. Query by 'uid' field
     try {
       final qUid = await firestore.collection('users').where('uid', isEqualTo: raw).limit(1).get();
       if (qUid.docs.isNotEmpty) {
@@ -2159,7 +2198,6 @@ class _AdminCoinsVaultTabState extends State<_AdminCoinsVaultTab> {
 
     final clean = raw.toLowerCase().replaceAll('@', '').trim();
 
-    // 3. Query by 'username'
     try {
       final qUser = await firestore.collection('users').where('username', isEqualTo: clean).limit(1).get();
       if (qUser.docs.isNotEmpty) {
@@ -2169,7 +2207,6 @@ class _AdminCoinsVaultTabState extends State<_AdminCoinsVaultTab> {
       }
     } catch (_) {}
 
-    // 4. Query by 'tag'
     try {
       final qTag = await firestore.collection('users').where('tag', isEqualTo: clean).limit(1).get();
       if (qTag.docs.isNotEmpty) {
@@ -2179,7 +2216,6 @@ class _AdminCoinsVaultTabState extends State<_AdminCoinsVaultTab> {
       }
     } catch (_) {}
 
-    // 5. Query by 'email' (lowercase)
     final cleanEmail = raw.toLowerCase().trim();
     try {
       final qEmail = await firestore.collection('users').where('email', isEqualTo: cleanEmail).limit(1).get();
@@ -2190,7 +2226,6 @@ class _AdminCoinsVaultTabState extends State<_AdminCoinsVaultTab> {
       }
     } catch (_) {}
 
-    // 6. Query by 'email' (raw)
     try {
       final qEmailRaw = await firestore.collection('users').where('email', isEqualTo: raw).limit(1).get();
       if (qEmailRaw.docs.isNotEmpty) {
@@ -2200,7 +2235,6 @@ class _AdminCoinsVaultTabState extends State<_AdminCoinsVaultTab> {
       }
     } catch (_) {}
 
-    // 7. Comprehensive in-memory fallback scan across all users
     try {
       final allUsersSnap = await firestore.collection('users').get();
       for (final doc in allUsersSnap.docs) {
@@ -2324,7 +2358,6 @@ class _AdminCoinsVaultTabState extends State<_AdminCoinsVaultTab> {
     });
 
     try {
-      // 1. Resolve user if not yet resolved or if query input changed
       Map<String, dynamic>? user = _foundUser;
       String? docId = _foundDocId;
 
@@ -2335,7 +2368,6 @@ class _AdminCoinsVaultTabState extends State<_AdminCoinsVaultTab> {
         }
       }
 
-      // If user still not found: show RED ERROR MESSAGE and STOP!
       if (user == null || docId == null || docId.isEmpty) {
         if (!mounted) return;
         setState(() {
@@ -2375,7 +2407,6 @@ class _AdminCoinsVaultTabState extends State<_AdminCoinsVaultTab> {
       final adminEmail = currentAdmin?.email ?? 'Admin';
       final adminUid = currentAdmin?.uid ?? 'admin';
 
-      // 2. Fetch fresh user data from database to calculate exact current balance
       int currentCoins = 0;
       final freshSnap = await firestore.collection('users').doc(targetDocId).get();
       if (freshSnap.exists && freshSnap.data() != null) {
@@ -2396,7 +2427,6 @@ class _AdminCoinsVaultTabState extends State<_AdminCoinsVaultTab> {
 
       final newTotalCoins = currentCoins + amount;
 
-      // 3. Immediately save new coins to users collection in Firestore
       await firestore.collection('users').doc(targetDocId).set({
         'coins': newTotalCoins,
         'gCoins': newTotalCoins,
@@ -2404,7 +2434,6 @@ class _AdminCoinsVaultTabState extends State<_AdminCoinsVaultTab> {
         'lastRewardAt': FieldValue.serverTimestamp(),
       }, SetOptions(merge: true));
 
-      // Also ensure if targetUid is a different doc ID, it is kept in sync
       if (targetUid.isNotEmpty && targetUid != targetDocId) {
         try {
           await firestore.collection('users').doc(targetUid).set({
@@ -2415,7 +2444,6 @@ class _AdminCoinsVaultTabState extends State<_AdminCoinsVaultTab> {
         } catch (_) {}
       }
 
-      // 4. Update wallets & coin_wallets safely
       try {
         await firestore.collection('wallets').doc(targetDocId).set({
           'coins': newTotalCoins,
@@ -2439,7 +2467,6 @@ class _AdminCoinsVaultTabState extends State<_AdminCoinsVaultTab> {
         debugPrint('Coin wallet save note: $cwErr');
       }
 
-      // 5. Log transaction
       final txId = firestore.collection('transactions').doc().id;
       final formattedDate = DateFormat('yyyy-MM-dd HH:mm').format(DateTime.now());
       final txData = {
@@ -2464,7 +2491,6 @@ class _AdminCoinsVaultTabState extends State<_AdminCoinsVaultTab> {
         debugPrint('Transaction log note: $txErr');
       }
 
-      // 6. Send user in-app notification
       try {
         await NotificationService().createNotification(
           userId: targetDocId,
@@ -2476,14 +2502,12 @@ class _AdminCoinsVaultTabState extends State<_AdminCoinsVaultTab> {
         debugPrint('Notification notice: $notifErr');
       }
 
-      // 7. Update local in-memory state if this device is the user
       final currentGamer = GamerAuthService().currentGamer;
       if (currentGamer != null && (currentGamer.uid == targetDocId || currentGamer.uid == targetUid)) {
         GamerAuthService().currentGamerNotifier.value = currentGamer.copyWith(coins: newTotalCoins);
         CoinRewardService().coinsNotifier.value = newTotalCoins;
       }
 
-      // 8. Refresh user state in preview
       final updatedSnap = await firestore.collection('users').doc(targetDocId).get();
       if (updatedSnap.exists && updatedSnap.data() != null) {
         final d = Map<String, dynamic>.from(updatedSnap.data()!);
@@ -2544,7 +2568,6 @@ class _AdminCoinsVaultTabState extends State<_AdminCoinsVaultTab> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // Header Card
           Container(
             padding: const EdgeInsets.all(16),
             decoration: BoxDecoration(
@@ -2599,7 +2622,6 @@ class _AdminCoinsVaultTabState extends State<_AdminCoinsVaultTab> {
           ),
           const SizedBox(height: 12),
 
-          // Target Username or UID input field with search button
           Row(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
@@ -2677,7 +2699,6 @@ class _AdminCoinsVaultTabState extends State<_AdminCoinsVaultTab> {
             ],
           ),
 
-          // Found User Preview Card
           if (_foundUser != null) ...[
             const SizedBox(height: 12),
             Container(
@@ -2759,7 +2780,6 @@ class _AdminCoinsVaultTabState extends State<_AdminCoinsVaultTab> {
 
           const SizedBox(height: 14),
 
-          // Coins Amount Input Field
           TextField(
             controller: _amountController,
             keyboardType: TextInputType.number,
@@ -2781,7 +2801,6 @@ class _AdminCoinsVaultTabState extends State<_AdminCoinsVaultTab> {
           ),
           const SizedBox(height: 8),
 
-          // Quick Amount Selection Chips
           SingleChildScrollView(
             scrollDirection: Axis.horizontal,
             child: Row(
@@ -2809,7 +2828,6 @@ class _AdminCoinsVaultTabState extends State<_AdminCoinsVaultTab> {
           ),
           const SizedBox(height: 14),
 
-          // Red Error Message Banner
           if (_errorMessage != null) ...[
             Container(
               padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
@@ -2834,7 +2852,6 @@ class _AdminCoinsVaultTabState extends State<_AdminCoinsVaultTab> {
             const SizedBox(height: 12),
           ],
 
-          // Green Success Message Banner
           if (_successMessage != null) ...[
             Container(
               padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
@@ -2859,7 +2876,6 @@ class _AdminCoinsVaultTabState extends State<_AdminCoinsVaultTab> {
             const SizedBox(height: 12),
           ],
 
-          // "Award Coins Now" Button
           SizedBox(
             width: double.infinity,
             height: 50,
@@ -2886,7 +2902,6 @@ class _AdminCoinsVaultTabState extends State<_AdminCoinsVaultTab> {
           ),
           const SizedBox(height: 28),
 
-          // Live Recent Coin Grants History
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
@@ -2943,7 +2958,6 @@ class _AdminCoinsVaultTabState extends State<_AdminCoinsVaultTab> {
                 );
               }
 
-              // Sort locally in case composite index is not built
               final sorted = List<QueryDocumentSnapshot>.from(docs);
               sorted.sort((a, b) {
                 final da = a.data() as Map<String, dynamic>;
@@ -3147,7 +3161,6 @@ class _AdminRankActionButtonsState extends State<_AdminRankActionButtons> {
         ],
         Row(
           children: [
-            // Reject button
             Expanded(
               child: OutlinedButton.icon(
                 onPressed: () {
@@ -3172,7 +3185,6 @@ class _AdminRankActionButtonsState extends State<_AdminRankActionButtons> {
               ),
             ),
             const SizedBox(width: 8),
-            // Approve button
             Expanded(
               child: ElevatedButton.icon(
                 onPressed: widget.onApprove,
@@ -3269,7 +3281,6 @@ class _AdminPendingProofCardState extends State<_AdminPendingProofCard> {
     required int addPts,
     int addTotalMatches = 1,
   }) async {
-    // 1. Supabase teams table
     try {
       final tUuid = SupabaseService.toUuid(teamId);
       final res = await SupabaseService.client
@@ -3294,7 +3305,6 @@ class _AdminPendingProofCardState extends State<_AdminPendingProofCard> {
             'total_matches': currentTotalMatches + addTotalMatches,
           }).eq('id', tUuid);
         } catch (_) {
-          // If total_matches column doesn't exist yet
           await SupabaseService.client.from('teams').update({
             'wins': currentWins + addW,
             'losses': currentLosses + addL,
@@ -3307,7 +3317,6 @@ class _AdminPendingProofCardState extends State<_AdminPendingProofCard> {
       debugPrint('[AdminProof] Supabase team stats update error: $e');
     }
 
-    // 2. Firestore teams collection
     try {
       final firestore = FirebaseFirestore.instance;
       final docRef = firestore.collection('teams').doc(teamId);
@@ -3340,7 +3349,6 @@ class _AdminPendingProofCardState extends State<_AdminPendingProofCard> {
           : (widget.match['winner_team_id'] ?? '').toString();
       final winnerUuid = winnerId.isNotEmpty ? SupabaseService.toUuid(winnerId) : null;
 
-      // 1. Update Supabase active_matches table: proof_status='accepted', status='completed', winner_team_id=submitted_by_team_id
       try {
         await SupabaseService.client.from('active_matches').update({
           'proof_status': 'accepted',
@@ -3355,7 +3363,6 @@ class _AdminPendingProofCardState extends State<_AdminPendingProofCard> {
         }).eq('id', matchId);
       }
 
-      // 2. Update teams table: winner wins+1, points+3, total_matches+1 / loser total_matches+1
       final t1Uuid = SupabaseService.toUuid(team1Id);
       final isT1Winner = (winnerId == team1Id || winnerId == t1Uuid);
       final winTeam = isT1Winner ? team1Id : team2Id;
@@ -3409,7 +3416,6 @@ class _AdminPendingProofCardState extends State<_AdminPendingProofCard> {
         }).eq('id', matchId);
       }
 
-      // Also sync to team_matches in Supabase if exists
       try {
         await SupabaseService.client.from('team_matches').update({
           'status': 'rejected',
@@ -3417,7 +3423,6 @@ class _AdminPendingProofCardState extends State<_AdminPendingProofCard> {
         }).eq('id', matchId);
       } catch (_) {}
 
-      // Also sync to Firestore team_matches if exists
       try {
         await FirebaseFirestore.instance.collection('team_matches').doc(matchId.toString()).update({
           'status': 'rejected',
@@ -3426,7 +3431,6 @@ class _AdminPendingProofCardState extends State<_AdminPendingProofCard> {
         });
       } catch (_) {}
 
-      // Send in-app notification to the team that submitted the proof
       try {
         final team1Id = (widget.match['team1_id'] ?? '').toString();
         final team2Id = (widget.match['team2_id'] ?? '').toString();
@@ -3532,7 +3536,6 @@ class _AdminPendingProofCardState extends State<_AdminPendingProofCard> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // Row 1: vs Teams Names
           Row(
             children: [
               Expanded(
@@ -3601,7 +3604,6 @@ class _AdminPendingProofCardState extends State<_AdminPendingProofCard> {
           ],
           const SizedBox(height: 10),
 
-          // Row 2: Proof Image from match_proofs bucket
           if (proofUrl != null && proofUrl.isNotEmpty) ...[
             GestureDetector(
               onTap: () => _showImageDialog(context, proofUrl),
@@ -3672,7 +3674,6 @@ class _AdminPendingProofCardState extends State<_AdminPendingProofCard> {
             const SizedBox(height: 10),
           ],
 
-          // Row 3: Reject Reason TextField
           TextField(
             controller: _reasonController,
             style: const TextStyle(color: Colors.white, fontSize: 12.5),
@@ -3698,7 +3699,6 @@ class _AdminPendingProofCardState extends State<_AdminPendingProofCard> {
           ),
           const SizedBox(height: 10),
 
-          // Row 4: Accept and Reject buttons
           if (_isProcessing)
             const Center(
               child: Padding(
@@ -3709,7 +3709,6 @@ class _AdminPendingProofCardState extends State<_AdminPendingProofCard> {
           else
             Row(
               children: [
-                // Reject Button ❌
                 Expanded(
                   child: SizedBox(
                     height: 40,
@@ -3730,7 +3729,6 @@ class _AdminPendingProofCardState extends State<_AdminPendingProofCard> {
                   ),
                 ),
                 const SizedBox(width: 10),
-                // Accept Button ✅
                 Expanded(
                   child: SizedBox(
                     height: 40,
@@ -3757,4 +3755,3 @@ class _AdminPendingProofCardState extends State<_AdminPendingProofCard> {
     );
   }
 }
-
