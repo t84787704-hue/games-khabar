@@ -1,5 +1,4 @@
 import 'dart:io';
-import 'dart:math';
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:cached_network_image/cached_network_image.dart';
@@ -17,6 +16,7 @@ import '../services/verification_service.dart';
 import '../models/challenge_model.dart';
 import '../services/challenge_service.dart';
 import '../services/profile_service.dart';
+import '../services/block_service.dart';
 import '../widgets/posts_tab.dart';
 import 'create_gamer_id_screen.dart';
 import 'followers_following_screen.dart';
@@ -29,6 +29,7 @@ import 'gamer_delete_account_screen.dart';
 import 'gamer_download_data_screen.dart';
 import 'gamer_privacy_policy_screen.dart';
 import 'gamer_terms_of_service_screen.dart';
+import 'blocked_users_screen.dart';
 import '../widgets/coin_history_sheet.dart';
 
 class GamerProfileScreen extends StatefulWidget {
@@ -45,21 +46,46 @@ class _GamerProfileScreenState extends State<GamerProfileScreen>
   late TabController _tabController;
   final GamerAuthService _authService = GamerAuthService();
   final GamerSocialService _socialService = GamerSocialService();
+  final BlockService _blockService = BlockService();
 
   VerificationProgress? _liveProgress;
   bool _isCheckingVerification = false;
   String? _lastCheckedUid;
 
+  bool _isBlockedByMe = false;
+  bool _isBlockedByThem = false;
+  bool _loadingBlockStatus = true;
+
   @override
   void initState() {
     super.initState();
     _tabController = TabController(length: 2, vsync: this);
+    _checkBlockStatus();
   }
 
   @override
   void dispose() {
     _tabController.dispose();
     super.dispose();
+  }
+
+  Future<void> _checkBlockStatus() async {
+    final currentUid = _authService.currentUid ?? '';
+    final targetUid = widget.userId ?? currentUid;
+    if (currentUid.isEmpty || currentUid == targetUid) {
+      if (mounted) setState(() => _loadingBlockStatus = false);
+      return;
+    }
+    final blocked = await _blockService.isBlocked(
+        currentUid: currentUid, targetUid: targetUid);
+    final blockedBy = await _blockService.isBlockedBy(
+        currentUid: currentUid, targetUid: targetUid);
+    if (!mounted) return;
+    setState(() {
+      _isBlockedByMe = blocked;
+      _isBlockedByThem = blockedBy;
+      _loadingBlockStatus = false;
+    });
   }
 
   Future<GamerUser?> _fetchGamerFromSupabase(String userId) async {
@@ -189,6 +215,89 @@ class _GamerProfileScreenState extends State<GamerProfileScreen>
           ),
         );
       }
+    }
+  }
+
+  Future<void> _confirmBlock(GamerUser user) async {
+    final confirm = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: Colors.white,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        title: const Row(
+          children: [
+            Icon(Icons.block_rounded, color: Color(0xFFDC2626)),
+            SizedBox(width: 8),
+            Text('Block User?',
+                style: TextStyle(
+                    color: Color(0xFF050505), fontWeight: FontWeight.bold)),
+          ],
+        ),
+        content: Text(
+          'Block ${user.displayName}?\n\nThey won\'t be able to:\n• See your profile or posts\n• Comment or follow you\n• Send you messages',
+          style: const TextStyle(color: Color(0xFF65676B), height: 1.4),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('Cancel',
+                style: TextStyle(color: Color(0xFF65676B))),
+          ),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(
+              backgroundColor: const Color(0xFFDC2626),
+              foregroundColor: Colors.white,
+              elevation: 0,
+              shape:
+                  RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+            ),
+            onPressed: () => Navigator.pop(ctx, true),
+            child: const Text('Block',
+                style:
+                    TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+          ),
+        ],
+      ),
+    );
+
+    if (confirm != true) return;
+
+    final uid = _authService.currentUid ?? '';
+    final ok = await _blockService.blockUser(
+        currentUid: uid, targetUid: user.uid);
+
+    if (!mounted) return;
+    if (ok) {
+      setState(() => _isBlockedByMe = true);
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('🚫 ${user.displayName} blocked'),
+          backgroundColor: const Color(0xFFDC2626),
+        ),
+      );
+    } else {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Failed to block user'),
+          backgroundColor: Color(0xFFFF4655),
+        ),
+      );
+    }
+  }
+
+  Future<void> _unblockUser(GamerUser user) async {
+    final uid = _authService.currentUid ?? '';
+    final ok = await _blockService.unblockUser(
+        currentUid: uid, targetUid: user.uid);
+    if (!mounted) return;
+    if (ok) {
+      setState(() => _isBlockedByMe = false);
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('${user.displayName} unblocked'),
+          backgroundColor: GamerTheme.accentGreen,
+        ),
+      );
     }
   }
 
@@ -1045,6 +1154,44 @@ class _GamerProfileScreenState extends State<GamerProfileScreen>
     final targetUid = widget.userId ?? currentUid;
     final isOwnProfile = currentUid == targetUid;
 
+    // Blocked-By-Them: hide profile completely
+    if (!isOwnProfile && _isBlockedByThem) {
+      return Scaffold(
+        backgroundColor: const Color(0xFFF0F2F5),
+        appBar: AppBar(
+          backgroundColor: Colors.white,
+          elevation: 1,
+          iconTheme: const IconThemeData(color: Color(0xFF050505)),
+        ),
+        body: const Center(
+          child: Padding(
+            padding: EdgeInsets.all(32),
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Icon(Icons.lock_outline_rounded,
+                    size: 64, color: Color(0xFF65676B)),
+                SizedBox(height: 16),
+                Text(
+                  'Profile Unavailable',
+                  style: TextStyle(
+                      color: Color(0xFF050505),
+                      fontSize: 18,
+                      fontWeight: FontWeight.bold),
+                ),
+                SizedBox(height: 8),
+                Text(
+                  'This profile isn\'t available right now.',
+                  textAlign: TextAlign.center,
+                  style: TextStyle(color: Color(0xFF65676B), fontSize: 13),
+                ),
+              ],
+            ),
+          ),
+        ),
+      );
+    }
+
     return StreamBuilder<GamerUser?>(
       stream: _gamerStream(targetUid),
       builder: (context, snapshot) {
@@ -1522,125 +1669,154 @@ class _GamerProfileScreenState extends State<GamerProfileScreen>
                                 onPressed: () => _shareProfile(user),
                               ),
                             ] else ...[
-                              Expanded(
-                                flex: 3,
-                                child: StreamBuilder<bool>(
-                                  stream: _socialService
-                                      .isFollowingStream(
-                                          currentUid, user.uid),
-                                  builder: (context, snap) {
-                                    final isFollowing =
-                                        snap.data ?? false;
-                                    return ElevatedButton.icon(
-                                      style: ElevatedButton.styleFrom(
-                                        backgroundColor: isFollowing
-                                            ? const Color(0xFFE4E6EB)
-                                            : const Color(0xFF1877F2),
-                                        foregroundColor: isFollowing
-                                            ? const Color(0xFF050505)
-                                            : Colors.white,
-                                        shape: RoundedRectangleBorder(
-                                            borderRadius:
-                                                BorderRadius.circular(
-                                                    8)),
-                                        padding:
-                                            const EdgeInsets.symmetric(
-                                                vertical: 12),
-                                        elevation: 0,
-                                      ),
-                                      icon: Icon(
-                                        isFollowing
-                                            ? Icons.check_rounded
-                                            : Icons.person_add_rounded,
-                                        size: 16,
-                                        color: isFollowing
-                                            ? const Color(0xFF34A853)
-                                            : Colors.white,
-                                      ),
-                                      label: Text(
-                                        isFollowing
-                                            ? 'Following'
-                                            : 'Follow',
+                              if (_isBlockedByMe) ...[
+                                Expanded(
+                                  child: OutlinedButton.icon(
+                                    style: OutlinedButton.styleFrom(
+                                      backgroundColor:
+                                          const Color(0xFFFEE2E2),
+                                      side: const BorderSide(
+                                          color: Color(0xFFDC2626),
+                                          width: 1.2),
+                                      foregroundColor:
+                                          const Color(0xFFDC2626),
+                                      shape: RoundedRectangleBorder(
+                                          borderRadius:
+                                              BorderRadius.circular(8)),
+                                      padding: const EdgeInsets.symmetric(
+                                          vertical: 12),
+                                    ),
+                                    icon: const Icon(Icons.block_rounded,
+                                        size: 16),
+                                    label: const Text('Blocked • Tap to Unblock',
                                         style: TextStyle(
-                                          fontWeight: FontWeight.bold,
-                                          fontSize: 12.5,
+                                            fontWeight: FontWeight.bold,
+                                            fontSize: 12.5,
+                                            color: Color(0xFFDC2626))),
+                                    onPressed: () => _unblockUser(user),
+                                  ),
+                                ),
+                              ] else ...[
+                                Expanded(
+                                  flex: 3,
+                                  child: StreamBuilder<bool>(
+                                    stream: _socialService
+                                        .isFollowingStream(
+                                            currentUid, user.uid),
+                                    builder: (context, snap) {
+                                      final isFollowing =
+                                          snap.data ?? false;
+                                      return ElevatedButton.icon(
+                                        style: ElevatedButton.styleFrom(
+                                          backgroundColor: isFollowing
+                                              ? const Color(0xFFE4E6EB)
+                                              : const Color(0xFF1877F2),
+                                          foregroundColor: isFollowing
+                                              ? const Color(0xFF050505)
+                                              : Colors.white,
+                                          shape: RoundedRectangleBorder(
+                                              borderRadius:
+                                                  BorderRadius.circular(
+                                                      8)),
+                                          padding:
+                                              const EdgeInsets.symmetric(
+                                                  vertical: 12),
+                                          elevation: 0,
+                                        ),
+                                        icon: Icon(
+                                          isFollowing
+                                              ? Icons.check_rounded
+                                              : Icons.person_add_rounded,
+                                          size: 16,
                                           color: isFollowing
-                                              ? const Color(
-                                                  0xFF050505)
+                                              ? const Color(0xFF34A853)
                                               : Colors.white,
                                         ),
-                                      ),
-                                      onPressed: () async {
-                                        if (currentUid.isEmpty) return;
-                                        if (isFollowing) {
-                                          await _socialService
-                                              .unfollowUser(
-                                                  currentUid:
-                                                      currentUid,
-                                                  targetUid:
-                                                      user.uid);
-                                        } else {
-                                          await _socialService
-                                              .followUser(
-                                                  currentUid:
-                                                      currentUid,
-                                                  targetUid:
-                                                      user.uid);
-                                        }
-                                      },
-                                    );
-                                  },
-                                ),
-                              ),
-                              const SizedBox(width: 8),
-                              Expanded(
-                                flex: 3,
-                                child: OutlinedButton.icon(
-                                  style: OutlinedButton.styleFrom(
-                                    side: const BorderSide(
-                                        color: Color(0xFFF87171),
-                                        width: 1.2),
-                                    backgroundColor:
-                                        const Color(0xFFFEE2E2),
-                                    foregroundColor:
-                                        const Color(0xFFDC2626),
-                                    shape: RoundedRectangleBorder(
-                                        borderRadius:
-                                            BorderRadius.circular(8)),
-                                    padding: const EdgeInsets.symmetric(
-                                        vertical: 12),
+                                        label: Text(
+                                          isFollowing
+                                              ? 'Following'
+                                              : 'Follow',
+                                          style: TextStyle(
+                                            fontWeight: FontWeight.bold,
+                                            fontSize: 12.5,
+                                            color: isFollowing
+                                                ? const Color(
+                                                    0xFF050505)
+                                                : Colors.white,
+                                          ),
+                                        ),
+                                        onPressed: () async {
+                                          if (currentUid.isEmpty) return;
+                                          if (isFollowing) {
+                                            await _socialService
+                                                .unfollowUser(
+                                                    currentUid:
+                                                        currentUid,
+                                                    targetUid:
+                                                        user.uid);
+                                          } else {
+                                            await _socialService
+                                                .followUser(
+                                                    currentUid:
+                                                        currentUid,
+                                                    targetUid:
+                                                        user.uid);
+                                          }
+                                        },
+                                      );
+                                    },
                                   ),
-                                  icon: const Text('⚔️',
-                                      style:
-                                          TextStyle(fontSize: 14)),
-                                  label: const Text(
-                                    '1v1 Battle',
-                                    style: TextStyle(
-                                      fontWeight: FontWeight.bold,
-                                      fontSize: 12.5,
-                                      color: Color(0xFFDC2626),
+                                ),
+                                const SizedBox(width: 8),
+                                Expanded(
+                                  flex: 3,
+                                  child: OutlinedButton.icon(
+                                    style: OutlinedButton.styleFrom(
+                                      side: const BorderSide(
+                                          color: Color(0xFFF87171),
+                                          width: 1.2),
+                                      backgroundColor:
+                                          const Color(0xFFFEE2E2),
+                                      foregroundColor:
+                                          const Color(0xFFDC2626),
+                                      shape: RoundedRectangleBorder(
+                                          borderRadius:
+                                              BorderRadius.circular(8)),
+                                      padding: const EdgeInsets.symmetric(
+                                          vertical: 12),
                                     ),
+                                    icon: const Text('⚔️',
+                                        style:
+                                            TextStyle(fontSize: 14)),
+                                    label: const Text(
+                                      '1v1 Battle',
+                                      style: TextStyle(
+                                        fontWeight: FontWeight.bold,
+                                        fontSize: 12.5,
+                                        color: Color(0xFFDC2626),
+                                      ),
+                                    ),
+                                    onPressed: () =>
+                                        _show1v1ChallengeDialog(user),
                                   ),
-                                  onPressed: () =>
-                                      _show1v1ChallengeDialog(user),
                                 ),
-                              ),
-                              const SizedBox(width: 8),
-                              IconButton(
-                                style: IconButton.styleFrom(
-                                  backgroundColor:
-                                      const Color(0xFFE4E6EB),
-                                  shape: RoundedRectangleBorder(
-                                    borderRadius:
-                                        BorderRadius.circular(8),
+                                const SizedBox(width: 8),
+                                IconButton(
+                                  style: IconButton.styleFrom(
+                                    backgroundColor:
+                                        const Color(0xFFE4E6EB),
+                                    shape: RoundedRectangleBorder(
+                                      borderRadius:
+                                          BorderRadius.circular(8),
+                                    ),
+                                    padding: const EdgeInsets.all(10),
                                   ),
-                                  padding: const EdgeInsets.all(10),
+                                  icon: const Icon(Icons.share_rounded,
+                                      size: 18,
+                                      color: Color(0xFF65676B)),
+                                  onPressed: () => _shareProfile(user),
                                 ),
-                                icon: const Icon(Icons.share_rounded,
-                                    size: 18,
-                                    color: Color(0xFF65676B)),
-                                onPressed: () => _shareProfile(user),
-                              ),
+                              ],
                             ],
                           ],
                         ),
@@ -1993,6 +2169,39 @@ class _GamerProfileScreenState extends State<GamerProfileScreen>
                         _showPrivacySettingsSheet(user);
                       },
                     ),
+                  if (isOwnProfile)
+                    ListTile(
+                      leading: Container(
+                        padding: const EdgeInsets.all(8),
+                        decoration: const BoxDecoration(
+                          color: Color(0xFFFEE2E2),
+                          shape: BoxShape.circle,
+                        ),
+                        child: const Icon(Icons.block_rounded,
+                            color: Color(0xFFDC2626), size: 20),
+                      ),
+                      title: const Text(
+                        'Blocked Users',
+                        style: TextStyle(
+                            color: Color(0xFF050505),
+                            fontWeight: FontWeight.bold,
+                            fontSize: 14),
+                      ),
+                      subtitle: const Text(
+                        'Manage users you have blocked',
+                        style: TextStyle(
+                            color: Color(0xFF65676B), fontSize: 12),
+                      ),
+                      trailing: const Icon(Icons.arrow_forward_ios_rounded,
+                          color: Color(0xFF65676B), size: 14),
+                      onTap: () {
+                        Navigator.pop(ctx);
+                        Navigator.of(context).push(
+                          MaterialPageRoute(
+                              builder: (_) => const BlockedUsersScreen()),
+                        );
+                      },
+                    ),
                   ListTile(
                     leading: Container(
                       padding: const EdgeInsets.all(8),
@@ -2065,6 +2274,44 @@ class _GamerProfileScreenState extends State<GamerProfileScreen>
                       _shareProfile(user);
                     },
                   ),
+                  if (!isOwnProfile)
+                    ListTile(
+                      leading: Container(
+                        padding: const EdgeInsets.all(8),
+                        decoration: const BoxDecoration(
+                          color: Color(0xFFFEE2E2),
+                          shape: BoxShape.circle,
+                        ),
+                        child: const Icon(Icons.block_rounded,
+                            color: Color(0xFFDC2626), size: 20),
+                      ),
+                      title: Text(
+                        _isBlockedByMe ? 'Unblock User' : 'Block User',
+                        style: const TextStyle(
+                            color: Color(0xFFDC2626),
+                            fontWeight: FontWeight.bold,
+                            fontSize: 14),
+                      ),
+                      subtitle: Text(
+                        _isBlockedByMe
+                            ? 'They will be able to see your profile again'
+                            : 'Hide their posts, comments & profile',
+                        style: const TextStyle(
+                            color: Color(0xFF65676B), fontSize: 12),
+                      ),
+                      trailing: const Icon(
+                          Icons.arrow_forward_ios_rounded,
+                          color: Color(0xFF65676B),
+                          size: 14),
+                      onTap: () {
+                        Navigator.pop(ctx);
+                        if (_isBlockedByMe) {
+                          _unblockUser(user);
+                        } else {
+                          _confirmBlock(user);
+                        }
+                      },
+                    ),
                   ValueListenableBuilder<ThemeMode>(
                     valueListenable: ThemeService.themeModeNotifier,
                     builder: (context, mode, _) {
