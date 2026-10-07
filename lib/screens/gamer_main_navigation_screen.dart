@@ -8,6 +8,7 @@ import '../services/supabase_service.dart';
 import '../services/theme_service.dart';
 import 'gamer_feed_screen.dart';
 import 'teams_screen.dart';
+import 'gamer_messages_screen.dart';
 import 'gamer_rooms_screen.dart';
 import 'gamer_profile_screen.dart';
 import 'create_gamer_id_screen.dart';
@@ -19,7 +20,8 @@ class GamerMainNavigationScreen extends StatefulWidget {
   const GamerMainNavigationScreen({super.key, this.initialIndex = 0});
 
   @override
-  State<GamerMainNavigationScreen> createState() => _GamerMainNavigationScreenState();
+  State<GamerMainNavigationScreen> createState() =>
+      _GamerMainNavigationScreenState();
 }
 
 class _GamerMainNavigationScreenState extends State<GamerMainNavigationScreen> {
@@ -37,13 +39,12 @@ class _GamerMainNavigationScreenState extends State<GamerMainNavigationScreen> {
 
   void _checkAdminStatus() {
     final user = FirebaseAuth.instance.currentUser;
-    // Condition 1: FirebaseAuth currentUser email == "tufailm483@gmail.com"
-    if (user != null && user.email?.trim().toLowerCase() == 'tufailm483@gmail.com') {
+    if (user != null &&
+        user.email?.trim().toLowerCase() == 'tufailm483@gmail.com') {
       setState(() => _isAdmin = true);
       return;
     }
 
-    // Condition 2: userDoc isAdmin == true
     if (user != null) {
       _adminSub = FirebaseFirestore.instance
           .collection('users')
@@ -53,12 +54,13 @@ class _GamerMainNavigationScreenState extends State<GamerMainNavigationScreen> {
         if (!snapshot.exists) return;
         final data = snapshot.data();
         final isDocAdmin = data?['isAdmin'] == true;
-        final isEmailMatch = user.email?.trim().toLowerCase() == 'tufailm483@gmail.com';
+        final isEmailMatch =
+            user.email?.trim().toLowerCase() == 'tufailm483@gmail.com';
         final newIsAdmin = isDocAdmin || isEmailMatch;
         if (newIsAdmin != _isAdmin && mounted) {
           setState(() {
             _isAdmin = newIsAdmin;
-            if (!_isAdmin && _currentIndex > 3) {
+            if (!_isAdmin && _currentIndex > 4) {
               _currentIndex = 0;
             }
           });
@@ -83,7 +85,6 @@ class _GamerMainNavigationScreenState extends State<GamerMainNavigationScreen> {
         }
       }
       if (mounted && (gamer == null || gamer.username.trim().isEmpty)) {
-        // Enforce Create ID Screen only if profile does not exist or username is empty
         Navigator.of(context).pushReplacement(
           MaterialPageRoute(builder: (_) => const CreateGamerIdScreen()),
         );
@@ -93,11 +94,12 @@ class _GamerMainNavigationScreenState extends State<GamerMainNavigationScreen> {
 
   @override
   Widget build(BuildContext context) {
-    // 4 Core tabs: Feed, Teams, Rooms, Profile
-    // Admin tab: Admin (shield icon) visible ONLY to admin
+    // 5 Core tabs: Feed, Teams, Messages, Rooms, Profile
+    // Admin tab: visible ONLY to admin
     final screens = <Widget>[
       const GamerFeedScreen(),
       const TeamsScreen(),
+      const GamerMessagesScreen(),
       const GamerRoomsScreen(),
       const GamerProfileScreen(),
       if (_isAdmin) const GamerAdminDashboardScreen(),
@@ -158,29 +160,37 @@ class _GamerMainNavigationScreenState extends State<GamerMainNavigationScreen> {
                       isSelected: _currentIndex == 1,
                     ),
 
-                    // Tab 2: Rooms (Tournaments / Custom Rooms)
+                    // Tab 2: Messages (NEW)
                     _buildNavItem(
                       index: 2,
-                      icon: Icons.military_tech_rounded,
-                      label: 'Rooms',
+                      icon: Icons.chat_bubble_rounded,
+                      label: 'Messages',
                       isSelected: _currentIndex == 2,
                     ),
 
-                    // Tab 3: Profile
+                    // Tab 3: Rooms
                     _buildNavItem(
                       index: 3,
-                      icon: Icons.person_rounded,
-                      label: 'Profile',
+                      icon: Icons.military_tech_rounded,
+                      label: 'Rooms',
                       isSelected: _currentIndex == 3,
                     ),
 
-                    // Tab 4: Admin (Visible ONLY to Admin)
+                    // Tab 4: Profile
+                    _buildNavItem(
+                      index: 4,
+                      icon: Icons.person_rounded,
+                      label: 'Profile',
+                      isSelected: _currentIndex == 4,
+                    ),
+
+                    // Tab 5: Admin (only for admin)
                     if (_isAdmin)
                       _buildNavItem(
-                        index: 4,
+                        index: 5,
                         icon: Icons.admin_panel_settings_rounded,
                         label: 'Admin',
-                        isSelected: _currentIndex == 4,
+                        isSelected: _currentIndex == 5,
                         activeColor: const Color(0xFF1877F2),
                       ),
                   ],
@@ -212,7 +222,8 @@ class _GamerMainNavigationScreenState extends State<GamerMainNavigationScreen> {
       onTap: () => _onTabTapped(index),
       borderRadius: BorderRadius.circular(12),
       child: Padding(
-        padding: EdgeInsets.symmetric(horizontal: _isAdmin ? 8 : 12, vertical: 6),
+        padding: EdgeInsets.symmetric(
+            horizontal: _isAdmin ? 6 : 10, vertical: 6),
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
