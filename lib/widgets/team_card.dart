@@ -34,6 +34,8 @@ class _TeamCardState extends State<TeamCard> {
   bool _isMemberFromDb = false;
   bool _isOwnerFromDb = false;
 
+  final Set<String> _localCancelledIds = {};
+
   @override
   void initState() {
     super.initState();
@@ -66,7 +68,8 @@ class _TeamCardState extends State<TeamCard> {
         if (res != null) {
           _isMemberFromDb = true;
           final role = (res['role'] ?? '').toString().toLowerCase();
-          _isOwnerFromDb = (role == 'owner' || role == 'leader');
+          _isOwnerFromDb =
+              (role == 'owner' || role == 'co_leader' || role == 'leader');
         } else {
           _isMemberFromDb = false;
           _isOwnerFromDb = false;
@@ -272,8 +275,6 @@ class _TeamCardState extends State<TeamCard> {
     }
   }
 
-  final Set<String> _localCancelledIds = {};
-
   Future<void> _cancelChallengeLocally(String challengeId) async {
     setState(() {
       _localCancelledIds.add(challengeId);
@@ -416,6 +417,45 @@ class _TeamCardState extends State<TeamCard> {
       label: const Text('CHALLENGE',
           style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold)),
       onPressed: () => _handleChallenge(currentUid),
+    );
+  }
+
+  /// REAL-TIME challenge section. Always listens to Supabase directly so the
+  /// button updates the instant a challenge is inserted or cancelled.
+  Widget _buildChallengeSection(String currentUid) {
+    if (widget.myTeamId.isEmpty) {
+      return _buildChallengeButton(currentUid);
+    }
+
+    return StreamBuilder<List<Map<String, dynamic>>>(
+      stream: SupabaseService.client
+          .from('challenges')
+          .stream(primaryKey: ['id'])
+          .eq('from_team_id', SupabaseService.toUuid(widget.myTeamId)),
+      builder: (context, cSnap) {
+        final challenges = cSnap.data ?? [];
+        final targetUuid = SupabaseService.toUuid(widget.team.id).toLowerCase();
+        final rawTeamId = widget.team.id.toLowerCase();
+
+        final pendingDoc = challenges.firstWhere(
+          (d) {
+            final toId = d['to_team_id']?.toString().toLowerCase();
+            final st = (d['status'] ?? '').toString().toLowerCase();
+            final id = d['id']?.toString() ?? '';
+            return (toId == targetUuid || toId == rawTeamId) &&
+                st == 'pending' &&
+                !_localCancelledIds.contains(id);
+          },
+          orElse: () => {},
+        );
+
+        if (pendingDoc.isNotEmpty) {
+          return _buildRequestedButton(
+              pendingDoc['id']?.toString() ?? '');
+        }
+
+        return _buildChallengeButton(currentUid);
+      },
     );
   }
 
@@ -731,47 +771,41 @@ class _TeamCardState extends State<TeamCard> {
                   ),
                 ],
 
-                // Red banner: pending challenge
+                // Red banner: pending challenge — real-time
                 if (!isMemberFinal &&
                     currentUid.isNotEmpty &&
                     widget.myTeamId.isNotEmpty) ...[
-                  if (widget.onCancelChallenge != null) ...[
-                    if (widget.pendingChallenge != null)
-                      _buildRedBanner(
-                          widget.pendingChallenge!['id']?.toString() ?? ''),
-                  ] else ...[
-                    StreamBuilder<List<Map<String, dynamic>>>(
-                      stream: SupabaseService.client
-                          .from('challenges')
-                          .stream(primaryKey: ['id'])
-                          .eq('from_team_id',
-                              SupabaseService.toUuid(widget.myTeamId)),
-                      builder: (context, cSnap) {
-                        final challenges = cSnap.data ?? [];
-                        final targetUuid =
-                            SupabaseService.toUuid(team.id).toLowerCase();
-                        final rawTeamId = team.id.toLowerCase();
-                        final pendingDoc = challenges.firstWhere(
-                          (d) {
-                            final toId =
-                                d['to_team_id']?.toString().toLowerCase();
-                            final st =
-                                (d['status'] ?? '').toString().toLowerCase();
-                            final id = d['id']?.toString() ?? '';
-                            return (toId == targetUuid ||
-                                    toId == rawTeamId) &&
-                                st == 'pending' &&
-                                !_localCancelledIds.contains(id);
-                          },
-                          orElse: () => {},
-                        );
+                  StreamBuilder<List<Map<String, dynamic>>>(
+                    stream: SupabaseService.client
+                        .from('challenges')
+                        .stream(primaryKey: ['id'])
+                        .eq('from_team_id',
+                            SupabaseService.toUuid(widget.myTeamId)),
+                    builder: (context, cSnap) {
+                      final challenges = cSnap.data ?? [];
+                      final targetUuid =
+                          SupabaseService.toUuid(team.id).toLowerCase();
+                      final rawTeamId = team.id.toLowerCase();
+                      final pendingDoc = challenges.firstWhere(
+                        (d) {
+                          final toId =
+                              d['to_team_id']?.toString().toLowerCase();
+                          final st =
+                              (d['status'] ?? '').toString().toLowerCase();
+                          final id = d['id']?.toString() ?? '';
+                          return (toId == targetUuid ||
+                                  toId == rawTeamId) &&
+                              st == 'pending' &&
+                              !_localCancelledIds.contains(id);
+                        },
+                        orElse: () => {},
+                      );
 
-                        if (pendingDoc.isEmpty) return const SizedBox.shrink();
-                        return _buildRedBanner(
-                            pendingDoc['id']?.toString() ?? '');
-                      },
-                    ),
-                  ],
+                      if (pendingDoc.isEmpty) return const SizedBox.shrink();
+                      return _buildRedBanner(
+                          pendingDoc['id']?.toString() ?? '');
+                    },
+                  ),
                 ],
 
                 const SizedBox(height: 12),
@@ -794,8 +828,7 @@ class _TeamCardState extends State<TeamCard> {
                     OutlinedButton(
                       style: OutlinedButton.styleFrom(
                         foregroundColor: const Color(0xFF050505),
-                        side:
-                            const BorderSide(color: Color(0xFFCED0D4)),
+                        side: const BorderSide(color: Color(0xFFCED0D4)),
                         padding: const EdgeInsets.symmetric(
                             horizontal: 10, vertical: 4),
                         minimumSize: const Size(0, 32),
@@ -822,7 +855,7 @@ class _TeamCardState extends State<TeamCard> {
                     if (isOwnerFinal || isMemberFinal)
                       _buildOpenTeamButton()
                     else ...[
-                      // Non-members: Challenge + Join buttons (original logic)
+                      // Non-members: live Challenge + Join buttons
                       StreamBuilder<List<Map<String, dynamic>>>(
                         stream: widget.myTeamId.isNotEmpty
                             ? SupabaseService.client
@@ -832,9 +865,9 @@ class _TeamCardState extends State<TeamCard> {
                             : Stream.value([]),
                         builder: (context, activeSnap) {
                           final activeMatches = activeSnap.data ?? [];
-                          final myUuid = SupabaseService.toUuid(
-                                  widget.myTeamId)
-                              .toLowerCase();
+                          final myUuid =
+                              SupabaseService.toUuid(widget.myTeamId)
+                                  .toLowerCase();
                           final myRawId = widget.myTeamId.toLowerCase();
                           final targetUuid =
                               SupabaseService.toUuid(team.id).toLowerCase();
@@ -866,6 +899,7 @@ class _TeamCardState extends State<TeamCard> {
                             orElse: () => {},
                           );
 
+                          // If there's a live active match: show LIVE badge + DM
                           if (activeMatchWithOpponent.isNotEmpty) {
                             return Row(
                               mainAxisSize: MainAxisSize.min,
@@ -943,56 +977,8 @@ class _TeamCardState extends State<TeamCard> {
                             );
                           }
 
-                          if (widget.onCancelChallenge != null) {
-                            if (widget.pendingChallenge != null) {
-                              return _buildRequestedButton(
-                                  widget.pendingChallenge!['id']
-                                          ?.toString() ??
-                                      '');
-                            }
-                            return _buildChallengeButton(currentUid);
-                          }
-
-                          return StreamBuilder<List<Map<String, dynamic>>>(
-                            stream: widget.myTeamId.isNotEmpty
-                                ? SupabaseService.client
-                                    .from('challenges')
-                                    .stream(primaryKey: ['id'])
-                                    .eq('from_team_id',
-                                        SupabaseService.toUuid(
-                                            widget.myTeamId))
-                                : Stream.value([]),
-                            builder: (context, cSnap) {
-                              final challenges = cSnap.data ?? [];
-                              final targetUuid = SupabaseService.toUuid(
-                                      team.id)
-                                  .toLowerCase();
-                              final rawTeamId = team.id.toLowerCase();
-                              final pendingDoc = challenges.firstWhere(
-                                (d) {
-                                  final toId = d['to_team_id']
-                                      ?.toString()
-                                      .toLowerCase();
-                                  final st = (d['status'] ?? '')
-                                      .toString()
-                                      .toLowerCase();
-                                  final id = d['id']?.toString() ?? '';
-                                  return (toId == targetUuid ||
-                                          toId == rawTeamId) &&
-                                      st == 'pending' &&
-                                      !_localCancelledIds.contains(id);
-                                },
-                                orElse: () => {},
-                              );
-
-                              if (pendingDoc.isNotEmpty) {
-                                return _buildRequestedButton(
-                                    pendingDoc['id']?.toString() ?? '');
-                              }
-
-                              return _buildChallengeButton(currentUid);
-                            },
-                          );
+                          // Always use real-time challenge section
+                          return _buildChallengeSection(currentUid);
                         },
                       ),
                       const SizedBox(width: 8),
