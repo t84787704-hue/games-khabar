@@ -19,15 +19,15 @@ class GamerSocialService {
   /// Helper to convert any string (e.g. Firebase UID) deterministically to a valid RFC4122 UUID v4/v5 format
   static String stringToUuid(String input) {
     if (input.isEmpty) return '00000000-0000-0000-0000-000000000000';
-    final uuidRegex = RegExp(r'^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$');
+    final uuidRegex = RegExp(
+        r'^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$');
     if (uuidRegex.hasMatch(input)) return input.toLowerCase();
 
-    // Deterministic UUID from string via MD5 (RFC 4122 UUID v3 format)
     final bytes = utf8.encode('gamer_user_namespace:$input');
     final digest = md5.convert(bytes).bytes;
-    final hexList = digest.map((b) => b.toRadixString(16).padLeft(2, '0')).toList();
-    
-    // Set version 4/3 and variant bits
+    final hexList =
+        digest.map((b) => b.toRadixString(16).padLeft(2, '0')).toList();
+
     hexList[6] = '4' + hexList[6].substring(1);
     final variantByte = (digest[8] & 0x3f) | 0x80;
     hexList[8] = variantByte.toRadixString(16).padLeft(2, '0');
@@ -36,10 +36,8 @@ class GamerSocialService {
     return '${h.substring(0, 8)}-${h.substring(8, 12)}-${h.substring(12, 16)}-${h.substring(16, 20)}-${h.substring(20, 32)}';
   }
 
-  /// Notifier to instantly inform Feed of new posts
   final ValueNotifier<int> feedRefreshNotifier = ValueNotifier<int>(0);
 
-  /// Ensure user exists in Supabase users table before foreign key operations
   Future<void> _ensureUserExists({
     required String userId,
     required String username,
@@ -59,7 +57,9 @@ class GamerSocialService {
         final Map<String, dynamic> insertPayload = {
           'id': validUuid,
           'uid': userId,
-          'username': username.isNotEmpty ? username : 'gamer_${userId.substring(0, userId.length > 5 ? 5 : userId.length)}',
+          'username': username.isNotEmpty
+              ? username
+              : 'gamer_${userId.substring(0, userId.length > 5 ? 5 : userId.length)}',
           'display_name': displayName.isNotEmpty ? displayName : 'Gamer',
           'avatar_url': userPhoto,
           'created_at': DateTime.now().toIso8601String(),
@@ -88,13 +88,17 @@ class GamerSocialService {
   }
 
   Future<bool> isFollowing(String currentUid, String targetUid) async {
-    if (currentUid.isEmpty || targetUid.isEmpty || currentUid == targetUid) return false;
+    if (currentUid.isEmpty || targetUid.isEmpty || currentUid == targetUid) {
+      return false;
+    }
     try {
+      final followerUuid = stringToUuid(currentUid);
+      final followingUuid = stringToUuid(targetUid);
       final res = await _supabase
           .from('follows')
           .select('id')
-          .eq('follower_id', currentUid)
-          .eq('following_id', targetUid)
+          .eq('follower_id', followerUuid)
+          .eq('following_id', followingUuid)
           .maybeSingle();
       return res != null;
     } catch (e) {
@@ -107,12 +111,58 @@ class GamerSocialService {
     required String currentUid,
     required String targetUid,
   }) async {
-    if (currentUid == targetUid || currentUid.isEmpty || targetUid.isEmpty) return;
+    if (currentUid == targetUid || currentUid.isEmpty || targetUid.isEmpty) {
+      return;
+    }
     try {
+      final followerUuid = stringToUuid(currentUid);
+      final followingUuid = stringToUuid(targetUid);
+
+      debugPrint('[Follow] Inserting: $followerUuid -> $followingUuid');
+
+      // Insert into follows table
       await _supabase.from('follows').insert({
-        'follower_id': currentUid,
-        'following_id': targetUid,
+        'follower_id': followerUuid,
+        'following_id': followingUuid,
       });
+
+      // Update following_count for current user (increment by 1)
+      try {
+        final currentUser = await _supabase
+            .from('users')
+            .select('following_count')
+            .eq('id', followerUuid)
+            .maybeSingle();
+        final currentCount =
+            (currentUser?['following_count'] as num?)?.toInt() ?? 0;
+        await _supabase
+            .from('users')
+            .update({'following_count': currentCount + 1})
+            .eq('id', followerUuid);
+        debugPrint('[Follow] Updated following_count: ${currentCount + 1}');
+      } catch (e) {
+        debugPrint('[Follow] Update following_count error: $e');
+      }
+
+      // Update followers_count for target user (increment by 1)
+      try {
+        final targetUser = await _supabase
+            .from('users')
+            .select('followers_count')
+            .eq('id', followingUuid)
+            .maybeSingle();
+        final targetCount =
+            (targetUser?['followers_count'] as num?)?.toInt() ?? 0;
+        await _supabase
+            .from('users')
+            .update({'followers_count': targetCount + 1})
+            .eq('id', followingUuid);
+        debugPrint('[Follow] Updated followers_count: ${targetCount + 1}');
+      } catch (e) {
+        debugPrint('[Follow] Update followers_count error: $e');
+      }
+
+      debugPrint('[Follow] Success!');
     } catch (e) {
       debugPrint('Error following user: $e');
     }
@@ -122,13 +172,57 @@ class GamerSocialService {
     required String currentUid,
     required String targetUid,
   }) async {
-    if (currentUid == targetUid || currentUid.isEmpty || targetUid.isEmpty) return;
+    if (currentUid == targetUid || currentUid.isEmpty || targetUid.isEmpty) {
+      return;
+    }
     try {
+      final followerUuid = stringToUuid(currentUid);
+      final followingUuid = stringToUuid(targetUid);
+
+      // Delete from follows table
       await _supabase
           .from('follows')
           .delete()
-          .eq('follower_id', currentUid)
-          .eq('following_id', targetUid);
+          .eq('follower_id', followerUuid)
+          .eq('following_id', followingUuid);
+
+      // Decrement following_count for current user
+      try {
+        final currentUser = await _supabase
+            .from('users')
+            .select('following_count')
+            .eq('id', followerUuid)
+            .maybeSingle();
+        final currentCount =
+            (currentUser?['following_count'] as num?)?.toInt() ?? 0;
+        await _supabase
+            .from('users')
+            .update({
+              'following_count': currentCount > 0 ? currentCount - 1 : 0,
+            })
+            .eq('id', followerUuid);
+      } catch (e) {
+        debugPrint('[Unfollow] Update following_count error: $e');
+      }
+
+      // Decrement followers_count for target user
+      try {
+        final targetUser = await _supabase
+            .from('users')
+            .select('followers_count')
+            .eq('id', followingUuid)
+            .maybeSingle();
+        final targetCount =
+            (targetUser?['followers_count'] as num?)?.toInt() ?? 0;
+        await _supabase
+            .from('users')
+            .update({
+              'followers_count': targetCount > 0 ? targetCount - 1 : 0,
+            })
+            .eq('id', followingUuid);
+      } catch (e) {
+        debugPrint('[Unfollow] Update followers_count error: $e');
+      }
     } catch (e) {
       debugPrint('Error unfollowing user: $e');
     }
@@ -141,13 +235,13 @@ class GamerSocialService {
     }
     while (true) {
       try {
+        final followerUuid = stringToUuid(uid);
         final res = await _supabase
             .from('follows')
             .select('following_id')
-            .eq('follower_id', uid);
-        final list = (res as List)
-            .map((item) => item['following_id'].toString())
-            .toList();
+            .eq('follower_id', followerUuid);
+        final list =
+            (res as List).map((item) => item['following_id'].toString()).toList();
         yield list;
       } catch (e) {
         yield [];
@@ -165,7 +259,7 @@ class GamerSocialService {
   }
 
   // ==========================================
-  // POSTS & FEED SYSTEM (Supabase only)
+  // POSTS & FEED SYSTEM
   // ==========================================
 
   Future<String> createPost({
@@ -182,7 +276,8 @@ class GamerSocialService {
     String? game,
   }) async {
     final postContent = text.isNotEmpty ? text : (content ?? '');
-    final finalGame = (gameTag.isNotEmpty && gameTag != 'BGMI') ? gameTag : (game ?? gameTag);
+    final finalGame =
+        (gameTag.isNotEmpty && gameTag != 'BGMI') ? gameTag : (game ?? gameTag);
     final finalMedia = imageUrl ?? mediaUrl;
     final finalVideo = videoUrl;
 
@@ -190,12 +285,11 @@ class GamerSocialService {
         ? _supabase.auth.currentUser!.id
         : userId;
 
-    // Supabase posts.user_id requires a UUID format if the column type is UUID
     final postUuid = stringToUuid(effectiveUserId);
 
-    debugPrint('[GamerSocialService] Attempting to create post for user: $effectiveUserId (UUID: $postUuid)');
+    debugPrint(
+        '[GamerSocialService] Attempting to create post for user: $effectiveUserId (UUID: $postUuid)');
 
-    // Make sure user exists in Supabase users table to satisfy foreign key constraint
     await _ensureUserExists(
       userId: effectiveUserId,
       username: username,
@@ -204,23 +298,23 @@ class GamerSocialService {
     );
 
     try {
-      // Supabase posts.user_id requires a valid UUID
-      final response = await _supabase.from('posts').insert({
-        'user_id': postUuid,
-        'content': postContent,
-        'image_url': finalMedia,
-        'video_url': finalVideo,
-        'game': finalGame,
-        'media_url': finalMedia ?? finalVideo,
-        'likes_count': 0,
-        'comments_count': 0,
-      }).select().single();
+      final response = await _supabase
+          .from('posts')
+          .insert({
+            'user_id': postUuid,
+            'content': postContent,
+            'image_url': finalMedia,
+            'video_url': finalVideo,
+            'game': finalGame,
+            'media_url': finalMedia ?? finalVideo,
+            'likes_count': 0,
+            'comments_count': 0,
+          })
+          .select()
+          .single();
 
       debugPrint('[GamerSocialService] Post saved successfully: ${response['id']}');
-
-      // Trigger feed refresh instantly
       feedRefreshNotifier.value++;
-
       return response['id'].toString();
     } catch (e) {
       debugPrint('[GamerSocialService] Error saving post: $e');
@@ -245,7 +339,6 @@ class GamerSocialService {
     }
   }
 
-  /// Stream of all video posts (gaming clips)
   Stream<List<GamerPost>> getVideosStream({String? gameTag}) async* {
     while (true) {
       try {
@@ -351,7 +444,8 @@ class GamerSocialService {
             .select()
             .eq('post_id', postId)
             .order('created_at', ascending: true);
-        final list = (data as List).map((map) => PostComment.fromMap(map)).toList();
+        final list =
+            (data as List).map((map) => PostComment.fromMap(map)).toList();
         yield list;
       } catch (e) {
         yield [];
@@ -379,10 +473,6 @@ class GamerSocialService {
       debugPrint('[GamerSocialService] addComment error: $e');
     }
   }
-
-  // ==========================================
-  // SEARCH & EXPLORE
-  // ==========================================
 
   Future<List<GamerUser>> searchUsers(String query) async {
     return [];
