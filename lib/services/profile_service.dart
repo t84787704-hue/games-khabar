@@ -57,8 +57,10 @@ class ProfileFeedItem {
           data['avatar_url']?.toString() ??
           '',
       text: data['content']?.toString() ?? data['text']?.toString() ?? '',
-      mediaUrl: data['media_url']?.toString() ?? data['mediaUrl']?.toString() ?? '',
-      gameTag: data['game']?.toString() ?? data['gameTag']?.toString() ?? 'BGMI',
+      mediaUrl:
+          data['media_url']?.toString() ?? data['mediaUrl']?.toString() ?? '',
+      gameTag:
+          data['game']?.toString() ?? data['gameTag']?.toString() ?? 'BGMI',
       likesCount: (data['likes_count'] as num?)?.toInt() ??
           (data['likesCount'] as num?)?.toInt() ??
           0,
@@ -80,7 +82,8 @@ class ProfileService {
   factory ProfileService() => _instance;
   ProfileService._internal();
 
-  /// Fetch user posts directly from Supabase posts table
+  /// Fetch user posts directly from Supabase posts table.
+  /// STRICT: only fetches posts where user_id equals this user's UUID.
   Future<List<ProfileFeedItem>> getUserPostsFromSupabase(String userId) async {
     if (userId.isEmpty) return [];
     try {
@@ -88,7 +91,7 @@ class ProfileService {
       final rows = await SupabaseService.client
           .from('posts')
           .select()
-          .or('user_id.eq.$userId,user_id.eq.$uuid')
+          .eq('user_id', uuid) // ✅ strict — no foreign posts
           .order('created_at', ascending: false);
       return (rows as List)
           .map((r) => ProfileFeedItem.fromMap(Map<String, dynamic>.from(r)))
@@ -100,6 +103,7 @@ class ProfileService {
   }
 
   /// Real-time stream of user posts directly from Supabase.
+  /// STRICT: only fetches posts where user_id equals this user's UUID.
   Stream<List<ProfileFeedItem>> getUserPostsAndClipsStream({
     String? userId,
     String? username,
@@ -119,7 +123,7 @@ class ProfileService {
         final rows = await SupabaseService.client
             .from('posts')
             .select()
-            .or('user_id.eq.$uid,user_id.eq.$uuid')
+            .eq('user_id', uuid) // ✅ strict — no foreign posts
             .order('created_at', ascending: false);
 
         final items = (rows as List)
@@ -135,6 +139,8 @@ class ProfileService {
     }
   }
 
+  /// One-shot fetch of user posts.
+  /// STRICT: only fetches posts where user_id equals this user's UUID.
   Future<List<ProfileFeedItem>> getUserPostsAndClips({
     String? userId,
     String? username,
@@ -150,7 +156,7 @@ class ProfileService {
       final rows = await SupabaseService.client
           .from('posts')
           .select()
-          .or('user_id.eq.$uid,user_id.eq.$uuid')
+          .eq('user_id', uuid) // ✅ strict — no foreign posts
           .order('created_at', ascending: false);
 
       return (rows as List)
