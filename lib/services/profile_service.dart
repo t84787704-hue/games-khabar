@@ -1,6 +1,4 @@
 import 'dart:async';
-import 'package:games_khabar/compat/cloud_firestore.dart';
-import 'package:games_khabar/compat/firebase_auth.dart';
 import 'package:flutter/foundation.dart';
 import '../models/gamer_post_model.dart';
 import 'supabase_service.dart';
@@ -50,215 +48,117 @@ class ProfileFeedItem {
       id: id ?? data['post_id']?.toString() ?? data['id']?.toString() ?? '',
       userId: data['user_id']?.toString() ?? data['userId']?.toString() ?? '',
       username: data['username']?.toString() ?? 'gamer',
-      displayName: data['display_name']?.toString() ?? data['displayName']?.toString() ?? data['username']?.toString() ?? 'Gamer',
-      userPhoto: data['user_avatar']?.toString() ?? data['userPhoto']?.toString() ?? '',
+      displayName: data['display_name']?.toString() ??
+          data['displayName']?.toString() ??
+          data['username']?.toString() ??
+          'Gamer',
+      userPhoto: data['user_avatar']?.toString() ??
+          data['userPhoto']?.toString() ??
+          data['avatar_url']?.toString() ??
+          '',
       text: data['content']?.toString() ?? data['text']?.toString() ?? '',
       mediaUrl: data['media_url']?.toString() ?? data['mediaUrl']?.toString() ?? '',
-      gameTag: data['game']?.toString() ?? data['gameTag']?.toString() ?? 'PUBG Mobile',
-      likesCount: (data['likes_count'] as num?)?.toInt() ?? (data['likesCount'] as num?)?.toInt() ?? 0,
-      commentsCount: (data['comments_count'] as num?)?.toInt() ?? (data['commentsCount'] as num?)?.toInt() ?? 0,
-      sharesCount: (data['shares_count'] as num?)?.toInt() ?? (data['sharesCount'] as num?)?.toInt() ?? 0,
+      gameTag: data['game']?.toString() ?? data['gameTag']?.toString() ?? 'BGMI',
+      likesCount: (data['likes_count'] as num?)?.toInt() ??
+          (data['likesCount'] as num?)?.toInt() ??
+          0,
+      commentsCount: (data['comments_count'] as num?)?.toInt() ??
+          (data['commentsCount'] as num?)?.toInt() ??
+          0,
+      sharesCount: (data['shares_count'] as num?)?.toInt() ??
+          (data['sharesCount'] as num?)?.toInt() ??
+          0,
       isVerified: data['is_verified'] == true || data['isVerified'] == true,
       createdAt: created,
-    );
-  }
-
-  factory ProfileFeedItem.fromFirestoreDoc(DocumentSnapshot doc) {
-    final data = doc.data() as Map<String, dynamic>? ?? {};
-
-    DateTime? created;
-    final rawCreated = data['createdAt'];
-    if (rawCreated is Timestamp) {
-      created = rawCreated.toDate();
-    } else if (rawCreated is String) {
-      created = DateTime.tryParse(rawCreated);
-    }
-
-    final String text = data['text']?.toString() ??
-        data['caption']?.toString() ??
-        data['title']?.toString() ??
-        '';
-
-    return ProfileFeedItem(
-      id: doc.id,
-      userId: data['userId']?.toString() ?? data['authorId']?.toString() ?? '',
-      username: data['username']?.toString() ?? 'gamer',
-      displayName: data['displayName']?.toString() ?? 'Gamer',
-      userPhoto: data['userPhoto']?.toString() ?? data['userAvatar']?.toString() ?? '',
-      text: text,
-      mediaUrl: data['mediaUrl']?.toString() ?? data['videoUrl']?.toString() ?? data['imageUrl']?.toString() ?? '',
-      gameTag: data['gameTag']?.toString() ?? 'BGMI',
-      likesCount: (data['likesCount'] as num?)?.toInt() ?? 0,
-      commentsCount: (data['commentsCount'] as num?)?.toInt() ?? 0,
-      sharesCount: (data['sharesCount'] as num?)?.toInt() ?? 0,
-      isVerified: data['isVerified'] == true,
-      createdAt: created,
-      originalPost: GamerPost.fromFirestore(doc),
     );
   }
 }
 
 /// Service dedicated to querying and syncing Profile posts.
 class ProfileService {
-  final FirebaseFirestore _firestore = FirebaseFirestore.instance;
-
   static final ProfileService _instance = ProfileService._internal();
   factory ProfileService() => _instance;
   ProfileService._internal();
 
   /// Fetch user posts directly from Supabase posts table
   Future<List<ProfileFeedItem>> getUserPostsFromSupabase(String userId) async {
+    if (userId.isEmpty) return [];
     try {
-      final rows = await SupabaseService.query(
-        'posts',
-        filters: {'user_id': 'eq.$userId'},
-        order: 'created_at.desc',
-      );
-      return rows.map((r) => ProfileFeedItem.fromMap(r)).toList();
+      final uuid = SupabaseService.toUuid(userId);
+      final rows = await SupabaseService.client
+          .from('posts')
+          .select()
+          .or('user_id.eq.$userId,user_id.eq.$uuid')
+          .order('created_at', ascending: false);
+      return (rows as List)
+          .map((r) => ProfileFeedItem.fromMap(Map<String, dynamic>.from(r)))
+          .toList();
     } catch (e) {
       debugPrint('ProfileService getUserPostsFromSupabase error: $e');
       return [];
     }
   }
 
-  Future<({String uid, String rawUsername, String atUsername})> _resolveUserIdentifiers({
-    String? userId,
-    String? username,
-  }) async {
-    String uid = (userId != null && userId.trim().isNotEmpty) ? userId.trim() : '';
-    String rawUser = (username != null && username.trim().isNotEmpty) ? username.trim() : '';
-
-    if (rawUser.startsWith('@')) {
-      rawUser = rawUser.substring(1);
-    }
-
-    if (uid.isEmpty && rawUser.isNotEmpty) {
-      try {
-        final querySnap = await _firestore
-            .collection('users')
-            .where('username', isEqualTo: rawUser)
-            .limit(1)
-            .get();
-        if (querySnap.docs.isNotEmpty) {
-          uid = querySnap.docs.first.id;
-        }
-      } catch (e) {
-        debugPrint('⚠️ [PROFILE_SERVICE] Failed resolving username to UID: $e');
-      }
-    }
-
-    if (uid.isEmpty) {
-      final currentAuth = FirebaseAuth.instance.currentUser;
-      if (currentAuth != null) {
-        uid = currentAuth.uid;
-      }
-    }
-
-    final atUser = rawUser.isNotEmpty ? '@$rawUser' : '';
-    return (uid: uid, rawUsername: rawUser, atUsername: atUser);
-  }
-
-  /// Real-time stream of all user posts, sorted by timestamp desc.
+  /// Real-time stream of user posts directly from Supabase.
   Stream<List<ProfileFeedItem>> getUserPostsAndClipsStream({
     String? userId,
     String? username,
   }) async* {
-    final ids = await _resolveUserIdentifiers(userId: userId, username: username);
-    final uid = ids.uid;
-    final rawUser = ids.rawUsername;
-    final atUser = ids.atUsername;
+    final uid =
+        (userId != null && userId.trim().isNotEmpty) ? userId.trim() : '';
 
-    final List<Filter> filters = [];
-    if (uid.isNotEmpty) {
-      filters.add(Filter('userId', isEqualTo: uid));
-      filters.add(Filter('authorId', isEqualTo: uid));
-    }
-    if (rawUser.isNotEmpty) {
-      filters.add(Filter('username', isEqualTo: rawUser));
-      filters.add(Filter('username', isEqualTo: atUser));
-      filters.add(Filter('userId', isEqualTo: rawUser));
-      filters.add(Filter('userId', isEqualTo: atUser));
-    }
-
-    if (filters.isEmpty) {
+    if (uid.isEmpty) {
       yield [];
       return;
     }
 
-    Filter combinedFilter = filters.first;
-    for (int i = 1; i < filters.length; i++) {
-      combinedFilter = Filter.or(combinedFilter, filters[i]);
-    }
+    final uuid = SupabaseService.toUuid(uid);
 
-    Stream<QuerySnapshot> postsStream;
-    try {
-      postsStream = _firestore.collection('posts').where(combinedFilter).snapshots();
-    } catch (e) {
-      postsStream = _fallbackStream('posts', uid, rawUser, atUser);
-    }
+    while (true) {
+      try {
+        final rows = await SupabaseService.client
+            .from('posts')
+            .select()
+            .or('user_id.eq.$uid,user_id.eq.$uuid')
+            .order('created_at', ascending: false);
 
-    yield* postsStream.map((snap) {
-      final items = snap.docs.map((doc) => ProfileFeedItem.fromFirestoreDoc(doc)).toList();
-      items.sort((a, b) {
-        final timeA = a.createdAt ?? DateTime(1970);
-        final timeB = b.createdAt ?? DateTime(1970);
-        return timeB.compareTo(timeA);
-      });
-      return items;
-    });
-  }
+        final items = (rows as List)
+            .map((r) => ProfileFeedItem.fromMap(Map<String, dynamic>.from(r)))
+            .toList();
 
-  Stream<QuerySnapshot> _fallbackStream(String collection, String uid, String rawUser, String atUser) {
-    if (uid.isNotEmpty) {
-      return _firestore.collection(collection).where('userId', isEqualTo: uid).snapshots();
+        yield items;
+      } catch (e) {
+        debugPrint('[ProfileService] Stream error: $e');
+        yield [];
+      }
+      await Future.delayed(const Duration(seconds: 4));
     }
-    if (rawUser.isNotEmpty) {
-      return _firestore.collection(collection).where('username', isEqualTo: rawUser).snapshots();
-    }
-    return const Stream.empty();
   }
 
   Future<List<ProfileFeedItem>> getUserPostsAndClips({
     String? userId,
     String? username,
   }) async {
-    final ids = await _resolveUserIdentifiers(userId: userId, username: username);
-    final uid = ids.uid;
-    final rawUser = ids.rawUsername;
-    final atUser = ids.atUsername;
+    final uid =
+        (userId != null && userId.trim().isNotEmpty) ? userId.trim() : '';
 
-    final Map<String, ProfileFeedItem> itemMap = {};
+    if (uid.isEmpty) return [];
 
     try {
-      final List<Future<QuerySnapshot>> queries = [];
-      if (uid.isNotEmpty) {
-        queries.add(_firestore.collection('posts').where('userId', isEqualTo: uid).get());
-        queries.add(_firestore.collection('posts').where('authorId', isEqualTo: uid).get());
-      }
-      if (rawUser.isNotEmpty) {
-        queries.add(_firestore.collection('posts').where('username', isEqualTo: rawUser).get());
-        queries.add(_firestore.collection('posts').where('username', isEqualTo: atUser).get());
-        queries.add(_firestore.collection('posts').where('userId', isEqualTo: rawUser).get());
-        queries.add(_firestore.collection('posts').where('userId', isEqualTo: atUser).get());
-      }
+      final uuid = SupabaseService.toUuid(uid);
 
-      final results = await Future.wait(queries);
-      for (final snap in results) {
-        for (final doc in snap.docs) {
-          itemMap[doc.id] = ProfileFeedItem.fromFirestoreDoc(doc);
-        }
-      }
+      final rows = await SupabaseService.client
+          .from('posts')
+          .select()
+          .or('user_id.eq.$uid,user_id.eq.$uuid')
+          .order('created_at', ascending: false);
+
+      return (rows as List)
+          .map((r) => ProfileFeedItem.fromMap(Map<String, dynamic>.from(r)))
+          .toList();
     } catch (e) {
-      debugPrint('⚠️ [PROFILE_SERVICE] Error fetching from posts: $e');
+      debugPrint('[ProfileService] Error fetching user posts: $e');
+      return [];
     }
-
-    final items = itemMap.values.toList();
-    items.sort((a, b) {
-      final timeA = a.createdAt ?? DateTime(1970);
-      final timeB = b.createdAt ?? DateTime(1970);
-      return timeB.compareTo(timeA);
-    });
-
-    return items;
   }
 }
