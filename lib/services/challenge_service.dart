@@ -7,13 +7,14 @@ class ChallengeService {
   factory ChallengeService() => _instance;
   ChallengeService._internal();
 
+  /// Send a 1v1 player challenge using the `player_challenges` table.
   Future<void> sendChallenge(GamerChallenge challenge) async {
     try {
       final challengerUuid = SupabaseService.toUuid(challenge.challengerId);
       final challengedUuid = SupabaseService.toUuid(challenge.challengedId);
 
       final inserted = await SupabaseService.client
-          .from('challenges')
+          .from('player_challenges')
           .insert({
         'challenger_id': challengerUuid,
         'challenger_name': challenge.challengerName,
@@ -54,7 +55,7 @@ class ChallengeService {
   }) async {
     try {
       await SupabaseService.client
-          .from('challenges')
+          .from('player_challenges')
           .update({'status': 'accepted'})
           .eq('id', challengeId);
 
@@ -79,7 +80,7 @@ class ChallengeService {
   Future<void> declineChallenge(String challengeId) async {
     try {
       await SupabaseService.client
-          .from('challenges')
+          .from('player_challenges')
           .update({'status': 'declined'})
           .eq('id', challengeId);
     } catch (e) {
@@ -89,7 +90,7 @@ class ChallengeService {
 
   Future<void> setWinner(String challengeId, String winnerId) async {
     try {
-      await SupabaseService.client.from('challenges').update({
+      await SupabaseService.client.from('player_challenges').update({
         'status': 'completed',
         'winner_id': SupabaseService.toUuid(winnerId),
       }).eq('id', challengeId);
@@ -102,7 +103,7 @@ class ChallengeService {
     if (userId.isEmpty) return Stream.value([]);
     final uuid = SupabaseService.toUuid(userId);
     return SupabaseService.client
-        .from('challenges')
+        .from('player_challenges')
         .stream(primaryKey: ['id'])
         .order('created_at', ascending: false)
         .map((rows) {
@@ -119,7 +120,7 @@ class ChallengeService {
     if (userId.isEmpty) return Stream.value([]);
     final uuid = SupabaseService.toUuid(userId);
     return SupabaseService.client
-        .from('challenges')
+        .from('player_challenges')
         .stream(primaryKey: ['id'])
         .map((rows) {
       return rows
