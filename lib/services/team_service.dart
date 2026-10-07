@@ -51,15 +51,17 @@ class TeamService {
         'created_at': DateTime.now().toIso8601String(),
       });
 
+      // Add leader as OWNER in team_members (lowercase 'owner')
       try {
         await SupabaseService.client.from('team_members').insert({
           'team_id': teamId,
           'user_id': leaderUuid,
-          'role': 'Leader',
+          'role': 'owner', // ✅ lowercase — matches constraint
           'joined_at': DateTime.now().toIso8601String(),
         });
+        debugPrint('[TeamService] ✅ Leader added as owner');
       } catch (e) {
-        debugPrint('[TeamService] add leader to team_members: $e');
+        debugPrint('[TeamService] ❌ add leader to team_members: $e');
       }
 
       return teamId;
@@ -176,6 +178,71 @@ class TeamService {
     }
   }
 
+  /// Get the role of a specific user in a specific team.
+  /// Returns 'owner', 'co_leader', 'member', or null if not a member.
+  Future<String?> getUserRoleInTeam({
+    required String userId,
+    required String teamId,
+  }) async {
+    if (userId.isEmpty || teamId.isEmpty) return null;
+    try {
+      final userUuid = SupabaseService.toUuid(userId);
+      final teamUuid = SupabaseService.toUuid(teamId);
+      final res = await SupabaseService.client
+          .from('team_members')
+          .select('role')
+          .eq('user_id', userUuid)
+          .eq('team_id', teamUuid)
+          .maybeSingle();
+      if (res == null) return null;
+      return (res['role'] ?? '').toString().toLowerCase();
+    } catch (e) {
+      debugPrint('[TeamService] getUserRoleInTeam error: $e');
+      return null;
+    }
+  }
+
+  /// Get all teams where current user is a member (any role)
+  Future<List<TeamModel>> getUserTeams(String userId) async {
+    try {
+      final userUuid = SupabaseService.toUuid(userId);
+      final memberships = await SupabaseService.client
+          .from('team_members')
+          .select('team_id')
+          .eq('user_id', userUuid);
+      final teamIds =
+          memberships.map((m) => m['team_id'].toString()).toList();
+      if (teamIds.isEmpty) return [];
+      final rows = await SupabaseService.client
+          .from('teams')
+          .select()
+          .inFilter('id', teamIds);
+      return (rows as List).map((r) => TeamModel.fromSupabase(r)).toList();
+    } catch (e) {
+      debugPrint('[TeamService] getUserTeams error: $e');
+      return [];
+    }
+  }
+
+  Stream<List<TeamModel>> getUserTeamsStream(String userId) {
+    return SupabaseService.client
+        .from('team_members')
+        .stream(primaryKey: ['id'])
+        .asyncMap((rows) async {
+      final userUuid = SupabaseService.toUuid(userId);
+      final teamIds = rows
+          .where((r) => r['user_id']?.toString() == userUuid)
+          .map((r) => r['team_id'].toString())
+          .toList();
+      if (teamIds.isEmpty) return <TeamModel>[];
+      final teams = await SupabaseService.client
+          .from('teams')
+          .select()
+          .inFilter('id', teamIds);
+      return (teams as List).map((r) => TeamModel.fromSupabase(r)).toList();
+    });
+  }
+
   Future<bool> requestToJoinTeam({
     required String teamId,
     required String userId,
@@ -235,7 +302,7 @@ class TeamService {
       await SupabaseService.client.from('team_members').insert({
         'team_id': teamId,
         'user_id': userUuid,
-        'role': 'Member',
+        'role': 'member', // ✅ lowercase — matches constraint
         'joined_at': DateTime.now().toIso8601String(),
       });
       await SupabaseService.client
@@ -276,43 +343,60 @@ class TeamService {
     }
   }
 
-  Future<List<TeamModel>> getUserTeams(String userId) async {
+  /// Promote a member to co-leader (owner-only action)
+  Future<bool> promoteToCoLeader({
+    required String teamId,
+    required String userId,
+  }) async {
     try {
       final userUuid = SupabaseService.toUuid(userId);
-      final memberships = await SupabaseService.client
+      await SupabaseService.client
           .from('team_members')
-          .select('team_id')
+          .update({'role': 'co_leader'})
+          .eq('team_id', teamId)
           .eq('user_id', userUuid);
-      final teamIds =
-          memberships.map((m) => m['team_id'].toString()).toList();
-      if (teamIds.isEmpty) return [];
-      final rows = await SupabaseService.client
-          .from('teams')
-          .select()
-          .inFilter('id', teamIds);
-      return (rows as List).map((r) => TeamModel.fromSupabase(r)).toList();
+      return true;
     } catch (e) {
-      debugPrint('[TeamService] getUserTeams error: $e');
-      return [];
+      debugPrint('[TeamService] promoteToCoLeader error: $e');
+      return false;
     }
   }
 
-  Stream<List<TeamModel>> getUserTeamsStream(String userId) {
-    return SupabaseService.client
-        .from('team_members')
-        .stream(primaryKey: ['id'])
-        .asyncMap((rows) async {
+  /// Demote co-leader back to member
+  Future<bool> demoteToMember({
+    required String teamId,
+    required String userId,
+  }) async {
+    try {
       final userUuid = SupabaseService.toUuid(userId);
-      final teamIds = rows
-          .where((r) => r['user_id']?.toString() == userUuid)
-          .map((r) => r['team_id'].toString())
-          .toList();
-      if (teamIds.isEmpty) return <TeamModel>[];
-      final teams = await SupabaseService.client
-          .from('teams')
-          .select()
-          .inFilter('id', teamIds);
-      return (teams as List).map((r) => TeamModel.fromSupabase(r)).toList();
-    });
+      await SupabaseService.client
+          .from('team_members')
+          .update({'role': 'member'})
+          .eq('team_id', teamId)
+          .eq('user_id', userUuid);
+      return true;
+    } catch (e) {
+      debugPrint('[TeamService] demoteToMember error: $e');
+      return false;
+    }
+  }
+
+  /// Remove a member from team (kick)
+  Future<bool> kickMember({
+    required String teamId,
+    required String userId,
+  }) async {
+    try {
+      final userUuid = SupabaseService.toUuid(userId);
+      await SupabaseService.client
+          .from('team_members')
+          .delete()
+          .eq('team_id', teamId)
+          .eq('user_id', userUuid);
+      return true;
+    } catch (e) {
+      debugPrint('[TeamService] kickMember error: $e');
+      return false;
+    }
   }
 }
