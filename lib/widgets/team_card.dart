@@ -5,6 +5,7 @@ import '../services/supabase_service.dart';
 import '../services/gamer_auth_service.dart';
 import '../screens/team_profile_screen.dart';
 import '../screens/teams_screen.dart';
+import '../screens/private_match_room_screen.dart';
 
 class TeamCard extends StatefulWidget {
   final TeamModel team;

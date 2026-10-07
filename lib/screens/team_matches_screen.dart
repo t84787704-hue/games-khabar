@@ -4,6 +4,7 @@ import '../services/team_service.dart';
 import '../models/team_model.dart';
 import 'match_chat_screen.dart';
 import 'teams_screen.dart';
+import 'private_match_room_screen.dart';
 
 class TeamMatchesScreen extends StatefulWidget {
   const TeamMatchesScreen({super.key});
