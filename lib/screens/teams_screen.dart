@@ -70,87 +70,6 @@ class _TeamsScreenState extends State<TeamsScreen> {
     }
   }
 
-  Widget _buildDmButton({
-    required BuildContext context,
-    required String matchId,
-    required String myTeamId,
-    required String myTeamName,
-    required String opponentId,
-    required String opponentName,
-    required Color color,
-    required BorderSide side,
-  }) {
-    final myTeamUuid = SupabaseService.toUuid(myTeamId).toLowerCase();
-    final myTeamRaw = myTeamId.toLowerCase();
-
-    return StreamBuilder<List<Map<String, dynamic>>>(
-      stream: SupabaseService.client
-          .from("match_messages")
-          .stream(primaryKey: ["id"])
-          .eq("match_id", matchId),
-      builder: (context, msgSnap) {
-        int unread = 0;
-        final msgs = msgSnap.data ?? [];
-        final lastReadStr = _lastReadMatchTimes[matchId];
-        final lastRead = lastReadStr != null ? DateTime.tryParse(lastReadStr) : null;
-
-        for (final m in msgs) {
-          final sender = (m["sender_team_id"] ?? "").toString().toLowerCase();
-          final isOpponent = sender.isNotEmpty && sender != myTeamUuid && sender != myTeamRaw;
-          if (isOpponent) {
-            final created = DateTime.tryParse(m["created_at"]?.toString() ?? "");
-            if (created != null && (lastRead == null || created.isAfter(lastRead))) {
-              unread++;
-            }
-          }
-        }
-
-        return OutlinedButton.icon(
-          onPressed: () async {
-            await _markMatchAsRead(matchId);
-            if (context.mounted) {
-              await Navigator.push(
-                context,
-                MaterialPageRoute(
-                  builder: (_) => PrivateMatchRoomScreen(
-                    matchId: matchId,
-                    myTeamId: myTeamId,
-                    myTeamName: myTeamName,
-                    opponentId: opponentId,
-                    opponentName: opponentName,
-                  ),
-                ),
-              );
-              _loadLastReadTimes();
-            }
-          },
-          style: OutlinedButton.styleFrom(
-            foregroundColor: color,
-            side: side,
-            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-            minimumSize: const Size(0, 32),
-            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-          ),
-          icon: const Icon(Icons.chat_bubble_rounded, size: 14),
-          label: Row(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              const Text("Team DM 💬", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 11)),
-              if (unread > 0) ...[
-                const SizedBox(width: 5),
-                Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 1.5),
-                  decoration: BoxDecoration(color: const Color(0xFFFF4655), borderRadius: BorderRadius.circular(10)),
-                  child: Text("$unread", style: const TextStyle(color: Colors.white, fontSize: 9.5, fontWeight: FontWeight.bold)),
-                ),
-              ],
-            ],
-          ),
-        );
-      },
-    );
-  }
-
   @override
   void dispose() {
     _searchController.dispose();
@@ -626,22 +545,6 @@ class _TeamsScreenState extends State<TeamsScreen> {
                                     ],
                                   ),
                                 ),
-                                FutureBuilder<TeamModel?>(
-                                  future: _teamService.getTeam(opponentId),
-                                  builder: (context, opSnap) {
-                                    final opponentName = opSnap.data?.name ?? match["opponent_name"]?.toString() ?? "Opponent";
-                                    return _buildDmButton(
-                                      context: context,
-                                      matchId: matchId.toString(),
-                                      myTeamId: myTeamId,
-                                      myTeamName: myTeamName,
-                                      opponentId: opponentId,
-                                      opponentName: opponentName,
-                                      color: const Color(0xFFB78103),
-                                      side: const BorderSide(color: Color(0xFFFFB300)),
-                                    );
-                                  },
-                                ),
                                 if (proofUrl != null && proofUrl.isNotEmpty) ...[
                                   const SizedBox(width: 6),
                                   InkWell(
@@ -704,24 +607,6 @@ class _TeamsScreenState extends State<TeamsScreen> {
                               Row(
                                 mainAxisAlignment: MainAxisAlignment.end,
                                 children: [
-                                  // REQUIREMENT 1 & 2: View Opponent opens PrivateMatchRoomScreen
-                                  FutureBuilder<TeamModel?>(
-                                    future: _teamService.getTeam(opponentId),
-                                    builder: (context, opSnap) {
-                                      final opponentName = opSnap.data?.name ?? match["opponent_name"]?.toString() ?? "Opponent";
-                                      return _buildDmButton(
-                                        context: context,
-                                        matchId: matchId.toString(),
-                                        myTeamId: myTeamId,
-                                        myTeamName: myTeamName,
-                                        opponentId: opponentId,
-                                        opponentName: opponentName,
-                                        color: const Color(0xFF1877F2),
-                                        side: const BorderSide(color: Color(0xFF1877F2)),
-                                      );
-                                    },
-                                  ),
-                                  const SizedBox(width: 8),
                                   ElevatedButton.icon(
                                     onPressed: () async {
                                       final ended = await EndMatchBottomSheet.show(context, activeMatchId: matchId.toString(), myTeamId: myTeamId, opponentId: opponentId, myTeamName: myTeamName);
@@ -857,4 +742,3 @@ class _TeamsScreenState extends State<TeamsScreen> {
     );
   }
 }
-
