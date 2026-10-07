@@ -257,12 +257,123 @@ class GamerSocialService {
     }
   }
 
+  /// FIXED: Get list of users who follow `targetUid`
   Future<List<GamerUser>> getFollowers(String targetUid) async {
-    return [];
+    if (targetUid.isEmpty) return [];
+    try {
+      final targetUuid = stringToUuid(targetUid);
+
+      // 1. Get all follower_ids from follows table
+      final followRows = await _supabase
+          .from('follows')
+          .select('follower_id')
+          .eq('following_id', targetUuid);
+
+      if (followRows.isEmpty) return [];
+
+      final followerUuids = followRows
+          .map((r) => r['follower_id']?.toString() ?? '')
+          .where((id) => id.isNotEmpty)
+          .toList();
+
+      if (followerUuids.isEmpty) return [];
+
+      // 2. Fetch user profiles for these follower IDs
+      final userRows = await _supabase
+          .from('users')
+          .select()
+          .inFilter('id', followerUuids);
+
+      // 3. Convert to GamerUser list
+      final users = (userRows as List)
+          .map((row) => _rowToGamerUser(row))
+          .whereType<GamerUser>()
+          .toList();
+
+      return users;
+    } catch (e) {
+      debugPrint('[GamerSocialService] getFollowers error: $e');
+      return [];
+    }
   }
 
+  /// FIXED: Get list of users that `followerUid` is following
   Future<List<GamerUser>> getFollowing(String followerUid) async {
-    return [];
+    if (followerUid.isEmpty) return [];
+    try {
+      final followerUuid = stringToUuid(followerUid);
+
+      // 1. Get all following_ids from follows table
+      final followRows = await _supabase
+          .from('follows')
+          .select('following_id')
+          .eq('follower_id', followerUuid);
+
+      if (followRows.isEmpty) return [];
+
+      final followingUuids = followRows
+          .map((r) => r['following_id']?.toString() ?? '')
+          .where((id) => id.isNotEmpty)
+          .toList();
+
+      if (followingUuids.isEmpty) return [];
+
+      // 2. Fetch user profiles for these following IDs
+      final userRows = await _supabase
+          .from('users')
+          .select()
+          .inFilter('id', followingUuids);
+
+      // 3. Convert to GamerUser list
+      final users = (userRows as List)
+          .map((row) => _rowToGamerUser(row))
+          .whereType<GamerUser>()
+          .toList();
+
+      return users;
+    } catch (e) {
+      debugPrint('[GamerSocialService] getFollowing error: $e');
+      return [];
+    }
+  }
+
+  /// Helper: Convert Supabase user row to GamerUser model
+  GamerUser? _rowToGamerUser(Map<String, dynamic> row) {
+    try {
+      final rawUid = (row['uid'] ?? row['id'] ?? '').toString();
+      if (rawUid.isEmpty) return null;
+
+      return GamerUser(
+        uid: rawUid,
+        username: (row['username'] ?? 'gamer').toString(),
+        displayName:
+            (row['display_name'] ?? row['username'] ?? 'Gamer').toString(),
+        photoUrl: (row['avatar_url'] ?? '').toString(),
+        coverUrl: (row['cover_url'] ?? '').toString(),
+        bio: (row['bio'] ?? '').toString(),
+        favoriteGame: (row['favorite_game'] ?? 'BGMI').toString(),
+        selectedGame: (row['selected_game'] ?? '').toString(),
+        selectedRank: (row['selected_rank'] ?? '').toString(),
+        rank: (row['rank'] ?? '').toString(),
+        rankStatus: (row['rank_status'] ?? 'None').toString(),
+        isRankVerified: row['is_rank_verified'] == true,
+        gameId: (row['game_id'] ?? '').toString(),
+        coins: (row['coins'] as num?)?.toInt() ?? 0,
+        followersCount: (row['followers_count'] as num?)?.toInt() ?? 0,
+        followingCount: (row['following_count'] as num?)?.toInt() ?? 0,
+        postsCount: (row['posts_count'] as num?)?.toInt() ?? 0,
+        isVerified: row['is_verified'] == true,
+        verificationStatus: (row['blue_tick_status'] ?? 'none').toString(),
+        activeFrame: (row['active_frame'] ?? '').toString(),
+        activeBadge: (row['active_badge'] ?? '').toString(),
+        createdAt: DateTime.tryParse((row['created_at'] ?? '').toString()),
+        isBioPublic: row['is_bio_public'] != false,
+        isGamePublic: row['is_game_public'] != false,
+      );
+    } catch (e) {
+      debugPrint('[GamerSocialService] _rowToGamerUser error: $e');
+      return null;
+    }
   }
 
   // ==========================================
@@ -491,7 +602,23 @@ class GamerSocialService {
   }
 
   Future<List<GamerUser>> searchUsers(String query) async {
-    return [];
+    if (query.trim().isEmpty) return [];
+    try {
+      final q = query.trim().toLowerCase();
+      final rows = await _supabase
+          .from('users')
+          .select()
+          .or('username.ilike.%$q%,display_name.ilike.%$q%')
+          .limit(20);
+
+      return (rows as List)
+          .map((r) => _rowToGamerUser(r))
+          .whereType<GamerUser>()
+          .toList();
+    } catch (e) {
+      debugPrint('[GamerSocialService] searchUsers error: $e');
+      return [];
+    }
   }
 
   Stream<List<GamerUser>> getSuggestedGamersStream({int limit = 15}) {
