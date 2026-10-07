@@ -12,9 +12,6 @@ import '../services/gamer_social_service.dart';
 import '../services/supabase_service.dart';
 import '../widgets/gamer_avatar.dart';
 import '../widgets/rank_badge_widget.dart';
-import '../services/verification_service.dart';
-import '../models/challenge_model.dart';
-import '../services/challenge_service.dart';
 import '../services/profile_service.dart';
 import '../services/block_service.dart';
 import '../widgets/posts_tab.dart';
@@ -22,9 +19,7 @@ import 'create_gamer_id_screen.dart';
 import 'followers_following_screen.dart';
 import 'gamer_auth_screen.dart';
 import 'saved_news_tab_screen.dart';
-import 'verification_screen.dart';
 import 'profile_screen.dart';
-import 'follow_us_screen.dart';
 import 'gamer_delete_account_screen.dart';
 import 'gamer_download_data_screen.dart';
 import 'gamer_privacy_policy_screen.dart';
@@ -47,10 +42,6 @@ class _GamerProfileScreenState extends State<GamerProfileScreen>
   final GamerAuthService _authService = GamerAuthService();
   final GamerSocialService _socialService = GamerSocialService();
   final BlockService _blockService = BlockService();
-
-  VerificationProgress? _liveProgress;
-  bool _isCheckingVerification = false;
-  String? _lastCheckedUid;
 
   bool _isBlockedByMe = false;
   bool _isBlockedByThem = false;
@@ -159,6 +150,9 @@ class _GamerProfileScreenState extends State<GamerProfileScreen>
     }
   }
 
+  // ==========================================
+  // PRIVACY UPDATE — FIXED VERSION
+  // ==========================================
   Future<void> _updatePrivacy({
     bool? isRankPublic,
     bool? isUidPublic,
@@ -170,7 +164,10 @@ class _GamerProfileScreenState extends State<GamerProfileScreen>
     bool? isGamePublic,
   }) async {
     final uid = _authService.currentUid ?? '';
-    if (uid.isEmpty) return;
+    if (uid.isEmpty) {
+      debugPrint('[Privacy] ❌ No current UID');
+      return;
+    }
 
     try {
       final uuid = SupabaseService.toUuid(uid);
@@ -190,10 +187,15 @@ class _GamerProfileScreenState extends State<GamerProfileScreen>
       if (updates.isEmpty) return;
       updates['updated_at'] = DateTime.now().toIso8601String();
 
-      await SupabaseService.client
+      debugPrint('[Privacy] 📤 Updating with: $updates');
+
+      final result = await SupabaseService.client
           .from('users')
           .update(updates)
-          .eq('id', uuid);
+          .eq('id', uuid)
+          .select();
+
+      debugPrint('[Privacy] ✅ UPDATE SUCCESS: $result');
 
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -203,15 +205,16 @@ class _GamerProfileScreenState extends State<GamerProfileScreen>
             duration: Duration(seconds: 2),
           ),
         );
-        setState(() {});
       }
-    } catch (e) {
-      debugPrint('[Profile] Privacy update error: $e');
+    } catch (e, stack) {
+      debugPrint('[Privacy] ❌ ERROR: $e');
+      debugPrint('[Privacy] STACK: $stack');
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text('Privacy update failed: $e'),
             backgroundColor: const Color(0xFFFF4655),
+            duration: const Duration(seconds: 5),
           ),
         );
       }
@@ -301,22 +304,26 @@ class _GamerProfileScreenState extends State<GamerProfileScreen>
     }
   }
 
+  // ==========================================
+  // PRIVACY SETTINGS SHEET — FIXED VERSION
+  // ==========================================
   void _showPrivacySettingsSheet(GamerUser user) {
+    // Local mutable state — persists across sheet rebuilds
+    bool rankPublic = user.isRankPublic;
+    bool uidPublic = user.isUidPublic;
+    bool coinsPublic = user.isCoinsPublic;
+    bool memberSincePublic = user.isMemberSincePublic;
+    bool followingPublic = user.isFollowingPublic;
+    bool followersPublic = user.isFollowersPublic;
+    bool bioPublic = user.isBioPublic;
+    bool gamePublic = user.isGamePublic;
+
     showModalBottomSheet(
       context: context,
       backgroundColor: Colors.transparent,
       isScrollControlled: true,
       builder: (ctx) => StatefulBuilder(
         builder: (context, setModalState) {
-          bool rankPublic = user.isRankPublic;
-          bool uidPublic = user.isUidPublic;
-          bool coinsPublic = user.isCoinsPublic;
-          bool memberSincePublic = user.isMemberSincePublic;
-          bool followingPublic = user.isFollowingPublic;
-          bool followersPublic = user.isFollowersPublic;
-          bool bioPublic = user.isBioPublic;
-          bool gamePublic = user.isGamePublic;
-
           return Container(
             decoration: const BoxDecoration(
               color: Colors.white,
@@ -815,7 +822,6 @@ class _GamerProfileScreenState extends State<GamerProfileScreen>
     final targetUid = widget.userId ?? currentUid;
     final isOwnProfile = currentUid == targetUid;
 
-    // Blocked-By-Them: hide profile completely
     if (!isOwnProfile && _isBlockedByThem) {
       return Scaffold(
         backgroundColor: const Color(0xFFF0F2F5),
