@@ -35,10 +35,8 @@ class _GamerFeedScreenState extends State<GamerFeedScreen> {
     await _loadFeed();
   }
 
-  /// Resolve current user's ID, username, and avatar once at startup.
   Future<void> _loadCurrentUserInfo() async {
     try {
-      // 1. SharedPreferences stored Supabase user ID
       try {
         final sbId = await SupabaseService.getCurrentUserId();
         if (sbId != null && _uuidRegex.hasMatch(sbId)) {
@@ -48,7 +46,6 @@ class _GamerFeedScreenState extends State<GamerFeedScreen> {
 
       final fbUser = FirebaseAuth.instance.currentUser;
 
-      // 2. Firebase user email -> Supabase users match
       if (currentUserId.isEmpty && fbUser != null) {
         if (fbUser.email != null && fbUser.email!.isNotEmpty) {
           try {
@@ -61,19 +58,15 @@ class _GamerFeedScreenState extends State<GamerFeedScreen> {
               final idStr = res['id'].toString();
               if (_uuidRegex.hasMatch(idStr)) {
                 currentUserId = idStr;
-                currentUsername =
-                    (res['username'] ?? '').toString().isNotEmpty
-                        ? res['username'].toString()
-                        : (fbUser.displayName ??
-                            fbUser.email?.split('@').first ??
-                            'Gamer');
+                currentUsername = (res['username'] ?? '').toString().isNotEmpty
+                    ? res['username'].toString()
+                    : (fbUser.displayName ?? fbUser.email?.split('@').first ?? 'Gamer');
                 currentAvatarUrl = (res['avatar_url'] ?? '').toString();
               }
             }
           } catch (_) {}
         }
 
-        // 2b. Firebase uid -> Supabase users match
         if (currentUserId.isEmpty) {
           try {
             final resUid = await SupabaseService.client
@@ -85,12 +78,9 @@ class _GamerFeedScreenState extends State<GamerFeedScreen> {
               final idStr = resUid['id'].toString();
               if (_uuidRegex.hasMatch(idStr)) {
                 currentUserId = idStr;
-                currentUsername =
-                    (resUid['username'] ?? '').toString().isNotEmpty
-                        ? resUid['username'].toString()
-                        : (fbUser.displayName ??
-                            fbUser.email?.split('@').first ??
-                            'Gamer');
+                currentUsername = (resUid['username'] ?? '').toString().isNotEmpty
+                    ? resUid['username'].toString()
+                    : (fbUser.displayName ?? fbUser.email?.split('@').first ?? 'Gamer');
                 currentAvatarUrl = (resUid['avatar_url'] ?? '').toString();
               }
             }
@@ -98,7 +88,6 @@ class _GamerFeedScreenState extends State<GamerFeedScreen> {
         }
       }
 
-      // 3. Fallback: any valid UUID from users table
       if (currentUserId.isEmpty) {
         try {
           final anyUser = await SupabaseService.client
@@ -117,14 +106,9 @@ class _GamerFeedScreenState extends State<GamerFeedScreen> {
         } catch (_) {}
       }
 
-      // 4. Last resort
-      if (currentUserId.isEmpty &&
-          fbUser != null &&
-          _uuidRegex.hasMatch(fbUser.uid)) {
+      if (currentUserId.isEmpty && fbUser != null && _uuidRegex.hasMatch(fbUser.uid)) {
         currentUserId = fbUser.uid;
-        currentUsername = fbUser.displayName ??
-            fbUser.email?.split('@').first ??
-            'Gamer';
+        currentUsername = fbUser.displayName ?? fbUser.email?.split('@').first ?? 'Gamer';
       }
 
       if (currentUsername.trim().isEmpty) {
@@ -143,7 +127,6 @@ class _GamerFeedScreenState extends State<GamerFeedScreen> {
     }
 
     try {
-      // 1. Fetch posts
       final data = await SupabaseService.client
           .from('posts')
           .select('*')
@@ -152,11 +135,9 @@ class _GamerFeedScreenState extends State<GamerFeedScreen> {
 
       final fetchedPosts = List<Map<String, dynamic>>.from(data as List);
 
-      // 2. Fetch users separately
       final userIds = fetchedPosts
           .map((p) => p['user_id']?.toString())
-          .where((id) =>
-              id != null && id.isNotEmpty && _uuidRegex.hasMatch(id))
+          .where((id) => id != null && id.isNotEmpty && _uuidRegex.hasMatch(id))
           .toSet()
           .toList();
 
@@ -179,7 +160,6 @@ class _GamerFeedScreenState extends State<GamerFeedScreen> {
         }
       }
 
-      // 3. Fetch likes for current user
       if (currentUserId.isNotEmpty && _uuidRegex.hasMatch(currentUserId)) {
         try {
           final likesData = await SupabaseService.client
@@ -224,7 +204,6 @@ class _GamerFeedScreenState extends State<GamerFeedScreen> {
     }
   }
 
-  /// Opens a user's profile screen.
   void _openUserProfile(String userId, String username) {
     if (userId.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -232,7 +211,6 @@ class _GamerFeedScreenState extends State<GamerFeedScreen> {
       );
       return;
     }
-
     Navigator.of(context).push(
       MaterialPageRoute(
         builder: (_) => GamerProfileScreen(userId: userId),
@@ -324,8 +302,7 @@ class _GamerFeedScreenState extends State<GamerFeedScreen> {
     final content = (post['content'] ?? '').toString();
     final postUserId = post['user_id']?.toString() ?? '';
     final userProfile = userProfiles[postUserId];
-    final username =
-        userProfile?['username'] ?? post['username'] ?? 'Gamer';
+    final username = userProfile?['username'] ?? post['username'] ?? 'Gamer';
 
     final shareText = '''
 🎮 Games Khabar - $username ki post
@@ -343,10 +320,7 @@ https://play.google.com/store/apps/details?id=com.gameskhabar.app
 ''';
 
     try {
-      await Share.share(
-        shareText.trim(),
-        subject: 'Games Khabar - $username',
-      );
+      await Share.share(shareText.trim(), subject: 'Games Khabar - $username');
     } catch (e) {
       debugPrint('Share error: $e');
     }
@@ -377,6 +351,73 @@ https://play.google.com/store/apps/details?id=com.gameskhabar.app
     });
   }
 
+  /// Report a post — saves into the `reports` table.
+  Future<void> _reportPost(String postId, String postContent, String postOwnerId) async {
+    // Prevent reporting own post
+    if (postOwnerId == currentUserId) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Aap apni post report nahi kar sakte')),
+      );
+      return;
+    }
+
+    // Confirm dialog
+    final confirm = await showDialog<bool>(
+      context: context,
+      builder: (c) => AlertDialog(
+        title: const Text('Report Post?'),
+        content: const Text('Kya aap ye post report karna chahte hain? Admin review karega.'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(c, false),
+            child: const Text('Cancel'),
+          ),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
+            onPressed: () => Navigator.pop(c, true),
+            child: const Text('Report', style: TextStyle(color: Colors.white)),
+          ),
+        ],
+      ),
+    );
+
+    if (confirm != true) return;
+
+    try {
+      await SupabaseService.client.from('reports').insert({
+        'reporter_id': currentUserId.isNotEmpty ? currentUserId : null,
+        'reporter_username': currentUsername,
+        'target_type': 'post',
+        'target_id': postId,
+        'target_content': postContent.length > 200
+            ? postContent.substring(0, 200)
+            : postContent,
+        'reason': 'Reported by user',
+        'status': 'pending',
+        'created_at': DateTime.now().toIso8601String(),
+      });
+
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('✅ Post report ho gayi — Admin review karega'),
+            backgroundColor: Colors.green,
+          ),
+        );
+      }
+    } catch (e) {
+      debugPrint('[Feed] Report error: $e');
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Report failed: $e'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    }
+  }
+
   void _showPostOptions(BuildContext context, String postId, String ownerId) {
     final isMyPost = ownerId == currentUserId;
 
@@ -405,10 +446,7 @@ https://play.google.com/store/apps/details?id=com.gameskhabar.app
                 leading: const Icon(Icons.delete_outline, color: Colors.red),
                 title: const Text(
                   'Delete Post',
-                  style: TextStyle(
-                    color: Colors.red,
-                    fontWeight: FontWeight.bold,
-                  ),
+                  style: TextStyle(color: Colors.red, fontWeight: FontWeight.bold),
                 ),
                 onTap: () async {
                   Navigator.pop(ctx);
@@ -416,23 +454,16 @@ https://play.google.com/store/apps/details?id=com.gameskhabar.app
                     context: context,
                     builder: (c) => AlertDialog(
                       title: const Text('Delete Post?'),
-                      content: const Text(
-                        'Kya aap ye post delete karna chahte hain?',
-                      ),
+                      content: const Text('Kya aap ye post delete karna chahte hain?'),
                       actions: [
                         TextButton(
                           onPressed: () => Navigator.pop(c, false),
                           child: const Text('Cancel'),
                         ),
                         ElevatedButton(
-                          style: ElevatedButton.styleFrom(
-                            backgroundColor: Colors.red,
-                          ),
+                          style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
                           onPressed: () => Navigator.pop(c, true),
-                          child: const Text(
-                            'Delete',
-                            style: TextStyle(color: Colors.white),
-                          ),
+                          child: const Text('Delete', style: TextStyle(color: Colors.white)),
                         ),
                       ],
                     ),
@@ -440,47 +471,30 @@ https://play.google.com/store/apps/details?id=com.gameskhabar.app
                   if (confirm == true) {
                     try {
                       try {
-                        await SupabaseService.client
-                            .from('likes')
-                            .delete()
-                            .eq('post_id', postId);
+                        await SupabaseService.client.from('likes').delete().eq('post_id', postId);
                       } catch (e) {
                         debugPrint('Likes delete warning: $e');
                       }
                       try {
-                        await SupabaseService.client
-                            .from('comments')
-                            .delete()
-                            .eq('post_id', postId);
+                        await SupabaseService.client.from('comments').delete().eq('post_id', postId);
                       } catch (e) {
                         debugPrint('Comments delete warning: $e');
                       }
 
-                      await SupabaseService.client
-                          .from('posts')
-                          .delete()
-                          .eq('id', postId);
+                      await SupabaseService.client.from('posts').delete().eq('id', postId);
 
                       if (mounted) {
                         setState(() {
-                          posts.removeWhere(
-                            (p) => p['id'].toString() == postId,
-                          );
+                          posts.removeWhere((p) => p['id'].toString() == postId);
                         });
                         ScaffoldMessenger.of(context).showSnackBar(
-                          const SnackBar(
-                            content: Text('Post deleted'),
-                            backgroundColor: Colors.green,
-                          ),
+                          const SnackBar(content: Text('Post deleted'), backgroundColor: Colors.green),
                         );
                       }
                     } catch (e) {
                       if (mounted) {
                         ScaffoldMessenger.of(context).showSnackBar(
-                          SnackBar(
-                            content: Text('Delete failed: $e'),
-                            backgroundColor: Colors.red,
-                          ),
+                          SnackBar(content: Text('Delete failed: $e'), backgroundColor: Colors.red),
                         );
                       }
                     }
@@ -489,16 +503,17 @@ https://play.google.com/store/apps/details?id=com.gameskhabar.app
               ),
             ] else ...[
               ListTile(
-                leading: const Icon(
-                  Icons.flag_outlined,
-                  color: Color(0xFF65676B),
-                ),
+                leading: const Icon(Icons.flag_outlined, color: Color(0xFF65676B)),
                 title: const Text('Report Post'),
                 onTap: () {
-                  Navigator.pop(ctx);
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(content: Text('Post reported')),
+                  // Capture the current post content for the report
+                  final targetPost = posts.firstWhere(
+                    (p) => p['id'].toString() == postId,
+                    orElse: () => <String, dynamic>{},
                   );
+                  final content = (targetPost['content'] ?? '').toString();
+                  Navigator.pop(ctx);
+                  _reportPost(postId, content, ownerId);
                 },
               ),
             ],
@@ -542,8 +557,7 @@ https://play.google.com/store/apps/details?id=com.gameskhabar.app
                           ? NetworkImage(currentAvatarUrl)
                           : null,
                       child: currentAvatarUrl.isEmpty
-                          ? const Icon(Icons.person,
-                              color: Color(0xFF050505))
+                          ? const Icon(Icons.person, color: Color(0xFF050505))
                           : null,
                     ),
                     const SizedBox(width: 10),
@@ -567,10 +581,7 @@ https://play.google.com/store/apps/details?id=com.gameskhabar.app
                         shape: RoundedRectangleBorder(
                           borderRadius: BorderRadius.circular(8),
                         ),
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 16,
-                          vertical: 8,
-                        ),
+                        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
                       ),
                       onPressed: isPosting
                           ? null
@@ -578,13 +589,10 @@ https://play.google.com/store/apps/details?id=com.gameskhabar.app
                               final text = textController.text.trim();
                               if (text.isEmpty) return;
 
-                              if (currentUserId.isEmpty ||
-                                  !_uuidRegex.hasMatch(currentUserId)) {
+                              if (currentUserId.isEmpty || !_uuidRegex.hasMatch(currentUserId)) {
                                 ScaffoldMessenger.of(context).showSnackBar(
                                   const SnackBar(
-                                    content: Text(
-                                      'Cannot post: user not logged in properly.',
-                                    ),
+                                    content: Text('Cannot post: user not logged in properly.'),
                                     backgroundColor: Colors.red,
                                   ),
                                 );
@@ -594,9 +602,7 @@ https://play.google.com/store/apps/details?id=com.gameskhabar.app
                               setSheetState(() => isPosting = true);
 
                               try {
-                                await SupabaseService.client
-                                    .from('posts')
-                                    .insert({
+                                await SupabaseService.client.from('posts').insert({
                                   'content': text,
                                   'user_id': currentUserId,
                                   'username': currentUsername,
@@ -609,8 +615,7 @@ https://play.google.com/store/apps/details?id=com.gameskhabar.app
                                 }
 
                                 if (mounted) {
-                                  ScaffoldMessenger.of(context)
-                                      .showSnackBar(
+                                  ScaffoldMessenger.of(context).showSnackBar(
                                     const SnackBar(
                                       content: Text('Post created!'),
                                       backgroundColor: Color(0xFF1877F2),
@@ -621,16 +626,12 @@ https://play.google.com/store/apps/details?id=com.gameskhabar.app
                               } catch (e) {
                                 debugPrint('Error creating post: $e');
                                 if (sheetCtx.mounted) {
-                                  setSheetState(
-                                      () => isPosting = false);
+                                  setSheetState(() => isPosting = false);
                                 }
                                 if (mounted) {
-                                  ScaffoldMessenger.of(context)
-                                      .showSnackBar(
+                                  ScaffoldMessenger.of(context).showSnackBar(
                                     SnackBar(
-                                      content: Text(
-                                        'Failed to create post: $e',
-                                      ),
+                                      content: Text('Failed to create post: $e'),
                                       backgroundColor: Colors.red,
                                     ),
                                   );
@@ -646,11 +647,7 @@ https://play.google.com/store/apps/details?id=com.gameskhabar.app
                                 color: Colors.white,
                               ),
                             )
-                          : const Text(
-                              'Post',
-                              style:
-                                  TextStyle(fontWeight: FontWeight.bold),
-                            ),
+                          : const Text('Post', style: TextStyle(fontWeight: FontWeight.bold)),
                     ),
                   ],
                 ),
@@ -660,16 +657,10 @@ https://play.google.com/store/apps/details?id=com.gameskhabar.app
                   autofocus: true,
                   maxLines: 5,
                   minLines: 3,
-                  style: const TextStyle(
-                    color: Color(0xFF050505),
-                    fontSize: 16,
-                  ),
+                  style: const TextStyle(color: Color(0xFF050505), fontSize: 16),
                   decoration: const InputDecoration(
                     hintText: "What's on your mind?",
-                    hintStyle: TextStyle(
-                      color: Color(0xFF65676B),
-                      fontSize: 16,
-                    ),
+                    hintStyle: TextStyle(color: Color(0xFF65676B), fontSize: 16),
                     border: InputBorder.none,
                   ),
                 ),
@@ -734,42 +725,29 @@ https://play.google.com/store/apps/details?id=com.gameskhabar.app
                           borderRadius: BorderRadius.circular(10),
                         ),
                         child: Padding(
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: 12,
-                            vertical: 8,
-                          ),
+                          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
                           child: Row(
                             children: [
                               CircleAvatar(
                                 backgroundColor: const Color(0xFFE4E6EB),
-                                backgroundImage:
-                                    currentAvatarUrl.isNotEmpty
-                                        ? NetworkImage(currentAvatarUrl)
-                                        : null,
+                                backgroundImage: currentAvatarUrl.isNotEmpty
+                                    ? NetworkImage(currentAvatarUrl)
+                                    : null,
                                 child: currentAvatarUrl.isEmpty
-                                    ? const Icon(
-                                        Icons.person,
-                                        color: Color(0xFF050505),
-                                      )
+                                    ? const Icon(Icons.person, color: Color(0xFF050505))
                                     : null,
                               ),
                               const SizedBox(width: 12),
                               Expanded(
                                 child: Container(
-                                  padding: const EdgeInsets.symmetric(
-                                    horizontal: 14,
-                                    vertical: 10,
-                                  ),
+                                  padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
                                   decoration: BoxDecoration(
                                     color: const Color(0xFFF0F2F5),
                                     borderRadius: BorderRadius.circular(20),
                                   ),
                                   child: const Text(
                                     "What's on your mind?",
-                                    style: TextStyle(
-                                      color: Color(0xFF65676B),
-                                      fontSize: 14,
-                                    ),
+                                    style: TextStyle(color: Color(0xFF65676B), fontSize: 14),
                                   ),
                                 ),
                               ),
@@ -784,13 +762,9 @@ https://play.google.com/store/apps/details?id=com.gameskhabar.app
                   final postUserId = post['user_id']?.toString() ?? '';
                   final userProfile = userProfiles[postUserId];
 
-                  final username = userProfile?['username'] ??
-                      post['username'] ??
-                      'Gamer';
-                  final avatarUrl = (userProfile?['avatar_url'] ??
-                          post['user_avatar'] ??
-                          '')
-                      .toString();
+                  final username = userProfile?['username'] ?? post['username'] ?? 'Gamer';
+                  final avatarUrl =
+                      (userProfile?['avatar_url'] ?? post['user_avatar'] ?? '').toString();
                   final postId = post['id']?.toString() ?? '';
                   final isLiked = likedPostIds.contains(postId);
                   final imageUrl = (post['image_url'] ?? '').toString();
@@ -799,35 +773,28 @@ https://play.google.com/store/apps/details?id=com.gameskhabar.app
                   final commentsCount = post['comments_count'] ?? 0;
 
                   return Card(
-                    margin: const EdgeInsets.symmetric(
-                        vertical: 4, horizontal: 0),
+                    margin: const EdgeInsets.symmetric(vertical: 4, horizontal: 0),
                     elevation: 0,
                     color: Colors.white,
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         ListTile(
-                          contentPadding: const EdgeInsets.symmetric(
-                              horizontal: 12, vertical: 4),
+                          contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
                           leading: GestureDetector(
-                            onTap: () => _openUserProfile(
-                                postUserId, username.toString()),
+                            onTap: () => _openUserProfile(postUserId, username.toString()),
                             child: CircleAvatar(
                               backgroundColor: const Color(0xFFE4E6EB),
                               backgroundImage: avatarUrl.isNotEmpty
                                   ? NetworkImage(avatarUrl)
                                   : null,
                               child: avatarUrl.isEmpty
-                                  ? const Icon(
-                                      Icons.person,
-                                      color: Color(0xFF050505),
-                                    )
+                                  ? const Icon(Icons.person, color: Color(0xFF050505))
                                   : null,
                             ),
                           ),
                           title: GestureDetector(
-                            onTap: () => _openUserProfile(
-                                postUserId, username.toString()),
+                            onTap: () => _openUserProfile(postUserId, username.toString()),
                             child: Text(
                               username.toString(),
                               style: const TextStyle(
@@ -839,29 +806,16 @@ https://play.google.com/store/apps/details?id=com.gameskhabar.app
                           ),
                           subtitle: Text(
                             _formatTimeAgo(post['created_at']),
-                            style: const TextStyle(
-                              fontSize: 12,
-                              color: Color(0xFF65676B),
-                            ),
+                            style: const TextStyle(fontSize: 12, color: Color(0xFF65676B)),
                           ),
                           trailing: IconButton(
-                            icon: const Icon(
-                              Icons.more_horiz,
-                              color: Color(0xFF65676B),
-                            ),
-                            onPressed: () => _showPostOptions(
-                              context,
-                              postId,
-                              postUserId,
-                            ),
+                            icon: const Icon(Icons.more_horiz, color: Color(0xFF65676B)),
+                            onPressed: () => _showPostOptions(context, postId, postUserId),
                           ),
                         ),
                         if (content.isNotEmpty)
                           Padding(
-                            padding: const EdgeInsets.symmetric(
-                              horizontal: 16,
-                              vertical: 4,
-                            ),
+                            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
                             child: Text(
                               content,
                               style: const TextStyle(
@@ -878,18 +832,13 @@ https://play.google.com/store/apps/details?id=com.gameskhabar.app
                               imageUrl,
                               width: double.infinity,
                               fit: BoxFit.cover,
-                              errorBuilder: (_, __, ___) =>
-                                  const SizedBox.shrink(),
+                              errorBuilder: (_, __, ___) => const SizedBox.shrink(),
                             ),
                           ),
                         Padding(
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: 16,
-                            vertical: 10,
-                          ),
+                          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
                           child: Row(
-                            mainAxisAlignment:
-                                MainAxisAlignment.spaceBetween,
+                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
                             children: [
                               Row(
                                 children: [
@@ -899,65 +848,44 @@ https://play.google.com/store/apps/details?id=com.gameskhabar.app
                                       color: Color(0xFF1877F2),
                                       shape: BoxShape.circle,
                                     ),
-                                    child: const Icon(
-                                      Icons.thumb_up,
-                                      size: 11,
-                                      color: Colors.white,
-                                    ),
+                                    child: const Icon(Icons.thumb_up, size: 11, color: Colors.white),
                                   ),
                                   const SizedBox(width: 6),
                                   Text(
                                     '$likesCount',
-                                    style: const TextStyle(
-                                      fontSize: 13,
-                                      color: Color(0xFF65676B),
-                                    ),
+                                    style: const TextStyle(fontSize: 13, color: Color(0xFF65676B)),
                                   ),
                                 ],
                               ),
                               Text(
                                 '$commentsCount comments',
-                                style: const TextStyle(
-                                  fontSize: 13,
-                                  color: Color(0xFF65676B),
-                                ),
+                                style: const TextStyle(fontSize: 13, color: Color(0xFF65676B)),
                               ),
                             ],
                           ),
                         ),
-                        const Divider(
-                            height: 1, color: Color(0xFFCED0D4)),
+                        const Divider(height: 1, color: Color(0xFFCED0D4)),
                         Row(
                           children: [
                             Expanded(
                               child: InkWell(
                                 onTap: () => _handleLike(post),
                                 child: Padding(
-                                  padding: const EdgeInsets.symmetric(
-                                      vertical: 10),
+                                  padding: const EdgeInsets.symmetric(vertical: 10),
                                   child: Row(
-                                    mainAxisAlignment:
-                                        MainAxisAlignment.center,
+                                    mainAxisAlignment: MainAxisAlignment.center,
                                     children: [
                                       Icon(
-                                        isLiked
-                                            ? Icons.thumb_up
-                                            : Icons.thumb_up_outlined,
+                                        isLiked ? Icons.thumb_up : Icons.thumb_up_outlined,
                                         size: 18,
-                                        color: isLiked
-                                            ? const Color(0xFF1877F2)
-                                            : const Color(0xFF65676B),
+                                        color: isLiked ? const Color(0xFF1877F2) : const Color(0xFF65676B),
                                       ),
                                       const SizedBox(width: 6),
                                       Text(
                                         'Like',
                                         style: TextStyle(
-                                          color: isLiked
-                                              ? const Color(0xFF1877F2)
-                                              : const Color(0xFF65676B),
-                                          fontWeight: isLiked
-                                              ? FontWeight.bold
-                                              : FontWeight.normal,
+                                          color: isLiked ? const Color(0xFF1877F2) : const Color(0xFF65676B),
+                                          fontWeight: isLiked ? FontWeight.bold : FontWeight.normal,
                                           fontSize: 13,
                                         ),
                                       ),
@@ -970,25 +898,13 @@ https://play.google.com/store/apps/details?id=com.gameskhabar.app
                               child: InkWell(
                                 onTap: () => _showComments(postId),
                                 child: const Padding(
-                                  padding: EdgeInsets.symmetric(
-                                      vertical: 10),
+                                  padding: EdgeInsets.symmetric(vertical: 10),
                                   child: Row(
-                                    mainAxisAlignment:
-                                        MainAxisAlignment.center,
+                                    mainAxisAlignment: MainAxisAlignment.center,
                                     children: [
-                                      Icon(
-                                        Icons.chat_bubble_outline,
-                                        size: 18,
-                                        color: Color(0xFF65676B),
-                                      ),
+                                      Icon(Icons.chat_bubble_outline, size: 18, color: Color(0xFF65676B)),
                                       SizedBox(width: 6),
-                                      Text(
-                                        'Comment',
-                                        style: TextStyle(
-                                          color: Color(0xFF65676B),
-                                          fontSize: 13,
-                                        ),
-                                      ),
+                                      Text('Comment', style: TextStyle(color: Color(0xFF65676B), fontSize: 13)),
                                     ],
                                   ),
                                 ),
@@ -998,25 +914,13 @@ https://play.google.com/store/apps/details?id=com.gameskhabar.app
                               child: InkWell(
                                 onTap: () => _handleShare(post),
                                 child: const Padding(
-                                  padding: EdgeInsets.symmetric(
-                                      vertical: 10),
+                                  padding: EdgeInsets.symmetric(vertical: 10),
                                   child: Row(
-                                    mainAxisAlignment:
-                                        MainAxisAlignment.center,
+                                    mainAxisAlignment: MainAxisAlignment.center,
                                     children: [
-                                      Icon(
-                                        Icons.share_outlined,
-                                        size: 18,
-                                        color: Color(0xFF65676B),
-                                      ),
+                                      Icon(Icons.share_outlined, size: 18, color: Color(0xFF65676B)),
                                       SizedBox(width: 6),
-                                      Text(
-                                        'Share',
-                                        style: TextStyle(
-                                          color: Color(0xFF65676B),
-                                          fontSize: 13,
-                                        ),
-                                      ),
+                                      Text('Share', style: TextStyle(color: Color(0xFF65676B), fontSize: 13)),
                                     ],
                                   ),
                                 ),
@@ -1086,11 +990,9 @@ class _CommentSheetState extends State<CommentSheet> {
       final list = List<Map<String, dynamic>>.from(data as List);
 
       final missingUserIds = list
-          .where((c) =>
-              c['username'] == null || c['username'].toString().isEmpty)
+          .where((c) => c['username'] == null || c['username'].toString().isEmpty)
           .map((c) => c['user_id']?.toString())
-          .where((id) =>
-              id != null && id.isNotEmpty && _uuidRegex.hasMatch(id))
+          .where((id) => id != null && id.isNotEmpty && _uuidRegex.hasMatch(id))
           .toSet()
           .toList();
 
@@ -1104,14 +1006,12 @@ class _CommentSheetState extends State<CommentSheet> {
           final userMap = <String, String>{};
           for (final u in (usersData as List)) {
             if (u is Map<String, dynamic> && u['id'] != null) {
-              userMap[u['id'].toString()] =
-                  (u['username'] ?? 'Gamer').toString();
+              userMap[u['id'].toString()] = (u['username'] ?? 'Gamer').toString();
             }
           }
 
           for (final c in list) {
-            if (c['username'] == null ||
-                c['username'].toString().isEmpty) {
+            if (c['username'] == null || c['username'].toString().isEmpty) {
               final uid = c['user_id']?.toString();
               if (uid != null && userMap.containsKey(uid)) {
                 c['username'] = userMap[uid];
@@ -1140,8 +1040,7 @@ class _CommentSheetState extends State<CommentSheet> {
     final text = _ctrl.text.trim();
     if (text.isEmpty || _isPosting) return;
 
-    if (widget.currentUserId.isEmpty ||
-        !_uuidRegex.hasMatch(widget.currentUserId)) {
+    if (widget.currentUserId.isEmpty || !_uuidRegex.hasMatch(widget.currentUserId)) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('Please login to comment.')),
       );
@@ -1205,12 +1104,138 @@ class _CommentSheetState extends State<CommentSheet> {
     }
   }
 
-  /// Opens a user's profile from a comment.
+  /// Report a comment — saves into the `reports` table.
+  Future<void> _reportComment(String commentId, String commentContent) async {
+    // Prevent reporting own comment
+    // (commentUserId might be current user)
+    final confirm = await showDialog<bool>(
+      context: context,
+      builder: (c) => AlertDialog(
+        title: const Text('Report Comment?'),
+        content: const Text('Kya aap ye comment report karna chahte hain? Admin review karega.'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(c, false),
+            child: const Text('Cancel'),
+          ),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
+            onPressed: () => Navigator.pop(c, true),
+            child: const Text('Report', style: TextStyle(color: Colors.white)),
+          ),
+        ],
+      ),
+    );
+
+    if (confirm != true) return;
+
+    try {
+      await SupabaseService.client.from('reports').insert({
+        'reporter_id': widget.currentUserId.isNotEmpty ? widget.currentUserId : null,
+        'reporter_username': widget.currentUsername,
+        'target_type': 'comment',
+        'target_id': commentId,
+        'target_content': commentContent.length > 200
+            ? commentContent.substring(0, 200)
+            : commentContent,
+        'reason': 'Reported by user',
+        'status': 'pending',
+        'created_at': DateTime.now().toIso8601String(),
+      });
+
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('✅ Comment report ho gayi — Admin review karega'),
+            backgroundColor: Colors.green,
+          ),
+        );
+      }
+    } catch (e) {
+      debugPrint('[Comment] Report error: $e');
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Report failed: $e'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    }
+  }
+
   void _openCommentUserProfile(String userId) {
     if (userId.isEmpty) return;
     Navigator.of(context).push(
       MaterialPageRoute(
         builder: (_) => GamerProfileScreen(userId: userId),
+      ),
+    );
+  }
+
+  void _showCommentOptions(Map<String, dynamic> comment, bool isMyComment) {
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: Colors.white,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
+      ),
+      builder: (ctx) => SafeArea(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const SizedBox(height: 12),
+            Container(
+              width: 40,
+              height: 4,
+              decoration: BoxDecoration(
+                color: Colors.grey[300],
+                borderRadius: BorderRadius.circular(2),
+              ),
+            ),
+            const SizedBox(height: 8),
+            if (isMyComment) ...[
+              ListTile(
+                leading: const Icon(Icons.delete_outline, color: Colors.red),
+                title: const Text(
+                  'Delete Comment',
+                  style: TextStyle(color: Colors.red, fontWeight: FontWeight.bold),
+                ),
+                onTap: () async {
+                  Navigator.pop(ctx);
+                  final commentId = (comment['id'] ?? '').toString();
+                  if (commentId.isEmpty) return;
+                  try {
+                    await SupabaseService.client
+                        .from('comments')
+                        .delete()
+                        .eq('id', commentId);
+                    await _loadComments();
+                    if (mounted) {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        const SnackBar(content: Text('Comment deleted'), backgroundColor: Colors.green),
+                      );
+                    }
+                  } catch (e) {
+                    debugPrint('[Comment] Delete error: $e');
+                  }
+                },
+              ),
+            ] else ...[
+              ListTile(
+                leading: const Icon(Icons.flag_outlined, color: Color(0xFF65676B)),
+                title: const Text('Report Comment'),
+                onTap: () {
+                  Navigator.pop(ctx);
+                  final commentId = (comment['id'] ?? '').toString();
+                  final commentContent = (comment['content'] ?? '').toString();
+                  _reportComment(commentId, commentContent);
+                },
+              ),
+            ],
+            const SizedBox(height: 12),
+          ],
+        ),
       ),
     );
   }
@@ -1237,10 +1262,7 @@ class _CommentSheetState extends State<CommentSheet> {
             const SizedBox(height: 12),
             const Text(
               'Comments',
-              style: TextStyle(
-                fontWeight: FontWeight.bold,
-                fontSize: 16,
-              ),
+              style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
             ),
             const Divider(),
             Expanded(
@@ -1257,42 +1279,49 @@ class _CommentSheetState extends State<CommentSheet> {
                           itemCount: comments.length,
                           itemBuilder: (_, i) {
                             final c = comments[i];
-                            final username =
-                                (c['username'] ?? 'Gamer').toString();
-                            final content =
-                                (c['content'] ?? '').toString();
-                            final commentUserId =
-                                (c['user_id'] ?? '').toString();
-                            return ListTile(
-                              leading: GestureDetector(
-                                onTap: () => _openCommentUserProfile(
-                                    commentUserId),
-                                child: const CircleAvatar(
-                                  radius: 16,
-                                  backgroundColor: Color(0xFFE4E6EB),
-                                  child: Icon(
-                                    Icons.person,
-                                    size: 18,
-                                    color: Color(0xFF050505),
+                            final username = (c['username'] ?? 'Gamer').toString();
+                            final content = (c['content'] ?? '').toString();
+                            final commentUserId = (c['user_id'] ?? '').toString();
+                            final isMyComment = commentUserId == widget.currentUserId;
+
+                            return InkWell(
+                              onLongPress: () => _showCommentOptions(c, isMyComment),
+                              child: ListTile(
+                                leading: GestureDetector(
+                                  onTap: () => _openCommentUserProfile(commentUserId),
+                                  child: const CircleAvatar(
+                                    radius: 16,
+                                    backgroundColor: Color(0xFFE4E6EB),
+                                    child: Icon(Icons.person, size: 18, color: Color(0xFF050505)),
                                   ),
                                 ),
-                              ),
-                              title: GestureDetector(
-                                onTap: () => _openCommentUserProfile(
-                                    commentUserId),
-                                child: Text(
-                                  username,
+                                title: GestureDetector(
+                                  onTap: () => _openCommentUserProfile(commentUserId),
+                                  child: Text(
+                                    username,
+                                    style: const TextStyle(
+                                      fontWeight: FontWeight.bold,
+                                      fontSize: 13,
+                                    ),
+                                  ),
+                                ),
+                                subtitle: Text(
+                                  content,
                                   style: const TextStyle(
-                                    fontWeight: FontWeight.bold,
-                                    fontSize: 13,
+                                    color: Color(0xFF050505),
+                                    fontSize: 14,
                                   ),
                                 ),
-                              ),
-                              subtitle: Text(
-                                content,
-                                style: const TextStyle(
-                                  color: Color(0xFF050505),
-                                  fontSize: 14,
+                                trailing: IconButton(
+                                  icon: const Icon(
+                                    Icons.flag_outlined,
+                                    size: 16,
+                                    color: Color(0xFF65676B),
+                                  ),
+                                  onPressed: () => _reportComment(
+                                    (c['id'] ?? '').toString(),
+                                    content,
+                                  ),
                                 ),
                               ),
                             );
@@ -1311,10 +1340,7 @@ class _CommentSheetState extends State<CommentSheet> {
                         hintText: 'Write a comment...',
                         filled: true,
                         fillColor: const Color(0xFFF0F2F5),
-                        contentPadding: const EdgeInsets.symmetric(
-                          horizontal: 16,
-                          vertical: 10,
-                        ),
+                        contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
                         border: OutlineInputBorder(
                           borderRadius: BorderRadius.circular(20),
                           borderSide: BorderSide.none,
@@ -1336,10 +1362,7 @@ class _CommentSheetState extends State<CommentSheet> {
                           ),
                         )
                       : IconButton(
-                          icon: const Icon(
-                            Icons.send,
-                            color: Color(0xFF1877F2),
-                          ),
+                          icon: const Icon(Icons.send, color: Color(0xFF1877F2)),
                           onPressed: _submitComment,
                         ),
                 ],
