@@ -616,6 +616,7 @@ class _CreateGamerIdScreenState extends State<CreateGamerIdScreen> {
                                 end: Alignment.bottomCenter,
                               ),
                             ),
+                          ),
                         ],
                       ),
                     ),
