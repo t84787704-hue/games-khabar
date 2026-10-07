@@ -185,9 +185,6 @@ class GamerUser {
   final DateTime? vipTournamentPassUntil;
   final DateTime? leaderboardSpotlightUntil;
 
-  // ═══════════════════════════════════════════════════════════
-  // PRIVACY FIELDS — Play Store ready
-  // ═══════════════════════════════════════════════════════════
   final bool isRankPublic;
   final bool isUidPublic;
   final bool isCoinsPublic;
@@ -250,7 +247,6 @@ class GamerUser {
     this.isVipMember = false,
     this.vipTournamentPassUntil,
     this.leaderboardSpotlightUntil,
-    // Privacy defaults
     this.isRankPublic = true,
     this.isUidPublic = false,
     this.isCoinsPublic = false,
@@ -462,35 +458,30 @@ class GamerUser {
     }
   }
 
+  // ✅ Helper: Timestamp, String, ya int — teeno ko DateTime mein convert karo
+  static DateTime? _parseDateTime(dynamic raw) {
+    if (raw == null) return null;
+    if (raw is Timestamp) return raw.toDate();
+    if (raw is DateTime) return raw;
+    if (raw is String) return DateTime.tryParse(raw);
+    if (raw is int) return DateTime.fromMillisecondsSinceEpoch(raw);
+    try {
+      return (raw as dynamic).toDate();
+    } catch (_) {
+      return null;
+    }
+  }
+
   factory GamerUser.fromFirestore(DocumentSnapshot doc) {
     return GamerUser.fromMap(
         doc.data() as Map<String, dynamic>? ?? {}, doc.id);
   }
 
   factory GamerUser.fromMap(Map<String, dynamic> data, [String? fallbackUid]) {
-    DateTime? created;
-    final rawCreated = data['createdAt'];
-    if (rawCreated is Timestamp) {
-      created = rawCreated.toDate();
-    } else if (rawCreated is String) {
-      created = DateTime.tryParse(rawCreated);
-    }
-
-    DateTime? appliedAt;
-    final rawApplied = data['verificationAppliedAt'];
-    if (rawApplied is Timestamp) {
-      appliedAt = rawApplied.toDate();
-    } else if (rawApplied is String) {
-      appliedAt = DateTime.tryParse(rawApplied);
-    }
-
-    DateTime? bannedTimestamp;
-    final rawBannedAt = data['bannedAt'];
-    if (rawBannedAt is Timestamp) {
-      bannedTimestamp = rawBannedAt.toDate();
-    } else if (rawBannedAt is String) {
-      bannedTimestamp = DateTime.tryParse(rawBannedAt);
-    }
+    // ✅ Supabase-compatible: Timestamp, String, ya int — sab handle karta hai
+    final DateTime? created = _parseDateTime(data['createdAt']);
+    final DateTime? appliedAt = _parseDateTime(data['verificationAppliedAt']);
+    final DateTime? bannedTimestamp = _parseDateTime(data['bannedAt']);
 
     final rawEmail = (data['email'] ?? '').toString().toLowerCase().trim();
     final authUser = FirebaseAuth.instance.currentUser;
@@ -538,21 +529,8 @@ class GamerUser {
         data['tier']?.toString() ?? data['rank']?.toString() ?? '';
     final String resolvedRank = rawRank.isNotEmpty ? rawRank : 'Bronze';
 
-    DateTime? vipPassExpires;
-    final rawVip = data['vipTournamentPassUntil'];
-    if (rawVip is Timestamp) {
-      vipPassExpires = rawVip.toDate();
-    } else if (rawVip is String) {
-      vipPassExpires = DateTime.tryParse(rawVip);
-    }
-
-    DateTime? spotlightExpires;
-    final rawSpotlight = data['leaderboardSpotlightUntil'];
-    if (rawSpotlight is Timestamp) {
-      spotlightExpires = rawSpotlight.toDate();
-    } else if (rawSpotlight is String) {
-      spotlightExpires = DateTime.tryParse(rawSpotlight);
-    }
+    final DateTime? vipPassExpires = _parseDateTime(data['vipTournamentPassUntil']);
+    final DateTime? spotlightExpires = _parseDateTime(data['leaderboardSpotlightUntil']);
 
     final bool isVip = data['isVipMember'] == true ||
         (vipPassExpires != null && vipPassExpires.isAfter(DateTime.now()));
@@ -628,7 +606,6 @@ class GamerUser {
       isVipMember: isVip,
       vipTournamentPassUntil: vipPassExpires,
       leaderboardSpotlightUntil: spotlightExpires,
-      // Privacy fields
       isRankPublic: data['is_rank_public'] != false,
       isUidPublic: data['is_uid_public'] == true,
       isCoinsPublic: data['is_coins_public'] == true,
@@ -723,7 +700,6 @@ class GamerUser {
           ? Timestamp.fromDate(createdAt!)
           : FieldValue.serverTimestamp(),
       'updatedAt': FieldValue.serverTimestamp(),
-      // Privacy fields
       'is_rank_public': isRankPublic,
       'is_uid_public': isUidPublic,
       'is_coins_public': isCoinsPublic,
