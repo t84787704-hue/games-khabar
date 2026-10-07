@@ -104,18 +104,27 @@ class ChatConversation implements Comparable<ChatConversation> {
   final String otherUserName;
   final String otherUserAvatar;
   final String lastMessage;
+  final String lastMessageType;
   final DateTime lastMessageAt;
   final int unreadCount;
+  final bool isVerified;
 
   const ChatConversation({
     this.id = '',
     this.otherUserId = '',
     this.otherUserName = '',
-    this.otherUserAvatar = '',
+    String otherUserAvatar = '',
+    String? otherUserPhoto,
     this.lastMessage = '',
+    this.lastMessageType = 'text',
     DateTime? lastMessageAt,
+    DateTime? lastMessageTime,
     this.unreadCount = 0,
-  }) : lastMessageAt = lastMessageAt ?? DateTime.now();
+    this.isVerified = false,
+  })  : otherUserAvatar = (otherUserPhoto != null && otherUserPhoto.isNotEmpty)
+            ? otherUserPhoto
+            : otherUserAvatar,
+        lastMessageAt = lastMessageTime ?? lastMessageAt ?? DateTime.now();
 
   // Alias getters to support various naming conventions across screens
   String get conversationId => id;
@@ -128,9 +137,11 @@ class ChatConversation implements Comparable<ChatConversation> {
   String get peerAvatar => otherUserAvatar;
   String get avatarUrl => otherUserAvatar;
   String get photoUrl => otherUserAvatar;
+  String get otherUserPhoto => otherUserAvatar;
   DateTime get timestamp => lastMessageAt;
   DateTime get updatedAt => lastMessageAt;
   DateTime get createdAt => lastMessageAt;
+  DateTime get lastMessageTime => lastMessageAt;
 
   factory ChatConversation.fromMap(Map<String, dynamic> map) {
     DateTime parseDate(dynamic val) {

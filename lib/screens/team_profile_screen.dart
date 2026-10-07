@@ -2018,7 +2018,7 @@ class _TeamProfileScreenState extends State<TeamProfileScreen> {
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            FutureBuilder<Map<String, String>>(
+                            FutureBuilder<Map<String, dynamic>>(
                               future: () async {
                                 if (!isT1 && m['team1'] is Map) {
                                   final name = m['team1']['name']?.toString() ?? '';
