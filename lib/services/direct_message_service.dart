@@ -76,7 +76,6 @@ class DirectMessageService {
     try {
       final uuid = SupabaseService.toUuid(userId);
 
-      // Get all messages involving this user
       final rows = await _client
           .from('direct_messages')
           .select()
@@ -86,29 +85,30 @@ class DirectMessageService {
 
       if (rows.isEmpty) return [];
 
-      // Group by other user
       final Map<String, List<Map<String, dynamic>>> grouped = {};
       for (final row in rows) {
         final sender = (row['sender_id'] ?? '').toString();
         final receiver = (row['receiver_id'] ?? '').toString();
         final otherId = sender == uuid ? receiver : sender;
         if (otherId.isEmpty) continue;
-        grouped.putIfAbsent(otherId, () => []).add(Map<String, dynamic>.from(row));
+        grouped
+            .putIfAbsent(otherId, () => [])
+            .add(Map<String, dynamic>.from(row));
       }
 
-      // Build conversations
       final List<ChatConversation> conversations = [];
 
       for (final entry in grouped.entries) {
         final otherUuid = entry.key;
-        final msgs = entry.value; // already sorted desc
+        final msgs = entry.value;
 
         final lastMsg = msgs.first;
         final lastText = (lastMsg['message'] ?? '').toString();
         final lastType = (lastMsg['message_type'] ?? 'text').toString();
-        final lastTime = DateTime.tryParse((lastMsg['created_at'] ?? '').toString()) ?? DateTime.now();
+        final lastTime = DateTime.tryParse(
+                (lastMsg['created_at'] ?? '').toString()) ??
+            DateTime.now();
 
-        // Count unread messages received from other user
         int unread = 0;
         for (final m in msgs) {
           final sender = (m['sender_id'] ?? '').toString();
@@ -116,7 +116,6 @@ class DirectMessageService {
           if (sender == otherUuid && !isRead) unread++;
         }
 
-        // Fetch other user profile
         String name = 'Gamer';
         String photo = '';
         bool verified = false;
@@ -127,7 +126,10 @@ class DirectMessageService {
               .eq('id', otherUuid)
               .maybeSingle();
           if (userRow != null) {
-            name = (userRow['display_name'] ?? userRow['username'] ?? 'Gamer').toString();
+            name = (userRow['display_name'] ??
+                    userRow['username'] ??
+                    'Gamer')
+                .toString();
             photo = (userRow['avatar_url'] ?? '').toString();
             verified = userRow['is_verified'] == true;
           }
@@ -145,8 +147,10 @@ class DirectMessageService {
         ));
       }
 
-      // Sort by last message time desc
-      conversations.sort((a, b) => b.lastMessageTime.compareTo(a.lastMessageTime));
+      // FIX: Explicit type annotation to avoid 'Object' inference error
+      conversations.sort((ChatConversation a, ChatConversation b) {
+        return b.lastMessageTime.compareTo(a.lastMessageTime);
+      });
       return conversations;
     } catch (e) {
       debugPrint('[DMS] getConversations error: $e');
