@@ -10,7 +10,7 @@ class ChatMessage {
   final String? imageUrl;
   final String? mediaUrl;
 
-  const ChatMessage({
+  ChatMessage({
     this.id = '',
     this.senderId = '',
     this.receiverId = '',
@@ -109,7 +109,7 @@ class ChatConversation implements Comparable<ChatConversation> {
   final int unreadCount;
   final bool isVerified;
 
-  const ChatConversation({
+  ChatConversation({
     this.id = '',
     this.otherUserId = '',
     this.otherUserName = '',
