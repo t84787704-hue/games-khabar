@@ -2,8 +2,7 @@
 ///
 /// NOTE: These models are PURE DATA classes.
 /// Time should be injected by the repository/service layer.
-/// Fallback time is applied ONLY when parsing legacy/incomplete data
-/// or when a caller passes lastMessageTime instead of lastMessageAt.
+/// Fallback time is applied ONLY when parsing legacy/incomplete data.
 
 class ChatMessage {
   final String id;
@@ -28,7 +27,6 @@ class ChatMessage {
     this.mediaUrl,
   });
 
-  // Alias getters
   String get text => message;
   String get content => message;
   DateTime get timestamp => createdAt;
@@ -116,9 +114,6 @@ class ChatConversation implements Comparable<ChatConversation> {
   final int unreadCount;
   final bool isVerified;
 
-  // NOTE: const hata diya kyunki constructor mein runtime ?: aur ?? hai.
-  // NOTE: otherUserPhoto aur lastMessageTime wapas rakhe gaye hain
-  //       taake direct_message_service.dart na toote.
   ChatConversation({
     this.id = '',
     this.otherUserId = '',
@@ -137,7 +132,6 @@ class ChatConversation implements Comparable<ChatConversation> {
                 : otherUserAvatar,
         lastMessageAt = lastMessageTime ?? lastMessageAt ?? DateTime.now();
 
-  // Alias getters
   String get conversationId => id;
   String get peerId => otherUserId;
   String get userId => otherUserId;
@@ -148,11 +142,11 @@ class ChatConversation implements Comparable<ChatConversation> {
   String get peerAvatar => otherUserAvatar;
   String get avatarUrl => otherUserAvatar;
   String get photoUrl => otherUserAvatar;
-  String get otherUserPhotoAlias => otherUserAvatar;
+  String get otherUserPhoto => otherUserAvatar;
   DateTime get timestamp => lastMessageAt;
   DateTime get updatedAt => lastMessageAt;
   DateTime get createdAt => lastMessageAt;
-  DateTime get lastMessageTimeAlias => lastMessageAt;
+  DateTime get lastMessageTime => lastMessageAt;
 
   factory ChatConversation.fromMap(Map<String, dynamic> map) {
     return ChatConversation(
@@ -216,8 +210,6 @@ class ChatConversation implements Comparable<ChatConversation> {
 // PRIVATE HELPERS
 // ============================================================================
 
-/// Safely parses a date value from various sources.
-/// Falls back to DateTime.now() ONLY when the source is missing/invalid.
 DateTime _parseDate(dynamic val) {
   if (val == null) return DateTime.now();
   if (val is DateTime) return val;
