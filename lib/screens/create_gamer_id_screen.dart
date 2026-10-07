@@ -9,6 +9,7 @@ import '../constants/gamer_theme.dart';
 import '../constants/mobile_games_rank_data.dart';
 import '../models/gamer_user_model.dart';
 import '../services/gamer_auth_service.dart';
+import '../services/supabase_service.dart';
 import '../widgets/gamer_avatar.dart';
 import 'coin_store_screen.dart';
 import 'gamer_main_navigation_screen.dart';
@@ -615,36 +616,6 @@ class _CreateGamerIdScreenState extends State<CreateGamerIdScreen> {
                                 end: Alignment.bottomCenter,
                               ),
                             ),
-                          ),
-                          // Subtle BGMI Theme indicator
-                          Positioned(
-                            right: 14,
-                            top: 14,
-                            child: Container(
-                              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-                              decoration: BoxDecoration(
-                                color: Colors.black.withOpacity(0.7),
-                                borderRadius: BorderRadius.circular(6),
-                                border: Border.all(color: GamerTheme.accentOrange.withOpacity(0.5)),
-                              ),
-                              child: const Row(
-                                mainAxisSize: MainAxisSize.min,
-                                children: [
-                                  Icon(Icons.sports_esports_rounded, color: GamerTheme.accentOrange, size: 12),
-                                  SizedBox(width: 4),
-                                  Text(
-                                    'BGMI THEME',
-                                    style: TextStyle(
-                                      color: GamerTheme.accentOrange,
-                                      fontWeight: FontWeight.w900,
-                                      fontSize: 9.5,
-                                      letterSpacing: 0.8,
-                                    ),
-                                  ),
-                                ],
-                              ),
-                            ),
-                          ),
                         ],
                       ),
                     ),
@@ -1882,7 +1853,7 @@ class _CreateGamerIdScreenState extends State<CreateGamerIdScreen> {
                                         context: context,
                                         isScrollControlled: true,
                                         backgroundColor: Colors.transparent,
-                                        builder: (sheetContext) => AddVerifyGameRankSheet(user: widget.existingUser!),
+                                        builder: (sheetContext) => AddVerifyGamerRankSheet(user: widget.existingUser!),
                                       );
                                     },
                                     style: OutlinedButton.styleFrom(
@@ -1999,3 +1970,274 @@ class _CreateGamerIdScreenState extends State<CreateGamerIdScreen> {
     );
   }
 }
+
+/// Bottom Sheet for adding or verifying game ranks
+class AddVerifyGamerRankSheet extends StatefulWidget {
+  final GamerUser user;
+  const AddVerifyGamerRankSheet({super.key, required this.user});
+
+  @override
+  State<AddVerifyGamerRankSheet> createState() => _AddVerifyGamerRankSheetState();
+}
+
+typedef AddVerifyGameRankSheet = AddVerifyGamerRankSheet;
+
+class _AddVerifyGamerRankSheetState extends State<AddVerifyGamerRankSheet> {
+  late String _selectedGame;
+  String _selectedRank = '';
+  final TextEditingController _uidController = TextEditingController();
+  File? _proofFile;
+  bool _isSubmitting = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _selectedGame = MobileGamesRankData.games.first;
+  }
+
+  @override
+  void dispose() {
+    _uidController.dispose();
+    super.dispose();
+  }
+
+  List<String> get _ranks => MobileGamesRankData.getRanksForGame(_selectedGame);
+
+  Future<void> _pickProof() async {
+    final picker = ImagePicker();
+    final picked = await picker.pickImage(source: ImageSource.gallery, imageQuality: 85);
+    if (picked != null) {
+      setState(() => _proofFile = File(picked.path));
+    }
+  }
+
+  Future<void> _submitRank() async {
+    final uid = widget.user.uid;
+    final gameId = _uidController.text.trim();
+    if (_selectedRank.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Please select a rank'), backgroundColor: GamerTheme.redAccent),
+      );
+      return;
+    }
+    if (gameId.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Please enter in-game Character ID / UID'), backgroundColor: GamerTheme.redAccent),
+      );
+      return;
+    }
+    if (_proofFile == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Please upload screenshot proof of your rank'), backgroundColor: GamerTheme.redAccent),
+      );
+      return;
+    }
+
+    setState(() => _isSubmitting = true);
+    try {
+      String proofUrl = '';
+      try {
+        proofUrl = await GamerAuthService().uploadRankScreenshot(_proofFile!, uid);
+      } catch (e) {
+        debugPrint('Upload rank proof error: $e');
+      }
+
+      final newRank = UserGameRank(
+        id: DateTime.now().millisecondsSinceEpoch.toString(),
+        gameName: _selectedGame,
+        gameId: gameId,
+        claimedRank: _selectedRank,
+        screenshotUrl: proofUrl,
+        status: 'pending',
+        submittedAt: DateTime.now(),
+        ownerUid: uid,
+      );
+
+      final updatedGames = List<UserGameRank>.from(widget.user.games)
+        ..removeWhere((g) => g.gameName.toLowerCase() == _selectedGame.toLowerCase())
+        ..add(newRank);
+
+      try {
+        await SupabaseService.client.from('users').update({
+          'games': updatedGames.map((g) => g.toMap()).toList(),
+          'updated_at': DateTime.now().toIso8601String(),
+        }).eq('id', uid);
+      } catch (_) {}
+
+      await GamerAuthService().refreshCurrentGamer();
+
+      if (mounted) {
+        Navigator.pop(context);
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('$_selectedGame rank submitted for verification! 🎮'),
+            backgroundColor: GamerTheme.neonGreen,
+          ),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Error: $e'), backgroundColor: GamerTheme.redAccent),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _isSubmitting = false);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: EdgeInsets.only(
+        top: 20,
+        left: 20,
+        right: 20,
+        bottom: MediaQuery.of(context).viewInsets.bottom + 24,
+      ),
+      decoration: const BoxDecoration(
+        color: GamerTheme.cardDark,
+        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+      ),
+      child: SingleChildScrollView(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                const Icon(Icons.shield_rounded, color: Color(0xFF00E5FF), size: 22),
+                const SizedBox(width: 8),
+                const Text(
+                  'Add / Verify Game Rank',
+                  style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 16),
+                ),
+                const Spacer(),
+                IconButton(
+                  icon: const Icon(Icons.close_rounded, color: Colors.white70),
+                  onPressed: () => Navigator.pop(context),
+                ),
+              ],
+            ),
+            const SizedBox(height: 14),
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 2),
+              decoration: BoxDecoration(
+                color: GamerTheme.cardElevated,
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(color: GamerTheme.borderLight),
+              ),
+              child: DropdownButtonHideUnderline(
+                child: DropdownButton<String>(
+                  value: _selectedGame,
+                  isExpanded: true,
+                  dropdownColor: const Color(0xFF161B26),
+                  items: MobileGamesRankData.games.map((g) {
+                    return DropdownMenuItem(
+                      value: g,
+                      child: Text(
+                        g,
+                        style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w600, fontSize: 13),
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    );
+                  }).toList(),
+                  onChanged: (val) {
+                    if (val != null) {
+                      setState(() {
+                        _selectedGame = val;
+                        _selectedRank = '';
+                      });
+                    }
+                  },
+                ),
+              ),
+            ),
+            const SizedBox(height: 14),
+            const Text('Select Your Rank:', style: TextStyle(color: Colors.white70, fontSize: 12, fontWeight: FontWeight.bold)),
+            const SizedBox(height: 8),
+            Wrap(
+              spacing: 6,
+              runSpacing: 6,
+              children: _ranks.map((r) {
+                final isSel = _selectedRank == r;
+                return ChoiceChip(
+                  label: Text(r, style: TextStyle(color: isSel ? Colors.black : Colors.white, fontSize: 11, fontWeight: FontWeight.bold)),
+                  selected: isSel,
+                  selectedColor: const Color(0xFF00FF88),
+                  backgroundColor: GamerTheme.surfaceDark,
+                  onSelected: (val) {
+                    if (val) setState(() => _selectedRank = r);
+                  },
+                );
+              }).toList(),
+            ),
+            const SizedBox(height: 14),
+            TextField(
+              controller: _uidController,
+              style: const TextStyle(color: Colors.white, fontSize: 13),
+              decoration: InputDecoration(
+                hintText: 'In-Game Character ID / UID',
+                hintStyle: const TextStyle(color: GamerTheme.textMuted, fontSize: 12),
+                prefixIcon: const Icon(Icons.sports_esports_rounded, color: Color(0xFF00E5FF), size: 18),
+                filled: true,
+                fillColor: GamerTheme.cardElevated,
+                border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide.none),
+              ),
+            ),
+            const SizedBox(height: 14),
+            InkWell(
+              onTap: _pickProof,
+              borderRadius: BorderRadius.circular(12),
+              child: Container(
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: GamerTheme.cardElevated,
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(color: _proofFile != null ? const Color(0xFF00FF88) : GamerTheme.borderLight),
+                ),
+                child: Row(
+                  children: [
+                    Icon(
+                      _proofFile != null ? Icons.check_circle_rounded : Icons.add_photo_alternate_rounded,
+                      color: _proofFile != null ? const Color(0xFF00FF88) : const Color(0xFF00E5FF),
+                      size: 20,
+                    ),
+                    const SizedBox(width: 10),
+                    Expanded(
+                      child: Text(
+                        _proofFile != null ? 'Screenshot Proof Attached' : 'Upload Rank Screenshot Proof',
+                        style: TextStyle(
+                          color: _proofFile != null ? const Color(0xFF00FF88) : Colors.white,
+                          fontSize: 12.5,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+            const SizedBox(height: 18),
+            SizedBox(
+              width: double.infinity,
+              height: 46,
+              child: ElevatedButton(
+                onPressed: _isSubmitting ? null : _submitRank,
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: const Color(0xFF00E5FF),
+                  foregroundColor: Colors.black,
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                ),
+                child: _isSubmitting
+                    ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.black))
+                    : const Text('Submit for Verification', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14)),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
