@@ -58,7 +58,7 @@ class _GamerProfileScreenState extends State<GamerProfileScreen>
     super.dispose();
   }
 
-  /// Fetches a GamerUser directly from Supabase.
+  /// Fetches a GamerUser directly from Supabase with all privacy fields.
   Future<GamerUser?> _fetchGamerFromSupabase(String userId) async {
     if (userId.isEmpty) return null;
     try {
@@ -105,6 +105,15 @@ class _GamerProfileScreenState extends State<GamerProfileScreen>
         isVipMember: row['is_vip_member'] == true,
         kdRatio: (row['kd_ratio'] as num?)?.toDouble() ?? 0.0,
         createdAt: DateTime.tryParse((row['created_at'] ?? '').toString()),
+        // Privacy fields from DB
+        isRankPublic: row['is_rank_public'] != false,
+        isUidPublic: row['is_uid_public'] == true,
+        isCoinsPublic: row['is_coins_public'] == true,
+        isMemberSincePublic: row['is_member_since_public'] == true,
+        isFollowingPublic: row['is_following_public'] != false,
+        isFollowersPublic: row['is_followers_public'] != false,
+        isBioPublic: row['is_bio_public'] != false,
+        isGamePublic: row['is_game_public'] != false,
       );
     } catch (e) {
       debugPrint('[ProfileScreen] Supabase fetch error: $e');
@@ -112,12 +121,281 @@ class _GamerProfileScreenState extends State<GamerProfileScreen>
     }
   }
 
-  /// Stream a GamerUser from Supabase (polling every 5 seconds).
   Stream<GamerUser?> _gamerStream(String userId) async* {
     while (true) {
       yield await _fetchGamerFromSupabase(userId);
       await Future.delayed(const Duration(seconds: 5));
     }
+  }
+
+  // ═══════════════════════════════════════════════════════════
+  // PRIVACY UPDATE — Saves privacy toggles to Supabase
+  // ═══════════════════════════════════════════════════════════
+  Future<void> _updatePrivacy({
+    bool? isRankPublic,
+    bool? isUidPublic,
+    bool? isCoinsPublic,
+    bool? isMemberSincePublic,
+    bool? isFollowingPublic,
+    bool? isFollowersPublic,
+    bool? isBioPublic,
+    bool? isGamePublic,
+  }) async {
+    final uid = _authService.currentUid ?? '';
+    if (uid.isEmpty) return;
+
+    try {
+      final uuid = SupabaseService.toUuid(uid);
+      final Map<String, dynamic> updates = {};
+      if (isRankPublic != null) updates['is_rank_public'] = isRankPublic;
+      if (isUidPublic != null) updates['is_uid_public'] = isUidPublic;
+      if (isCoinsPublic != null) updates['is_coins_public'] = isCoinsPublic;
+      if (isMemberSincePublic != null)
+        updates['is_member_since_public'] = isMemberSincePublic;
+      if (isFollowingPublic != null)
+        updates['is_following_public'] = isFollowingPublic;
+      if (isFollowersPublic != null)
+        updates['is_followers_public'] = isFollowersPublic;
+      if (isBioPublic != null) updates['is_bio_public'] = isBioPublic;
+      if (isGamePublic != null) updates['is_game_public'] = isGamePublic;
+
+      if (updates.isEmpty) return;
+      updates['updated_at'] = DateTime.now().toIso8601String();
+
+      await SupabaseService.client
+          .from('users')
+          .update(updates)
+          .eq('id', uuid);
+
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('✅ Privacy settings updated'),
+            backgroundColor: Color(0xFF34A853),
+            duration: Duration(seconds: 2),
+          ),
+        );
+        setState(() {});
+      }
+    } catch (e) {
+      debugPrint('[Profile] Privacy update error: $e');
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Privacy update failed: $e'),
+            backgroundColor: const Color(0xFFFF4655),
+          ),
+        );
+      }
+    }
+  }
+
+  /// Privacy Settings Sheet — Play Store ready
+  void _showPrivacySettingsSheet(GamerUser user) {
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: Colors.transparent,
+      isScrollControlled: true,
+      builder: (ctx) => StatefulBuilder(
+        builder: (context, setModalState) {
+          bool rankPublic = user.isRankPublic;
+          bool uidPublic = user.isUidPublic;
+          bool coinsPublic = user.isCoinsPublic;
+          bool memberSincePublic = user.isMemberSincePublic;
+          bool followingPublic = user.isFollowingPublic;
+          bool followersPublic = user.isFollowersPublic;
+          bool bioPublic = user.isBioPublic;
+          bool gamePublic = user.isGamePublic;
+
+          return Container(
+            decoration: const BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.vertical(top: Radius.circular(22)),
+            ),
+            padding: const EdgeInsets.only(top: 12, bottom: 28),
+            child: SafeArea(
+              child: SingleChildScrollView(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Container(
+                      width: 44,
+                      height: 4.5,
+                      decoration: BoxDecoration(
+                        color: const Color(0xFFCED0D4),
+                        borderRadius: BorderRadius.circular(2),
+                      ),
+                    ),
+                    const SizedBox(height: 16),
+                    Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 20),
+                      child: Row(
+                        children: [
+                          Container(
+                            padding: const EdgeInsets.all(7),
+                            decoration: const BoxDecoration(
+                              color: Color(0xFFE7F3FF),
+                              shape: BoxShape.circle,
+                            ),
+                            child: const Icon(Icons.lock_rounded,
+                                color: Color(0xFF1877F2), size: 20),
+                          ),
+                          const SizedBox(width: 12),
+                          const Expanded(
+                            child: Text(
+                              'Privacy Settings',
+                              style: TextStyle(
+                                color: Color(0xFF050505),
+                                fontSize: 17,
+                                fontWeight: FontWeight.bold,
+                              ),
+                            ),
+                          ),
+                          IconButton(
+                            icon: const Icon(Icons.close_rounded,
+                                color: Color(0xFF65676B), size: 22),
+                            onPressed: () => Navigator.pop(ctx),
+                          ),
+                        ],
+                      ),
+                    ),
+                    const SizedBox(height: 4),
+                    const Padding(
+                      padding: EdgeInsets.symmetric(horizontal: 20),
+                      child: Align(
+                        alignment: Alignment.centerLeft,
+                        child: Text(
+                          'Choose what others can see on your profile',
+                          style: TextStyle(color: Color(0xFF65676B), fontSize: 12),
+                        ),
+                      ),
+                    ),
+                    const SizedBox(height: 12),
+                    const Divider(color: Color(0xFFCED0D4), height: 1),
+
+                    _buildPrivacyTile(
+                      icon: Icons.military_tech_rounded,
+                      title: 'Show My Rank',
+                      subtitle: 'Display your competitive rank publicly',
+                      value: rankPublic,
+                      onChanged: (v) {
+                        setModalState(() => rankPublic = v);
+                        _updatePrivacy(isRankPublic: v);
+                      },
+                    ),
+                    _buildPrivacyTile(
+                      icon: Icons.tag_rounded,
+                      title: 'Show My Game UID',
+                      subtitle: 'Make your in-game UID visible',
+                      value: uidPublic,
+                      onChanged: (v) {
+                        setModalState(() => uidPublic = v);
+                        _updatePrivacy(isUidPublic: v);
+                      },
+                    ),
+                    _buildPrivacyTile(
+                      icon: Icons.monetization_on_rounded,
+                      title: 'Show My Coins',
+                      subtitle: 'Display your G-Coins balance',
+                      value: coinsPublic,
+                      onChanged: (v) {
+                        setModalState(() => coinsPublic = v);
+                        _updatePrivacy(isCoinsPublic: v);
+                      },
+                    ),
+                    _buildPrivacyTile(
+                      icon: Icons.calendar_today_rounded,
+                      title: 'Show Member Since',
+                      subtitle: 'Display when you joined Gamers ID',
+                      value: memberSincePublic,
+                      onChanged: (v) {
+                        setModalState(() => memberSincePublic = v);
+                        _updatePrivacy(isMemberSincePublic: v);
+                      },
+                    ),
+                    _buildPrivacyTile(
+                      icon: Icons.people_alt_rounded,
+                      title: 'Show Followers Count',
+                      subtitle: 'Let others see your followers',
+                      value: followersPublic,
+                      onChanged: (v) {
+                        setModalState(() => followersPublic = v);
+                        _updatePrivacy(isFollowersPublic: v);
+                      },
+                    ),
+                    _buildPrivacyTile(
+                      icon: Icons.person_add_alt_1_rounded,
+                      title: 'Show Following Count',
+                      subtitle: 'Let others see who you follow',
+                      value: followingPublic,
+                      onChanged: (v) {
+                        setModalState(() => followingPublic = v);
+                        _updatePrivacy(isFollowingPublic: v);
+                      },
+                    ),
+                    _buildPrivacyTile(
+                      icon: Icons.edit_note_rounded,
+                      title: 'Show My Bio',
+                      subtitle: 'Display your gamer bio publicly',
+                      value: bioPublic,
+                      onChanged: (v) {
+                        setModalState(() => bioPublic = v);
+                        _updatePrivacy(isBioPublic: v);
+                      },
+                    ),
+                    _buildPrivacyTile(
+                      icon: Icons.sports_esports_rounded,
+                      title: 'Show My Game',
+                      subtitle: 'Display your favorite game',
+                      value: gamePublic,
+                      onChanged: (v) {
+                        setModalState(() => gamePublic = v);
+                        _updatePrivacy(isGamePublic: v);
+                      },
+                    ),
+                    const SizedBox(height: 20),
+                  ],
+                ),
+              ),
+            ),
+          );
+        },
+      ),
+    );
+  }
+
+  Widget _buildPrivacyTile({
+    required IconData icon,
+    required String title,
+    required String subtitle,
+    required bool value,
+    required ValueChanged<bool> onChanged,
+  }) {
+    return SwitchListTile(
+      secondary: Container(
+        padding: const EdgeInsets.all(8),
+        decoration: const BoxDecoration(
+          color: Color(0xFFE7F3FF),
+          shape: BoxShape.circle,
+        ),
+        child: Icon(icon, color: const Color(0xFF1877F2), size: 20),
+      ),
+      title: Text(
+        title,
+        style: const TextStyle(
+          color: Color(0xFF050505),
+          fontWeight: FontWeight.bold,
+          fontSize: 14,
+        ),
+      ),
+      subtitle: Text(
+        subtitle,
+        style: const TextStyle(color: Color(0xFF65676B), fontSize: 12),
+      ),
+      value: value,
+      activeColor: const Color(0xFF1877F2),
+      onChanged: onChanged,
+    );
   }
 
   void _showChangeCoverSheet(BuildContext context, GamerUser user) {
@@ -832,6 +1110,19 @@ class _GamerProfileScreenState extends State<GamerProfileScreen>
         final gameEmoji =
             GamerTheme.gameEmojis[user.favoriteGame] ?? '🎮';
 
+        // Privacy checks — hide if not public AND not own profile
+        final bool canShowBio = isOwnProfile || user.isBioPublic;
+        final bool canShowGame = isOwnProfile || user.isGamePublic;
+        final bool canShowRank = isOwnProfile || user.isRankPublic;
+        final bool canShowCoins = isOwnProfile || user.isCoinsPublic;
+        final bool canShowMemberSince =
+            isOwnProfile || user.isMemberSincePublic;
+        final bool canShowFollowers =
+            isOwnProfile || user.isFollowersPublic;
+        final bool canShowFollowing =
+            isOwnProfile || user.isFollowingPublic;
+        final bool canShowUid = isOwnProfile || user.isUidPublic;
+
         return Scaffold(
           backgroundColor: const Color(0xFFF0F2F5),
           body: NestedScrollView(
@@ -993,6 +1284,7 @@ class _GamerProfileScreenState extends State<GamerProfileScreen>
                               ),
                             ),
                             if (!user.isOwnerUser &&
+                                canShowRank &&
                                 user.isRankApproved &&
                                 user.rank.isNotEmpty &&
                                 user.rank.toLowerCase() != 'none') ...[
@@ -1024,7 +1316,7 @@ class _GamerProfileScreenState extends State<GamerProfileScreen>
                             fontWeight: FontWeight.w700,
                           ),
                         ),
-                        if (user.bio.isNotEmpty) ...[
+                        if (user.bio.isNotEmpty && canShowBio) ...[
                           const SizedBox(height: 10),
                           Text(
                             user.bio,
@@ -1041,7 +1333,7 @@ class _GamerProfileScreenState extends State<GamerProfileScreen>
                           runSpacing: 6,
                           crossAxisAlignment: WrapCrossAlignment.center,
                           children: [
-                            if (user.favoriteGame.isNotEmpty)
+                            if (user.favoriteGame.isNotEmpty && canShowGame)
                               Container(
                                 padding: const EdgeInsets.symmetric(
                                     horizontal: 10, vertical: 5),
@@ -1104,8 +1396,11 @@ class _GamerProfileScreenState extends State<GamerProfileScreen>
                                   width: 1,
                                   color: const Color(0xFFCED0D4)),
                               _buildStatColumn(
-                                  '${user.followersCount}', 'Followers',
-                                  () {
+                                  canShowFollowers
+                                      ? '${user.followersCount}'
+                                      : '🔒',
+                                  'Followers', () {
+                                if (!canShowFollowers) return;
                                 Navigator.of(context).push(
                                   MaterialPageRoute(
                                     builder: (_) =>
@@ -1122,8 +1417,11 @@ class _GamerProfileScreenState extends State<GamerProfileScreen>
                                   width: 1,
                                   color: const Color(0xFFCED0D4)),
                               _buildStatColumn(
-                                  '${user.followingCount}', 'Following',
-                                  () {
+                                  canShowFollowing
+                                      ? '${user.followingCount}'
+                                      : '🔒',
+                                  'Following', () {
+                                if (!canShowFollowing) return;
                                 Navigator.of(context).push(
                                   MaterialPageRoute(
                                     builder: (_) =>
@@ -1399,22 +1697,40 @@ class _GamerProfileScreenState extends State<GamerProfileScreen>
                         color: GamerTheme.accentOrange,
                       ),
                       const SizedBox(height: 12),
-                      _buildAboutCard(
-                        icon: Icons.sports_esports_outlined,
-                        title: 'Main Game',
-                        value: '$gameEmoji ${user.favoriteGame}',
-                        color: gameColor,
-                      ),
-                      const SizedBox(height: 12),
-                      _buildAboutCard(
-                        icon: Icons.calendar_today_outlined,
-                        title: 'Member Since',
-                        value: user.createdAt != null
-                            ? DateFormat('MMMM yyyy')
-                                .format(user.createdAt!)
-                            : '2026',
-                        color: GamerTheme.accentBlue,
-                      ),
+                      if (canShowGame)
+                        _buildAboutCard(
+                          icon: Icons.sports_esports_outlined,
+                          title: 'Main Game',
+                          value: '$gameEmoji ${user.favoriteGame}',
+                          color: gameColor,
+                        ),
+                      if (canShowGame) const SizedBox(height: 12),
+                      if (canShowUid && user.gameId.isNotEmpty)
+                        _buildAboutCard(
+                          icon: Icons.tag_rounded,
+                          title: 'In-Game UID',
+                          value: user.gameId,
+                          color: GamerTheme.accentOrange,
+                        ),
+                      if (canShowUid && user.gameId.isNotEmpty)
+                        const SizedBox(height: 12),
+                      if (canShowMemberSince)
+                        _buildAboutCard(
+                          icon: Icons.calendar_today_outlined,
+                          title: 'Member Since',
+                          value: user.createdAt != null
+                              ? DateFormat('MMMM yyyy')
+                                  .format(user.createdAt!)
+                              : '2026',
+                          color: GamerTheme.accentBlue,
+                        ),
+                      if (canShowCoins)
+                        _buildAboutCard(
+                          icon: Icons.monetization_on_rounded,
+                          title: 'G-Coins Balance',
+                          value: '${user.coins} Coins',
+                          color: const Color(0xFFFFD700),
+                        ),
                     ],
                   ),
                 ),
@@ -1648,6 +1964,37 @@ class _GamerProfileScreenState extends State<GamerProfileScreen>
                     }
                   },
                 ),
+                // ═══════ PRIVACY SETTINGS — Play Store Ready ═══════
+                if (isOwnProfile)
+                  ListTile(
+                    leading: Container(
+                      padding: const EdgeInsets.all(8),
+                      decoration: const BoxDecoration(
+                        color: Color(0xFFE7F3FF),
+                        shape: BoxShape.circle,
+                      ),
+                      child: const Icon(Icons.lock_rounded,
+                          color: Color(0xFF1877F2), size: 20),
+                    ),
+                    title: const Text(
+                      'Privacy Settings',
+                      style: TextStyle(
+                          color: Color(0xFF050505),
+                          fontWeight: FontWeight.bold,
+                          fontSize: 14),
+                    ),
+                    subtitle: const Text(
+                      'Control what others can see on your profile',
+                      style: TextStyle(
+                          color: Color(0xFF65676B), fontSize: 12),
+                    ),
+                    trailing: const Icon(Icons.arrow_forward_ios_rounded,
+                        color: Color(0xFF65676B), size: 14),
+                    onTap: () {
+                      Navigator.pop(ctx);
+                      _showPrivacySettingsSheet(user);
+                    },
+                  ),
                 ListTile(
                   leading: Container(
                     padding: const EdgeInsets.all(8),
