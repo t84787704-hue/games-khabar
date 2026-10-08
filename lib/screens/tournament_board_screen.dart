@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import 'package:games_khabar/compat/cloud_firestore.dart';
+import '../services/supabase_service.dart';
 import '../models/tournament_room_model.dart';
 import '../widgets/gamer_avatar.dart';
 import 'gamer_rooms_screen.dart';
@@ -14,16 +14,15 @@ class TournamentBoardScreen extends StatefulWidget {
 }
 
 class _TournamentBoardScreenState extends State<TournamentBoardScreen> {
-  // Cache for host usernames fetched from Firestore 'users' collection to avoid repeated reads
+  // Cache for host usernames fetched from Supabase 'users' table to avoid repeated reads
   final Map<String, String> _hostNameCache = {};
 
   /// Ensure host display name is loaded into cache (reads users collection once per hostId)
   Future<void> _ensureHostNameLoaded(String hostId) async {
     if (hostId.isEmpty || _hostNameCache.containsKey(hostId)) return;
     try {
-      final doc = await FirebaseFirestore.instance.collection('users').doc(hostId).get();
-      if (doc.exists) {
-        final data = doc.data() as Map<String, dynamic>? ?? {};
+      final data = await SupabaseService.getUser(hostId);
+      if (data != null) {
         final username = (data['username'] ?? data['displayName'] ?? data['name'])?.toString().trim() ?? '';
         if (username.isNotEmpty) {
           _hostNameCache[hostId] = username;

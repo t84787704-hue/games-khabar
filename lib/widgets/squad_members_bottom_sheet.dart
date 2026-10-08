@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import '../compat/cloud_firestore.dart';
-import '../compat/firebase_auth.dart';
+import '../services/supabase_service.dart';
 import '../constants/gamer_theme.dart';
 import '../models/squad_post_model.dart';
 import '../models/gamer_user_model.dart';
@@ -30,6 +29,21 @@ class SquadMembersBottomSheet extends StatefulWidget {
 class _SquadMembersBottomSheetState extends State<SquadMembersBottomSheet> {
   final Map<String, GamerUser?> _userCache = {};
   bool _isActionInProgress = false;
+
+  Stream<Map<String, dynamic>?> _postStream(String postId) async* {
+    while (true) {
+      Map<String, dynamic>? data;
+      try {
+        data = await SupabaseService.client
+            .from('lfg_posts')
+            .select()
+            .eq('id', postId)
+            .maybeSingle();
+      } catch (_) {}
+      yield data;
+      await Future.delayed(const Duration(seconds: 4));
+    }
+  }
 
   void _copyToClipboard(BuildContext context, String text, String label) {
     if (text.isEmpty) return;
@@ -158,7 +172,7 @@ class _SquadMembersBottomSheetState extends State<SquadMembersBottomSheet> {
 
   @override
   Widget build(BuildContext context) {
-    final currentUid = FirebaseAuth.instance.currentUser?.uid ?? GamerAuthService().currentUid ?? '';
+    final currentUid = GamerAuthService().currentUid ?? SupabaseService.client.auth.currentUser?.id ?? '';
     final leaderUid = widget.squad.ownerId.isNotEmpty ? widget.squad.ownerId : widget.squad.userId;
     final bool isCurrentUserOwner = currentUid.isNotEmpty && (currentUid == leaderUid);
 
@@ -169,12 +183,12 @@ class _SquadMembersBottomSheetState extends State<SquadMembersBottomSheet> {
         borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
         border: Border(top: BorderSide(color: GamerTheme.accentCyan, width: 1.5)),
       ),
-      child: StreamBuilder<DocumentSnapshot>(
-        stream: FirebaseFirestore.instance.collection('lfg_posts').doc(widget.squad.id).snapshots(),
+      child: StreamBuilder<Map<String, dynamic>?>(
+        stream: _postStream(widget.squad.id),
         builder: (context, snapshot) {
           List<String> members = List<String>.from(widget.squad.members);
-          if (snapshot.hasData && snapshot.data?.exists == true) {
-            final data = snapshot.data!.data() as Map<String, dynamic>? ?? {};
+          if (snapshot.hasData && snapshot.data != null) {
+            final data = snapshot.data!;
             final snapMembers = List<String>.from(data['members'] ?? []);
             if (snapMembers.isNotEmpty) {
               members = snapMembers;

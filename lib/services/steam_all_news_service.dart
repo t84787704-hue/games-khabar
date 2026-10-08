@@ -1,11 +1,9 @@
 import 'dart:convert';
 import 'package:http/http.dart' as http;
-import 'package:games_khabar/compat/cloud_firestore.dart';
 import '../constants/steam_app_ids.dart';
+import 'supabase_service.dart';
 
 class SteamAllNewsService {
-  final _firestore = FirebaseFirestore.instance;
-
   Future<void> fetchAndTest() async {
     print('Fetching started...');
     // Sirf 1 game se test karte hain pehle - GTA 5
@@ -36,15 +34,31 @@ class SteamAllNewsService {
           var items = data['appnews']?['newsitems'] as List?;
           if (items != null && items.isNotEmpty) {
             for (var item in items) {
-              await _firestore.collection('news').add({
-                'title': item['title'] ?? 'No Title',
-                'content': item['contents'] ?? '',
-                'sourceUrl': item['url'] ?? '',
-                'gameName': entry.key,
-                'category': 'Open World',
-                'timestamp': FieldValue.serverTimestamp(),
-                'source': 'Steam',
-              });
+              final nowStr = DateTime.now().toIso8601String();
+              try {
+                await SupabaseService.client.from('posts').insert({
+                  'title': item['title'] ?? 'No Title',
+                  'content': item['contents'] ?? '',
+                  'source_url': item['url'] ?? '',
+                  'sourceUrl': item['url'] ?? '',
+                  'game_name': entry.key,
+                  'gameName': entry.key,
+                  'category': 'Open World',
+                  'created_at': nowStr,
+                  'timestamp': nowStr,
+                  'source': 'Steam',
+                });
+              } catch (_) {
+                await SupabaseService.client.from('news').insert({
+                  'title': item['title'] ?? 'No Title',
+                  'content': item['contents'] ?? '',
+                  'source_url': item['url'] ?? '',
+                  'game_name': entry.key,
+                  'category': 'Open World',
+                  'created_at': nowStr,
+                  'source': 'Steam',
+                });
+              }
               total++;
             }
           }

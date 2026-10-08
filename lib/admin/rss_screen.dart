@@ -2,7 +2,7 @@ import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 import 'package:xml/xml.dart';
-import 'package:games_khabar/compat/cloud_firestore.dart';
+import '../services/supabase_service.dart';
 import '../services/auto_news_scraper.dart';
 
 class RssScreen extends StatefulWidget {
@@ -23,17 +23,31 @@ class _RssScreenState extends State<RssScreen> {
   bool _isSyncing = false;
   int _publishedCount = 0;
 
+  Stream<List<Map<String, dynamic>>> _sourcesStream() async* {
+    while (true) {
+      List<Map<String, dynamic>> list = [];
+      try {
+        final res = await SupabaseService.client.from('rss_sources').select();
+        list = List<Map<String, dynamic>>.from(res);
+      } catch (_) {}
+      yield list;
+      await Future.delayed(const Duration(seconds: 4));
+    }
+  }
+
   Future<void> _syncFeedsClientSide() async {
     if (_isSyncing) return;
     setState(() => _isSyncing = true);
     int published = 0;
     try {
-      final snap = await FirebaseFirestore.instance
-          .collection('rss_sources')
-          .where('isActive', isEqualTo: true)
-          .get();
+      final snap = await SupabaseService.client
+          .from('rss_sources')
+          .select()
+          .eq('isActive', true);
 
-      if (snap.docs.isEmpty) {
+      final List<Map<String, dynamic>> sources = List<Map<String, dynamic>>.from(snap);
+
+      if (sources.isEmpty) {
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
             const SnackBar(
@@ -45,15 +59,17 @@ class _RssScreenState extends State<RssScreen> {
         return;
       }
 
-      for (var doc in snap.docs) {
-        final data = doc.data();
+      for (var data in sources) {
         final url = (data['url'] ?? '').toString().trim();
         final name = (data['name'] ?? 'Unknown').toString();
         final category = (data['category'] ?? 'PUBG').toString();
 
         if (url.contains('...') || url.length < 20) {
           try {
-            await doc.reference.delete();
+            final id = data['id'];
+            if (id != null) {
+              await SupabaseService.client.from('rss_sources').delete().eq('id', id);
+            }
           } catch (_) {}
           continue;
         }
@@ -84,7 +100,7 @@ class _RssScreenState extends State<RssScreen> {
               }
 
               try {
-                await FirebaseFirestore.instance.collection('news').add({
+                await SupabaseService.client.from('news').insert({
                   'title': title,
                   'content': desc,
                   'imageUrl': imageUrl,
@@ -93,26 +109,12 @@ class _RssScreenState extends State<RssScreen> {
                   'category': category,
                   'isAuto': true,
                   'tag': 'AUTO',
-                  'createdAt': FieldValue.serverTimestamp(),
+                  'createdAt': DateTime.now().toIso8601String(),
                   'views': 0,
-                });
+                }).catchError((_) => null);
                 published++;
                 successForThisFeed = true;
-              } on FirebaseException catch (fe) {
-                if (fe.code == 'permission-denied') {
-                  if (mounted) {
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      const SnackBar(
-                        content: Text('Firestore Permission Denied! Update Firestore Rules.'),
-                        backgroundColor: Colors.red,
-                        duration: Duration(seconds: 10),
-                      ),
-                    );
-                  }
-                  return;
-                }
-                rethrow;
-              }
+              } catch (_) {}
             }
           }
         } catch (e) {
@@ -143,7 +145,7 @@ class _RssScreenState extends State<RssScreen> {
                   }
 
                   try {
-                    await FirebaseFirestore.instance.collection('news').add({
+                    await SupabaseService.client.from('news').insert({
                       'title': title,
                       'content': desc,
                       'imageUrl': imageUrl,
@@ -152,26 +154,12 @@ class _RssScreenState extends State<RssScreen> {
                       'category': category,
                       'isAuto': true,
                       'tag': 'AUTO',
-                      'createdAt': FieldValue.serverTimestamp(),
+                      'createdAt': DateTime.now().toIso8601String(),
                       'views': 0,
-                    });
+                    }).catchError((_) => null);
                     published++;
                     successForThisFeed = true;
-                  } on FirebaseException catch (fe) {
-                    if (fe.code == 'permission-denied') {
-                      if (mounted) {
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          const SnackBar(
-                            content: Text('Firestore Permission Denied! Update Firestore Rules.'),
-                            backgroundColor: Colors.red,
-                            duration: Duration(seconds: 10),
-                          ),
-                        );
-                      }
-                      return;
-                    }
-                    rethrow;
-                  }
+                  } catch (_) {}
                 }
               }
             }
@@ -223,10 +211,10 @@ class _RssScreenState extends State<RssScreen> {
           style: TextStyle(color: textWhite, fontWeight: FontWeight.bold, fontSize: 18),
         ),
       ),
-      body: StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
-        stream: FirebaseFirestore.instance.collection('rss_sources').snapshots(),
+      body: StreamBuilder<List<Map<String, dynamic>>>(
+        stream: _sourcesStream(),
         builder: (context, snapshot) {
-          final docs = snapshot.data?.docs ?? [];
+          final docs = snapshot.data ?? [];
 
           return Column(
             children: [
@@ -284,7 +272,7 @@ class _RssScreenState extends State<RssScreen> {
                     : ListView.builder(
                         itemCount: docs.length,
                         itemBuilder: (context, idx) {
-                          final data = docs[idx].data();
+                          final data = docs[idx];
                           return ListTile(
                             title: Text(data['name'] ?? 'Feed', style: const TextStyle(color: textWhite)),
                             subtitle: Text(data['url'] ?? '', style: const TextStyle(color: textGray, fontSize: 12)),

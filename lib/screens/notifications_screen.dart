@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import 'package:games_khabar/compat/cloud_firestore.dart';
+import '../services/supabase_service.dart';
 import 'package:intl/intl.dart';
 import '../constants/gamer_theme.dart';
 import '../services/gamer_auth_service.dart';
@@ -12,9 +12,36 @@ import 'team_match_room_screen.dart';
 class NotificationsScreen extends StatelessWidget {
   const NotificationsScreen({super.key});
 
-  String _formatTime(Timestamp? ts) {
+  Stream<List<Map<String, dynamic>>> _notificationsStream(String currentUid) async* {
+    while (true) {
+      List<Map<String, dynamic>> list = [];
+      try {
+        final res = await SupabaseService.client
+            .from('notifications')
+            .select()
+            .eq('recipientUid', currentUid)
+            .order('createdAt', ascending: false)
+            .limit(50);
+        list = List<Map<String, dynamic>>.from(res);
+      } catch (_) {}
+      yield list;
+      await Future.delayed(const Duration(seconds: 4));
+    }
+  }
+
+  String _formatTime(dynamic ts) {
     if (ts == null) return 'recently';
-    final dt = ts.toDate();
+    DateTime? dt;
+    if (ts is DateTime) {
+      dt = ts;
+    } else if (ts is String) {
+      dt = DateTime.tryParse(ts);
+    } else {
+      try {
+        dt = (ts as dynamic).toDate();
+      } catch (_) {}
+    }
+    if (dt == null) return 'recently';
     final diff = DateTime.now().difference(dt);
     if (diff.inMinutes < 1) return 'just now';
     if (diff.inMinutes < 60) return '${diff.inMinutes}m ago';
@@ -36,33 +63,24 @@ class NotificationsScreen extends StatelessWidget {
             icon: const Icon(Icons.done_all_rounded, color: GamerTheme.accentBlue, size: 20),
             onPressed: () async {
               try {
-                final snap = await FirebaseFirestore.instance
-                    .collection('notifications')
-                    .where('recipientUid', isEqualTo: currentUid)
-                    .get();
-                final batch = FirebaseFirestore.instance.batch();
-                for (final d in snap.docs) {
-                  batch.update(d.reference, {'read': true});
-                }
-                await batch.commit();
+                await SupabaseService.client
+                    .from('notifications')
+                    .update({'read': true})
+                    .eq('recipientUid', currentUid)
+                    .catchError((_) => null);
               } catch (_) {}
             },
           ),
         ],
       ),
-      body: StreamBuilder<QuerySnapshot>(
-        stream: FirebaseFirestore.instance
-            .collection('notifications')
-            .where('recipientUid', isEqualTo: currentUid)
-            .orderBy('createdAt', descending: true)
-            .limit(50)
-            .snapshots(),
+      body: StreamBuilder<List<Map<String, dynamic>>>(
+        stream: _notificationsStream(currentUid),
         builder: (context, snapshot) {
-          if (snapshot.connectionState == ConnectionState.waiting) {
+          if (snapshot.connectionState == ConnectionState.waiting && !snapshot.hasData) {
             return const Center(child: CircularProgressIndicator(color: GamerTheme.accentBlue));
           }
 
-          final docs = snapshot.data?.docs ?? [];
+          final docs = snapshot.data ?? [];
 
           if (docs.isEmpty) {
             return Center(
@@ -94,11 +112,11 @@ class NotificationsScreen extends StatelessWidget {
             itemCount: docs.length,
             separatorBuilder: (_, __) => const Divider(color: GamerTheme.borderDark, height: 1),
             itemBuilder: (context, index) {
-              final data = docs[index].data() as Map<String, dynamic>? ?? {};
+              final data = docs[index];
               final senderUid = data['senderUid'] ?? '';
               final type = data['type'] ?? 'activity';
               final message = data['message'] ?? 'interacted with your Gamer ID';
-              final timestamp = data['createdAt'] as Timestamp?;
+              final timestamp = data['createdAt'];
               final isRead = data['read'] == true;
 
               IconData iconData;

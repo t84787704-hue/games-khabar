@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
-import 'package:games_khabar/compat/cloud_firestore.dart';
-import 'package:games_khabar/compat/firebase_auth.dart';
+import '../services/supabase_service.dart';
+import '../services/gamer_auth_service.dart';
 import '../constants/gamer_theme.dart';
 import '../models/squad_post_model.dart';
 import '../services/lfg_service.dart';
@@ -22,7 +22,21 @@ class RequestsScreen extends StatefulWidget {
 
 class _RequestsScreenState extends State<RequestsScreen> {
   final LfgService _lfgService = LfgService();
-  final FirebaseFirestore _firestore = FirebaseFirestore.instance;
+
+  Stream<Map<String, dynamic>?> _postStream() async* {
+    while (true) {
+      Map<String, dynamic>? data;
+      try {
+        data = await SupabaseService.client
+            .from('lfg_posts')
+            .select()
+            .eq('id', widget.postId)
+            .maybeSingle();
+      } catch (_) {}
+      yield data;
+      await Future.delayed(const Duration(seconds: 4));
+    }
+  }
   final Set<String> _processingUids = {};
 
   Future<void> _handleAccept(String requesterUid, Map<String, dynamic> userData, SquadPost? currentSquad) async {
@@ -34,7 +48,7 @@ class _RequestsScreenState extends State<RequestsScreen> {
         requesterId: requesterUid,
         requestDocId: requesterUid,
         requesterName: name,
-        leaderUid: currentSquad?.userId ?? FirebaseAuth.instance.currentUser?.uid ?? '',
+        leaderUid: currentSquad?.userId ?? GamerAuthService().currentUid ?? '',
         inGameUid: currentSquad?.inGameUid ?? '',
         mode: currentSquad?.mode ?? 'Classic Squad',
       );
@@ -116,14 +130,15 @@ class _RequestsScreenState extends State<RequestsScreen> {
           ),
         ),
       ),
-      body: StreamBuilder<DocumentSnapshot>(
-        stream: _firestore.collection('lfg_posts').doc(widget.postId).snapshots(),
+      body: StreamBuilder<Map<String, dynamic>?>(
+        stream: _postStream(),
         builder: (context, snapshot) {
           if (snapshot.connectionState == ConnectionState.waiting && !snapshot.hasData) {
             return const Center(child: CircularProgressIndicator(color: GamerTheme.accentOrange));
           }
 
-          if (!snapshot.hasData || !snapshot.data!.exists) {
+          final postData = snapshot.data ?? {};
+          if (postData.isEmpty) {
             return const Center(
               child: Text(
                 'Squad post not found',
@@ -132,10 +147,8 @@ class _RequestsScreenState extends State<RequestsScreen> {
             );
           }
 
-          final postDoc = snapshot.data!;
-          final postData = postDoc.data() as Map<String, dynamic>? ?? {};
           final List<String> joinRequests = List<String>.from(postData['joinRequests'] ?? []);
-          final squad = SquadPost.fromFirestore(postDoc);
+          final squad = SquadPost.fromFirestore(postData);
 
           if (joinRequests.isEmpty) {
             return Center(
@@ -179,10 +192,10 @@ class _RequestsScreenState extends State<RequestsScreen> {
               final requesterUid = joinRequests[index];
               final isProcessing = _processingUids.contains(requesterUid);
 
-              return FutureBuilder<DocumentSnapshot>(
-                future: _firestore.collection('users').doc(requesterUid).get(),
+              return FutureBuilder<Map<String, dynamic>?>(
+                future: SupabaseService.getUser(requesterUid),
                 builder: (context, userSnap) {
-                  final userData = (userSnap.data?.data() as Map<String, dynamic>?) ?? {};
+                  final userData = userSnap.data ?? {};
                   final bgmiName = (userData['bgmiName'] ?? userData['displayName'] ?? 'Gamer').toString();
                   final tag = (userData['tag'] ?? userData['username'] ?? 'player').toString();
                   final avatar = (userData['avatar'] ?? userData['photoUrl'] ?? '').toString();

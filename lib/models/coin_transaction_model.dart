@@ -1,5 +1,3 @@
-import 'package:games_khabar/compat/cloud_firestore.dart';
-
 class CoinTransaction {
   final String id;
   final String userId;
@@ -25,18 +23,33 @@ class CoinTransaction {
 
   bool get isCredit => amount > 0;
 
-  factory CoinTransaction.fromFirestore(DocumentSnapshot doc) {
-    final data = doc.data() as Map<String, dynamic>? ?? {};
-    return CoinTransaction.fromMap(data, doc.id);
+  factory CoinTransaction.fromFirestore(dynamic doc) {
+    if (doc == null) return CoinTransaction.fromMap({}, '');
+    try {
+      final data = (doc as dynamic).data();
+      if (data is Map<String, dynamic>) {
+        return CoinTransaction.fromMap(data, (doc as dynamic).id?.toString());
+      }
+    } catch (_) {}
+    if (doc is Map<String, dynamic>) {
+      return CoinTransaction.fromMap(doc, doc['id']?.toString());
+    }
+    return CoinTransaction.fromMap({}, '');
   }
 
   factory CoinTransaction.fromMap(Map<String, dynamic> data, [String? id]) {
     DateTime time = DateTime.now();
-    final rawTime = data['timestamp'] ?? data['createdAt'];
-    if (rawTime is Timestamp) {
-      time = rawTime.toDate();
+    final rawTime = data['timestamp'] ?? data['createdAt'] ?? data['created_at'];
+    if (rawTime is DateTime) {
+      time = rawTime;
     } else if (rawTime is String) {
       time = DateTime.tryParse(rawTime) ?? time;
+    } else if (rawTime is int) {
+      time = DateTime.fromMillisecondsSinceEpoch(rawTime);
+    } else {
+      try {
+        time = (rawTime as dynamic)?.toDate() ?? time;
+      } catch (_) {}
     }
 
     final userId = data['userId'] ?? data['to'] ?? data['from'] ?? '';
@@ -146,7 +159,7 @@ class CoinTransaction {
       'type': type,
       'amount': amount,
       'status': status,
-      'timestamp': Timestamp.fromDate(timestamp),
+      'timestamp': timestamp.toIso8601String(),
       'title': title,
       'description': description,
       'roomId': roomId,

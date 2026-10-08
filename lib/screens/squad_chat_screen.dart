@@ -2,8 +2,6 @@ import 'dart:convert';
 import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import 'package:games_khabar/compat/cloud_firestore.dart';
-import 'package:games_khabar/compat/firebase_auth.dart';
 import 'package:image_picker/image_picker.dart';
 import '../constants/gamer_theme.dart';
 import '../models/squad_post_model.dart';
@@ -42,21 +40,67 @@ class _SquadChatScreenState extends State<SquadChatScreen> {
     _ensureChatDocExists();
   }
 
-  /// Auto-creates both squads/{postId} and chats/{postId} parent documents if missing
+  Stream<Map<String, dynamic>?> _chatStream() async* {
+    while (true) {
+      Map<String, dynamic>? data;
+      try {
+        data = await SupabaseService.client
+            .from('chats')
+            .select()
+            .eq('id', widget.postId)
+            .maybeSingle();
+        if (data == null) {
+          data = await SupabaseService.client
+              .from('chats')
+              .select()
+              .eq('postId', widget.postId)
+              .maybeSingle();
+        }
+      } catch (_) {}
+      yield data;
+      await Future.delayed(const Duration(seconds: 4));
+    }
+  }
+
+  Stream<List<Map<String, dynamic>>> _messagesStream() async* {
+    while (true) {
+      List<Map<String, dynamic>> list = [];
+      try {
+        final res = await SupabaseService.client
+            .from('messages')
+            .select()
+            .or('chatId.eq.${widget.postId},squadId.eq.${widget.postId}')
+            .order('createdAt', ascending: true);
+        list = List<Map<String, dynamic>>.from(res);
+      } catch (_) {}
+      yield list;
+      await Future.delayed(const Duration(seconds: 3));
+    }
+  }
+
   Future<void> _ensureChatDocExists() async {
     try {
-      final squadRef = FirebaseFirestore.instance.collection('squads').doc(widget.postId);
-      final squadDoc = await squadRef.get();
-      final chatRef = FirebaseFirestore.instance.collection('chats').doc(widget.postId);
-      final chatDoc = await chatRef.get();
-
-      DocumentSnapshot postDoc = await FirebaseFirestore.instance.collection('lfg_posts').doc(widget.postId).get();
-      if (!postDoc.exists) {
-        postDoc = squadDoc;
+      final nowIso = DateTime.now().toIso8601String();
+      Map<String, dynamic>? postData;
+      try {
+        postData = await SupabaseService.client
+            .from('lfg_posts')
+            .select()
+            .eq('id', widget.postId)
+            .maybeSingle();
+      } catch (_) {}
+      if (postData == null) {
+        try {
+          postData = await SupabaseService.client
+              .from('squads')
+              .select()
+              .eq('id', widget.postId)
+              .maybeSingle();
+        } catch (_) {}
       }
 
-      final currentUid = FirebaseAuth.instance.currentUser?.uid ?? GamerAuthService().currentUid ?? '';
-      final currentEmail = FirebaseAuth.instance.currentUser?.email ?? '';
+      final currentUid = GamerAuthService().currentUid ?? '';
+      final currentEmail = GamerAuthService().currentUser?.email ?? '';
 
       List<String> members = [];
       String title = 'Squad Chat';
@@ -64,85 +108,74 @@ class _SquadChatScreenState extends State<SquadChatScreen> {
       String inGameUid = '';
       String leaderUid = '';
 
-      if (postDoc.exists) {
-        final data = postDoc.data() as Map<String, dynamic>? ?? {};
-        leaderUid = (data['hostId'] ?? data['ownerId'] ?? data['userId'] ?? '').toString();
-        final rawMembers = List<dynamic>.from(data['members'] ?? []);
+      if (postData != null) {
+        leaderUid = (postData['hostId'] ?? postData['ownerId'] ?? postData['userId'] ?? '').toString();
+        final rawMembers = List<dynamic>.from(postData['members'] ?? []);
         members = rawMembers.map((e) => e.toString()).toList();
         if (leaderUid.isNotEmpty && !members.contains(leaderUid)) {
           members.insert(0, leaderUid);
         }
-        title = data['ownerBgmiName'] ?? data['displayName'] ?? data['title'] ?? 'Squad Chat';
-        mode = data['mode'] ?? 'Classic Squad';
-        inGameUid = data['bgmiUid'] ?? data['inGameUid'] ?? data['gameId'] ?? '';
+        title = postData['ownerBgmiName'] ?? postData['displayName'] ?? postData['title'] ?? 'Squad Chat';
+        mode = postData['mode'] ?? 'Classic Squad';
+        inGameUid = (postData['gameUid'] ?? postData['inGameUid'] ?? postData['bgmiUid'] ?? '').toString();
       } else if (widget.squad != null) {
+        leaderUid = widget.squad!.userId;
         members = List<String>.from(widget.squad!.members);
-        leaderUid = widget.squad!.ownerId.isNotEmpty ? widget.squad!.ownerId : widget.squad!.userId;
-        if (leaderUid.isNotEmpty && !members.contains(leaderUid)) {
-          members.insert(0, leaderUid);
-        }
-        title = widget.squad!.displayName.isNotEmpty ? "${widget.squad!.displayName}'s Squad" : 'Squad Chat';
+        title = widget.squad!.title;
         mode = widget.squad!.mode;
         inGameUid = widget.squad!.inGameUid;
       }
 
-      if (leaderUid.isEmpty) {
-        leaderUid = currentUid.isNotEmpty ? currentUid : 'gamer';
-      }
-      if (members.isEmpty && leaderUid.isNotEmpty) {
-        members.add(leaderUid);
+      if (currentUid.isNotEmpty && !members.contains(currentUid) && leaderUid.isEmpty) {
+        members.add(currentUid);
       }
 
-      // 1. Ensure parent document in 'squads' collection exists
-      if (!squadDoc.exists) {
-        final squadData = {
-          'squadId': widget.postId,
-          'id': widget.postId,
-          'postId': widget.postId,
-          'hostId': leaderUid,
-          'userId': leaderUid,
-          'ownerId': leaderUid,
-          'hostEmail': currentEmail,
-          'ownerEmail': currentEmail,
-          'createdAt': FieldValue.serverTimestamp(),
-          'members': members,
-          'memberCount': members.isNotEmpty ? members.length : 1,
-          'membersCount': members.isNotEmpty ? members.length : 1,
-          'isActive': true,
-          'displayName': title,
-          'title': title,
-          'mode': mode,
-          'inGameUid': inGameUid,
-          'bgmiUid': inGameUid,
-          'bgmiUidToCopy': inGameUid,
-          'game': 'BGMI',
-          'updatedAt': FieldValue.serverTimestamp(),
-        };
-        await squadRef.set(squadData, SetOptions(merge: true));
-        await FirebaseFirestore.instance.collection('lfg_posts').doc(widget.postId).set(squadData, SetOptions(merge: true));
-      }
+      final squadData = {
+        'id': widget.postId,
+        'postId': widget.postId,
+        'squadId': widget.postId,
+        'ownerId': leaderUid,
+        'hostId': leaderUid,
+        'userId': leaderUid,
+        'leaderUid': leaderUid,
+        'ownerEmail': currentEmail,
+        'hostEmail': currentEmail,
+        'members': members,
+        'memberCount': members.isNotEmpty ? members.length : 1,
+        'membersCount': members.isNotEmpty ? members.length : 1,
+        'isActive': true,
+        'displayName': title,
+        'title': title,
+        'mode': mode,
+        'inGameUid': inGameUid,
+        'bgmiUid': inGameUid,
+        'bgmiUidToCopy': inGameUid,
+        'game': 'BGMI',
+        'updatedAt': nowIso,
+      };
 
-      // 2. Ensure parent document in 'chats' collection exists
-      if (!chatDoc.exists || (chatDoc.data()?['members'] == null)) {
-        await chatRef.set({
-          'chatId': widget.postId,
-          'postId': widget.postId,
-          'squadId': widget.postId,
-          'members': members,
-          'leaderUid': leaderUid,
-          'ownerId': leaderUid,
-          'hostId': leaderUid,
-          'title': title,
-          'mode': mode,
-          'inGameUid': inGameUid,
-          'bgmiUidToCopy': inGameUid,
-          'createdAt': FieldValue.serverTimestamp(),
-          'updatedAt': FieldValue.serverTimestamp(),
-          'isActive': true,
-        }, SetOptions(merge: true));
-      }
+      await SupabaseService.client.from('squads').upsert(squadData).catchError((_) => null);
+      await SupabaseService.client.from('lfg_posts').upsert(squadData).catchError((_) => null);
+
+      await SupabaseService.client.from('chats').upsert({
+        'id': widget.postId,
+        'chatId': widget.postId,
+        'postId': widget.postId,
+        'squadId': widget.postId,
+        'members': members,
+        'leaderUid': leaderUid,
+        'ownerId': leaderUid,
+        'hostId': leaderUid,
+        'title': title,
+        'mode': mode,
+        'inGameUid': inGameUid,
+        'bgmiUidToCopy': inGameUid,
+        'createdAt': nowIso,
+        'updatedAt': nowIso,
+        'isActive': true,
+      }).catchError((_) => null);
     } catch (e) {
-      debugPrint('[SquadChatScreen] Error ensuring squad and chat docs: $e');
+      debugPrint('[SquadChatScreen] Error ensuring squad and chat docs: ');
     }
   }
 
@@ -169,7 +202,7 @@ class _SquadChatScreenState extends State<SquadChatScreen> {
   }
 
   Future<void> _handleLeaveSquad(String leaderUid, List<String> members) async {
-    final currentUid = FirebaseAuth.instance.currentUser?.uid ?? GamerAuthService().currentUid ?? '';
+    final currentUid = GamerAuthService().currentUid ?? "";
     if (currentUid.isEmpty) return;
 
     final confirm = await showDialog<bool>(
@@ -282,7 +315,7 @@ class _SquadChatScreenState extends State<SquadChatScreen> {
     final text = _textController.text.trim();
     if (text.isEmpty || _isSending) return;
 
-    final currentUid = FirebaseAuth.instance.currentUser?.uid ?? GamerAuthService().currentUid;
+    final currentUid = GamerAuthService().currentUid;
     if (currentUid == null || currentUid.isEmpty) return;
 
     _textController.clear();
@@ -292,15 +325,19 @@ class _SquadChatScreenState extends State<SquadChatScreen> {
       final user = await GamerAuthService().getUserProfile(currentUid);
       final senderName = user?.displayName.isNotEmpty == true
           ? user!.displayName
-          : (FirebaseAuth.instance.currentUser?.displayName ?? 'Gamer');
+          : "Gamer";
       final senderUsername = user?.username.isNotEmpty == true
           ? user!.username
           : senderName.toLowerCase().replaceAll(' ', '');
-      final senderAvatar = user?.photoUrl ?? (FirebaseAuth.instance.currentUser?.photoURL ?? '');
+      final senderAvatar = user?.photoUrl ?? "";
 
-      final chatRef = FirebaseFirestore.instance.collection('chats').doc(widget.postId);
+      final nowIso = DateTime.now().toIso8601String();
+      final msgId = SupabaseService.toUuid('${DateTime.now().millisecondsSinceEpoch}_$currentUid');
 
-      await chatRef.collection('messages').add({
+      await SupabaseService.client.from('messages').insert({
+        'id': msgId,
+        'chatId': widget.postId,
+        'squadId': widget.postId,
         'senderId': currentUid,
         'senderUid': currentUid,
         'senderName': senderName,
@@ -311,15 +348,16 @@ class _SquadChatScreenState extends State<SquadChatScreen> {
         'senderChatColor': user?.chatColor ?? '',
         'text': text,
         'type': 'text',
-        'createdAt': FieldValue.serverTimestamp(),
-      });
+        'createdAt': nowIso,
+      }).catchError((_) => null);
 
-      await chatRef.set({
+      await SupabaseService.client.from('chats').upsert({
+        'id': widget.postId,
+        'postId': widget.postId,
         'lastMessage': '$senderName: $text',
-        'lastMessageTime': FieldValue.serverTimestamp(),
-        'updatedAt': FieldValue.serverTimestamp(),
-      }, SetOptions(merge: true));
-
+        'lastMessageTime': nowIso,
+        'updatedAt': nowIso,
+      }).catchError((_) => null);
       Future.delayed(const Duration(milliseconds: 100), _scrollToBottom);
     } catch (e) {
       if (mounted) {
@@ -343,7 +381,7 @@ class _SquadChatScreenState extends State<SquadChatScreen> {
 
   /// Opens dialog for submitting a Win Proof message in squad chat
   Future<void> _openSubmitWinProofSheet() async {
-    final currentUid = FirebaseAuth.instance.currentUser?.uid ?? GamerAuthService().currentUid ?? '';
+    final currentUid = GamerAuthService().currentUid ?? '';
     if (currentUid.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
@@ -355,8 +393,7 @@ class _SquadChatScreenState extends State<SquadChatScreen> {
     }
 
     // 1. Fetch live user profile to get verified character UID (gameUid)
-    final userDoc = await FirebaseFirestore.instance.collection('users').doc(currentUid).get();
-    final userData = userDoc.data() ?? {};
+    final userData = await SupabaseService.getUser(currentUid) ?? {};
     final characterUid = (userData['bgmiUid'] ?? userData['gameId'] ?? userData['inGameId'] ?? userData['gameUid'] ?? '').toString().trim();
 
     // Validate: Character UID must be equal to current user's Firestore profile gameUid, don't allow typing any UID.
@@ -696,13 +733,10 @@ class _SquadChatScreenState extends State<SquadChatScreen> {
                                   return;
                                 }
 
-                                final firestore = FirebaseFirestore.instance;
-                                final proofDocRef = firestore.collection('win_proofs').doc();
-                                final proofId = proofDocRef.id;
+                                final proofId = SupabaseService.toUuid('${DateTime.now().millisecondsSinceEpoch}_$currentUid');
+                                final nowIso = DateTime.now().toIso8601String();
 
-                                // 1. Save to win_proofs collection with status='pending', submittedBy=auth.uid, createdAt=serverTimestamp
-                                // NEVER set status='rewarded' from app
-                                await proofDocRef.set({
+                                await SupabaseService.client.from('win_proofs').insert({
                                   'id': proofId,
                                   'squadId': widget.postId,
                                   'submittedBy': currentUid,
@@ -713,29 +747,28 @@ class _SquadChatScreenState extends State<SquadChatScreen> {
                                   'proofUrl': url,
                                   'imageUrl': url,
                                   'note': note.isNotEmpty ? note : 'Match Won! Victory proof submitted.',
-                                  'status': 'pending', // NEVER set status='rewarded' from app
-                                  'createdAt': FieldValue.serverTimestamp(),
+                                  'status': 'pending',
+                                  'createdAt': nowIso,
                                   'senderName': senderName,
                                   'senderUsername': senderUsername,
                                   'senderAvatar': senderAvatar,
-                                });
+                                }).catchError((_) => null);
 
-                                // Update rate limit timestamp on user profile
-                                await firestore.collection('users').doc(currentUid).set({
-                                  'lastWinProofAt': FieldValue.serverTimestamp(),
-                                }, SetOptions(merge: true));
+                                await SupabaseService.client.from('users').update({
+                                  'lastWinProofAt': nowIso,
+                                }).eq('id', currentUid).catchError((_) => null);
 
-                                // Add win proof message to squad chat
-                                final chatRef = firestore.collection('chats').doc(widget.postId);
-                                await chatRef.collection('messages').doc(proofId).set({
-                                  'proofId': proofId,
+                                await SupabaseService.client.from('messages').insert({
+                                  'id': proofId,
+                                  'chatId': widget.postId,
+                                  'squadId': widget.postId,
                                   'senderId': currentUid,
                                   'senderUid': currentUid,
                                   'senderName': senderName,
                                   'senderUsername': senderUsername,
                                   'senderAvatar': senderAvatar,
                                   'type': 'win_proof',
-                                  'status': 'pending', // Shows "PENDING APPROVAL"
+                                  'status': 'pending',
                                   'submittedBy': currentUid,
                                   'inGameUid': characterUid,
                                   'characterUid': characterUid,
@@ -743,14 +776,16 @@ class _SquadChatScreenState extends State<SquadChatScreen> {
                                   'proofUrl': url,
                                   'imageUrl': url,
                                   'text': note.isNotEmpty ? note : 'Match Won! Victory proof submitted.',
-                                  'createdAt': FieldValue.serverTimestamp(),
-                                });
+                                  'createdAt': nowIso,
+                                }).catchError((_) => null);
 
-                                await chatRef.set({
+                                await SupabaseService.client.from('chats').upsert({
+                                  'id': widget.postId,
+                                  'postId': widget.postId,
                                   'lastMessage': '$senderName submitted Win Proof 🏆',
-                                  'lastMessageTime': FieldValue.serverTimestamp(),
-                                  'updatedAt': FieldValue.serverTimestamp(),
-                                }, SetOptions(merge: true));
+                                  'lastMessageTime': nowIso,
+                                  'updatedAt': nowIso,
+                                }).catchError((_) => null);
 
                                 if (mounted) {
                                   Navigator.pop(ctx);
@@ -840,34 +875,33 @@ class _SquadChatScreenState extends State<SquadChatScreen> {
 
     if (confirm != true) return;
 
-    final currentUid = FirebaseAuth.instance.currentUser?.uid ?? GamerAuthService().currentUid ?? '';
-    final firestore = FirebaseFirestore.instance;
-    final messageRef = firestore.collection('chats').doc(squadId).collection('messages').doc(messageDocId);
-    final proofRef = firestore.collection('win_proofs').doc(messageDocId);
+    final currentUid = GamerAuthService().currentUid ?? '';
+    final nowIso = DateTime.now().toIso8601String();
 
     try {
-      final batch = firestore.batch();
-      batch.update(messageRef, {
+      await SupabaseService.client.from('messages').update({
         'status': 'rejected',
-        'rejectedAt': FieldValue.serverTimestamp(),
+        'rejectedAt': nowIso,
         'rejectedBy': currentUid,
-      });
-      batch.set(proofRef, {
+      }).eq('id', messageDocId).catchError((_) => null);
+
+      await SupabaseService.client.from('win_proofs').update({
         'status': 'rejected',
-        'rejectedAt': FieldValue.serverTimestamp(),
+        'rejectedAt': nowIso,
         'rejectedBy': currentUid,
-      }, SetOptions(merge: true));
-      await batch.commit();
+      }).eq('id', messageDocId).catchError((_) => null);
 
       // System notification message in squad chat
-      await firestore.collection('chats').doc(squadId).collection('messages').add({
+      await SupabaseService.client.from('messages').insert({
+        'chatId': squadId,
+        'squadId': squadId,
         'senderId': 'system',
         'senderUid': 'system',
         'senderName': 'System',
         'text': 'Host rejected win proof submitted by @$cleanTag',
         'type': 'system',
-        'createdAt': FieldValue.serverTimestamp(),
-      });
+        'createdAt': nowIso,
+      }).catchError((_) => null);
 
       if (context.mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -947,82 +981,64 @@ class _SquadChatScreenState extends State<SquadChatScreen> {
 
     if (confirm != true) return;
 
-    final firestore = FirebaseFirestore.instance;
-    final hostRef = firestore.collection('users').doc(hostId);
-    final winnerRef = firestore.collection('users').doc(winnerId);
-    final messageRef = firestore
-        .collection('chats')
-        .doc(squadId)
-        .collection('messages')
-        .doc(messageDocId);
+    final nowIso = DateTime.now().toIso8601String();
 
     try {
-      // Run Firestore transaction to deduct coins from host and add 100 to winner via FieldValue.increment
-      await firestore.runTransaction((transaction) async {
-        final hostDoc = await transaction.get(hostRef);
-        final hostData = hostDoc.data() ?? {};
-        final int hostCoins = (hostData['coins'] as num?)?.toInt() ?? 100;
+      final hostData = await SupabaseService.getUser(hostId);
+      final int hostCoins = (hostData?['coins'] as num?)?.toInt() ?? 100;
 
-        if (hostCoins < 100) {
-          throw 'Not enough coins';
-        }
+      if (hostCoins < 100) {
+        throw 'Not enough coins';
+      }
 
-        // Deduct 100 from host, increment 100 for winner using FieldValue.increment
-        transaction.update(hostRef, {
-          'coins': FieldValue.increment(-100),
-          'updatedAt': FieldValue.serverTimestamp(),
-        });
+      await SupabaseService.client.from('users').update({
+        'coins': hostCoins - 100,
+        'updatedAt': nowIso,
+      }).eq('id', hostId);
 
-        transaction.update(winnerRef, {
-          'coins': FieldValue.increment(100),
-          'updatedAt': FieldValue.serverTimestamp(),
-        });
+      final winnerData = await SupabaseService.getUser(winnerId);
+      final int winnerCoins = (winnerData?['coins'] as num?)?.toInt() ?? 0;
+      await SupabaseService.client.from('users').update({
+        'coins': winnerCoins + 100,
+        'updatedAt': nowIso,
+      }).eq('id', winnerId);
 
-        // Create doc in 'coin_transactions' collection
-        final txRef = firestore.collection('coin_transactions').doc();
-        transaction.set(txRef, {
-          'id': txRef.id,
-          'userId': winnerId,
-          'from': hostId,
-          'to': winnerId,
-          'amount': 100,
-          'squadId': squadId,
-          'type': 'win_reward',
-          'title': 'Match Victory Reward 🏆',
-          'description': 'Awarded 100 Coins for approved match victory proof',
-          'status': 'completed',
-          'timestamp': FieldValue.serverTimestamp(),
-        });
+      await SupabaseService.recordCoinTransaction(
+        userId: hostId,
+        amount: -100,
+        type: 'squad_reward_given',
+        description: 'Rewarded squad match winner 100 coins',
+      );
+      await SupabaseService.recordCoinTransaction(
+        userId: winnerId,
+        amount: 100,
+        type: 'squad_reward_won',
+        description: 'Won squad match reward 100 coins',
+      );
 
-        // Update win_proof message status to 'rewarded'
-        transaction.update(messageRef, {
-          'status': 'rewarded',
-          'rewardedAt': FieldValue.serverTimestamp(),
-          'rewardedBy': hostId,
-        });
+      await SupabaseService.client.from('messages').update({
+        'status': 'rewarded',
+        'rewardedAt': nowIso,
+        'rewardedBy': hostId,
+      }).eq('id', messageDocId).catchError((_) => null);
 
-        // Also update win_proofs collection
-        final winProofRef = firestore.collection('win_proofs').doc(messageDocId);
-        transaction.set(winProofRef, {
-          'status': 'rewarded',
-          'rewardedAt': FieldValue.serverTimestamp(),
-          'rewardedBy': hostId,
-        }, SetOptions(merge: true));
-      });
+      await SupabaseService.client.from('win_proofs').update({
+        'status': 'rewarded',
+        'rewardedAt': nowIso,
+        'rewardedBy': hostId,
+      }).eq('id', messageDocId).catchError((_) => null);
 
       // Send chat system message: "Host rewarded 100 coins to @fua"
-      await firestore
-          .collection('chats')
-          .doc(squadId)
-          .collection('messages')
-          .add({
+      await SupabaseService.client.from('messages').insert({
+        'chatId': squadId,
+        'squadId': squadId,
         'senderId': 'system',
         'senderUid': 'system',
         'senderName': 'System',
         'text': 'Host rewarded 100 coins to @$cleanTag 🏆',
         'type': 'system',
-        'createdAt': FieldValue.serverTimestamp(),
-      });
+        'createdAt': nowIso,
+      }).catchError((_) => null);
 
       if (context.mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -1433,12 +1449,12 @@ class _SquadChatScreenState extends State<SquadChatScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final currentUid = FirebaseAuth.instance.currentUser?.uid ?? GamerAuthService().currentUid ?? '';
+    final currentUid = GamerAuthService().currentUid ?? '';
 
-    return StreamBuilder<DocumentSnapshot>(
-      stream: FirebaseFirestore.instance.collection('chats').doc(widget.postId).snapshots(),
+    return StreamBuilder<Map<String, dynamic>?>(
+      stream: _chatStream(),
       builder: (context, chatSnap) {
-        final chatData = chatSnap.data?.data() as Map<String, dynamic>? ?? {};
+        final chatData = chatSnap.data ?? {};
         final leaderUid = (chatData['leaderUid'] ?? widget.squad?.ownerId ?? widget.squad?.userId ?? '').toString();
         final isOwner = currentUid.isNotEmpty && (leaderUid == currentUid || (widget.squad != null && (widget.squad!.ownerId == currentUid || widget.squad!.userId == currentUid)));
         final rawMembers = List<dynamic>.from(chatData['members'] ?? widget.squad?.members ?? []);
@@ -1587,9 +1603,13 @@ class _SquadChatScreenState extends State<SquadChatScreen> {
                     onPressed: () async {
                       SquadPost? currentSquad = widget.squad;
                       if (currentSquad == null) {
-                        final doc = await FirebaseFirestore.instance.collection('lfg_posts').doc(widget.postId).get();
-                        if (doc.exists) {
-                          currentSquad = SquadPost.fromFirestore(doc);
+                        final map = await SupabaseService.client
+                            .from('lfg_posts')
+                            .select()
+                            .eq('id', widget.postId)
+                            .maybeSingle();
+                        if (map != null) {
+                          currentSquad = SquadPost.fromFirestore(map);
                         }
                       }
                       if (currentSquad != null && mounted) {
@@ -1606,13 +1626,8 @@ class _SquadChatScreenState extends State<SquadChatScreen> {
               children: [
                 // Messages list
                 Expanded(
-                  child: StreamBuilder<QuerySnapshot>(
-                    stream: FirebaseFirestore.instance
-                        .collection('chats')
-                        .doc(widget.postId)
-                        .collection('messages')
-                        .orderBy('createdAt', descending: false)
-                        .snapshots(),
+                  child: StreamBuilder<List<Map<String, dynamic>>>(
+                    stream: _messagesStream(),
                     builder: (context, snapshot) {
                       if (snapshot.connectionState == ConnectionState.waiting && !snapshot.hasData) {
                         return const Center(
@@ -1620,7 +1635,7 @@ class _SquadChatScreenState extends State<SquadChatScreen> {
                         );
                       }
 
-                      final docs = snapshot.data?.docs ?? [];
+                      final docs = snapshot.data ?? [];
                       if (docs.isEmpty) {
                         return Center(
                           child: Column(
@@ -1645,8 +1660,8 @@ class _SquadChatScreenState extends State<SquadChatScreen> {
                         padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
                         itemCount: docs.length,
                         itemBuilder: (context, index) {
-                          final data = docs[index].data() as Map<String, dynamic>;
-                          final messageDocId = docs[index].id;
+                          final data = docs[index];
+                          final messageDocId = (data['id'] ?? '').toString();
                           final senderUid = (data['senderId'] ?? data['senderUid']) as String? ?? '';
                           final senderName = data['senderName'] as String? ?? 'Gamer';
                           final senderAvatar = data['senderAvatar'] as String? ?? '';

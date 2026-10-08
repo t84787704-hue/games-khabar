@@ -1,5 +1,4 @@
-import 'package:games_khabar/compat/cloud_firestore.dart';
-import 'package:games_khabar/compat/firebase_auth.dart';
+import 'package:games_khabar/services/supabase_service.dart';
 import 'package:flutter/material.dart';
 
 enum RankBadgeType {
@@ -61,12 +60,16 @@ class UserGameRank {
   factory UserGameRank.fromMap(Map<String, dynamic> map) {
     DateTime? submitted;
     final rawSubmitted = map['submittedAt'];
-    if (rawSubmitted is Timestamp) {
-      submitted = rawSubmitted.toDate();
+    if (rawSubmitted is DateTime) {
+      submitted = rawSubmitted;
     } else if (rawSubmitted is String) {
       submitted = DateTime.tryParse(rawSubmitted);
     } else if (rawSubmitted is int) {
       submitted = DateTime.fromMillisecondsSinceEpoch(rawSubmitted);
+    } else {
+      try {
+        submitted = (rawSubmitted as dynamic)?.toDate();
+      } catch (_) {}
     }
 
     return UserGameRank(
@@ -95,7 +98,7 @@ class UserGameRank {
       'screenshotUrl': screenshotUrl,
       'status': status,
       'submittedAt':
-          submittedAt != null ? Timestamp.fromDate(submittedAt!) : Timestamp.now(),
+          (submittedAt ?? DateTime.now()).toIso8601String(),
       if (rejectReason != null && rejectReason!.isNotEmpty)
         'rejectReason': rejectReason,
       if (ownerUid.isNotEmpty) 'ownerUid': ownerUid,
@@ -185,6 +188,9 @@ class GamerUser {
   final DateTime? vipTournamentPassUntil;
   final DateTime? leaderboardSpotlightUntil;
 
+  // ═══════════════════════════════════════════════════════════
+  // PRIVACY FIELDS — Play Store ready
+  // ═══════════════════════════════════════════════════════════
   final bool isRankPublic;
   final bool isUidPublic;
   final bool isCoinsPublic;
@@ -247,6 +253,7 @@ class GamerUser {
     this.isVipMember = false,
     this.vipTournamentPassUntil,
     this.leaderboardSpotlightUntil,
+    // Privacy defaults
     this.isRankPublic = true,
     this.isUidPublic = false,
     this.isCoinsPublic = false,
@@ -270,11 +277,11 @@ class GamerUser {
   bool get isOwnerUser {
     if (isOwner) return true;
     if (isAdmin) return true;
-    final auth = FirebaseAuth.instance.currentUser;
+    final auth = SupabaseService.client.auth.currentUser;
     if (auth != null) {
       final authEmail = auth.email?.trim().toLowerCase() ?? '';
       if (authEmail == 'tufailm483@gmail.com' &&
-          (uid.isEmpty || auth.uid == uid)) {
+          (uid.isEmpty || auth.id == uid)) {
         return true;
       }
     }
@@ -295,9 +302,9 @@ class GamerUser {
   String get gamerRank => rank.isNotEmpty ? rank : selectedRank;
 
   String get email {
-    final auth = FirebaseAuth.instance.currentUser;
+    final auth = SupabaseService.client.auth.currentUser;
     if (auth != null &&
-        (uid.isEmpty || auth.uid == uid) &&
+        (uid.isEmpty || auth.id == uid) &&
         auth.email != null) {
       return auth.email!;
     }
@@ -423,9 +430,9 @@ class GamerUser {
       final diff = DateTime.now().difference(createdAt!).inDays;
       if (diff > 0) return diff;
     }
-    final auth = FirebaseAuth.instance.currentUser;
-    if (auth != null && (uid.isEmpty || auth.uid == uid)) {
-      final c = auth.metadata.creationTime;
+    final auth = SupabaseService.client.auth.currentUser;
+    if (auth != null && (uid.isEmpty || auth.id == uid)) {
+      final c = DateTime.tryParse(auth.createdAt);
       if (c != null) {
         final diff = DateTime.now().difference(c).inDays;
         if (diff > 0) return diff;
@@ -458,41 +465,48 @@ class GamerUser {
     }
   }
 
-  // ✅ Helper: Timestamp, String, ya int — teeno ko DateTime mein convert karo
-  static DateTime? _parseDateTime(dynamic raw) {
-    if (raw == null) return null;
-    if (raw is Timestamp) return raw.toDate();
-    if (raw is DateTime) return raw;
-    if (raw is String) return DateTime.tryParse(raw);
-    if (raw is int) return DateTime.fromMillisecondsSinceEpoch(raw);
+  factory GamerUser.fromFirestore(dynamic doc) {
+    if (doc == null) return GamerUser.fromMap({}, '');
     try {
-      return (raw as dynamic).toDate();
-    } catch (_) {
-      return null;
+      final data = (doc as dynamic).data();
+      if (data is Map<String, dynamic>) {
+        return GamerUser.fromMap(data, (doc as dynamic).id?.toString());
+      }
+    } catch (_) {}
+    if (doc is Map<String, dynamic>) {
+      return GamerUser.fromMap(
+          doc, doc['id']?.toString() ?? doc['uid']?.toString());
     }
-  }
-
-  factory GamerUser.fromFirestore(DocumentSnapshot doc) {
-    return GamerUser.fromMap(
-        doc.data() as Map<String, dynamic>? ?? {}, doc.id);
+    return GamerUser.fromMap({}, '');
   }
 
   factory GamerUser.fromMap(Map<String, dynamic> data, [String? fallbackUid]) {
-    // ✅ Supabase-compatible: Timestamp, String, ya int — sab handle karta hai
-    final DateTime? created = _parseDateTime(data['createdAt']);
-    final DateTime? appliedAt = _parseDateTime(data['verificationAppliedAt']);
-    final DateTime? bannedTimestamp = _parseDateTime(data['bannedAt']);
+    DateTime? parseDate(dynamic raw) {
+      if (raw == null) return null;
+      if (raw is DateTime) return raw;
+      if (raw is String) return DateTime.tryParse(raw);
+      if (raw is int) return DateTime.fromMillisecondsSinceEpoch(raw);
+      try {
+        return (raw as dynamic)?.toDate();
+      } catch (_) {}
+      return null;
+    }
+
+    final DateTime? created = parseDate(data['createdAt'] ?? data['created_at']);
+    final DateTime? appliedAt = parseDate(data['verificationAppliedAt'] ?? data['verification_applied_at']);
+    final DateTime? bannedTimestamp = parseDate(data['bannedAt'] ?? data['banned_at']);
 
     final rawEmail = (data['email'] ?? '').toString().toLowerCase().trim();
-    final authUser = FirebaseAuth.instance.currentUser;
+    final authUser = SupabaseService.client.auth.currentUser;
     final bool isOwner = data['isOwner'] == true ||
         data['role']?.toString().toLowerCase() == 'owner' ||
         data['isAdmin'] == true ||
         rawEmail == 'tufailm483@gmail.com' ||
         (authUser != null &&
             authUser.email?.toLowerCase().trim() == 'tufailm483@gmail.com' &&
-            ((fallbackUid ?? '') == authUser.uid ||
-                data['uid'] == authUser.uid));
+            ((fallbackUid ?? '') == authUser.id ||
+                data['uid'] == authUser.id ||
+                data['id'] == authUser.id));
 
     final rawStatus =
         data['verificationStatus']?.toString().toLowerCase().trim();
@@ -529,8 +543,8 @@ class GamerUser {
         data['tier']?.toString() ?? data['rank']?.toString() ?? '';
     final String resolvedRank = rawRank.isNotEmpty ? rawRank : 'Bronze';
 
-    final DateTime? vipPassExpires = _parseDateTime(data['vipTournamentPassUntil']);
-    final DateTime? spotlightExpires = _parseDateTime(data['leaderboardSpotlightUntil']);
+    final DateTime? vipPassExpires = parseDate(data['vipTournamentPassUntil']);
+    final DateTime? spotlightExpires = parseDate(data['leaderboardSpotlightUntil']);
 
     final bool isVip = data['isVipMember'] == true ||
         (vipPassExpires != null && vipPassExpires.isAfter(DateTime.now()));
@@ -606,6 +620,7 @@ class GamerUser {
       isVipMember: isVip,
       vipTournamentPassUntil: vipPassExpires,
       leaderboardSpotlightUntil: spotlightExpires,
+      // Privacy fields
       isRankPublic: data['is_rank_public'] != false,
       isUidPublic: data['is_uid_public'] == true,
       isCoinsPublic: data['is_coins_public'] == true,
@@ -655,16 +670,14 @@ class GamerUser {
       'isAdmin': isAdmin,
       'isOwner': isOwner || isOwnerUser,
       'isBanned': isBanned,
-      if (bannedAt != null) 'bannedAt': Timestamp.fromDate(bannedAt!),
+      if (bannedAt != null) 'bannedAt': bannedAt!.toIso8601String(),
       if (bannedReason != null && bannedReason!.isNotEmpty)
         'bannedReason': bannedReason,
       if (bannedBy != null && bannedBy!.isNotEmpty) 'bannedBy': bannedBy,
       'isDemoAccount': isDemoAccount,
       'clipsCount': clipsCount,
       'squadRoomsCount': squadRoomsCount,
-      'verificationAppliedAt': verificationAppliedAt != null
-          ? Timestamp.fromDate(verificationAppliedAt!)
-          : null,
+      'verificationAppliedAt': verificationAppliedAt?.toIso8601String(),
       'gameId': gameId.trim(),
       'bgmiUid': gameId.trim(),
       'coins': coins,
@@ -679,10 +692,10 @@ class GamerUser {
       'unlockedChatColors': unlockedChatColors,
       'isVipMember': isVipMember,
       if (vipTournamentPassUntil != null)
-        'vipTournamentPassUntil': Timestamp.fromDate(vipTournamentPassUntil!),
+        'vipTournamentPassUntil': vipTournamentPassUntil!.toIso8601String(),
       if (leaderboardSpotlightUntil != null)
         'leaderboardSpotlightUntil':
-            Timestamp.fromDate(leaderboardSpotlightUntil!),
+            leaderboardSpotlightUntil!.toIso8601String(),
       'games': games.map((g) => g.toMap()).toList(),
       'verificationProgress': {
         'postsCount': postsCount,
@@ -696,10 +709,9 @@ class GamerUser {
         'squadRoomsCount': squadRoomsCount,
         'verificationStatus': verificationStatus,
       },
-      'createdAt': createdAt != null
-          ? Timestamp.fromDate(createdAt!)
-          : FieldValue.serverTimestamp(),
-      'updatedAt': FieldValue.serverTimestamp(),
+      'createdAt': (createdAt ?? DateTime.now()).toIso8601String(),
+      'updatedAt': DateTime.now().toIso8601String(),
+      // Privacy fields
       'is_rank_public': isRankPublic,
       'is_uid_public': isUidPublic,
       'is_coins_public': isCoinsPublic,

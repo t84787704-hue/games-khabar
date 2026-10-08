@@ -1,5 +1,3 @@
-import 'package:games_khabar/compat/cloud_firestore.dart';
-
 class TeamRanking {
   final String teamId;
   final String teamName;
@@ -29,21 +27,34 @@ class TeamRanking {
 
   double get winRate => totalMatches > 0 ? (wins / totalMatches) * 100 : 0.0;
 
-  factory TeamRanking.fromFirestore(DocumentSnapshot doc) {
-    final data = doc.data() as Map<String, dynamic>? ?? {};
+  factory TeamRanking.fromFirestore(dynamic doc) {
+    if (doc == null) return TeamRanking.fromMap({}, '');
+    try {
+      final data = (doc as dynamic).data();
+      if (data is Map<String, dynamic>) {
+        return TeamRanking.fromMap(data, (doc as dynamic).id?.toString());
+      }
+    } catch (_) {}
+    if (doc is Map<String, dynamic>) {
+      return TeamRanking.fromMap(doc, doc['id']?.toString());
+    }
+    return TeamRanking.fromMap({}, '');
+  }
+
+  factory TeamRanking.fromMap(Map<String, dynamic> data, [String? docId]) {
     final w = (data['wins'] as num?)?.toInt() ?? 0;
     final l = (data['losses'] as num?)?.toInt() ?? 0;
     final d = (data['draws'] as num?)?.toInt() ?? 0;
-    final tm = (data['totalMatches'] as num?)?.toInt() ?? (w + l + d);
+    final tm = (data['totalMatches'] ?? data['total_matches'] as num?)?.toInt() ?? (w + l + d);
     final pts = (data['points'] as num?)?.toInt() ?? (w * 3 + d);
 
     return TeamRanking(
-      teamId: data['teamId'] ?? doc.id,
-      teamName: data['teamName'] ?? 'Gamer Team',
-      leaderId: data['leaderId'] ?? '',
-      leaderName: data['leaderName'] ?? 'Leader',
-      avatar: data['avatar'] ?? '',
-      game: data['game'] ?? 'All',
+      teamId: (data['teamId'] ?? data['team_id'] ?? data['id'] ?? docId ?? '').toString(),
+      teamName: (data['teamName'] ?? data['team_name'] ?? 'Gamer Team').toString(),
+      leaderId: (data['leaderId'] ?? data['leader_id'] ?? '').toString(),
+      leaderName: (data['leaderName'] ?? data['leader_name'] ?? 'Leader').toString(),
+      avatar: (data['avatar'] ?? data['avatar_url'] ?? '').toString(),
+      game: (data['game'] ?? 'All').toString(),
       wins: w,
       losses: l,
       draws: d,
@@ -53,19 +64,26 @@ class TeamRanking {
   }
 
   Map<String, dynamic> toMap() {
+    final nowStr = DateTime.now().toIso8601String();
     return {
       'teamId': teamId,
+      'team_id': teamId,
       'teamName': teamName,
+      'team_name': teamName,
       'leaderId': leaderId,
+      'leader_id': leaderId,
       'leaderName': leaderName,
+      'leader_name': leaderName,
       'avatar': avatar,
       'game': game,
       'wins': wins,
       'losses': losses,
       'draws': draws,
       'totalMatches': totalMatches,
+      'total_matches': totalMatches,
       'points': points,
-      'updatedAt': FieldValue.serverTimestamp(),
+      'updatedAt': nowStr,
+      'updated_at': nowStr,
     };
   }
 }

@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
-import 'package:games_khabar/compat/firebase_auth.dart';
 import '../constants/gamer_theme.dart';
 import '../services/gamer_auth_service.dart';
+import '../services/supabase_service.dart';
 
 class BannedScreen extends StatelessWidget {
   final String? reason;
@@ -164,7 +164,7 @@ class BannedScreen extends StatelessWidget {
                         try {
                           await GamerAuthService().signOut();
                         } catch (_) {
-                          await FirebaseAuth.instance.signOut();
+                          await SupabaseService.signOut();
                         }
                       },
                       style: ElevatedButton.styleFrom(

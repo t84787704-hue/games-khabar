@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import '../compat/firebase_auth.dart';
-import '../compat/cloud_firestore.dart';
+import '../services/supabase_service.dart';
 import 'package:intl/intl.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'dart:math' as math;
@@ -35,6 +34,21 @@ class LFGCard extends StatefulWidget {
 
 class _LFGCardState extends State<LFGCard> {
   bool _isRequesting = false;
+
+  Stream<Map<String, dynamic>?> _postStream(String postId) async* {
+    while (true) {
+      Map<String, dynamic>? data;
+      try {
+        data = await SupabaseService.client
+            .from('lfg_posts')
+            .select()
+            .eq('id', postId)
+            .maybeSingle();
+      } catch (_) {}
+      yield data;
+      await Future.delayed(const Duration(seconds: 4));
+    }
+  }
   String? _customGameUid;
 
   String get effectiveUid {
@@ -155,23 +169,24 @@ class _LFGCardState extends State<LFGCard> {
                   } catch (_) {}
 
                   try {
+                    final nowIso = DateTime.now().toIso8601String();
                     final updates = {
                       'gameUid': newUid,
                       'leaderUid': newUid,
                       'inGameUid': newUid,
                       'bgmiUid': newUid,
                       'bgmiUidToCopy': newUid,
-                      'updatedAt': FieldValue.serverTimestamp(),
+                      'updatedAt': nowIso,
                     };
-                    await FirebaseFirestore.instance.collection('lfg_posts').doc(squad.id).set(updates, SetOptions(merge: true));
+                    await SupabaseService.client.from('lfg_posts').update(updates).eq('id', squad.id).catchError((_) => null);
                     try {
-                      await FirebaseFirestore.instance.collection('squads').doc(squad.id).set(updates, SetOptions(merge: true));
+                      await SupabaseService.client.from('squads').update(updates).eq('id', squad.id).catchError((_) => null);
                     } catch (_) {}
                     try {
-                      await FirebaseFirestore.instance.collection('chats').doc(squad.id).set({
+                      await SupabaseService.client.from('chats').update({
                         'leaderUid': newUid,
                         'gameUid': newUid,
-                      }, SetOptions(merge: true));
+                      }).eq('id', squad.id).catchError((_) => null);
                     } catch (_) {}
 
                     if (context.mounted) {
@@ -264,9 +279,9 @@ class _LFGCardState extends State<LFGCard> {
   }
 
   Future<void> _sendJoinRequest(BuildContext context) async {
-    final authUser = FirebaseAuth.instance.currentUser;
-    final currentGamer = GamerAuthService().currentGamer;
-    final currentUserId = authUser?.uid ?? GamerAuthService().currentUid ?? currentGamer?.uid ?? '';
+    final authService = GamerAuthService();
+    final currentGamer = authService.currentGamer;
+    final currentUserId = authService.currentUid ?? currentGamer?.uid ?? '';
 
     if (currentUserId.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -330,7 +345,7 @@ class _LFGCardState extends State<LFGCard> {
           'inGameUid': effectiveGameId,
           'gameId': effectiveGameId,
           'status': 'pending',
-          'createdAt': FieldValue.serverTimestamp(),
+          'createdAt': DateTime.now().toIso8601String(),
         },
       );
 
@@ -363,9 +378,8 @@ class _LFGCardState extends State<LFGCard> {
   Widget build(BuildContext context) {
     final squad = widget.squad;
     final authService = GamerAuthService();
-    final authUser = FirebaseAuth.instance.currentUser;
     final currentGamer = authService.currentGamer;
-    final currentUid = authUser?.uid ?? authService.currentUid ?? currentGamer?.uid ?? '';
+    final currentUid = authService.currentUid ?? currentGamer?.uid ?? '';
 
     // bool isOwner = post.ownerId == currentUser.uid
     final bool isOwner = currentUid.isNotEmpty &&
@@ -783,13 +797,13 @@ class _LFGCardState extends State<LFGCard> {
               children: [
                 if (isOwner) ...[
                   // Owner View: Real-Time Clickable "X requested VIEW" Button + Close LFG + Red Delete button
-                  StreamBuilder<DocumentSnapshot>(
-                    stream: FirebaseFirestore.instance.collection('lfg_posts').doc(squad.id).snapshots(),
+                  StreamBuilder<Map<String, dynamic>?>(
+                    stream: _postStream(squad.id),
                     builder: (context, docSnap) {
                       List<dynamic> liveRequests = squad.joinRequests;
                       int liveReqCount = squad.requestedCount;
-                      if (docSnap.hasData && docSnap.data!.exists) {
-                        final data = docSnap.data!.data() as Map<String, dynamic>? ?? {};
+                      if (docSnap.hasData && docSnap.data != null && docSnap.data!.isNotEmpty) {
+                        final data = docSnap.data!;
                         liveRequests = List.from(data['joinRequests'] ?? []);
                         liveReqCount = (data['requestedCount'] as num?)?.toInt() ?? liveRequests.length;
                       }
@@ -1069,7 +1083,7 @@ class _LFGCardState extends State<LFGCard> {
                       ),
                     ),
                     onPressed: () async {
-                      final currentUid = FirebaseAuth.instance.currentUser?.uid;
+                      final currentUid = GamerAuthService().currentUid;
                       if (currentUid == null) {
                         ScaffoldMessenger.of(context).showSnackBar(
                           const SnackBar(content: Text('Please login to challenge teams')),

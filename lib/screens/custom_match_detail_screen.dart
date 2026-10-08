@@ -1,6 +1,5 @@
 import 'dart:io';
 import 'package:flutter/material.dart';
-import 'package:games_khabar/compat/cloud_firestore.dart';
 import 'package:image_picker/image_picker.dart';
 import '../constants/gamer_theme.dart';
 import '../services/win_proof_validator.dart';
@@ -24,6 +23,21 @@ class CustomMatchDetailScreen extends StatefulWidget {
 
 class _CustomMatchDetailScreenState extends State<CustomMatchDetailScreen> {
   static const Color _neonGreen = GamerTheme.neonGreen;
+
+  Stream<Map<String, dynamic>?> _roomStream() async* {
+    while (true) {
+      Map<String, dynamic>? data;
+      try {
+        data = await SupabaseService.client
+            .from('rooms')
+            .select()
+            .eq('id', widget.roomId)
+            .maybeSingle();
+      } catch (_) {}
+      yield data;
+      await Future.delayed(const Duration(seconds: 4));
+    }
+  }
   bool _isUploadingProof = false;
   File? _selectedProofImage;
   final TextEditingController _messageController = TextEditingController();
@@ -64,18 +78,17 @@ class _CustomMatchDetailScreenState extends State<CustomMatchDetailScreen> {
         roomId: widget.roomId,
       );
 
-      final roomRef = FirebaseFirestore.instance.collection('rooms').doc(widget.roomId);
-
       final now = DateTime.now();
-      final autoApproveAt = Timestamp.fromDate(now.add(const Duration(minutes: 15)));
+      final nowIso = now.toIso8601String();
+      final autoApproveAtIso = now.add(const Duration(minutes: 15)).toIso8601String();
 
       // 3. Update room document: Status always goes to reward_waiting (never auto block on mismatch)
-      await roomRef.update({
+      final updateData = {
         'status': 'reward_waiting',
         'proofUrl': uploadedUrl,
         'winProofUrl': uploadedUrl,
-        'winProofUploadedAt': FieldValue.serverTimestamp(),
-        'autoApproveAt': autoApproveAt,
+        'winProofUploadedAt': nowIso,
+        'autoApproveAt': autoApproveAtIso,
         'winnerId': widget.currentUserId,
         'winnerName': widget.currentUserName,
         'proofUploadedBy': widget.currentUserId,
@@ -88,25 +101,18 @@ class _CustomMatchDetailScreenState extends State<CustomMatchDetailScreen> {
         'rewardStatus': 'pending',
         'detectedScreenshotName': validationResult.detectedScreenshotName,
         'accountIdName': validationResult.accountIdName,
-      });
+      };
+
+      await SupabaseService.client.from('rooms').update(updateData).eq('id', widget.roomId).catchError((_) => null);
 
       // Sync to tournament_rooms collection
       try {
-        await FirebaseFirestore.instance.collection('tournament_rooms').doc(widget.roomId).set({
-          'status': 'reward_waiting',
-          'winProofUrl': uploadedUrl,
-          'winProofUploadedAt': FieldValue.serverTimestamp(),
-          'autoApproveAt': autoApproveAt,
-          'winnerId': widget.currentUserId,
-          'winnerName': widget.currentUserName,
-          'proofUploadedBy': widget.currentUserId,
-          'proofUploadedByName': widget.currentUserName,
-          'rewardStatus': 'pending',
-        }, SetOptions(merge: true));
+        await SupabaseService.client.from('tournament_rooms').update(updateData).eq('id', widget.roomId).catchError((_) => null);
       } catch (_) {}
 
       // 4. Add win proof message to room chat
-      await roomRef.collection('messages').add({
+      await SupabaseService.client.from('messages').insert({
+        'roomId': widget.roomId,
         'senderId': widget.currentUserId,
         'senderName': widget.currentUserName,
         'senderInitial': widget.currentUserName.isNotEmpty ? widget.currentUserName[0].toUpperCase() : 'G',
@@ -119,20 +125,23 @@ class _CustomMatchDetailScreenState extends State<CustomMatchDetailScreen> {
         'detectedName': validationResult.detectedScreenshotName,
         'accountName': validationResult.accountIdName,
         'aiCheckMsg': validationResult.message,
-        'timestamp': FieldValue.serverTimestamp(),
+        'timestamp': nowIso,
+        'createdAt': nowIso,
         'isHost': false,
-      });
+      }).catchError((_) => null);
 
       // 5. Add AI Bot check message to room chat
-      await roomRef.collection('messages').add({
+      await SupabaseService.client.from('messages').insert({
+        'roomId': widget.roomId,
         'senderId': 'system',
         'senderName': 'APP BOT',
         'senderInitial': '🤖',
         'message': validationResult.message,
         'type': 'system',
-        'timestamp': FieldValue.serverTimestamp(),
+        'timestamp': nowIso,
+        'createdAt': nowIso,
         'isHost': false,
-      });
+      }).catchError((_) => null);
 
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -378,51 +387,49 @@ class _CustomMatchDetailScreenState extends State<CustomMatchDetailScreen> {
                                       ? reasonController.text.trim()
                                       : 'Loser claims winner screenshot is fake/wrong';
 
-                                  final roomRef = FirebaseFirestore.instance.collection('rooms').doc(widget.roomId);
-                                  await roomRef.update({
+                                  final nowIso = DateTime.now().toIso8601String();
+                                  final disputeData = {
                                     'status': 'disputed',
                                     'disputed': true,
                                     'disputedBy': widget.currentUserId,
                                     'disputedByName': widget.currentUserName,
                                     'disputeProofUrl': disputeUrl,
                                     'disputeReason': reason,
-                                    'disputedAt': FieldValue.serverTimestamp(),
-                                  });
+                                    'disputedAt': nowIso,
+                                  };
+
+                                  await SupabaseService.client.from('rooms').update(disputeData).eq('id', widget.roomId).catchError((_) => null);
 
                                   try {
-                                    await FirebaseFirestore.instance.collection('tournament_rooms').doc(widget.roomId).set({
-                                      'status': 'disputed',
-                                      'disputed': true,
-                                      'disputedBy': widget.currentUserId,
-                                      'disputedByName': widget.currentUserName,
-                                      'disputeProofUrl': disputeUrl,
-                                      'disputeReason': reason,
-                                      'disputedAt': FieldValue.serverTimestamp(),
-                                    }, SetOptions(merge: true));
+                                    await SupabaseService.client.from('tournament_rooms').update(disputeData).eq('id', widget.roomId).catchError((_) => null);
                                   } catch (_) {}
 
                                   // Add dispute proof message into chat
-                                  await roomRef.collection('messages').add({
+                                  await SupabaseService.client.from('messages').insert({
+                                    'roomId': widget.roomId,
                                     'senderId': widget.currentUserId,
                                     'senderName': widget.currentUserName,
                                     'senderInitial': widget.currentUserName.isNotEmpty ? widget.currentUserName[0].toUpperCase() : 'L',
                                     'message': reason,
                                     'imageUrl': disputeUrl,
                                     'type': 'dispute_proof',
-                                    'timestamp': FieldValue.serverTimestamp(),
+                                    'timestamp': nowIso,
+                                    'createdAt': nowIso,
                                     'isHost': false,
-                                  });
+                                  }).catchError((_) => null);
 
                                   // System announcement
-                                  await roomRef.collection('messages').add({
+                                  await SupabaseService.client.from('messages').insert({
+                                    'roomId': widget.roomId,
                                     'senderId': 'system',
                                     'senderName': 'APP BOT',
                                     'senderInitial': '🤖',
                                     'message': '⚠️ Dispute raised by ${widget.currentUserName} with evidence screenshot! Auto-approval paused. Under Admin Review.',
                                     'type': 'system',
-                                    'timestamp': FieldValue.serverTimestamp(),
+                                    'timestamp': nowIso,
+                                    'createdAt': nowIso,
                                     'isHost': false,
-                                  });
+                                  }).catchError((_) => null);
 
                                   if (context.mounted) {
                                     Navigator.pop(sheetContext);
@@ -481,41 +488,35 @@ class _CustomMatchDetailScreenState extends State<CustomMatchDetailScreen> {
     }
 
     try {
-      final autoApproveTime = DateTime.now().add(const Duration(minutes: 15));
-      final roomRef = FirebaseFirestore.instance.collection('rooms').doc(widget.roomId);
-      await roomRef.update({
+      final nowIso = DateTime.now().toIso8601String();
+      final autoApproveTimeIso = DateTime.now().add(const Duration(minutes: 15)).toIso8601String();
+      final removeDisputeData = {
         'status': 'reward_waiting',
         'disputed': false,
-        'disputedBy': FieldValue.delete(),
-        'disputedByName': FieldValue.delete(),
-        'disputeProofUrl': FieldValue.delete(),
-        'disputeReason': FieldValue.delete(),
-        'disputedAt': FieldValue.delete(),
-        'autoApproveAt': Timestamp.fromDate(autoApproveTime),
-      });
+        'disputedBy': null,
+        'disputedByName': null,
+        'disputeProofUrl': null,
+        'disputeReason': null,
+        'disputedAt': null,
+        'autoApproveAt': autoApproveTimeIso,
+      };
+      await SupabaseService.client.from('rooms').update(removeDisputeData).eq('id', widget.roomId).catchError((_) => null);
 
       try {
-        await FirebaseFirestore.instance.collection('tournament_rooms').doc(widget.roomId).update({
-          'status': 'reward_waiting',
-          'disputed': false,
-          'disputedBy': FieldValue.delete(),
-          'disputedByName': FieldValue.delete(),
-          'disputeProofUrl': FieldValue.delete(),
-          'disputeReason': FieldValue.delete(),
-          'disputedAt': FieldValue.delete(),
-          'autoApproveAt': Timestamp.fromDate(autoApproveTime),
-        });
+        await SupabaseService.client.from('tournament_rooms').update(removeDisputeData).eq('id', widget.roomId).catchError((_) => null);
       } catch (_) {}
 
-      await roomRef.collection('messages').add({
+      await SupabaseService.client.from('messages').insert({
+        'roomId': widget.roomId,
         'senderId': 'system',
         'senderName': 'APP BOT',
         'senderInitial': '🤖',
         'message': '🗑️ Dispute proof was removed by ${widget.currentUserName}. 15-minute countdown resumed.',
         'type': 'system',
-        'timestamp': FieldValue.serverTimestamp(),
+        'timestamp': nowIso,
+        'createdAt': nowIso,
         'isHost': false,
-      });
+      }).catchError((_) => null);
 
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -549,49 +550,42 @@ class _CustomMatchDetailScreenState extends State<CustomMatchDetailScreen> {
     }
 
     try {
-      final roomRef = FirebaseFirestore.instance.collection('rooms').doc(widget.roomId);
-      await roomRef.update({
+      final nowIso = DateTime.now().toIso8601String();
+      final cancelProofData = {
         'status': 'IN_PROGRESS',
-        'proofUrl': FieldValue.delete(),
-        'winProofUrl': FieldValue.delete(),
-        'winProofUploadedAt': FieldValue.delete(),
-        'autoApproveAt': FieldValue.delete(),
-        'winnerId': FieldValue.delete(),
-        'winnerName': FieldValue.delete(),
-        'proofUploadedBy': FieldValue.delete(),
-        'proofUploadedByName': FieldValue.delete(),
-        'ocrStatus': FieldValue.delete(),
+        'proofUrl': null,
+        'winProofUrl': null,
+        'winProofUploadedAt': null,
+        'autoApproveAt': null,
+        'winnerId': null,
+        'winnerName': null,
+        'proofUploadedBy': null,
+        'proofUploadedByName': null,
+        'ocrStatus': null,
         'ocrScore': 0,
-        'ocrText': FieldValue.delete(),
-        'detectedScreenshotName': FieldValue.delete(),
-        'accountIdName': FieldValue.delete(),
+        'ocrText': null,
+        'detectedScreenshotName': null,
+        'accountIdName': null,
         'rewardStatus': 'idle',
-      });
+      };
+      await SupabaseService.client.from('rooms').update(cancelProofData).eq('id', widget.roomId).catchError((_) => null);
 
       try {
-        await FirebaseFirestore.instance.collection('tournament_rooms').doc(widget.roomId).update({
-          'status': 'IN_PROGRESS',
-          'winProofUrl': FieldValue.delete(),
-          'winProofUploadedAt': FieldValue.delete(),
-          'autoApproveAt': FieldValue.delete(),
-          'winnerId': FieldValue.delete(),
-          'winnerName': FieldValue.delete(),
-          'proofUploadedBy': FieldValue.delete(),
-          'proofUploadedByName': FieldValue.delete(),
-          'rewardStatus': 'idle',
-        });
+        await SupabaseService.client.from('tournament_rooms').update(cancelProofData).eq('id', widget.roomId).catchError((_) => null);
       } catch (_) {}
 
       // Add system message
-      await roomRef.collection('messages').add({
+      await SupabaseService.client.from('messages').insert({
+        'roomId': widget.roomId,
         'senderId': 'system',
         'senderName': 'APP BOT',
         'senderInitial': '🤖',
         'message': '🗑️ Win proof was removed by ${widget.currentUserName}. You can now upload a fresh screenshot.',
         'type': 'system',
-        'timestamp': FieldValue.serverTimestamp(),
+        'timestamp': nowIso,
+        'createdAt': nowIso,
         'isHost': false,
-      });
+      }).catchError((_) => null);
 
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -624,17 +618,16 @@ class _CustomMatchDetailScreenState extends State<CustomMatchDetailScreen> {
         elevation: 0,
         title: const Text('Custom Match Details', style: TextStyle(color: Colors.white)),
       ),
-      body: StreamBuilder<DocumentSnapshot>(
-        stream: FirebaseFirestore.instance.collection('rooms').doc(widget.roomId).snapshots(),
+      body: StreamBuilder<Map<String, dynamic>?>(
+        stream: _roomStream(),
         builder: (context, snapshot) {
-          if (snapshot.connectionState == ConnectionState.waiting) {
+          if (snapshot.connectionState == ConnectionState.waiting && !snapshot.hasData) {
             return const Center(child: CircularProgressIndicator(color: _neonGreen));
           }
-          if (!snapshot.hasData || !snapshot.data!.exists) {
+          final data = snapshot.data ?? {};
+          if (data.isEmpty) {
             return const Center(child: Text('Match not found', style: TextStyle(color: Colors.white)));
           }
-
-          final data = snapshot.data!.data() as Map<String, dynamic>? ?? {};
           final title = data['title'] ?? 'Custom Match';
           final status = (data['status'] ?? 'OPEN').toString();
           final rewardStatus = (data['rewardStatus'] ?? 'idle').toString();
@@ -650,7 +643,17 @@ class _CustomMatchDetailScreenState extends State<CustomMatchDetailScreen> {
               (status.toLowerCase() == 'reward_waiting' ||
                   rewardStatus.toLowerCase() == 'pending' ||
                   hasProof);
-          final autoApproveAt = (data['autoApproveAt'] as Timestamp?)?.toDate();
+          DateTime? autoApproveAt;
+          final rawAuto = data['autoApproveAt'];
+          if (rawAuto is DateTime) {
+            autoApproveAt = rawAuto;
+          } else if (rawAuto is String) {
+            autoApproveAt = DateTime.tryParse(rawAuto);
+          } else if (rawAuto != null) {
+            try {
+              autoApproveAt = (rawAuto as dynamic).toDate();
+            } catch (_) {}
+          }
           final winnerId = (data['winnerId'] ?? '').toString();
 
           final joinedUsers = (data['joinedUsers'] as List?)

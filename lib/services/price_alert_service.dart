@@ -1,7 +1,7 @@
 import 'package:flutter/foundation.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-import 'package:games_khabar/compat/cloud_firestore.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
+import 'supabase_service.dart';
 
 class PriceAlertService {
   static final PriceAlertService _instance = PriceAlertService._internal();
@@ -62,24 +62,30 @@ class PriceAlertService {
         debugPrint('[PriceAlertService] Subscribe topic error: $e');
       }
 
-      // Save alert to Firestore so Cloud Functions can track individual alerts
+      // Save alert to Supabase
       try {
         final fcmToken = await FirebaseMessaging.instance.getToken().catchError((_) => null);
-        await FirebaseFirestore.instance
-            .collection('price_alerts')
-            .doc('${gameId}_alert')
-            .set({
+        await SupabaseService.client
+            .from('price_alerts')
+            .upsert({
+          'id': '${gameId}_alert',
+          'game_id': gameId,
           'gameId': gameId,
+          'game_name': gameName,
           'gameName': gameName,
+          'alert_price': targetPrice,
           'alertPrice': targetPrice,
+          'current_price': currentPrice,
           'currentPrice': currentPrice,
           'store': store ?? 'Steam',
+          'fcm_token': fcmToken,
           'fcmToken': fcmToken,
-          'createdAt': FieldValue.serverTimestamp(),
+          'created_at': DateTime.now().toIso8601String(),
+          'createdAt': DateTime.now().toIso8601String(),
           'active': true,
-        }, SetOptions(merge: true));
+        });
       } catch (e) {
-        debugPrint('[PriceAlertService] Firestore save error: $e');
+        debugPrint('[PriceAlertService] Supabase save error: $e');
       }
     } catch (e) {
       debugPrint('[PriceAlertService] setAlert error: $e');
@@ -101,10 +107,10 @@ class PriceAlertService {
       } catch (_) {}
 
       try {
-        await FirebaseFirestore.instance
-            .collection('price_alerts')
-            .doc('${gameId}_alert')
-            .delete();
+        await SupabaseService.client
+            .from('price_alerts')
+            .delete()
+            .or('id.eq.${gameId}_alert,game_id.eq.$gameId');
       } catch (_) {}
     } catch (e) {
       debugPrint('[PriceAlertService] removeAlert error: $e');

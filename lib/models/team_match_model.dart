@@ -1,5 +1,3 @@
-import 'package:games_khabar/compat/cloud_firestore.dart';
-
 /// Status values:
 /// 'Pending' - Challenge sent, awaiting opponent team's response
 /// 'Accepted' - Opponent team accepted, Match Room scheduled
@@ -134,91 +132,114 @@ class TeamMatch {
   bool isTeam2Leader(String userId) => team2LeaderId == userId;
   bool isLeaderOfEither(String userId) => isTeam1Leader(userId) || isTeam2Leader(userId);
 
-  factory TeamMatch.fromFirestore(DocumentSnapshot doc) {
-    final data = doc.data() as Map<String, dynamic>? ?? {};
+  static DateTime _parseDateTime(dynamic raw) {
+    if (raw == null) return DateTime.now();
+    if (raw is DateTime) return raw;
+    if (raw is String) {
+      final parsed = DateTime.tryParse(raw);
+      if (parsed != null) return parsed;
+    }
+    if (raw is int) {
+      return DateTime.fromMillisecondsSinceEpoch(raw);
+    }
+    try {
+      final dt = (raw as dynamic)?.toDate();
+      if (dt is DateTime) return dt;
+    } catch (_) {}
+    return DateTime.now();
+  }
 
-    DateTime parseTime(dynamic raw) {
-      if (raw is Timestamp) return raw.toDate();
-      if (raw is String) {
-        final parsed = DateTime.tryParse(raw);
-        if (parsed != null) return parsed;
+  static DateTime? _parseNullableDateTime(dynamic raw) {
+    if (raw == null) return null;
+    if (raw is DateTime) return raw;
+    if (raw is String) {
+      return DateTime.tryParse(raw);
+    }
+    if (raw is int) {
+      return DateTime.fromMillisecondsSinceEpoch(raw);
+    }
+    try {
+      final dt = (raw as dynamic)?.toDate();
+      if (dt is DateTime) return dt;
+    } catch (_) {}
+    return null;
+  }
+
+  factory TeamMatch.fromFirestore(dynamic doc) {
+    if (doc == null) return TeamMatch.fromMap({}, '');
+    try {
+      final data = (doc as dynamic).data();
+      if (data is Map<String, dynamic>) {
+        return TeamMatch.fromMap(data, (doc as dynamic).id?.toString());
       }
-      return DateTime.now();
+    } catch (_) {}
+    if (doc is Map<String, dynamic>) {
+      return TeamMatch.fromMap(doc, doc['id']?.toString());
     }
+    return TeamMatch.fromMap({}, '');
+  }
 
-    final mTime = parseTime(data['matchTime']);
-    final cTime = parseTime(data['createdAt']);
-    DateTime? vTime;
-    if (data['verifiedAt'] != null) {
-      vTime = parseTime(data['verifiedAt']);
-    }
-    DateTime? t1ProofTime;
-    if (data['team1ProofUploadedAt'] != null) {
-      t1ProofTime = parseTime(data['team1ProofUploadedAt']);
-    }
-    DateTime? t2ProofTime;
-    if (data['team2ProofUploadedAt'] != null) {
-      t2ProofTime = parseTime(data['team2ProofUploadedAt']);
-    }
-    DateTime? rejTime;
-    if (data['rejectedAt'] != null) {
-      rejTime = parseTime(data['rejectedAt']);
-    }
-    DateTime? lastProofTime;
-    if (data['lastProofAt'] != null) {
-      lastProofTime = parseTime(data['lastProofAt']);
-    }
+  factory TeamMatch.fromMap(Map<String, dynamic> data, [String? docId]) {
+    final mTime = _parseDateTime(data['matchTime'] ?? data['match_time']);
+    final cTime = _parseDateTime(data['createdAt'] ?? data['created_at']);
+    final vTime = _parseNullableDateTime(data['verifiedAt'] ?? data['verified_at']);
+    final t1ProofTime = _parseNullableDateTime(data['team1ProofUploadedAt'] ?? data['team1_proof_uploaded_at']);
+    final t2ProofTime = _parseNullableDateTime(data['team2ProofUploadedAt'] ?? data['team2_proof_uploaded_at']);
+    final rejTime = _parseNullableDateTime(data['rejectedAt'] ?? data['rejected_at']);
+    final lastProofTime = _parseNullableDateTime(data['lastProofAt'] ?? data['last_proof_at']);
 
-    final adminNoteVal = data['adminNote'] as String?;
-    final rejectReasonVal = data['rejectReason'] as String?;
+    final adminNoteVal = (data['adminNote'] ?? data['admin_note']) as String?;
+    final rejectReasonVal = (data['rejectReason'] ?? data['reject_reason']) as String?;
     final effectiveNote = adminNoteVal ?? rejectReasonVal;
 
-    int pAttempts = (data['proofAttempts'] as num?)?.toInt() ?? 0;
+    int pAttempts = (data['proofAttempts'] ?? data['proof_attempts'] as num?)?.toInt() ?? 0;
     if (pAttempts == 0 && (data['team1Proof'] != null || data['team2Proof'] != null || effectiveNote != null)) {
       pAttempts = 1;
     }
 
+    final id = data['matchId'] ?? data['match_id'] ?? data['id'] ?? docId ?? '';
+
     return TeamMatch(
-      matchId: data['matchId'] ?? doc.id,
-      team1Id: (data['team1Id'] ?? '').toString(),
-      team1Name: (data['team1Name'] ?? 'Team Alpha').toString(),
-      team1LeaderId: (data['team1LeaderId'] ?? '').toString(),
-      team1LeaderName: (data['team1LeaderName'] ?? 'Leader 1').toString(),
-      team1Avatar: (data['team1Avatar'] ?? '').toString(),
-      team1Members: List<String>.from(data['team1Members'] ?? []),
-      team2Id: (data['team2Id'] ?? '').toString(),
-      team2Name: (data['team2Name'] ?? 'Team Bravo').toString(),
-      team2LeaderId: (data['team2LeaderId'] ?? '').toString(),
-      team2LeaderName: (data['team2LeaderName'] ?? 'Leader 2').toString(),
-      team2Avatar: (data['team2Avatar'] ?? '').toString(),
-      team2Members: List<String>.from(data['team2Members'] ?? []),
+      matchId: id.toString(),
+      team1Id: (data['team1Id'] ?? data['team1_id'] ?? '').toString(),
+      team1Name: (data['team1Name'] ?? data['team1_name'] ?? 'Team Alpha').toString(),
+      team1LeaderId: (data['team1LeaderId'] ?? data['team1_leader_id'] ?? '').toString(),
+      team1LeaderName: (data['team1LeaderName'] ?? data['team1_leader_name'] ?? 'Leader 1').toString(),
+      team1Avatar: (data['team1Avatar'] ?? data['team1_avatar'] ?? '').toString(),
+      team1Members: List<String>.from(data['team1Members'] ?? data['team1_members'] ?? []),
+      team2Id: (data['team2Id'] ?? data['team2_id'] ?? '').toString(),
+      team2Name: (data['team2Name'] ?? data['team2_name'] ?? 'Team Bravo').toString(),
+      team2LeaderId: (data['team2LeaderId'] ?? data['team2_leader_id'] ?? '').toString(),
+      team2LeaderName: (data['team2LeaderName'] ?? data['team2_leader_name'] ?? 'Leader 2').toString(),
+      team2Avatar: (data['team2Avatar'] ?? data['team2_avatar'] ?? '').toString(),
+      team2Members: List<String>.from(data['team2Members'] ?? data['team2_members'] ?? []),
       game: (data['game'] ?? 'BGMI').toString(),
       mode: (data['mode'] ?? '4v4').toString(),
       matchTime: mTime,
-      entryFee: (data['entryFee'] ?? 'Free').toString(),
+      entryFee: (data['entryFee'] ?? data['entry_fee'] ?? 'Free').toString(),
       status: (data['status'] ?? 'Pending').toString(),
-      customRoomId: (data['customRoomId'] ?? '').toString(),
-      customRoomPassword: (data['customRoomPassword'] ?? '').toString(),
-      team1Proof: data['team1Proof'],
-      team1Claim: data['team1Claim'],
+      customRoomId: (data['customRoomId'] ?? data['custom_room_id'] ?? '').toString(),
+      customRoomPassword: (data['customRoomPassword'] ?? data['custom_room_password'] ?? '').toString(),
+      team1Proof: data['team1Proof'] ?? data['team1_proof'],
+      team1Claim: data['team1Claim'] ?? data['team1_claim'],
       team1ProofUploadedAt: t1ProofTime,
-      team2Proof: data['team2Proof'],
-      team2Claim: data['team2Claim'],
+      team2Proof: data['team2Proof'] ?? data['team2_proof'],
+      team2Claim: data['team2Claim'] ?? data['team2_claim'],
       team2ProofUploadedAt: t2ProofTime,
-      winnerId: data['winnerId'],
-      winnerName: data['winnerName'],
-      verifiedBy: data['verifiedBy'],
+      winnerId: data['winnerId'] ?? data['winner_id'],
+      winnerName: data['winnerName'] ?? data['winner_name'],
+      verifiedBy: data['verifiedBy'] ?? data['verified_by'],
       verifiedAt: vTime,
-      chatId: (data['chatId'] ?? doc.id).toString(),
-      team1Confirmed: data['team1Confirmed'] == true,
-      team2Confirmed: data['team2Confirmed'] == true,
+      chatId: (data['chatId'] ?? data['chat_id'] ?? id).toString(),
+      team1Confirmed: data['team1Confirmed'] == true || data['team1_confirmed'] == true,
+      team2Confirmed: data['team2Confirmed'] == true || data['team2_confirmed'] == true,
       createdAt: cTime,
-      disputeReason: (data['disputeReason'] ?? '').toString(),
+      disputeReason: (data['disputeReason'] ?? data['dispute_reason'] ?? '').toString(),
       adminNote: adminNoteVal,
       rejectReason: effectiveNote,
       proofAttempts: pAttempts,
       lastProofAt: lastProofTime,
-      rejectedBy: data['rejectedBy'] as String?,
+      rejectedBy: (data['rejectedBy'] ?? data['rejected_by']) as String?,
       rejectedAt: rejTime,
     );
   }
@@ -226,46 +247,84 @@ class TeamMatch {
   Map<String, dynamic> toMap() {
     return {
       'matchId': matchId,
+      'match_id': matchId,
       'team1Id': team1Id,
+      'team1_id': team1Id,
       'team1Name': team1Name,
+      'team1_name': team1Name,
       'team1LeaderId': team1LeaderId,
+      'team1_leader_id': team1LeaderId,
       'team1LeaderName': team1LeaderName,
+      'team1_leader_name': team1LeaderName,
       'team1Avatar': team1Avatar,
+      'team1_avatar': team1Avatar,
       'team1Members': team1Members,
+      'team1_members': team1Members,
       'team2Id': team2Id,
+      'team2_id': team2Id,
       'team2Name': team2Name,
+      'team2_name': team2Name,
       'team2LeaderId': team2LeaderId,
+      'team2_leader_id': team2LeaderId,
       'team2LeaderName': team2LeaderName,
+      'team2_leader_name': team2LeaderName,
       'team2Avatar': team2Avatar,
+      'team2_avatar': team2Avatar,
       'team2Members': team2Members,
+      'team2_members': team2Members,
       'game': game,
       'mode': mode,
-      'matchTime': Timestamp.fromDate(matchTime),
+      'matchTime': matchTime.toIso8601String(),
+      'match_time': matchTime.toIso8601String(),
       'entryFee': entryFee,
+      'entry_fee': entryFee,
       'status': status,
       'customRoomId': customRoomId,
+      'custom_room_id': customRoomId,
       'customRoomPassword': customRoomPassword,
+      'custom_room_password': customRoomPassword,
       'team1Proof': team1Proof,
+      'team1_proof': team1Proof,
       'team1Claim': team1Claim,
-      'team1ProofUploadedAt': team1ProofUploadedAt != null ? Timestamp.fromDate(team1ProofUploadedAt!) : null,
+      'team1_claim': team1Claim,
+      'team1ProofUploadedAt': team1ProofUploadedAt?.toIso8601String(),
+      'team1_proof_uploaded_at': team1ProofUploadedAt?.toIso8601String(),
       'team2Proof': team2Proof,
+      'team2_proof': team2Proof,
       'team2Claim': team2Claim,
-      'team2ProofUploadedAt': team2ProofUploadedAt != null ? Timestamp.fromDate(team2ProofUploadedAt!) : null,
+      'team2_claim': team2Claim,
+      'team2ProofUploadedAt': team2ProofUploadedAt?.toIso8601String(),
+      'team2_proof_uploaded_at': team2ProofUploadedAt?.toIso8601String(),
       'winnerId': winnerId,
+      'winner_id': winnerId,
       'winnerName': winnerName,
+      'winner_name': winnerName,
       'verifiedBy': verifiedBy,
-      'verifiedAt': verifiedAt != null ? Timestamp.fromDate(verifiedAt!) : null,
+      'verified_by': verifiedBy,
+      'verifiedAt': verifiedAt?.toIso8601String(),
+      'verified_at': verifiedAt?.toIso8601String(),
       'chatId': chatId,
+      'chat_id': chatId,
       'team1Confirmed': team1Confirmed,
+      'team1_confirmed': team1Confirmed,
       'team2Confirmed': team2Confirmed,
-      'createdAt': Timestamp.fromDate(createdAt),
+      'team2_confirmed': team2Confirmed,
+      'createdAt': createdAt.toIso8601String(),
+      'created_at': createdAt.toIso8601String(),
       'disputeReason': disputeReason,
+      'dispute_reason': disputeReason,
       'adminNote': adminNote,
+      'admin_note': adminNote,
       'rejectReason': rejectReason ?? adminNote,
+      'reject_reason': rejectReason ?? adminNote,
       'proofAttempts': proofAttempts,
-      'lastProofAt': lastProofAt != null ? Timestamp.fromDate(lastProofAt!) : null,
+      'proof_attempts': proofAttempts,
+      'lastProofAt': lastProofAt?.toIso8601String(),
+      'last_proof_at': lastProofAt?.toIso8601String(),
       'rejectedBy': rejectedBy,
-      'rejectedAt': rejectedAt != null ? Timestamp.fromDate(rejectedAt!) : null,
+      'rejected_by': rejectedBy,
+      'rejectedAt': rejectedAt?.toIso8601String(),
+      'rejected_at': rejectedAt?.toIso8601String(),
     };
   }
 }

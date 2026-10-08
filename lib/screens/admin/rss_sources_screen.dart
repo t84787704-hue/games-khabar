@@ -2,7 +2,7 @@ import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 import 'package:xml/xml.dart';
-import 'package:games_khabar/compat/cloud_firestore.dart';
+import '../../services/supabase_service.dart';
 import '../../services/auto_news_scraper.dart';
 
 class RssSourcesScreen extends StatefulWidget {
@@ -14,6 +14,18 @@ class RssSourcesScreen extends StatefulWidget {
 
 class _RssSourcesScreenState extends State<RssSourcesScreen> {
   static const Color neonGreen = Color(0xFF00FF88);
+
+  Stream<List<Map<String, dynamic>>> _sourcesStream() async* {
+    while (true) {
+      List<Map<String, dynamic>> list = [];
+      try {
+        final res = await SupabaseService.client.from('rss_sources').select();
+        list = List<Map<String, dynamic>>.from(res);
+      } catch (_) {}
+      yield list;
+      await Future.delayed(const Duration(seconds: 4));
+    }
+  }
   static const Color bgDark = Color(0xFF0A0A0F);
   static const Color cardDark = Color(0xFF1E1E24);
   static const Color cardDark2 = Color(0xFF15151A);
@@ -33,12 +45,15 @@ class _RssSourcesScreenState extends State<RssSourcesScreen> {
 
   Future<void> _fixTruncatedUrls() async {
     try {
-      final snap = await FirebaseFirestore.instance.collection('rss_sources').get();
-      for (var doc in snap.docs) {
-        String url = (doc.data()['url'] ?? '').toString();
+      final list = await SupabaseService.client.from('rss_sources').select();
+      for (var row in list) {
+        String url = (row['url'] ?? '').toString();
         if (url.contains('...') || (url.isNotEmpty && url.length < 20)) {
-          await doc.reference.delete();
-          debugPrint('Deleted invalid/truncated source: ${doc.id}');
+          final id = row['id'];
+          if (id != null) {
+            await SupabaseService.client.from('rss_sources').delete().eq('id', id);
+            debugPrint('Deleted invalid/truncated source: $id');
+          }
         }
       }
     } catch (e) {
@@ -52,12 +67,12 @@ class _RssSourcesScreenState extends State<RssSourcesScreen> {
     int published = 0;
     try {
       // 1. Fetch ALL active sources (NO limit(1))
-      final snap = await FirebaseFirestore.instance
-          .collection('rss_sources')
-          .where('isActive', isEqualTo: true)
-          .get();
+      final snap = await SupabaseService.client
+          .from('rss_sources')
+          .select()
+          .eq('isActive', true);
 
-      if (snap.docs.isEmpty) {
+      if (snap.isEmpty) {
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
             const SnackBar(
@@ -69,8 +84,8 @@ class _RssSourcesScreenState extends State<RssSourcesScreen> {
         return;
       }
 
-      for (var doc in snap.docs) {
-        final data = doc.data();
+      for (var doc in snap) {
+        final data = doc;
         String url = (data['url'] ?? '').toString().trim();
         String name = (data['name'] ?? 'Unknown').toString();
         String category = (data['category'] ?? 'PUBG').toString();
@@ -79,7 +94,7 @@ class _RssSourcesScreenState extends State<RssSourcesScreen> {
         if (url.contains('...') || url.length < 20) {
           debugPrint('SKIPPING invalid URL for $name: $url');
           try {
-            await doc.reference.delete();
+            if (doc['id'] != null) await SupabaseService.client.from('rss_sources').delete().eq('id', doc['id']);
           } catch (_) {}
           if (mounted) {
             ScaffoldMessenger.of(context).showSnackBar(
@@ -124,7 +139,8 @@ class _RssSourcesScreenState extends State<RssSourcesScreen> {
               }
 
               try {
-                await FirebaseFirestore.instance.collection('news').add({
+                final nowIso = DateTime.now().toIso8601String();
+                await SupabaseService.client.from('news').insert({
                   'title': title,
                   'content': desc,
                   'imageUrl': imageUrl,
@@ -133,26 +149,12 @@ class _RssSourcesScreenState extends State<RssSourcesScreen> {
                   'category': category,
                   'isAuto': true,
                   'tag': 'AUTO',
-                  'createdAt': FieldValue.serverTimestamp(),
+                  'createdAt': nowIso,
                   'views': 0,
-                });
+                }).catchError((_) => null);
                 published++;
                 successForThisFeed = true;
-              } on FirebaseException catch (fe) {
-                if (fe.code == 'permission-denied') {
-                  if (mounted) {
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      const SnackBar(
-                        content: Text('Firestore Permission Denied! Update Firestore Rules in Firebase Console.'),
-                        backgroundColor: Colors.red,
-                        duration: Duration(seconds: 10),
-                      ),
-                    );
-                  }
-                  return;
-                }
-                rethrow;
-              }
+              } catch (_) {}
             }
           }
         } catch (e) {
@@ -185,7 +187,8 @@ class _RssSourcesScreenState extends State<RssSourcesScreen> {
                   }
 
                   try {
-                    await FirebaseFirestore.instance.collection('news').add({
+                    final nowIso = DateTime.now().toIso8601String();
+                    await SupabaseService.client.from('news').insert({
                       'title': title,
                       'content': desc,
                       'imageUrl': imageUrl,
@@ -194,26 +197,12 @@ class _RssSourcesScreenState extends State<RssSourcesScreen> {
                       'category': category,
                       'isAuto': true,
                       'tag': 'AUTO',
-                      'createdAt': FieldValue.serverTimestamp(),
+                      'createdAt': nowIso,
                       'views': 0,
-                    });
+                    }).catchError((_) => null);
                     published++;
                     successForThisFeed = true;
-                  } on FirebaseException catch (fe) {
-                    if (fe.code == 'permission-denied') {
-                      if (mounted) {
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          const SnackBar(
-                            content: Text('Firestore Permission Denied! Update Firestore Rules in Firebase Console.'),
-                            backgroundColor: Colors.red,
-                            duration: Duration(seconds: 10),
-                          ),
-                        );
-                      }
-                      return;
-                    }
-                    rethrow;
-                  }
+                  } catch (_) {}
                 }
               }
             }
@@ -391,10 +380,10 @@ class _RssSourcesScreenState extends State<RssSourcesScreen> {
           ),
         ],
       ),
-      body: StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
-        stream: FirebaseFirestore.instance.collection('rss_sources').snapshots(),
+      body: StreamBuilder<List<Map<String, dynamic>>>(
+        stream: _sourcesStream(),
         builder: (context, snapshot) {
-          final docs = snapshot.data?.docs ?? [];
+          final docs = snapshot.data ?? [];
 
           return Column(
             children: [
@@ -526,7 +515,7 @@ class _RssSourcesScreenState extends State<RssSourcesScreen> {
                         separatorBuilder: (_, __) => const SizedBox(height: 10),
                         itemBuilder: (context, idx) {
                           final doc = docs[idx];
-                          final data = doc.data();
+                          final data = doc;
                           final name = data['name'] as String? ?? 'Gaming Feed';
                           final url = data['url'] as String? ?? '';
                           final isEnabled = (data['isActive'] ?? data['isEnabled']) as bool? ?? true;
@@ -585,7 +574,7 @@ class _RssSourcesScreenState extends State<RssSourcesScreen> {
                                 Switch(
                                   value: isEnabled,
                                   activeColor: neonGreen,
-                                  onChanged: (val) => AutoNewsScraper.toggleFirestoreSource(doc.id, val),
+                                  onChanged: (val) => AutoNewsScraper.toggleFirestoreSource((doc['id'] ?? '').toString(), val),
                                 ),
                               ],
                             ),

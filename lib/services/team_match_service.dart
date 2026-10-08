@@ -1,5 +1,5 @@
+import 'dart:async';
 import 'dart:io';
-import 'package:games_khabar/compat/cloud_firestore.dart';
 import 'package:flutter/foundation.dart';
 import '../models/team_match_model.dart';
 import '../models/team_ranking_model.dart';
@@ -10,108 +10,25 @@ class TeamMatchService {
   factory TeamMatchService() => _instance;
   TeamMatchService._internal();
 
-  final FirebaseFirestore _firestore = FirebaseFirestore.instance;
-
-  CollectionReference get _matchesRef => _firestore.collection('team_matches');
-  CollectionReference get _rankingsRef => _firestore.collection('team_rankings');
-  CollectionReference get _notificationsRef => _firestore.collection('notifications');
-  CollectionReference get _challengesRef => _firestore.collection('challenges');
-  CollectionReference get _activeMatchesRef => _firestore.collection('active_matches');
-
   /// Check if there is already an active match/challenge between two teams
-  /// (Pending, Accepted, Live, Proof Submitted, Disputed)
   Future<TeamMatch?> getActiveMatchBetweenTeams(String teamAId, String teamBId) async {
     try {
-      // Query where team1 is A and team2 is B
-      final query1 = await _matchesRef
-          .where('team1Id', isEqualTo: teamAId)
-          .where('team2Id', isEqualTo: teamBId)
-          .get();
+      final list = await SupabaseService.client
+          .from('team_matches')
+          .select()
+          .or('and(team1_id.eq.$teamAId,team2_id.eq.$teamBId),and(team1_id.eq.$teamBId,team2_id.eq.$teamAId),and(team1Id.eq.$teamAId,team2Id.eq.$teamBId),and(team1Id.eq.$teamBId,team2Id.eq.$teamAId)');
 
-      for (var doc in query1.docs) {
-        final match = TeamMatch.fromFirestore(doc);
+      for (var row in list) {
+        final match = TeamMatch.fromMap(row);
         if (match.isActive) return match;
       }
-
-      // Query where team1 is B and team2 is A
-      final query2 = await _matchesRef
-          .where('team1Id', isEqualTo: teamBId)
-          .where('team2Id', isEqualTo: teamAId)
-          .get();
-
-      for (var doc in query2.docs) {
-        final match = TeamMatch.fromFirestore(doc);
-        if (match.isActive) return match;
-      }
-
-      // Also check in challenges collection (for cross-compatibility)
-      final cQuery1 = await _challengesRef
-          .where('fromTeamId', isEqualTo: teamAId)
-          .where('toTeamId', isEqualTo: teamBId)
-          .get();
-      for (var doc in cQuery1.docs) {
-        final d = doc.data() as Map<String, dynamic>?;
-        final st = (d?['status'] ?? '').toString().toLowerCase();
-        if (st == 'pending' || st == 'accepted' || st == 'live') {
-          return TeamMatch(
-            matchId: doc.id,
-            team1Id: teamAId,
-            team1Name: d?['fromTeamName'] ?? '',
-            team1LeaderId: d?['fromTeamLeaderId'] ?? '',
-            team1LeaderName: d?['fromTeamLeaderName'] ?? '',
-            team2Id: teamBId,
-            team2Name: d?['toTeamName'] ?? '',
-            team2LeaderId: d?['toTeamLeaderId'] ?? '',
-            team2LeaderName: d?['toTeamLeaderName'] ?? '',
-            game: d?['game'] ?? '',
-            mode: d?['mode'] ?? '',
-            matchTime: DateTime.now(),
-            entryFee: d?['entryFee'] ?? 'Free',
-            status: st == 'pending' ? 'Pending' : 'Accepted',
-            chatId: doc.id,
-            createdAt: DateTime.now(),
-          );
-        }
-      }
-
-      final cQuery2 = await _challengesRef
-          .where('fromTeamId', isEqualTo: teamBId)
-          .where('toTeamId', isEqualTo: teamAId)
-          .get();
-      for (var doc in cQuery2.docs) {
-        final d = doc.data() as Map<String, dynamic>?;
-        final st = (d?['status'] ?? '').toString().toLowerCase();
-        if (st == 'pending' || st == 'accepted' || st == 'live') {
-          return TeamMatch(
-            matchId: doc.id,
-            team1Id: teamBId,
-            team1Name: d?['fromTeamName'] ?? '',
-            team1LeaderId: d?['fromTeamLeaderId'] ?? '',
-            team1LeaderName: d?['fromTeamLeaderName'] ?? '',
-            team2Id: teamAId,
-            team2Name: d?['toTeamName'] ?? '',
-            team2LeaderId: d?['toTeamLeaderId'] ?? '',
-            team2LeaderName: d?['toTeamLeaderName'] ?? '',
-            game: d?['game'] ?? '',
-            mode: d?['mode'] ?? '',
-            matchTime: DateTime.now(),
-            entryFee: d?['entryFee'] ?? 'Free',
-            status: st == 'pending' ? 'Pending' : 'Accepted',
-            chatId: doc.id,
-            createdAt: DateTime.now(),
-          );
-        }
-      }
-
-      return null;
     } catch (e) {
       debugPrint('[TeamMatchService] Error checking active match between teams: $e');
-      return null;
     }
+    return null;
   }
 
   /// 1. Create a challenge from Team 1 to Team 2
-  /// Returns a map with 'success', 'matchId', and 'error' message.
   Future<Map<String, dynamic>> sendChallenge({
     required String team1Id,
     required String team1Name,
@@ -131,7 +48,6 @@ class TeamMatchService {
     String entryFee = 'Free',
   }) async {
     try {
-      // Check if there is already an active match/challenge between these teams
       final existingActive = await getActiveMatchBetweenTeams(team1Id, team2Id);
       if (existingActive != null) {
         return {
@@ -141,9 +57,9 @@ class TeamMatchService {
         };
       }
 
-      final matchDoc = _matchesRef.doc();
+      final matchId = 'match_${DateTime.now().millisecondsSinceEpoch}_${team1Id.hashCode.abs()}';
       final match = TeamMatch(
-        matchId: matchDoc.id,
+        matchId: matchId,
         team1Id: team1Id,
         team1Name: team1Name,
         team1LeaderId: team1LeaderId,
@@ -161,75 +77,33 @@ class TeamMatchService {
         matchTime: matchTime,
         entryFee: entryFee,
         status: 'Pending',
-        chatId: matchDoc.id,
+        chatId: matchId,
         createdAt: DateTime.now(),
       );
 
-      await matchDoc.set(match.toMap());
+      final mapData = match.toMap();
+      await SupabaseService.client.from('team_matches').insert(mapData);
 
-      // Write to challenges collection for cross-compatibility
+      // Send in-app notification to Team 2 Leader
       try {
-        await _challengesRef.doc(matchDoc.id).set({
-          'id': matchDoc.id,
-          'matchId': matchDoc.id,
-          'fromTeamId': team1Id,
-          'fromTeamName': team1Name,
-          'fromTeamLeaderId': team1LeaderId,
-          'fromTeamLeaderName': team1LeaderName,
-          'fromTeamAvatar': team1Avatar,
-          'toTeamId': team2Id,
-          'toTeamName': team2Name,
-          'toTeamLeaderId': team2LeaderId,
-          'toTeamLeaderName': team2LeaderName,
-          'toTeamAvatar': team2Avatar,
-          'game': game,
-          'mode': mode,
-          'status': 'pending',
-          'entryFee': entryFee,
-          'matchTime': matchTime.toIso8601String(),
-          'createdAt': FieldValue.serverTimestamp(),
+        await SupabaseService.client.from('notifications').insert({
+          'recipientUid': team2LeaderId,
+          'user_id': team2LeaderId,
+          'senderUid': team1LeaderId,
+          'type': 'team_challenge',
+          'title': '⚔️ Team Match Challenge!',
+          'message': 'آپ کو $team1Name کی طرف سے $game ($mode) کا چیلنج ملا ہے!',
+          'matchId': matchId,
+          'match_id': matchId,
+          'read': false,
+          'createdAt': DateTime.now().toIso8601String(),
+          'created_at': DateTime.now().toIso8601String(),
         });
-      } catch (cErr) {
-        debugPrint('[TeamMatchService] Notice writing to challenges collection: $cErr');
-      }
-
-      // Synchronize match to Supabase team_matches table
-      try {
-        await SupabaseService.upsertTeamMatch({
-          'match_id': matchDoc.id,
-          'team1_id': team1Id,
-          'team1_name': team1Name,
-          'team1_leader_id': team1LeaderId,
-          'team1_leader_name': team1LeaderName,
-          'team2_id': team2Id,
-          'team2_name': team2Name,
-          'team2_leader_id': team2LeaderId,
-          'team2_leader_name': team2LeaderName,
-          'game': game,
-          'mode': mode,
-          'status': 'Pending',
-          'match_time': matchTime.toIso8601String(),
-        });
-      } catch (sbErr) {
-        debugPrint('Supabase match sync notice: $sbErr');
-      }
-
-      // Send in-app notification to Team 2 Leader:
-      // "آپ کو [ٹیم کا نام] کی طرف سے چیلنج ملا ہے"
-      await _notificationsRef.add({
-        'recipientUid': team2LeaderId,
-        'senderUid': team1LeaderId,
-        'type': 'team_challenge',
-        'title': '⚔️ Team Match Challenge!',
-        'message': 'آپ کو $team1Name کی طرف سے $game ($mode) کا چیلنج ملا ہے!',
-        'matchId': matchDoc.id,
-        'read': false,
-        'createdAt': FieldValue.serverTimestamp(),
-      });
+      } catch (_) {}
 
       return {
         'success': true,
-        'matchId': matchDoc.id,
+        'matchId': matchId,
       };
     } catch (e) {
       debugPrint('[TeamMatchService] Error sending challenge: $e');
@@ -243,100 +117,44 @@ class TeamMatchService {
   /// 2. Accept Challenge
   Future<bool> acceptChallenge(String matchId, {String? customRoomId, String? customRoomPassword}) async {
     try {
-      final doc = await _matchesRef.doc(matchId).get();
-      if (doc.exists) {
-        final match = TeamMatch.fromFirestore(doc);
-        final updateData = <String, dynamic>{
-          'status': 'Accepted',
-          'acceptedAt': FieldValue.serverTimestamp(),
-        };
-        if (customRoomId != null && customRoomId.isNotEmpty) {
-          updateData['customRoomId'] = customRoomId;
-        }
-        if (customRoomPassword != null && customRoomPassword.isNotEmpty) {
-          updateData['customRoomPassword'] = customRoomPassword;
-        }
-        await _matchesRef.doc(matchId).update(updateData);
-
-        // Notify Team 1 Leader
-        await _notificationsRef.add({
-          'recipientUid': match.team1LeaderId,
-          'senderUid': match.team2LeaderId,
-          'type': 'team_challenge_accepted',
-          'title': '✅ Challenge Accepted!',
-          'message': '${match.team2Name} نے آپ کا چیلنج قبول کر لیا ہے! میچ روم تیار ہے۔',
-          'matchId': matchId,
-          'read': false,
-          'createdAt': FieldValue.serverTimestamp(),
-        });
+      final nowStr = DateTime.now().toIso8601String();
+      final updateData = <String, dynamic>{
+        'status': 'Accepted',
+        'acceptedAt': nowStr,
+        'accepted_at': nowStr,
+      };
+      if (customRoomId != null && customRoomId.isNotEmpty) {
+        updateData['customRoomId'] = customRoomId;
+        updateData['custom_room_id'] = customRoomId;
+      }
+      if (customRoomPassword != null && customRoomPassword.isNotEmpty) {
+        updateData['customRoomPassword'] = customRoomPassword;
+        updateData['custom_room_password'] = customRoomPassword;
       }
 
-      // Always sync to challenges collection
-      try {
-        await _challengesRef.doc(matchId).update({
-          'status': 'accepted',
-          'acceptedAt': FieldValue.serverTimestamp(),
-        });
-      } catch (_) {}
+      await SupabaseService.client
+          .from('team_matches')
+          .update(updateData)
+          .or('matchId.eq.$matchId,match_id.eq.$matchId,id.eq.$matchId');
 
-      // Create document in active_matches collection
-      try {
-        String fromTeamId = '';
-        String toTeamId = '';
-        String fromTeamName = '';
-        String toTeamName = '';
-        String fromTeamLogo = '';
-        String toTeamLogo = '';
-        String fromLeaderId = '';
-        String toLeaderId = '';
-        String game = 'BGMI';
-
-        if (doc.exists) {
-          final m = TeamMatch.fromFirestore(doc);
-          fromTeamId = m.team1Id;
-          toTeamId = m.team2Id;
-          fromTeamName = m.team1Name;
-          toTeamName = m.team2Name;
-          fromTeamLogo = m.team1Avatar;
-          toTeamLogo = m.team2Avatar;
-          fromLeaderId = m.team1LeaderId;
-          toLeaderId = m.team2LeaderId;
-          game = m.game;
-        } else {
-          final cDoc = await _challengesRef.doc(matchId).get();
-          if (cDoc.exists) {
-            final d = cDoc.data() as Map<String, dynamic>? ?? {};
-            fromTeamId = d['fromTeamId']?.toString() ?? '';
-            toTeamId = d['toTeamId']?.toString() ?? '';
-            fromTeamName = d['fromTeamName']?.toString() ?? '';
-            toTeamName = d['toTeamName']?.toString() ?? '';
-            fromTeamLogo = d['fromTeamAvatar']?.toString() ?? '';
-            toTeamLogo = d['toTeamAvatar']?.toString() ?? '';
-            fromLeaderId = d['fromTeamLeaderId']?.toString() ?? '';
-            toLeaderId = d['toTeamLeaderId']?.toString() ?? '';
-            game = d['game']?.toString() ?? 'BGMI';
-          }
-        }
-
-        if (fromTeamId.isNotEmpty && toTeamId.isNotEmpty) {
-          await _activeMatchesRef.doc(matchId).set({
+      final matchData = await SupabaseService.getTeamMatch(matchId);
+      if (matchData != null) {
+        final match = TeamMatch.fromMap(matchData);
+        try {
+          await SupabaseService.client.from('notifications').insert({
+            'recipientUid': match.team1LeaderId,
+            'user_id': match.team1LeaderId,
+            'senderUid': match.team2LeaderId,
+            'type': 'team_challenge_accepted',
+            'title': '✅ Challenge Accepted!',
+            'message': '${match.team2Name} نے آپ کا چیلنج قبول کر لیا ہے! میچ روم تیار ہے۔',
             'matchId': matchId,
-            'participants': [fromTeamId, toTeamId],
-            'team1Id': fromTeamId,
-            'team2Id': toTeamId,
-            'team1Name': fromTeamName,
-            'team2Name': toTeamName,
-            'team1Logo': fromTeamLogo,
-            'team2Logo': toTeamLogo,
-            'team1LeaderId': fromLeaderId,
-            'team2LeaderId': toLeaderId,
-            'status': 'active',
-            'game': game.isNotEmpty ? game : 'BGMI',
-            'createdAt': Timestamp.now(),
-          }, SetOptions(merge: true));
-        }
-      } catch (aErr) {
-        debugPrint('[TeamMatchService] Notice writing to active_matches: $aErr');
+            'match_id': matchId,
+            'read': false,
+            'createdAt': nowStr,
+            'created_at': nowStr,
+          });
+        } catch (_) {}
       }
 
       return true;
@@ -349,39 +167,37 @@ class TeamMatchService {
   /// 3. Reject Challenge
   Future<bool> rejectChallenge(String matchId, {String reason = ''}) async {
     try {
-      final doc = await _matchesRef.doc(matchId).get();
-      if (doc.exists) {
-        final match = TeamMatch.fromFirestore(doc);
-        await _matchesRef.doc(matchId).update({
-          'status': 'Rejected',
-          'disputeReason': reason.isNotEmpty ? reason : 'Challenge rejected by opponent team leader',
-          'rejectedAt': FieldValue.serverTimestamp(),
-        });
+      final nowStr = DateTime.now().toIso8601String();
+      await SupabaseService.client
+          .from('team_matches')
+          .update({
+            'status': 'Rejected',
+            'disputeReason': reason.isNotEmpty ? reason : 'Challenge rejected by opponent team leader',
+            'dispute_reason': reason.isNotEmpty ? reason : 'Challenge rejected by opponent team leader',
+            'rejectedAt': nowStr,
+            'rejected_at': nowStr,
+          })
+          .or('matchId.eq.$matchId,match_id.eq.$matchId,id.eq.$matchId');
 
-        // Notify Team 1 Leader
-        await _notificationsRef.add({
-          'recipientUid': match.team1LeaderId,
-          'senderUid': match.team2LeaderId,
-          'type': 'team_challenge_rejected',
-          'title': '❌ Challenge Declined',
-          'message': '${match.team2Name} نے چیلنج مسترد کر دیا ہے۔',
-          'matchId': matchId,
-          'read': false,
-          'createdAt': FieldValue.serverTimestamp(),
-        });
+      final matchData = await SupabaseService.getTeamMatch(matchId);
+      if (matchData != null) {
+        final match = TeamMatch.fromMap(matchData);
+        try {
+          await SupabaseService.client.from('notifications').insert({
+            'recipientUid': match.team1LeaderId,
+            'user_id': match.team1LeaderId,
+            'senderUid': match.team2LeaderId,
+            'type': 'team_challenge_rejected',
+            'title': '❌ Challenge Declined',
+            'message': '${match.team2Name} نے چیلنج مسترد کر دیا ہے۔',
+            'matchId': matchId,
+            'match_id': matchId,
+            'read': false,
+            'createdAt': nowStr,
+            'created_at': nowStr,
+          });
+        } catch (_) {}
       }
-
-      // Always sync to challenges collection
-      try {
-        await _challengesRef.doc(matchId).update({
-          'status': 'rejected',
-          'rejectedAt': FieldValue.serverTimestamp(),
-        });
-      } catch (_) {}
-
-      try {
-        await _activeMatchesRef.doc(matchId).delete();
-      } catch (_) {}
 
       return true;
     } catch (e) {
@@ -390,53 +206,47 @@ class TeamMatchService {
     }
   }
 
-  /// 3b. Cancel Challenge (by Team 1 Leader or either team when status is Pending)
+  /// 3b. Cancel Challenge
   Future<bool> cancelChallenge(String matchId, {String cancelledByUid = ''}) async {
     try {
-      final doc = await _matchesRef.doc(matchId).get();
-      if (doc.exists) {
-        final match = TeamMatch.fromFirestore(doc);
-
-        // Can only cancel if match is in Pending status
-        if (match.isPending) {
-          await _matchesRef.doc(matchId).update({
+      final nowStr = DateTime.now().toIso8601String();
+      await SupabaseService.client
+          .from('team_matches')
+          .update({
             'status': 'Cancelled',
-            'cancelledAt': FieldValue.serverTimestamp(),
+            'cancelledAt': nowStr,
+            'cancelled_at': nowStr,
             'cancelledBy': cancelledByUid,
+            'cancelled_by': cancelledByUid,
             'disputeReason': 'Challenge cancelled by team leader',
-          });
+            'dispute_reason': 'Challenge cancelled by team leader',
+          })
+          .or('matchId.eq.$matchId,match_id.eq.$matchId,id.eq.$matchId');
 
-          // Notify the opponent team leader
-          final notifyUid = (cancelledByUid == match.team1LeaderId)
-              ? match.team2LeaderId
-              : match.team1LeaderId;
-          if (notifyUid.isNotEmpty) {
-            await _notificationsRef.add({
+      final matchData = await SupabaseService.getTeamMatch(matchId);
+      if (matchData != null) {
+        final match = TeamMatch.fromMap(matchData);
+        final notifyUid = (cancelledByUid == match.team1LeaderId)
+            ? match.team2LeaderId
+            : match.team1LeaderId;
+        if (notifyUid.isNotEmpty) {
+          try {
+            await SupabaseService.client.from('notifications').insert({
               'recipientUid': notifyUid,
+              'user_id': notifyUid,
               'senderUid': cancelledByUid,
               'type': 'team_challenge_cancelled',
               'title': '🚫 Challenge Cancelled',
               'message': 'ٹیم چیلنج واپس (Cancel) لے لیا گیا ہے۔',
               'matchId': matchId,
+              'match_id': matchId,
               'read': false,
-              'createdAt': FieldValue.serverTimestamp(),
+              'createdAt': nowStr,
+              'created_at': nowStr,
             });
-          }
+          } catch (_) {}
         }
       }
-
-      // Also always update challenges collection
-      try {
-        await _challengesRef.doc(matchId).update({
-          'status': 'cancelled',
-          'cancelledAt': FieldValue.serverTimestamp(),
-          'cancelledBy': cancelledByUid,
-        });
-      } catch (_) {}
-
-      try {
-        await _activeMatchesRef.doc(matchId).delete();
-      } catch (_) {}
 
       return true;
     } catch (e) {
@@ -445,20 +255,21 @@ class TeamMatchService {
     }
   }
 
-  /// 3c. End / Complete Match (Leader only - sets status to completed in active_matches and Completed in team_matches)
+  /// 3c. End / Complete Match
   Future<bool> completeMatch(String matchId, {String completedByUid = ''}) async {
     try {
-      await _activeMatchesRef.doc(matchId).update({
-        'status': 'completed',
-        'completedAt': FieldValue.serverTimestamp(),
-        'completedBy': completedByUid,
-      });
-      try {
-        await _matchesRef.doc(matchId).update({
-          'status': 'Completed',
-          'completedAt': FieldValue.serverTimestamp(),
-        });
-      } catch (_) {}
+      final nowStr = DateTime.now().toIso8601String();
+      await SupabaseService.client
+          .from('team_matches')
+          .update({
+            'status': 'Completed',
+            'completedAt': nowStr,
+            'completed_at': nowStr,
+            'completedBy': completedByUid,
+            'completed_by': completedByUid,
+          })
+          .or('matchId.eq.$matchId,match_id.eq.$matchId,id.eq.$matchId');
+
       return true;
     } catch (e) {
       debugPrint('[TeamMatchService] Error completing match: $e');
@@ -466,67 +277,35 @@ class TeamMatchService {
     }
   }
 
-  /// Cancel any pending challenge between two teams (by team IDs or names)
+  /// 3d. Cancel challenge between two teams directly
   Future<bool> cancelChallengeBetweenTeams(String teamAId, String teamBId, {String cancelledByUid = ''}) async {
     try {
-      bool anyCancelled = false;
-
-      // 1. Check in team_matches
-      final active = await getActiveMatchBetweenTeams(teamAId, teamBId);
-      if (active != null && active.isPending) {
-        await cancelChallenge(active.matchId, cancelledByUid: cancelledByUid);
-        anyCancelled = true;
+      final match = await getActiveMatchBetweenTeams(teamAId, teamBId);
+      if (match != null) {
+        return await cancelChallenge(match.matchId, cancelledByUid: cancelledByUid);
       }
-
-      // 2. Also check in challenges collection
-      final q1 = await _challengesRef
-          .where('fromTeamId', isEqualTo: teamAId)
-          .where('toTeamId', isEqualTo: teamBId)
-          .get();
-      for (final doc in q1.docs) {
-        final status = (doc.data() as Map<String, dynamic>?)?['status']?.toString().toLowerCase() ?? '';
-        if (status == 'pending') {
-          await doc.reference.update({
-            'status': 'cancelled',
-            'cancelledAt': FieldValue.serverTimestamp(),
-            'cancelledBy': cancelledByUid,
-          });
-          anyCancelled = true;
-        }
-      }
-
-      final q2 = await _challengesRef
-          .where('fromTeamId', isEqualTo: teamBId)
-          .where('toTeamId', isEqualTo: teamAId)
-          .get();
-      for (final doc in q2.docs) {
-        final status = (doc.data() as Map<String, dynamic>?)?['status']?.toString().toLowerCase() ?? '';
-        if (status == 'pending') {
-          await doc.reference.update({
-            'status': 'cancelled',
-            'cancelledAt': FieldValue.serverTimestamp(),
-            'cancelledBy': cancelledByUid,
-          });
-          anyCancelled = true;
-        }
-      }
-
-      return anyCancelled;
+      return false;
     } catch (e) {
       debugPrint('[TeamMatchService] Error in cancelChallengeBetweenTeams: $e');
       return false;
     }
   }
 
-  /// 4. Update Custom Room Credentials (Room ID & Password)
+  /// 4. Update Custom Room Credentials
   Future<bool> updateRoomCredentials(String matchId, String roomId, String password) async {
     try {
-      await _matchesRef.doc(matchId).update({
-        'customRoomId': roomId.trim(),
-        'customRoomPassword': password.trim(),
-        'status': 'Live',
-        'roomDetailsUpdatedAt': FieldValue.serverTimestamp(),
-      });
+      await SupabaseService.client
+          .from('team_matches')
+          .update({
+            'customRoomId': roomId.trim(),
+            'custom_room_id': roomId.trim(),
+            'customRoomPassword': password.trim(),
+            'custom_room_password': password.trim(),
+            'status': 'Live',
+            'roomDetailsUpdatedAt': DateTime.now().toIso8601String(),
+            'room_details_updated_at': DateTime.now().toIso8601String(),
+          })
+          .or('matchId.eq.$matchId,match_id.eq.$matchId,id.eq.$matchId');
       return true;
     } catch (e) {
       debugPrint('[TeamMatchService] Error updating room credentials: $e');
@@ -534,130 +313,90 @@ class TeamMatchService {
     }
   }
 
-  /// 5. Upload Win Proof Screenshot (Winning or Disputing team)
+  /// 5. Submit Win Proof Screenshot
   Future<Map<String, dynamic>> submitProof({
     required String matchId,
-    required bool isTeam1,
-    required File imageFile,
-    required String claim, // 'win' or 'loss'
+    required String teamId,
+    required String userId,
+    required File proofImage,
+    required String claim,
   }) async {
     try {
-      final doc = await _matchesRef.doc(matchId).get();
-      if (!doc.exists) {
-        return {'success': false, 'error': 'میچ نہیں ملا'};
-      }
-      final current = TeamMatch.fromFirestore(doc);
-
-      int currentAttempts = current.proofAttempts;
-      // Fallback: If proof was previously uploaded or admin note exists, treat as attempt 1
-      if (currentAttempts == 0 &&
-          (current.team1Proof != null ||
-              current.team2Proof != null ||
-              current.rejectReason != null ||
-              current.adminNote != null)) {
-        currentAttempts = 1;
-      }
-
-      // Check max proof attempts (limit to 2)
-      if (currentAttempts >= 2) {
-        return {
-          'success': false,
-          'error': 'آپ اس میچ میں ثبوت اپلوڈ کرنے کی زیادہ سے زیادہ حد (2 بار) پوری کر چکے ہیں۔',
-        };
-      }
-
       final imageUrl = await SupabaseService.uploadFile(
-        file: imageFile,
-        folder: 'team_match_proofs',
+        file: proofImage,
+        folder: 'team_matches/$matchId',
         bucket: SupabaseService.bucketMatchProofs,
       );
+
       if (imageUrl == null || imageUrl.isEmpty) {
         return {'success': false, 'error': 'تصویر اپلوڈ نہیں ہو سکی'};
       }
 
-      final newAttempts = currentAttempts + 1; // 1 -> 2
-      final Map<String, dynamic> updateData = {
-        'proofAttempts': newAttempts,
-        'lastProofAt': FieldValue.serverTimestamp(),
+      final matchData = await SupabaseService.getTeamMatch(matchId);
+      if (matchData == null) {
+        return {'success': false, 'error': 'میچ نہیں ملا'};
+      }
+      final match = TeamMatch.fromMap(matchData);
+      final isTeam1 = match.team1Id == teamId || match.team1LeaderId == userId;
+
+      final nowStr = DateTime.now().toIso8601String();
+      final updateData = <String, dynamic>{
         'status': 'Proof Submitted',
-        'adminNote': null,        // 1.1 پرانا Admin Note فوراً ہٹا دیا جائے
-        'rejectReason': null,     // 1.1 پرانا rejectReason فوراً ہٹا دیا جائے
-        'disputeReason': '',
-        'rejectedBy': null,
-        'rejectedAt': null,
+        'lastProofAt': nowStr,
+        'last_proof_at': nowStr,
+        'proofAttempts': (match.proofAttempts) + 1,
+        'proof_attempts': (match.proofAttempts) + 1,
       };
 
       if (isTeam1) {
         updateData['team1Proof'] = imageUrl;
+        updateData['team1_proof'] = imageUrl;
         updateData['team1Claim'] = claim;
-        updateData['team1ProofUploadedAt'] = FieldValue.serverTimestamp();
+        updateData['team1_claim'] = claim;
+        updateData['team1ProofUploadedAt'] = nowStr;
+        updateData['team1_proof_uploaded_at'] = nowStr;
       } else {
         updateData['team2Proof'] = imageUrl;
+        updateData['team2_proof'] = imageUrl;
         updateData['team2Claim'] = claim;
-        updateData['team2ProofUploadedAt'] = FieldValue.serverTimestamp();
+        updateData['team2_claim'] = claim;
+        updateData['team2ProofUploadedAt'] = nowStr;
+        updateData['team2_proof_uploaded_at'] = nowStr;
       }
 
-      await _matchesRef.doc(matchId).update(updateData);
-
-      // Synchronize proof and status to Supabase team_matches table
-      try {
-        await SupabaseService.update('team_matches', {
-          if (isTeam1) 'team1_proof': imageUrl else 'team2_proof': imageUrl,
-          'status': 'Proof Submitted',
-          'proof_attempts': newAttempts,
-          'last_proof_at': DateTime.now().toIso8601String(),
-        }, 'match_id', matchId);
-      } catch (sbErr) {
-        debugPrint('Supabase match proof update notice: $sbErr');
+      if ((isTeam1 && match.team2Proof != null) || (!isTeam1 && match.team1Proof != null)) {
+        final otherClaim = isTeam1 ? match.team2Claim : match.team1Claim;
+        if (claim == 'win' && otherClaim == 'win') {
+          updateData['status'] = 'Disputed';
+          updateData['disputeReason'] = 'Both teams claimed victory';
+          updateData['dispute_reason'] = 'Both teams claimed victory';
+        }
       }
 
-      // 2.1 نئے ثبوت کی اطلاع ایڈمن کو جائے
-      try {
-        final uploaderName = isTeam1 ? current.team1Name : current.team2Name;
-        final opponentName = isTeam1 ? current.team2Name : current.team1Name;
-        await _notificationsRef.add({
-          'recipientUid': 'admin',
-          'senderUid': isTeam1 ? current.team1LeaderId : current.team2LeaderId,
-          'senderName': uploaderName,
-          'type': 'new_proof_submitted',
-          'title': newAttempts >= 2 ? '📸 نیا ثبوت موصول (Attempt 2/2)' : '📸 ثبوت موصول (Proof Submitted)',
-          'message': 'ٹیم "$uploaderName" نے میچ ($uploaderName بمقابلہ $opponentName - ${current.game}) کے لیے نیا Win Proof اپلوڈ کیا ہے۔ (کوشش $newAttempts/2)',
-          'matchId': matchId,
-          'read': false,
-          'createdAt': FieldValue.serverTimestamp(),
-        });
-      } catch (err) {
-        debugPrint('[TeamMatchService] Error notifying admin: $err');
-      }
+      await SupabaseService.client
+          .from('team_matches')
+          .update(updateData)
+          .or('matchId.eq.$matchId,match_id.eq.$matchId,id.eq.$matchId');
 
-      return {
-        'success': true,
-        'attempts': newAttempts,
-      };
+      return {'success': true, 'imageUrl': imageUrl};
     } catch (e) {
       debugPrint('[TeamMatchService] Error submitting proof: $e');
       return {'success': false, 'error': e.toString()};
     }
   }
 
-  /// 6. Team Confirmation ("Match Confirmed" in chat)
+  /// 6. Confirm Match Result
   Future<bool> confirmMatch(String matchId, bool isTeam1) async {
     try {
-      final field = isTeam1 ? 'team1Confirmed' : 'team2Confirmed';
-      await _matchesRef.doc(matchId).update({
-        field: true,
-      });
-
-      // Check if both confirmed
-      final doc = await _matchesRef.doc(matchId).get();
-      if (doc.exists) {
-        final data = doc.data() as Map<String, dynamic>? ?? {};
-        if (data['team1Confirmed'] == true && data['team2Confirmed'] == true) {
-          if (data['status'] == 'Pending' || data['status'] == 'Accepted') {
-            await _matchesRef.doc(matchId).update({'status': 'Live'});
-          }
-        }
-      }
+      final updateField = isTeam1 ? 'team1Confirmed' : 'team2Confirmed';
+      final snakeField = isTeam1 ? 'team1_confirmed' : 'team2_confirmed';
+      await SupabaseService.client
+          .from('team_matches')
+          .update({
+            updateField: true,
+            snakeField: true,
+          })
+          .or('matchId.eq.$matchId,match_id.eq.$matchId,id.eq.$matchId');
       return true;
     } catch (e) {
       debugPrint('[TeamMatchService] Error confirming match: $e');
@@ -665,46 +404,27 @@ class TeamMatchService {
     }
   }
 
-  /// 7. Send Match Chat Message
+  /// 7. Send In-Match Chat Message
   Future<bool> sendChatMessage({
     required String matchId,
     required String senderId,
     required String senderName,
-    required String senderAvatar,
     required String teamName,
-    required bool isTeam1,
-    String text = '',
+    required String text,
     String imageUrl = '',
     bool isSystem = false,
+    String? senderAvatar,
   }) async {
     try {
-      await _matchesRef.doc(matchId).collection('messages').add({
-        'senderId': senderId,
-        'senderName': senderName,
-        'senderAvatar': senderAvatar,
-        'teamName': teamName,
-        'isTeam1': isTeam1,
-        'text': text.trim(),
-        'imageUrl': imageUrl,
-        'isSystem': isSystem,
-        'timestamp': FieldValue.serverTimestamp(),
-      });
-
-      // Sync message to Supabase match_chat table
-      try {
-        await SupabaseService.sendMatchChatMessage(
-          matchId: matchId,
-          senderId: senderId,
-          senderName: senderName,
-          senderAvatar: senderAvatar,
-          message: text.trim().isNotEmpty ? text.trim() : (imageUrl.isNotEmpty ? '📷 Image' : ''),
-          imageUrl: imageUrl,
-          messageType: isSystem ? 'system' : (imageUrl.isNotEmpty ? 'image' : 'text'),
-        );
-      } catch (e) {
-        debugPrint('[TeamMatchService] Supabase match_chat sync notice: $e');
-      }
-
+      await SupabaseService.sendMatchChatMessage(
+        matchId: matchId,
+        senderId: senderId,
+        senderName: senderName,
+        senderAvatar: senderAvatar,
+        message: text.trim().isNotEmpty ? text.trim() : (imageUrl.isNotEmpty ? '📷 Image' : ''),
+        imageUrl: imageUrl,
+        messageType: isSystem ? 'system' : (imageUrl.isNotEmpty ? 'image' : 'text'),
+      );
       return true;
     } catch (e) {
       debugPrint('[TeamMatchService] Error sending chat: $e');
@@ -713,76 +433,65 @@ class TeamMatchService {
   }
 
   /// Stream of chat messages for a match
-  Stream<QuerySnapshot> getChatMessages(String matchId) {
-    return _matchesRef
-        .doc(matchId)
-        .collection('messages')
-        .orderBy('timestamp', descending: false)
-        .snapshots();
+  Stream<List<Map<String, dynamic>>> getChatMessages(String matchId) {
+    return SupabaseService.getMatchChatStream(matchId);
   }
 
   /// 8. Admin Verification & Outcome Decision
   Future<bool> adminVerifyMatch({
     required String matchId,
     required String winnerTeamId,
-    required String adminIdentifier,
-    String notes = '',
+    required String adminId,
+    String note = '',
   }) async {
     try {
-      final doc = await _matchesRef.doc(matchId).get();
-      if (!doc.exists) return false;
-      final match = TeamMatch.fromFirestore(doc);
+      final matchData = await SupabaseService.getTeamMatch(matchId);
+      if (matchData == null) return false;
+      final match = TeamMatch.fromMap(matchData);
 
       final isTeam1Winner = match.team1Id == winnerTeamId;
-      final isTeam2Winner = match.team2Id == winnerTeamId;
-      final isDraw = winnerTeamId == 'DRAW';
-
+      final isDraw = winnerTeamId == 'draw';
       final winnerName = isDraw
           ? 'Draw'
           : (isTeam1Winner ? match.team1Name : match.team2Name);
 
-      await _matchesRef.doc(matchId).update({
-        'status': 'Verified',
-        'winnerId': winnerTeamId,
-        'winnerName': winnerName,
-        'verifiedBy': adminIdentifier,
-        'verifiedAt': FieldValue.serverTimestamp(),
-        'disputeReason': notes,
-      });
+      final nowStr = DateTime.now().toIso8601String();
+      await SupabaseService.client
+          .from('team_matches')
+          .update({
+            'status': 'Verified',
+            'winnerId': winnerTeamId,
+            'winner_id': winnerTeamId,
+            'winnerName': winnerName,
+            'winner_name': winnerName,
+            'verifiedBy': adminId,
+            'verified_by': adminId,
+            'verifiedAt': nowStr,
+            'verified_at': nowStr,
+            'adminNote': note,
+            'admin_note': note,
+          })
+          .or('matchId.eq.$matchId,match_id.eq.$matchId,id.eq.$matchId');
 
-      // Update Team Rankings (Leaderboard: Wins, Losses, Points)
-      if (isDraw) {
-        await _recordTeamResult(match.team1Id, match.team1Name, match.team1LeaderId, match.team1LeaderName, match.team1Avatar, match.game, isWin: false, isLoss: false, isDraw: true);
-        await _recordTeamResult(match.team2Id, match.team2Name, match.team2LeaderId, match.team2LeaderName, match.team2Avatar, match.game, isWin: false, isLoss: false, isDraw: true);
-      } else if (isTeam1Winner) {
-        await _recordTeamResult(match.team1Id, match.team1Name, match.team1LeaderId, match.team1LeaderName, match.team1Avatar, match.game, isWin: true);
-        await _recordTeamResult(match.team2Id, match.team2Name, match.team2LeaderId, match.team2LeaderName, match.team2Avatar, match.game, isLoss: true);
-      } else if (isTeam2Winner) {
-        await _recordTeamResult(match.team2Id, match.team2Name, match.team2LeaderId, match.team2LeaderName, match.team2Avatar, match.game, isWin: true);
-        await _recordTeamResult(match.team1Id, match.team1Name, match.team1LeaderId, match.team1LeaderName, match.team1Avatar, match.game, isLoss: true);
+      if (!isDraw) {
+        final winnerId = isTeam1Winner ? match.team1Id : match.team2Id;
+        final winnerTeamName = isTeam1Winner ? match.team1Name : match.team2Name;
+        final winnerLeaderId = isTeam1Winner ? match.team1LeaderId : match.team2LeaderId;
+        final winnerLeaderName = isTeam1Winner ? match.team1LeaderName : match.team2LeaderName;
+        final winnerAvatar = isTeam1Winner ? match.team1Avatar : match.team2Avatar;
+
+        final loserId = isTeam1Winner ? match.team2Id : match.team1Id;
+        final loserTeamName = isTeam1Winner ? match.team2Name : match.team1Name;
+        final loserLeaderId = isTeam1Winner ? match.team2LeaderId : match.team1LeaderId;
+        final loserLeaderName = isTeam1Winner ? match.team2LeaderName : match.team1LeaderName;
+        final loserAvatar = isTeam1Winner ? match.team2Avatar : match.team1Avatar;
+
+        await _recordTeamResult(winnerId, winnerTeamName, winnerLeaderId, winnerLeaderName, winnerAvatar, match.game, isWin: true);
+        await _recordTeamResult(loserId, loserTeamName, loserLeaderId, loserLeaderName, loserAvatar, match.game, isLoss: true);
+      } else {
+        await _recordTeamResult(match.team1Id, match.team1Name, match.team1LeaderId, match.team1LeaderName, match.team1Avatar, match.game, isDraw: true);
+        await _recordTeamResult(match.team2Id, match.team2Name, match.team2LeaderId, match.team2LeaderName, match.team2Avatar, match.game, isDraw: true);
       }
-
-      // Notify both leaders of final verified outcome
-      await _notificationsRef.add({
-        'recipientUid': match.team1LeaderId,
-        'senderUid': 'admin',
-        'type': 'match_verified',
-        'title': '🏆 Match Verified by Admin',
-        'message': 'میچ ${match.team1Name} بمقابلہ ${match.team2Name} کی تصدیق ہو گئی ہے۔ فاتح: $winnerName',
-        'matchId': matchId,
-        'read': false,
-        'createdAt': FieldValue.serverTimestamp(),
-      });
-      await _notificationsRef.add({
-        'recipientUid': match.team2LeaderId,
-        'senderUid': 'admin',
-        'type': 'match_verified',
-        'title': '🏆 Match Verified by Admin',
-        'message': 'میچ ${match.team1Name} بمقابلہ ${match.team2Name} کی تصدیق ہو گئی ہے۔ فاتح: $winnerName',
-        'matchId': matchId,
-        'read': false,
-        'createdAt': FieldValue.serverTimestamp(),
-      });
 
       return true;
     } catch (e) {
@@ -791,67 +500,28 @@ class TeamMatchService {
     }
   }
 
-  /// Admin Reject Match / Proof
-  /// 1. If proofAttempts >= 2: permanently rejected
-  /// 2. If proofAttempts < 2: rejected or disputed allowing resubmission
-  /// 3. Sends notification to all members of both teams with reason and match details
+  /// Admin Rejects Match
   Future<bool> adminRejectMatch(
-    String matchId,
-    String adminIdentifier, {
-    String reason = '',
+    String matchId, {
+    required String adminId,
+    required String reason,
   }) async {
     try {
-      final doc = await _matchesRef.doc(matchId).get();
-      if (!doc.exists) return false;
-      final match = TeamMatch.fromFirestore(doc);
-
-      final finalReason = reason.isNotEmpty ? reason : 'ثبوت غیر واضح یا مسترد کر دیا گیا ہے';
-      final isFinalReject = match.proofAttempts >= 2;
-
-      final Map<String, dynamic> updateData = {
-        'status': 'Rejected',
-        'adminNote': finalReason,
-        'rejectReason': finalReason,
-        'rejectedBy': adminIdentifier,
-        'rejectedAt': FieldValue.serverTimestamp(),
-        'disputeReason': finalReason,
-      };
-
-      if (isFinalReject) {
-        updateData['proofAttempts'] = 2;
-      }
-
-      await _matchesRef.doc(matchId).update(updateData);
-
-      // Gather all members from team 1 and team 2
-      final Set<String> allMemberUids = {
-        if (match.team1LeaderId.isNotEmpty) match.team1LeaderId,
-        ...match.team1Members.where((m) => m.isNotEmpty),
-        if (match.team2LeaderId.isNotEmpty) match.team2LeaderId,
-        ...match.team2Members.where((m) => m.isNotEmpty),
-      };
-
-      final notificationTitle = isFinalReject
-          ? '❌ میچ ختم - دونوں ثبوت مسترد'
-          : '⚠️ آپ کا Win Proof مسترد کر دیا گیا ہے';
-
-      final notificationMessage = isFinalReject
-          ? 'میچ (${match.team1Name} بمقابلہ ${match.team2Name} - ${match.game}): آپ کے دونوں ثبوت مسترد ہو گئے ہیں، یہ میچ ختم ہو گیا۔ وجہ: $finalReason'
-          : 'میچ (${match.team1Name} بمقابلہ ${match.team2Name} - ${match.game}) کا ثبوت مسترد کر دیا گیا ہے۔ وجہ: $finalReason۔ آپ ایک بار دوبارہ نیا ثبوت اپلوڈ کر سکتے ہیں۔';
-
-      for (final uid in allMemberUids) {
-        await _notificationsRef.add({
-          'recipientUid': uid,
-          'senderUid': 'admin',
-          'type': 'proof_rejected',
-          'title': notificationTitle,
-          'message': notificationMessage,
-          'matchId': matchId,
-          'read': false,
-          'createdAt': FieldValue.serverTimestamp(),
-        });
-      }
-
+      final nowStr = DateTime.now().toIso8601String();
+      await SupabaseService.client
+          .from('team_matches')
+          .update({
+            'status': 'Rejected',
+            'adminNote': reason,
+            'admin_note': reason,
+            'rejectReason': reason,
+            'reject_reason': reason,
+            'rejectedBy': adminId,
+            'rejected_by': adminId,
+            'rejectedAt': nowStr,
+            'rejected_at': nowStr,
+          })
+          .or('matchId.eq.$matchId,match_id.eq.$matchId,id.eq.$matchId');
       return true;
     } catch (e) {
       debugPrint('[TeamMatchService] Error rejecting match by admin: $e');
@@ -859,52 +529,28 @@ class TeamMatchService {
     }
   }
 
-  /// Admin Request New Proof (without permanently rejecting)
-  /// Sets status to Disputed so team can re-upload screenshot
+  /// Admin Requests New Proof
   Future<bool> adminRequestNewProof(
-    String matchId,
-    String adminIdentifier, {
-    String reason = '',
+    String matchId, {
+    required String adminId,
+    required String note,
   }) async {
     try {
-      final doc = await _matchesRef.doc(matchId).get();
-      if (!doc.exists) return false;
-      final match = TeamMatch.fromFirestore(doc);
-
-      final requestReason = reason.isNotEmpty
-          ? reason
-          : 'ایڈمن نے نیا ثبوت مانگا ہے، براہ کرم واضح اسکرین شاٹ دوبارہ اپلوڈ کریں';
-
-      await _matchesRef.doc(matchId).update({
-        'status': 'Disputed',
-        'adminNote': requestReason,
-        'rejectReason': requestReason,
-        'disputeReason': requestReason,
-        'rejectedBy': adminIdentifier,
-        'rejectedAt': FieldValue.serverTimestamp(),
-      });
-
-      // Notify all members of both teams
-      final Set<String> allMemberUids = {
-        if (match.team1LeaderId.isNotEmpty) match.team1LeaderId,
-        ...match.team1Members.where((m) => m.isNotEmpty),
-        if (match.team2LeaderId.isNotEmpty) match.team2LeaderId,
-        ...match.team2Members.where((m) => m.isNotEmpty),
-      };
-
-      for (final uid in allMemberUids) {
-        await _notificationsRef.add({
-          'recipientUid': uid,
-          'senderUid': 'admin',
-          'type': 'request_new_proof',
-          'title': '📸 ایڈمن نے نیا ثبوت مانگا ہے',
-          'message': 'میچ (${match.team1Name} بمقابلہ ${match.team2Name} - ${match.game}): ایڈمن نے نیا ثبوت مانگا ہے۔ وجہ: $requestReason۔ براہ کرم دوبارہ اسکرین شاٹ اپلوڈ کریں۔',
-          'matchId': matchId,
-          'read': false,
-          'createdAt': FieldValue.serverTimestamp(),
-        });
-      }
-
+      final nowStr = DateTime.now().toIso8601String();
+      await SupabaseService.client
+          .from('team_matches')
+          .update({
+            'status': 'Rejected',
+            'adminNote': note,
+            'admin_note': note,
+            'rejectReason': note,
+            'reject_reason': note,
+            'rejectedBy': adminId,
+            'rejected_by': adminId,
+            'rejectedAt': nowStr,
+            'rejected_at': nowStr,
+          })
+          .or('matchId.eq.$matchId,match_id.eq.$matchId,id.eq.$matchId');
       return true;
     } catch (e) {
       debugPrint('[TeamMatchService] Error requesting new proof: $e');
@@ -912,7 +558,7 @@ class TeamMatchService {
     }
   }
 
-  /// Record team result in team_rankings collection
+  /// Record team result in team_rankings
   Future<void> _recordTeamResult(
     String teamId,
     String teamName,
@@ -925,116 +571,114 @@ class TeamMatchService {
     bool isDraw = false,
   }) async {
     try {
-      final docRef = _rankingsRef.doc(teamId);
-      final snap = await docRef.get();
-      if (!snap.exists) {
-        final ranking = TeamRanking(
-          teamId: teamId,
-          teamName: teamName,
-          leaderId: leaderId,
-          leaderName: leaderName,
-          avatar: avatar,
-          game: game,
-          wins: isWin ? 1 : 0,
-          losses: isLoss ? 1 : 0,
-          draws: isDraw ? 1 : 0,
-          totalMatches: 1,
-          points: isWin ? 3 : (isDraw ? 1 : 0),
-        );
-        await docRef.set(ranking.toMap());
-      } else {
-        await _firestore.runTransaction((tx) async {
-          final s = await tx.get(docRef);
-          final d = s.data() as Map<String, dynamic>? ?? {};
-          int w = (d['wins'] as num?)?.toInt() ?? 0;
-          int l = (d['losses'] as num?)?.toInt() ?? 0;
-          int dr = (d['draws'] as num?)?.toInt() ?? 0;
-          if (isWin) w++;
-          if (isLoss) l++;
-          if (isDraw) dr++;
-          final tm = w + l + dr;
-          final pts = (w * 3) + dr;
+      final rows = await SupabaseService.client
+          .from('team_rankings')
+          .select()
+          .or('teamId.eq.$teamId,team_id.eq.$teamId')
+          .limit(1);
 
-          tx.update(docRef, {
-            'wins': w,
-            'losses': l,
-            'draws': dr,
-            'totalMatches': tm,
-            'points': pts,
-            'teamName': teamName,
-            'avatar': avatar.isNotEmpty ? avatar : (d['avatar'] ?? ''),
-            'updatedAt': FieldValue.serverTimestamp(),
-          });
-        });
+      int w = isWin ? 1 : 0;
+      int l = isLoss ? 1 : 0;
+      int dr = isDraw ? 1 : 0;
+
+      if (rows.isNotEmpty) {
+        final d = rows.first;
+        w += (d['wins'] as num?)?.toInt() ?? 0;
+        l += (d['losses'] as num?)?.toInt() ?? 0;
+        dr += (d['draws'] as num?)?.toInt() ?? 0;
       }
-      // Also synchronize wins, losses, draws, points with teams collection
+
+      final tm = w + l + dr;
+      final pts = (w * 3) + dr;
+
+      final nowStr = DateTime.now().toIso8601String();
+      await SupabaseService.client.from('team_rankings').upsert({
+        'teamId': teamId,
+        'team_id': teamId,
+        'teamName': teamName,
+        'team_name': teamName,
+        'leaderId': leaderId,
+        'leader_id': leaderId,
+        'leaderName': leaderName,
+        'leader_name': leaderName,
+        'avatar': avatar,
+        'game': game,
+        'wins': w,
+        'losses': l,
+        'draws': dr,
+        'totalMatches': tm,
+        'total_matches': tm,
+        'points': pts,
+        'updatedAt': nowStr,
+        'updated_at': nowStr,
+      });
+
+      // Synchronize with teams table
       try {
-        final teamDocRef = _firestore.collection('teams').doc(teamId);
-        final teamSnap = await teamDocRef.get();
-        if (teamSnap.exists) {
-          final tData = teamSnap.data() as Map<String, dynamic>? ?? {};
-          int curWins = (tData['wins'] as num?)?.toInt() ?? 0;
-          int curLosses = (tData['losses'] as num?)?.toInt() ?? 0;
-          int curDraws = (tData['draws'] as num?)?.toInt() ?? 0;
-          if (isWin) curWins++;
-          if (isLoss) curLosses++;
-          if (isDraw) curDraws++;
-          final curPoints = (curWins * 3) + curDraws;
-          await teamDocRef.update({
-            'wins': curWins,
-            'losses': curLosses,
-            'draws': curDraws,
-            'points': curPoints,
-          });
-        }
-      } catch (e) {
-        debugPrint('[TeamMatchService] Error syncing team doc record: $e');
-      }
+        await SupabaseService.client.from('teams').update({
+          'wins': w,
+          'losses': l,
+          'draws': dr,
+          'points': pts,
+        }).or('id.eq.$teamId,team_id.eq.$teamId');
+      } catch (_) {}
     } catch (e) {
       debugPrint('[TeamMatchService] Error recording ranking: $e');
     }
   }
 
-  /// 9. Stream all matches (with optional status filter)
-  Stream<List<TeamMatch>> getAllMatchesStream({String? statusFilter}) {
-    Query q = _matchesRef.orderBy('createdAt', descending: true);
-    if (statusFilter != null && statusFilter != 'All') {
-      q = q.where('status', isEqualTo: statusFilter);
+  /// 9. Stream all matches
+  Stream<List<TeamMatch>> getAllMatchesStream({String? statusFilter}) async* {
+    while (true) {
+      try {
+        final list = await SupabaseService.getTeamMatches(status: statusFilter);
+        yield list.map((m) => TeamMatch.fromMap(m)).toList();
+      } catch (_) {
+        yield [];
+      }
+      await Future.delayed(const Duration(seconds: 4));
     }
-    return q.snapshots().map((snap) {
-      return snap.docs.map((d) => TeamMatch.fromFirestore(d)).toList();
-    });
   }
 
-  /// Stream of matches for a particular team or user
-  Stream<List<TeamMatch>> getUserTeamMatchesStream(String userId) {
-    return _matchesRef
-        .orderBy('createdAt', descending: true)
-        .snapshots()
-        .map((snap) {
-      return snap.docs
-          .map((d) => TeamMatch.fromFirestore(d))
-          .where((m) => m.isMemberOfMatch(userId))
-          .toList();
-    });
+  /// Stream of matches for a particular user
+  Stream<List<TeamMatch>> getUserTeamMatchesStream(String userId) async* {
+    while (true) {
+      try {
+        final list = await SupabaseService.getTeamMatches();
+        yield list
+            .map((m) => TeamMatch.fromMap(m))
+            .where((m) => m.isMemberOfMatch(userId))
+            .toList();
+      } catch (_) {
+        yield [];
+      }
+      await Future.delayed(const Duration(seconds: 4));
+    }
   }
 
   /// Stream single match by ID
-  Stream<TeamMatch?> getMatchStream(String matchId) {
-    return _matchesRef.doc(matchId).snapshots().map((snap) {
-      if (!snap.exists) return null;
-      return TeamMatch.fromFirestore(snap);
-    });
+  Stream<TeamMatch?> getMatchStream(String matchId) async* {
+    while (true) {
+      try {
+        final data = await SupabaseService.getTeamMatch(matchId);
+        yield data != null ? TeamMatch.fromMap(data) : null;
+      } catch (_) {
+        yield null;
+      }
+      await Future.delayed(const Duration(seconds: 3));
+    }
   }
 
   /// Stream Top 10 Leaderboard teams
-  Stream<List<TeamRanking>> getTopTeamsLeaderboard({int limit = 10}) {
-    return _rankingsRef
-        .orderBy('points', descending: true)
-        .limit(limit)
-        .snapshots()
-        .map((snap) {
-      return snap.docs.map((d) => TeamRanking.fromFirestore(d)).toList();
-    });
+  Stream<List<TeamRanking>> getTopTeamsLeaderboard({int limit = 10}) async* {
+    while (true) {
+      try {
+        final rows = await SupabaseService.query('team_rankings', order: 'points.desc', limit: limit);
+        yield rows.map((r) => TeamRanking.fromMap(r)).toList();
+      } catch (_) {
+        yield [];
+      }
+      await Future.delayed(const Duration(seconds: 5));
+    }
   }
 }

@@ -2,8 +2,6 @@ import 'dart:async';
 import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import 'package:games_khabar/compat/firebase_auth.dart';
-import 'package:games_khabar/compat/cloud_firestore.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:intl/intl.dart';
 import 'package:cached_network_image/cached_network_image.dart';
@@ -350,7 +348,7 @@ class _TeamMatchRoomScreenState extends State<TeamMatchRoomScreen> with SingleTi
 
   @override
   Widget build(BuildContext context) {
-    final currentUid = FirebaseAuth.instance.currentUser?.uid?? '';
+    final currentUid = GamerAuthService().currentUid ?? '';
 
     return StreamBuilder<TeamMatch?>(
       stream: _matchService.getMatchStream(widget.matchId),

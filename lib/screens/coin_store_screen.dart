@@ -1,6 +1,6 @@
 // Gamers ID Coin Store - In-App Rewards & Customization
 import 'dart:async';
-import 'package:games_khabar/compat/cloud_firestore.dart';
+import '../services/supabase_service.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:intl/intl.dart';
@@ -20,6 +20,34 @@ class CoinStoreScreen extends StatefulWidget {
 
 class _CoinStoreScreenState extends State<CoinStoreScreen> with SingleTickerProviderStateMixin {
   final CoinWalletService _walletService = CoinWalletService();
+
+  Stream<Map<String, dynamic>?> _userStream(String uid) async* {
+    while (true) {
+      Map<String, dynamic>? data;
+      try {
+        data = await SupabaseService.getUser(uid);
+      } catch (_) {}
+      yield data;
+      await Future.delayed(const Duration(seconds: 4));
+    }
+  }
+
+  Stream<List<Map<String, dynamic>>> _authorPostsStream(String uid) async* {
+    while (true) {
+      List<Map<String, dynamic>> list = [];
+      try {
+        final res = await SupabaseService.client
+            .from('posts')
+            .select()
+            .eq('authorId', uid)
+            .order('createdAt', ascending: false)
+            .limit(10);
+        list = List<Map<String, dynamic>>.from(res);
+      } catch (_) {}
+      yield list;
+      await Future.delayed(const Duration(seconds: 4));
+    }
+  }
   final GamerAuthService _authService = GamerAuthService();
 
   late TabController _tabController;
@@ -492,9 +520,9 @@ class _CoinStoreScreenState extends State<CoinStoreScreen> with SingleTickerProv
     required String name,
   }) async {
     try {
-      await FirebaseFirestore.instance.collection('users').doc(uid).set({
+      await SupabaseService.client.from('users').update({
         field: value,
-      }, SetOptions(merge: true));
+      }).eq('id', uid).catchError((_) => null);
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
@@ -522,15 +550,10 @@ class _CoinStoreScreenState extends State<CoinStoreScreen> with SingleTickerProv
         borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
       ),
       builder: (bottomCtx) {
-        return StreamBuilder<QuerySnapshot>(
-          stream: FirebaseFirestore.instance
-              .collection('posts')
-              .where('authorId', isEqualTo: uid)
-              .orderBy('createdAt', descending: true)
-              .limit(10)
-              .snapshots(),
+        return StreamBuilder<List<Map<String, dynamic>>>(
+          stream: _authorPostsStream(uid),
           builder: (context, snapshot) {
-            final posts = snapshot.data?.docs ?? [];
+            final posts = snapshot.data ?? [];
             return Padding(
               padding: const EdgeInsets.all(20),
               child: Column(
@@ -588,8 +611,8 @@ class _CoinStoreScreenState extends State<CoinStoreScreen> with SingleTickerProv
                         itemCount: posts.length,
                         separatorBuilder: (_, __) => const SizedBox(height: 8),
                         itemBuilder: (context, index) {
-                          final post = posts[index];
-                          final data = post.data() as Map<String, dynamic>? ?? {};
+                          final data = posts[index];
+                          final postId = (data['id'] ?? '').toString();
                           final content = (data['text'] ?? data['content'] ?? data['title'] ?? 'Community Post').toString();
                           final isAlreadyBoosted = data['isBoosted'] == true;
 
@@ -629,12 +652,12 @@ class _CoinStoreScreenState extends State<CoinStoreScreen> with SingleTickerProv
                                   Navigator.pop(bottomCtx);
                                   _handlePurchaseItem(
                                     uid: uid,
-                                    itemId: post.id,
+                                    itemId: postId,
                                     itemName: '$hours-Hour Feed Boost',
                                     category: 'feed_boost',
                                     costCoins: costCoins,
                                     metadata: {
-                                      'postId': post.id,
+                                      'postId': postId,
                                       'durationHours': hours,
                                     },
                                   );
@@ -704,18 +727,24 @@ class _CoinStoreScreenState extends State<CoinStoreScreen> with SingleTickerProv
         builder: (context, snapshot) {
           final wallet = snapshot.data ?? _walletService.currentWallet ?? CoinWallet.empty(uid);
 
-          return StreamBuilder<DocumentSnapshot>(
-            stream: FirebaseFirestore.instance.collection('users').doc(uid).snapshots(),
+          return StreamBuilder<Map<String, dynamic>?>(
+            stream: _userStream(uid),
             builder: (context, userSnap) {
-              final userData = userSnap.data?.data() as Map<String, dynamic>? ?? {};
+              final userData = userSnap.data ?? {};
               final activeFrame = userData['activeFrame'] as String? ?? '';
               final unlockedFrames = List<String>.from(userData['unlockedFrames'] ?? []);
               final activeBadge = userData['activeBadge'] as String? ?? '';
               final unlockedBadges = List<String>.from(userData['unlockedBadges'] ?? []);
               final activeChatColor = userData['chatColor'] as String? ?? '#00FF66';
               final unlockedChatColors = List<String>.from(userData['unlockedChatColors'] ?? []);
-              final vipPassUntil = (userData['vipTournamentPassUntil'] as Timestamp?)?.toDate();
-              final spotlightUntil = (userData['leaderboardSpotlightUntil'] as Timestamp?)?.toDate();
+              DateTime? vipPassUntil;
+              final rawVip = userData['vipTournamentPassUntil'];
+              if (rawVip is DateTime) vipPassUntil = rawVip;
+              else if (rawVip is String) vipPassUntil = DateTime.tryParse(rawVip);
+              DateTime? spotlightUntil;
+              final rawSpot = userData['leaderboardSpotlightUntil'];
+              if (rawSpot is DateTime) spotlightUntil = rawSpot;
+              else if (rawSpot is String) spotlightUntil = DateTime.tryParse(rawSpot);
 
               return Column(
                 children: [

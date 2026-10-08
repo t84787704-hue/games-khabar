@@ -1,8 +1,7 @@
-import 'package:games_khabar/compat/cloud_firestore.dart';
-import 'package:games_khabar/compat/firebase_storage.dart';
 import 'package:video_player/video_player.dart';
 import 'package:chewie/chewie.dart';
 import 'package:flutter/foundation.dart';
+import 'supabase_service.dart';
 
 /// Manages video controller lifecycle and cleanup
 class VideoControllerManager {
@@ -16,8 +15,6 @@ class VideoControllerManager {
 
   final Map<String, VideoPlayerController> _videoControllers = {};
   final Map<String, ChewieController?> _chewieControllers = {};
-  final FirebaseFirestore _firestore = FirebaseFirestore.instance;
-  final FirebaseStorage _storage = FirebaseStorage.instance;
 
   /// Register a video controller pair
   void registerController(
@@ -79,7 +76,7 @@ class VideoControllerManager {
     }
   }
 
-  /// Delete video from Firestore and Firebase Storage
+  /// Delete video from Supabase and Storage
   Future<bool> deleteVideo({
     required String videoId,
     required String videoStoragePath,
@@ -97,17 +94,25 @@ class VideoControllerManager {
       // Step 3: Remove from local cache
       unregisterController(videoId);
 
-      // Step 4: Delete from Firestore
-      await _firestore.collection(collectionPath).doc(videoId).delete();
-      debugPrint('✅ Deleted from Firestore: $videoId');
-
-      // Step 5: Delete from Firebase Storage
+      // Step 4: Delete from Supabase
       try {
-        await _storage.ref(videoStoragePath).delete();
+        await SupabaseService.client
+            .from(collectionPath)
+            .delete()
+            .or('id.eq.$videoId,doc_id.eq.$videoId');
+        debugPrint('✅ Deleted from DB: $videoId');
+      } catch (e) {
+        debugPrint('⚠️ DB deletion error: $e');
+      }
+
+      // Step 5: Delete from Supabase Storage
+      try {
+        await SupabaseService.client.storage
+            .from(SupabaseService.bucketUploads)
+            .remove([videoStoragePath]);
         debugPrint('✅ Deleted from Storage: $videoStoragePath');
       } catch (e) {
         debugPrint('⚠️ Storage file not found or already deleted: $e');
-        // Don't fail if storage delete fails - Firestore deletion is more critical
       }
 
       return true;

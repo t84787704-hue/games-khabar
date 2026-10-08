@@ -1,7 +1,7 @@
 import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
-import 'package:games_khabar/compat/cloud_firestore.dart';
+import '../../services/supabase_service.dart';
 import 'package:xml/xml.dart';
 
 class ManageNewsScreen extends StatefulWidget {
@@ -69,18 +69,19 @@ class _ManageNewsScreenState extends State<ManageNewsScreen> {
             }
 
             // Duplicate check using article URL
-            final existing = await FirebaseFirestore.instance
-                .collection('news')
-                .where('link', isEqualTo: link)
-                .limit(1)
-                .get();
+            final existing = await SupabaseService.client
+                .from('news')
+                .select()
+                .eq('link', link)
+                .limit(1);
 
-            if (existing.docs.isNotEmpty) {
+            if (existing.isNotEmpty) {
               skipped++;
               continue;
             }
 
-            await FirebaseFirestore.instance.collection('news').add({
+            final nowIso = DateTime.now().toIso8601String();
+            await SupabaseService.client.from('news').insert({
               'title': title,
               'content': _cleanHtml(description),
               'imageUrl': '',
@@ -88,9 +89,9 @@ class _ManageNewsScreenState extends State<ManageNewsScreen> {
               'sourceName': sourceName,
               'category': category,
               'pubDate': pubDate,
-              'createdAt': FieldValue.serverTimestamp(),
+              'createdAt': nowIso,
               'views': 0,
-            });
+            }).catchError((_) => null);
 
             added++;
           }

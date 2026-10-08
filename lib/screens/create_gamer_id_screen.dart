@@ -3,7 +3,6 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:cached_network_image/cached_network_image.dart';
-import 'package:games_khabar/compat/cloud_firestore.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../constants/gamer_theme.dart';
 import '../constants/mobile_games_rank_data.dart';
@@ -159,11 +158,8 @@ class _CreateGamerIdScreenState extends State<CreateGamerIdScreen> {
       final localFrame = prefs.getString('user_active_frame_$uid') ?? '';
       final localFrames = prefs.getStringList('user_unlocked_frames_$uid') ?? [];
       final localBadge = prefs.getString('user_active_badge_$uid') ?? '';
-      final localBadges = prefs.getStringList('user_unlocked_badges_$uid') ?? [];
-
-      final doc = await FirebaseFirestore.instance.collection('users').doc(uid).get();
-      if (doc.exists && mounted) {
-        final data = doc.data() ?? {};
+      final data = await SupabaseService.getUser(uid);
+      if (data != null && mounted) {
         final activeF = (data['activeFrame'] as String?) ?? localFrame;
         final unF = List<String>.from(data['unlockedFrames'] ?? localFrames);
         final activeB = (data['activeBadge'] as String?) ?? localBadge;

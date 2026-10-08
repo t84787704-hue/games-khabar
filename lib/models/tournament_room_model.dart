@@ -1,5 +1,3 @@
-import 'package:games_khabar/compat/cloud_firestore.dart';
-
 class TournamentRoom {
   final String id;
   final String hostId;
@@ -239,109 +237,108 @@ class TournamentRoom {
     }
   }
 
-  factory TournamentRoom.fromFirestore(DocumentSnapshot doc) {
-    final data = doc.data() as Map<String, dynamic>? ?? {};
+  static DateTime _parseDateTime(dynamic raw, [DateTime? fallback]) {
+    if (raw == null) return fallback ?? DateTime.now();
+    if (raw is DateTime) return raw;
+    if (raw is String) return DateTime.tryParse(raw) ?? (fallback ?? DateTime.now());
+    if (raw is int) return DateTime.fromMillisecondsSinceEpoch(raw);
+    try {
+      final dt = (raw as dynamic)?.toDate();
+      if (dt is DateTime) return dt;
+    } catch (_) {}
+    return fallback ?? DateTime.now();
+  }
 
-    DateTime start = DateTime.now().add(const Duration(hours: 1));
-    final rawStart = data['startTime'];
-    if (rawStart is Timestamp) {
-      start = rawStart.toDate();
-    } else if (rawStart is String) {
-      start = DateTime.tryParse(rawStart) ?? start;
+  static DateTime? _parseNullableDateTime(dynamic raw) {
+    if (raw == null) return null;
+    if (raw is DateTime) return raw;
+    if (raw is String) return DateTime.tryParse(raw);
+    if (raw is int) return DateTime.fromMillisecondsSinceEpoch(raw);
+    try {
+      final dt = (raw as dynamic)?.toDate();
+      if (dt is DateTime) return dt;
+    } catch (_) {}
+    return null;
+  }
+
+  factory TournamentRoom.fromFirestore(dynamic doc) {
+    if (doc == null) return TournamentRoom.fromMap({}, '');
+    try {
+      final data = (doc as dynamic).data();
+      if (data is Map<String, dynamic>) {
+        return TournamentRoom.fromMap(data, (doc as dynamic).id?.toString());
+      }
+    } catch (_) {}
+    if (doc is Map<String, dynamic>) {
+      return TournamentRoom.fromMap(doc, doc['id']?.toString());
     }
+    return TournamentRoom.fromMap({}, '');
+  }
 
-    DateTime? created;
-    final rawCreated = data['createdAt'];
-    if (rawCreated is Timestamp) {
-      created = rawCreated.toDate();
-    } else if (rawCreated is String) {
-      created = DateTime.tryParse(rawCreated);
-    }
+  factory TournamentRoom.fromMap(Map<String, dynamic> data, [String? docId]) {
+    DateTime start = _parseDateTime(data['startTime'] ?? data['start_time'], DateTime.now().add(const Duration(hours: 1)));
+    DateTime? created = _parseNullableDateTime(data['createdAt'] ?? data['created_at']);
 
-    final prizeCoins = (data['prizePoolCoins'] as num?)?.toInt() ?? 500;
-    final feeCoins = (data['entryFeeCoins'] as num?)?.toInt() ?? 0;
-    final rawPrize = data['prize']?.toString() ?? data['prizePool']?.toString() ?? '💰 $prizeCoins Coins Prize';
-    // Clean up any old rupee signs
+    final prizeCoins = (data['prizePoolCoins'] ?? data['prize_pool_coins'] as num?)?.toInt() ?? 500;
+    final feeCoins = (data['entryFeeCoins'] ?? data['entry_fee_coins'] as num?)?.toInt() ?? 0;
+    final rawPrize = data['prize']?.toString() ?? data['prizePool']?.toString() ?? data['prize_pool']?.toString() ?? '💰 $prizeCoins Coins Prize';
     final cleanPrize = rawPrize.replaceAll('₹', '💰 ').replaceAll('Cash', 'Coins');
-    final gType = data['gameName']?.toString() ?? data['gameType']?.toString() ?? 'BGMI';
-    final gMode = data['gameMode']?.toString() ?? (data['roomType'] ?? 'TDM 1v1');
-    final joined = List<String>.from(data['joinedPlayers'] ?? []);
-    final pNames = Map<String, String>.from(data['joinedPlayerNames'] ?? data['playerNames'] ?? {});
-    final cSlots = (data['currentSlots'] as num?)?.toInt() ?? (joined.isNotEmpty ? joined.length : 1);
-    final tSlots = (data['totalSlots'] as num?)?.toInt() ?? (data['maxSlots'] as num?)?.toInt() ?? 2;
-    final pPool = data['prizePool']?.toString() ?? cleanPrize;
+    final gType = data['gameName']?.toString() ?? data['game_name']?.toString() ?? data['gameType']?.toString() ?? data['game_type']?.toString() ?? 'BGMI';
+    final gMode = data['gameMode']?.toString() ?? data['game_mode']?.toString() ?? (data['roomType'] ?? data['room_type'] ?? 'TDM 1v1');
+    final joined = List<String>.from(data['joinedPlayers'] ?? data['joined_players'] ?? []);
+    final pNames = Map<String, String>.from(data['joinedPlayerNames'] ?? data['joined_player_names'] ?? data['playerNames'] ?? {});
+    final cSlots = (data['currentSlots'] ?? data['current_slots'] as num?)?.toInt() ?? (joined.isNotEmpty ? joined.length : 1);
+    final tSlots = (data['totalSlots'] ?? data['total_slots'] as num?)?.toInt() ?? (data['maxSlots'] ?? data['max_slots'] as num?)?.toInt() ?? 2;
+    final pPool = data['prizePool']?.toString() ?? data['prize_pool']?.toString() ?? cleanPrize;
     final statusStr = (data['status']?.toString() ?? 'active');
-    final winProofUrl = data['winProofUrl']?.toString() ?? data['proofUrl']?.toString();
-    DateTime? winProofUploadedAt;
-    final rawWinProofAt = data['winProofUploadedAt'];
-    if (rawWinProofAt is Timestamp) {
-      winProofUploadedAt = rawWinProofAt.toDate();
-    } else if (rawWinProofAt is String) {
-      winProofUploadedAt = DateTime.tryParse(rawWinProofAt);
-    }
-    final rewardStatus = (data['rewardStatus'] ?? (statusStr.toLowerCase() == 'completed' ? 'sent' : 'idle')).toString();
-    DateTime? completedAt;
-    final rawCompletedAt = data['completedAt'];
-    if (rawCompletedAt is Timestamp) {
-      completedAt = rawCompletedAt.toDate();
-    } else if (rawCompletedAt is String) {
-      completedAt = DateTime.tryParse(rawCompletedAt);
-    }
-
-    DateTime? autoApproveAt;
-    final rawAutoApproveAt = data['autoApproveAt'];
-    if (rawAutoApproveAt is Timestamp) {
-      autoApproveAt = rawAutoApproveAt.toDate();
-    } else if (rawAutoApproveAt is String) {
-      autoApproveAt = DateTime.tryParse(rawAutoApproveAt);
-    }
+    final winProofUrl = data['winProofUrl']?.toString() ?? data['win_proof_url']?.toString() ?? data['proofUrl']?.toString() ?? data['proof_url']?.toString();
+    DateTime? winProofUploadedAt = _parseNullableDateTime(data['winProofUploadedAt'] ?? data['win_proof_uploaded_at']);
+    final rewardStatus = (data['rewardStatus'] ?? data['reward_status'] ?? (statusStr.toLowerCase() == 'completed' ? 'sent' : 'idle')).toString();
+    DateTime? completedAt = _parseNullableDateTime(data['completedAt'] ?? data['completed_at']);
+    DateTime? autoApproveAt = _parseNullableDateTime(data['autoApproveAt'] ?? data['auto_approve_at']);
 
     final bool disputed = data['disputed'] == true || statusStr.toLowerCase() == 'disputed' || statusStr.toLowerCase() == 'under_review';
-    final String? disputedBy = data['disputedBy']?.toString();
-    final String? disputedByName = data['disputedByName']?.toString();
-    final String? disputeReason = data['disputeReason']?.toString();
-    final String? disputeProofUrl = data['disputeProofUrl']?.toString();
-    DateTime? disputedAt;
-    final rawDisputedAt = data['disputedAt'];
-    if (rawDisputedAt is Timestamp) {
-      disputedAt = rawDisputedAt.toDate();
-    } else if (rawDisputedAt is String) {
-      disputedAt = DateTime.tryParse(rawDisputedAt);
-    }
+    final String? disputedBy = (data['disputedBy'] ?? data['disputed_by'])?.toString();
+    final String? disputedByName = (data['disputedByName'] ?? data['disputed_by_name'])?.toString();
+    final String? disputeReason = (data['disputeReason'] ?? data['dispute_reason'])?.toString();
+    final String? disputeProofUrl = (data['disputeProofUrl'] ?? data['dispute_proof_url'])?.toString();
+    DateTime? disputedAt = _parseNullableDateTime(data['disputedAt'] ?? data['disputed_at']);
 
-    String resolvedHostName = (data['hostName'] ?? data['host'] ?? data['hostUsername'] ?? '').toString().trim();
+    String resolvedHostName = (data['hostName'] ?? data['host_name'] ?? data['host'] ?? data['hostUsername'] ?? '').toString().trim();
     if (resolvedHostName.isEmpty || resolvedHostName.toLowerCase() == 'host') {
-      final hId = (data['hostId'] ?? '').toString();
+      final hId = (data['hostId'] ?? data['host_id'] ?? '').toString();
       if (pNames.containsKey(hId) && pNames[hId]!.trim().isNotEmpty && pNames[hId]!.trim().toLowerCase() != 'host') {
         resolvedHostName = pNames[hId]!.trim();
       }
     }
     if (resolvedHostName.isEmpty) resolvedHostName = 'Host';
 
+    final id = (data['id'] ?? docId ?? '').toString();
+
     return TournamentRoom(
-      id: data['id'] ?? doc.id,
-      hostId: data['hostId'] ?? '',
+      id: id,
+      hostId: (data['hostId'] ?? data['host_id'] ?? '').toString(),
       hostName: resolvedHostName,
-      hostAvatar: data['hostAvatar'] ?? '',
+      hostAvatar: (data['hostAvatar'] ?? data['host_avatar'] ?? '').toString(),
       gameType: gType,
       gameMode: gMode,
-      roomType: data['roomType'] ?? gMode,
+      roomType: data['roomType'] ?? data['room_type'] ?? gMode,
       title: data['title'] ?? '$gType Match',
       map: data['map'] ?? 'Default',
       platform: data['platform'] ?? 'Mobile',
-      serverRegion: data['serverRegion'] ?? 'Asia / India',
+      serverRegion: data['serverRegion'] ?? data['server_region'] ?? 'Asia / India',
       rules: data['rules'] ?? 'Fair play only. No emulators or hacks allowed.',
       entryFee: data['entryFee']?.toString().replaceAll('₹', '') ?? (feeCoins > 0 ? '$feeCoins Coins' : 'FREE'),
       prize: cleanPrize,
       prizePool: pPool,
       prizePoolCoins: prizeCoins,
       entryFeeCoins: feeCoins,
-      escrowCoins: (data['escrowCoins'] as num?)?.toInt() ?? prizeCoins,
+      escrowCoins: (data['escrowCoins'] ?? data['escrow_coins'] as num?)?.toInt() ?? prizeCoins,
       status: statusStr.toUpperCase() == 'OPEN' ? 'active' : statusStr,
-      winnerUid: data['winnerUid'],
-      winnerName: data['winnerName'],
-      resultSubmissions: Map<String, dynamic>.from(data['resultSubmissions'] ?? {}),
-      roomId: data['roomId'] ?? '',
+      winnerUid: data['winnerUid'] ?? data['winner_uid'],
+      winnerName: data['winnerName'] ?? data['winner_name'],
+      resultSubmissions: Map<String, dynamic>.from(data['resultSubmissions'] ?? data['result_submissions'] ?? {}),
+      roomId: data['roomId'] ?? data['room_id'] ?? '',
       password: data['password'] ?? '',
       startTime: start,
       maxSlots: tSlots,
@@ -349,8 +346,8 @@ class TournamentRoom {
       totalSlots: tSlots,
       joinedPlayers: joined,
       joinedPlayerNames: pNames,
-      isLive: data['isLive'] ?? true,
-      isRoomRevealed: data['isRoomRevealed'] == true,
+      isLive: data['isLive'] ?? data['is_live'] ?? true,
+      isRoomRevealed: data['isRoomRevealed'] == true || data['is_room_revealed'] == true,
       createdAt: created,
       winProofUrl: winProofUrl,
       winProofUploadedAt: winProofUploadedAt,
@@ -367,53 +364,90 @@ class TournamentRoom {
   }
 
   Map<String, dynamic> toMap() {
+    final nowStr = (createdAt ?? DateTime.now()).toIso8601String();
     return {
       'id': id,
       'hostId': hostId,
+      'host_id': hostId,
       'hostName': hostName,
+      'host_name': hostName,
       'hostAvatar': hostAvatar,
+      'host_avatar': hostAvatar,
       'gameName': gameType,
+      'game_name': gameType,
       'gameType': gameType,
+      'game_type': gameType,
       'gameMode': gameMode,
+      'game_mode': gameMode,
       'roomType': roomType,
+      'room_type': roomType,
       'title': title.trim(),
       'map': map,
       'platform': platform,
       'serverRegion': serverRegion,
+      'server_region': serverRegion,
       'rules': rules,
       'entryFee': entryFee.trim(),
+      'entry_fee': entryFee.trim(),
       'prize': prize.trim(),
       'prizePool': prizePool.isNotEmpty ? prizePool : (prizePoolCoins > 0 ? '💰 $prizePoolCoins Coins' : prize),
+      'prize_pool': prizePool.isNotEmpty ? prizePool : (prizePoolCoins > 0 ? '💰 $prizePoolCoins Coins' : prize),
       'prizePoolCoins': prizePoolCoins,
+      'prize_pool_coins': prizePoolCoins,
       'entryFeeCoins': entryFeeCoins,
+      'entry_fee_coins': entryFeeCoins,
       'escrowCoins': escrowCoins,
+      'escrow_coins': escrowCoins,
       'status': status.toUpperCase() == 'OPEN' ? 'active' : status,
       'winnerUid': winnerUid,
+      'winner_uid': winnerUid,
       'winnerName': winnerName,
+      'winner_name': winnerName,
       'resultSubmissions': resultSubmissions,
+      'result_submissions': resultSubmissions,
       'roomId': roomId.trim(),
+      'room_id': roomId.trim(),
       'password': password.trim(),
-      'startTime': Timestamp.fromDate(startTime),
+      'startTime': startTime.toIso8601String(),
+      'start_time': startTime.toIso8601String(),
       'maxSlots': totalSlots > 0 ? totalSlots : maxSlots,
+      'max_slots': totalSlots > 0 ? totalSlots : maxSlots,
       'totalSlots': totalSlots > 0 ? totalSlots : maxSlots,
+      'total_slots': totalSlots > 0 ? totalSlots : maxSlots,
       'currentSlots': currentSlots > 0 ? currentSlots : (joinedPlayers.isNotEmpty ? joinedPlayers.length : 1),
+      'current_slots': currentSlots > 0 ? currentSlots : (joinedPlayers.isNotEmpty ? joinedPlayers.length : 1),
       'slots': '${currentSlots > 0 ? currentSlots : (joinedPlayers.isNotEmpty ? joinedPlayers.length : 1)}/${totalSlots > 0 ? totalSlots : maxSlots}',
       'joinedPlayers': joinedPlayers,
+      'joined_players': joinedPlayers,
       'joinedPlayerNames': joinedPlayerNames,
+      'joined_player_names': joinedPlayerNames,
       'isLive': isLive,
+      'is_live': isLive,
       'isRoomRevealed': isRoomRevealed,
-      'createdAt': createdAt != null ? Timestamp.fromDate(createdAt!) : FieldValue.serverTimestamp(),
+      'is_room_revealed': isRoomRevealed,
+      'createdAt': nowStr,
+      'created_at': nowStr,
       'winProofUrl': winProofUrl,
-      'winProofUploadedAt': winProofUploadedAt != null ? Timestamp.fromDate(winProofUploadedAt!) : null,
+      'win_proof_url': winProofUrl,
+      'winProofUploadedAt': winProofUploadedAt?.toIso8601String(),
+      'win_proof_uploaded_at': winProofUploadedAt?.toIso8601String(),
       'rewardStatus': rewardStatus,
-      'completedAt': completedAt != null ? Timestamp.fromDate(completedAt!) : null,
-      'autoApproveAt': autoApproveAt != null ? Timestamp.fromDate(autoApproveAt!) : null,
+      'reward_status': rewardStatus,
+      'completedAt': completedAt?.toIso8601String(),
+      'completed_at': completedAt?.toIso8601String(),
+      'autoApproveAt': autoApproveAt?.toIso8601String(),
+      'auto_approve_at': autoApproveAt?.toIso8601String(),
       'disputed': disputed,
       'disputedBy': disputedBy,
+      'disputed_by': disputedBy,
       'disputedByName': disputedByName,
+      'disputed_by_name': disputedByName,
       'disputeReason': disputeReason,
+      'dispute_reason': disputeReason,
       'disputeProofUrl': disputeProofUrl,
-      'disputedAt': disputedAt != null ? Timestamp.fromDate(disputedAt!) : null,
+      'dispute_proof_url': disputeProofUrl,
+      'disputedAt': disputedAt?.toIso8601String(),
+      'disputed_at': disputedAt?.toIso8601String(),
     };
   }
 

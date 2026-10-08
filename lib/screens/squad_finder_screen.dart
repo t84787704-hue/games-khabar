@@ -1,8 +1,7 @@
-import 'package:games_khabar/compat/cloud_firestore.dart';
-import 'package:games_khabar/compat/firebase_auth.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import '../services/supabase_service.dart';
 import '../constants/gamer_theme.dart';
 import '../services/theme_service.dart';
 import '../models/squad_post_model.dart';
@@ -95,8 +94,9 @@ class _SquadFinderScreenState extends State<SquadFinderScreen> {
 
   Future<void> _createSquadFromCard() async {
     if (_isPosting) return;
-    final authUser = FirebaseAuth.instance.currentUser;
-    if (authUser == null) {
+    final authUser = _authService.currentUser;
+    final currentGamer = _authService.currentGamer;
+    if (authUser == null && currentGamer == null) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('Please log in to create a squad!')),
       );
@@ -185,18 +185,17 @@ class _SquadFinderScreenState extends State<SquadFinderScreen> {
       'membersCount': 1,
       'requestedCount': 0,
       'joinRequests': <String>[],
-      'createdAt': FieldValue.serverTimestamp(),
-      'updatedAt': FieldValue.serverTimestamp(),
+      'createdAt': DateTime.now().toIso8601String(),
+      'updatedAt': DateTime.now().toIso8601String(),
     };
 
     try {
-      await FirebaseFirestore.instance.collection('lfg_posts').doc(uid).set(postData);
+      await SupabaseService.client.from('lfg_posts').upsert(postData).catchError((_) => null);
       try {
-        await FirebaseFirestore.instance.collection('squads').doc(uid).set(postData);
+        await SupabaseService.client.from('squads').upsert(postData).catchError((_) => null);
       } catch (_) {}
       try {
-        final chatRef = FirebaseFirestore.instance.collection('chats').doc(uid);
-        await chatRef.set({
+        await SupabaseService.client.from('chats').upsert({
           'squadId': uid,
           'chatId': uid,
           'postId': uid,
@@ -204,12 +203,12 @@ class _SquadFinderScreenState extends State<SquadFinderScreen> {
           'leaderUid': enteredUid,
           'gameUid': enteredUid,
           'hostEmail': email,
-          'createdAt': FieldValue.serverTimestamp(),
+          'createdAt': DateTime.now().toIso8601String(),
           'members': [uid],
           'isActive': true,
           'title': gamerName,
           'displayName': gamerName,
-        }, SetOptions(merge: true));
+        }).catchError((_) => null);
       } catch (_) {}
     } catch (e) {
       debugPrint('[SquadFinderScreen] Error saving squad: $e');
@@ -278,15 +277,15 @@ class _SquadFinderScreenState extends State<SquadFinderScreen> {
   }
 
   Future<void> _openCreateSquadSheet() async {
-    final authUser = FirebaseAuth.instance.currentUser;
-    if (authUser == null) {
+    final authUser = _authService.currentUser;
+    final currentGamer = _authService.currentGamer;
+    if (authUser == null && currentGamer == null) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('Please log in to post squad requests!')),
       );
       return;
     }
 
-    final currentGamer = _authService.currentGamer;
     if (currentGamer == null) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('Please create your Gamer ID to post squad requests!')),
@@ -294,11 +293,16 @@ class _SquadFinderScreenState extends State<SquadFinderScreen> {
       return;
     }
 
+    final uid = authUser?.id ?? currentGamer.userId;
+
     // Check if user already has an active squad in lfg_posts
     try {
-      final docRef = FirebaseFirestore.instance.collection('lfg_posts').doc(authUser.uid);
-      final existing = await docRef.get();
-      if (existing.exists && existing.data()?['isActive'] == true) {
+      final existing = await SupabaseService.client
+          .from('lfg_posts')
+          .select()
+          .eq('userId', uid)
+          .maybeSingle();
+      if (existing != null && (existing['isActive'] == true || existing['is_active'] == true)) {
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
             const SnackBar(
@@ -540,8 +544,9 @@ class _SquadFinderScreenState extends State<SquadFinderScreen> {
                       if (_isPosting) return;
                       _isPosting = true;
 
-                      final currentUser = FirebaseAuth.instance.currentUser;
-                      if (currentUser == null) {
+                      final currentUser = _authService.currentUser;
+                      final currentGamer = _authService.currentGamer;
+                      if (currentUser == null && currentGamer == null) {
                         _isPosting = false;
                         ScaffoldMessenger.of(context).showSnackBar(
                           const SnackBar(content: Text('Please log in to post squad requests!')),
@@ -558,37 +563,42 @@ class _SquadFinderScreenState extends State<SquadFinderScreen> {
                         return;
                       }
 
-                      final docRef = FirebaseFirestore.instance.collection('lfg_posts').doc(currentUser.uid);
-                      final existing = await docRef.get();
-                      if (existing.exists && existing.data()?['isActive'] == true) {
-                        // Already has active squad, don't create new
-                        _isPosting = false;
-                        if (ctx.mounted) Navigator.pop(ctx);
-                        if (mounted) {
-                          ScaffoldMessenger.of(context).showSnackBar(
-                            const SnackBar(
-                              content: Text('Aapka active squad pehle se hai!'),
-                              backgroundColor: GamerTheme.accentOrange,
-                            ),
-                          );
+                      final currentUid = currentUser?.id ?? currentGamer!.userId;
+                      try {
+                        final existing = await SupabaseService.client
+                            .from('lfg_posts')
+                            .select()
+                            .eq('userId', currentUid)
+                            .maybeSingle();
+                        if (existing != null && (existing['isActive'] == true || existing['is_active'] == true)) {
+                          // Already has active squad, don't create new
+                          _isPosting = false;
+                          if (ctx.mounted) Navigator.pop(ctx);
+                          if (mounted) {
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              const SnackBar(
+                                content: Text('Aapka active squad pehle se hai!'),
+                                backgroundColor: GamerTheme.accentOrange,
+                              ),
+                            );
+                          }
+                          return;
                         }
-                        return;
-                      }
+                      } catch (_) {}
 
                       Navigator.pop(ctx);
-                      final String uid = currentUser.uid;
-                      final String email = currentUser.email ?? '';
+                      final String uid = currentUid;
+                      final String email = currentUser?.email ?? currentGamer.email;
 
                       final String bgmiName = currentGamer.displayName.isNotEmpty
                           ? currentGamer.displayName
-                          : (currentUser.displayName ?? 'Squad Leader');
+                          : 'Squad Leader';
                       final String tag = currentGamer.username.isNotEmpty
                           ? currentGamer.username
                           : 'gamer';
-                      final String avatar = currentGamer.photoUrl.isNotEmpty
-                          ? currentGamer.photoUrl
-                          : (currentUser.photoURL ?? '');
+                      final String avatar = currentGamer.photoUrl;
 
+                      final nowIso = DateTime.now().toIso8601String();
                       final postData = {
                         'id': uid,
                         'postId': uid,
@@ -626,48 +636,44 @@ class _SquadFinderScreenState extends State<SquadFinderScreen> {
                         'membersCount': 1,
                         'requestedCount': 0,
                         'joinRequests': <String>[],
-                        'createdAt': FieldValue.serverTimestamp(),
-                        'updatedAt': FieldValue.serverTimestamp(),
+                        'createdAt': nowIso,
+                        'updatedAt': nowIso,
                       };
 
                       try {
-                        // 1. In lfg_posts creation, STOP using .add() with random ID. Use user UID as document ID:
-                        // collection('lfg_posts').doc(currentUser.uid).set({...})
-                        await docRef.set(postData);
-
-                        // Also sync to squads and chats with same uid
+                        await SupabaseService.client.from('lfg_posts').upsert(postData).catchError((_) => null);
                         try {
-                          await FirebaseFirestore.instance.collection('squads').doc(uid).set(postData);
+                          await SupabaseService.client.from('squads').upsert(postData).catchError((_) => null);
                         } catch (_) {}
 
                         try {
-                          final chatRef = FirebaseFirestore.instance.collection('chats').doc(uid);
-                          await chatRef.set({
+                          await SupabaseService.client.from('chats').upsert({
                             'squadId': uid,
                             'chatId': uid,
                             'postId': uid,
                             'hostId': uid,
                             'leaderUid': uid,
                             'hostEmail': email,
-                            'createdAt': FieldValue.serverTimestamp(),
+                            'createdAt': nowIso,
                             'members': [uid],
                             'isActive': true,
                             'title': bgmiName,
                             'displayName': bgmiName,
-                          }, SetOptions(merge: true));
+                          }).catchError((_) => null);
 
-                          await chatRef.collection('messages').add({
+                          await SupabaseService.client.from('messages').insert({
+                            'chatId': uid,
                             'text': 'Squad created!',
                             'senderId': uid,
                             'senderUid': uid,
-                            'timestamp': FieldValue.serverTimestamp(),
-                            'createdAt': FieldValue.serverTimestamp(),
-                          });
+                            'timestamp': nowIso,
+                            'createdAt': nowIso,
+                          }).catchError((_) => null);
                         } catch (_) {}
 
                         debugPrint('[SquadFinderScreen] Posted squad using user UID doc: $uid');
                       } catch (e) {
-                        debugPrint('[SquadFinderScreen] Error saving squad to Firestore: $e');
+                        debugPrint('[SquadFinderScreen] Error saving squad: $e');
                       } finally {
                         _isPosting = false;
                       }

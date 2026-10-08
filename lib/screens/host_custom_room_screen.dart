@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
-import 'package:games_khabar/compat/cloud_firestore.dart';
-import 'package:games_khabar/compat/firebase_auth.dart';
+import '../services/supabase_service.dart';
+import '../services/gamer_auth_service.dart';
 import '../constants/gamer_theme.dart';
 
 /// Host Custom Room Screen & Dialog
@@ -298,14 +298,20 @@ class _HostCustomRoomScreenState extends State<HostCustomRoomScreen> {
                 ),
                 onPressed: isPublishEnabled
                     ? () async {
-                        final user = FirebaseAuth.instance.currentUser;
-                        final uid = user?.uid ?? 'host_user';
-                        final name = user?.displayName ?? 'Host';
-                        final photo = user?.photoURL ?? '';
-                        final docRef = FirebaseFirestore.instance.collection('rooms').doc();
+                        final auth = GamerAuthService();
+                        final user = auth.currentUser;
+                        final currentGamer = auth.currentGamer;
+                        final uid = user?.id ?? currentGamer?.userId ?? 'host_user';
+                        final name = (currentGamer?.displayName.isNotEmpty == true)
+                            ? currentGamer!.displayName
+                            : (user?.userMetadata?['displayName'] ?? 'Host');
+                        final photo = currentGamer?.photoUrl ?? '';
+                        final roomId = SupabaseService.toUuid('${DateTime.now().millisecondsSinceEpoch}_$uid');
+                        final nowIso = DateTime.now().toIso8601String();
+                        final startTimeIso = DateTime.now().add(const Duration(minutes: 15)).toIso8601String();
 
                         final newRoomData = {
-                          'id': docRef.id,
+                          'id': roomId,
                           'title': titleController.text.trim().isNotEmpty ? titleController.text.trim() : 'BGMI Custom Match',
                           'hostId': uid,
                           'hostName': name,
@@ -329,7 +335,7 @@ class _HostCustomRoomScreenState extends State<HostCustomRoomScreen> {
                               'id': uid,
                               'name': name,
                               'photo': photo,
-                              'joinedAt': Timestamp.now(),
+                              'joinedAt': nowIso,
                             }
                           ],
                           'joinedPlayerNames': {uid: name},
@@ -337,12 +343,15 @@ class _HostCustomRoomScreenState extends State<HostCustomRoomScreen> {
                           'roomId': roomIdController.text.trim(),
                           'password': passController.text.trim(),
                           'status': 'active',
-                          'createdAt': FieldValue.serverTimestamp(),
-                          'startTime': Timestamp.fromDate(DateTime.now().add(const Duration(minutes: 15))),
+                          'createdAt': nowIso,
+                          'startTime': startTimeIso,
                           'isLive': true,
                         };
 
-                        await docRef.set(newRoomData);
+                        await SupabaseService.client.from('rooms').upsert(newRoomData).catchError((_) => null);
+                        try {
+                          await SupabaseService.client.from('tournament_rooms').upsert(newRoomData).catchError((_) => null);
+                        } catch (_) {}
 
                         if (mounted) {
                           Navigator.pop(context);

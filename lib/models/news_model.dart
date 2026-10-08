@@ -1,4 +1,3 @@
-import 'package:games_khabar/compat/cloud_firestore.dart';
 import '../services/translation_service.dart';
 import '../data/fallback_images.dart';
 
@@ -22,7 +21,7 @@ class NewsModel {
   final String? downloadSize;
   final String? sourceUrl;
   final bool isAuto;
-  final Timestamp? timestamp;
+  final DateTime? timestamp;
   final int? appId;
   final double? currentPrice;
   final double? originalPriceVal;
@@ -61,13 +60,19 @@ class NewsModel {
     this.releaseDate,
   })  : titleMap = titleMap ?? _createDefaultMap(title ?? ''),
         descriptionMap = descriptionMap ?? _createDefaultMap(description ?? ''),
-        timestamp = timestamp is Timestamp
-            ? timestamp
-            : (timestamp is int
-                ? Timestamp.fromMillisecondsSinceEpoch(timestamp)
-                : (timestamp is DateTime
-                    ? Timestamp.fromDate(timestamp)
-                    : null));
+        timestamp = _parseDateTime(timestamp);
+
+  static DateTime? _parseDateTime(dynamic val) {
+    if (val == null) return null;
+    if (val is DateTime) return val;
+    if (val is int) return DateTime.fromMillisecondsSinceEpoch(val);
+    if (val is String) return DateTime.tryParse(val);
+    try {
+      final dt = (val as dynamic)?.toDate();
+      if (dt is DateTime) return dt;
+    } catch (_) {}
+    return null;
+  }
 
   static Map<String, String> _createDefaultMap(String text) {
     return {
@@ -206,19 +211,32 @@ class NewsModel {
 
   String getContent([String? langCode]) => getDescription(langCode);
 
-  factory NewsModel.fromFirestore(DocumentSnapshot doc) {
-    final rawData = doc.data() as Map<String, dynamic>?;
-    final data = rawData!= null? rawData : <String, dynamic>{};
+  factory NewsModel.fromFirestore(dynamic doc) {
+    Map<String, dynamic> data = {};
+    String docId = '';
+    if (doc != null) {
+      try {
+        final d = (doc as dynamic).data();
+        if (d is Map<String, dynamic>) {
+          data = d;
+          docId = (doc as dynamic).id?.toString() ?? '';
+        }
+      } catch (_) {}
+      if (data.isEmpty && doc is Map<String, dynamic>) {
+        data = doc;
+        docId = doc['id']?.toString() ?? '';
+      }
+    }
 
     String formattedTime = 'Abhi abhi';
     if (data['timeAgo'] is String) {
       formattedTime = data['timeAgo'] as String;
     }
-    final ts = data['timestamp'] is Timestamp? data['timestamp'] as Timestamp : null;
-    if (ts!= null) {
-      final diff = DateTime.now().difference(ts.toDate());
+    final ts = _parseDateTime(data['timestamp'] ?? data['timestampMillis']);
+    if (ts != null) {
+      final diff = DateTime.now().difference(ts);
       if (diff.inMinutes < 60) {
-        formattedTime = '${diff.inMinutes <= 0? 1 : diff.inMinutes}m ago';
+        formattedTime = '${diff.inMinutes <= 0 ? 1 : diff.inMinutes}m ago';
       } else if (diff.inHours < 24) {
         formattedTime = '${diff.inHours}h ago';
       } else {
@@ -251,7 +269,7 @@ class NewsModel {
       img = getGameFallbackImage(
         category: cat,
         title: (data['title'] is Map ? (data['title']['en'] ?? data['title']['roman']) : data['title'])?.toString(),
-        docId: doc.id,
+        docId: docId,
       );
     }
 
@@ -301,17 +319,10 @@ class NewsModel {
       }).where((e) => e.isNotEmpty).toList();
     }
 
-    DateTime? releaseDate;
-    if (data['releaseDate'] is Timestamp) {
-      releaseDate = (data['releaseDate'] as Timestamp).toDate();
-    } else if (data['releaseDate'] is String) {
-      releaseDate = DateTime.tryParse(data['releaseDate'] as String);
-    } else if (data['releaseDate'] is int) {
-      releaseDate = DateTime.fromMillisecondsSinceEpoch(data['releaseDate'] as int);
-    }
+    DateTime? releaseDate = _parseDateTime(data['releaseDate']);
 
     return NewsModel(
-      id: doc.id,
+      id: docId.isNotEmpty ? docId : (data['id']?.toString() ?? ''),
       titleMap: parseTextMap(data['title'], ''),
       descriptionMap: parseTextMap(data['content']!= null? data['content'] : data['description'], ''),
       category: data['category'] is String? data['category'] as String : 'Gaming News',
@@ -433,10 +444,7 @@ class NewsModel {
   }
 
   factory NewsModel.fromJson(Map<String, dynamic> json) {
-    Timestamp? ts;
-    if (json['timestampMillis'] is int) {
-      ts = Timestamp.fromMillisecondsSinceEpoch(json['timestampMillis'] as int);
-    }
+    DateTime? ts = _parseDateTime(json['timestamp'] ?? json['timestampMillis']);
 
     Map<String, String> parseTextMap(dynamic val, String fallback) {
       if (val is Map) {
@@ -496,14 +504,7 @@ class NewsModel {
       }).where((e) => e.isNotEmpty).toList();
     }
 
-    DateTime? releaseDate;
-    if (json['releaseDate'] is Timestamp) {
-      releaseDate = (json['releaseDate'] as Timestamp).toDate();
-    } else if (json['releaseDate'] is String) {
-      releaseDate = DateTime.tryParse(json['releaseDate'] as String);
-    } else if (json['releaseDate'] is int) {
-      releaseDate = DateTime.fromMillisecondsSinceEpoch(json['releaseDate'] as int);
-    }
+    DateTime? releaseDate = _parseDateTime(json['releaseDate']);
 
     return NewsModel(
       id: json['id'] is String? json['id'] as String : '',

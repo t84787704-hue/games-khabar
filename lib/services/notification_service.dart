@@ -1,10 +1,8 @@
 import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:firebase_core/firebase_core.dart';
-import '../compat/firebase_auth.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
-import '../compat/cloud_firestore.dart';
 import 'package:http/http.dart' as http;
 import '../models/news_model.dart';
 import 'firestore_service.dart';
@@ -112,45 +110,43 @@ class NotificationService {
   /// Real-time listener for current user's squad notifications (e.g. requests, accepts)
   void _listenForSquadNotifications() {
     bool isFirstSnapshot = true;
-    FirebaseAuth.instance.authStateChanges().listen((user) {
-      if (user == null) return;
-      saveUserFcmToken(user.uid);
+    try {
+      SupabaseService.client.auth.onAuthStateChange.listen((data) {
+        final user = data.session?.user;
+        if (user == null) return;
+        saveUserFcmToken(user.id);
 
-      try {
-        FirebaseFirestore.instance
-            .collection('notifications')
-            .where('recipientUid', isEqualTo: user.uid)
-            .orderBy('createdAt', descending: true)
-            .limit(10)
-            .snapshots()
-            .listen((snapshot) {
-          if (isFirstSnapshot) {
-            isFirstSnapshot = false;
-            return;
-          }
+        try {
+          SupabaseService.client
+              .from('notifications')
+              .stream(primaryKey: ['id'])
+              .eq('recipientUid', user.id)
+              .order('created_at', ascending: false)
+              .limit(10)
+              .listen((rows) {
+            if (isFirstSnapshot) {
+              isFirstSnapshot = false;
+              return;
+            }
 
-          for (final change in snapshot.docChanges) {
-            if (change.type == DocumentChangeType.added) {
-              final data = change.doc.data();
-              if (data != null) {
-                final type = data['type'] as String? ?? '';
-                if (type.startsWith('squad_')) {
-                  final title = data['title'] as String? ?? 'Squad Update 🎮';
-                  final message = data['message'] as String? ?? 'New update in your squad!';
-                  final postId = data['postId'] as String? ?? '';
-                  showSquadNotification(
-                    title: title,
-                    body: message,
-                    postId: postId,
-                    recipientUid: user.uid,
-                  );
-                }
+            for (final map in rows) {
+              final type = map['type'] as String? ?? '';
+              if (type.startsWith('squad_')) {
+                final title = map['title'] as String? ?? 'Squad Update 🎮';
+                final message = map['message'] as String? ?? map['body'] as String? ?? 'New update in your squad!';
+                final postId = map['postId'] as String? ?? map['post_id'] as String? ?? '';
+                showSquadNotification(
+                  title: title,
+                  body: message,
+                  postId: postId,
+                  recipientUid: user.id,
+                );
               }
             }
-          }
-        }, onError: (_) {});
-      } catch (_) {}
-    });
+          }, onError: (_) {});
+        } catch (_) {}
+      });
+    } catch (_) {}
   }
 
   /// Show heads-up banner notification for squad events
@@ -161,7 +157,7 @@ class NotificationService {
     required String recipientUid,
   }) async {
     try {
-      final currentUid = FirebaseAuth.instance.currentUser?.uid;
+      final currentUid = SupabaseService.client.auth.currentUser?.id;
       // Trigger local notification if device matches recipient or in development
       if (currentUid != null && currentUid != recipientUid) {
         // Different user on this client - only show if on same physical test device
@@ -209,44 +205,39 @@ class NotificationService {
     } catch (_) {}
   }
 
-  /// Real-time Firestore listener: when a new doc is added, trigger notification "New: {gameName}"
+  /// Real-time news listener
   void _listenForNewNewsDocuments() {
     bool isFirstSnapshot = true;
     try {
-      FirebaseFirestore.instance
-          .collection('news')
-          .orderBy('timestamp', descending: true)
+      SupabaseService.client
+          .from('posts')
+          .stream(primaryKey: ['id'])
+          .order('created_at', ascending: false)
           .limit(10)
-          .snapshots()
-          .listen((snapshot) {
+          .listen((rows) {
         if (isFirstSnapshot) {
           isFirstSnapshot = false;
           return; // Skip initial batch on launch
         }
 
-        for (final change in snapshot.docChanges) {
-          if (change.type == DocumentChangeType.added) {
-            final data = change.doc.data();
-            if (data != null) {
-              final gameName = (data['gameName'] as String?)?.trim().isNotEmpty == true
-                  ? (data['gameName'] as String).trim()
-                  : ((data['category'] as String?)?.trim().isNotEmpty == true
-                      ? (data['category'] as String).trim()
-                      : 'Gaming News');
-              final title = data['title'] ?? 'Check out the latest gaming update!';
-              final newsId = change.doc.id;
-              final imageUrl = data['imageUrl'] as String?;
-              final category = data['category'] as String? ?? 'Gaming';
+        for (final data in rows) {
+          final gameName = (data['gameName'] ?? data['game_name'] as String?)?.trim().isNotEmpty == true
+              ? (data['gameName'] ?? data['game_name'] as String).trim()
+              : ((data['category'] as String?)?.trim().isNotEmpty == true
+                  ? (data['category'] as String).trim()
+                  : 'Gaming News');
+          final title = data['title']?.toString() ?? 'Check out the latest gaming update!';
+          final newsId = data['id']?.toString() ?? '';
+          final imageUrl = data['imageUrl'] ?? data['image_url'] as String?;
+          final category = data['category'] as String? ?? 'Gaming';
 
-              _showLocalNotification(
-                title: 'New: $gameName',
-                body: title,
-                newsId: newsId,
-                imageUrl: imageUrl,
-                category: category,
-              );
-            }
-          }
+          _showLocalNotification(
+            title: 'New: $gameName',
+            body: title,
+            newsId: newsId,
+            imageUrl: imageUrl,
+            category: category,
+          );
         }
       }, onError: (_) {});
     } catch (_) {}
@@ -500,16 +491,16 @@ class NotificationService {
       'click_action': 'FLUTTER_NOTIFICATION_CLICK',
     };
 
-    // 2. Save Notification Record in Firestore 'notifications' collection
+    // 2. Save Notification Record in Supabase 'notifications' table
     try {
-      await FirebaseFirestore.instance.collection('notifications').add({
+      await SupabaseService.client.from('notifications').insert({
         'title': notifTitle,
         'body': notifBody,
         'topic': topicName,
         'newsId': newsId,
         'category': category,
         'imageUrl': imageUrl ?? '',
-        'timestamp': FieldValue.serverTimestamp(),
+        'timestamp': DateTime.now().toIso8601String(),
         'status': 'sent',
       }).timeout(const Duration(seconds: 4));
     } catch (_) {}
@@ -536,7 +527,7 @@ class NotificationService {
     } catch (_) {}
   }
 
-  /// Create and store an in-app notification in Firestore
+  /// Create and store an in-app notification in Supabase
   Future<void> createNotification({
     required String userId,
     required String title,
@@ -545,20 +536,26 @@ class NotificationService {
     Map<String, dynamic>? additionalData,
   }) async {
     try {
-      await FirebaseFirestore.instance.collection('notifications').add({
+      final notifMap = {
         'recipientUid': userId,
         'userId': userId,
+        'user_id': userId,
         'title': title,
         'body': body,
         'message': body,
         'type': type,
         'read': false,
-        'createdAt': FieldValue.serverTimestamp(),
-        'timestamp': FieldValue.serverTimestamp(),
+        'createdAt': DateTime.now().toIso8601String(),
+        'created_at': DateTime.now().toIso8601String(),
+        'timestamp': DateTime.now().toIso8601String(),
         if (additionalData != null) ...additionalData,
-      });
+      };
 
-      // Sync notification to Supabase notifications table
+      try {
+        await SupabaseService.client.from('notifications').insert(notifMap);
+      } catch (_) {}
+
+      // Sync notification to Supabase notifications table via helper
       try {
         await SupabaseService.sendNotification({
           'userId': userId,

@@ -9,7 +9,6 @@ import '../services/theme_service.dart';
 import '../services/language_service.dart';
 import '../widgets/news_card.dart';
 import '../widgets/price_tracker_card.dart';
-import 'package:games_khabar/compat/cloud_firestore.dart';
 
 class FollowingScreen extends StatefulWidget {
   const FollowingScreen({super.key});
@@ -486,10 +485,18 @@ class _FollowingScreenState extends State<FollowingScreen> {
                     delegate: SliverChildBuilderDelegate(
                       (context, index) {
                         final game = followedPaidGames[index];
-                        return StreamBuilder<DocumentSnapshot<Map<String, dynamic>>>(
+                        return StreamBuilder<dynamic>(
                           stream: _priceService.streamGamePrice(game),
                           builder: (context, priceSnap) {
-                            final data = priceSnap.data?.data();
+                            final raw = priceSnap.data;
+                            Map<String, dynamic>? data;
+                            if (raw is Map<String, dynamic>) {
+                              data = raw;
+                            } else if (raw != null) {
+                              try {
+                                data = (raw as dynamic).data();
+                              } catch (_) {}
+                            }
                             final currentPrice = (data?['currentPrice'] as num?)?.toDouble() ??
                                 _getDefaultCurrentPrice(game);
                             final originalPrice = (data?['originalPrice'] as num?)?.toDouble() ??

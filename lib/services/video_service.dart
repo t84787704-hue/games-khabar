@@ -1,8 +1,7 @@
-import 'package:games_khabar/compat/cloud_firestore.dart';
-import 'package:games_khabar/compat/firebase_storage.dart';
 import 'package:video_player/video_player.dart';
 import 'package:chewie/chewie.dart';
 import 'package:flutter/foundation.dart';
+import 'supabase_service.dart';
 
 /// Service class to handle video operations with proper resource cleanup
 class VideoService {
@@ -13,9 +12,6 @@ class VideoService {
   }
 
   VideoService._internal();
-
-  final FirebaseFirestore _firestore = FirebaseFirestore.instance;
-  final FirebaseStorage _storage = FirebaseStorage.instance;
 
   /// Safely pause and dispose a single video controller pair
   Future<void> pauseAndDisposeController({
@@ -67,7 +63,7 @@ class VideoService {
     }
   }
 
-  /// Delete video from Firestore and Firebase Storage with proper cleanup
+  /// Delete video with proper cleanup
   Future<bool> deleteVideo({
     required String videoDocId,
     required String videoStoragePath,
@@ -76,21 +72,29 @@ class VideoService {
     required String collectionPath,
   }) async {
     try {
-      // Step 1: Pause and dispose controllers BEFORE deleting from Firebase
+      // Step 1: Pause and dispose controllers
       await pauseAndDisposeController(
         videoController: videoController,
         chewieController: chewieController,
       );
 
-      // Step 2: Delete from Firestore
-      await _firestore.collection(collectionPath).doc(videoDocId).delete();
-
-      // Step 3: Delete from Firebase Storage
+      // Step 2: Delete from database
       try {
-        await _storage.ref(videoStoragePath).delete();
+        await SupabaseService.client
+            .from(collectionPath)
+            .delete()
+            .or('id.eq.$videoDocId,doc_id.eq.$videoDocId');
+      } catch (e) {
+        debugPrint('Warning: Could not delete DB record: $e');
+      }
+
+      // Step 3: Delete from Supabase Storage
+      try {
+        await SupabaseService.client.storage
+            .from(SupabaseService.bucketUploads)
+            .remove([videoStoragePath]);
       } catch (e) {
         debugPrint('Warning: Could not delete storage file: $e');
-        // Don't throw - Firestore deletion is more critical
       }
 
       debugPrint('Video deleted successfully: $videoDocId');
@@ -118,12 +122,21 @@ class VideoService {
         index: index,
       );
 
-      // Step 2: Delete from Firestore
-      await _firestore.collection(collectionPath).doc(videoDocId).delete();
-
-      // Step 3: Delete from Firebase Storage
+      // Step 2: Delete from database
       try {
-        await _storage.ref(videoStoragePath).delete();
+        await SupabaseService.client
+            .from(collectionPath)
+            .delete()
+            .or('id.eq.$videoDocId,doc_id.eq.$videoDocId');
+      } catch (e) {
+        debugPrint('Warning: Could not delete DB record: $e');
+      }
+
+      // Step 3: Delete from storage
+      try {
+        await SupabaseService.client.storage
+            .from(SupabaseService.bucketUploads)
+            .remove([videoStoragePath]);
       } catch (e) {
         debugPrint('Warning: Could not delete storage file: $e');
       }
