@@ -2304,55 +2304,284 @@ class _GamerAdminDashboardScreenState extends State<GamerAdminDashboardScreen>
     );
   }
 
-  // ===================== TAB 5: REPORTS (FIRESTORE - NOT YET CONVERTED) =====================
+  // ===================== TAB 6: REPORTS (SUPABASE) =====================
   Widget _buildReportsTab() {
-    return StreamBuilder<QuerySnapshot>(
-      stream: FirebaseFirestore.instance.collection('reports').snapshots(),
+    return StreamBuilder<List<Map<String, dynamic>>>(
+      stream: SupabaseService.client
+          .from('reports')
+          .stream(primaryKey: ['id'])
+          .order('created_at', ascending: false),
       builder: (context, snapshot) {
-        final docs = snapshot.data?.docs ?? [];
-        if (docs.isEmpty) {
+        if (snapshot.hasError) {
           return Center(
-            child: Column(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                Container(
-                  padding: const EdgeInsets.all(16),
-                  decoration: BoxDecoration(
-                    color: const Color(0xFF00FF88).withOpacity(0.1),
-                    shape: BoxShape.circle,
-                  ),
-                  child: const Icon(Icons.verified_user_rounded, color: Color(0xFF00FF88), size: 40),
-                ),
-                const SizedBox(height: 14),
-                const Text(
-                  'Community Safe • 0 Open Reports',
-                  style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 16),
-                ),
-                const SizedBox(height: 6),
-                const Text(
-                  'No offensive content or active player violations reported.',
-                  style: TextStyle(color: Color(0xFF8B949E), fontSize: 12),
-                ),
-              ],
+            child: Padding(
+              padding: const EdgeInsets.all(32),
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  const Icon(Icons.error_outline_rounded, color: Color(0xFFFF4655), size: 48),
+                  const SizedBox(height: 14),
+                  const Text('Could not load reports',
+                      style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 15)),
+                  const SizedBox(height: 6),
+                  Text('${snapshot.error}',
+                      textAlign: TextAlign.center,
+                      style: const TextStyle(color: Color(0xFF8B949E), fontSize: 12)),
+                ],
+              ),
             ),
           );
         }
 
-        return ListView.builder(
-          padding: const EdgeInsets.all(16),
+        if (snapshot.connectionState == ConnectionState.waiting && !snapshot.hasData) {
+          return const Center(child: CircularProgressIndicator(color: Color(0xFF00FF88)));
+        }
+
+        final docs = snapshot.data ?? [];
+
+        if (docs.isEmpty) {
+          return Center(
+            child: Padding(
+              padding: const EdgeInsets.all(32),
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Container(
+                    padding: const EdgeInsets.all(18),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFF00FF88).withOpacity(0.1),
+                      shape: BoxShape.circle,
+                    ),
+                    child: const Icon(Icons.verified_user_rounded,
+                        color: Color(0xFF00FF88), size: 40),
+                  ),
+                  const SizedBox(height: 14),
+                  const Text(
+                    'Community Safe • 0 Open Reports',
+                    style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 16),
+                  ),
+                  const SizedBox(height: 6),
+                  const Text(
+                    'No offensive content or active player violations reported.',
+                    textAlign: TextAlign.center,
+                    style: TextStyle(color: Color(0xFF8B949E), fontSize: 12),
+                  ),
+                ],
+              ),
+            ),
+          );
+        }
+
+        return ListView.separated(
+          padding: const EdgeInsets.fromLTRB(16, 14, 16, 30),
           itemCount: docs.length,
+          separatorBuilder: (_, __) => const SizedBox(height: 10),
           itemBuilder: (context, index) {
-            final doc = docs[index];
-            final data = doc.data() as Map<String, dynamic>;
-            return Card(
-              color: const Color(0xFF10141D),
-              child: ListTile(
-                title: Text(data['reason'] ?? 'Report', style: const TextStyle(color: Colors.white)),
-                subtitle: Text('Target: ${data['targetId'] ?? 'N/A'}', style: const TextStyle(color: Color(0xFF8B949E))),
-                trailing: IconButton(
-                  icon: const Icon(Icons.check, color: Color(0xFF00FF88)),
-                  onPressed: () => doc.reference.delete(),
-                ),
+            final data = docs[index];
+            final reportId = (data['id'] ?? '').toString();
+            final reporterName = (data['reporter_username'] ?? 'Player').toString();
+            final reason = (data['reason'] ?? 'Report').toString();
+            final targetType = (data['target_type'] ?? '').toString();
+            final targetId = (data['target_id'] ?? '').toString();
+            final targetContent = (data['target_content'] ?? '').toString();
+            final status = (data['status'] ?? 'pending').toString();
+
+            final statusColor = status == 'resolved'
+                ? const Color(0xFF00FF88)
+                : (status == 'rejected'
+                    ? const Color(0xFFFF4655)
+                    : const Color(0xFFFFB800));
+
+            return Container(
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: const Color(0xFF10141D),
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(color: const Color(0xFF1F2B3E)),
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    children: [
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                        decoration: BoxDecoration(
+                          color: const Color(0xFFFF4655).withOpacity(0.15),
+                          borderRadius: BorderRadius.circular(6),
+                          border: Border.all(color: const Color(0xFFFF4655).withOpacity(0.5)),
+                        ),
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            const Icon(Icons.warning_amber_rounded,
+                                color: Color(0xFFFF4655), size: 12),
+                            const SizedBox(width: 4),
+                            Text(
+                              targetType.isNotEmpty ? targetType.toUpperCase() : 'REPORT',
+                              style: const TextStyle(
+                                  color: Color(0xFFFF4655),
+                                  fontSize: 10,
+                                  fontWeight: FontWeight.w900),
+                            ),
+                          ],
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                        decoration: BoxDecoration(
+                          color: statusColor.withOpacity(0.15),
+                          borderRadius: BorderRadius.circular(6),
+                          border: Border.all(color: statusColor.withOpacity(0.5)),
+                        ),
+                        child: Text(
+                          status.toUpperCase(),
+                          style: TextStyle(
+                              color: statusColor,
+                              fontSize: 10,
+                              fontWeight: FontWeight.w900),
+                        ),
+                      ),
+                      const Spacer(),
+                      IconButton(
+                        icon: const Icon(Icons.delete_outline,
+                            color: Color(0xFFFF4655), size: 20),
+                        tooltip: 'Delete Report',
+                        onPressed: () async {
+                          try {
+                            await SupabaseService.client
+                                .from('reports')
+                                .delete()
+                                .eq('id', reportId);
+                            if (context.mounted) {
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                const SnackBar(
+                                    content: Text('Report deleted'),
+                                    backgroundColor: Color(0xFFFF4655)),
+                              );
+                            }
+                          } catch (e) {
+                            if (context.mounted) {
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                SnackBar(
+                                    content: Text('Error: $e'),
+                                    backgroundColor: const Color(0xFFFF4655)),
+                              );
+                            }
+                          }
+                        },
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 8),
+
+                  Row(
+                    children: [
+                      const Icon(Icons.person_outline_rounded,
+                          color: Color(0xFF8B949E), size: 14),
+                      const SizedBox(width: 6),
+                      Expanded(
+                        child: Text(
+                          'Reported by: $reporterName',
+                          style: const TextStyle(
+                              color: Color(0xFF38BDF8),
+                              fontSize: 12,
+                              fontWeight: FontWeight.bold),
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 6),
+
+                  if (reason.isNotEmpty) ...[
+                    Container(
+                      padding: const EdgeInsets.all(10),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFF161B26),
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                      child: Row(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          const Icon(Icons.info_outline_rounded,
+                              color: Color(0xFFFFB800), size: 14),
+                          const SizedBox(width: 6),
+                          Expanded(
+                            child: Text(
+                              reason,
+                              style: const TextStyle(
+                                  color: Colors.white, fontSize: 12.5),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                    const SizedBox(height: 8),
+                  ],
+
+                  if (targetContent.isNotEmpty) ...[
+                    const Text('Reported Content:',
+                        style: TextStyle(color: Color(0xFF8B949E), fontSize: 11)),
+                    const SizedBox(height: 4),
+                    Text(
+                      targetContent,
+                      style: const TextStyle(color: Color(0xFFCBD5E1), fontSize: 12),
+                      maxLines: 3,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                    const SizedBox(height: 8),
+                  ],
+
+                  Row(
+                    children: [
+                      if (targetId.isNotEmpty)
+                        Text(
+                          'Target ID: ${targetId.length > 8 ? targetId.substring(0, 8) : targetId}',
+                          style: const TextStyle(
+                              color: Color(0xFF6E7681),
+                              fontSize: 10,
+                              fontFamily: 'monospace'),
+                        ),
+                      const Spacer(),
+                      if (status != 'resolved')
+                        TextButton.icon(
+                          style: TextButton.styleFrom(
+                            foregroundColor: const Color(0xFF00FF88),
+                            padding: const EdgeInsets.symmetric(
+                                horizontal: 8, vertical: 4),
+                          ),
+                          icon: const Icon(Icons.check_circle_outline, size: 14),
+                          label: const Text('Mark Resolved',
+                              style: TextStyle(
+                                  fontSize: 11, fontWeight: FontWeight.bold)),
+                          onPressed: () async {
+                            try {
+                              await SupabaseService.client
+                                  .from('reports')
+                                  .update({'status': 'resolved'}).eq('id', reportId);
+                              if (context.mounted) {
+                                ScaffoldMessenger.of(context).showSnackBar(
+                                  const SnackBar(
+                                      content: Text('Report marked resolved'),
+                                      backgroundColor: Color(0xFF00FF88)),
+                                );
+                              }
+                            } catch (e) {
+                              if (context.mounted) {
+                                ScaffoldMessenger.of(context).showSnackBar(
+                                  SnackBar(
+                                      content: Text('Error: $e'),
+                                      backgroundColor: const Color(0xFFFF4655)),
+                                );
+                              }
+                            }
+                          },
+                        ),
+                    ],
+                  ),
+                ],
               ),
             );
           },
@@ -2361,7 +2590,7 @@ class _GamerAdminDashboardScreenState extends State<GamerAdminDashboardScreen>
     );
   }
 
-  // ===================== TAB 6: COINS (FIRESTORE - NOT YET CONVERTED) =====================
+  // ===================== TAB 7: COINS (FIRESTORE - NOT YET CONVERTED) =====================
   Widget _buildCoinsTab() {
     return const _AdminCoinsVaultTab();
   }
