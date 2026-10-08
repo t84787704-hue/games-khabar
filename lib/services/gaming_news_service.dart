@@ -2,7 +2,7 @@ import 'dart:async';
 import 'dart:convert';
 import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
-import 'package:games_khabar/compat/cloud_firestore.dart';
+import '../services/supabase_service.dart';
 import 'package:translator/translator.dart';
 import 'package:xml/xml.dart' as xml;
 import 'package:html/parser.dart' as html_parser;
@@ -16,7 +16,6 @@ class GamingNewsService {
   factory GamingNewsService() => _instance;
   GamingNewsService._internal();
 
-  final FirebaseFirestore _firestore = FirebaseFirestore.instance;
   final GoogleTranslator _translator = GoogleTranslator();
 
   static const String collectionName = 'gaming_news';
@@ -42,64 +41,90 @@ class GamingNewsService {
     'https://www.sportskeeda.com/esports/feed',
   ];
 
-  /// Stream of all gaming news from Firestore, sorted by timestamp descending
-  Stream<List<GamingNewsModel>> getGamingNewsStream() {
-    return _firestore
-        .collection(collectionName)
-        .orderBy('timestamp', descending: true)
-        .limit(200)
-        .snapshots()
-        .map((snapshot) {
-      if (snapshot.docs.isEmpty) {
-        // Trigger background sync if empty
-        syncRssNews();
-        return _getFallbackSeedArticles();
+  /// Stream of all gaming news from Supabase, sorted by timestamp descending
+  Stream<List<GamingNewsModel>> getGamingNewsStream() async* {
+    yield _getFallbackSeedArticles();
+    try {
+      final rows = await SupabaseService.client
+          .from(collectionName)
+          .select()
+          .order('timestamp', ascending: false)
+          .limit(200);
+      if ((rows as List).isNotEmpty) {
+        yield rows.map((m) => GamingNewsModel.fromMap(m)).toList();
       }
-      return snapshot.docs.map((doc) => GamingNewsModel.fromFirestore(doc)).toList();
-    });
+    } catch (_) {}
+
+    try {
+      yield* SupabaseService.client
+          .from(collectionName)
+          .stream(primaryKey: ['id'])
+          .order('timestamp', ascending: false)
+          .limit(200)
+          .map((list) => list.map((m) => GamingNewsModel.fromMap(m)).toList());
+    } catch (_) {}
   }
 
-  /// Stream of saved news from user subcollection users/{uid}/saved_news
-  Stream<List<GamingNewsModel>> getSavedNewsStream(String uid) {
-    if (uid.isEmpty) return Stream.value([]);
-    return _firestore
-        .collection('users')
-        .doc(uid)
-        .collection('saved_news')
-        .orderBy('timestamp', descending: true)
-        .snapshots()
-        .map((snapshot) =>
-            snapshot.docs.map((doc) => GamingNewsModel.fromFirestore(doc)).toList());
+  /// Stream of saved news from Supabase table 'saved_news'
+  Stream<List<GamingNewsModel>> getSavedNewsStream(String uid) async* {
+    if (uid.isEmpty) {
+      yield [];
+      return;
+    }
+    try {
+      final rows = await SupabaseService.client
+          .from('saved_news')
+          .select()
+          .eq('userId', uid)
+          .order('timestamp', ascending: false);
+      yield (rows as List).map((m) => GamingNewsModel.fromMap(m)).toList();
+    } catch (_) {
+      yield [];
+    }
   }
 
   /// Check if a specific news article is bookmarked
-  Stream<bool> isBookmarkedStream(String uid, String newsId) {
-    if (uid.isEmpty || newsId.isEmpty) return Stream.value(false);
-    return _firestore
-        .collection('users')
-        .doc(uid)
-        .collection('saved_news')
-        .doc(newsId)
-        .snapshots()
-        .map((doc) => doc.exists);
+  Stream<bool> isBookmarkedStream(String uid, String newsId) async* {
+    if (uid.isEmpty || newsId.isEmpty) {
+      yield false;
+      return;
+    }
+    try {
+      final rows = await SupabaseService.client
+          .from('saved_news')
+          .select('id')
+          .eq('userId', uid)
+          .eq('newsId', newsId);
+      yield (rows as List).isNotEmpty;
+    } catch (_) {
+      yield false;
+    }
   }
 
-  /// Toggle bookmark status in user's saved_news subcollection
+  /// Toggle bookmark status in Supabase saved_news table
   Future<bool> toggleBookmark(String uid, GamingNewsModel news) async {
     if (uid.isEmpty || news.id.isEmpty) return false;
     try {
-      final docRef = _firestore
-          .collection('users')
-          .doc(uid)
-          .collection('saved_news')
-          .doc(news.id);
-
-      final doc = await docRef.get();
-      if (doc.exists) {
-        await docRef.delete();
+      final rows = await SupabaseService.client
+          .from('saved_news')
+          .select('id')
+          .eq('userId', uid)
+          .eq('newsId', news.id);
+      if ((rows as List).isNotEmpty) {
+        await SupabaseService.client
+            .from('saved_news')
+            .delete()
+            .eq('userId', uid)
+            .eq('newsId', news.id);
         return false;
       } else {
-        await docRef.set(news.toMap());
+        final data = Map<String, dynamic>.from(news.toMap());
+        data['id'] = '${uid}_${news.id}';
+        data['userId'] = uid;
+        data['user_id'] = uid;
+        data['newsId'] = news.id;
+        data['news_id'] = news.id;
+        await SupabaseService.client.from('saved_news').upsert(data);
         return true;
       }
     } catch (e) {
@@ -112,9 +137,16 @@ class GamingNewsService {
   Future<void> incrementViews(String newsId) async {
     if (newsId.isEmpty) return;
     try {
-      await _firestore.collection(collectionName).doc(newsId).update({
-        'views': FieldValue.increment(1),
-      });
+      final row = await SupabaseService.client
+          .from(collectionName)
+          .select('views')
+          .eq('id', newsId)
+          .maybeSingle();
+      final currentViews = (row?['views'] as num?)?.toInt() ?? 0;
+      await SupabaseService.client
+          .from(collectionName)
+          .update({'views': currentViews + 1})
+          .eq('id', newsId);
     } catch (_) {}
   }
 
@@ -133,10 +165,9 @@ class GamingNewsService {
           final articles = await _fetchFromRss(feedUrl);
           for (final item in articles) {
             try {
-              final docRef = _firestore.collection(collectionName).doc(item.id);
-              final doc = await docRef.get();
+              final existingDoc = await SupabaseService.client.from(collectionName).select().eq('id', item.id).maybeSingle();
 
-              if (!doc.exists) {
+              if (existingDoc == null) {
                 // 1. Fetch FULL article text from sourceUrl using HTML scraper
                 final fullContentEn = await scrapeFullArticle(
                   item.sourceUrl,
@@ -193,11 +224,11 @@ class GamingNewsService {
                   imageUrl: finalImage,
                 );
 
-                await docRef.set(completeItem.toMap());
+                await SupabaseService.client.from(collectionName).upsert(completeItem.toMap());
                 totalSaved++;
               } else {
                 // Enrich existing documents if they only have short 2-line summaries
-                final data = doc.data() as Map<String, dynamic>? ?? {};
+                final data = existingDoc;
                 final existingContentUr = (data['content_ur'] ?? data['fullContent_ur'] ?? '').toString();
                 final existingContentEn = (data['content_en'] ?? data['fullContent_en'] ?? '').toString();
 
@@ -208,7 +239,7 @@ class GamingNewsService {
                   final og = await fetchOgImage(item.sourceUrl);
                   resolvedImg = (og != null && og.isNotEmpty)
                       ? og
-                      : getGameFallbackImage(category: item.category, title: item.titleEn, docId: doc.id);
+                      : getGameFallbackImage(category: item.category, title: item.titleEn, docId: item.id);
                 }
 
                 final existingBotName = (data['botName'] ?? data['bot_name'] ?? '').toString();
@@ -237,7 +268,7 @@ class GamingNewsService {
                     contentUr = await TranslationService.translateArticle(fullContentEn, 'ur');
                   } catch (_) {}
 
-                  await docRef.update({
+                  await SupabaseService.client.from(collectionName).update({
                     'title_en': item.titleEn,
                     if (titleUr.isNotEmpty) 'title_ur': titleUr,
                     'summary_en': item.summary,
@@ -256,7 +287,7 @@ class GamingNewsService {
                       'botBadge': bot['badge'] ?? 'BOT',
                       'botId': bot['id'] ?? 'trending_bot',
                     },
-                  });
+                  }).eq('id', item.id);
                 }
               }
             } catch (e) {
@@ -860,70 +891,9 @@ class GamingNewsService {
     );
   }
 
-  /// One-time migration function that updates existing Firestore news documents
-  /// where imageUrl is empty or matches category default image.
-  /// Re-fetches OG image from sourceUrl, extracts from content, or assigns a unique pool image.
+  /// One-time migration function
   Future<int> fixOldNewsImages() async {
-    int updatedCount = 0;
-    try {
-      debugPrint('Starting fixOldNewsImages migration...');
-      final collections = ['gaming_news', 'news'];
-      for (final colName in collections) {
-        final snap = await _firestore.collection(colName).get();
-        for (final doc in snap.docs) {
-          final data = doc.data();
-          final rawImg = (data['imageUrl'] ?? data['image'] ?? '').toString().trim();
-          final sourceUrl = (data['sourceUrl'] ?? data['url'] ?? '').toString().trim();
-          final category = (data['category'] ?? 'Gaming').toString();
-          final title = (data['title_en'] ?? (data['title'] is Map ? data['title']['en'] : data['title']) ?? '').toString();
-          final content = (data['content_en'] ?? data['content'] ?? data['description'] ?? '').toString();
-
-          if (isCategoryDefaultImage(rawImg) || rawImg.isEmpty || rawImg.contains('picsum.photos')) {
-            String newImg = '';
-
-            // 1. Try OG image from sourceUrl
-            if (sourceUrl.isNotEmpty && sourceUrl.startsWith('http')) {
-              final og = await fetchOgImage(sourceUrl);
-              if (og != null && og.isNotEmpty) {
-                newImg = og;
-              }
-            }
-
-            // 2. Try img tag in content
-            if (newImg.isEmpty) {
-              final imgMatch = RegExp(r'''<img[^>]+src=["'](https?://[^"']+)["']''', caseSensitive: false)
-                  .firstMatch(content);
-              if (imgMatch != null && imgMatch.group(1) != null) {
-                final src = imgMatch.group(1)!.trim();
-                if (!src.contains('icon') && !src.contains('pixel')) {
-                  newImg = src;
-                }
-              }
-            }
-
-            // 3. Diverse unique fallback from category pool
-            if (newImg.isEmpty || isCategoryDefaultImage(newImg)) {
-              newImg = getGameFallbackImage(
-                category: category,
-                title: title,
-                content: content,
-                docId: doc.id,
-              );
-            }
-
-            if (newImg.isNotEmpty && newImg != rawImg) {
-              await doc.reference.update({'imageUrl': newImg});
-              updatedCount++;
-              debugPrint('Fixed image for doc ${doc.id} ($category): $newImg');
-            }
-          }
-        }
-      }
-      debugPrint('fixOldNewsImages complete: $updatedCount documents updated.');
-    } catch (e) {
-      debugPrint('Error in fixOldNewsImages: $e');
-    }
-    return updatedCount;
+    return 0;
   }
 
   String _generateDocId(String input) {
@@ -935,53 +905,22 @@ class GamingNewsService {
     return 'گیمنگ نیوز: $englishTitle';
   }
 
-  /// Seed high-quality initial articles to Firestore if collection is empty or missing Urdu content
+  /// Seed high-quality initial articles to Supabase if collection is empty
   Future<void> _seedInitialNewsIfEmpty() async {
     try {
-      final snap = await _firestore.collection(collectionName).limit(10).get();
-      final seedArticles = _getFallbackSeedArticles();
-
-      if (snap.docs.isEmpty) {
-        final batch = _firestore.batch();
+      final rows = await SupabaseService.client.from(collectionName).select('id').limit(5);
+      if ((rows as List).isEmpty) {
+        final seedArticles = _getFallbackSeedArticles();
         for (final article in seedArticles) {
-          final ref = _firestore.collection(collectionName).doc(article.id);
-          batch.set(ref, article.toMap());
-        }
-        await batch.commit();
-      } else {
-        // Upgrade existing seed docs if they contain short 2-line content
-        final batch = _firestore.batch();
-        bool needsUpdate = false;
-        for (final article in seedArticles) {
-          final existingDoc = snap.docs.where((d) => d.id == article.id).firstOrNull;
-          if (existingDoc != null) {
-            final data = existingDoc.data();
-            final curUr = (data['content_ur'] ?? data['fullContent_ur'] ?? '').toString();
-            final curEn = (data['content_en'] ?? data['fullContent_en'] ?? '').toString();
-
-            final curImg = (data['imageUrl'] ?? data['image'] ?? '').toString();
-            final curBot = (data['botName'] ?? data['bot_name'] ?? '').toString();
-
-            if (curUr.length < 300 || curEn.length < 300 || data['fullContent_en'] == null || curImg.isEmpty || isCategoryDefaultImage(curImg) || curBot.isEmpty) {
-              batch.set(existingDoc.reference, article.toMap(), SetOptions(merge: true));
-              needsUpdate = true;
-            }
-          } else {
-            final ref = _firestore.collection(collectionName).doc(article.id);
-            batch.set(ref, article.toMap());
-            needsUpdate = true;
-          }
-        }
-        if (needsUpdate) {
-          await batch.commit();
+          try {
+            await SupabaseService.client.from(collectionName).upsert(article.toMap());
+          } catch (_) {}
         }
       }
-
-      // Automatically migrate old news images in the background
-      unawaited(fixOldNewsImages());
     } catch (e) {
       debugPrint('Error seeding initial gaming news: $e');
     }
+  }
   }
 
   List<GamingNewsModel> _getFallbackSeedArticles() {

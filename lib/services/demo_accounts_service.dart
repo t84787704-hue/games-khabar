@@ -1,6 +1,6 @@
 import 'dart:math';
-import 'package:games_khabar/compat/cloud_firestore.dart';
 import 'package:flutter/foundation.dart';
+import '../services/supabase_service.dart';
 import '../models/gamer_user_model.dart';
 import '../models/gamer_post_model.dart';
 
@@ -8,8 +8,6 @@ class DemoAccountsService {
   static final DemoAccountsService _instance = DemoAccountsService._internal();
   factory DemoAccountsService() => _instance;
   DemoAccountsService._internal();
-
-  final FirebaseFirestore _firestore = FirebaseFirestore.instance;
 
   static const List<Map<String, dynamic>> demoUsersConfig = [
     {
@@ -244,14 +242,14 @@ class DemoAccountsService {
     },
   ];
 
-  /// Checks if demo accounts currently exist in Firestore
+  /// Checks if demo accounts currently exist in Supabase
   Future<int> getDemoAccountsCount() async {
     try {
-      final snap = await _firestore
-          .collection('users')
-          .where('isDemoAccount', isEqualTo: true)
-          .get();
-      return snap.docs.length;
+      final rows = await SupabaseService.client
+          .from('users')
+          .select('id')
+          .eq('isDemoAccount', true);
+      return (rows as List).length;
     } catch (e) {
       debugPrint('[DemoAccountsService] Error checking demo count: $e');
       return 0;
@@ -344,7 +342,7 @@ class DemoAccountsService {
       );
 
       // 1. Write User Document
-      await _firestore.collection('users').doc(uid).set(userDoc.toMap(), SetOptions(merge: true));
+      await SupabaseService.client.from('users').upsert(userDoc.toMap());
 
       // 2. Write Post 1: Squad Recruitment Post
       final post1Id = 'post_${uid}_recruit';
@@ -364,7 +362,7 @@ class DemoAccountsService {
         isDemoAccount: true,
         createdAt: createdAt.add(const Duration(days: 2, hours: 4)),
       );
-      await _firestore.collection('posts').doc(post1Id).set(post1.toMap(), SetOptions(merge: true));
+      await SupabaseService.client.from('posts').upsert(post1.toMap());
 
       // 3. Write Post 2: Achievement Post with Unsplash Gaming Image
       final post2Id = 'post_${uid}_achieve';
@@ -385,7 +383,7 @@ class DemoAccountsService {
         isDemoAccount: true,
         createdAt: createdAt.add(const Duration(days: 5, hours: 7)),
       );
-      await _firestore.collection('posts').doc(post2Id).set(post2.toMap(), SetOptions(merge: true));
+      await SupabaseService.client.from('posts').upsert(post2.toMap());
     }
 
     // 4. Follows System: Make demo accounts follow each other
@@ -398,12 +396,17 @@ class DemoAccountsService {
         final target = demoUsersConfig[targetIndex]['uid'] as String;
         final followDocId = '${current}_$target';
 
-        await _firestore.collection('follows').doc(followDocId).set({
+        await SupabaseService.client.from('follows').upsert({
+          'id': followDocId,
           'followerId': current,
+          'follower_id': current,
           'followingId': target,
+          'following_id': target,
           'isDemoFollow': true,
-          'createdAt': FieldValue.serverTimestamp(),
-        }, SetOptions(merge: true));
+          'is_demo_follow': true,
+          'createdAt': DateTime.now().toIso8601String(),
+          'created_at': DateTime.now().toIso8601String(),
+        });
       }
     }
 
@@ -417,50 +420,44 @@ class DemoAccountsService {
     int deletedCount = 0;
 
     try {
-      // 1. Find all demo users
-      final userSnap = await _firestore
-          .collection('users')
-          .where('isDemoAccount', isEqualTo: true)
-          .get();
-
       final demoUids = <String>{};
-      for (final doc in userSnap.docs) {
-        demoUids.add(doc.id);
-      }
-
-      // Also include demo_01 to demo_10 explicitly just in case
       for (final cfg in demoUsersConfig) {
         demoUids.add(cfg['uid'] as String);
       }
 
+      try {
+        final userRows = await SupabaseService.client
+            .from('users')
+            .select('id')
+            .eq('isDemoAccount', true);
+        for (final row in (userRows as List)) {
+          if (row['id'] != null) demoUids.add(row['id'].toString());
+        }
+      } catch (_) {}
+
       // 2. Delete demo users
       for (final uid in demoUids) {
-        await _firestore.collection('users').doc(uid).delete();
-        deletedCount++;
+        try {
+          await SupabaseService.client.from('users').delete().eq('id', uid);
+          deletedCount++;
+        } catch (_) {}
       }
 
       // 3. Delete demo posts
-      final postsSnap = await _firestore
-          .collection('posts')
-          .where('isDemoAccount', isEqualTo: true)
-          .get();
-      for (final doc in postsSnap.docs) {
-        await doc.reference.delete();
-      }
-      // Also delete by known ids
+      try {
+        await SupabaseService.client.from('posts').delete().eq('isDemoAccount', true);
+      } catch (_) {}
       for (final uid in demoUids) {
-        await _firestore.collection('posts').doc('post_${uid}_recruit').delete();
-        await _firestore.collection('posts').doc('post_${uid}_achieve').delete();
+        try {
+          await SupabaseService.client.from('posts').delete().eq('id', 'post_${uid}_recruit');
+          await SupabaseService.client.from('posts').delete().eq('id', 'post_${uid}_achieve');
+        } catch (_) {}
       }
 
       // 4. Delete demo follows
-      final followsSnap = await _firestore
-          .collection('follows')
-          .where('isDemoFollow', isEqualTo: true)
-          .get();
-      for (final doc in followsSnap.docs) {
-        await doc.reference.delete();
-      }
+      try {
+        await SupabaseService.client.from('follows').delete().eq('isDemoFollow', true);
+      } catch (_) {}
 
       debugPrint('[DemoAccountsService] Deleted $deletedCount demo accounts and cleanups.');
       return deletedCount;

@@ -1,7 +1,5 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
-import 'package:games_khabar/compat/firebase_auth.dart';
-import 'package:games_khabar/compat/cloud_firestore.dart';
 import '../constants/gamer_theme.dart';
 import '../services/gamer_auth_service.dart';
 import '../services/supabase_service.dart';
@@ -37,35 +35,32 @@ class _GamerMainNavigationScreenState extends State<GamerMainNavigationScreen> {
     _checkAdminStatus();
   }
 
-  void _checkAdminStatus() {
-    final user = FirebaseAuth.instance.currentUser;
-    if (user != null &&
-        user.email?.trim().toLowerCase() == 'tufailm483@gmail.com') {
+  void _checkAdminStatus() async {
+    final email = GamerAuthService().currentUser?.email ??
+        SupabaseService.client.auth.currentUser?.email;
+    if (email != null &&
+        email.trim().toLowerCase() == 'tufailm483@gmail.com') {
       setState(() => _isAdmin = true);
       return;
     }
 
-    if (user != null) {
-      _adminSub = FirebaseFirestore.instance
-          .collection('users')
-          .doc(user.uid)
-          .snapshots()
-          .listen((snapshot) {
-        if (!snapshot.exists) return;
-        final data = snapshot.data();
-        final isDocAdmin = data?['isAdmin'] == true;
-        final isEmailMatch =
-            user.email?.trim().toLowerCase() == 'tufailm483@gmail.com';
-        final newIsAdmin = isDocAdmin || isEmailMatch;
-        if (newIsAdmin != _isAdmin && mounted) {
-          setState(() {
-            _isAdmin = newIsAdmin;
-            if (!_isAdmin && _currentIndex > 4) {
-              _currentIndex = 0;
-            }
-          });
+    final currentUid = GamerAuthService().currentUid ??
+        SupabaseService.client.auth.currentUser?.id;
+    if (currentUid != null && currentUid.isNotEmpty) {
+      try {
+        final data = await SupabaseService.getUser(currentUid);
+        if (data != null && mounted) {
+          final isDocAdmin = data['isAdmin'] == true || data['is_admin'] == true;
+          if (isDocAdmin != _isAdmin) {
+            setState(() {
+              _isAdmin = isDocAdmin;
+              if (!_isAdmin && _currentIndex > 4) {
+                _currentIndex = 0;
+              }
+            });
+          }
         }
-      });
+      } catch (_) {}
     }
   }
 

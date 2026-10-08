@@ -1,7 +1,7 @@
 import 'dart:io';
 import 'dart:ui' as ui;
 import 'package:flutter/material.dart';
-import 'package:games_khabar/compat/cloud_firestore.dart';
+import '../services/supabase_service.dart';
 import 'package:google_mlkit_text_recognition/google_mlkit_text_recognition.dart';
 
 class WinProofValidationResult {
@@ -178,13 +178,12 @@ class WinProofValidator {
     // Check room document in Firestore if roomId provided
     if (roomId != null && roomId.isNotEmpty) {
       try {
-        final roomSnap = await FirebaseFirestore.instance.collection('rooms').doc(roomId).get();
-        if (roomSnap.exists) {
-          final rData = roomSnap.data() as Map<String, dynamic>? ?? {};
-          final rUsers = rData['joinedUsers'] as List?;
+        final rData = await SupabaseService.client.from('rooms').select().eq('id', roomId).maybeSingle();
+        if (rData != null) {
+          final rUsers = rData['joinedUsers'] ?? rData['joined_users'] as List?;
           if (rUsers != null) {
             for (final item in rUsers) {
-              if (item is Map && item['id'] == userId) {
+              if (item is Map && (item['id'] == userId || item['userId'] == userId)) {
                 final sName = item['name']?.toString().trim();
                 if (sName != null &&
                     sName.isNotEmpty &&
@@ -195,7 +194,7 @@ class WinProofValidator {
               }
             }
           }
-          final pNames = rData['joinedPlayerNames'] as Map?;
+          final pNames = (rData['joinedPlayerNames'] ?? rData['joined_player_names']) as Map?;
           if (pNames != null && pNames[userId] != null) {
             final sName = pNames[userId].toString().trim();
             if (sName.isNotEmpty && sName != 'Player' && sName != 'Gamer') {
@@ -210,9 +209,8 @@ class WinProofValidator {
 
     // 2. Check users collection -> bgmiName / inGameName / username
     try {
-      final userDoc = await FirebaseFirestore.instance.collection('users').doc(userId).get();
-      if (userDoc.exists) {
-        final uData = userDoc.data() as Map<String, dynamic>? ?? {};
+      final uData = await SupabaseService.getUser(userId);
+      if (uData != null) {
         final bgmiName = uData['bgmiName']?.toString().trim();
         if (bgmiName != null && bgmiName.isNotEmpty) return bgmiName;
 

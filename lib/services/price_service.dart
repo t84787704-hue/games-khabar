@@ -1,8 +1,7 @@
 import 'dart:math';
-import 'package:games_khabar/compat/cloud_firestore.dart';
-import 'package:games_khabar/compat/firebase_auth.dart';
 import 'package:flutter/foundation.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import '../services/supabase_service.dart';
 
 class PriceService {
   static final PriceService _instance = PriceService._internal();
@@ -43,9 +42,9 @@ class PriceService {
     if (_cachedUserId != null && _cachedUserId!.isNotEmpty) {
       return _cachedUserId!;
     }
-    final authUser = FirebaseAuth.instance.currentUser;
-    if (authUser != null && authUser.uid.isNotEmpty) {
-      _cachedUserId = authUser.uid;
+    final authUser = SupabaseService.client.auth.currentUser;
+    if (authUser != null && authUser.id.isNotEmpty) {
+      _cachedUserId = authUser.id;
       return _cachedUserId!;
     }
 
@@ -80,21 +79,45 @@ class PriceService {
     return false;
   }
 
-  Stream<DocumentSnapshot<Map<String, dynamic>>> streamGamePrice(String gameName) {
+  Stream<Map<String, dynamic>?> streamGamePrice(String gameName) async* {
     final docId = getGameDocId(gameName);
-    return FirebaseFirestore.instance
-        .collection('game_prices')
-        .doc(docId)
-        .snapshots();
+    try {
+      final initial = await SupabaseService.client
+          .from('game_prices')
+          .select()
+          .eq('id', docId)
+          .maybeSingle();
+      yield initial;
+    } catch (_) {}
+
+    try {
+      yield* SupabaseService.client
+          .from('game_prices')
+          .stream(primaryKey: ['id'])
+          .eq('id', docId)
+          .map((list) => list.isNotEmpty ? list.first : null);
+    } catch (_) {}
   }
 
-  Stream<DocumentSnapshot<Map<String, dynamic>>> streamUserAlert(String gameName, String userId) {
+  Stream<Map<String, dynamic>?> streamUserAlert(String gameName, String userId) async* {
     final gameId = getGameDocId(gameName);
     final alertDocId = '${userId}_$gameId';
-    return FirebaseFirestore.instance
-        .collection('user_price_alerts')
-        .doc(alertDocId)
-        .snapshots();
+    try {
+      final initial = await SupabaseService.client
+          .from('user_price_alerts')
+          .select()
+          .eq('id', alertDocId)
+          .maybeSingle();
+      yield initial;
+    } catch (_) {}
+
+    try {
+      yield* SupabaseService.client
+          .from('user_price_alerts')
+          .stream(primaryKey: ['id'])
+          .eq('id', alertDocId)
+          .map((list) => list.isNotEmpty ? list.first : null);
+    } catch (_) {}
   }
 
   Future<void> setPriceAlert({
@@ -106,19 +129,27 @@ class PriceService {
     final gameId = getGameDocId(gameName);
     final alertDocId = '${userId}_$gameId';
     final targetPriceUSD = (targetPricePKR / pkrExchangeRate);
+    final nowIso = DateTime.now().toIso8601String();
 
-    await FirebaseFirestore.instance
-        .collection('user_price_alerts')
-        .doc(alertDocId)
-        .set({
-      'userId': userId,
-      'gameName': gameName,
-      'targetPricePKR': targetPricePKR,
-      'targetPriceUSD': double.parse(targetPriceUSD.toStringAsFixed(2)),
-      'isActive': true,
-      'createdAt': FieldValue.serverTimestamp(),
-    }, SetOptions(merge: true));
-
-    debugPrint('[PriceService] Alert created for $gameName at Rs. $targetPricePKR ($targetPriceUSD USD)');
+    try {
+      await SupabaseService.client.from('user_price_alerts').upsert({
+        'id': alertDocId,
+        'userId': userId,
+        'user_id': userId,
+        'gameName': gameName,
+        'game_name': gameName,
+        'targetPricePKR': targetPricePKR,
+        'target_price_pkr': targetPricePKR,
+        'targetPriceUSD': double.parse(targetPriceUSD.toStringAsFixed(2)),
+        'target_price_usd': double.parse(targetPriceUSD.toStringAsFixed(2)),
+        'isActive': true,
+        'is_active': true,
+        'createdAt': nowIso,
+        'created_at': nowIso,
+      });
+      debugPrint('[PriceService] Alert created for $gameName at Rs. $targetPricePKR ($targetPriceUSD USD)');
+    } catch (e) {
+      debugPrint('[PriceService] Error setting price alert: $e');
+    }
   }
 }

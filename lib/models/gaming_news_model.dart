@@ -1,4 +1,3 @@
-import 'package:games_khabar/compat/cloud_firestore.dart';
 import '../data/game_bots_100.dart';
 import '../data/fallback_images.dart';
 
@@ -104,7 +103,8 @@ class GamingNewsModel {
       'category': category,
       'platform': platform,
       'imageUrl': finalImg,
-      'timestamp': Timestamp.fromDate(timestamp),
+      'timestamp': timestamp.toIso8601String(),
+      'created_at': timestamp.toIso8601String(),
       'views': views,
       'botName': botName.isNotEmpty ? botName : finalBot['name']!,
       'botAvatar': botAvatar.isNotEmpty ? botAvatar : finalBot['avatar']!,
@@ -113,22 +113,37 @@ class GamingNewsModel {
     };
   }
 
-  factory GamingNewsModel.fromFirestore(DocumentSnapshot doc) {
-    final data = doc.data() as Map<String, dynamic>? ?? {};
-    return GamingNewsModel.fromMap(data, doc.id);
+  factory GamingNewsModel.fromFirestore(dynamic doc) {
+    if (doc is Map<String, dynamic>) {
+      return GamingNewsModel.fromMap(doc);
+    }
+    try {
+      final data = (doc.data != null ? doc.data() : null) as Map<String, dynamic>? ?? {};
+      return GamingNewsModel.fromMap(data, doc.id?.toString());
+    } catch (_) {
+      return GamingNewsModel.fromMap({}, '');
+    }
   }
 
   factory GamingNewsModel.fromMap(Map<String, dynamic> map, [String? docId]) {
     DateTime parsedTime;
-    final rawTs = map['timestamp'];
-    if (rawTs is Timestamp) {
-      parsedTime = rawTs.toDate();
+    final rawTs = map['timestamp'] ?? map['created_at'];
+    if (rawTs is DateTime) {
+      parsedTime = rawTs;
     } else if (rawTs is String) {
       parsedTime = DateTime.tryParse(rawTs) ?? DateTime.now();
     } else if (rawTs is int) {
       parsedTime = DateTime.fromMillisecondsSinceEpoch(rawTs);
     } else {
-      parsedTime = DateTime.now();
+      try {
+        if (rawTs?.toDate != null) {
+          parsedTime = rawTs.toDate();
+        } else {
+          parsedTime = DateTime.now();
+        }
+      } catch (_) {
+        parsedTime = DateTime.now();
+      }
     }
 
     final rawEn = (map['fullContent_en'] ??

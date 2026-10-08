@@ -2,7 +2,6 @@ import 'package:flutter/material.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'dart:math' as math;
 import '../services/price_service.dart';
-import '../compat/cloud_firestore.dart';
 
 class PriceTrackerCard extends StatefulWidget {
   final String gameName;
@@ -286,10 +285,13 @@ class _PriceTrackerCardState extends State<PriceTrackerCard> {
           if (_userId == null)
             const SizedBox.shrink()
           else
-            StreamBuilder<DocumentSnapshot<Map<String, dynamic>>>(
+            StreamBuilder<Map<String, dynamic>?>(
               stream: _priceService.streamUserAlert(widget.gameName, _userId!),
               builder: (context, snapshot) {
-                final alertData = snapshot.data?.data();
+                final dynamic rawData = snapshot.data;
+                final Map<String, dynamic>? alertData = (rawData is Map<String, dynamic>)
+                    ? rawData
+                    : (rawData?.data != null ? rawData.data() : null);
                 final bool isAlertActive =
                     alertData != null && alertData['isActive'] == true && alertData['targetPricePKR'] != null;
 

@@ -2,7 +2,6 @@ import 'dart:convert';
 import 'dart:typed_data';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import 'package:games_khabar/compat/firebase_auth.dart';
 import 'package:image_picker/image_picker.dart';
 import '../models/news_model.dart';
 import '../services/firestore_service.dart';

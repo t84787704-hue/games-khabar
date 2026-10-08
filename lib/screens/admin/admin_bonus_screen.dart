@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import 'package:games_khabar/compat/cloud_firestore.dart';
+import '../../services/supabase_service.dart';
 import '../../services/theme_service.dart';
 
 class AdminBonusScreen extends StatefulWidget {
@@ -119,29 +119,33 @@ class _AdminBonusScreenState extends State<AdminBonusScreen> {
     });
 
     try {
-      final usersSnapshot = await FirebaseFirestore.instance.collection('users').get();
+      final usersRows = await SupabaseService.client.from('users').select();
       int usersRewarded = 0;
       int totalBonusCoinsDistributed = 0;
 
-      for (final doc in usersSnapshot.docs) {
-        final data = doc.data();
-        final totalAdsYesterday = (data['totalAdsYesterday'] as num?)?.toInt() ?? 0;
+      for (final doc in (usersRows as List)) {
+        final data = doc as Map<String, dynamic>;
+        final docId = (data['id'] ?? data['uid'] ?? '').toString();
+        final totalAdsYesterday = (data['totalAdsYesterday'] ?? data['total_ads_yesterday'] as num?)?.toInt() ?? 0;
 
-        if (totalAdsYesterday > 0) {
+        if (totalAdsYesterday > 0 && docId.isNotEmpty) {
           final totalBonus = (calculatedBonusPerAd * totalAdsYesterday).toInt();
           if (totalBonus > 0) {
+            final currentCoins = (data['coins'] as num?)?.toInt() ?? 0;
             // Update coins in user doc
-            await doc.reference.update({
-              'coins': FieldValue.increment(totalBonus),
-            });
+            await SupabaseService.client.from('users').update({
+              'coins': currentCoins + totalBonus,
+            }).eq('id', docId);
 
             // Send in-app notification without mentioning Ad or 50%
-            await FirebaseFirestore.instance.collection('notifications').add({
-              'userId': doc.id,
+            await SupabaseService.client.from('notifications').insert({
+              'userId': docId,
+              'user_id': docId,
               'title': '🎁 Daily Bonus!',
               'body': '🎁 Daily Bonus! $totalBonus Coins mil gaye! Kal ki activity ka inaam!',
               'type': 'bonus_reward',
-              'timestamp': FieldValue.serverTimestamp(),
+              'timestamp': DateTime.now().toIso8601String(),
+              'created_at': DateTime.now().toIso8601String(),
             });
 
             usersRewarded += 1;

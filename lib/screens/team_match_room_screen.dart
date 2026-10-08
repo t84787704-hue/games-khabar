@@ -30,6 +30,7 @@ class _TeamMatchRoomScreenState extends State<TeamMatchRoomScreen> with SingleTi
   Duration _timeRemaining = Duration.zero;
   bool _isUploadingProof = false;
   bool _isSendingChat = false;
+  String get currentUid => GamerAuthService().currentUid ?? '';
 
   @override
   void initState() {

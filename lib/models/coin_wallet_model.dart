@@ -1,4 +1,4 @@
-import 'package:games_khabar/compat/cloud_firestore.dart';
+// 100% Supabase Coin Wallet Model
 
 class CoinWallet {
   final String userId;
@@ -47,40 +47,60 @@ class CoinWallet {
     );
   }
 
-  factory CoinWallet.fromFirestore(DocumentSnapshot doc) {
-    final data = doc.data() as Map<String, dynamic>? ?? {};
-    return CoinWallet.fromMap(data, doc.id);
+  factory CoinWallet.fromFirestore(dynamic doc) {
+    if (doc is Map<String, dynamic>) {
+      return CoinWallet.fromMap(doc);
+    }
+    try {
+      final data = (doc.data != null ? doc.data() : null) as Map<String, dynamic>? ?? {};
+      return CoinWallet.fromMap(data, doc.id?.toString());
+    } catch (_) {
+      return CoinWallet.empty('');
+    }
   }
 
   factory CoinWallet.fromMap(Map<String, dynamic> data, [String? id]) {
     DateTime? parseDate(dynamic val) {
-      if (val is Timestamp) return val.toDate();
+      if (val == null) return null;
+      if (val is DateTime) return val;
       if (val is String) return DateTime.tryParse(val);
+      if (val is int) return DateTime.fromMillisecondsSinceEpoch(val);
+      try {
+        if (val.toDate != null) return val.toDate();
+      } catch (_) {}
       return null;
     }
 
     return CoinWallet(
-      userId: data['userId'] ?? id ?? '',
+      userId: data['userId'] ?? data['user_id'] ?? id ?? '',
       coins: (data['coins'] as num?)?.toInt() ?? 1000,
-      escrowCoins: (data['escrowCoins'] as num?)?.toInt() ?? 0,
-      lifetimeEarned: (data['lifetimeEarned'] as num?)?.toInt() ?? 1000,
-      trustScore: (data['trustScore'] as num?)?.toInt() ?? 100,
-      lastDailyBonusClaim: parseDate(data['lastDailyBonusClaim']),
-      createdAt: parseDate(data['createdAt']),
-      updatedAt: parseDate(data['updatedAt']),
+      escrowCoins: (data['escrowCoins'] ?? data['escrow_coins'] as num?)?.toInt() ?? 0,
+      lifetimeEarned: (data['lifetimeEarned'] ?? data['lifetime_earned'] as num?)?.toInt() ?? 1000,
+      trustScore: (data['trustScore'] ?? data['trust_score'] as num?)?.toInt() ?? 100,
+      lastDailyBonusClaim: parseDate(data['lastDailyBonusClaim'] ?? data['last_daily_bonus_claim']),
+      createdAt: parseDate(data['createdAt'] ?? data['created_at']),
+      updatedAt: parseDate(data['updatedAt'] ?? data['updated_at']),
     );
   }
 
   Map<String, dynamic> toMap() {
+    final nowIso = DateTime.now().toIso8601String();
     return {
       'userId': userId,
+      'user_id': userId,
       'coins': coins,
       'escrowCoins': escrowCoins,
+      'escrow_coins': escrowCoins,
       'lifetimeEarned': lifetimeEarned,
+      'lifetime_earned': lifetimeEarned,
       'trustScore': trustScore,
-      'lastDailyBonusClaim': lastDailyBonusClaim != null ? Timestamp.fromDate(lastDailyBonusClaim!) : null,
-      'createdAt': createdAt != null ? Timestamp.fromDate(createdAt!) : FieldValue.serverTimestamp(),
-      'updatedAt': FieldValue.serverTimestamp(),
+      'trust_score': trustScore,
+      'lastDailyBonusClaim': lastDailyBonusClaim?.toIso8601String(),
+      'last_daily_bonus_claim': lastDailyBonusClaim?.toIso8601String(),
+      'createdAt': createdAt?.toIso8601String() ?? nowIso,
+      'created_at': createdAt?.toIso8601String() ?? nowIso,
+      'updatedAt': nowIso,
+      'updated_at': nowIso,
     };
   }
 

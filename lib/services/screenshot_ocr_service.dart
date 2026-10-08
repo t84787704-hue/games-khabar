@@ -2,7 +2,7 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:google_mlkit_text_recognition/google_mlkit_text_recognition.dart';
-import 'package:games_khabar/compat/firebase_storage.dart';
+import '../services/supabase_service.dart';
 import '../models/tournament_room_model.dart';
 import '../constants/tournament_game_categories.dart';
 
@@ -210,16 +210,15 @@ class ScreenshotOcrService {
         }
       }
 
-      // 6. Upload to Firebase Storage
+      // 6. Upload to Supabase Storage
       String downloadUrl = '';
       try {
-        final storageRef = FirebaseStorage.instance
-            .ref()
-            .child('results')
-            .child('${roomId}_${userId}_${DateTime.now().millisecondsSinceEpoch}.jpg');
-
-        final uploadTask = await storageRef.putFile(file);
-        downloadUrl = await uploadTask.ref.getDownloadURL();
+        final uploaded = await SupabaseService.uploadFile(
+          file: file,
+          folder: 'results/$roomId',
+          bucket: SupabaseService.bucketScreenshots,
+        );
+        downloadUrl = uploaded ?? pickedFile.path;
       } catch (storageError) {
         debugPrint('ScreenshotOcrService: Storage upload notice: $storageError. Using local path.');
         downloadUrl = pickedFile.path;

@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import 'package:games_khabar/compat/firebase_auth.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:intl/intl.dart';
 import '../constants/gamer_theme.dart';
@@ -242,9 +241,8 @@ class _TeamProfileScreenState extends State<TeamProfileScreen> {
   Future<void> _handleJoinRequest(TeamModel team, String currentUid) async {
     final effectiveUid = currentUid.trim().isNotEmpty
         ? currentUid.trim()
-        : (FirebaseAuth.instance.currentUser?.uid ??
-            (GamerAuthService().currentUid ??
-                (SupabaseService.client.auth.currentUser?.id ?? '')));
+        : (GamerAuthService().currentUid ??
+            (SupabaseService.client.auth.currentUser?.id ?? ''));
 
     if (effectiveUid.isEmpty) {
       if (mounted) {
@@ -355,9 +353,8 @@ class _TeamProfileScreenState extends State<TeamProfileScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final currentUid = FirebaseAuth.instance.currentUser?.uid ??
-        (GamerAuthService().currentUid ??
-            (SupabaseService.client.auth.currentUser?.id ?? ''));
+    final currentUid = GamerAuthService().currentUid ??
+        (SupabaseService.client.auth.currentUser?.id ?? '');
 
     return StreamBuilder<TeamModel?>(
       stream: _teamService.getTeamStream(widget.teamId),

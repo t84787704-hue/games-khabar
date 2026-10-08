@@ -1,53 +1,44 @@
 import 'dart:async';
 import 'package:flutter/foundation.dart';
-import 'package:games_khabar/compat/cloud_firestore.dart';
+import '../services/supabase_service.dart';
 import '../models/news_model.dart';
 
 class FirestoreService {
   static final FirestoreService _instance = FirestoreService._internal();
   factory FirestoreService() => _instance;
 
-  FirebaseFirestore? get _db {
-    try {
-      return FirebaseFirestore.instance;
-    } catch (_) {
-      return null;
-    }
-  }
-
   final StreamController<List<NewsModel>> _streamController =
       StreamController<List<NewsModel>>.broadcast();
 
-  // In-memory master list (starts empty, populated strictly from Firestore)
+  // In-memory master list (populated strictly from Supabase)
   List<NewsModel> _currentNewsList = [];
 
   FirestoreService._internal() {
-    _initFirestoreListener();
+    _initSupabaseListener();
   }
 
-  void _initFirestoreListener() {
+  void _initSupabaseListener() {
     try {
-      final db = _db;
-      if (db == null) return;
-      db
-          .collection('news')
-          .orderBy('timestamp', descending: true)
-          .limit(1000)
-          .snapshots()
+      refreshNews();
+      SupabaseService.client
+          .from('news')
+          .stream(primaryKey: ['id'])
+          .order('timestamp', ascending: false)
+          .limit(500)
           .listen(
-        (snapshot) {
-          final firestoreItems =
-              snapshot.docs.map((doc) => NewsModel.fromFirestore(doc)).toList();
-
-          _currentNewsList = firestoreItems;
-          _streamController.add(List.from(_currentNewsList));
+        (data) {
+          final items = data.map((row) => NewsModel.fromMap(row)).toList();
+          if (items.isNotEmpty) {
+            _currentNewsList = items;
+            _streamController.add(List.from(_currentNewsList));
+          }
         },
         onError: (err) {
           _streamController.add(List.from(_currentNewsList));
         },
       );
     } catch (_) {
-      // Ignore initial Firestore listener setup failure
+      // Ignore initial listener setup failure
     }
   }
 
@@ -59,27 +50,21 @@ class FirestoreService {
     yield* _streamController.stream;
   }
 
-  // Force refresh news from Firestore (pull-to-refresh)
+  // Force refresh news from Supabase (pull-to-refresh)
   Future<void> refreshNews() async {
     try {
-      final db = _db;
-      if (db != null) {
-        final snapshot = await db
-            .collection('news')
-            .orderBy('timestamp', descending: true)
-            .limit(1000)
-            .get(const GetOptions(source: Source.serverAndCache))
-            .timeout(const Duration(seconds: 10));
+      final rows = await SupabaseService.client
+          .from('news')
+          .select()
+          .order('timestamp', ascending: false)
+          .limit(500)
+          .timeout(const Duration(seconds: 10));
 
-        final firestoreItems =
-            snapshot.docs.map((doc) => NewsModel.fromFirestore(doc)).toList();
-
-        _currentNewsList = firestoreItems;
-        _streamController.add(List.from(_currentNewsList));
-        return;
-      }
+      final items = (rows as List).map((row) => NewsModel.fromMap(row)).toList();
+      _currentNewsList = items;
+      _streamController.add(List.from(_currentNewsList));
+      return;
     } catch (_) {}
-    // Re-emit existing list on error or timeout
     _streamController.add(List.from(_currentNewsList));
   }
 
@@ -93,18 +78,19 @@ class FirestoreService {
     }
 
     try {
-      final db = _db;
-      if (db != null && !id.startsWith('local-')) {
-        await db
-            .collection('news')
-            .doc(id)
-            .update({'views': FieldValue.increment(1)})
-            .timeout(const Duration(seconds: 2));
+      if (!id.startsWith('local-')) {
+        final row = await SupabaseService.client.from('news').select('views').eq('id', id).maybeSingle();
+        final currentViews = (row?['views'] as num?)?.toInt() ?? 0;
+        await SupabaseService.client
+            .from('news')
+            .update({'views': currentViews + 1})
+            .eq('id', id)
+            .timeout(const Duration(seconds: 3));
       }
     } catch (_) {}
   }
 
-  // Update localized title & description translations in memory & Firestore
+  // Update localized title & description translations in memory & Supabase
   Future<void> updateNewsTranslation(
     String id,
     String langCode,
@@ -123,18 +109,15 @@ class FirestoreService {
     }
 
     try {
-      final db = _db;
-      if (db != null) {
-        await db.collection('news').doc(cleanId).set({
-          'title': {langCode: translatedTitle},
-          'description': {langCode: translatedDesc},
-          'content': {langCode: translatedDesc},
-        }, SetOptions(merge: true)).timeout(const Duration(seconds: 3));
-      }
+      await SupabaseService.client.from('news').update({
+        'title': {langCode: translatedTitle},
+        'description': {langCode: translatedDesc},
+        'content': {langCode: translatedDesc},
+      }).eq('id', cleanId).timeout(const Duration(seconds: 3));
     } catch (_) {}
   }
 
-  // Get single news article by ID (checks memory first, then Firestore)
+  // Get single news article by ID (checks memory first, then Supabase)
   Future<NewsModel?> getNewsById(String id) async {
     final cleanId = id.trim();
     if (cleanId.isEmpty) return null;
@@ -145,12 +128,9 @@ class FirestoreService {
     }
 
     try {
-      final db = _db;
-      if (db != null) {
-        final doc = await db.collection('news').doc(cleanId).get().timeout(const Duration(seconds: 4));
-        if (doc.exists && doc.data() != null) {
-          return NewsModel.fromFirestore(doc);
-        }
+      final row = await SupabaseService.client.from('news').select().eq('id', cleanId).maybeSingle().timeout(const Duration(seconds: 4));
+      if (row != null) {
+        return NewsModel.fromMap(row);
       }
     } catch (_) {}
     return null;
@@ -195,9 +175,9 @@ class FirestoreService {
     };
   }
 
-  // Add new article - instant UI update + background Firestore sync (returns created newsId)
+  // Add new article - instant UI update + background Supabase sync (returns created newsId)
   Future<String> addNews(Map<String, dynamic> data) async {
-    final localId = 'local-${DateTime.now().millisecondsSinceEpoch}';
+    final localId = 'news-${DateTime.now().millisecondsSinceEpoch}';
     final videoUrl = (data['videoUrl'] ?? '') as String;
     final titleMap = _parseTextMap(data['title'], 'Untitled');
     final descriptionMap = _parseTextMap(data['content'] ?? data['description'], '');
@@ -230,30 +210,26 @@ class FirestoreService {
 
     String createdId = localId;
 
-    // Try to sync with Firestore in background with 4-second timeout
     try {
-      final db = _db;
-      if (db != null) {
-        final docRef = await db.collection('news').add({
-          'title': titleMap,
-          'content': descriptionMap,
-          'description': descriptionMap,
-          'category': newModel.category,
-          'imageUrl': newModel.imageUrl,
-          'videoUrl': videoUrl,
-          'timestamp': FieldValue.serverTimestamp(),
-          'isPublished': true,
-          'views': 0,
-          'isFree': newModel.isFree,
-          'isFeatured': newModel.isFeatured,
-          'timeAgo': 'Just now',
-          if (newModel.sourceUrl != null) 'sourceUrl': newModel.sourceUrl,
-        }).timeout(const Duration(seconds: 4));
-        createdId = docRef.id;
-      }
-    } catch (_) {
-      // If Firestore write times out or fails (e.g. offline/permission), local store already has it
-    }
+      final nowIso = DateTime.now().toIso8601String();
+      await SupabaseService.client.from('news').upsert({
+        'id': localId,
+        'title': titleMap,
+        'content': descriptionMap,
+        'description': descriptionMap,
+        'category': newModel.category,
+        'imageUrl': newModel.imageUrl,
+        'videoUrl': videoUrl,
+        'timestamp': nowIso,
+        'created_at': nowIso,
+        'isPublished': true,
+        'views': 0,
+        'isFree': newModel.isFree,
+        'isFeatured': newModel.isFeatured,
+        'timeAgo': 'Just now',
+        if (newModel.sourceUrl != null) 'sourceUrl': newModel.sourceUrl,
+      }).timeout(const Duration(seconds: 4));
+    } catch (_) {}
 
     return createdId;
   }
@@ -264,18 +240,17 @@ class FirestoreService {
     _streamController.add(List.from(_currentNewsList));
 
     try {
-      final db = _db;
-      if (db != null && !id.startsWith('local-')) {
-        await db
-            .collection('news')
-            .doc(id)
+      if (!id.startsWith('local-')) {
+        await SupabaseService.client
+            .from('news')
             .delete()
+            .eq('id', id)
             .timeout(const Duration(seconds: 3));
       }
     } catch (_) {}
   }
 
-  // Update existing article - instant UI update + background Firestore sync
+  // Update existing article - instant UI update + background Supabase sync
   Future<void> updateNews(String id, Map<String, dynamic> data) async {
     final idx = _currentNewsList.indexWhere((item) => item.id == id);
     final titleMap = _parseTextMap(data['title'], 'Untitled');
@@ -312,8 +287,7 @@ class FirestoreService {
     }
 
     try {
-      final db = _db;
-      if (db != null && !id.startsWith('local-')) {
+      if (!id.startsWith('local-')) {
         final updateData = <String, dynamic>{
           'title': titleMap,
           'content': descriptionMap,
@@ -325,14 +299,13 @@ class FirestoreService {
           'isFeatured': isFeatured,
           if (data['sourceUrl'] != null) 'sourceUrl': data['sourceUrl'],
         };
-        await db.collection('news').doc(id).update(updateData).timeout(const Duration(seconds: 3));
+        await SupabaseService.client.from('news').update(updateData).eq('id', id).timeout(const Duration(seconds: 3));
       }
     } catch (_) {}
   }
 
   // Set an article as featured and demote previous featured articles without deleting them
   Future<void> makeFeatured(String newDocId) async {
-    // 1. Update in-memory state for immediate UI reactivity
     for (int i = 0; i < _currentNewsList.length; i++) {
       final item = _currentNewsList[i];
       if (item.id == newDocId) {
@@ -343,31 +316,9 @@ class FirestoreService {
     }
     _streamController.add(List.from(_currentNewsList));
 
-    // 2. Perform atomic batch update on Firestore
     try {
-      final db = _db;
-      if (db != null) {
-        final batch = db.batch();
-
-        // Find all currently featured documents
-        final querySnapshot = await db
-            .collection('news')
-            .where('isFeatured', isEqualTo: true)
-            .get();
-
-        for (var doc in querySnapshot.docs) {
-          if (doc.id != newDocId) {
-            // Demote old featured document to regular news (do NOT delete)
-            batch.update(doc.reference, {'isFeatured': false});
-          }
-        }
-
-        // Promote new document to featured
-        final newDocRef = db.collection('news').doc(newDocId);
-        batch.update(newDocRef, {'isFeatured': true});
-
-        await batch.commit();
-      }
+      await SupabaseService.client.from('news').update({'isFeatured': false}).eq('isFeatured', true);
+      await SupabaseService.client.from('news').update({'isFeatured': true}).eq('id', newDocId);
     } catch (e) {
       debugPrint('Error making news featured: $e');
     }

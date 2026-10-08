@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import '../compat/firebase_auth.dart';
 import 'package:intl/intl.dart';
 import '../constants/gamer_theme.dart';
 import '../models/squad_post_model.dart';
@@ -123,7 +122,7 @@ class _SendTeamChallengeDialogState extends State<SendTeamChallengeDialog> {
       return;
     }
 
-    final currentUser = FirebaseAuth.instance.currentUser;
+    final currentUser = GamerAuthService().currentUser;
     final currentGamer = GamerAuthService().currentGamer;
     if (currentUser == null) {
       ScaffoldMessenger.of(context).showSnackBar(
