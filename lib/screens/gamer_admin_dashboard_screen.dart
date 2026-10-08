@@ -55,7 +55,6 @@ class _GamerAdminDashboardScreenState extends State<GamerAdminDashboardScreen>
     super.dispose();
   }
 
-  /// Ensures 10 Pro Demo Accounts exist for testing & full app experience
   Future<void> _ensureSampleQueueExists() async {
     try {
       final demoService = DemoAccountsService();
@@ -627,7 +626,6 @@ class _GamerAdminDashboardScreenState extends State<GamerAdminDashboardScreen>
           ),
         ),
 
-        // Demo Accounts Management Bar
         Padding(
           padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
           child: Row(
@@ -693,12 +691,10 @@ class _GamerAdminDashboardScreenState extends State<GamerAdminDashboardScreen>
         ),
         const SizedBox(height: 4),
 
-        // ✅ SUPABASE: Users Stream (Firestore ki jagah)
         Expanded(
           child: StreamBuilder<List<Map<String, dynamic>>>(
             stream: SupabaseService.client.from('users').stream(primaryKey: ['id']),
             builder: (context, snapshot) {
-              // Error state
               if (snapshot.hasError) {
                 return Center(
                   child: Padding(
@@ -729,7 +725,6 @@ class _GamerAdminDashboardScreenState extends State<GamerAdminDashboardScreen>
                 );
               }
 
-              // Loading state
               if (snapshot.connectionState == ConnectionState.waiting &&
                   !snapshot.hasData) {
                 return const Center(
@@ -741,7 +736,6 @@ class _GamerAdminDashboardScreenState extends State<GamerAdminDashboardScreen>
               List<GamerUser> users =
                   docs.map((d) => GamerUser.fromMap(d)).toList();
 
-              // Search filter
               if (_userSearchQuery.isNotEmpty) {
                 users = users.where((u) {
                   return u.displayName.toLowerCase().contains(_userSearchQuery) ||
@@ -750,7 +744,6 @@ class _GamerAdminDashboardScreenState extends State<GamerAdminDashboardScreen>
                 }).toList();
               }
 
-              // ✅ EMPTY STATE (Team Matches jaisa)
               if (users.isEmpty) {
                 return Center(
                   child: Padding(
@@ -1008,7 +1001,7 @@ class _GamerAdminDashboardScreenState extends State<GamerAdminDashboardScreen>
     }
   }
 
-  // ===================== TAB 2: RANK VERIFICATION TAB =====================
+  // ===================== TAB 2: RANK VERIFICATION TAB (SUPABASE) =====================
   Widget _buildRankVerifyTab() {
     return Column(
       children: [
@@ -1110,18 +1103,39 @@ class _GamerAdminDashboardScreenState extends State<GamerAdminDashboardScreen>
         ),
 
         Expanded(
-          child: StreamBuilder<QuerySnapshot>(
-            stream: FirebaseFirestore.instance.collection('users').snapshots(),
+          child: StreamBuilder<List<Map<String, dynamic>>>(
+            stream: SupabaseService.client.from('users').stream(primaryKey: ['id']),
             builder: (context, snapshot) {
+              if (snapshot.hasError) {
+                return Center(
+                  child: Padding(
+                    padding: const EdgeInsets.all(32),
+                    child: Column(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        const Icon(Icons.error_outline_rounded, color: Color(0xFFFF4655), size: 48),
+                        const SizedBox(height: 14),
+                        const Text('Could not load rank requests',
+                            style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 15)),
+                        const SizedBox(height: 6),
+                        Text('${snapshot.error}',
+                            textAlign: TextAlign.center,
+                            style: const TextStyle(color: Color(0xFF8B949E), fontSize: 12)),
+                      ],
+                    ),
+                  ),
+                );
+              }
+
               if (snapshot.connectionState == ConnectionState.waiting && !snapshot.hasData) {
                 return const Center(child: CircularProgressIndicator(color: Color(0xFF00FF88)));
               }
 
-              final docs = snapshot.data?.docs ?? [];
+              final docs = snapshot.data ?? [];
               final List<_RankQueueItem> allItems = [];
 
               for (final doc in docs) {
-                final user = GamerUser.fromFirestore(doc);
+                final user = GamerUser.fromMap(doc);
                 for (int i = 0; i < user.games.length; i++) {
                   final game = user.games[i];
                   allItems.add(_RankQueueItem(user: user, game: game, gameIndex: i));
@@ -1165,12 +1179,10 @@ class _GamerAdminDashboardScreenState extends State<GamerAdminDashboardScreen>
                 if (_showOnlyPendingRanks && item.game.status != 'pending') {
                   return false;
                 }
-
                 if (_selectedRankGameFilter != 'All' &&
                     item.game.gameName.toLowerCase() != _selectedRankGameFilter.toLowerCase()) {
                   return false;
                 }
-
                 if (_rankSearchQuery.isNotEmpty) {
                   final uName = item.user.username.toLowerCase();
                   final dName = item.user.displayName.toLowerCase();
@@ -1183,7 +1195,6 @@ class _GamerAdminDashboardScreenState extends State<GamerAdminDashboardScreen>
                     return false;
                   }
                 }
-
                 return true;
               }).toList();
 
@@ -1721,7 +1732,7 @@ class _GamerAdminDashboardScreenState extends State<GamerAdminDashboardScreen>
     }
   }
 
-  // ===================== TAB 3: BLUE TICK QUEUE =====================
+  // ===================== TAB 3: BLUE TICK QUEUE (FIRESTORE - NOT YET CONVERTED) =====================
   Widget _buildBlueTickRequestsTab() {
     return StreamBuilder<QuerySnapshot>(
       stream: FirebaseFirestore.instance.collection('users').snapshots(),
@@ -1986,7 +1997,7 @@ class _GamerAdminDashboardScreenState extends State<GamerAdminDashboardScreen>
     }
   }
 
-  // ===================== TAB 3: POSTS MODERATION =====================
+  // ===================== TAB 3: POSTS MODERATION (FIRESTORE - NOT YET CONVERTED) =====================
   Widget _buildPostsModerationTab() {
     return StreamBuilder<QuerySnapshot>(
       stream: FirebaseFirestore.instance.collection('posts').orderBy('createdAt', descending: true).snapshots(),
@@ -2084,7 +2095,7 @@ class _GamerAdminDashboardScreenState extends State<GamerAdminDashboardScreen>
     );
   }
 
-  // ===================== TAB 4: REPORTS =====================
+  // ===================== TAB 4: REPORTS (FIRESTORE - NOT YET CONVERTED) =====================
   Widget _buildReportsTab() {
     return StreamBuilder<QuerySnapshot>(
       stream: FirebaseFirestore.instance.collection('reports').snapshots(),
@@ -2141,7 +2152,7 @@ class _GamerAdminDashboardScreenState extends State<GamerAdminDashboardScreen>
     );
   }
 
-  // ===================== TAB 5: COINS =====================
+  // ===================== TAB 5: COINS (FIRESTORE - NOT YET CONVERTED) =====================
   Widget _buildCoinsTab() {
     return const _AdminCoinsVaultTab();
   }
