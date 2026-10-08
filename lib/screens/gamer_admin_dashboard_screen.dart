@@ -34,7 +34,6 @@ class _GamerAdminDashboardScreenState extends State<GamerAdminDashboardScreen>
   bool _isSeedingDemo = false;
   bool _isDeletingDemo = false;
 
-  // Multi-Game Rank Verification state
   final TextEditingController _rankSearchController = TextEditingController();
   String _rankSearchQuery = '';
   String _selectedRankGameFilter = 'All';
@@ -215,14 +214,13 @@ class _GamerAdminDashboardScreenState extends State<GamerAdminDashboardScreen>
   }
 
   Widget _buildRankVerifyTabTitle() {
-    return StreamBuilder<QuerySnapshot>(
-      stream: FirebaseFirestore.instance.collection('users').snapshots(),
+    return StreamBuilder<List<Map<String, dynamic>>>(
+      stream: SupabaseService.getRealtimeUsers(),
       builder: (context, snapshot) {
         int pendingCount = 0;
         if (snapshot.hasData) {
-          for (final doc in snapshot.data!.docs) {
-            final data = doc.data() as Map<String, dynamic>?;
-            final rawGames = data?['games'];
+          for (final doc in snapshot.data!) {
+            final rawGames = doc['games'];
             if (rawGames is List) {
               for (final g in rawGames) {
                 if (g is Map && g['status'] == 'pending') {
@@ -261,97 +259,115 @@ class _GamerAdminDashboardScreenState extends State<GamerAdminDashboardScreen>
     );
   }
 
+  // ─────────────── HEADER (100% Supabase) ───────────────
   Widget _buildHeader() {
-    final currentEmail = FirebaseAuth.instance.currentUser?.email ?? 'tufailm483@gmail.com';
-    return Container(
-      padding: const EdgeInsets.all(14),
-      decoration: BoxDecoration(
-        color: const Color(0xFF10141D),
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: const Color(0xFF1F2B3E)),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withOpacity(0.3),
-            blurRadius: 10,
-            offset: const Offset(0, 4),
+    return StreamBuilder<List<Map<String, dynamic>>>(
+      stream: SupabaseService.getRealtimeUsers(),
+      builder: (context, snapshot) {
+        String currentEmail = 'Admin';
+        if (snapshot.hasData) {
+          final sbUserId = SupabaseService.client.auth.currentUser?.id;
+          if (sbUserId != null) {
+            for (final u in snapshot.data!) {
+              if (u['id'] == sbUserId) {
+                currentEmail = u['email']?.toString() ?? 'Admin';
+                break;
+              }
+            }
+          }
+        }
+
+        return Container(
+          padding: const EdgeInsets.all(14),
+          decoration: BoxDecoration(
+            color: const Color(0xFF10141D),
+            borderRadius: BorderRadius.circular(16),
+            border: Border.all(color: const Color(0xFF1F2B3E)),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withOpacity(0.3),
+                blurRadius: 10,
+                offset: const Offset(0, 4),
+              ),
+            ],
           ),
-        ],
-      ),
-      child: Row(
-        children: [
-          Container(
-            padding: const EdgeInsets.all(10),
-            decoration: BoxDecoration(
-              color: const Color(0xFF00FF88).withOpacity(0.12),
-              borderRadius: BorderRadius.circular(12),
-              border: Border.all(color: const Color(0xFF00FF88).withOpacity(0.4)),
-            ),
-            child: const Icon(
-              Icons.shield_rounded,
-              color: Color(0xFF00FF88),
-              size: 26,
-            ),
+          child: Row(
+            children: [
+              Container(
+                padding: const EdgeInsets.all(10),
+                decoration: BoxDecoration(
+                  color: const Color(0xFF00FF88).withOpacity(0.12),
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(color: const Color(0xFF00FF88).withOpacity(0.4)),
+                ),
+                child: const Icon(
+                  Icons.shield_rounded,
+                  color: Color(0xFF00FF88),
+                  size: 26,
+                ),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Text(
+                      'Admin Dashboard',
+                      style: TextStyle(
+                        color: Colors.white,
+                        fontSize: 18,
+                        fontWeight: FontWeight.w900,
+                        letterSpacing: 0.3,
+                      ),
+                    ),
+                    const SizedBox(height: 2),
+                    const Text(
+                      'Gamers ID Network • Admin Only',
+                      style: TextStyle(
+                        color: Color(0xFF00FF88),
+                        fontSize: 12,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      'Active Admin: $currentEmail',
+                      style: const TextStyle(
+                        color: Color(0xFF8B949E),
+                        fontSize: 11,
+                        fontFamily: 'monospace',
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                decoration: BoxDecoration(
+                  color: const Color(0xFF00FF88).withOpacity(0.15),
+                  borderRadius: BorderRadius.circular(8),
+                  border: Border.all(color: const Color(0xFF00FF88)),
+                ),
+                child: const Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Icon(Icons.fiber_manual_record, color: Color(0xFF00FF88), size: 10),
+                    SizedBox(width: 4),
+                    Text(
+                      'LIVE',
+                      style: TextStyle(
+                        color: Color(0xFF00FF88),
+                        fontSize: 10,
+                        fontWeight: FontWeight.w900,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
           ),
-          const SizedBox(width: 12),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                const Text(
-                  'Admin Dashboard',
-                  style: TextStyle(
-                    color: Colors.white,
-                    fontSize: 18,
-                    fontWeight: FontWeight.w900,
-                    letterSpacing: 0.3,
-                  ),
-                ),
-                const SizedBox(height: 2),
-                const Text(
-                  'Gamers ID Network • Admin Only',
-                  style: TextStyle(
-                    color: Color(0xFF00FF88),
-                    fontSize: 12,
-                    fontWeight: FontWeight.bold,
-                  ),
-                ),
-                const SizedBox(height: 4),
-                Text(
-                  'Active Admin: $currentEmail',
-                  style: const TextStyle(
-                    color: Color(0xFF8B949E),
-                    fontSize: 11,
-                    fontFamily: 'monospace',
-                  ),
-                ),
-              ],
-            ),
-          ),
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-            decoration: BoxDecoration(
-              color: const Color(0xFF00FF88).withOpacity(0.15),
-              borderRadius: BorderRadius.circular(8),
-              border: Border.all(color: const Color(0xFF00FF88)),
-            ),
-            child: const Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Icon(Icons.fiber_manual_record, color: Color(0xFF00FF88), size: 10),
-                SizedBox(width: 4),
-                Text(
-                  'LIVE',
-                  style: TextStyle(
-                    color: Color(0xFF00FF88),
-                    fontSize: 10,
-                    fontWeight: FontWeight.w900,
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ],
-      ),
+        );
+      },
     );
   }
 
@@ -469,29 +485,31 @@ class _GamerAdminDashboardScreenState extends State<GamerAdminDashboardScreen>
     );
   }
 
+  // ─────────────── STATS CARDS (100% Supabase) ───────────────
   Widget _buildStatsCards() {
-    return StreamBuilder<QuerySnapshot>(
-      stream: FirebaseFirestore.instance.collection('users').snapshots(),
+    return StreamBuilder<List<Map<String, dynamic>>>(
+      stream: SupabaseService.getRealtimeUsers(),
       builder: (context, userSnap) {
-        final totalUsers = userSnap.data?.docs.length ?? 0;
+        int totalUsers = 0;
         int totalCoins = 0;
+
         if (userSnap.hasData) {
-          for (final doc in userSnap.data!.docs) {
-            final data = doc.data() as Map<String, dynamic>;
-            final raw = data['coins'] ?? data['gCoins'];
+          totalUsers = userSnap.data!.length;
+          for (final doc in userSnap.data!) {
+            final raw = doc['coins'];
             totalCoins += (raw as num?)?.toInt() ?? 0;
           }
         }
 
-        return StreamBuilder<QuerySnapshot>(
-          stream: FirebaseFirestore.instance.collection('posts').snapshots(),
+        return StreamBuilder<List<Map<String, dynamic>>>(
+          stream: SupabaseService.getRealtimePosts(),
           builder: (context, postSnap) {
-            final totalPosts = postSnap.data?.docs.length ?? 0;
+            final totalPosts = postSnap.data?.length ?? 0;
 
-            return StreamBuilder<QuerySnapshot>(
-              stream: FirebaseFirestore.instance.collection('reports').snapshots(),
+            return StreamBuilder<List<Map<String, dynamic>>>(
+              stream: SupabaseService.getRealtimeReports(),
               builder: (context, reportSnap) {
-                final totalReports = reportSnap.data?.docs.length ?? 0;
+                final totalReports = reportSnap.data?.length ?? 0;
 
                 return GridView.count(
                   crossAxisCount: 2,
@@ -693,7 +711,7 @@ class _GamerAdminDashboardScreenState extends State<GamerAdminDashboardScreen>
 
         Expanded(
           child: StreamBuilder<List<Map<String, dynamic>>>(
-            stream: SupabaseService.client.from('users').stream(primaryKey: ['id']),
+            stream: SupabaseService.getRealtimeUsers(),
             builder: (context, snapshot) {
               if (snapshot.hasError) {
                 return Center(
@@ -960,35 +978,32 @@ class _GamerAdminDashboardScreenState extends State<GamerAdminDashboardScreen>
 
   Future<void> _toggleBanUser(GamerUser user) async {
     final nextBanned = !user.isBanned;
-    final adminUid = FirebaseAuth.instance.currentUser?.uid ?? 'admin';
+    final sbAdminId = SupabaseService.client.auth.currentUser?.id ?? '';
     try {
+      bool ok;
       if (nextBanned) {
-        await FirebaseFirestore.instance.collection('users').doc(user.uid).set({
-          'isBanned': true,
-          'bannedAt': FieldValue.serverTimestamp(),
-          'bannedBy': adminUid,
-          'bannedReason': 'Violating community guidelines or banned by admin',
-          'updatedAt': FieldValue.serverTimestamp(),
-        }, SetOptions(merge: true));
+        ok = await SupabaseService.banUser(
+          userId: user.uid,
+          adminId: sbAdminId,
+          reason: 'Violating community guidelines or banned by admin',
+        );
       } else {
-        await FirebaseFirestore.instance.collection('users').doc(user.uid).set({
-          'isBanned': false,
-          'bannedAt': null,
-          'bannedReason': null,
-          'bannedBy': null,
-          'updatedAt': FieldValue.serverTimestamp(),
-        }, SetOptions(merge: true));
+        ok = await SupabaseService.unbanUser(user.uid);
       }
 
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text(
-              nextBanned
-                  ? 'User @${user.username} banned successfully'
-                  : 'User @${user.username} unbanned successfully',
+              ok
+                  ? (nextBanned
+                      ? 'User @${user.username} banned successfully'
+                      : 'User @${user.username} unbanned successfully')
+                  : 'Error updating ban status',
             ),
-            backgroundColor: nextBanned ? const Color(0xFFFF4655) : const Color(0xFF00FF88),
+            backgroundColor: ok
+                ? (nextBanned ? const Color(0xFFFF4655) : const Color(0xFF00FF88))
+                : const Color(0xFFFF4655),
           ),
         );
       }
@@ -1104,7 +1119,7 @@ class _GamerAdminDashboardScreenState extends State<GamerAdminDashboardScreen>
 
         Expanded(
           child: StreamBuilder<List<Map<String, dynamic>>>(
-            stream: SupabaseService.client.from('users').stream(primaryKey: ['id']),
+            stream: SupabaseService.getRealtimeUsers(),
             builder: (context, snapshot) {
               if (snapshot.hasError) {
                 return Center(
@@ -1594,72 +1609,36 @@ class _GamerAdminDashboardScreenState extends State<GamerAdminDashboardScreen>
     );
   }
 
-  int _getRankWeight(String rankName) {
-    final r = rankName.toLowerCase().trim();
-    if (r.contains('conqueror') || r.contains('radiant') || r.contains('grandmaster')) return 100;
-    if (r.contains('legendary') || r.contains('immortal') || r.contains('heroic')) return 90;
-    if (r.contains('ace') || r.contains('ascendant')) return 80;
-    if (r.contains('crown') || r.contains('master')) return 70;
-    if (r.contains('diamond')) return 60;
-    if (r.contains('platinum') || r.contains('pro')) return 50;
-    if (r.contains('gold') || r.contains('elite')) return 40;
-    if (r.contains('silver') || r.contains('veteran')) return 30;
-    if (r.contains('bronze') || r.contains('rookie') || r.contains('iron')) return 20;
-    return 10;
-  }
-
   Future<void> _approveRankVerification(_RankQueueItem item) async {
     try {
-      final targetDocId = item.game.ownerUid.isNotEmpty ? item.game.ownerUid : item.user.uid;
+      final targetUserId = item.game.ownerUid.isNotEmpty ? item.game.ownerUid : item.user.uid;
       final currentAdmin = GamerAuthService().currentGamer?.displayName ?? 'Admin';
 
-      final Map<String, dynamic> updateData = {
-        'rank': item.game.claimedRank,
-        'tier': item.game.claimedRank,
-        'selectedGame': item.game.gameName,
-        'selectedRank': item.game.claimedRank,
-        'isRankVerified': true,
-        'rankStatus': 'Verified',
-        'rankVerifiedBy': currentAdmin,
-        'rankRejectReason': '',
-        'updatedAt': FieldValue.serverTimestamp(),
-      };
-
-      if (item.gameIndex >= 0 && item.gameIndex < item.user.games.length) {
-        final updatedGames = List<UserGameRank>.from(item.user.games);
-        final approvedGame = item.game.copyWith(
-          isVerified: true,
-          verifiedRank: item.game.claimedRank,
-          status: 'approved',
-          ownerUid: targetDocId,
-        );
-        updatedGames[item.gameIndex] = approvedGame;
-        updateData['games'] = updatedGames.map((g) => g.toMap()).toList();
-      }
-
-      await FirebaseFirestore.instance.collection('users').doc(targetDocId).set(
-        updateData,
-        SetOptions(merge: true),
+      final ok = await SupabaseService.approveRank(
+        userId: targetUserId,
+        rank: item.game.claimedRank,
+        gameName: item.game.gameName,
+        adminName: currentAdmin,
       );
 
       try {
         await NotificationService().createNotification(
-          userId: targetDocId,
+          userId: targetUserId,
           title: 'Rank Verified! 🎉',
           body: 'آپ کا ${item.game.claimedRank} (${item.game.gameName}) رینک ایڈمن کی طرف سے منظور ہو گیا ہے۔',
           type: 'rank_verified',
         );
-      } catch (e) {
-        debugPrint('Notification notice: $e');
-      }
+      } catch (e) {}
 
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text(
-              'Approved ${item.game.gameName} rank (${item.game.claimedRank}) for @${item.user.username}!',
+              ok
+                  ? 'Approved ${item.game.gameName} rank (${item.game.claimedRank}) for @${item.user.username}!'
+                  : 'Error approving rank',
             ),
-            backgroundColor: const Color(0xFF00FF88),
+            backgroundColor: ok ? const Color(0xFF00FF88) : const Color(0xFFFF4655),
           ),
         );
       }
@@ -1674,52 +1653,35 @@ class _GamerAdminDashboardScreenState extends State<GamerAdminDashboardScreen>
 
   Future<void> _rejectRankVerification(_RankQueueItem item, String reason) async {
     try {
-      final targetDocId = item.game.ownerUid.isNotEmpty ? item.game.ownerUid : item.user.uid;
+      final targetUserId = item.game.ownerUid.isNotEmpty ? item.game.ownerUid : item.user.uid;
       final currentAdmin = GamerAuthService().currentGamer?.displayName ?? 'Admin';
       const defaultUrduMsg = 'آپ کا اسکرین شاٹ درست نہیں ہے، دوبارہ اپلوڈ کریں';
       final finalReason = reason.trim().isNotEmpty ? reason.trim() : defaultUrduMsg;
 
-      final Map<String, dynamic> updateData = {
-        'isRankVerified': false,
-        'rankStatus': 'Rejected',
-        'rankRejectReason': finalReason,
-        'rankVerifiedBy': currentAdmin,
-        'updatedAt': FieldValue.serverTimestamp(),
-      };
-
-      if (item.gameIndex >= 0 && item.gameIndex < item.user.games.length) {
-        final updatedGames = List<UserGameRank>.from(item.user.games);
-        final rejectedGame = item.game.copyWith(
-          isVerified: false,
-          status: 'rejected',
-          rejectReason: finalReason,
-          ownerUid: targetDocId,
-        );
-        updatedGames[item.gameIndex] = rejectedGame;
-        updateData['games'] = updatedGames.map((g) => g.toMap()).toList();
-      }
-
-      await FirebaseFirestore.instance.collection('users').doc(targetDocId).set(
-        updateData,
-        SetOptions(merge: true),
+      final ok = await SupabaseService.rejectRank(
+        userId: targetUserId,
+        reason: finalReason,
+        adminName: currentAdmin,
       );
 
       try {
         await NotificationService().createNotification(
-          userId: targetDocId,
+          userId: targetUserId,
           title: 'Rank Verification Notice ⚠️',
           body: defaultUrduMsg,
           type: 'rank_rejected',
         );
-      } catch (e) {
-        debugPrint('Notification notice: $e');
-      }
+      } catch (e) {}
 
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text('Rejected ${item.game.gameName} rank verification for @${item.user.username}'),
-            backgroundColor: const Color(0xFFFF8A00),
+            content: Text(
+              ok
+                  ? 'Rejected ${item.game.gameName} rank verification for @${item.user.username}'
+                  : 'Error rejecting rank',
+            ),
+            backgroundColor: ok ? const Color(0xFFFF8A00) : const Color(0xFFFF4655),
           ),
         );
       }
@@ -1735,7 +1697,7 @@ class _GamerAdminDashboardScreenState extends State<GamerAdminDashboardScreen>
   // ===================== TAB 3: BLUE TICK QUEUE (SUPABASE) =====================
   Widget _buildBlueTickRequestsTab() {
     return StreamBuilder<List<Map<String, dynamic>>>(
-      stream: SupabaseService.client.from('users').stream(primaryKey: ['id']),
+      stream: SupabaseService.getRealtimeUsers(),
       builder: (context, snapshot) {
         if (snapshot.hasError) {
           return Center(
@@ -1765,50 +1727,11 @@ class _GamerAdminDashboardScreenState extends State<GamerAdminDashboardScreen>
         final docs = snapshot.data ?? [];
         final allUsers = docs.map((d) => GamerUser.fromMap(d)).toList();
 
-        final bool isKiroApproved = allUsers.any(
-            (u) => (u.username == 'kiro_yt' || u.uid == 'demo_01' || u.uid == 'sample_kiro_yt') && u.hasBlueTick);
-        final bool isShadowApproved = allUsers.any(
-            (u) => (u.username == 'shadownova' || u.username == 'shadow_nova' || u.uid == 'demo_02' || u.uid == 'sample_shadownova') && u.hasBlueTick);
-
         List<GamerUser> requests = allUsers
-            .where((u) => !u.hasBlueTick && (u.verificationStatus == 'pending' || u.blueTickStatus == 'pending'))
+            .where((u) =>
+                !u.hasBlueTick &&
+                (u.verificationStatus == 'pending' || u.blueTickStatus == 'pending'))
             .toList();
-
-        if (!isKiroApproved && !requests.any((u) => u.username == 'kiro_yt')) {
-          final kiroUser = allUsers.firstWhere(
-            (u) => u.username == 'kiro_yt' || u.uid == 'demo_01',
-            orElse: () => const GamerUser(
-              uid: 'demo_01',
-              username: 'kiro_yt',
-              displayName: 'Kiro_YT',
-              rank: 'Conqueror',
-              kdRatio: 5.4,
-              gameId: '519283711',
-              followersCount: 3420,
-              verificationStatus: 'pending',
-              blueTickStatus: 'pending',
-            ),
-          );
-          requests.add(kiroUser);
-        }
-
-        if (!isShadowApproved && !requests.any((u) => u.username == 'shadownova' || u.username == 'shadow_nova')) {
-          final shadowUser = allUsers.firstWhere(
-            (u) => u.username == 'shadownova' || u.username == 'shadow_nova' || u.uid == 'demo_02',
-            orElse: () => const GamerUser(
-              uid: 'demo_02',
-              username: 'shadownova',
-              displayName: 'ShadowNova',
-              rank: 'Ace',
-              kdRatio: 5.2,
-              gameId: '588492019',
-              followersCount: 3400,
-              verificationStatus: 'pending',
-              blueTickStatus: 'pending',
-            ),
-          );
-          requests.add(shadowUser);
-        }
 
         if (requests.isEmpty) {
           return Center(
@@ -1971,24 +1894,7 @@ class _GamerAdminDashboardScreenState extends State<GamerAdminDashboardScreen>
 
   Future<void> _approveVerification(GamerUser user) async {
     try {
-      final updateData = {
-        'isBlueTickVerified': true,
-        'blueTickVerified': true,
-        'blueTickStatus': 'approved',
-        'isVerifiedBlue': true,
-        'isVerified': true,
-        'verificationStatus': 'verified',
-        'updatedAt': FieldValue.serverTimestamp(),
-      };
-      await FirebaseFirestore.instance.collection('users').doc(user.uid).set(updateData, SetOptions(merge: true));
-
-      if (user.username == 'kiro_yt') {
-        await FirebaseFirestore.instance.collection('users').doc('demo_01').set(updateData, SetOptions(merge: true));
-        await FirebaseFirestore.instance.collection('users').doc('sample_kiro_yt').set(updateData, SetOptions(merge: true));
-      } else if (user.username == 'shadownova' || user.username == 'shadow_nova') {
-        await FirebaseFirestore.instance.collection('users').doc('demo_02').set(updateData, SetOptions(merge: true));
-        await FirebaseFirestore.instance.collection('users').doc('sample_shadownova').set(updateData, SetOptions(merge: true));
-      }
+      final ok = await SupabaseService.approveBlueTick(user.uid);
 
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -1997,10 +1903,10 @@ class _GamerAdminDashboardScreenState extends State<GamerAdminDashboardScreen>
               children: [
                 const Icon(Icons.verified, color: Colors.white, size: 18),
                 const SizedBox(width: 8),
-                Text('Approved! Blue tick added to @${user.username}'),
+                Text(ok ? 'Approved! Blue tick added to @${user.username}' : 'Error approving'),
               ],
             ),
-            backgroundColor: const Color(0xFF1D9BF0),
+            backgroundColor: ok ? const Color(0xFF1D9BF0) : const Color(0xFFFF4655),
           ),
         );
       }
@@ -2015,30 +1921,13 @@ class _GamerAdminDashboardScreenState extends State<GamerAdminDashboardScreen>
 
   Future<void> _rejectVerification(GamerUser user) async {
     try {
-      final rejectData = {
-        'isBlueTickVerified': false,
-        'blueTickVerified': false,
-        'blueTickStatus': 'rejected',
-        'isVerifiedBlue': false,
-        'isVerified': false,
-        'verificationStatus': 'rejected',
-        'updatedAt': FieldValue.serverTimestamp(),
-      };
-      await FirebaseFirestore.instance.collection('users').doc(user.uid).set(rejectData, SetOptions(merge: true));
-
-      if (user.username == 'kiro_yt') {
-        await FirebaseFirestore.instance.collection('users').doc('demo_01').set(rejectData, SetOptions(merge: true));
-        await FirebaseFirestore.instance.collection('users').doc('sample_kiro_yt').set(rejectData, SetOptions(merge: true));
-      } else if (user.username == 'shadownova' || user.username == 'shadow_nova') {
-        await FirebaseFirestore.instance.collection('users').doc('demo_02').set(rejectData, SetOptions(merge: true));
-        await FirebaseFirestore.instance.collection('users').doc('sample_shadownova').set(rejectData, SetOptions(merge: true));
-      }
+      final ok = await SupabaseService.rejectBlueTick(user.uid);
 
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text('Rejected verification for @${user.username}'),
-            backgroundColor: const Color(0xFFFF4655),
+            content: Text(ok ? 'Rejected verification for @${user.username}' : 'Error rejecting'),
+            backgroundColor: ok ? const Color(0xFFFF4655) : const Color(0xFFFF4655),
           ),
         );
       }
@@ -2054,10 +1943,7 @@ class _GamerAdminDashboardScreenState extends State<GamerAdminDashboardScreen>
   // ===================== TAB 4: POSTS MODERATION (SUPABASE) =====================
   Widget _buildPostsModerationTab() {
     return StreamBuilder<List<Map<String, dynamic>>>(
-      stream: SupabaseService.client
-          .from('posts')
-          .stream(primaryKey: ['id'])
-          .order('created_at', ascending: false),
+      stream: SupabaseService.getRealtimePosts(),
       builder: (context, snapshot) {
         if (snapshot.hasError) {
           return Center(
@@ -2190,26 +2076,13 @@ class _GamerAdminDashboardScreenState extends State<GamerAdminDashboardScreen>
                             color: Color(0xFFFF4655), size: 20),
                         tooltip: 'Delete Post',
                         onPressed: () async {
-                          try {
-                            await SupabaseService.client
-                                .from('posts')
-                                .delete()
-                                .eq('id', postId);
-                            if (context.mounted) {
-                              ScaffoldMessenger.of(context).showSnackBar(
-                                const SnackBar(
-                                    content: Text('Post deleted by admin'),
-                                    backgroundColor: Color(0xFFFF4655)),
-                              );
-                            }
-                          } catch (e) {
-                            if (context.mounted) {
-                              ScaffoldMessenger.of(context).showSnackBar(
-                                SnackBar(
-                                    content: Text('Error deleting: $e'),
-                                    backgroundColor: Color(0xFFFF4655)),
-                              );
-                            }
+                          final ok = await SupabaseService.deletePost(postId);
+                          if (context.mounted) {
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              SnackBar(
+                                  content: Text(ok ? 'Post deleted by admin' : 'Error deleting'),
+                                  backgroundColor: const Color(0xFFFF4655)),
+                            );
                           }
                         },
                       ),
@@ -2269,25 +2142,18 @@ class _GamerAdminDashboardScreenState extends State<GamerAdminDashboardScreen>
                       if (userId.isNotEmpty)
                         TextButton(
                           onPressed: () async {
-                            try {
-                              await SupabaseService.client
-                                  .from('users')
-                                  .update({'is_banned': true}).eq('id', userId);
-                              if (context.mounted) {
-                                ScaffoldMessenger.of(context).showSnackBar(
-                                  SnackBar(
-                                      content: Text('Author $author banned'),
-                                      backgroundColor: const Color(0xFFFF4655)),
-                                );
-                              }
-                            } catch (e) {
-                              if (context.mounted) {
-                                ScaffoldMessenger.of(context).showSnackBar(
-                                  SnackBar(
-                                      content: Text('Error: $e'),
-                                      backgroundColor: const Color(0xFFFF4655)),
-                                );
-                              }
+                            final sbAdminId = SupabaseService.client.auth.currentUser?.id ?? '';
+                            final ok = await SupabaseService.banUser(
+                              userId: userId,
+                              adminId: sbAdminId,
+                              reason: 'Banned from post moderation',
+                            );
+                            if (context.mounted) {
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                SnackBar(
+                                    content: Text(ok ? 'Author $author banned' : 'Error banning'),
+                                    backgroundColor: const Color(0xFFFF4655)),
+                              );
                             }
                           },
                           child: const Text('Ban Author',
@@ -2307,10 +2173,7 @@ class _GamerAdminDashboardScreenState extends State<GamerAdminDashboardScreen>
   // ===================== TAB 6: REPORTS (SUPABASE) =====================
   Widget _buildReportsTab() {
     return StreamBuilder<List<Map<String, dynamic>>>(
-      stream: SupabaseService.client
-          .from('reports')
-          .stream(primaryKey: ['id'])
-          .order('created_at', ascending: false),
+      stream: SupabaseService.getRealtimeReports(),
       builder: (context, snapshot) {
         if (snapshot.hasError) {
           return Center(
@@ -2449,26 +2312,13 @@ class _GamerAdminDashboardScreenState extends State<GamerAdminDashboardScreen>
                             color: Color(0xFFFF4655), size: 20),
                         tooltip: 'Delete Report',
                         onPressed: () async {
-                          try {
-                            await SupabaseService.client
-                                .from('reports')
-                                .delete()
-                                .eq('id', reportId);
-                            if (context.mounted) {
-                              ScaffoldMessenger.of(context).showSnackBar(
-                                const SnackBar(
-                                    content: Text('Report deleted'),
-                                    backgroundColor: Color(0xFFFF4655)),
-                              );
-                            }
-                          } catch (e) {
-                            if (context.mounted) {
-                              ScaffoldMessenger.of(context).showSnackBar(
-                                SnackBar(
-                                    content: Text('Error: $e'),
-                                    backgroundColor: const Color(0xFFFF4655)),
-                              );
-                            }
+                          final ok = await SupabaseService.deleteReport(reportId);
+                          if (context.mounted) {
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              SnackBar(
+                                  content: Text(ok ? 'Report deleted' : 'Error'),
+                                  backgroundColor: const Color(0xFFFF4655)),
+                            );
                           }
                         },
                       ),
@@ -2557,25 +2407,16 @@ class _GamerAdminDashboardScreenState extends State<GamerAdminDashboardScreen>
                               style: TextStyle(
                                   fontSize: 11, fontWeight: FontWeight.bold)),
                           onPressed: () async {
-                            try {
-                              await SupabaseService.client
-                                  .from('reports')
-                                  .update({'status': 'resolved'}).eq('id', reportId);
-                              if (context.mounted) {
-                                ScaffoldMessenger.of(context).showSnackBar(
-                                  const SnackBar(
-                                      content: Text('Report marked resolved'),
-                                      backgroundColor: Color(0xFF00FF88)),
-                                );
-                              }
-                            } catch (e) {
-                              if (context.mounted) {
-                                ScaffoldMessenger.of(context).showSnackBar(
-                                  SnackBar(
-                                      content: Text('Error: $e'),
-                                      backgroundColor: const Color(0xFFFF4655)),
-                                );
-                              }
+                            final ok = await SupabaseService.updateReport(
+                              reportId: reportId,
+                              status: 'resolved',
+                            );
+                            if (context.mounted) {
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                SnackBar(
+                                    content: Text(ok ? 'Report marked resolved' : 'Error'),
+                                    backgroundColor: const Color(0xFF00FF88)),
+                              );
                             }
                           },
                         ),
@@ -2590,7 +2431,7 @@ class _GamerAdminDashboardScreenState extends State<GamerAdminDashboardScreen>
     );
   }
 
-  // ===================== TAB 7: COINS (FIRESTORE - NOT YET CONVERTED) =====================
+  // ===================== TAB 7: COINS (SUPABASE) =====================
   Widget _buildCoinsTab() {
     return const _AdminCoinsVaultTab();
   }
@@ -2625,98 +2466,36 @@ class _AdminCoinsVaultTabState extends State<_AdminCoinsVaultTab> {
     final raw = input.trim();
     if (raw.isEmpty) return null;
 
-    final firestore = FirebaseFirestore.instance;
-
     try {
-      final docSnap = await firestore.collection('users').doc(raw).get();
-      if (docSnap.exists && docSnap.data() != null) {
-        final d = Map<String, dynamic>.from(docSnap.data()!);
-        d['docId'] = docSnap.id;
-        return d;
-      }
-    } catch (_) {}
+      final users = await SupabaseService.query('users', select: '*', limit: 500);
+      final clean = raw.toLowerCase().replaceAll('@', '').trim();
 
-    try {
-      final qUid = await firestore.collection('users').where('uid', isEqualTo: raw).limit(1).get();
-      if (qUid.docs.isNotEmpty) {
-        final d = Map<String, dynamic>.from(qUid.docs.first.data());
-        d['docId'] = qUid.docs.first.id;
-        return d;
-      }
-    } catch (_) {}
-
-    final clean = raw.toLowerCase().replaceAll('@', '').trim();
-
-    try {
-      final qUser = await firestore.collection('users').where('username', isEqualTo: clean).limit(1).get();
-      if (qUser.docs.isNotEmpty) {
-        final d = Map<String, dynamic>.from(qUser.docs.first.data());
-        d['docId'] = qUser.docs.first.id;
-        return d;
-      }
-    } catch (_) {}
-
-    try {
-      final qTag = await firestore.collection('users').where('tag', isEqualTo: clean).limit(1).get();
-      if (qTag.docs.isNotEmpty) {
-        final d = Map<String, dynamic>.from(qTag.docs.first.data());
-        d['docId'] = qTag.docs.first.id;
-        return d;
-      }
-    } catch (_) {}
-
-    final cleanEmail = raw.toLowerCase().trim();
-    try {
-      final qEmail = await firestore.collection('users').where('email', isEqualTo: cleanEmail).limit(1).get();
-      if (qEmail.docs.isNotEmpty) {
-        final d = Map<String, dynamic>.from(qEmail.docs.first.data());
-        d['docId'] = qEmail.docs.first.id;
-        return d;
-      }
-    } catch (_) {}
-
-    try {
-      final qEmailRaw = await firestore.collection('users').where('email', isEqualTo: raw).limit(1).get();
-      if (qEmailRaw.docs.isNotEmpty) {
-        final d = Map<String, dynamic>.from(qEmailRaw.docs.first.data());
-        d['docId'] = qEmailRaw.docs.first.id;
-        return d;
-      }
-    } catch (_) {}
-
-    try {
-      final allUsersSnap = await firestore.collection('users').get();
-      for (final doc in allUsersSnap.docs) {
-        final data = doc.data();
-        final docId = doc.id;
-        final uUid = (data['uid'] ?? docId).toString().trim();
-        final uName = (data['username'] ?? data['tag'] ?? '').toString().toLowerCase().trim();
-        final uEmail = (data['email'] ?? '').toString().toLowerCase().trim();
-        final uDisplay = (data['displayName'] ?? data['bgmiName'] ?? '').toString().toLowerCase().trim();
-        final inGameId = (data['gameId'] ?? data['bgmiUid'] ?? '').toString().trim();
+      for (final u in users) {
+        final docId = (u['id'] ?? '').toString();
+        final uUid = (u['uid'] ?? docId).toString().trim();
+        final uName = (u['username'] ?? '').toString().toLowerCase().trim();
+        final uEmail = (u['email'] ?? '').toString().toLowerCase().trim();
+        final uDisplay = (u['display_name'] ?? '').toString().toLowerCase().trim();
 
         if (docId == raw ||
             docId.toLowerCase() == clean ||
             uUid == raw ||
             uUid.toLowerCase() == clean ||
             uName == clean ||
-            uEmail == cleanEmail ||
             uEmail == clean ||
             uDisplay == clean ||
-            inGameId == raw ||
-            inGameId.toLowerCase() == clean ||
             (clean.length >= 2 &&
                 (uName.contains(clean) ||
                     uEmail.contains(clean) ||
                     uDisplay.contains(clean) ||
                     uUid.contains(clean)))) {
-          final d = Map<String, dynamic>.from(data);
+          final d = Map<String, dynamic>.from(u);
           d['docId'] = docId;
           return d;
         }
       }
     } catch (e) {
-      debugPrint('Error searching users in admin dashboard: $e');
+      debugPrint('Error searching user: $e');
     }
 
     return null;
@@ -2825,154 +2604,42 @@ class _AdminCoinsVaultTabState extends State<_AdminCoinsVaultTab> {
           _foundDocId = null;
           _errorMessage = 'صارف نہیں ملا';
         });
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Row(
-              children: [
-                Icon(Icons.cancel_rounded, color: Colors.white, size: 20),
-                SizedBox(width: 8),
-                Expanded(
-                  child: Text(
-                    'صارف نہیں ملا',
-                    style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13),
-                  ),
-                ),
-              ],
-            ),
-            backgroundColor: Color(0xFFFF4655),
-            behavior: SnackBarBehavior.floating,
-          ),
-        );
         return;
       }
 
       final targetDocId = docId;
-      final targetDisplayName = (user['displayName'] ?? user['bgmiName'] ?? user['username'] ?? user['tag'] ?? 'صارف').toString();
-      final targetUsername = (user['username'] ?? user['tag'] ?? '').toString();
-      final targetUid = (user['uid'] ?? targetDocId).toString().trim();
+      final targetDisplayName = (user['display_name'] ??
+              user['displayName'] ??
+              user['username'] ??
+              'صارف')
+          .toString();
 
-      final firestore = FirebaseFirestore.instance;
-      final currentAdmin = FirebaseAuth.instance.currentUser;
-      final adminEmail = currentAdmin?.email ?? 'Admin';
-      final adminUid = currentAdmin?.uid ?? 'admin';
+      final sbAdminId = SupabaseService.client.auth.currentUser?.id ?? '';
 
-      int currentCoins = 0;
-      final freshSnap = await firestore.collection('users').doc(targetDocId).get();
-      if (freshSnap.exists && freshSnap.data() != null) {
-        final rawVal = freshSnap.data()!['coins'] ?? freshSnap.data()!['gCoins'];
-        if (rawVal is num) {
-          currentCoins = rawVal.toInt();
-        } else if (rawVal is String) {
-          currentCoins = int.tryParse(rawVal) ?? 0;
-        }
-      } else {
-        final rawVal = user['coins'] ?? user['gCoins'];
-        if (rawVal is num) {
-          currentCoins = rawVal.toInt();
-        } else if (rawVal is String) {
-          currentCoins = int.tryParse(rawVal) ?? 0;
-        }
+      final ok = await SupabaseService.awardCoins(
+        userId: targetDocId,
+        amount: amount,
+        adminId: sbAdminId,
+      );
+
+      if (!ok) {
+        if (!mounted) return;
+        setState(() {
+          _isAwarding = false;
+          _errorMessage = 'سکے بھیجنے میں خرابی';
+        });
+        return;
       }
 
-      final newTotalCoins = currentCoins + amount;
+      // Refresh user coins
+      final freshUser = await _findUser(target);
 
-      await firestore.collection('users').doc(targetDocId).set({
-        'coins': newTotalCoins,
-        'gCoins': newTotalCoins,
-        'updatedAt': FieldValue.serverTimestamp(),
-        'lastRewardAt': FieldValue.serverTimestamp(),
-      }, SetOptions(merge: true));
-
-      if (targetUid.isNotEmpty && targetUid != targetDocId) {
-        try {
-          await firestore.collection('users').doc(targetUid).set({
-            'coins': newTotalCoins,
-            'gCoins': newTotalCoins,
-            'updatedAt': FieldValue.serverTimestamp(),
-          }, SetOptions(merge: true));
-        } catch (_) {}
-      }
-
-      try {
-        await firestore.collection('wallets').doc(targetDocId).set({
-          'coins': newTotalCoins,
-          'gCoins': newTotalCoins,
-          'userId': targetDocId,
-          'updatedAt': FieldValue.serverTimestamp(),
-        }, SetOptions(merge: true));
-      } catch (wErr) {
-        debugPrint('Wallet save note: $wErr');
-      }
-
-      try {
-        await firestore.collection('coin_wallets').doc(targetDocId).set({
-          'coins': newTotalCoins,
-          'gCoins': newTotalCoins,
-          'lifetimeEarned': FieldValue.increment(amount),
-          'userId': targetDocId,
-          'updatedAt': FieldValue.serverTimestamp(),
-        }, SetOptions(merge: true));
-      } catch (cwErr) {
-        debugPrint('Coin wallet save note: $cwErr');
-      }
-
-      final txId = firestore.collection('transactions').doc().id;
-      final formattedDate = DateFormat('yyyy-MM-dd HH:mm').format(DateTime.now());
-      final txData = {
-        'id': txId,
-        'userId': targetDocId,
-        'amount': amount,
-        'type': 'admin_grant',
-        'title': 'Admin Award 🪙',
-        'description': 'Admin ne $amount coins diye',
-        'status': 'completed',
-        'adminUid': adminUid,
-        'adminEmail': adminEmail,
-        'createdAt': FieldValue.serverTimestamp(),
-        'timestamp': FieldValue.serverTimestamp(),
-        'date': formattedDate,
-      };
-
-      try {
-        await firestore.collection('transactions').doc(txId).set(txData);
-        await firestore.collection('coin_transactions').doc(txId).set(txData);
-      } catch (txErr) {
-        debugPrint('Transaction log note: $txErr');
-      }
-
-      try {
-        await NotificationService().createNotification(
-          userId: targetDocId,
-          title: '🪙 Coins Awarded!',
-          body: 'ایڈمن کی طرف سے آپ کے اکاؤنٹ میں $amount سکے شامل کر دیے گئے ہیں! کل سکے: $newTotalCoins',
-          type: 'coin_grant',
-        );
-      } catch (notifErr) {
-        debugPrint('Notification notice: $notifErr');
-      }
-
-      final currentGamer = GamerAuthService().currentGamer;
-      if (currentGamer != null && (currentGamer.uid == targetDocId || currentGamer.uid == targetUid)) {
-        GamerAuthService().currentGamerNotifier.value = currentGamer.copyWith(coins: newTotalCoins);
-        CoinRewardService().coinsNotifier.value = newTotalCoins;
-      }
-
-      final updatedSnap = await firestore.collection('users').doc(targetDocId).get();
-      if (updatedSnap.exists && updatedSnap.data() != null) {
-        final d = Map<String, dynamic>.from(updatedSnap.data()!);
-        d['docId'] = updatedSnap.id;
-        user = d;
-      } else {
-        user['coins'] = newTotalCoins;
-        user['gCoins'] = newTotalCoins;
-      }
-
-      final successText = 'کامیابی! $targetDisplayName کو $amount سکے بھیج دیے گئے (کل سکے: $newTotalCoins)';
+      final successText = 'کامیابی! $targetDisplayName کو $amount سکے بھیج دیے گئے';
 
       if (!mounted) return;
       setState(() {
         _isAwarding = false;
-        _foundUser = user;
+        _foundUser = freshUser ?? user;
         _foundDocId = targetDocId;
         _errorMessage = null;
         _successMessage = successText;
@@ -2987,7 +2654,10 @@ class _AdminCoinsVaultTabState extends State<_AdminCoinsVaultTab> {
               Expanded(
                 child: Text(
                   successText,
-                  style: const TextStyle(color: Colors.black, fontWeight: FontWeight.bold, fontSize: 13.5),
+                  style: const TextStyle(
+                      color: Colors.black,
+                      fontWeight: FontWeight.bold,
+                      fontSize: 13.5),
                 ),
               ),
             ],
@@ -3004,9 +2674,6 @@ class _AdminCoinsVaultTabState extends State<_AdminCoinsVaultTab> {
         _isAwarding = false;
         _errorMessage = 'سکے بھیجنے میں خرابی: $e';
       });
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('خرابی: $e'), backgroundColor: const Color(0xFFFF4655)),
-      );
     }
   }
 
@@ -3036,7 +2703,8 @@ class _AdminCoinsVaultTabState extends State<_AdminCoinsVaultTab> {
                     color: const Color(0xFFFFD700).withOpacity(0.15),
                     borderRadius: BorderRadius.circular(12),
                   ),
-                  child: const Icon(Icons.monetization_on_rounded, color: Color(0xFFFFD700), size: 32),
+                  child: const Icon(Icons.monetization_on_rounded,
+                      color: Color(0xFFFFD700), size: 32),
                 ),
                 const SizedBox(width: 14),
                 const Expanded(
@@ -3045,7 +2713,10 @@ class _AdminCoinsVaultTabState extends State<_AdminCoinsVaultTab> {
                     children: [
                       Text(
                         'Gamers ID Coins Vault',
-                        style: TextStyle(color: Colors.white, fontWeight: FontWeight.w900, fontSize: 16),
+                        style: TextStyle(
+                            color: Colors.white,
+                            fontWeight: FontWeight.w900,
+                            fontSize: 16),
                       ),
                       SizedBox(height: 2),
                       Text(
@@ -3062,7 +2733,8 @@ class _AdminCoinsVaultTabState extends State<_AdminCoinsVaultTab> {
 
           const Text(
             'Grant Coins to Player',
-            style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 15),
+            style: TextStyle(
+                color: Colors.white, fontWeight: FontWeight.bold, fontSize: 15),
           ),
           const SizedBox(height: 4),
           const Text(
@@ -3094,10 +2766,12 @@ class _AdminCoinsVaultTabState extends State<_AdminCoinsVaultTab> {
                     hintText: 'e.g. fua, @user, UID, or email',
                     hintStyle: const TextStyle(color: Color(0xFF555E6D), fontSize: 13),
                     labelStyle: const TextStyle(color: Color(0xFF8B949E)),
-                    prefixIcon: const Icon(Icons.person_search_rounded, color: Color(0xFF38BDF8)),
+                    prefixIcon: const Icon(Icons.person_search_rounded,
+                        color: Color(0xFF38BDF8)),
                     suffixIcon: _targetController.text.isNotEmpty
                         ? IconButton(
-                            icon: const Icon(Icons.clear, color: Colors.white54, size: 18),
+                            icon: const Icon(Icons.clear,
+                                color: Colors.white54, size: 18),
                             onPressed: () {
                               _targetController.clear();
                               setState(() {
@@ -3111,7 +2785,8 @@ class _AdminCoinsVaultTabState extends State<_AdminCoinsVaultTab> {
                         : null,
                     filled: true,
                     fillColor: const Color(0xFF10141D),
-                    border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+                    border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(12)),
                     focusedBorder: OutlineInputBorder(
                       borderRadius: BorderRadius.circular(12),
                       borderSide: const BorderSide(color: Color(0xFFFFD700)),
@@ -3127,20 +2802,24 @@ class _AdminCoinsVaultTabState extends State<_AdminCoinsVaultTab> {
                   style: ElevatedButton.styleFrom(
                     backgroundColor: const Color(0xFF1F2B3E),
                     foregroundColor: const Color(0xFF38BDF8),
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                    shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(12)),
                     padding: const EdgeInsets.symmetric(horizontal: 14),
                   ),
                   child: _isSearching
                       ? const SizedBox(
                           width: 20,
                           height: 20,
-                          child: CircularProgressIndicator(color: Color(0xFF38BDF8), strokeWidth: 2),
+                          child: CircularProgressIndicator(
+                              color: Color(0xFF38BDF8), strokeWidth: 2),
                         )
                       : const Column(
                           mainAxisAlignment: MainAxisAlignment.center,
                           children: [
                             Icon(Icons.search_rounded, size: 20),
-                            Text('تلاش کریں', style: TextStyle(fontSize: 10, fontWeight: FontWeight.bold)),
+                            Text('تلاش کریں',
+                                style: TextStyle(
+                                    fontSize: 10, fontWeight: FontWeight.bold)),
                           ],
                         ),
                 ),
@@ -3155,15 +2834,23 @@ class _AdminCoinsVaultTabState extends State<_AdminCoinsVaultTab> {
               decoration: BoxDecoration(
                 color: const Color(0xFF0D2319),
                 borderRadius: BorderRadius.circular(12),
-                border: Border.all(color: const Color(0xFF00FF88).withOpacity(0.5)),
+                border:
+                    Border.all(color: const Color(0xFF00FF88).withOpacity(0.5)),
               ),
               child: Row(
                 children: [
                   GamerAvatar(
-                    photoUrl: (_foundUser!['photoUrl'] ?? _foundUser!['avatar'] ?? '').toString(),
-                    displayName: (_foundUser!['displayName'] ?? _foundUser!['bgmiName'] ?? _foundUser!['username'] ?? 'User').toString(),
+                    photoUrl: (_foundUser!['avatar_url'] ??
+                            _foundUser!['photoUrl'] ??
+                            '')
+                        .toString(),
+                    displayName: (_foundUser!['display_name'] ??
+                            _foundUser!['displayName'] ??
+                            _foundUser!['username'] ??
+                            'User')
+                        .toString(),
                     radius: 22,
-                    frameId: (_foundUser!['activeFrame'] ?? '').toString(),
+                    frameId: (_foundUser!['active_frame'] ?? '').toString(),
                   ),
                   const SizedBox(width: 12),
                   Expanded(
@@ -3174,14 +2861,22 @@ class _AdminCoinsVaultTabState extends State<_AdminCoinsVaultTab> {
                           children: [
                             Flexible(
                               child: Text(
-                                (_foundUser!['displayName'] ?? _foundUser!['bgmiName'] ?? _foundUser!['username'] ?? 'User').toString(),
-                                style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 14),
+                                (_foundUser!['display_name'] ??
+                                        _foundUser!['displayName'] ??
+                                        _foundUser!['username'] ??
+                                        'User')
+                                    .toString(),
+                                style: const TextStyle(
+                                    color: Colors.white,
+                                    fontWeight: FontWeight.bold,
+                                    fontSize: 14),
                                 overflow: TextOverflow.ellipsis,
                               ),
                             ),
                             const SizedBox(width: 6),
                             Container(
-                              padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                              padding: const EdgeInsets.symmetric(
+                                  horizontal: 6, vertical: 2),
                               decoration: BoxDecoration(
                                 color: const Color(0xFF00FF88).withOpacity(0.2),
                                 borderRadius: BorderRadius.circular(6),
@@ -3189,11 +2884,15 @@ class _AdminCoinsVaultTabState extends State<_AdminCoinsVaultTab> {
                               child: const Row(
                                 mainAxisSize: MainAxisSize.min,
                                 children: [
-                                  Icon(Icons.check_circle_rounded, color: Color(0xFF00FF88), size: 12),
+                                  Icon(Icons.check_circle_rounded,
+                                      color: Color(0xFF00FF88), size: 12),
                                   SizedBox(width: 3),
                                   Text(
                                     'صارف مل گیا',
-                                    style: TextStyle(color: Color(0xFF00FF88), fontSize: 10, fontWeight: FontWeight.bold),
+                                    style: TextStyle(
+                                        color: Color(0xFF00FF88),
+                                        fontSize: 10,
+                                        fontWeight: FontWeight.bold),
                                   ),
                                 ],
                               ),
@@ -3202,8 +2901,9 @@ class _AdminCoinsVaultTabState extends State<_AdminCoinsVaultTab> {
                         ),
                         const SizedBox(height: 2),
                         Text(
-                          '@${_foundUser!['username'] ?? _foundUser!['tag'] ?? ''} • ${_foundUser!['email'] ?? _foundDocId ?? ''}',
-                          style: const TextStyle(color: Color(0xFF8B949E), fontSize: 11),
+                          '@${_foundUser!['username'] ?? ''} • ${_foundUser!['email'] ?? _foundDocId ?? ''}',
+                          style: const TextStyle(
+                              color: Color(0xFF8B949E), fontSize: 11),
                           overflow: TextOverflow.ellipsis,
                         ),
                         const SizedBox(height: 4),
@@ -3211,11 +2911,15 @@ class _AdminCoinsVaultTabState extends State<_AdminCoinsVaultTab> {
                           children: [
                             const Text(
                               'موجودہ بیلنس: ',
-                              style: TextStyle(color: Colors.white70, fontSize: 11),
+                              style: TextStyle(
+                                  color: Colors.white70, fontSize: 11),
                             ),
                             Text(
-                              '${(_foundUser!['coins'] ?? _foundUser!['gCoins'] ?? 0)} 🪙',
-                              style: const TextStyle(color: Color(0xFFFFD700), fontWeight: FontWeight.bold, fontSize: 12),
+                              '${(_foundUser!['coins'] ?? 0)} 🪙',
+                              style: const TextStyle(
+                                  color: Color(0xFFFFD700),
+                                  fontWeight: FontWeight.bold,
+                                  fontSize: 12),
                             ),
                           ],
                         ),
@@ -3236,12 +2940,15 @@ class _AdminCoinsVaultTabState extends State<_AdminCoinsVaultTab> {
             decoration: InputDecoration(
               labelText: 'Coins Amount',
               labelStyle: const TextStyle(color: Color(0xFF8B949E)),
-              prefixIcon: const Icon(Icons.monetization_on_rounded, color: Color(0xFFFFD700)),
+              prefixIcon: const Icon(Icons.monetization_on_rounded,
+                  color: Color(0xFFFFD700)),
               helperText: 'کوئی حد نہیں — ایڈمن جتنی چاہے سکے بھیج سکتا ہے',
-              helperStyle: const TextStyle(color: Color(0xFF8B949E), fontSize: 11),
+              helperStyle:
+                  const TextStyle(color: Color(0xFF8B949E), fontSize: 11),
               filled: true,
               fillColor: const Color(0xFF10141D),
-              border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+              border:
+                  OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
               focusedBorder: OutlineInputBorder(
                 borderRadius: BorderRadius.circular(12),
                 borderSide: const BorderSide(color: Color(0xFFFFD700)),
@@ -3259,7 +2966,8 @@ class _AdminCoinsVaultTabState extends State<_AdminCoinsVaultTab> {
                   child: ActionChip(
                     label: Text(
                       '+$amt 🪙',
-                      style: const TextStyle(fontSize: 11, fontWeight: FontWeight.bold),
+                      style: const TextStyle(
+                          fontSize: 11, fontWeight: FontWeight.bold),
                     ),
                     backgroundColor: const Color(0xFF1A2130),
                     labelStyle: const TextStyle(color: Color(0xFFFFD700)),
@@ -3283,16 +2991,21 @@ class _AdminCoinsVaultTabState extends State<_AdminCoinsVaultTab> {
               decoration: BoxDecoration(
                 color: const Color(0xFF2D1216),
                 borderRadius: BorderRadius.circular(10),
-                border: Border.all(color: const Color(0xFFFF4655).withOpacity(0.6)),
+                border: Border.all(
+                    color: const Color(0xFFFF4655).withOpacity(0.6)),
               ),
               child: Row(
                 children: [
-                  const Icon(Icons.error_outline_rounded, color: Color(0xFFFF4655), size: 20),
+                  const Icon(Icons.error_outline_rounded,
+                      color: Color(0xFFFF4655), size: 20),
                   const SizedBox(width: 10),
                   Expanded(
                     child: Text(
                       _errorMessage!,
-                      style: const TextStyle(color: Color(0xFFFF7080), fontSize: 13, fontWeight: FontWeight.w600),
+                      style: const TextStyle(
+                          color: Color(0xFFFF7080),
+                          fontSize: 13,
+                          fontWeight: FontWeight.w600),
                     ),
                   ),
                 ],
@@ -3307,16 +3020,21 @@ class _AdminCoinsVaultTabState extends State<_AdminCoinsVaultTab> {
               decoration: BoxDecoration(
                 color: const Color(0xFF0E281C),
                 borderRadius: BorderRadius.circular(10),
-                border: Border.all(color: const Color(0xFF00FF88).withOpacity(0.6)),
+                border: Border.all(
+                    color: const Color(0xFF00FF88).withOpacity(0.6)),
               ),
               child: Row(
                 children: [
-                  const Icon(Icons.check_circle_rounded, color: Color(0xFF00FF88), size: 20),
+                  const Icon(Icons.check_circle_rounded,
+                      color: Color(0xFF00FF88), size: 20),
                   const SizedBox(width: 10),
                   Expanded(
                     child: Text(
                       _successMessage!,
-                      style: const TextStyle(color: Color(0xFF80FFC0), fontSize: 13, fontWeight: FontWeight.w600),
+                      style: const TextStyle(
+                          color: Color(0xFF80FFC0),
+                          fontSize: 13,
+                          fontWeight: FontWeight.w600),
                     ),
                   ),
                 ],
@@ -3334,18 +3052,21 @@ class _AdminCoinsVaultTabState extends State<_AdminCoinsVaultTab> {
                 backgroundColor: const Color(0xFFFFD700),
                 foregroundColor: Colors.black,
                 disabledBackgroundColor: const Color(0xFF554400),
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(12)),
               ),
               icon: _isAwarding
                   ? const SizedBox(
                       width: 18,
                       height: 18,
-                      child: CircularProgressIndicator(color: Colors.black, strokeWidth: 2.2),
+                      child: CircularProgressIndicator(
+                          color: Colors.black, strokeWidth: 2.2),
                     )
                   : const Icon(Icons.send_rounded, size: 20),
               label: Text(
                 _isAwarding ? 'سکے بھیجے جا رہے ہیں...' : 'Award Coins Now',
-                style: const TextStyle(fontWeight: FontWeight.w900, fontSize: 15),
+                style: const TextStyle(
+                    fontWeight: FontWeight.w900, fontSize: 15),
               ),
             ),
           ),
@@ -3356,21 +3077,29 @@ class _AdminCoinsVaultTabState extends State<_AdminCoinsVaultTab> {
             children: [
               const Text(
                 'Recent Coin Awards History',
-                style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 14),
+                style: TextStyle(
+                    color: Colors.white,
+                    fontWeight: FontWeight.bold,
+                    fontSize: 14),
               ),
               Container(
-                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
                 decoration: BoxDecoration(
                   color: const Color(0xFFFFD700).withOpacity(0.15),
                   borderRadius: BorderRadius.circular(8),
                 ),
                 child: const Row(
                   children: [
-                    Icon(Icons.history_rounded, color: Color(0xFFFFD700), size: 12),
+                    Icon(Icons.history_rounded,
+                        color: Color(0xFFFFD700), size: 12),
                     SizedBox(width: 4),
                     Text(
                       'Live Logs',
-                      style: TextStyle(color: Color(0xFFFFD700), fontSize: 11, fontWeight: FontWeight.bold),
+                      style: TextStyle(
+                          color: Color(0xFFFFD700),
+                          fontSize: 11,
+                          fontWeight: FontWeight.bold),
                     ),
                   ],
                 ),
@@ -3379,17 +3108,19 @@ class _AdminCoinsVaultTabState extends State<_AdminCoinsVaultTab> {
           ),
           const SizedBox(height: 10),
 
-          StreamBuilder<QuerySnapshot>(
-            stream: FirebaseFirestore.instance
-                .collection('transactions')
-                .where('type', isEqualTo: 'admin_grant')
-                .limit(10)
-                .snapshots(),
+          StreamBuilder<List<Map<String, dynamic>>>(
+            stream: SupabaseService.getRealtimeCoinTransactions(),
             builder: (context, snap) {
               if (snap.hasError) {
-                return Text('Error loading history: ${snap.error}', style: const TextStyle(color: Colors.red, fontSize: 12));
+                return Text('Error loading history: ${snap.error}',
+                    style: const TextStyle(color: Colors.red, fontSize: 12));
               }
-              final docs = snap.data?.docs ?? [];
+              final docs = (snap.data ?? [])
+                  .where((t) =>
+                      t['type'] == 'admin_grant' || t['type'] == 'coin_grant')
+                  .take(10)
+                  .toList();
+
               if (docs.isEmpty) {
                 return Container(
                   padding: const EdgeInsets.all(16),
@@ -3407,29 +3138,22 @@ class _AdminCoinsVaultTabState extends State<_AdminCoinsVaultTab> {
                 );
               }
 
-              final sorted = List<QueryDocumentSnapshot>.from(docs);
-              sorted.sort((a, b) {
-                final da = a.data() as Map<String, dynamic>;
-                final db = b.data() as Map<String, dynamic>;
-                final ta = da['createdAt'] as Timestamp? ?? Timestamp.now();
-                final tb = db['createdAt'] as Timestamp? ?? Timestamp.now();
-                return tb.compareTo(ta);
-              });
-
               return ListView.separated(
                 shrinkWrap: true,
                 physics: const NeverScrollableScrollPhysics(),
-                itemCount: sorted.length,
+                itemCount: docs.length,
                 separatorBuilder: (_, __) => const SizedBox(height: 8),
                 itemBuilder: (context, index) {
-                  final data = sorted[index].data() as Map<String, dynamic>;
+                  final data = docs[index];
                   final amount = (data['amount'] as num?)?.toInt() ?? 0;
-                  final description = data['description'] ?? 'Admin ne $amount coins diye';
-                  final date = data['date']?.toString() ?? '';
-                  final targetUserId = (data['userId'] ?? '').toString();
+                  final description =
+                      data['description'] ?? 'Admin ne $amount coins diye';
+                  final date = data['created_at']?.toString() ?? '';
+                  final targetUserId = (data['user_id'] ?? '').toString();
 
                   return Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                    padding: const EdgeInsets.symmetric(
+                        horizontal: 12, vertical: 10),
                     decoration: BoxDecoration(
                       color: const Color(0xFF10141D),
                       borderRadius: BorderRadius.circular(10),
@@ -3443,7 +3167,8 @@ class _AdminCoinsVaultTabState extends State<_AdminCoinsVaultTab> {
                             color: const Color(0xFFFFD700).withOpacity(0.12),
                             borderRadius: BorderRadius.circular(8),
                           ),
-                          child: const Icon(Icons.monetization_on_rounded, color: Color(0xFFFFD700), size: 18),
+                          child: const Icon(Icons.monetization_on_rounded,
+                              color: Color(0xFFFFD700), size: 18),
                         ),
                         const SizedBox(width: 10),
                         Expanded(
@@ -3452,12 +3177,16 @@ class _AdminCoinsVaultTabState extends State<_AdminCoinsVaultTab> {
                             children: [
                               Text(
                                 description,
-                                style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 12.5),
+                                style: const TextStyle(
+                                    color: Colors.white,
+                                    fontWeight: FontWeight.bold,
+                                    fontSize: 12.5),
                               ),
                               const SizedBox(height: 2),
                               Text(
-                                'UID: $targetUserId ${date.isNotEmpty ? '• $date' : ''}',
-                                style: const TextStyle(color: Color(0xFF8B949E), fontSize: 10.5),
+                                'UID: $targetUserId ${date.isNotEmpty ? '• ${date.substring(0, 19).replaceAll('T', ' ')}' : ''}',
+                                style: const TextStyle(
+                                    color: Color(0xFF8B949E), fontSize: 10.5),
                                 overflow: TextOverflow.ellipsis,
                               ),
                             ],
@@ -3697,7 +3426,11 @@ class _AdminPendingProofCardState extends State<_AdminPendingProofCard> {
               child: Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
-                  const Text('Proof Screenshot 📸', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 14)),
+                  const Text('Proof Screenshot 📸',
+                      style: TextStyle(
+                          color: Colors.white,
+                          fontWeight: FontWeight.bold,
+                          fontSize: 14)),
                   IconButton(
                     icon: const Icon(Icons.close, color: Colors.white54, size: 20),
                     onPressed: () => Navigator.pop(ctx),
@@ -3707,12 +3440,21 @@ class _AdminPendingProofCardState extends State<_AdminPendingProofCard> {
             ),
             InteractiveViewer(
               child: ClipRRect(
-                borderRadius: const BorderRadius.vertical(bottom: Radius.circular(16)),
+                borderRadius:
+                    const BorderRadius.vertical(bottom: Radius.circular(16)),
                 child: CachedNetworkImage(
                   imageUrl: imageUrl,
                   fit: BoxFit.contain,
-                  placeholder: (c, u) => const SizedBox(height: 200, child: Center(child: CircularProgressIndicator(color: Color(0xFF00FF88)))),
-                  errorWidget: (c, u, e) => const SizedBox(height: 200, child: Center(child: Icon(Icons.broken_image, color: Colors.white30))),
+                  placeholder: (c, u) => const SizedBox(
+                      height: 200,
+                      child: Center(
+                          child: CircularProgressIndicator(
+                              color: Color(0xFF00FF88)))),
+                  errorWidget: (c, u, e) => const SizedBox(
+                      height: 200,
+                      child: Center(
+                          child: Icon(Icons.broken_image,
+                              color: Colors.white30))),
                 ),
               ),
             ),
@@ -3720,68 +3462,6 @@ class _AdminPendingProofCardState extends State<_AdminPendingProofCard> {
         ),
       ),
     );
-  }
-
-  Future<void> _updateTeamStatsInDb({
-    required String teamId,
-    required int addW,
-    required int addL,
-    required int addD,
-    required int addPts,
-    int addTotalMatches = 1,
-  }) async {
-    try {
-      final tUuid = SupabaseService.toUuid(teamId);
-      final res = await SupabaseService.client
-          .from('teams')
-          .select('wins, losses, draws, points, total_matches')
-          .eq('id', tUuid)
-          .maybeSingle();
-
-      if (res != null) {
-        final currentWins = (res['wins'] as num?)?.toInt() ?? 0;
-        final currentLosses = (res['losses'] as num?)?.toInt() ?? 0;
-        final currentDraws = (res['draws'] as num?)?.toInt() ?? 0;
-        final currentPoints = (res['points'] as num?)?.toInt() ?? 0;
-        final currentTotalMatches = (res['total_matches'] as num?)?.toInt() ?? 0;
-
-        try {
-          await SupabaseService.client.from('teams').update({
-            'wins': currentWins + addW,
-            'losses': currentLosses + addL,
-            'draws': currentDraws + addD,
-            'points': currentPoints + addPts,
-            'total_matches': currentTotalMatches + addTotalMatches,
-          }).eq('id', tUuid);
-        } catch (_) {
-          await SupabaseService.client.from('teams').update({
-            'wins': currentWins + addW,
-            'losses': currentLosses + addL,
-            'draws': currentDraws + addD,
-            'points': currentPoints + addPts,
-          }).eq('id', tUuid);
-        }
-      }
-    } catch (e) {
-      debugPrint('[AdminProof] Supabase team stats update error: $e');
-    }
-
-    try {
-      final firestore = FirebaseFirestore.instance;
-      final docRef = firestore.collection('teams').doc(teamId);
-      final docSnap = await docRef.get();
-      if (docSnap.exists) {
-        await docRef.update({
-          'wins': FieldValue.increment(addW),
-          'losses': FieldValue.increment(addL),
-          'draws': FieldValue.increment(addD),
-          'points': FieldValue.increment(addPts),
-          'totalMatches': FieldValue.increment(addTotalMatches),
-        });
-      }
-    } catch (e) {
-      debugPrint('[AdminProof] Firestore team stats update error: $e');
-    }
   }
 
   Future<void> _handleAccept() async {
@@ -3792,50 +3472,36 @@ class _AdminPendingProofCardState extends State<_AdminPendingProofCard> {
       final matchId = widget.match['id'];
       final team1Id = (widget.match['team1_id'] ?? '').toString();
       final team2Id = (widget.match['team2_id'] ?? '').toString();
-      final submittedByRaw = (widget.match['submitted_by_team_id'] ?? widget.match['winner_team_id'])?.toString();
+      final submittedByRaw = (widget.match['submitted_by_team_id'] ??
+              widget.match['winner_team_id'])
+          ?.toString();
       final winnerId = (submittedByRaw != null && submittedByRaw.isNotEmpty)
           ? submittedByRaw
           : (widget.match['winner_team_id'] ?? '').toString();
-      final winnerUuid = winnerId.isNotEmpty ? SupabaseService.toUuid(winnerId) : null;
+      final winnerUuid = winnerId.isNotEmpty ? SupabaseService.toUuid(winnerId) : '';
 
-      try {
-        await SupabaseService.client.from('active_matches').update({
-          'proof_status': 'accepted',
-          'status': 'completed',
-          if (winnerUuid != null) 'winner_team_id': winnerUuid,
-        }).eq('id', matchId);
-      } catch (e) {
-        debugPrint('[AdminProof] Accept update with proof_status error: $e, trying status only');
-        await SupabaseService.client.from('active_matches').update({
-          'status': 'completed',
-          if (winnerUuid != null) 'winner_team_id': winnerUuid,
-        }).eq('id', matchId);
-      }
-
-      final t1Uuid = SupabaseService.toUuid(team1Id);
-      final isT1Winner = (winnerId == team1Id || winnerId == t1Uuid);
-      final winTeam = isT1Winner ? team1Id : team2Id;
-      final loseTeam = isT1Winner ? team2Id : team1Id;
-
-      await _updateTeamStatsInDb(teamId: winTeam, addW: 1, addL: 0, addD: 0, addPts: 3, addTotalMatches: 1);
-      await _updateTeamStatsInDb(teamId: loseTeam, addW: 0, addL: 1, addD: 0, addPts: 0, addTotalMatches: 1);
+      final ok = await SupabaseService.approveProof(
+        matchId: matchId.toString(),
+        winnerTeamId: winnerUuid,
+      );
 
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('✅ Proof accepted! Match completed and team stats updated.'),
-            backgroundColor: Color(0xFF00FF88),
+          SnackBar(
+            content: Text(ok
+                ? '✅ Proof accepted! Match completed.'
+                : 'Error accepting proof'),
+            backgroundColor:
+                ok ? const Color(0xFF00FF88) : const Color(0xFFFF4655),
           ),
         );
       }
     } catch (e) {
-      debugPrint('[AdminProof] Accept error: $e');
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text('Error accepting proof: $e'),
-            backgroundColor: const Color(0xFFFF4655),
-          ),
+              content: Text('Error accepting proof: $e'),
+              backgroundColor: const Color(0xFFFF4655)),
         );
       }
     } finally {
@@ -3850,106 +3516,31 @@ class _AdminPendingProofCardState extends State<_AdminPendingProofCard> {
     try {
       final matchId = widget.match['id'];
       final reason = _reasonController.text.trim();
-      final finalReason = reason.isNotEmpty ? reason : 'Proof screenshot was unclear or invalid';
+      final finalReason =
+          reason.isNotEmpty ? reason : 'Proof screenshot was unclear or invalid';
 
-      try {
-        await SupabaseService.client.from('active_matches').update({
-          'status': 'rejected',
-          'proof_status': 'rejected',
-          'admin_note': finalReason,
-        }).eq('id', matchId);
-      } catch (e) {
-        debugPrint('[AdminProof] Reject update with extra columns failed: $e, falling back to status only');
-        await SupabaseService.client.from('active_matches').update({
-          'status': 'rejected',
-        }).eq('id', matchId);
-      }
-
-      try {
-        await SupabaseService.client.from('team_matches').update({
-          'status': 'rejected',
-          'admin_note': finalReason,
-        }).eq('id', matchId);
-      } catch (_) {}
-
-      try {
-        await FirebaseFirestore.instance.collection('team_matches').doc(matchId.toString()).update({
-          'status': 'rejected',
-          'adminNote': finalReason,
-          'rejectedAt': FieldValue.serverTimestamp(),
-        });
-      } catch (_) {}
-
-      try {
-        final team1Id = (widget.match['team1_id'] ?? '').toString();
-        final team2Id = (widget.match['team2_id'] ?? '').toString();
-        String submitterTeamId = (widget.match['submitted_by_team_id'] ?? '').toString();
-        if (submitterTeamId.isEmpty) {
-          final result = (widget.match['result'] ?? 'win').toString().toLowerCase();
-          final winnerId = (widget.match['winner_team_id'] ?? '').toString();
-          if (result == 'win' && winnerId.isNotEmpty) {
-            submitterTeamId = winnerId;
-          } else if (result == 'loss' && winnerId.isNotEmpty) {
-            submitterTeamId = (winnerId == team1Id) ? team2Id : team1Id;
-          } else {
-            submitterTeamId = winnerId.isNotEmpty ? winnerId : team1Id;
-          }
-        }
-
-        final submitterTeam = await widget.teamService.getTeam(submitterTeamId);
-        final submitterName = submitterTeam?.name ?? 'Team';
-
-        final Set<String> targetUids = {};
-        if (submitterTeam != null) {
-          if (submitterTeam.leaderId.isNotEmpty) {
-            targetUids.add(submitterTeam.leaderId);
-          }
-          for (final m in submitterTeam.members) {
-            if (m.isNotEmpty) targetUids.add(m);
-          }
-        }
-
-        if (targetUids.isEmpty) {
-          final t1 = await widget.teamService.getTeam(team1Id);
-          final t2 = await widget.teamService.getTeam(team2Id);
-          if (t1 != null && t1.leaderId.isNotEmpty) targetUids.add(t1.leaderId);
-          if (t2 != null && t2.leaderId.isNotEmpty) targetUids.add(t2.leaderId);
-        }
-
-        for (final uid in targetUids) {
-          await NotificationService().createNotification(
-            userId: uid,
-            title: '❌ Match Proof Rejected ($submitterName)',
-            body: 'Admin ne aapka match proof reject kar diya hai. Wajah: $finalReason. Barah-e-karam apna Team profile khol kar dubara proof upload karein.',
-            type: 'proof_rejected',
-            additionalData: {
-              'matchId': matchId.toString(),
-              'senderUid': 'admin',
-              'senderName': '🛡️ Admin',
-              'reason': finalReason,
-            },
-          );
-        }
-      } catch (notifErr) {
-        debugPrint('[AdminProof] Error sending rejection notification: $notifErr');
-      }
+      final ok = await SupabaseService.rejectProof(
+        matchId: matchId.toString(),
+        reason: finalReason,
+      );
 
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text('❌ Proof rejected with note: $finalReason'),
-            backgroundColor: const Color(0xFFFF4655),
+            content: Text(ok
+                ? '❌ Proof rejected with note: $finalReason'
+                : 'Error rejecting'),
+            backgroundColor:
+                ok ? const Color(0xFFFF4655) : const Color(0xFFFF4655),
           ),
         );
       }
     } catch (e) {
-      debugPrint('[AdminProof] Reject error: $e');
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text('Error rejecting proof: $e'),
-            backgroundColor: const Color(0xFFFF4655),
-          ),
+              content: Text('Error rejecting proof: $e'),
+              backgroundColor: const Color(0xFFFF4655)),
         );
       }
     } finally {
@@ -3994,8 +3585,12 @@ class _AdminPendingProofCardState extends State<_AdminPendingProofCard> {
                     widget.teamService.getTeam(t2),
                   ]),
                   builder: (context, snap) {
-                    final t1Name = snap.data?[0]?.name ?? widget.match['team1_name'] ?? 'Team 1';
-                    final t2Name = snap.data?[1]?.name ?? widget.match['team2_name'] ?? 'Team 2';
+                    final t1Name = snap.data?[0]?.name ??
+                        widget.match['team1_name'] ??
+                        'Team 1';
+                    final t2Name = snap.data?[1]?.name ??
+                        widget.match['team2_name'] ??
+                        'Team 2';
                     return Text(
                       '$t1Name  ⚔️  $t2Name',
                       style: const TextStyle(
@@ -4010,11 +3605,13 @@ class _AdminPendingProofCardState extends State<_AdminPendingProofCard> {
                 ),
               ),
               Container(
-                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
                 decoration: BoxDecoration(
                   color: const Color(0xFF00FF88).withOpacity(0.18),
                   borderRadius: BorderRadius.circular(6),
-                  border: Border.all(color: const Color(0xFF00FF88).withOpacity(0.4)),
+                  border:
+                      Border.all(color: const Color(0xFF00FF88).withOpacity(0.4)),
                 ),
                 child: Text(
                   'Claim: $result',
@@ -4033,14 +3630,26 @@ class _AdminPendingProofCardState extends State<_AdminPendingProofCard> {
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
                 FutureBuilder<TeamModel?>(
-                  future: (widget.match['submitted_by_team_id'] ?? widget.match['winner_team_id']) != null
-                      ? widget.teamService.getTeam((widget.match['submitted_by_team_id'] ?? widget.match['winner_team_id']).toString())
-                      : Future.value(null),
+                  future:
+                      (widget.match['submitted_by_team_id'] ??
+                                  widget.match['winner_team_id']) !=
+                              null
+                          ? widget.teamService.getTeam(
+                              (widget.match['submitted_by_team_id'] ??
+                                      widget.match['winner_team_id'])
+                                  .toString())
+                          : Future.value(null),
                   builder: (context, snap) {
-                    final subName = snap.data?.name ?? (widget.match['submitted_by_team_id'] != null ? 'Team' : 'Submitter');
+                    final subName = snap.data?.name ??
+                        (widget.match['submitted_by_team_id'] != null
+                            ? 'Team'
+                            : 'Submitter');
                     return Text(
                       'Submitted By: $subName',
-                      style: const TextStyle(color: Color(0xFF38BDF8), fontWeight: FontWeight.bold, fontSize: 11.5),
+                      style: const TextStyle(
+                          color: Color(0xFF38BDF8),
+                          fontWeight: FontWeight.bold,
+                          fontSize: 11.5),
                     );
                   },
                 ),
@@ -4070,7 +3679,8 @@ class _AdminPendingProofCardState extends State<_AdminPendingProofCard> {
                         height: 160,
                         color: const Color(0xFF10141D),
                         child: const Center(
-                          child: CircularProgressIndicator(color: Color(0xFF00FF88)),
+                          child: CircularProgressIndicator(
+                              color: Color(0xFF00FF88)),
                         ),
                       ),
                       errorWidget: (c, u, e) => Container(
@@ -4082,7 +3692,9 @@ class _AdminPendingProofCardState extends State<_AdminPendingProofCard> {
                             children: [
                               Icon(Icons.broken_image, color: Colors.white30),
                               SizedBox(width: 8),
-                              Text('Could not load image', style: TextStyle(color: Colors.white30, fontSize: 12)),
+                              Text('Could not load image',
+                                  style: TextStyle(
+                                      color: Colors.white30, fontSize: 12)),
                             ],
                           ),
                         ),
@@ -4091,7 +3703,8 @@ class _AdminPendingProofCardState extends State<_AdminPendingProofCard> {
                   ),
                   Container(
                     margin: const EdgeInsets.all(8),
-                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                    padding:
+                        const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                     decoration: BoxDecoration(
                       color: Colors.black.withOpacity(0.75),
                       borderRadius: BorderRadius.circular(6),
@@ -4101,7 +3714,11 @@ class _AdminPendingProofCardState extends State<_AdminPendingProofCard> {
                       children: [
                         Icon(Icons.zoom_in, color: Colors.white, size: 14),
                         SizedBox(width: 4),
-                        Text('Tap to View', style: TextStyle(color: Colors.white, fontSize: 10, fontWeight: FontWeight.bold)),
+                        Text('Tap to View',
+                            style: TextStyle(
+                                color: Colors.white,
+                                fontSize: 10,
+                                fontWeight: FontWeight.bold)),
                       ],
                     ),
                   ),
@@ -4117,7 +3734,8 @@ class _AdminPendingProofCardState extends State<_AdminPendingProofCard> {
                 borderRadius: BorderRadius.circular(8),
               ),
               child: const Center(
-                child: Text('No screenshot attached', style: TextStyle(color: Colors.white38, fontSize: 12)),
+                child: Text('No screenshot attached',
+                    style: TextStyle(color: Colors.white38, fontSize: 12)),
               ),
             ),
             const SizedBox(height: 10),
@@ -4131,7 +3749,8 @@ class _AdminPendingProofCardState extends State<_AdminPendingProofCard> {
               hintStyle: const TextStyle(color: Colors.white38, fontSize: 12),
               filled: true,
               fillColor: const Color(0xFF10141D),
-              contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+              contentPadding:
+                  const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
               border: OutlineInputBorder(
                 borderRadius: BorderRadius.circular(8),
                 borderSide: const BorderSide(color: Color(0xFF2A3447)),
@@ -4165,13 +3784,15 @@ class _AdminPendingProofCardState extends State<_AdminPendingProofCard> {
                       style: ElevatedButton.styleFrom(
                         backgroundColor: const Color(0xFFFF4655),
                         foregroundColor: Colors.white,
-                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                        shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(8)),
                         elevation: 0,
                       ),
                       icon: const Icon(Icons.close_rounded, size: 16),
                       label: const Text(
                         'Reject Proof ❌',
-                        style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12),
+                        style: TextStyle(
+                            fontWeight: FontWeight.bold, fontSize: 12),
                       ),
                       onPressed: _handleReject,
                     ),
@@ -4185,13 +3806,16 @@ class _AdminPendingProofCardState extends State<_AdminPendingProofCard> {
                       style: ElevatedButton.styleFrom(
                         backgroundColor: const Color(0xFF00FF88),
                         foregroundColor: Colors.black,
-                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                        shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(8)),
                         elevation: 0,
                       ),
-                      icon: const Icon(Icons.check_rounded, size: 16, color: Colors.black),
+                      icon: const Icon(Icons.check_rounded,
+                          size: 16, color: Colors.black),
                       label: const Text(
                         'Accept Proof ✅',
-                        style: TextStyle(fontWeight: FontWeight.w900, fontSize: 12),
+                        style: TextStyle(
+                            fontWeight: FontWeight.w900, fontSize: 12),
                       ),
                       onPressed: _handleAccept,
                     ),
