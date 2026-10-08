@@ -66,7 +66,8 @@ class _TeamMatchRoomScreenState extends State<TeamMatchRoomScreen> with SingleTi
     return '$hours:$minutes:$seconds';
   }
 
-  Future<void> _handleUploadProof(TeamMatch match, bool isTeam1) async {
+  Future<void> _handleUploadProof(TeamMatch match, bool isTeam1, [String? uid]) async {
+    final currentUid = uid ?? GamerAuthService().currentUid ?? '';
     final picker = ImagePicker();
     final picked = await picker.pickImage(source: ImageSource.gallery, imageQuality: 85);
     if (picked == null) return;
