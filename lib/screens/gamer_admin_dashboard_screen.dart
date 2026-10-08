@@ -1,6 +1,4 @@
 import 'package:flutter/material.dart';
-import 'package:games_khabar/compat/firebase_auth.dart';
-import 'package:games_khabar/compat/cloud_firestore.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:intl/intl.dart';
 import '../constants/gamer_theme.dart';
