@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 import 'package:share_plus/share_plus.dart';
-import 'package:games_khabar/compat/firebase_auth.dart';
 import '../services/supabase_service.dart';
 import 'gamer_profile_screen.dart';
 
@@ -37,22 +36,41 @@ class _GamerFeedScreenState extends State<GamerFeedScreen> {
 
   Future<void> _loadCurrentUserInfo() async {
     try {
-      try {
-        final sbId = await SupabaseService.getCurrentUserId();
-        if (sbId != null && _uuidRegex.hasMatch(sbId)) {
-          currentUserId = sbId;
-        }
-      } catch (_) {}
+      // 1. Supabase Auth se current user id lo
+      String? sbId = SupabaseService.client.auth.currentUser?.id;
+      if (sbId == null || sbId.isEmpty) {
+        sbId = await SupabaseService.getCurrentUserId();
+      }
 
-      final fbUser = FirebaseAuth.instance.currentUser;
+      if (sbId != null && sbId.isNotEmpty && _uuidRegex.hasMatch(sbId)) {
+        currentUserId = sbId;
 
-      if (currentUserId.isEmpty && fbUser != null) {
-        if (fbUser.email != null && fbUser.email!.isNotEmpty) {
+        // Supabase se user ka username/avatar lo
+        try {
+          final res = await SupabaseService.client
+              .from('users')
+              .select('id, username, avatar_url')
+              .eq('id', sbId)
+              .maybeSingle();
+          if (res != null) {
+            currentUsername =
+                (res['username'] ?? '').toString().isNotEmpty
+                    ? res['username'].toString()
+                    : 'Gamer';
+            currentAvatarUrl = (res['avatar_url'] ?? '').toString();
+          }
+        } catch (_) {}
+      }
+
+      // 2. Fallback: email se lookup
+      if (currentUserId.isEmpty) {
+        final sbEmail = SupabaseService.client.auth.currentUser?.email;
+        if (sbEmail != null && sbEmail.isNotEmpty) {
           try {
             final res = await SupabaseService.client
                 .from('users')
                 .select('id, username, avatar_url')
-                .eq('email', fbUser.email!)
+                .eq('email', sbEmail)
                 .maybeSingle();
             if (res != null && res['id'] != null) {
               final idStr = res['id'].toString();
@@ -60,34 +78,15 @@ class _GamerFeedScreenState extends State<GamerFeedScreen> {
                 currentUserId = idStr;
                 currentUsername = (res['username'] ?? '').toString().isNotEmpty
                     ? res['username'].toString()
-                    : (fbUser.displayName ?? fbUser.email?.split('@').first ?? 'Gamer');
+                    : sbEmail.split('@').first;
                 currentAvatarUrl = (res['avatar_url'] ?? '').toString();
-              }
-            }
-          } catch (_) {}
-        }
-
-        if (currentUserId.isEmpty) {
-          try {
-            final resUid = await SupabaseService.client
-                .from('users')
-                .select('id, username, avatar_url')
-                .eq('uid', fbUser.uid)
-                .maybeSingle();
-            if (resUid != null && resUid['id'] != null) {
-              final idStr = resUid['id'].toString();
-              if (_uuidRegex.hasMatch(idStr)) {
-                currentUserId = idStr;
-                currentUsername = (resUid['username'] ?? '').toString().isNotEmpty
-                    ? resUid['username'].toString()
-                    : (fbUser.displayName ?? fbUser.email?.split('@').first ?? 'Gamer');
-                currentAvatarUrl = (resUid['avatar_url'] ?? '').toString();
               }
             }
           } catch (_) {}
         }
       }
 
+      // 3. Fallback: first user
       if (currentUserId.isEmpty) {
         try {
           final anyUser = await SupabaseService.client
@@ -104,11 +103,6 @@ class _GamerFeedScreenState extends State<GamerFeedScreen> {
             }
           }
         } catch (_) {}
-      }
-
-      if (currentUserId.isEmpty && fbUser != null && _uuidRegex.hasMatch(fbUser.uid)) {
-        currentUserId = fbUser.uid;
-        currentUsername = fbUser.displayName ?? fbUser.email?.split('@').first ?? 'Gamer';
       }
 
       if (currentUsername.trim().isEmpty) {
@@ -351,9 +345,7 @@ https://play.google.com/store/apps/details?id=com.gameskhabar.app
     });
   }
 
-  /// Report a post — saves into the `reports` table.
   Future<void> _reportPost(String postId, String postContent, String postOwnerId) async {
-    // Prevent reporting own post
     if (postOwnerId == currentUserId) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('Aap apni post report nahi kar sakte')),
@@ -361,7 +353,6 @@ https://play.google.com/store/apps/details?id=com.gameskhabar.app
       return;
     }
 
-    // Confirm dialog
     final confirm = await showDialog<bool>(
       context: context,
       builder: (c) => AlertDialog(
@@ -506,7 +497,6 @@ https://play.google.com/store/apps/details?id=com.gameskhabar.app
                 leading: const Icon(Icons.flag_outlined, color: Color(0xFF65676B)),
                 title: const Text('Report Post'),
                 onTap: () {
-                  // Capture the current post content for the report
                   final targetPost = posts.firstWhere(
                     (p) => p['id'].toString() == postId,
                     orElse: () => <String, dynamic>{},
@@ -1104,10 +1094,7 @@ class _CommentSheetState extends State<CommentSheet> {
     }
   }
 
-  /// Report a comment — saves into the `reports` table.
   Future<void> _reportComment(String commentId, String commentContent) async {
-    // Prevent reporting own comment
-    // (commentUserId might be current user)
     final confirm = await showDialog<bool>(
       context: context,
       builder: (c) => AlertDialog(
