@@ -1732,17 +1732,38 @@ class _GamerAdminDashboardScreenState extends State<GamerAdminDashboardScreen>
     }
   }
 
-  // ===================== TAB 3: BLUE TICK QUEUE (FIRESTORE - NOT YET CONVERTED) =====================
+  // ===================== TAB 3: BLUE TICK QUEUE (SUPABASE) =====================
   Widget _buildBlueTickRequestsTab() {
-    return StreamBuilder<QuerySnapshot>(
-      stream: FirebaseFirestore.instance.collection('users').snapshots(),
+    return StreamBuilder<List<Map<String, dynamic>>>(
+      stream: SupabaseService.client.from('users').stream(primaryKey: ['id']),
       builder: (context, snapshot) {
+        if (snapshot.hasError) {
+          return Center(
+            child: Padding(
+              padding: const EdgeInsets.all(32),
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  const Icon(Icons.error_outline_rounded, color: Color(0xFFFF4655), size: 48),
+                  const SizedBox(height: 14),
+                  const Text('Could not load blue tick requests',
+                      style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 15)),
+                  const SizedBox(height: 6),
+                  Text('${snapshot.error}',
+                      textAlign: TextAlign.center,
+                      style: const TextStyle(color: Color(0xFF8B949E), fontSize: 12)),
+                ],
+              ),
+            ),
+          );
+        }
+
         if (snapshot.connectionState == ConnectionState.waiting && !snapshot.hasData) {
           return const Center(child: CircularProgressIndicator(color: Color(0xFF00FF88)));
         }
 
-        final docs = snapshot.data?.docs ?? [];
-        final allUsers = docs.map((d) => GamerUser.fromFirestore(d)).toList();
+        final docs = snapshot.data ?? [];
+        final allUsers = docs.map((d) => GamerUser.fromMap(d)).toList();
 
         final bool isKiroApproved = allUsers.any(
             (u) => (u.username == 'kiro_yt' || u.uid == 'demo_01' || u.uid == 'sample_kiro_yt') && u.hasBlueTick);
@@ -1787,6 +1808,39 @@ class _GamerAdminDashboardScreenState extends State<GamerAdminDashboardScreen>
             ),
           );
           requests.add(shadowUser);
+        }
+
+        if (requests.isEmpty) {
+          return Center(
+            child: Padding(
+              padding: const EdgeInsets.all(32),
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Container(
+                    padding: const EdgeInsets.all(18),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFF10141D),
+                      shape: BoxShape.circle,
+                      border: Border.all(color: const Color(0xFF1F2B3E)),
+                    ),
+                    child: const Icon(Icons.verified_outlined, color: Color(0xFF38BDF8), size: 40),
+                  ),
+                  const SizedBox(height: 14),
+                  const Text(
+                    'No Blue Tick Requests',
+                    style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 15),
+                  ),
+                  const SizedBox(height: 6),
+                  const Text(
+                    'All verification requests have been reviewed!',
+                    textAlign: TextAlign.center,
+                    style: TextStyle(color: Color(0xFF8B949E), fontSize: 12),
+                  ),
+                ],
+              ),
+            ),
+          );
         }
 
         return ListView.separated(
