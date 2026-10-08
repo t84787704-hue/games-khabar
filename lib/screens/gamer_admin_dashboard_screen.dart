@@ -2051,25 +2051,70 @@ class _GamerAdminDashboardScreenState extends State<GamerAdminDashboardScreen>
     }
   }
 
-  // ===================== TAB 3: POSTS MODERATION (FIRESTORE - NOT YET CONVERTED) =====================
+  // ===================== TAB 4: POSTS MODERATION (SUPABASE) =====================
   Widget _buildPostsModerationTab() {
-    return StreamBuilder<QuerySnapshot>(
-      stream: FirebaseFirestore.instance.collection('posts').orderBy('createdAt', descending: true).snapshots(),
+    return StreamBuilder<List<Map<String, dynamic>>>(
+      stream: SupabaseService.client
+          .from('posts')
+          .stream(primaryKey: ['id'])
+          .order('created_at', ascending: false),
       builder: (context, snapshot) {
+        if (snapshot.hasError) {
+          return Center(
+            child: Padding(
+              padding: const EdgeInsets.all(32),
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  const Icon(Icons.error_outline_rounded, color: Color(0xFFFF4655), size: 48),
+                  const SizedBox(height: 14),
+                  const Text('Could not load posts',
+                      style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 15)),
+                  const SizedBox(height: 6),
+                  Text('${snapshot.error}',
+                      textAlign: TextAlign.center,
+                      style: const TextStyle(color: Color(0xFF8B949E), fontSize: 12)),
+                ],
+              ),
+            ),
+          );
+        }
+
         if (snapshot.connectionState == ConnectionState.waiting && !snapshot.hasData) {
           return const Center(child: CircularProgressIndicator(color: Color(0xFF00FF88)));
         }
 
-        final docs = snapshot.data?.docs ?? [];
+        final docs = snapshot.data ?? [];
+
         if (docs.isEmpty) {
-          return const Center(
-            child: Column(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                Icon(Icons.check_circle_outline_rounded, color: Color(0xFF00FF88), size: 48),
-                SizedBox(height: 12),
-                Text('No posts found to moderate', style: TextStyle(color: Color(0xFF8B949E))),
-              ],
+          return Center(
+            child: Padding(
+              padding: const EdgeInsets.all(32),
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Container(
+                    padding: const EdgeInsets.all(18),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFF10141D),
+                      shape: BoxShape.circle,
+                      border: Border.all(color: const Color(0xFF1F2B3E)),
+                    ),
+                    child: const Icon(Icons.dynamic_feed_rounded, color: Color(0xFF8B949E), size: 40),
+                  ),
+                  const SizedBox(height: 14),
+                  const Text(
+                    'No posts to moderate',
+                    style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 15),
+                  ),
+                  const SizedBox(height: 6),
+                  const Text(
+                    'Community is clean — no posts need review!',
+                    textAlign: TextAlign.center,
+                    style: TextStyle(color: Color(0xFF8B949E), fontSize: 12),
+                  ),
+                ],
+              ),
             ),
           );
         }
@@ -2079,12 +2124,14 @@ class _GamerAdminDashboardScreenState extends State<GamerAdminDashboardScreen>
           itemCount: docs.length,
           separatorBuilder: (_, __) => const SizedBox(height: 10),
           itemBuilder: (context, index) {
-            final doc = docs[index];
-            final data = doc.data() as Map<String, dynamic>;
-            final postId = doc.id;
-            final text = data['text'] ?? data['title'] ?? 'Gaming Post';
-            final author = data['displayName'] ?? data['username'] ?? 'Player';
-            final userId = data['userId'] ?? '';
+            final data = docs[index];
+            final postId = (data['id'] ?? '').toString();
+            final text = (data['content'] ?? 'Gaming Post').toString();
+            final author = (data['display_name'] ?? 'Player').toString();
+            final userId = (data['user_id'] ?? '').toString();
+            final game = (data['game'] ?? '').toString();
+            final imageUrl = (data['image_url'] ?? '').toString();
+            final isVerified = data['is_verified'] == true;
 
             return Container(
               padding: const EdgeInsets.all(12),
@@ -2097,46 +2144,154 @@ class _GamerAdminDashboardScreenState extends State<GamerAdminDashboardScreen>
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
-                      Text(
-                        author,
-                        style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 14),
+                      GamerAvatar(
+                        photoUrl: (data['user_avatar'] ?? '').toString(),
+                        displayName: author,
+                        radius: 18,
+                      ),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Row(
+                              children: [
+                                Flexible(
+                                  child: Text(
+                                    author,
+                                    style: const TextStyle(
+                                        color: Colors.white,
+                                        fontWeight: FontWeight.bold,
+                                        fontSize: 14),
+                                    overflow: TextOverflow.ellipsis,
+                                  ),
+                                ),
+                                if (isVerified) ...[
+                                  const SizedBox(width: 4),
+                                  const Icon(Icons.verified,
+                                      color: Color(0xFF38BDF8), size: 14),
+                                ],
+                              ],
+                            ),
+                            if (game.isNotEmpty)
+                              Text(
+                                'Game: $game',
+                                style: const TextStyle(
+                                    color: Color(0xFF38BDF8),
+                                    fontSize: 11,
+                                    fontWeight: FontWeight.bold),
+                              ),
+                          ],
+                        ),
                       ),
                       IconButton(
-                        icon: const Icon(Icons.delete_outline, color: Color(0xFFFF4655), size: 20),
+                        icon: const Icon(Icons.delete_outline,
+                            color: Color(0xFFFF4655), size: 20),
                         tooltip: 'Delete Post',
                         onPressed: () async {
-                          await FirebaseFirestore.instance.collection('posts').doc(postId).delete();
-                          if (context.mounted) {
-                            ScaffoldMessenger.of(context).showSnackBar(
-                              const SnackBar(content: Text('Post deleted by admin'), backgroundColor: Color(0xFFFF4655)),
-                            );
+                          try {
+                            await SupabaseService.client
+                                .from('posts')
+                                .delete()
+                                .eq('id', postId);
+                            if (context.mounted) {
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                const SnackBar(
+                                    content: Text('Post deleted by admin'),
+                                    backgroundColor: Color(0xFFFF4655)),
+                              );
+                            }
+                          } catch (e) {
+                            if (context.mounted) {
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                SnackBar(
+                                    content: Text('Error deleting: $e'),
+                                    backgroundColor: Color(0xFFFF4655)),
+                              );
+                            }
                           }
                         },
                       ),
                     ],
                   ),
-                  const SizedBox(height: 4),
-                  Text(text, style: const TextStyle(color: Color(0xFFCBD5E1), fontSize: 13)),
-                  const SizedBox(height: 8),
+                  const SizedBox(height: 10),
+
+                  if (text.isNotEmpty) ...[
+                    Text(
+                      text,
+                      style: const TextStyle(color: Color(0xFFCBD5E1), fontSize: 13),
+                      maxLines: 3,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                    const SizedBox(height: 8),
+                  ],
+
+                  if (imageUrl.isNotEmpty) ...[
+                    ClipRRect(
+                      borderRadius: BorderRadius.circular(8),
+                      child: CachedNetworkImage(
+                        imageUrl: imageUrl,
+                        height: 140,
+                        width: double.infinity,
+                        fit: BoxFit.cover,
+                        placeholder: (_, __) => Container(
+                          height: 140,
+                          color: const Color(0xFF161B26),
+                          child: const Center(
+                            child: CircularProgressIndicator(
+                                color: Color(0xFF00FF88), strokeWidth: 2),
+                          ),
+                        ),
+                        errorWidget: (_, __, ___) => Container(
+                          height: 140,
+                          color: const Color(0xFF161B26),
+                          child: const Center(
+                            child: Icon(Icons.broken_image_rounded,
+                                color: Colors.white38, size: 36),
+                          ),
+                        ),
+                      ),
+                    ),
+                    const SizedBox(height: 8),
+                  ],
+
                   Row(
                     children: [
-                      Text('Post ID: $postId', style: const TextStyle(color: Color(0xFF6E7681), fontSize: 10, fontFamily: 'monospace')),
+                      Text(
+                        'ID: ${postId.length > 8 ? postId.substring(0, 8) : postId}',
+                        style: const TextStyle(
+                            color: Color(0xFF6E7681),
+                            fontSize: 10,
+                            fontFamily: 'monospace'),
+                      ),
                       const Spacer(),
                       if (userId.isNotEmpty)
                         TextButton(
                           onPressed: () async {
-                            await FirebaseFirestore.instance.collection('users').doc(userId).set({
-                              'isBanned': true,
-                            }, SetOptions(merge: true));
-                            if (context.mounted) {
-                              ScaffoldMessenger.of(context).showSnackBar(
-                                SnackBar(content: Text('Author $author banned'), backgroundColor: const Color(0xFFFF4655)),
-                              );
+                            try {
+                              await SupabaseService.client
+                                  .from('users')
+                                  .update({'is_banned': true}).eq('id', userId);
+                              if (context.mounted) {
+                                ScaffoldMessenger.of(context).showSnackBar(
+                                  SnackBar(
+                                      content: Text('Author $author banned'),
+                                      backgroundColor: const Color(0xFFFF4655)),
+                                );
+                              }
+                            } catch (e) {
+                              if (context.mounted) {
+                                ScaffoldMessenger.of(context).showSnackBar(
+                                  SnackBar(
+                                      content: Text('Error: $e'),
+                                      backgroundColor: const Color(0xFFFF4655)),
+                                );
+                              }
                             }
                           },
-                          child: const Text('Ban Author', style: TextStyle(color: Color(0xFFFF4655), fontSize: 11)),
+                          child: const Text('Ban Author',
+                              style: TextStyle(color: Color(0xFFFF4655), fontSize: 11)),
                         ),
                     ],
                   ),
@@ -2149,7 +2304,7 @@ class _GamerAdminDashboardScreenState extends State<GamerAdminDashboardScreen>
     );
   }
 
-  // ===================== TAB 4: REPORTS (FIRESTORE - NOT YET CONVERTED) =====================
+  // ===================== TAB 5: REPORTS (FIRESTORE - NOT YET CONVERTED) =====================
   Widget _buildReportsTab() {
     return StreamBuilder<QuerySnapshot>(
       stream: FirebaseFirestore.instance.collection('reports').snapshots(),
@@ -2206,7 +2361,7 @@ class _GamerAdminDashboardScreenState extends State<GamerAdminDashboardScreen>
     );
   }
 
-  // ===================== TAB 5: COINS (FIRESTORE - NOT YET CONVERTED) =====================
+  // ===================== TAB 6: COINS (FIRESTORE - NOT YET CONVERTED) =====================
   Widget _buildCoinsTab() {
     return const _AdminCoinsVaultTab();
   }
