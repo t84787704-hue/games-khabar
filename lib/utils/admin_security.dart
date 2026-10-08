@@ -38,55 +38,106 @@ class AdminSession {
   }
 }
 
-/// Checks if currently authenticated user is admin:
-/// email == "tufailm483@gmail.com" OR userDoc is_admin / isAdmin == true
+/// Fallback email-based admin check (owner)
 bool isEmailAdmin(String? email) {
   if (email == null) return false;
   return email.trim().toLowerCase() == 'tufailm483@gmail.com';
 }
 
+/// Primary admin check — reads `is_admin` from Supabase users table.
+/// Priority: is_admin column > owner email fallback.
+Future<bool> checkIsAdmin() async {
+  try {
+    // 1. Check Supabase Auth current user
+    final sbUserId = SupabaseService.client.auth.currentUser?.id;
+    if (sbUserId != null) {
+      final userData = await SupabaseService.query(
+        'users',
+        select: 'is_admin,email',
+        filters: {'id': 'eq.$sbUserId'},
+        limit: 1,
+      );
+      if (userData.isNotEmpty) {
+        final data = userData.first;
+        if (data['is_admin'] == true) return true;
+        if (isEmailAdmin(data['email']?.toString())) return true;
+      }
+    }
+
+    // 2. Fallback to GamerAuthService current user
+    final user = GamerAuthService().currentUser;
+    if (user != null) {
+      if (isEmailAdmin(user.email)) return true;
+      final userData = await SupabaseService.query(
+        'users',
+        select: 'is_admin,email',
+        filters: {'uid': 'eq.${user.id}'},
+        limit: 1,
+      );
+      if (userData.isNotEmpty) {
+        final data = userData.first;
+        if (data['is_admin'] == true) return true;
+        if (isEmailAdmin(data['email']?.toString())) return true;
+      }
+    }
+  } catch (e) {
+    debugPrint('[AdminSecurity] checkIsAdmin error: $e');
+  }
+  return false;
+}
+
+/// Synchronous version for quick UI checks (uses cached session)
 bool isAdminUser({Map<String, dynamic>? userDocData, bool? docIsAdmin}) {
   try {
-    final user = GamerAuthService().currentUser;
-    if (user != null && isEmailAdmin(user.email)) {
+    if (docIsAdmin == true) return true;
+    if (userDocData != null &&
+        (userDocData['is_admin'] == true || userDocData['isAdmin'] == true)) {
       return true;
     }
-    if (docIsAdmin == true) return true;
-    if (userDocData != null && (userDocData['is_admin'] == true || userDocData['isAdmin'] == true)) return true;
+    final user = GamerAuthService().currentUser;
+    if (user != null && isEmailAdmin(user.email)) return true;
   } catch (_) {}
   return false;
 }
 
-/// Helper stream to watch current user's admin state in real time
+/// Realtime stream of current user's admin state
 Stream<bool> watchIsAdmin() {
-  final user = GamerAuthService().currentUser;
-  if (user == null) return Stream.value(false);
-  if (isEmailAdmin(user.email)) return Stream.value(true);
+  try {
+    final sbUserId = SupabaseService.client.auth.currentUser?.id;
+    if (sbUserId == null) return Stream.value(false);
 
-  return SupabaseService.client
-      .from('users')
-      .stream(primaryKey: ['id'])
-      .eq('id', user.id)
-      .map((rows) {
-    if (rows.isEmpty) return false;
-    final data = rows.first;
-    return data['is_admin'] == true || data['isAdmin'] == true || isEmailAdmin(user.email);
-  });
+    return SupabaseService.client
+        .from('users')
+        .stream(primaryKey: ['id'])
+        .eq('id', sbUserId)
+        .map((rows) {
+      if (rows.isEmpty) return false;
+      final data = rows.first;
+      return data['is_admin'] == true ||
+          data['isAdmin'] == true ||
+          isEmailAdmin(data['email']?.toString());
+    });
+  } catch (e) {
+    return Stream.value(false);
+  }
 }
 
-/// Optional confirmation dialog before performing admin actions
+/// Confirmation dialog before performing admin actions
 Future<bool> promptAdminPinDialog(BuildContext context) async {
-  if (!isAdminUser()) {
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(
-        backgroundColor: Color(0xFFFF4655),
-        behavior: SnackBarBehavior.floating,
-        content: Text(
-          'Access Denied - Please login as Admin first',
-          style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
+  final ok = await checkIsAdmin();
+  if (!ok) {
+    if (context.mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          backgroundColor: Color(0xFFFF4655),
+          behavior: SnackBarBehavior.floating,
+          content: Text(
+            'Access Denied - Please login as Admin first',
+            style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
+          ),
         ),
-      ),
-    );
+      );
+    }
     return false;
   }
   return true;
