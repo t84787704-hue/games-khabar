@@ -188,7 +188,9 @@ class _AdminTeamMatchesScreenState extends State<AdminTeamMatchesScreen> {
                 await _matchService.adminVerifyMatch(
                   matchId: match.matchId,
                   winnerTeamId: selectedWinner!,
+                  adminId: 'Admin',
                   adminIdentifier: 'Admin',
+                  note: notesController.text.trim(),
                   notes: notesController.text.trim(),
                 );
                 if (context.mounted) {

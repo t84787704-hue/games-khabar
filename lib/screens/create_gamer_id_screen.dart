@@ -158,6 +158,7 @@ class _CreateGamerIdScreenState extends State<CreateGamerIdScreen> {
       final localFrame = prefs.getString('user_active_frame_$uid') ?? '';
       final localFrames = prefs.getStringList('user_unlocked_frames_$uid') ?? [];
       final localBadge = prefs.getString('user_active_badge_$uid') ?? '';
+      final localBadges = prefs.getStringList('user_unlocked_badges_$uid') ?? <String>[];
       final data = await SupabaseService.getUser(uid);
       if (data != null && mounted) {
         final activeF = (data['activeFrame'] as String?) ?? localFrame;

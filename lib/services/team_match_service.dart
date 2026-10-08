@@ -316,14 +316,20 @@ class TeamMatchService {
   /// 5. Submit Win Proof Screenshot
   Future<Map<String, dynamic>> submitProof({
     required String matchId,
-    required String teamId,
-    required String userId,
-    required File proofImage,
+    String? teamId,
+    String? userId,
+    File? proofImage,
+    File? imageFile,
+    bool? isTeam1,
     required String claim,
   }) async {
     try {
+      final fileToUpload = proofImage ?? imageFile;
+      if (fileToUpload == null) {
+        return {'success': false, 'error': 'کوئی تصویر منتخب نہیں کی گئی'};
+      }
       final imageUrl = await SupabaseService.uploadFile(
-        file: proofImage,
+        file: fileToUpload,
         folder: 'team_matches/$matchId',
         bucket: SupabaseService.bucketMatchProofs,
       );
@@ -337,7 +343,7 @@ class TeamMatchService {
         return {'success': false, 'error': 'میچ نہیں ملا'};
       }
       final match = TeamMatch.fromMap(matchData);
-      final isTeam1 = match.team1Id == teamId || match.team1LeaderId == userId;
+      final resolvedIsTeam1 = isTeam1 ?? (match.team1Id == (teamId ?? '') || match.team1LeaderId == (userId ?? ''));
 
       final nowStr = DateTime.now().toIso8601String();
       final updateData = <String, dynamic>{
@@ -348,7 +354,7 @@ class TeamMatchService {
         'proof_attempts': (match.proofAttempts) + 1,
       };
 
-      if (isTeam1) {
+      if (resolvedIsTeam1) {
         updateData['team1Proof'] = imageUrl;
         updateData['team1_proof'] = imageUrl;
         updateData['team1Claim'] = claim;
@@ -364,8 +370,8 @@ class TeamMatchService {
         updateData['team2_proof_uploaded_at'] = nowStr;
       }
 
-      if ((isTeam1 && match.team2Proof != null) || (!isTeam1 && match.team1Proof != null)) {
-        final otherClaim = isTeam1 ? match.team2Claim : match.team1Claim;
+      if ((resolvedIsTeam1 && match.team2Proof != null) || (!resolvedIsTeam1 && match.team1Proof != null)) {
+        final otherClaim = resolvedIsTeam1 ? match.team2Claim : match.team1Claim;
         if (claim == 'win' && otherClaim == 'win') {
           updateData['status'] = 'Disputed';
           updateData['disputeReason'] = 'Both teams claimed victory';
@@ -410,10 +416,11 @@ class TeamMatchService {
     required String senderId,
     required String senderName,
     required String teamName,
-    required String text,
+    String text = '',
     String imageUrl = '',
     bool isSystem = false,
     String? senderAvatar,
+    bool? isTeam1,
   }) async {
     try {
       await SupabaseService.sendMatchChatMessage(
@@ -441,10 +448,14 @@ class TeamMatchService {
   Future<bool> adminVerifyMatch({
     required String matchId,
     required String winnerTeamId,
-    required String adminId,
+    String? adminId,
+    String? adminIdentifier,
     String note = '',
+    String? notes,
   }) async {
     try {
+      final effectiveAdminId = adminId ?? adminIdentifier ?? 'Admin';
+      final effectiveNote = (notes != null && notes.isNotEmpty) ? notes : note;
       final matchData = await SupabaseService.getTeamMatch(matchId);
       if (matchData == null) return false;
       final match = TeamMatch.fromMap(matchData);
@@ -464,12 +475,12 @@ class TeamMatchService {
             'winner_id': winnerTeamId,
             'winnerName': winnerName,
             'winner_name': winnerName,
-            'verifiedBy': adminId,
-            'verified_by': adminId,
+            'verifiedBy': effectiveAdminId,
+            'verified_by': effectiveAdminId,
             'verifiedAt': nowStr,
             'verified_at': nowStr,
-            'adminNote': note,
-            'admin_note': note,
+            'adminNote': effectiveNote,
+            'admin_note': effectiveNote,
           })
           .or('matchId.eq.$matchId,match_id.eq.$matchId,id.eq.$matchId');
 
@@ -502,9 +513,9 @@ class TeamMatchService {
 
   /// Admin Rejects Match
   Future<bool> adminRejectMatch(
-    String matchId, {
-    required String adminId,
-    required String reason,
+    String matchId,
+    String adminId, {
+    String reason = '',
   }) async {
     try {
       final nowStr = DateTime.now().toIso8601String();
@@ -531,20 +542,22 @@ class TeamMatchService {
 
   /// Admin Requests New Proof
   Future<bool> adminRequestNewProof(
-    String matchId, {
-    required String adminId,
-    required String note,
+    String matchId,
+    String adminId, {
+    String note = '',
+    String reason = '',
   }) async {
     try {
+      final effectiveNote = reason.isNotEmpty ? reason : note;
       final nowStr = DateTime.now().toIso8601String();
       await SupabaseService.client
           .from('team_matches')
           .update({
             'status': 'Rejected',
-            'adminNote': note,
-            'admin_note': note,
-            'rejectReason': note,
-            'reject_reason': note,
+            'adminNote': effectiveNote,
+            'admin_note': effectiveNote,
+            'rejectReason': effectiveNote,
+            'reject_reason': effectiveNote,
             'rejectedBy': adminId,
             'rejected_by': adminId,
             'rejectedAt': nowStr,

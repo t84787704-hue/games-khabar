@@ -101,8 +101,11 @@ class _TeamMatchRoomScreenState extends State<TeamMatchRoomScreen> with SingleTi
 
     final result = await _matchService.submitProof(
       matchId: match.matchId,
+      teamId: isTeam1 ? match.team1Id : match.team2Id,
+      userId: currentUid,
       isTeam1: isTeam1,
       imageFile: File(picked.path),
+      proofImage: File(picked.path),
       claim: confirm,
     );
 
@@ -945,15 +948,15 @@ class _TeamMatchRoomScreenState extends State<TeamMatchRoomScreen> with SingleTi
           ),
         ),
         Expanded(
-          child: StreamBuilder<QuerySnapshot>(
+          child: StreamBuilder<List<Map<String, dynamic>>>(
             stream: _matchService.getChatMessages(match.matchId),
             builder: (context, snapshot) {
               if (snapshot.connectionState == ConnectionState.waiting) {
                 return const Center(child: CircularProgressIndicator(color: Color(0xFFFF6B00)));
               }
 
-              final docs = snapshot.data?.docs?? [];
-              if (docs.isEmpty) {
+              final messages = snapshot.data ?? [];
+              if (messages.isEmpty) {
                 return const Center(
                   child: Text(
                     'کوئی پیغام نہیں ہے۔ بات چیت کا آغاز کریں!',
@@ -965,15 +968,23 @@ class _TeamMatchRoomScreenState extends State<TeamMatchRoomScreen> with SingleTi
               return ListView.builder(
                 controller: _scrollController,
                 padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-                itemCount: docs.length,
+                itemCount: messages.length,
                 itemBuilder: (context, index) {
-                  final data = docs[index].data() as Map<String, dynamic>;
+                  final data = messages[index];
                   final isMe = data['senderId'] == currentUid;
                   final msgTeam = (data['teamName']?? '').toString();
                   final msgSender = (data['senderName']?? 'Player').toString();
-                  final msgText = (data['text']?? '').toString();
+                  final msgText = (data['text'] ?? data['message'] ?? '').toString();
                   final msgImage = (data['imageUrl']?? '').toString();
-                  final timestamp = (data['timestamp'] as Timestamp?)?.toDate();
+                  DateTime? timestamp;
+                  final rawTs = data['timestamp'] ?? data['created_at'];
+                  if (rawTs is DateTime) {
+                    timestamp = rawTs;
+                  } else if (rawTs is String) {
+                    timestamp = DateTime.tryParse(rawTs);
+                  } else if (rawTs is int) {
+                    timestamp = DateTime.fromMillisecondsSinceEpoch(rawTs);
+                  }
 
                   return Container(
                     margin: const EdgeInsets.only(bottom: 10),
