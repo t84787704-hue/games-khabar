@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'dart:math' as math;
 import '../services/price_service.dart';
+import '../compat/cloud_firestore.dart';
 
 class PriceTrackerCard extends StatefulWidget {
   final String gameName;
