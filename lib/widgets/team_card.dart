@@ -1,4 +1,6 @@
+import 'dart:io';
 import 'package:flutter/material.dart';
+import 'package:image_picker/image_picker.dart';
 import '../models/team_model.dart';
 import '../services/team_service.dart';
 import '../services/supabase_service.dart';
@@ -43,8 +45,6 @@ class _TeamCardState extends State<TeamCard> {
     _checkMembership();
   }
 
-  /// Check Supabase team_members table to see if current user is already
-  /// a member or owner of this team.
   Future<void> _checkMembership() async {
     final currentUid = GamerAuthService().currentUid ??
         (SupabaseService.client.auth.currentUser?.id ?? '');
@@ -421,8 +421,6 @@ class _TeamCardState extends State<TeamCard> {
     );
   }
 
-  /// REAL-TIME challenge section. Always listens to Supabase directly so the
-  /// button updates the instant a challenge is inserted or cancelled.
   Widget _buildChallengeSection(String currentUid) {
     if (widget.myTeamId.isEmpty) {
       return _buildChallengeButton(currentUid);
@@ -460,7 +458,6 @@ class _TeamCardState extends State<TeamCard> {
     );
   }
 
-  /// 👑 Golden OWNER badge
   Widget _buildOwnerBadge() {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
@@ -496,7 +493,6 @@ class _TeamCardState extends State<TeamCard> {
     );
   }
 
-  /// 🛡️ Blue MEMBER badge
   Widget _buildMemberBadge() {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
@@ -530,7 +526,6 @@ class _TeamCardState extends State<TeamCard> {
     );
   }
 
-  /// "Open Team" button shown to members/owners instead of Join
   Widget _buildOpenTeamButton() {
     return ElevatedButton.icon(
       style: ElevatedButton.styleFrom(
@@ -557,6 +552,415 @@ class _TeamCardState extends State<TeamCard> {
     );
   }
 
+  // ═══════════════════════════════════════════════════════════════════════════
+  // EDIT TEAM DIALOG (Owner only)
+  // ═══════════════════════════════════════════════════════════════════════════
+  Future<void> _showEditTeamDialog() async {
+    final nameCtrl = TextEditingController(text: widget.team.name);
+    final tagCtrl = TextEditingController(text: widget.team.tag);
+    final gameCtrl = TextEditingController(text: widget.team.game);
+    final descCtrl = TextEditingController(text: widget.team.description);
+    final reqCtrl = TextEditingController(text: widget.team.requirements);
+    File? newLogoFile;
+    bool isSaving = false;
+
+    await showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (ctx) => StatefulBuilder(
+        builder: (ctx, setDialogState) => AlertDialog(
+          backgroundColor: const Color(0xFF131A29),
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+          title: Row(
+            children: const [
+              Icon(Icons.edit_rounded, color: Color(0xFF00FF88), size: 22),
+              SizedBox(width: 8),
+              Expanded(
+                child: Text(
+                  'Edit Team',
+                  style: TextStyle(
+                      color: Colors.white,
+                      fontWeight: FontWeight.bold,
+                      fontSize: 17),
+                ),
+              ),
+            ],
+          ),
+          content: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                // Logo Picker
+                Center(
+                  child: GestureDetector(
+                    onTap: () async {
+                      final picker = ImagePicker();
+                      final picked = await picker.pickImage(
+                          source: ImageSource.gallery, imageQuality: 80);
+                      if (picked != null) {
+                        setDialogState(() {
+                          newLogoFile = File(picked.path);
+                        });
+                      }
+                    },
+                    child: Stack(
+                      children: [
+                        Container(
+                          width: 80,
+                          height: 80,
+                          decoration: BoxDecoration(
+                            shape: BoxShape.circle,
+                            color: const Color(0xFF1F2B3E),
+                            border: Border.all(
+                                color: const Color(0xFF00FF88), width: 2),
+                            image: newLogoFile != null
+                                ? DecorationImage(
+                                    image: FileImage(newLogoFile!),
+                                    fit: BoxFit.cover)
+                                : (widget.team.logo.isNotEmpty
+                                    ? DecorationImage(
+                                        image:
+                                            NetworkImage(widget.team.logo),
+                                        fit: BoxFit.cover)
+                                    : null),
+                          ),
+                          child: (newLogoFile == null &&
+                                  widget.team.logo.isEmpty)
+                              ? const Icon(Icons.shield_rounded,
+                                  color: Color(0xFF00FF88), size: 36)
+                              : null,
+                        ),
+                        Positioned(
+                          bottom: 0,
+                          right: 0,
+                          child: Container(
+                            padding: const EdgeInsets.all(6),
+                            decoration: const BoxDecoration(
+                              color: Color(0xFF00FF88),
+                              shape: BoxShape.circle,
+                            ),
+                            child: const Icon(Icons.camera_alt_rounded,
+                                color: Colors.black, size: 14),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 6),
+                const Center(
+                  child: Text(
+                    'Tap to change logo',
+                    style: TextStyle(color: Color(0xFF8B949E), fontSize: 11),
+                  ),
+                ),
+                const SizedBox(height: 14),
+
+                TextField(
+                  controller: nameCtrl,
+                  style: const TextStyle(color: Colors.white, fontSize: 13),
+                  decoration: InputDecoration(
+                    labelText: 'Team Name',
+                    labelStyle:
+                        const TextStyle(color: Color(0xFF8B949E), fontSize: 12),
+                    filled: true,
+                    fillColor: const Color(0xFF10141D),
+                    border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(10)),
+                    focusedBorder: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(10),
+                      borderSide: const BorderSide(color: Color(0xFF00FF88)),
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 10),
+
+                TextField(
+                  controller: tagCtrl,
+                  style: const TextStyle(color: Colors.white, fontSize: 13),
+                  decoration: InputDecoration(
+                    labelText: 'Team Tag',
+                    labelStyle:
+                        const TextStyle(color: Color(0xFF8B949E), fontSize: 12),
+                    filled: true,
+                    fillColor: const Color(0xFF10141D),
+                    border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(10)),
+                    focusedBorder: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(10),
+                      borderSide: const BorderSide(color: Color(0xFF00FF88)),
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 10),
+
+                TextField(
+                  controller: gameCtrl,
+                  style: const TextStyle(color: Colors.white, fontSize: 13),
+                  decoration: InputDecoration(
+                    labelText: 'Game (e.g. BGMI)',
+                    labelStyle:
+                        const TextStyle(color: Color(0xFF8B949E), fontSize: 12),
+                    filled: true,
+                    fillColor: const Color(0xFF10141D),
+                    border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(10)),
+                    focusedBorder: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(10),
+                      borderSide: const BorderSide(color: Color(0xFF00FF88)),
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 10),
+
+                TextField(
+                  controller: descCtrl,
+                  maxLines: 2,
+                  style: const TextStyle(color: Colors.white, fontSize: 13),
+                  decoration: InputDecoration(
+                    labelText: 'Description',
+                    labelStyle:
+                        const TextStyle(color: Color(0xFF8B949E), fontSize: 12),
+                    filled: true,
+                    fillColor: const Color(0xFF10141D),
+                    border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(10)),
+                    focusedBorder: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(10),
+                      borderSide: const BorderSide(color: Color(0xFF00FF88)),
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 10),
+
+                TextField(
+                  controller: reqCtrl,
+                  maxLines: 2,
+                  style: const TextStyle(color: Colors.white, fontSize: 13),
+                  decoration: InputDecoration(
+                    labelText: 'Requirements',
+                    labelStyle:
+                        const TextStyle(color: Color(0xFF8B949E), fontSize: 12),
+                    filled: true,
+                    fillColor: const Color(0xFF10141D),
+                    border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(10)),
+                    focusedBorder: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(10),
+                      borderSide: const BorderSide(color: Color(0xFF00FF88)),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: isSaving ? null : () => Navigator.pop(ctx),
+              child: const Text('Cancel',
+                  style: TextStyle(color: Color(0xFF8B949E))),
+            ),
+            ElevatedButton.icon(
+              onPressed: isSaving
+                  ? null
+                  : () async {
+                      if (nameCtrl.text.trim().isEmpty ||
+                          tagCtrl.text.trim().isEmpty) {
+                        ScaffoldMessenger.of(ctx).showSnackBar(
+                          const SnackBar(
+                            content: Text('Name aur Tag zaroori hain'),
+                            backgroundColor: Color(0xFFFF4655),
+                          ),
+                        );
+                        return;
+                      }
+
+                      setDialogState(() => isSaving = true);
+
+                      final ok = await _teamService.updateTeam(
+                        teamId: widget.team.id,
+                        name: nameCtrl.text.trim(),
+                        tag: tagCtrl.text.trim(),
+                        newLogoFile: newLogoFile,
+                        game: gameCtrl.text.trim(),
+                        description: descCtrl.text.trim(),
+                        requirements: reqCtrl.text.trim(),
+                      );
+
+                      if (!ctx.mounted) return;
+                      Navigator.pop(ctx);
+
+                      if (mounted) {
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          SnackBar(
+                            content: Text(ok
+                                ? '✅ Team updated successfully!'
+                                : '❌ Team update fail ho gaya'),
+                            backgroundColor: ok
+                                ? const Color(0xFF00FF88)
+                                : const Color(0xFFFF4655),
+                          ),
+                        );
+                      }
+                    },
+              style: ElevatedButton.styleFrom(
+                backgroundColor: const Color(0xFF00FF88),
+                foregroundColor: Colors.black,
+              ),
+              icon: isSaving
+                  ? const SizedBox(
+                      width: 14,
+                      height: 14,
+                      child: CircularProgressIndicator(
+                          strokeWidth: 2, color: Colors.black),
+                    )
+                  : const Icon(Icons.save_rounded, size: 16),
+              label: Text(
+                isSaving ? 'Saving...' : 'Save Changes',
+                style: const TextStyle(fontWeight: FontWeight.bold),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  // ═══════════════════════════════════════════════════════════════════════════
+  // DELETE TEAM DIALOG (Owner only)
+  // ═══════════════════════════════════════════════════════════════════════════
+  Future<void> _showDeleteTeamDialog() async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: const Color(0xFF131A29),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        title: Row(
+          children: const [
+            Icon(Icons.warning_amber_rounded,
+                color: Color(0xFFFF4655), size: 24),
+            SizedBox(width: 8),
+            Expanded(
+              child: Text(
+                'Delete Team?',
+                style: TextStyle(
+                    color: Color(0xFFFF4655),
+                    fontWeight: FontWeight.bold,
+                    fontSize: 17),
+              ),
+            ),
+          ],
+        ),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Text(
+              'Kya aap waqai apni team delete karna chahte hain?',
+              style: TextStyle(color: Colors.white, fontSize: 13.5),
+            ),
+            const SizedBox(height: 10),
+            Container(
+              padding: const EdgeInsets.all(10),
+              decoration: BoxDecoration(
+                color: const Color(0xFF10141D),
+                borderRadius: BorderRadius.circular(8),
+                border: Border.all(color: const Color(0xFF2A3447)),
+              ),
+              child: Row(
+                children: [
+                  const Icon(Icons.shield_rounded,
+                      color: Color(0xFF00FF88), size: 20),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: Text(
+                      widget.team.name,
+                      style: const TextStyle(
+                          color: Colors.white,
+                          fontWeight: FontWeight.bold,
+                          fontSize: 14),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(height: 10),
+            const Text(
+              '⚠️ Ye action permanent hai. Team ke saare members, challenges, aur join requests delete ho jayenge.',
+              style: TextStyle(color: Color(0xFFFF4655), fontSize: 11.5),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('Cancel',
+                style: TextStyle(color: Color(0xFF8B949E))),
+          ),
+          ElevatedButton.icon(
+            style: ElevatedButton.styleFrom(
+              backgroundColor: const Color(0xFFFF4655),
+              foregroundColor: Colors.white,
+            ),
+            icon: const Icon(Icons.delete_forever_rounded, size: 16),
+            label: const Text('Delete Team',
+                style: TextStyle(fontWeight: FontWeight.bold)),
+            onPressed: () => Navigator.pop(ctx, true),
+          ),
+        ],
+      ),
+    );
+
+    if (confirmed != true) return;
+
+    final currentUid = GamerAuthService().currentUid ??
+        (SupabaseService.client.auth.currentUser?.id ?? '');
+
+    if (currentUid.isEmpty) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('User not logged in'),
+            backgroundColor: Color(0xFFFF4655),
+          ),
+        );
+      }
+      return;
+    }
+
+    final result = await _teamService.deleteTeam(
+      teamId: widget.team.id,
+      currentUserId: currentUid,
+    );
+
+    if (!mounted) return;
+
+    String msg;
+    Color bg;
+    switch (result) {
+      case 'ok':
+        msg = '✅ Team deleted successfully';
+        bg = const Color(0xFF00FF88);
+        break;
+      case 'not_owner':
+        msg = '❌ Aap team ke owner nahi hain';
+        bg = const Color(0xFFFF4655);
+        break;
+      case 'active_match':
+        msg = '❌ Team ka active match chal raha hai. Pehle match end karein.';
+        bg = const Color(0xFFFF4655);
+        break;
+      default:
+        msg = '❌ Team delete fail ho gayi';
+        bg = const Color(0xFFFF4655);
+    }
+
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text(msg), backgroundColor: bg),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final team = widget.team;
@@ -566,15 +970,13 @@ class _TeamCardState extends State<TeamCard> {
     final isMember = team.isMember(currentUid);
     final hasRequested = team.hasRequestedJoin(currentUid);
 
-    // Combine local model check + DB check
     final bool isOwnerFinal = isLeader || _isOwnerFromDb;
     final bool isMemberFinal = isMember || _isMemberFromDb || isOwnerFinal;
 
-    // Card background highlight for owner/member
     final Color cardBgColor = isOwnerFinal
-        ? const Color(0xFFFFF8E1) // soft golden for owner
+        ? const Color(0xFFFFF8E1)
         : isMemberFinal
-            ? const Color(0xFFE7F3FF) // soft blue for member
+            ? const Color(0xFFE7F3FF)
             : Colors.white;
 
     final Color cardBorderColor = isOwnerFinal
@@ -622,11 +1024,9 @@ class _TeamCardState extends State<TeamCard> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                // Top Row: Logo, Name, Tag & Leader
                 Row(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    // Team Logo
                     Container(
                       width: 50,
                       height: 50,
@@ -654,7 +1054,6 @@ class _TeamCardState extends State<TeamCard> {
                     ),
                     const SizedBox(width: 12),
 
-                    // Name, Tag, Leader + Badges
                     Expanded(
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
@@ -696,7 +1095,6 @@ class _TeamCardState extends State<TeamCard> {
                           ),
                           const SizedBox(height: 4),
 
-                          // 👑 Owner / 🛡️ Member badge row
                           if (_checkingMembership) ...[
                             const SizedBox(
                               height: 18,
@@ -758,6 +1156,53 @@ class _TeamCardState extends State<TeamCard> {
                         ],
                       ),
                     ),
+
+                    // ✏️ EDIT / 🗑️ DELETE (Owner only)
+                    if (isOwnerFinal && !_checkingMembership) ...[
+                      PopupMenuButton<String>(
+                        icon: const Icon(Icons.more_vert_rounded,
+                            color: Color(0xFF65676B), size: 22),
+                        color: const Color(0xFF131A29),
+                        shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(12)),
+                        onSelected: (val) {
+                          if (val == 'edit') {
+                            _showEditTeamDialog();
+                          } else if (val == 'delete') {
+                            _showDeleteTeamDialog();
+                          }
+                        },
+                        itemBuilder: (ctx) => [
+                          const PopupMenuItem(
+                            value: 'edit',
+                            child: Row(
+                              children: [
+                                Icon(Icons.edit_rounded,
+                                    color: Color(0xFF00FF88), size: 18),
+                                SizedBox(width: 10),
+                                Text('Edit Team',
+                                    style: TextStyle(
+                                        color: Colors.white, fontSize: 13)),
+                              ],
+                            ),
+                          ),
+                          const PopupMenuItem(
+                            value: 'delete',
+                            child: Row(
+                              children: [
+                                Icon(Icons.delete_forever_rounded,
+                                    color: Color(0xFFFF4655), size: 18),
+                                SizedBox(width: 10),
+                                Text('Delete Team',
+                                    style: TextStyle(
+                                        color: Color(0xFFFF4655),
+                                        fontSize: 13)),
+                              ],
+                            ),
+                          ),
+                        ],
+                      ),
+                    ],
                   ],
                 ),
 
@@ -772,7 +1217,6 @@ class _TeamCardState extends State<TeamCard> {
                   ),
                 ],
 
-                // Red banner: pending challenge — real-time
                 if (!isMemberFinal &&
                     currentUid.isNotEmpty &&
                     widget.myTeamId.isNotEmpty) ...[
@@ -813,7 +1257,6 @@ class _TeamCardState extends State<TeamCard> {
                 const Divider(color: Color(0xFFE4E6EB), height: 1),
                 const SizedBox(height: 10),
 
-                // Bottom action buttons
                 Row(
                   children: [
                     Text(
@@ -825,7 +1268,6 @@ class _TeamCardState extends State<TeamCard> {
                     ),
                     const Spacer(),
 
-                    // View Team button
                     OutlinedButton(
                       style: OutlinedButton.styleFrom(
                         foregroundColor: const Color(0xFF050505),
@@ -852,11 +1294,9 @@ class _TeamCardState extends State<TeamCard> {
                     ),
                     const SizedBox(width: 8),
 
-                    // Owner/Member: Show Open Team
                     if (isOwnerFinal || isMemberFinal)
                       _buildOpenTeamButton()
                     else ...[
-                      // Non-members: live Challenge + Join buttons
                       StreamBuilder<List<Map<String, dynamic>>>(
                         stream: widget.myTeamId.isNotEmpty
                             ? SupabaseService.client
@@ -900,7 +1340,6 @@ class _TeamCardState extends State<TeamCard> {
                             orElse: () => {},
                           );
 
-                          // If there's a live active match: show LIVE badge + DM
                           if (activeMatchWithOpponent.isNotEmpty) {
                             return Row(
                               mainAxisSize: MainAxisSize.min,
@@ -978,13 +1417,11 @@ class _TeamCardState extends State<TeamCard> {
                             );
                           }
 
-                          // Always use real-time challenge section
                           return _buildChallengeSection(currentUid);
                         },
                       ),
                       const SizedBox(width: 8),
 
-                      // Join button
                       Builder(builder: (context) {
                         final bool isRequested =
                             hasRequested || _localRequested;
