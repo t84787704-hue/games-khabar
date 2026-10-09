@@ -57,7 +57,6 @@ class GamerAuthService {
     try {
       final authUserId = user.id;
 
-      // 1. Query public.users table for this user matching authUser.id
       Map<String, dynamic>? profile;
       try {
         profile = await _supabase
@@ -80,7 +79,6 @@ class GamerAuthService {
         currentGamerNotifier.value = null;
       }
 
-      // Store FCM push notification token safely
       try {
         NotificationService().saveUserFcmToken(authUserId);
       } catch (_) {}
@@ -94,7 +92,6 @@ class GamerAuthService {
 
   /// Refresh current gamer profile from Supabase
   Future<GamerUser?> refreshCurrentGamer() async {
-    // 1. Get current Supabase auth user
     final authUser = SupabaseService.client.auth.currentUser;
     if (authUser == null) {
       currentGamerNotifier.value = null;
@@ -103,7 +100,6 @@ class GamerAuthService {
     }
 
     try {
-      // 2. Query public.users table for this user matching authUser.id
       Map<String, dynamic>? profile;
       try {
         profile = await _supabase
@@ -149,7 +145,7 @@ class GamerAuthService {
         final row = res.first;
         final rowUid = row['uid'] ?? row['id'];
         if (currentUid != null && rowUid == currentUid) {
-          return true; // User's own username
+          return true;
         }
         return false;
       }
@@ -174,7 +170,7 @@ class GamerAuthService {
     }
   }
 
-  /// Guest / Instant Sign In (Ensures user can immediately enter app without being stuck)
+  /// Guest / Instant Sign In
   Future<GamerUser> signInAnonymouslyOrGuest() async {
     isLoadingNotifier.value = true;
     try {
@@ -192,7 +188,6 @@ class GamerAuthService {
       debugPrint('[GamerAuthService] Guest/Anonymous Supabase fallback: $e');
     }
 
-    // Local instant guest session:
     final guestUid = 'guest_${DateTime.now().millisecondsSinceEpoch.toString().substring(6)}';
     final guestGamer = GamerUser(
       uid: guestUid,
@@ -270,7 +265,8 @@ class GamerAuthService {
   }
 
   /// Creates or updates `users` record in Supabase
-  Future<void> saveGamerProfile(GamerUser user) async {
+  /// Uses upsert first, then falls back to update by id
+  Future<bool> saveGamerProfile(GamerUser user) async {
     try {
       final payload = <String, dynamic>{
         'id': user.uid,
@@ -286,10 +282,37 @@ class GamerAuthService {
         'is_verified': user.isVerified,
         'updated_at': DateTime.now().toIso8601String(),
       };
-      await _supabase.from('users').upsert(payload);
+
+      // 1. Try upsert first
+      try {
+        await _supabase.from('users').upsert(payload);
+        debugPrint('[GamerAuthService] ✅ upsert successful for ${user.uid}');
+      } catch (upsertError) {
+        debugPrint('[GamerAuthService] upsert failed, trying update: $upsertError');
+
+        // 2. Fallback: try update only
+        try {
+          await _supabase.from('users').update(payload).eq('id', user.uid);
+          debugPrint('[GamerAuthService] ✅ update successful for ${user.uid}');
+        } catch (updateError) {
+          debugPrint('[GamerAuthService] update also failed: $updateError');
+
+          // 3. Last fallback: try insert with uid only
+          try {
+            await _supabase.from('users').insert(payload);
+            debugPrint('[GamerAuthService] ✅ insert successful for ${user.uid}');
+          } catch (insertError) {
+            debugPrint('[GamerAuthService] insert also failed: $insertError');
+            return false;
+          }
+        }
+      }
+
       currentGamerNotifier.value = user;
+      return true;
     } catch (e) {
       debugPrint('[GamerAuthService] Error saving gamer profile in Supabase: $e');
+      return false;
     }
   }
 
@@ -316,6 +339,7 @@ class GamerAuthService {
     String? bio,
     String? displayName,
     String? photoUrl,
+    String? coverUrl,
     String? verificationStatus,
   }) async {
     final uid = currentUid;
@@ -326,6 +350,7 @@ class GamerAuthService {
     if (bio != null) updates['bio'] = bio;
     if (displayName != null) updates['display_name'] = displayName;
     if (photoUrl != null) updates['avatar_url'] = photoUrl;
+    if (coverUrl != null) updates['cover_url'] = coverUrl;
     if (verificationStatus != null) updates['is_verified'] = verificationStatus == 'verified';
 
     if (updates.isNotEmpty) {
