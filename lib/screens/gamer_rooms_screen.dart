@@ -464,7 +464,7 @@ class _GamerRoomsScreenState extends State<GamerRoomsScreen> {
       }
       final tQuery = await SupaStore.instance.collection('tournament_rooms').where('hostId', isEqualTo: hostId).limit(1).get();
       if (tQuery.docs.isNotEmpty) {
-        final tData = tQuery.docs.first.data();
+        final tData = tQuery.docs.first.data() ?? {};
         final tHost = (tData['hostName'] ?? tData['host'] ?? tData['hostUsername'])?.toString().trim() ?? '';
         if (tHost.isNotEmpty && tHost.toLowerCase() != 'host') {
           _hostNameCache[hostId] = tHost;
@@ -555,7 +555,7 @@ class _GamerRoomsScreenState extends State<GamerRoomsScreen> {
           .get();
 
       for (final doc in snap.docs) {
-        final data = doc.data();
+        final data = doc.data() ?? {};
         DateTime? completedAt;
         if (data['completedAt'] is SupaTime) {
           completedAt = (data['completedAt'] as SupaTime).toDate();

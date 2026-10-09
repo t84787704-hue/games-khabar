@@ -315,8 +315,8 @@ class NotificationService {
       icon: '@mipmap/ic_launcher',
       color: const Color(0xFF00FF88),
       styleInformation: BigTextStyleInformation(
-        body,
-        contentTitle: title,
+        effectiveBody,
+        contentTitle: effectiveTitle,
         summaryText: data['category'] ?? 'Gaming News',
       ),
     );

@@ -921,7 +921,6 @@ class GamingNewsService {
       debugPrint('Error seeding initial gaming news: $e');
     }
   }
-  }
 
   List<GamingNewsModel> _getFallbackSeedArticles() {
     return [

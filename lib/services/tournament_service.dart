@@ -823,9 +823,4 @@ class TournamentService extends ChangeNotifier {
       debugPrint('TournamentService: closeRoom error: $e');
     }
   }
-    } catch (e) {
-      debugPrint('TournamentService: closeRoom error: $e');
-    }
-  }
 }
-
