@@ -127,6 +127,7 @@ class GamerRoom {
     return DateTime.now().difference(completedAt!).inMinutes >= 5;
   }
 
+  factory GamerRoom.fromFirestore(SupaDoc doc) => GamerRoom.fromSupabase(doc);
   factory GamerRoom.fromSupabase(SupaDoc doc) {
     final data = doc.data() as Map<String, dynamic>? ?? {};
 
@@ -584,7 +585,7 @@ class _GamerRoomsScreenState extends State<GamerRoomsScreen> {
           .get();
 
       for (final doc in snap.docs) {
-        final data = doc.data();
+        final data = doc.data() ?? {};
         if (data['disputed'] == true || data['status'] == 'disputed') continue;
 
         DateTime? autoApproveAt;

@@ -261,6 +261,7 @@ class TournamentRoom {
     return null;
   }
 
+  factory TournamentRoom.fromFirestore(dynamic doc) => TournamentRoom.fromSupabase(doc);
   factory TournamentRoom.fromSupabase(dynamic doc) {
     if (doc == null) return TournamentRoom.fromMap({}, '');
     try {

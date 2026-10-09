@@ -116,6 +116,7 @@ class GamerPost {
     );
   }
 
+  factory GamerPost.fromFirestore(dynamic doc) => GamerPost.fromSupabase(doc);
   factory GamerPost.fromSupabase(dynamic doc) {
     Map<String, dynamic> data = {};
     String docId = '';

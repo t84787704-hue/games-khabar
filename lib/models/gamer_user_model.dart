@@ -465,6 +465,7 @@ class GamerUser {
     }
   }
 
+  factory GamerUser.fromFirestore(dynamic doc) => GamerUser.fromSupabase(doc);
   factory GamerUser.fromSupabase(dynamic doc) {
     if (doc == null) return GamerUser.fromMap({}, '');
     try {

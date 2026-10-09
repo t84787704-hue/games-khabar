@@ -23,6 +23,7 @@ class CoinTransaction {
 
   bool get isCredit => amount > 0;
 
+  factory CoinTransaction.fromFirestore(dynamic doc) => CoinTransaction.fromSupabase(doc);
   factory CoinTransaction.fromSupabase(dynamic doc) {
     if (doc == null) return CoinTransaction.fromMap({}, '');
     try {

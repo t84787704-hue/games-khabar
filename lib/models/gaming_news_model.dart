@@ -113,6 +113,7 @@ class GamingNewsModel {
     };
   }
 
+  factory GamingNewsModel.fromFirestore(dynamic doc) => GamingNewsModel.fromSupabase(doc);
   factory GamingNewsModel.fromSupabase(dynamic doc) {
     if (doc is Map<String, dynamic>) {
       return GamingNewsModel.fromMap(doc);

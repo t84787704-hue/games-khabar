@@ -27,6 +27,7 @@ class TeamRanking {
 
   double get winRate => totalMatches > 0 ? (wins / totalMatches) * 100 : 0.0;
 
+  factory TeamRanking.fromFirestore(dynamic doc) => TeamRanking.fromSupabase(doc);
   factory TeamRanking.fromSupabase(dynamic doc) {
     if (doc == null) return TeamRanking.fromMap({}, '');
     try {

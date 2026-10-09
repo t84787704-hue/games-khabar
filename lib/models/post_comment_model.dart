@@ -44,6 +44,7 @@ class PostComment {
     );
   }
 
+  factory PostComment.fromFirestore(dynamic doc) => PostComment.fromSupabase(doc);
   factory PostComment.fromSupabase(dynamic doc) {
     if (doc == null) return PostComment.fromMap({}, '');
     try {

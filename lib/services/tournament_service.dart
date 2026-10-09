@@ -426,9 +426,17 @@ class TournamentService extends ChangeNotifier {
         notifyListeners();
       }
 
-      await _roomsRef.doc(roomId).update({
-        'resultSubmissions.$playerUid': submission,
-      });
+      try {
+        final existingRoom = index != -1 ? _rooms[index] : null;
+        final currentSubs = existingRoom != null
+            ? Map<String, dynamic>.from(existingRoom.resultSubmissions)
+            : <String, dynamic>{};
+        currentSubs[playerUid] = submission;
+        await SupabaseService.client
+            .from('tournament_rooms')
+            .update({'resultSubmissions': currentSubs})
+            .eq('id', roomId);
+      } catch (_) {}
       return true;
     } catch (e) {
       debugPrint('TournamentService: submitResultScreenshot error: $e');
@@ -453,9 +461,13 @@ class TournamentService extends ChangeNotifier {
         room = _rooms[index];
       } else {
         try {
-          final doc = await _roomsRef.doc(roomId).get();
-          if (doc.exists) {
-            room = TournamentRoom.fromSupabase(doc);
+          final res = await SupabaseService.client
+              .from('tournament_rooms')
+              .select()
+              .eq('id', roomId)
+              .maybeSingle();
+          if (res != null) {
+            room = TournamentRoom.fromSupabase(res);
           }
         } catch (_) {}
       }

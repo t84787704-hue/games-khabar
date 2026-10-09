@@ -54,6 +54,7 @@ class SquadPost {
     this.createdAt,
   }) : gameUid = gameUid ?? inGameUid ?? '';
 
+  factory SquadPost.fromFirestore(dynamic doc) => SquadPost.fromSupabase(doc);
   factory SquadPost.fromSupabase(dynamic doc) {
     if (doc == null) return SquadPost.fromMap({}, '');
     try {

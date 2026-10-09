@@ -47,6 +47,7 @@ class CoinWallet {
     );
   }
 
+  factory CoinWallet.fromFirestore(dynamic doc) => CoinWallet.fromSupabase(doc);
   factory CoinWallet.fromSupabase(dynamic doc) {
     if (doc is Map<String, dynamic>) {
       return CoinWallet.fromMap(doc);
