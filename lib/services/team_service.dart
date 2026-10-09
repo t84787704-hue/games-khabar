@@ -38,7 +38,8 @@ class TeamService {
           .from("teams")
           .stream(primaryKey: ["id"])
           .eq("id", teamUuid)
-          .map((rows) => rows.isNotEmpty ? TeamModel.fromSupabase(rows.first) : null);
+          .map((rows) =>
+              rows.isNotEmpty ? TeamModel.fromSupabase(rows.first) : null);
     } catch (e) {
       debugPrint("[TeamService] getTeamStream error: $e");
       return Stream.value(null);
@@ -105,7 +106,8 @@ class TeamService {
                   if (leaderId == userId || leaderId == userUuid) return true;
                   final members = r["members"];
                   if (members is List) {
-                    return members.any((m) => m.toString() == userId || m.toString() == userUuid);
+                    return members.any((m) =>
+                        m.toString() == userId || m.toString() == userUuid);
                   }
                   return false;
                 })
@@ -119,7 +121,8 @@ class TeamService {
   }
 
   /// Get stream of all teams with optional game filter and search query
-  Stream<List<TeamModel>> getTeamsStream({String? gameFilter, String? searchQuery}) {
+  Stream<List<TeamModel>> getTeamsStream(
+      {String? gameFilter, String? searchQuery}) {
     try {
       return SupabaseService.client
           .from("teams")
@@ -127,14 +130,21 @@ class TeamService {
           .order("points", ascending: false)
           .map((rows) {
             var filtered = rows.map((r) => TeamModel.fromSupabase(r)).toList();
-            if (gameFilter != null && gameFilter.isNotEmpty && gameFilter != "All") {
-              filtered = filtered.where((t) => t.game.toLowerCase() == gameFilter.toLowerCase()).toList();
+            if (gameFilter != null &&
+                gameFilter.isNotEmpty &&
+                gameFilter != "All") {
+              filtered = filtered
+                  .where((t) =>
+                      t.game.toLowerCase() == gameFilter.toLowerCase())
+                  .toList();
             }
             if (searchQuery != null && searchQuery.trim().isNotEmpty) {
               final q = searchQuery.trim().toLowerCase();
-              filtered = filtered.where((t) =>
-                  t.name.toLowerCase().contains(q) || t.tag.toLowerCase().contains(q)
-              ).toList();
+              filtered = filtered
+                  .where((t) =>
+                      t.name.toLowerCase().contains(q) ||
+                      t.tag.toLowerCase().contains(q))
+                  .toList();
             }
             return filtered;
           });
@@ -145,6 +155,8 @@ class TeamService {
   }
 
   /// Create a new team
+  /// FIX: Sirf auth.currentUser.id use karo, extra columns hata do,
+  /// aur error ko rethrow karo taake UI ko pata chale.
   Future<String?> createTeam({
     required String name,
     required String tag,
@@ -157,6 +169,17 @@ class TeamService {
     required String leaderAvatar,
   }) async {
     try {
+      // ============ FIX: Sirf Supabase auth.currentUser.id use karo ============
+      final authUserId = SupabaseService.client.auth.currentUser?.id;
+
+      if (authUserId == null || authUserId.isEmpty) {
+        throw Exception(
+            'User not authenticated. Please log in again.');
+      }
+
+      // leaderId parameter ignore — sirf auth ID use karo
+      final effectiveLeaderId = authUserId;
+
       String logoUrl = "";
       if (logoFile != null) {
         final uploaded = await SupabaseService.uploadFile(
@@ -167,47 +190,50 @@ class TeamService {
         if (uploaded != null) logoUrl = uploaded;
       }
 
-      final teamUuid = SupabaseService.toUuid(DateTime.now().millisecondsSinceEpoch.toString());
+      final teamUuid = SupabaseService.toUuid(
+          DateTime.now().millisecondsSinceEpoch.toString());
       final now = DateTime.now().toIso8601String();
 
+      // ============ FIX: Sirf woh columns jo teams table mein hain ============
+      // Extra columns hataye: team_id, leader_name, leader_avatar,
+      // members, member_count, updated_at
       final row = {
         "id": teamUuid,
-        "team_id": teamUuid,
         "name": name.trim(),
         "tag": tag.trim().toUpperCase(),
         "logo_url": logoUrl,
         "game": game,
         "description": description.trim(),
         "requirements": requirements.trim(),
-        "leader_id": leaderId,
-        "leader_name": leaderName,
-        "leader_avatar": leaderAvatar,
-        "members": [leaderId],
-        "member_count": 1,
+        "leader_id": effectiveLeaderId,
         "wins": 0,
         "losses": 0,
         "draws": 0,
         "points": 0,
         "created_at": now,
-        "updated_at": now,
       };
 
       await SupabaseService.client.from("teams").insert(row);
 
+      // Team member add karo
       try {
         await SupabaseService.client.from("team_members").insert({
           "team_id": teamUuid,
-          "user_id": leaderId,
+          "user_id": effectiveLeaderId,
           "username": leaderName,
           "role": "Owner",
           "joined_at": now,
         });
-      } catch (_) {}
+      } catch (e) {
+        debugPrint("[TeamService] team_members insert note: $e");
+      }
 
+      debugPrint("[TeamService] ✅ Team created: $teamUuid");
       return teamUuid;
     } catch (e) {
       debugPrint("[TeamService] createTeam error: $e");
-      return null;
+      // Error ko rethrow karo — taake UI ko pata chale
+      rethrow;
     }
   }
 
@@ -229,7 +255,6 @@ class TeamService {
         "game": game,
         "description": description.trim(),
         "requirements": requirements.trim(),
-        "updated_at": DateTime.now().toIso8601String(),
       };
 
       if (newLogoFile != null) {
@@ -294,19 +319,34 @@ class TeamService {
       }
 
       try {
-        await SupabaseService.client.from("challenges").delete().eq("from_team_id", teamUuid);
+        await SupabaseService.client
+            .from("challenges")
+            .delete()
+            .eq("from_team_id", teamUuid);
       } catch (_) {}
       try {
-        await SupabaseService.client.from("challenges").delete().eq("to_team_id", teamUuid);
+        await SupabaseService.client
+            .from("challenges")
+            .delete()
+            .eq("to_team_id", teamUuid);
       } catch (_) {}
       try {
-        await SupabaseService.client.from("team_join_requests").delete().eq("team_id", teamUuid);
+        await SupabaseService.client
+            .from("team_join_requests")
+            .delete()
+            .eq("team_id", teamUuid);
       } catch (_) {}
       try {
-        await SupabaseService.client.from("team_members").delete().eq("team_id", teamUuid);
+        await SupabaseService.client
+            .from("team_members")
+            .delete()
+            .eq("team_id", teamUuid);
       } catch (_) {}
 
-      await SupabaseService.client.from("teams").delete().or("id.eq.$teamUuid,id.eq.$teamId");
+      await SupabaseService.client
+          .from("teams")
+          .delete()
+          .or("id.eq.$teamUuid,id.eq.$teamId");
       debugPrint("[TeamService] ✅ Team deleted: $teamId");
       return "ok";
     } catch (e) {
@@ -413,20 +453,22 @@ Future<bool> updateTeam({
   required String game,
   required String description,
   required String requirements,
-}) => TeamService().updateTeam(
-  teamId: teamId,
-  name: name,
-  tag: tag,
-  newLogoFile: newLogoFile,
-  game: game,
-  description: description,
-  requirements: requirements,
-);
+}) =>
+    TeamService().updateTeam(
+      teamId: teamId,
+      name: name,
+      tag: tag,
+      newLogoFile: newLogoFile,
+      game: game,
+      description: description,
+      requirements: requirements,
+    );
 
 Future<String> deleteTeam({
   required String teamId,
   required String currentUserId,
-}) => TeamService().deleteTeam(
-  teamId: teamId,
-  currentUserId: currentUserId,
-);
+}) =>
+    TeamService().deleteTeam(
+      teamId: teamId,
+      currentUserId: currentUserId,
+    );
