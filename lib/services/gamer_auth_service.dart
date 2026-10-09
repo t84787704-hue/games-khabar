@@ -143,8 +143,9 @@ class GamerAuthService {
           .timeout(const Duration(seconds: 2), onTimeout: () => []);
       if (res.isNotEmpty) {
         final row = res.first;
-        final rowUid = row['uid'] ?? row['id'];
-        if (currentUid != null && rowUid == currentUid) {
+        final rowId = (row['id'] ?? '').toString();
+        final rowUid = (row['uid'] ?? '').toString();
+        if (currentUid != null && (rowId == currentUid || rowUid == currentUid)) {
           return true;
         }
         return false;
@@ -283,21 +284,18 @@ class GamerAuthService {
         'updated_at': DateTime.now().toIso8601String(),
       };
 
-      // 1. Try upsert first
       try {
         await _supabase.from('users').upsert(payload);
         debugPrint('[GamerAuthService] ✅ upsert successful for ${user.uid}');
       } catch (upsertError) {
         debugPrint('[GamerAuthService] upsert failed, trying update: $upsertError');
 
-        // 2. Fallback: try update only
         try {
           await _supabase.from('users').update(payload).eq('id', user.uid);
           debugPrint('[GamerAuthService] ✅ update successful for ${user.uid}');
         } catch (updateError) {
           debugPrint('[GamerAuthService] update also failed: $updateError');
 
-          // 3. Last fallback: try insert with uid only
           try {
             await _supabase.from('users').insert(payload);
             debugPrint('[GamerAuthService] ✅ insert successful for ${user.uid}');
@@ -316,12 +314,33 @@ class GamerAuthService {
     }
   }
 
-  /// Fetch any user's profile by UID from Supabase
+  /// ✅ FIXED: Fetch any user's profile by UID from Supabase
+  /// Pehle `id` se exact match, phir `uid` se fallback
   Future<GamerUser?> getUserProfile(String uid) async {
+    if (uid.isEmpty) return null;
+
     try {
-      final userData = await _supabase.from('users').select().or('id.eq.$uid,uid.eq.$uid').maybeSingle();
-      if (userData != null) {
-        return GamerUser.fromMap(userData, uid);
+      // 1. Pehle `id` se exact match karo
+      final userById = await _supabase
+          .from('users')
+          .select()
+          .eq('id', uid)
+          .maybeSingle();
+
+      if (userById != null) {
+        return GamerUser.fromMap(userById, uid);
+      }
+
+      // 2. Agar `id` se nahi mila, to `uid` se try karo
+      final userByUid = await _supabase
+          .from('users')
+          .select()
+          .eq('uid', uid)
+          .maybeSingle();
+
+      if (userByUid != null) {
+        final actualId = (userByUid['id'] ?? uid).toString();
+        return GamerUser.fromMap(userByUid, actualId);
       }
     } catch (e) {
       debugPrint('[GamerAuthService] Supabase get user profile error: $e');
