@@ -196,7 +196,6 @@ class GamerSocialService {
   }
 
   /// Safely increment/decrement a counter column on the users table.
-  /// Tries RPC first (atomic), falls back to manual fetch+update.
   Future<void> _incrementCounter({
     required String userId,
     required String column,
@@ -258,6 +257,7 @@ class GamerSocialService {
   }
 
   /// FIXED: Get list of users who follow `targetUid`
+  /// Excludes self from the list
   Future<List<GamerUser>> getFollowers(String targetUid) async {
     if (targetUid.isEmpty) return [];
     try {
@@ -273,7 +273,7 @@ class GamerSocialService {
 
       final followerUuids = followRows
           .map((r) => r['follower_id']?.toString() ?? '')
-          .where((id) => id.isNotEmpty)
+          .where((id) => id.isNotEmpty && id != targetUuid) // ✅ Exclude self
           .toList();
 
       if (followerUuids.isEmpty) return [];
@@ -284,10 +284,11 @@ class GamerSocialService {
           .select()
           .inFilter('id', followerUuids);
 
-      // 3. Convert to GamerUser list
+      // 3. Convert to GamerUser list, exclude self
       final users = (userRows as List)
           .map((row) => _rowToGamerUser(row))
           .whereType<GamerUser>()
+          .where((u) => u.uid != targetUid) // ✅ Double check
           .toList();
 
       return users;
@@ -298,6 +299,7 @@ class GamerSocialService {
   }
 
   /// FIXED: Get list of users that `followerUid` is following
+  /// Excludes self from the list
   Future<List<GamerUser>> getFollowing(String followerUid) async {
     if (followerUid.isEmpty) return [];
     try {
@@ -313,7 +315,7 @@ class GamerSocialService {
 
       final followingUuids = followRows
           .map((r) => r['following_id']?.toString() ?? '')
-          .where((id) => id.isNotEmpty)
+          .where((id) => id.isNotEmpty && id != followerUuid) // ✅ Exclude self
           .toList();
 
       if (followingUuids.isEmpty) return [];
@@ -324,10 +326,11 @@ class GamerSocialService {
           .select()
           .inFilter('id', followingUuids);
 
-      // 3. Convert to GamerUser list
+      // 3. Convert to GamerUser list, exclude self
       final users = (userRows as List)
           .map((row) => _rowToGamerUser(row))
           .whereType<GamerUser>()
+          .where((u) => u.uid != followerUid) // ✅ Double check
           .toList();
 
       return users;
@@ -338,9 +341,10 @@ class GamerSocialService {
   }
 
   /// Helper: Convert Supabase user row to GamerUser model
+  /// ✅ FIX: id ko priority do (kyunki follows table id use karta hai)
   GamerUser? _rowToGamerUser(Map<String, dynamic> row) {
     try {
-      final rawUid = (row['uid'] ?? row['id'] ?? '').toString();
+      final rawUid = (row['id'] ?? row['uid'] ?? '').toString();
       if (rawUid.isEmpty) return null;
 
       return GamerUser(
@@ -491,7 +495,7 @@ class GamerSocialService {
         final data = await _supabase
             .from('posts')
             .select()
-            .eq('user_id', uuid) // strict match — no more foreign posts
+            .eq('user_id', uuid)
             .order('created_at', ascending: false);
         final list =
             (data as List).map((map) => GamerPost.fromMap(map)).toList();
