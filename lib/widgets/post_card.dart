@@ -230,7 +230,7 @@ class _PostCardState extends State<PostCard> {
               // 1. Immediately pause and dispose audio / video
               await _stopAndDisposeVideo();
 
-              // 2. Call custom onDeleteTap or standard Firestore deletion
+              // 2. Call custom onDeleteTap or standard database deletion
               if (widget.onDeleteTap != null) {
                 widget.onDeleteTap!();
               } else {

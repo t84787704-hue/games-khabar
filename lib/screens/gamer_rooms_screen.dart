@@ -127,7 +127,7 @@ class GamerRoom {
     return DateTime.now().difference(completedAt!).inMinutes >= 5;
   }
 
-  factory GamerRoom.fromFirestore(SupaDoc doc) {
+  factory GamerRoom.fromSupabase(SupaDoc doc) {
     final data = doc.data() as Map<String, dynamic>? ?? {};
 
     final id = doc.id;
@@ -444,7 +444,7 @@ class _GamerRoomsScreenState extends State<GamerRoomsScreen> {
     });
   }
 
-  // Cache for host usernames fetched from Firestore 'users' collection to avoid repeated reads
+  // Cache for host usernames fetched from 'users' collection to avoid repeated reads
   final Map<String, String> _hostNameCache = {};
 
   /// Ensure host display name is loaded into cache (reads users collection once per hostId)
@@ -605,7 +605,7 @@ class _GamerRoomsScreenState extends State<GamerRoomsScreen> {
         }
 
         if (autoApproveAt != null && now.isAfter(autoApproveAt)) {
-          final room = GamerRoom.fromFirestore(doc);
+          final room = GamerRoom.fromSupabase(doc);
           await _executeAutoApprove(room);
         }
       }
@@ -748,7 +748,7 @@ class _GamerRoomsScreenState extends State<GamerRoomsScreen> {
     }
   }
 
-  /// Real-time stream for rooms from Firestore with auto-deletion after 5 minutes
+  /// Real-time stream for rooms from database with auto-deletion after 5 minutes
   Stream<List<GamerRoom>> _getRoomsStream() {
     return SupaStore.instance
         .collection('rooms')
@@ -756,7 +756,7 @@ class _GamerRoomsScreenState extends State<GamerRoomsScreen> {
         .map((snapshot) {
       final list = <GamerRoom>[];
       for (final doc in snapshot.docs) {
-        final room = GamerRoom.fromFirestore(doc);
+        final room = GamerRoom.fromSupabase(doc);
         if (room.isExpiredCompleted) {
           doc.reference.delete().catchError((_) {});
           SupaStore.instance
@@ -775,7 +775,7 @@ class _GamerRoomsScreenState extends State<GamerRoomsScreen> {
   }
 
   /// =========================================================================
-  /// 3. JOIN LOGIC - FIX OVER-JOIN BUG (Firestore SupaTx)
+  /// 3. JOIN LOGIC - FIX OVER-JOIN BUG (SupaTx)
   /// =========================================================================
   Future<void> joinRoom(GamerRoom room) async {
     final uid = currentUserId;
@@ -877,7 +877,7 @@ class _GamerRoomsScreenState extends State<GamerRoomsScreen> {
             // Fetch fresh room copy and open sheet
             final updatedDoc = await roomRef.get();
             if (mounted && updatedDoc.exists) {
-              _showRoomBottomSheet(GamerRoom.fromFirestore(updatedDoc));
+              _showRoomBottomSheet(GamerRoom.fromSupabase(updatedDoc));
             }
           }
         } catch (e) {
@@ -1451,7 +1451,7 @@ class _GamerRoomsScreenState extends State<GamerRoomsScreen> {
 
     // hostDisplay logic: if room.hostName is not null, not empty, and not equal to map values like
     // "Erangel", "Miramar", "Sanhok", "Vikendi" then use room.hostName.
-    // Else, fetch username from Firestore collection 'users' docId = room.hostId.
+    // Else, fetch username from 'users' table docId = room.hostId.
     // Use field 'username' -> 'displayName' -> 'name' in that order.
     // Cache result in a Map<String, String> _hostNameCache to avoid repeated reads.
     final String rawHostName = room.hostName.trim();
@@ -2826,7 +2826,7 @@ class _InRoomBottomSheetContentState extends State<_InRoomBottomSheetContent> {
       const newRewardStatus = 'pending';
       final autoApproveTime = DateTime.now().add(const Duration(minutes: 15));
 
-      // Firestore update: status becomes 'reward_waiting' with 15-minute autoApprove timer
+      // Database update: status becomes 'reward_waiting' with 15-minute autoApprove timer
       await SupaStore.instance.collection('rooms').doc(roomId).update({
         'status': newStatus,
         'proofUrl': downloadUrl,
@@ -2913,7 +2913,7 @@ class _InRoomBottomSheetContentState extends State<_InRoomBottomSheetContent> {
     }
 
     try {
-      // 1. Clear Firestore proof fields and reset status
+      // 1. Clear database proof fields and reset status
       await SupaStore.instance.collection('rooms').doc(room.id).update({
         'status': 'IN_PROGRESS',
         'proofUrl': SupaField.delete(),
@@ -3641,7 +3641,7 @@ class _InRoomBottomSheetContentState extends State<_InRoomBottomSheetContent> {
 
   bool _isStartingMatch = false;
 
-  /// Host starts the match: updates status to 'IN_PROGRESS' in Firestore & local TournamentService,
+  /// Host starts the match: updates status to 'IN_PROGRESS' in database & local TournamentService,
   /// announces in room chat, and alerts all room participants.
   Future<void> _startMatch(GamerRoom room) async {
     if (_isStartingMatch) return;
@@ -3650,7 +3650,7 @@ class _InRoomBottomSheetContentState extends State<_InRoomBottomSheetContent> {
     });
 
     try {
-      // 1. Update Firestore 'rooms' document
+      // 1. Update database 'rooms' document
       await SupaStore.instance.collection('rooms').doc(room.id).update({
         'status': 'IN_PROGRESS',
         'isMatchStarted': true,
@@ -3789,7 +3789,7 @@ class _InRoomBottomSheetContentState extends State<_InRoomBottomSheetContent> {
       builder: (context, roomSnapshot) {
         GamerRoom room = widget.room;
         if (roomSnapshot.hasData && roomSnapshot.data != null && roomSnapshot.data!.exists) {
-          room = GamerRoom.fromFirestore(roomSnapshot.data!);
+          room = GamerRoom.fromSupabase(roomSnapshot.data!);
         }
 
         final now = DateTime.now();

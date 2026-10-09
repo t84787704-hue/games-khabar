@@ -3,7 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:easy_localization/easy_localization.dart' hide TextDirection;
 import '../models/news_model.dart';
-import '../services/firestore_service.dart';
+import '../services/supabase_store_service.dart';
 import '../services/bookmark_service.dart';
 import '../services/notification_service.dart';
 import '../services/theme_service.dart';
@@ -35,7 +35,7 @@ class HomeScreen extends StatefulWidget {
 
 class _HomeScreenState extends State<HomeScreen> {
   int _selectedNavIndex = 0;
-  final FirestoreService _firestoreService = FirestoreService();
+  final SupabaseStoreService _storeService = SupabaseStoreService();
   final BookmarkService _bookmarkService = BookmarkService();
   String selectedCategory = "All";
   String get _selectedCategory => selectedCategory;
@@ -54,7 +54,7 @@ class _HomeScreenState extends State<HomeScreen> {
   @override
   void initState() {
     super.initState();
-    _initFirebaseAndServices();
+    _initServices();
     StreakService().init();
     CoinRewardService().init();
     PriceAlertService().init();
@@ -78,7 +78,7 @@ class _HomeScreenState extends State<HomeScreen> {
     }
   }
 
-  Future<void> _initFirebaseAndServices() async {
+  Future<void> _initServices() async {
     try {
       await BookmarkService().init().timeout(const Duration(seconds: 2));
     } catch (_) {}
@@ -87,7 +87,7 @@ class _HomeScreenState extends State<HomeScreen> {
       await NotificationService().initialize().timeout(const Duration(seconds: 3));
     } catch (_) {}
 
-    _firestoreService.refreshNews();
+    _storeService.refreshNews();
     if (mounted) {
       setState(() {});
     }
@@ -106,7 +106,7 @@ class _HomeScreenState extends State<HomeScreen> {
       return;
     }
     print("Clicked news: ${news.id}");
-    _firestoreService.incrementView(news.id);
+    _storeService.incrementView(news.id);
 
     // Warm up description translation immediately if needed
     final langCode = context.locale.languageCode;
@@ -490,8 +490,8 @@ class _HomeScreenState extends State<HomeScreen> {
                   : _selectedNavIndex == 4
                       ? const ProfileScreen()
                       : StreamBuilder<List<NewsModel>>(
-        initialData: _firestoreService.currentNews,
-        stream: _firestoreService.getNewsStream(),
+        initialData: _storeService.currentNews,
+        stream: _storeService.getNewsStream(),
         builder: (context, snapshot) {
           if (snapshot.connectionState == ConnectionState.waiting && (!snapshot.hasData || snapshot.data!.isEmpty)) {
             return Center(
@@ -539,7 +539,7 @@ class _HomeScreenState extends State<HomeScreen> {
                       ),
                       onPressed: () {
                         setState(() {
-                          _firestoreService.refreshNews();
+                          _storeService.refreshNews();
                         });
                       },
                       icon: const Icon(Icons.refresh_rounded),
@@ -658,7 +658,7 @@ class _HomeScreenState extends State<HomeScreen> {
             displacement: 40,
             strokeWidth: 2.5,
             onRefresh: () async {
-              await _firestoreService.refreshNews();
+              await _storeService.refreshNews();
             },
             child: CustomScrollView(
               clipBehavior: Clip.none,

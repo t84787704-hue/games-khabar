@@ -57,7 +57,7 @@ class _CreatePostScreenState extends State<CreatePostScreen> {
       final rawUid = _authService.currentUid;
       final sbUserId = await SupabaseService.getCurrentUserId();
 
-      // Ensure we have a valid identifier even if Firebase or Supabase is active
+      // Ensure we have a valid user identifier
       final effectiveUid = (rawUid != null && rawUid.isNotEmpty)
           ? rawUid
           : (sbUserId != null && sbUserId.isNotEmpty ? sbUserId : 'user_${DateTime.now().millisecondsSinceEpoch}');

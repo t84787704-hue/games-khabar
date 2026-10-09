@@ -21,7 +21,7 @@ void main() async {
     overlays: [SystemUiOverlay.top, SystemUiOverlay.bottom],
   );
 
-  // ✅ Sirf Supabase initialize karo (Firebase hata diya)
+  // ✅ Initialize Supabase
   try {
     await SupabaseService.init();
   } catch (e) {

@@ -211,7 +211,7 @@ class NewsModel {
 
   String getContent([String? langCode]) => getDescription(langCode);
 
-  factory NewsModel.fromFirestore(dynamic doc) {
+  factory NewsModel.fromSupabase(dynamic doc) {
     Map<String, dynamic> data = {};
     String docId = '';
     if (doc != null) {

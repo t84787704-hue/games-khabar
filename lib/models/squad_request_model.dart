@@ -27,7 +27,7 @@ class SquadJoinRequest {
     this.createdAt,
   });
 
-  factory SquadJoinRequest.fromFirestore(dynamic doc, [String? postId]) {
+  factory SquadJoinRequest.fromSupabase(dynamic doc, [String? postId]) {
     if (doc == null) return SquadJoinRequest.fromMap({}, '', postId);
     try {
       final data = (doc as dynamic).data();

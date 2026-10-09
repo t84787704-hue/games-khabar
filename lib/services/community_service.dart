@@ -96,7 +96,7 @@ class CommunityService {
       final posts = list
           .where((data) => data['isApproved'] != false)
           .where((data) => selectedFilter == 'All' || data['gameName'] == selectedFilter)
-          .map((data) => CommunityPostModel.fromFirestore(data))
+          .map((data) => CommunityPostModel.fromSupabase(data))
           .toList();
 
       posts.sort((a, b) => b.createdAt.compareTo(a.createdAt));
@@ -226,7 +226,7 @@ class CommunityService {
         .eq('postId', postId)
         .map((list) {
       final comments = list
-          .map((doc) => CommunityCommentModel.fromFirestore(doc))
+          .map((doc) => CommunityCommentModel.fromSupabase(doc))
           .toList();
       comments.sort((a, b) => a.createdAt.compareTo(b.createdAt));
       return comments;

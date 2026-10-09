@@ -167,7 +167,7 @@ class GamerPrivacyPolicyScreen extends StatelessWidget {
                 items: [
                   'We do NOT sell your personal data to anyone.',
                   'We use Supabase for database and authentication.',
-                  'We use Firebase Cloud Messaging (FCM) for push notifications only.',
+                  'We use secure cloud messaging for push notifications only.',
                   'We may share data if required by law.',
                 ],
               ),

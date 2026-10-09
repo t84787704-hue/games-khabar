@@ -178,7 +178,7 @@ class TournamentService extends ChangeNotifier {
           .eq('isLive', true)
           .order('startTime', ascending: true);
 
-      final supabaseRooms = (res as List).map((d) => TournamentRoom.fromFirestore(d)).toList();
+      final supabaseRooms = (res as List).map((d) => TournamentRoom.fromSupabase(d)).toList();
 
       // Deduplicate by ID and auto-delete completed rooms older than 5 minutes
       final Map<String, TournamentRoom> roomMap = {};
@@ -225,7 +225,7 @@ class TournamentService extends ChangeNotifier {
         .map((snap) {
           final streamRooms = snap
               .where((d) => d['isLive'] == true)
-              .map((d) => TournamentRoom.fromFirestore(d))
+              .map((d) => TournamentRoom.fromSupabase(d))
               .toList();
           final Map<String, TournamentRoom> map = {};
           for (final r in _rooms) {
@@ -276,7 +276,7 @@ class TournamentService extends ChangeNotifier {
               .select()
               .eq('id', roomId)
               .maybeSingle();
-          if (res != null) targetRoom = TournamentRoom.fromFirestore(res);
+          if (res != null) targetRoom = TournamentRoom.fromSupabase(res);
         } catch (_) {}
       }
 
@@ -455,7 +455,7 @@ class TournamentService extends ChangeNotifier {
         try {
           final doc = await _roomsRef.doc(roomId).get();
           if (doc.exists) {
-            room = TournamentRoom.fromFirestore(doc);
+            room = TournamentRoom.fromSupabase(doc);
           }
         } catch (_) {}
       }
@@ -507,7 +507,7 @@ class TournamentService extends ChangeNotifier {
       final combinedWinnerUid = allWinnerUids.join(',');
       final combinedWinnerName = allWinnerNames.join(', ');
 
-      // 3. Mark room as COMPLETED in memory & Firestore
+      // 3. Mark room as COMPLETED in memory & database
       final roomIdx = _rooms.indexWhere((r) => r.id == roomId);
       final now = DateTime.now();
       if (roomIdx != -1) {
@@ -702,7 +702,7 @@ class TournamentService extends ChangeNotifier {
               .eq('id', roomId)
               .maybeSingle();
           if (res != null) {
-            room = TournamentRoom.fromFirestore(res);
+            room = TournamentRoom.fromSupabase(res);
           }
         } catch (_) {}
       }

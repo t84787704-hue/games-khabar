@@ -140,7 +140,7 @@ class WinProofValidator {
 
   /// Resolve the uploader's real ID name:
   /// 1. Slot allocation name (e.g. "1083") from room slots
-  /// 2. Firestore users collection -> bgmiName / inGameName / username / displayName
+  /// 2. Users table -> bgmiName / inGameName / username / displayName
   /// 3. Fallback to currentUserName
   static Future<String> resolveAccountIdName({
     required String userId,
@@ -175,7 +175,7 @@ class WinProofValidator {
       }
     }
 
-    // Check room document in Firestore if roomId provided
+    // Check room document in database if roomId provided
     if (roomId != null && roomId.isNotEmpty) {
       try {
         final rData = await SupabaseService.client.from('rooms').select().eq('id', roomId).maybeSingle();

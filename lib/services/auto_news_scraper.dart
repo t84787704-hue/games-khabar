@@ -7,7 +7,7 @@ import 'supabase_service.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../data/fallback_images.dart';
 import '../services/translation_service.dart';
-import '../services/firestore_service.dart';
+import '../services/supabase_store_service.dart';
 
 class RssSource {
   final String id;
@@ -65,7 +65,7 @@ class AutoNewsScraper {
   final ValueNotifier<List<RssSource>> sourcesNotifier = ValueNotifier<List<RssSource>>([]);
 
   // Top 10 High Search Volume Sources
-  static final List<Map<String, dynamic>> defaultFirestoreSources = [
+  static final List<Map<String, dynamic>> defaultRssSources = [
     {
       'id': 'source_1_sportskeeda',
       'name': 'Sportskeeda',
@@ -148,7 +148,7 @@ class AutoNewsScraper {
     },
   ];
 
-  static List<RssSource> get defaultSources => defaultFirestoreSources
+  static List<RssSource> get defaultSources => defaultRssSources
       .map((s) => RssSource(
             id: s['id'] as String,
             name: s['name'] as String,
@@ -169,8 +169,8 @@ class AutoNewsScraper {
           .select('id')
           .limit(1);
       if (snap.isEmpty) {
-        for (int i = 0; i < defaultFirestoreSources.length; i++) {
-          final s = defaultFirestoreSources[i];
+        for (int i = 0; i < defaultRssSources.length; i++) {
+          final s = defaultRssSources[i];
           final data = {
             'id': s['id'],
             'name': s['name'],
@@ -200,8 +200,8 @@ class AutoNewsScraper {
         await SupabaseService.client.from('scraper_sources').delete().neq('id', '___');
         await SupabaseService.client.from('rss_sources').delete().neq('id', '___');
       } catch (_) {}
-      for (int i = 0; i < defaultFirestoreSources.length; i++) {
-        final s = defaultFirestoreSources[i];
+      for (int i = 0; i < defaultRssSources.length; i++) {
+        final s = defaultRssSources[i];
         final data = {
           'id': s['id'],
           'name': s['name'],
@@ -224,7 +224,7 @@ class AutoNewsScraper {
   }
 
   /// Add a source to Supabase 'rss_sources' and 'scraper_sources'
-  static Future<void> addFirestoreSource({
+  static Future<void> addSource({
     required String name,
     required String url,
     required String category,
@@ -255,7 +255,7 @@ class AutoNewsScraper {
   }
 
   /// Delete a source from Supabase
-  static Future<void> deleteFirestoreSource(String docId) async {
+  static Future<void> deleteSource(String docId) async {
     try {
       await SupabaseService.client.from('scraper_sources').delete().or('id.eq.$docId');
       try {
@@ -267,7 +267,7 @@ class AutoNewsScraper {
   }
 
   /// Toggle source enabled state in Supabase
-  static Future<void> toggleFirestoreSource(String docId, bool isEnabled) async {
+  static Future<void> toggleSource(String docId, bool isEnabled) async {
     try {
       await SupabaseService.client.from('scraper_sources').update({
         'isActive': isEnabled,
@@ -310,17 +310,17 @@ class AutoNewsScraper {
     required String categoryHint,
     String searchVolumeDesc = '',
   }) async {
-    await addFirestoreSource(name: name, url: url, category: categoryHint);
+    await addSource(name: name, url: url, category: categoryHint);
     await _loadSources();
   }
 
-  Future<void> toggleSource(String id, bool enabled) async {
-    await toggleFirestoreSource(id, enabled);
+  Future<void> toggleSourceInstance(String id, bool enabled) async {
+    await toggleSource(id, enabled);
     await _loadSources();
   }
 
-  Future<void> deleteSource(String id) async {
-    await deleteFirestoreSource(id);
+  Future<void> deleteSourceInstance(String id) async {
+    await deleteSource(id);
     await _loadSources();
   }
 
@@ -374,8 +374,8 @@ class AutoNewsScraper {
               continue;
             }
 
-            // 2. Firestore Duplicate Check
-            final isDuplicate = await _checkFirestoreDuplicate(sourceUrl);
+            // 2. Database Duplicate Check
+            final isDuplicate = await _checkDuplicate(sourceUrl);
             if (isDuplicate) {
               seenUrls.add(sourceUrl);
               continue;
@@ -399,8 +399,8 @@ class AutoNewsScraper {
               sourceUrl: sourceUrl,
             );
 
-            // 6. Save to Firestore with isAuto: true
-            final added = await _saveToFirestore(
+            // 6. Save to Database with isAuto: true
+            final added = await _saveNews(
               titleMap: titleMap,
               descriptionMap: descMap,
               category: category,
@@ -581,7 +581,7 @@ class AutoNewsScraper {
   }
 
   /// Duplicate check in Supabase
-  Future<bool> _checkFirestoreDuplicate(String sourceUrl) async {
+  Future<bool> _checkDuplicate(String sourceUrl) async {
     try {
       final query = await SupabaseService.client
           .from('news')
@@ -885,7 +885,7 @@ class AutoNewsScraper {
   }
 
   /// Save to Supabase with isAuto: true
-  Future<bool> _saveToFirestore({
+  Future<bool> _saveNews({
     required Map<String, String> titleMap,
     required Map<String, String> descriptionMap,
     required String category,
@@ -915,8 +915,8 @@ class AutoNewsScraper {
         'sourceUrl': sourceUrl,
       }).timeout(const Duration(seconds: 4));
 
-      // Also trigger refresh in FirestoreService so live stream reflects new Khabar immediately
-      FirestoreService().refreshNews();
+      // Also trigger refresh in SupabaseStoreService so live stream reflects new Khabar immediately
+      SupabaseStoreService().refreshNews();
       return true;
     } catch (e) {
       debugPrint('Failed to save scraped news to Supabase: $e');

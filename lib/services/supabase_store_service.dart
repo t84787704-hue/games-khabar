@@ -3,9 +3,9 @@ import 'package:flutter/foundation.dart';
 import '../services/supabase_service.dart';
 import '../models/news_model.dart';
 
-class FirestoreService {
-  static final FirestoreService _instance = FirestoreService._internal();
-  factory FirestoreService() => _instance;
+class SupabaseStoreService {
+  static final SupabaseStoreService _instance = SupabaseStoreService._internal();
+  factory SupabaseStoreService() => _instance;
 
   final StreamController<List<NewsModel>> _streamController =
       StreamController<List<NewsModel>>.broadcast();
@@ -13,7 +13,7 @@ class FirestoreService {
   // In-memory master list (populated strictly from Supabase)
   List<NewsModel> _currentNewsList = [];
 
-  FirestoreService._internal() {
+  SupabaseStoreService._internal() {
     _initSupabaseListener();
   }
 

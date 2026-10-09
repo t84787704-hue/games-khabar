@@ -25,7 +25,7 @@ class _SquadFinderScreenState extends State<SquadFinderScreen> {
   // Guard to prevent duplicate rapid posting
   bool _isPosting = false;
 
-  // Local list to immediately display created posts without waiting for Firestore stream
+  // Local list to immediately display created posts without waiting for database stream
   final List<SquadPost> _localSquads = [];
 
   // Top Filter bar state

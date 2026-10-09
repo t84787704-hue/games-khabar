@@ -188,7 +188,7 @@ class SquadService {
         final List<SquadPost> result = [];
 
         for (final row in rows) {
-          final post = SquadPost.fromFirestore(row);
+          final post = SquadPost.fromSupabase(row);
           final isOwner = currentUid.isNotEmpty &&
               (post.ownerId == currentUid || post.userId == currentUid);
 
@@ -246,7 +246,7 @@ class SquadService {
       final List<SquadPost> result = [];
 
       for (final r in rows) {
-        final p = SquadPost.fromFirestore(r);
+        final p = SquadPost.fromSupabase(r);
         final isOwner = currentUid.isNotEmpty &&
             (p.ownerId == currentUid || p.userId == currentUid);
 

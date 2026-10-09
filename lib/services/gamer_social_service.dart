@@ -16,7 +16,7 @@ class GamerSocialService {
 
   SupabaseClient get _supabase => SupabaseService.client;
 
-  /// Helper to convert any string (e.g. Firebase UID) deterministically to a valid RFC4122 UUID v4/v5 format
+  /// Helper to convert any string (e.g. User ID) deterministically to a valid RFC4122 UUID v4/v5 format
   static String stringToUuid(String input) {
     if (input.isEmpty) return '00000000-0000-0000-0000-000000000000';
     final uuidRegex = RegExp(

@@ -396,7 +396,7 @@ class _SquadChatScreenState extends State<SquadChatScreen> {
     final userData = await SupabaseService.getUser(currentUid) ?? {};
     final characterUid = (userData['bgmiUid'] ?? userData['gameId'] ?? userData['inGameId'] ?? userData['gameUid'] ?? '').toString().trim();
 
-    // Validate: Character UID must be equal to current user's Firestore profile gameUid, don't allow typing any UID.
+    // Validate: Character UID must be equal to current user profile gameUid, don't allow typing any UID.
     if (characterUid.isEmpty) {
       if (!mounted) return;
       showDialog(
@@ -1609,7 +1609,7 @@ class _SquadChatScreenState extends State<SquadChatScreen> {
                             .eq('id', widget.postId)
                             .maybeSingle();
                         if (map != null) {
-                          currentSquad = SquadPost.fromFirestore(map);
+                          currentSquad = SquadPost.fromSupabase(map);
                         }
                       }
                       if (currentSquad != null && mounted) {

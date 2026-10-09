@@ -2,7 +2,7 @@ import 'dart:ui' as ui;
 import 'package:flutter/material.dart';
 import 'package:easy_localization/easy_localization.dart' hide TextDirection;
 import '../models/news_model.dart';
-import '../services/firestore_service.dart';
+import '../services/supabase_store_service.dart';
 import '../services/following_service.dart';
 import '../services/price_service.dart';
 import '../services/theme_service.dart';
@@ -19,7 +19,7 @@ class FollowingScreen extends StatefulWidget {
 
 class _FollowingScreenState extends State<FollowingScreen> {
   final FollowingService _followingService = FollowingService();
-  final FirestoreService _firestoreService = FirestoreService();
+  final SupabaseStoreService _storeService = SupabaseStoreService();
   final PriceService _priceService = PriceService();
   final TextEditingController _customGameController = TextEditingController();
   bool _isAddingCustom = false;
@@ -45,7 +45,7 @@ class _FollowingScreenState extends State<FollowingScreen> {
   }
 
   void _navigateToDetail(NewsModel news) {
-    _firestoreService.incrementView(news.id);
+    _storeService.incrementView(news.id);
   }
 
   void _addCustomGame() {
@@ -297,8 +297,8 @@ class _FollowingScreenState extends State<FollowingScreen> {
 
               // News Stream for Followed Games
               StreamBuilder<List<NewsModel>>(
-                initialData: _firestoreService.currentNews,
-                stream: _firestoreService.getNewsStream(),
+                initialData: _storeService.currentNews,
+                stream: _storeService.getNewsStream(),
                 builder: (context, snapshot) {
                   final allNews = snapshot.data ?? [];
                   final followedList = _followingService.filterNews(allNews);

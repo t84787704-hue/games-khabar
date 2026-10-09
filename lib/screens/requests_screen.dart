@@ -148,7 +148,7 @@ class _RequestsScreenState extends State<RequestsScreen> {
           }
 
           final List<String> joinRequests = List<String>.from(postData['joinRequests'] ?? []);
-          final squad = SquadPost.fromFirestore(postData);
+          final squad = SquadPost.fromSupabase(postData);
 
           if (joinRequests.isEmpty) {
             return Center(

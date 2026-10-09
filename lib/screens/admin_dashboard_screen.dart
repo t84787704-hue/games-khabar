@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import '../services/supabase_service.dart';
 import '../models/news_model.dart';
-import '../services/firestore_service.dart';
+import '../services/supabase_store_service.dart';
 import '../services/auto_news_scraper.dart';
 import '../widgets/app_image_view.dart';
 import '../utils/admin_security.dart';
@@ -141,7 +141,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
 
     if (confirm == true) {
       try {
-        await FirestoreService().deleteNews(docId);
+        await SupabaseStoreService().deleteNews(docId);
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(
@@ -294,7 +294,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
                 );
                 return;
               }
-              await AutoNewsScraper.addFirestoreSource(
+              await AutoNewsScraper.addSource(
                 name: nameCtrl.text.trim().isEmpty ? 'Custom RSS Feed' : nameCtrl.text.trim(),
                 url: url,
                 category: hintCtrl.text.trim().isEmpty ? 'Gaming News' : hintCtrl.text.trim(),
@@ -304,7 +304,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
                 ScaffoldMessenger.of(ctx).showSnackBar(
                   const SnackBar(
                     backgroundColor: cardDark,
-                    content: Text('RSS Source Added to Firestore Successfully!', style: TextStyle(color: neonGreen)),
+                    content: Text('RSS Source Added Successfully!', style: TextStyle(color: neonGreen)),
                   ),
                 );
               }
@@ -317,7 +317,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
   }
 
   void _showAutoScraperSheet() {
-    // Ensure 10 default sources are seeded into Firestore if collection is empty
+    // Ensure 10 default sources are seeded if collection is empty
     AutoNewsScraper.seedDefaultSourcesIfEmpty();
 
     showModalBottomSheet(
@@ -386,7 +386,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
                                         borderRadius: BorderRadius.circular(4),
                                       ),
                                       child: const Text(
-                                        'Firestore',
+                                        'Supabase',
                                         style: TextStyle(
                                           color: neonGreen,
                                           fontSize: 9,
@@ -558,7 +558,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
                       },
                     ),
 
-                    // Firestore Sources List
+                    // RSS Sources List
                     Expanded(
                       child: snapshot.connectionState == ConnectionState.waiting && docs.isEmpty
                           ? const Center(
@@ -574,7 +574,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
                                       const Icon(Icons.rss_feed, color: textGray, size: 40),
                                       const SizedBox(height: 12),
                                       const Text(
-                                        'No RSS Sources found in Firestore',
+                                        'No RSS Sources found',
                                         style: TextStyle(color: textWhite, fontWeight: FontWeight.bold),
                                       ),
                                       const SizedBox(height: 12),
@@ -688,14 +688,14 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
                                             inactiveThumbColor: textGray,
                                             inactiveTrackColor: cardDark2,
                                             onChanged: (val) {
-                                              AutoNewsScraper.toggleFirestoreSource(docId, val);
+                                              AutoNewsScraper.toggleSource(docId, val);
                                             },
                                           ),
                                           IconButton(
                                             icon: const Icon(Icons.delete_outline, color: alertRed, size: 20),
                                             tooltip: 'Delete Source',
                                             onPressed: () async {
-                                              await AutoNewsScraper.deleteFirestoreSource(docId);
+                                              await AutoNewsScraper.deleteSource(docId);
                                             },
                                           ),
                                         ],
@@ -721,7 +721,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
                                 ScaffoldMessenger.of(bCtx).showSnackBar(
                                   const SnackBar(
                                     backgroundColor: cardDark,
-                                    content: Text('Reset to 10 Default High Search Sources in Firestore', style: TextStyle(color: neonGreen)),
+                                    content: Text('Reset to 10 Default High Search Sources', style: TextStyle(color: neonGreen)),
                                   ),
                                 );
                               }
@@ -1028,10 +1028,10 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
 
           const SizedBox(height: 8),
 
-          // News Stream from Firestore Service
+          // News Stream from Supabase Store Service
           Expanded(
             child: StreamBuilder<List<NewsModel>>(
-              stream: FirestoreService().getNewsStream(),
+              stream: SupabaseStoreService().getNewsStream(),
               builder: (context, snapshot) {
                 if (snapshot.connectionState == ConnectionState.waiting) {
                   return Center(

@@ -339,7 +339,7 @@ class _RssSourcesScreenState extends State<RssSourcesScreen> {
                 );
                 return;
               }
-              await AutoNewsScraper.addFirestoreSource(
+              await AutoNewsScraper.addSource(
                 name: nameCtrl.text.trim().isEmpty ? 'Custom RSS Feed' : nameCtrl.text.trim(),
                 url: url,
                 category: hintCtrl.text.trim().isEmpty ? 'Gaming News' : hintCtrl.text.trim(),
@@ -494,7 +494,7 @@ class _RssSourcesScreenState extends State<RssSourcesScreen> {
                             const Icon(Icons.rss_feed, color: textGray, size: 40),
                             const SizedBox(height: 12),
                             const Text(
-                              'No RSS Sources in Firestore',
+                              'No RSS Sources found',
                               style: TextStyle(color: textWhite, fontWeight: FontWeight.bold),
                             ),
                             const SizedBox(height: 12),
@@ -574,7 +574,7 @@ class _RssSourcesScreenState extends State<RssSourcesScreen> {
                                 Switch(
                                   value: isEnabled,
                                   activeColor: neonGreen,
-                                  onChanged: (val) => AutoNewsScraper.toggleFirestoreSource((doc['id'] ?? '').toString(), val),
+                                  onChanged: (val) => AutoNewsScraper.toggleSource((doc['id'] ?? '').toString(), val),
                                 ),
                               ],
                             ),

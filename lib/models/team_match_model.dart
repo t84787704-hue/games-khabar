@@ -165,7 +165,7 @@ class TeamMatch {
     return null;
   }
 
-  factory TeamMatch.fromFirestore(dynamic doc) {
+  factory TeamMatch.fromSupabase(dynamic doc) {
     if (doc == null) return TeamMatch.fromMap({}, '');
     try {
       final data = (doc as dynamic).data();

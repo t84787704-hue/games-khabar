@@ -38,7 +38,7 @@ class _TournamentBoardScreenState extends State<TournamentBoardScreen> {
   Widget _buildRoomCard(TournamentRoom room) {
     // hostDisplay logic: if room.hostName is not null, not empty, and not equal to map values like
     // "Erangel", "Miramar", "Sanhok", "Vikendi" then use room.hostName.
-    // Else, fetch username from Firestore collection 'users' docId = room.hostId.
+    // Else, fetch username from 'users' table docId = room.hostId.
     // Use field 'username' -> 'displayName' -> 'name' in that order.
     // Cache result in a Map<String, String> _hostNameCache to avoid repeated reads.
     final String rawHostName = room.hostName.trim();

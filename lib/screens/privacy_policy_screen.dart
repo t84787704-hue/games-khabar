@@ -98,9 +98,9 @@ class PrivacyPolicyScreen extends StatelessWidget {
                 ),
 
                 _buildSection(
-                  title: '3. Firebase Services',
+                  title: '3. Cloud & Notification Services',
                   content:
-                      'Our application uses Google Firebase (Firebase Cloud Firestore and Firebase Cloud Messaging) solely to provide real-time gaming news updates and push notifications for breaking esports events and game updates. Firebase may process anonymous device tokens strictly to deliver notifications.',
+                      'Our application uses secure cloud infrastructure solely to provide real-time gaming news updates and notifications for breaking esports events and game updates. Anonymous device tokens may be processed strictly to deliver notifications.',
                 ),
 
                 _buildSection(

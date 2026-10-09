@@ -4,7 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:image_picker/image_picker.dart';
 import '../models/news_model.dart';
-import '../services/firestore_service.dart';
+import '../services/supabase_store_service.dart';
 import '../widgets/app_image_view.dart';
 import '../utils/admin_security.dart';
 import '../services/notification_service.dart';
@@ -68,7 +68,7 @@ class _AddNewsScreenState extends State<AddNewsScreen> {
   late final TextEditingController _titleController;
   late final TextEditingController _descController;
   late final TextEditingController _videoUrlController;
-  final FirestoreService _firestoreService = FirestoreService();
+  final SupabaseStoreService _storeService = SupabaseStoreService();
   final ImagePicker _picker = ImagePicker();
 
   late String _selectedCategory;
@@ -252,7 +252,7 @@ class _AddNewsScreenState extends State<AddNewsScreen> {
 
       if (mounted) {
         setState(() {
-          _publishingStatus = 'Saving to Firestore...';
+          _publishingStatus = 'Saving news...';
         });
       }
 
@@ -268,9 +268,9 @@ class _AddNewsScreenState extends State<AddNewsScreen> {
       };
 
       if (isEditing) {
-        await _firestoreService.updateNews(widget.editItem!.id, payload);
+        await _storeService.updateNews(widget.editItem!.id, payload);
       } else {
-        final newNewsId = await _firestoreService.addNews(payload);
+        final newNewsId = await _storeService.addNews(payload);
         // Send FCM notification to topic 'all_news'
         try {
           await NotificationService().sendNewsNotification(
@@ -406,7 +406,7 @@ class _AddNewsScreenState extends State<AddNewsScreen> {
                     ),
                     const SizedBox(height: 6),
                     Text(
-                      'Write only in Roman (or English). On publish, it will automatically translate to 7 languages and save directly to Firestore for instant display.',
+                      'Write only in Roman (or English). On publish, it will automatically translate to 7 languages and save directly to database for instant display.',
                       style: TextStyle(color: textGray, fontSize: 11.5, height: 1.35),
                     ),
                     const SizedBox(height: 10),

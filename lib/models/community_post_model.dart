@@ -29,7 +29,7 @@ class CommunityPostModel {
     required this.createdAt,
   });
 
-  factory CommunityPostModel.fromFirestore(dynamic doc) {
+  factory CommunityPostModel.fromSupabase(dynamic doc) {
     if (doc == null) return CommunityPostModel.fromMap({}, '');
     try {
       final data = (doc as dynamic).data();
@@ -126,7 +126,7 @@ class CommunityCommentModel {
     required this.createdAt,
   });
 
-  factory CommunityCommentModel.fromFirestore(dynamic doc) {
+  factory CommunityCommentModel.fromSupabase(dynamic doc) {
     if (doc == null) return CommunityCommentModel.fromMap({}, '');
     try {
       final data = (doc as dynamic).data();

@@ -4,7 +4,7 @@ import 'package:flutter/foundation.dart';
 import 'package:translator/translator.dart';
 import 'package:http/http.dart' as http;
 import '../models/news_model.dart';
-import 'firestore_service.dart';
+import 'supabase_store_service.dart';
 
 class TranslationService {
   static final GoogleTranslator _translator = GoogleTranslator();
@@ -316,12 +316,12 @@ class TranslationService {
 
     await Future.wait(tasks);
 
-    // Also persist translation back to Firestore if document exists
+    // Also persist translation back to database if document exists
     if (news.id.isNotEmpty && !news.id.startsWith('local-')) {
       final updatedTitle = news.titleMap[lang];
       final updatedDesc = news.descriptionMap[lang];
       if (updatedTitle != null || updatedDesc != null) {
-        FirestoreService().updateNewsTranslation(
+        SupabaseStoreService().updateNewsTranslation(
           news.id,
           lang,
           updatedTitle ?? currentTitle,

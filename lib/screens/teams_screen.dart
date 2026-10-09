@@ -206,7 +206,7 @@ class _TeamsScreenState extends State<TeamsScreen> {
 
   @override
   Widget build(BuildContext context) {
-    // 100% Supabase Auth - No Firebase
+    // Supabase Auth
     final currentUid = SupabaseService.client.auth.currentUser?.id ?? "";
 
     return Scaffold(

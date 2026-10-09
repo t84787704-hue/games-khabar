@@ -290,7 +290,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                         ),
                       ),
                       const SizedBox(height: 6),
-                      // Debug: Current Firebase Auth User & UID
+                      // Debug: Current Auth User & UID
                       Container(
                         padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
                         decoration: BoxDecoration(

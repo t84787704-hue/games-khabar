@@ -3,7 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:http/http.dart' as http;
 import '../models/news_model.dart';
-import 'firestore_service.dart';
+import 'supabase_store_service.dart';
 import 'supabase_service.dart';
 
 class NotificationService {
@@ -367,7 +367,7 @@ class NotificationService {
     final context = navigatorKey.currentContext;
     if (context == null) return;
 
-    NewsModel? news = await FirestoreService().getNewsById(newsId);
+    NewsModel? news = await SupabaseStoreService().getNewsById(newsId);
 
     // If offline or news not yet synced to snapshot, create a fallback model so UI opens instantly
     news ??= NewsModel(

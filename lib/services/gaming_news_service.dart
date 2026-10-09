@@ -150,14 +150,14 @@ class GamingNewsService {
     } catch (_) {}
   }
 
-  /// Fetch news from RSS, parse, translate, and save to Firestore
+  /// Fetch news from RSS, parse, translate, and save to database
   Future<int> syncRssNews() async {
     if (_isSyncing) return 0;
     _isSyncing = true;
     int totalSaved = 0;
 
     try {
-      // First ensure initial seed articles exist in Firestore with full 4-5 paragraphs
+      // First ensure initial seed articles exist in database with full 4-5 paragraphs
       await _seedInitialNewsIfEmpty();
 
       for (final feedUrl in _rssFeedUrls) {
