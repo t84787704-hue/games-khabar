@@ -56,8 +56,12 @@ class _FollowersFollowingScreenState extends State<FollowersFollowingScreen> wit
 
     if (mounted) {
       setState(() {
-        _followers = followers;
-        _following = following;
+        // ✅ FIX: Khud ko followers list se hataao
+        _followers = followers.where((u) => u.uid != widget.userId).toList();
+
+        // ✅ FIX: Khud ko following list se bhi hataao
+        _following = following.where((u) => u.uid != widget.userId).toList();
+
         _loadingFollowers = false;
         _loadingFollowing = false;
       });
