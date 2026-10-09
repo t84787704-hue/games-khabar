@@ -5,12 +5,14 @@ import 'package:image_picker/image_picker.dart';
 import '../models/team_model.dart';
 import '../services/gamer_auth_service.dart';
 import '../services/team_service.dart';
+import '../services/supabase_service.dart';
 
 class CreateTeamDialog extends StatefulWidget {
   final TeamModel? existingTeam;
   final bool isEditMode;
 
-  const CreateTeamDialog({super.key, this.existingTeam, this.isEditMode = false});
+  const CreateTeamDialog(
+      {super.key, this.existingTeam, this.isEditMode = false});
 
   static Future<bool?> show(BuildContext context, {TeamModel? existingTeam}) {
     final editMode = existingTeam != null;
@@ -68,24 +70,31 @@ class _CreateTeamDialogState extends State<CreateTeamDialog> {
 
   Future<void> _pickLogo() async {
     final picker = ImagePicker();
-    final picked = await picker.pickImage(source: ImageSource.gallery, imageQuality: 85);
+    final picked =
+        await picker.pickImage(source: ImageSource.gallery, imageQuality: 85);
     if (picked != null) {
       setState(() => _logoFile = File(picked.path));
     }
   }
 
+  /// FIX: Sirf Supabase auth ID use karo, error ko user ko dikhao.
   Future<void> _handleSave() async {
     if (!_formKey.currentState!.validate()) return;
 
-    final currentUser = GamerAuthService().currentUser;
-    final currentGamer = GamerAuthService().currentGamer;
+    // ============ FIX: Sirf Supabase auth use karo ============
+    final sbUserId = SupabaseService.client.auth.currentUser?.id;
 
-    if (currentUser == null) {
+    if (sbUserId == null || sbUserId.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('براہ کرم پہلے لاگ ان کریں')),
+        const SnackBar(
+          content: Text('براہ کرم پہلے لاگ ان کریں'),
+          backgroundColor: Color(0xFFFF4655),
+        ),
       );
       return;
     }
+
+    final currentGamer = GamerAuthService().currentGamer;
 
     setState(() => _isLoading = true);
 
@@ -123,42 +132,54 @@ class _CreateTeamDialogState extends State<CreateTeamDialog> {
       }
     } else {
       // ===== CREATE NEW TEAM =====
-      final meta = currentUser.userMetadata ?? {};
-      final metaName = (meta['full_name'] ?? meta['name'] ?? meta['display_name'] ?? '').toString();
-      final metaAvatar = (meta['avatar_url'] ?? meta['picture'] ?? '').toString();
       final leaderName = currentGamer?.displayName ??
           currentGamer?.username ??
-          (metaName.isNotEmpty ? metaName : 'Team Leader');
-      final leaderAvatar = currentGamer?.photoUrl ?? metaAvatar;
+          'Team Leader';
+      final leaderAvatar = currentGamer?.photoUrl ?? '';
 
-      final teamId = await TeamService().createTeam(
-        name: _nameController.text.trim(),
-        tag: _tagController.text.trim().toUpperCase(),
-        logoFile: _logoFile,
-        game: _selectedGame,
-        description: _descController.text.trim(),
-        requirements: _reqController.text.trim(),
-        leaderId: currentUser.id,
-        leaderName: leaderName,
-        leaderAvatar: leaderAvatar,
-      );
+      try {
+        final teamId = await TeamService().createTeam(
+          name: _nameController.text.trim(),
+          tag: _tagController.text.trim().toUpperCase(),
+          logoFile: _logoFile,
+          game: _selectedGame,
+          description: _descController.text.trim(),
+          requirements: _reqController.text.trim(),
+          leaderId: sbUserId,
+          leaderName: leaderName,
+          leaderAvatar: leaderAvatar,
+        );
 
-      setState(() => _isLoading = false);
+        setState(() => _isLoading = false);
 
-      if (mounted) {
-        if (teamId != null) {
-          Navigator.pop(context, true);
+        if (mounted) {
+          if (teamId != null) {
+            Navigator.pop(context, true);
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(
+                content: Text(
+                    '🎉 ٹیم "${_nameController.text.trim()}" کامیابی سے بن گئی!'),
+                backgroundColor: const Color(0xFF00FF88),
+              ),
+            );
+          } else {
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(
+                content:
+                    Text('ٹیم بنانے میں خرابی پیش آئی۔ دوبارہ کوشش کریں۔'),
+                backgroundColor: Color(0xFFFF4655),
+              ),
+            );
+          }
+        }
+      } catch (e) {
+        setState(() => _isLoading = false);
+        if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(
-              content: Text('🎉 ٹیم "${_nameController.text.trim()}" کامیابی سے بن گئی!'),
-              backgroundColor: const Color(0xFF00FF88),
-            ),
-          );
-        } else {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-              content: Text('ٹیم بنانے میں خرابی پیش آئی۔ دوبارہ کوشش کریں۔'),
-              backgroundColor: Color(0xFFFF4655),
+              content: Text('Error: $e'),
+              backgroundColor: const Color(0xFFFF4655),
+              duration: const Duration(seconds: 5),
             ),
           );
         }
@@ -247,7 +268,8 @@ class _CreateTeamDialogState extends State<CreateTeamDialog> {
                     ),
                   ),
                   IconButton(
-                    icon: const Icon(Icons.close_rounded, color: Colors.white54),
+                    icon:
+                        const Icon(Icons.close_rounded, color: Colors.white54),
                     onPressed: () => Navigator.pop(context),
                   ),
                 ],
