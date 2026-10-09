@@ -47,7 +47,6 @@ class _GamerProfileScreenState extends State<GamerProfileScreen>
   bool _isBlockedByThem = false;
   bool _loadingBlockStatus = true;
 
-  // ✅ FIX: Cached user + initial fetch tracking to avoid "not found" glitch
   GamerUser? _cachedUser;
   bool _initialFetchDone = false;
   String _lastFetchedUid = '';
@@ -66,13 +65,10 @@ class _GamerProfileScreenState extends State<GamerProfileScreen>
     super.dispose();
   }
 
-  /// ✅ FIX: Pre-fetch current user so profile shows instantly
-  /// when app returns from background.
   Future<void> _prefetchCurrentUser() async {
     final uid = widget.userId ?? (_authService.currentUid ?? '');
 
     if (uid.isEmpty) {
-      // Auth may not be initialized yet — wait 500ms and retry
       await Future.delayed(const Duration(milliseconds: 500));
       final retryUid = widget.userId ?? (_authService.currentUid ?? '');
       if (retryUid.isEmpty) {
@@ -117,72 +113,100 @@ class _GamerProfileScreenState extends State<GamerProfileScreen>
     });
   }
 
+  /// ✅ FIXED: Fetch gamer profile from Supabase
+  /// Priority: id → uid → username (no toUuid conversion)
   Future<GamerUser?> _fetchGamerFromSupabase(String userId) async {
     if (userId.isEmpty) return null;
     try {
-      final uuid = SupabaseService.toUuid(userId);
-      final row = await SupabaseService.client
+      // 1. Pehle `id` se exact match karo
+      final rowById = await SupabaseService.client
           .from('users')
           .select()
-          .eq('id', uuid)
+          .eq('id', userId)
           .maybeSingle();
 
-      if (row == null) return null;
+      if (rowById != null) {
+        return _rowToGamerUser(rowById, userId);
+      }
 
-      return GamerUser(
-        uid: userId,
-        username: (row['username'] ?? 'gamer').toString(),
-        displayName:
-            (row['display_name'] ?? row['username'] ?? 'Gamer').toString(),
-        photoUrl: (row['avatar_url'] ?? '').toString(),
-        coverUrl: (row['cover_url'] ?? '').toString(),
-        bio: (row['bio'] ?? '').toString(),
-        favoriteGame: (row['favorite_game'] ?? 'BGMI').toString(),
-        selectedGame: (row['selected_game'] ?? '').toString(),
-        selectedRank: (row['selected_rank'] ?? '').toString(),
-        rank: (row['rank'] ?? '').toString(),
-        rankScreenshot: (row['rank_screenshot'] ?? '').toString(),
-        rankStatus: (row['rank_status'] ?? 'None').toString(),
-        rankVerifiedBy: (row['rank_verified_by'] ?? '').toString(),
-        rankRejectReason: (row['rank_reject_reason'] ?? '').toString(),
-        isRankVerified: row['is_rank_verified'] == true,
-        gameId: (row['game_id'] ?? '').toString(),
-        coins: (row['coins'] as num?)?.toInt() ?? 0,
-        followersCount: (row['followers_count'] as num?)?.toInt() ?? 0,
-        followingCount: (row['following_count'] as num?)?.toInt() ?? 0,
-        postsCount: (row['posts_count'] as num?)?.toInt() ?? 0,
-        likesReceived: (row['likes_received'] as num?)?.toInt() ?? 0,
-        reportsCount: (row['reports_count'] as num?)?.toInt() ?? 0,
-        isVerified: row['is_verified'] == true,
-        verificationStatus: (row['blue_tick_status'] ?? 'none').toString(),
-        activeFrame: (row['active_frame'] ?? '').toString(),
-        unlockedFrames: List<String>.from(row['unlocked_frames'] ?? []),
-        activeBadge: (row['active_badge'] ?? '').toString(),
-        unlockedBadges: List<String>.from(row['unlocked_badges'] ?? []),
-        chatColor: (row['chat_color'] ?? '#00FF66').toString(),
-        unlockedChatColors:
-            List<String>.from(row['unlocked_chat_colors'] ?? []),
-        isVipMember: row['is_vip_member'] == true,
-        kdRatio: (row['kd_ratio'] as num?)?.toDouble() ?? 0.0,
-        createdAt:
-            DateTime.tryParse((row['created_at'] ?? '').toString()),
-        isRankPublic: row['is_rank_public'] != false,
-        isUidPublic: row['is_uid_public'] == true,
-        isCoinsPublic: row['is_coins_public'] == true,
-        isMemberSincePublic: row['is_member_since_public'] == true,
-        isFollowingPublic: row['is_following_public'] != false,
-        isFollowersPublic: row['is_followers_public'] != false,
-        isBioPublic: row['is_bio_public'] != false,
-        isGamePublic: row['is_game_public'] != false,
-      );
+      // 2. Agar `id` se nahi mila, to `uid` se try karo
+      final rowByUid = await SupabaseService.client
+          .from('users')
+          .select()
+          .eq('uid', userId)
+          .maybeSingle();
+
+      if (rowByUid != null) {
+        final actualId = (rowByUid['id'] ?? userId).toString();
+        return _rowToGamerUser(rowByUid, actualId);
+      }
+
+      // 3. Agar wo bhi nahi mila, to `username` se try karo
+      final rowByUsername = await SupabaseService.client
+          .from('users')
+          .select()
+          .eq('username', userId)
+          .maybeSingle();
+
+      if (rowByUsername != null) {
+        final actualId = (rowByUsername['id'] ?? userId).toString();
+        return _rowToGamerUser(rowByUsername, actualId);
+      }
     } catch (e) {
       debugPrint('[ProfileScreen] Supabase fetch error: $e');
-      return null;
     }
+    return null;
   }
 
-  /// ✅ FIX: yield cached user if fetch returns null, so screen
-  /// never shows "not found" during transient network/auth gaps.
+  /// ✅ Helper: Supabase row ko GamerUser mein convert karo
+  /// `id` ko priority do (kyunki follows table id use karta hai)
+  GamerUser _rowToGamerUser(Map<String, dynamic> row, String fallbackUid) {
+    return GamerUser(
+      uid: (row['id'] ?? fallbackUid).toString(),
+      username: (row['username'] ?? 'gamer').toString(),
+      displayName:
+          (row['display_name'] ?? row['username'] ?? 'Gamer').toString(),
+      photoUrl: (row['avatar_url'] ?? '').toString(),
+      coverUrl: (row['cover_url'] ?? '').toString(),
+      bio: (row['bio'] ?? '').toString(),
+      favoriteGame: (row['favorite_game'] ?? 'BGMI').toString(),
+      selectedGame: (row['selected_game'] ?? '').toString(),
+      selectedRank: (row['selected_rank'] ?? '').toString(),
+      rank: (row['rank'] ?? '').toString(),
+      rankScreenshot: (row['rank_screenshot'] ?? '').toString(),
+      rankStatus: (row['rank_status'] ?? 'None').toString(),
+      rankVerifiedBy: (row['rank_verified_by'] ?? '').toString(),
+      rankRejectReason: (row['rank_reject_reason'] ?? '').toString(),
+      isRankVerified: row['is_rank_verified'] == true,
+      gameId: (row['game_id'] ?? '').toString(),
+      coins: (row['coins'] as num?)?.toInt() ?? 0,
+      followersCount: (row['followers_count'] as num?)?.toInt() ?? 0,
+      followingCount: (row['following_count'] as num?)?.toInt() ?? 0,
+      postsCount: (row['posts_count'] as num?)?.toInt() ?? 0,
+      likesReceived: (row['likes_received'] as num?)?.toInt() ?? 0,
+      reportsCount: (row['reports_count'] as num?)?.toInt() ?? 0,
+      isVerified: row['is_verified'] == true,
+      verificationStatus: (row['blue_tick_status'] ?? 'none').toString(),
+      activeFrame: (row['active_frame'] ?? '').toString(),
+      unlockedFrames: List<String>.from(row['unlocked_frames'] ?? []),
+      activeBadge: (row['active_badge'] ?? '').toString(),
+      unlockedBadges: List<String>.from(row['unlocked_badges'] ?? []),
+      chatColor: (row['chat_color'] ?? '#00FF66').toString(),
+      unlockedChatColors: List<String>.from(row['unlocked_chat_colors'] ?? []),
+      isVipMember: row['is_vip_member'] == true,
+      kdRatio: (row['kd_ratio'] as num?)?.toDouble() ?? 0.0,
+      createdAt: DateTime.tryParse((row['created_at'] ?? '').toString()),
+      isRankPublic: row['is_rank_public'] != false,
+      isUidPublic: row['is_uid_public'] == true,
+      isCoinsPublic: row['is_coins_public'] == true,
+      isMemberSincePublic: row['is_member_since_public'] == true,
+      isFollowingPublic: row['is_following_public'] != false,
+      isFollowersPublic: row['is_followers_public'] != false,
+      isBioPublic: row['is_bio_public'] != false,
+      isGamePublic: row['is_game_public'] != false,
+    );
+  }
+
   Stream<GamerUser?> _gamerStream(String userId) async* {
     if (userId.isEmpty) {
       yield _cachedUser;
@@ -199,9 +223,6 @@ class _GamerProfileScreenState extends State<GamerProfileScreen>
     }
   }
 
-  // ==========================================
-  // PRIVACY UPDATE — FIXED VERSION
-  // ==========================================
   Future<void> _updatePrivacy({
     bool? isRankPublic,
     bool? isUidPublic,
@@ -219,7 +240,6 @@ class _GamerProfileScreenState extends State<GamerProfileScreen>
     }
 
     try {
-      final uuid = SupabaseService.toUuid(uid);
       final Map<String, dynamic> updates = {};
       if (isRankPublic != null) updates['is_rank_public'] = isRankPublic;
       if (isUidPublic != null) updates['is_uid_public'] = isUidPublic;
@@ -236,15 +256,11 @@ class _GamerProfileScreenState extends State<GamerProfileScreen>
       if (updates.isEmpty) return;
       updates['updated_at'] = DateTime.now().toIso8601String();
 
-      debugPrint('[Privacy] 📤 Updating with: $updates');
-
-      final result = await SupabaseService.client
+      await SupabaseService.client
           .from('users')
           .update(updates)
-          .eq('id', uuid)
+          .eq('id', uid)
           .select();
-
-      debugPrint('[Privacy] ✅ UPDATE SUCCESS: $result');
 
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -353,9 +369,6 @@ class _GamerProfileScreenState extends State<GamerProfileScreen>
     }
   }
 
-  // ==========================================
-  // PRIVACY SETTINGS SHEET — FIXED VERSION
-  // ==========================================
   void _showPrivacySettingsSheet(GamerUser user) {
     bool rankPublic = user.isRankPublic;
     bool uidPublic = user.isUidPublic;
@@ -717,11 +730,10 @@ class _GamerProfileScreenState extends State<GamerProfileScreen>
       final finalUrl = uploadedUrl.isNotEmpty ? uploadedUrl : '';
 
       if (finalUrl.isNotEmpty) {
-        final uuid = SupabaseService.toUuid(user.uid);
         await SupabaseService.client.from('users').update({
           'cover_url': finalUrl,
           'updated_at': DateTime.now().toIso8601String(),
-        }).eq('id', uuid);
+        }).eq('id', user.uid);
 
         if (mounted) {
           ScaffoldMessenger.of(context).hideCurrentSnackBar();
@@ -748,11 +760,10 @@ class _GamerProfileScreenState extends State<GamerProfileScreen>
 
   Future<void> _setPresetCover(GamerUser user, String coverUrl) async {
     try {
-      final uuid = SupabaseService.toUuid(user.uid);
       await SupabaseService.client.from('users').update({
         'cover_url': coverUrl,
         'updated_at': DateTime.now().toIso8601String(),
-      }).eq('id', uuid);
+      }).eq('id', user.uid);
 
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -920,10 +931,8 @@ class _GamerProfileScreenState extends State<GamerProfileScreen>
           );
         }
 
-        // ✅ FIX: use cached user as fallback while stream is loading
         final user = snapshot.data ?? _cachedUser;
         if (user == null) {
-          // If initial fetch isn't done yet, show loading instead of "not found"
           if (!_initialFetchDone) {
             return const Scaffold(
               backgroundColor: Color(0xFFF0F2F5),
