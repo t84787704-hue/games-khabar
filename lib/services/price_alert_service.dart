@@ -1,6 +1,5 @@
 import 'package:flutter/foundation.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-import 'package:firebase_messaging/firebase_messaging.dart';
 import 'supabase_service.dart';
 
 class PriceAlertService {
@@ -54,17 +53,8 @@ class PriceAlertService {
       updated[gameId] = targetPrice;
       alertsNotifier.value = updated;
 
-      // Subscribe to FCM topic for this game's price drop
-      final topicName = 'price_drop_${gameId.replaceAll(RegExp(r'[^a-zA-Z0-9-_.~%]'), '_')}';
-      try {
-        await FirebaseMessaging.instance.subscribeToTopic(topicName);
-      } catch (e) {
-        debugPrint('[PriceAlertService] Subscribe topic error: $e');
-      }
-
       // Save alert to Supabase
       try {
-        final fcmToken = await FirebaseMessaging.instance.getToken().catchError((_) => null);
         await SupabaseService.client
             .from('price_alerts')
             .upsert({
@@ -78,8 +68,6 @@ class PriceAlertService {
           'current_price': currentPrice,
           'currentPrice': currentPrice,
           'store': store ?? 'Steam',
-          'fcm_token': fcmToken,
-          'fcmToken': fcmToken,
           'created_at': DateTime.now().toIso8601String(),
           'createdAt': DateTime.now().toIso8601String(),
           'active': true,
@@ -100,11 +88,6 @@ class PriceAlertService {
       final updated = Map<String, double>.from(alertsNotifier.value);
       updated.remove(gameId);
       alertsNotifier.value = updated;
-
-      final topicName = 'price_drop_${gameId.replaceAll(RegExp(r'[^a-zA-Z0-9-_.~%]'), '_')}';
-      try {
-        await FirebaseMessaging.instance.unsubscribeFromTopic(topicName);
-      } catch (_) {}
 
       try {
         await SupabaseService.client

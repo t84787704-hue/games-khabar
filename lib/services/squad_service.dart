@@ -1,6 +1,4 @@
 import 'dart:async';
-import 'package:games_khabar/compat/cloud_firestore.dart';
-import 'package:games_khabar/compat/firebase_auth.dart';
 import 'package:flutter/foundation.dart';
 import '../models/squad_post_model.dart';
 import '../models/squad_request_model.dart';
@@ -8,14 +6,6 @@ import 'gamer_auth_service.dart';
 import 'supabase_service.dart';
 
 class SquadService {
-  final FirebaseFirestore _firestore = FirebaseFirestore.instance;
-
-  // Primary LFG collections
-  CollectionReference get _squadRef => _firestore.collection('squads');
-  CollectionReference get _lfgPostsRef => _firestore.collection('lfg_posts');
-  CollectionReference get _legacySquadRef => _firestore.collection('squad_posts');
-  CollectionReference get _notificationsRef => _firestore.collection('notifications');
-
   /// Disabled auto-repair/auto-create to prevent duplicate posts
   Future<void> repairBrokenSquads([String? specificSquadId]) async {
     // Intentionally no-op: LFG posts must ONLY be created when user taps NEED SQUAD button.
@@ -44,47 +34,45 @@ class SquadService {
     isCreating = true;
 
     try {
-      final user = FirebaseAuth.instance.currentUser;
-      if (user == null) return;
+      final user = SupabaseService.client.auth.currentUser;
+      final currentUid = user?.id ?? GamerAuthService().currentUid;
+      if (currentUid == null || currentUid.isEmpty) return;
+
+      final now = DateTime.now();
 
       // 1. Pehle check karo kahin pehle se to squad nahi hai
-      final lfgDocRef = FirebaseFirestore.instance.collection('lfg_posts').doc(user.uid);
-      final existing = await lfgDocRef.get();
-      if (existing.exists && existing.data()?['isActive'] == true) {
-        debugPrint("Squad pehle se hai");
-        isCreating = false;
-        return;
-      }
+      try {
+        final existing = await SupabaseService.client
+            .from('lfg_posts')
+            .select()
+            .or('id.eq.$currentUid,userId.eq.$currentUid,hostId.eq.$currentUid')
+            .eq('isActive', true)
+            .limit(1);
 
-      final chatExisting = await FirebaseFirestore.instance
-          .collection('chats')
-          .where('hostId', isEqualTo: user.uid)
-          .where('isActive', isEqualTo: true)
-          .get();
+        if (existing.isNotEmpty) {
+          debugPrint("Squad pehle se hai in lfg_posts");
+          isCreating = false;
+          return;
+        }
+      } catch (_) {}
 
-      if (chatExisting.docs.isNotEmpty) {
-        debugPrint("Squad pehle se hai in chats");
-        isCreating = false;
-        return;
-      }
-
-      // 2. Ab PARENT document banao - Use user.uid as default doc ID
-      final String sId = (squadId != null && squadId.isNotEmpty) ? squadId : user.uid;
-      final docRef = FirebaseFirestore.instance.collection('chats').doc(sId);
-      final cleanMembers = [user.uid];
+      // 2. Ab PARENT document banao - Use currentUid as default doc ID
+      final String sId = (squadId != null && squadId.isNotEmpty) ? squadId : currentUid;
+      final cleanMembers = [currentUid];
 
       final Map<String, dynamic> docData = {
+        'id': sId,
         'squadId': sId,
         'chatId': sId,
         'postId': sId,
-        'id': sId,
-        'hostId': user.uid,
-        'userId': user.uid,
-        'ownerId': user.uid,
-        'leaderUid': user.uid,
-        'hostEmail': user.email,
-        'ownerEmail': user.email,
-        'createdAt': FieldValue.serverTimestamp(),
+        'hostId': currentUid,
+        'userId': currentUid,
+        'ownerId': currentUid,
+        'leaderUid': currentUid,
+        'hostEmail': user?.email ?? '',
+        'ownerEmail': user?.email ?? '',
+        'createdAt': now.toIso8601String(),
+        'created_at': now.toIso8601String(),
         'members': cleanMembers,
         'memberCount': 1,
         'membersCount': 1,
@@ -112,19 +100,22 @@ class SquadService {
         'joinRequests': <String>[],
         'requestedCount': 0,
         'lastMessage': 'Squad created!',
-        'lastMessageTime': FieldValue.serverTimestamp(),
-        'updatedAt': FieldValue.serverTimestamp(),
+        'lastMessageTime': now.toIso8601String(),
+        'updatedAt': now.toIso8601String(),
+        'updated_at': now.toIso8601String(),
       };
 
-      await docRef.set(docData);
-
-      // Also mirror to squads and lfg_posts for feed compatibility
+      // Upsert to lfg_posts and squads
       try {
-        await FirebaseFirestore.instance.collection('squads').doc(sId).set(docData);
-      } catch (_) {}
+        await SupabaseService.client.from('lfg_posts').upsert(docData);
+      } catch (e) {
+        debugPrint('[SquadService] lfg_posts save error: $e');
+      }
       try {
-        await FirebaseFirestore.instance.collection('lfg_posts').doc(sId).set(docData);
-      } catch (_) {}
+        await SupabaseService.client.from('squads').upsert(docData);
+      } catch (e) {
+        debugPrint('[SquadService] squads save error: $e');
+      }
 
       // Sync room to Supabase rooms and room_members table
       try {
@@ -133,41 +124,32 @@ class SquadService {
           'title': title ?? post?.displayName ?? "${post?.username ?? 'Gamer'}'s Squad",
           'game': 'PUBG Mobile',
           'mode': mode ?? post?.mode ?? 'Classic Squad',
-          'host_id': user.uid,
+          'host_id': currentUid,
           'host_name': post?.username ?? 'gamer',
           'max_players': 4,
           'current_players': 1,
           'status': 'Open',
-          'created_at': DateTime.now().toIso8601String(),
+          'created_at': now.toIso8601String(),
         });
         await SupabaseService.addRoomMember({
           'room_id': sId,
-          'user_id': user.uid,
+          'user_id': currentUid,
           'username': post?.username ?? 'gamer',
-          'joined_at': DateTime.now().toIso8601String(),
+          'joined_at': now.toIso8601String(),
         });
       } catch (_) {}
 
-      // 3. Uske BAAD messages ka subcollection banao
-      await docRef.collection('messages').add({
-        'text': 'Squad created!',
-        'senderId': user.uid,
-        'senderUid': user.uid,
-        'timestamp': FieldValue.serverTimestamp(),
-        'createdAt': FieldValue.serverTimestamp(),
-      });
-
+      // Initial message
       try {
-        await FirebaseFirestore.instance
-            .collection('squads')
-            .doc(sId)
-            .collection('messages')
-            .add({
+        await SupabaseService.client.from('messages').insert({
+          'squad_id': sId,
+          'chat_id': sId,
+          'room_id': sId,
           'text': 'Squad created!',
-          'senderId': user.uid,
-          'senderUid': user.uid,
-          'timestamp': FieldValue.serverTimestamp(),
-          'createdAt': FieldValue.serverTimestamp(),
+          'senderId': currentUid,
+          'senderUid': currentUid,
+          'timestamp': now.toIso8601String(),
+          'created_at': now.toIso8601String(),
         });
       } catch (_) {}
 
@@ -194,103 +176,87 @@ class SquadService {
 
   /// Real-time stream of all posts where isActive == true (and owner's posts regardless of isActive)
   Stream<List<SquadPost>> getActiveSquadsStream() {
-    return _lfgPostsRef
-        .snapshots()
-        .asyncMap((snap) async {
-      final currentUid = FirebaseAuth.instance.currentUser?.uid ?? GamerAuthService().currentUid ?? '';
-      final Set<String> seenIds = {};
-      final List<SquadPost> rawPosts = [];
+    try {
+      return SupabaseService.client
+          .from('lfg_posts')
+          .stream(primaryKey: ['id'])
+          .map((rows) {
+        final currentUid = GamerAuthService().currentUid ??
+            SupabaseService.client.auth.currentUser?.id ??
+            '';
+        final now = DateTime.now();
+        final List<SquadPost> result = [];
 
-      for (final doc in snap.docs) {
-        seenIds.add(doc.id);
-        rawPosts.add(SquadPost.fromFirestore(doc));
-      }
+        for (final row in rows) {
+          final post = SquadPost.fromFirestore(row);
+          final isOwner = currentUid.isNotEmpty &&
+              (post.ownerId == currentUid || post.userId == currentUid);
 
-      // Also fetch from squads for consistency
-      try {
-        final squadSnap = await _squadRef.get();
-        for (final doc in squadSnap.docs) {
-          if (!seenIds.contains(doc.id)) {
-            seenIds.add(doc.id);
-            rawPosts.add(SquadPost.fromFirestore(doc));
+          // Auto-expire: if post is older than 2 hours and isActive==true
+          if (post.createdAt != null &&
+              now.difference(post.createdAt!).inHours >= 2 &&
+              post.isActive) {
+            SupabaseService.client
+                .from('lfg_posts')
+                .update({'isActive': false, 'is_active': false})
+                .eq('id', post.id)
+                .catchError((_) {});
+            if (!isOwner) continue;
+          }
+
+          if ((post.membersCount >= 4 || post.members.length >= 4) && post.isActive) {
+            SupabaseService.client
+                .from('lfg_posts')
+                .update({'isActive': false, 'is_active': false})
+                .eq('id', post.id)
+                .catchError((_) {});
+          }
+
+          if (post.isActive || isOwner) {
+            result.add(post);
           }
         }
-      } catch (_) {}
 
-      final now = DateTime.now();
-      final List<SquadPost> result = [];
+        result.sort((a, b) {
+          final aTime = a.createdAt ?? DateTime(1970);
+          final bTime = b.createdAt ?? DateTime(1970);
+          return bTime.compareTo(aTime);
+        });
 
-      for (final post in rawPosts) {
-        final isOwner = currentUid.isNotEmpty && (post.ownerId == currentUid || post.userId == currentUid);
-
-        // Auto-expire: if post is older than 2 hours and isActive==true, update isActive=false in background
-        if (post.createdAt != null && now.difference(post.createdAt!).inHours >= 2 && post.isActive) {
-          debugPrint('[SquadService] Post ${post.id} is >2 hours old. Auto-expiring.');
-          _lfgPostsRef.doc(post.id).update({'isActive': false}).catchError((_) {});
-          _squadRef.doc(post.id).update({'isActive': false}).catchError((_) {});
-          if (!isOwner) continue;
-        }
-
-        // If membersCount >= 4, auto close
-        if ((post.membersCount >= 4 || post.members.length >= 4) && post.isActive) {
-          _lfgPostsRef.doc(post.id).update({'isActive': false}).catchError((_) {});
-          _squadRef.doc(post.id).update({'isActive': false}).catchError((_) {});
-        }
-
-        // Feed shows isActive==true, orderBy createdAt descending. (Owner's own posts show regardless of isActive).
-        if (post.isActive || isOwner) {
-          result.add(post);
-        }
-      }
-
-      result.sort((a, b) {
-        final aTime = a.createdAt ?? DateTime(1970);
-        final bTime = b.createdAt ?? DateTime(1970);
-        return bTime.compareTo(aTime);
+        return result;
       });
-
-      debugPrint('[SquadService] Fetched active squads length: ${result.length}');
-      return result;
-    });
+    } catch (e) {
+      debugPrint('[SquadService] getActiveSquadsStream error: $e');
+      return Stream.value([]);
+    }
   }
 
   Future<List<SquadPost>> fetchSquadsOnce() async {
     try {
-      final snap = await _lfgPostsRef.get();
-      final currentUid = FirebaseAuth.instance.currentUser?.uid ?? GamerAuthService().currentUid ?? '';
-      final Set<String> seenIds = {};
-      final List<SquadPost> rawPosts = [];
+      final rows = await SupabaseService.client
+          .from('lfg_posts')
+          .select()
+          .order('created_at', ascending: false)
+          .limit(50);
 
-      for (final d in snap.docs) {
-        seenIds.add(d.id);
-        rawPosts.add(SquadPost.fromFirestore(d));
-      }
-
-      try {
-        final squadSnap = await _squadRef.get();
-        for (final doc in squadSnap.docs) {
-          if (!seenIds.contains(doc.id)) {
-            seenIds.add(doc.id);
-            rawPosts.add(SquadPost.fromFirestore(doc));
-          }
-        }
-      } catch (_) {}
-
+      final currentUid = GamerAuthService().currentUid ??
+          SupabaseService.client.auth.currentUser?.id ??
+          '';
       final now = DateTime.now();
       final List<SquadPost> result = [];
 
-      for (final p in rawPosts) {
-        final isOwner = currentUid.isNotEmpty && (p.ownerId == currentUid || p.userId == currentUid);
+      for (final r in rows) {
+        final p = SquadPost.fromFirestore(r);
+        final isOwner = currentUid.isNotEmpty &&
+            (p.ownerId == currentUid || p.userId == currentUid);
 
         if (p.createdAt != null && now.difference(p.createdAt!).inHours >= 2 && p.isActive) {
-          _lfgPostsRef.doc(p.id).update({'isActive': false}).catchError((_) {});
-          _squadRef.doc(p.id).update({'isActive': false}).catchError((_) {});
+          SupabaseService.client
+              .from('lfg_posts')
+              .update({'isActive': false, 'is_active': false})
+              .eq('id', p.id)
+              .catchError((_) {});
           if (!isOwner) continue;
-        }
-
-        if ((p.membersCount >= 4 || p.members.length >= 4) && p.isActive) {
-          _lfgPostsRef.doc(p.id).update({'isActive': false}).catchError((_) {});
-          _squadRef.doc(p.id).update({'isActive': false}).catchError((_) {});
         }
 
         if (p.isActive || isOwner) {
@@ -343,10 +309,15 @@ class SquadService {
           ? applicantGameId
           : (gamer?.gameId ?? '');
 
+      final now = DateTime.now();
+      final reqId = '${postId}_$applicantUid';
+
       final reqData = {
-        'id': applicantUid,
+        'id': reqId,
         'postId': postId,
+        'post_id': postId,
         'userId': applicantUid,
+        'user_id': applicantUid,
         'applicantUid': applicantUid,
         'name': effectiveName,
         'displayName': effectiveName,
@@ -360,150 +331,101 @@ class SquadService {
         'inGameUid': effectiveGameId,
         'gameId': effectiveGameId,
         'status': 'pending',
-        'createdAt': FieldValue.serverTimestamp(),
+        'createdAt': now.toIso8601String(),
+        'created_at': now.toIso8601String(),
       };
 
-      // 1. Write to 'lfg_posts' & 'squads' with batch and increment requestedCount
+      // 1. Write to squad_requests table in Supabase
       try {
-        final batch = _firestore.batch();
-        batch.set(_lfgPostsRef.doc(postId).collection('requests').doc(applicantUid), reqData, SetOptions(merge: true));
-        batch.set(_lfgPostsRef.doc(postId), {
-          'joinRequests': FieldValue.arrayUnion([applicantUid]),
-          'requestedCount': FieldValue.increment(1),
-        }, SetOptions(merge: true));
-
-        batch.set(_squadRef.doc(postId).collection('requests').doc(applicantUid), reqData, SetOptions(merge: true));
-        batch.set(_squadRef.doc(postId), {
-          'joinRequests': FieldValue.arrayUnion([applicantUid]),
-          'requestedCount': FieldValue.increment(1),
-        }, SetOptions(merge: true));
-
-        await batch.commit();
+        await SupabaseService.client.from('squad_requests').upsert(reqData);
       } catch (e) {
-        debugPrint('[SquadService] Error writing to requests batch: $e');
+        debugPrint('[SquadService] squad_requests save notice: $e');
       }
 
-      // 3. Mirror to legacy
+      // 2. Fetch post to append joinRequests and increment requestedCount
       try {
-        await _legacySquadRef.doc(postId).update({
-          'joinRequests': FieldValue.arrayUnion([applicantUid]),
-        });
-      } catch (_) {}
+        final existingPost = await SupabaseService.client
+            .from('lfg_posts')
+            .select('joinRequests, requestedCount')
+            .eq('id', postId)
+            .maybeSingle();
 
-      // 4. Send notification to squad leader
+        List<dynamic> currentRequests = [];
+        int currentCount = 0;
+        if (existingPost != null) {
+          currentRequests = List.from(existingPost['joinRequests'] ?? []);
+          currentCount = (existingPost['requestedCount'] as num?)?.toInt() ?? 0;
+        }
+
+        if (!currentRequests.contains(applicantUid)) {
+          currentRequests.add(applicantUid);
+          currentCount += 1;
+        }
+
+        await SupabaseService.client.from('lfg_posts').update({
+          'joinRequests': currentRequests,
+          'requestedCount': currentCount,
+          'updated_at': now.toIso8601String(),
+        }).eq('id', postId);
+
+        await SupabaseService.client.from('squads').update({
+          'joinRequests': currentRequests,
+          'requestedCount': currentCount,
+          'updated_at': now.toIso8601String(),
+        }).eq('id', postId);
+      } catch (e) {
+        debugPrint('[SquadService] joinRequests sync notice: $e');
+      }
+
+      // 3. Send notification to squad leader
       if (leaderUid != applicantUid && leaderUid.isNotEmpty) {
-        await _notificationsRef.add({
-          'recipientUid': leaderUid,
-          'senderUid': applicantUid,
-          'type': 'squad_request',
-          'message': 'requested to join your Squad!',
-          'postId': postId,
-          'read': false,
-          'createdAt': FieldValue.serverTimestamp(),
-        });
+        try {
+          await SupabaseService.sendNotification({
+            'recipientUid': leaderUid,
+            'recipient_id': leaderUid,
+            'senderUid': applicantUid,
+            'sender_id': applicantUid,
+            'type': 'squad_request',
+            'title': 'New Squad Request! 🎮',
+            'message': '$effectiveName requested to join your Squad!',
+            'body': '$effectiveName requested to join your Squad!',
+            'postId': postId,
+            'post_id': postId,
+            'read': false,
+            'created_at': now.toIso8601String(),
+          });
+        } catch (_) {}
       }
     } catch (e) {
       debugPrint('[SquadService] Error requesting join: $e');
     }
   }
 
-  /// Real-time stream of all requests in 'lfg_posts' -> docId -> 'requests' (and 'squads' subcollection)
-  Stream<List<SquadJoinRequest>> getSquadRequestsStream(String postId, [List<String>? initialJoinRequests]) {
-    final controller = StreamController<List<SquadJoinRequest>>();
-    final Map<String, SquadJoinRequest> requestsMap = {};
+  /// Real-time stream of all requests for postId
+  Stream<List<SquadJoinRequest>> getSquadRequestsStream(
+    String postId, [
+    List<String>? initialJoinRequests,
+  ]) {
+    try {
+      return SupabaseService.client
+          .from('squad_requests')
+          .stream(primaryKey: ['id'])
+          .map((rows) {
+        final matching = rows.where((r) =>
+            (r['postId'] ?? r['post_id'])?.toString() == postId);
 
-    void emitRequests() {
-      final list = requestsMap.values.toList();
-      list.sort((a, b) {
-        final tA = a.createdAt ?? DateTime(1970);
-        final tB = b.createdAt ?? DateTime(1970);
-        return tB.compareTo(tA);
+        final list = matching.map((r) => SquadJoinRequest.fromMap(r)).toList();
+        list.sort((a, b) {
+          final tA = a.createdAt ?? DateTime(1970);
+          final tB = b.createdAt ?? DateTime(1970);
+          return tB.compareTo(tA);
+        });
+        return list;
       });
-      if (!controller.isClosed) {
-        controller.add(list);
-      }
+    } catch (e) {
+      debugPrint('[SquadService] getSquadRequestsStream notice: $e');
+      return Stream.value([]);
     }
-
-    // Populate from fallback initialJoinRequests if any
-    if (initialJoinRequests != null && initialJoinRequests.isNotEmpty) {
-      for (final uid in initialJoinRequests) {
-        if (!requestsMap.containsKey(uid)) {
-          requestsMap[uid] = SquadJoinRequest(
-            id: uid,
-            postId: postId,
-            userId: uid,
-            name: 'Gamer',
-            tier: 'Ace',
-            kd: 3.0,
-          );
-          // Asynchronously resolve real user details from users collection
-          _firestore.collection('users').doc(uid).get().then((userDoc) {
-            if (userDoc.exists) {
-              final d = userDoc.data() ?? {};
-              requestsMap[uid] = SquadJoinRequest(
-                id: uid,
-                postId: postId,
-                userId: uid,
-                name: d['displayName']?.toString() ?? d['username']?.toString() ?? 'Gamer',
-                username: d['username']?.toString() ?? '',
-                userAvatar: d['photoUrl']?.toString() ?? '',
-                tier: d['rank']?.toString() ?? 'Ace',
-                kd: (d['kdRatio'] as num?)?.toDouble() ?? 3.0,
-                inGameUid: d['gameId']?.toString() ?? '',
-              );
-              emitRequests();
-            }
-          }).catchError((_) {});
-        }
-      }
-      emitRequests();
-    }
-
-    // Stream 1: lfg_posts -> postId -> requests
-    final subLfg = _lfgPostsRef.doc(postId).collection('requests').snapshots().listen((snap) {
-      for (final doc in snap.docs) {
-        requestsMap[doc.id] = SquadJoinRequest.fromFirestore(doc, postId);
-      }
-      // Remove docs that were deleted in snapshot if snap is primary
-      final docIds = snap.docs.map((d) => d.id).toSet();
-      // Only remove if this subcollection had docs
-      if (snap.docs.isNotEmpty) {
-        requestsMap.removeWhere((key, _) => !docIds.contains(key) && (initialJoinRequests?.contains(key) != true));
-      }
-      emitRequests();
-    }, onError: (e) {
-      debugPrint('[SquadService] lfg requests stream error: $e');
-    });
-
-    // Stream 2: squads -> postId -> requests
-    final subSquad = _squadRef.doc(postId).collection('requests').snapshots().listen((snap) {
-      for (final doc in snap.docs) {
-        requestsMap[doc.id] = SquadJoinRequest.fromFirestore(doc, postId);
-      }
-      emitRequests();
-    }, onError: (e) {
-      debugPrint('[SquadService] squads requests stream error: $e');
-    });
-
-    // Stream 3: Also listen to the squad post doc itself to see joinRequests array changes
-    final subDoc = _squadRef.doc(postId).snapshots().listen((docSnap) {
-      if (docSnap.exists) {
-        final data = docSnap.data() as Map<String, dynamic>? ?? {};
-        final List<dynamic> currentArray = data['joinRequests'] ?? [];
-        final currentUids = currentArray.map((e) => e.toString()).toSet();
-        // Remove items that were removed from joinRequests array
-        requestsMap.removeWhere((key, _) => !currentUids.contains(key) && requestsMap[key]?.status != 'pending');
-        emitRequests();
-      }
-    }, onError: (_) {});
-
-    controller.onCancel = () {
-      subLfg.cancel();
-      subSquad.cancel();
-      subDoc.cancel();
-    };
-
-    return controller.stream;
   }
 
   /// Accept join request: add to squad members, delete request doc, send notification
@@ -520,129 +442,94 @@ class SquadService {
         throw "Only owner can accept";
       }
 
-      // Reference both collections for sync
-      final lfgPostRef = _lfgPostsRef.doc(postId);
-      final squadRef = _squadRef.doc(postId);
+      final now = DateTime.now();
 
-      await _firestore.runTransaction((tx) async {
-        DocumentSnapshot lfgSnap = await tx.get(lfgPostRef);
-        DocumentSnapshot squadSnap = await tx.get(squadRef);
+      // 1. Fetch current members
+      final postRow = await SupabaseService.client
+          .from('lfg_posts')
+          .select('members, joinRequests, requestedCount')
+          .eq('id', postId)
+          .maybeSingle();
 
-        DocumentSnapshot? targetSnap = lfgSnap.exists ? lfgSnap : (squadSnap.exists ? squadSnap : null);
-        List<dynamic> members = [];
-        if (targetSnap != null) {
-          final data = targetSnap.data() as Map<String, dynamic>? ?? {};
-          members = List.from(data['members'] ?? []);
-          if (members.isEmpty) {
-            final owner = data['userId']?.toString() ?? squad.userId;
-            if (owner.isNotEmpty) members.add(owner);
-          }
-        } else {
-          members = [squad.userId];
-        }
+      List<dynamic> members = [];
+      List<dynamic> joinReqs = [];
+      int reqCount = 0;
 
-        final postOwner = (targetSnap?.data() as Map<String, dynamic>?)?['ownerId'] ??
-            (targetSnap?.data() as Map<String, dynamic>?)?['userId'] ??
-            squad.ownerId;
-        final int currentRequested = (targetSnap?.data() as Map<String, dynamic>?)?['requestedCount'] is num
-            ? ((targetSnap!.data() as Map<String, dynamic>)['requestedCount'] as num).toInt()
-            : 0;
+      if (postRow != null) {
+        members = List.from(postRow['members'] ?? []);
+        joinReqs = List.from(postRow['joinRequests'] ?? []);
+        reqCount = (postRow['requestedCount'] as num?)?.toInt() ?? 0;
+      }
+      if (members.isEmpty) {
+        members.add(squad.userId);
+      }
 
-        // 1. If requester is owner: clean from joinRequests and return
-        if (postOwner == request.userId) {
-          final cleanMap = {
-            'joinRequests': FieldValue.arrayRemove([request.userId, request.id]),
-            'requestedCount': currentRequested <= 1 ? 0 : currentRequested - 1,
-          };
-          if (lfgSnap.exists) tx.update(lfgPostRef, cleanMap);
-          if (squadSnap.exists) tx.update(squadRef, cleanMap);
-          tx.delete(lfgPostRef.collection('requests').doc(request.id));
-          tx.delete(squadRef.collection('requests').doc(request.id));
-          return;
-        }
+      if (members.contains(request.userId)) {
+        joinReqs.remove(request.userId);
+        joinReqs.remove(request.id);
+        reqCount = reqCount <= 1 ? 0 : reqCount - 1;
+        await SupabaseService.client.from('lfg_posts').update({
+          'joinRequests': joinReqs,
+          'requestedCount': reqCount,
+        }).eq('id', postId);
+        return;
+      }
 
-        // 2. If requester is already in members: clean from joinRequests, decrement requestedCount, return
-        if (members.contains(request.userId)) {
-          final dynamic safeDec = currentRequested <= 1 ? 0 : FieldValue.increment(-1);
-          final cleanMap = {
-            'joinRequests': FieldValue.arrayRemove([request.userId, request.id]),
-            'requestedCount': safeDec,
-          };
-          if (lfgSnap.exists) tx.update(lfgPostRef, cleanMap);
-          if (squadSnap.exists) tx.update(squadRef, cleanMap);
-          tx.delete(lfgPostRef.collection('requests').doc(request.id));
-          tx.delete(squadRef.collection('requests').doc(request.id));
-          return;
-        }
+      if (members.length >= 4) {
+        throw "Squad Full";
+      }
 
-        if (members.length >= 4) {
-          throw "Squad Full";
-        }
+      members.add(request.userId);
+      joinReqs.remove(request.userId);
+      joinReqs.remove(request.id);
+      reqCount = reqCount <= 1 ? 0 : reqCount - 1;
 
-        final dynamic safeRequestedDecrement = currentRequested <= 1 ? 0 : FieldValue.increment(-1);
+      final updateMap = {
+        'members': members,
+        'joinRequests': joinReqs,
+        'membersCount': members.length,
+        'memberCount': members.length,
+        'requestedCount': reqCount,
+        'isActive': true,
+        'updated_at': now.toIso8601String(),
+      };
 
-        final updateData = {
-          'members': FieldValue.arrayUnion([request.userId]),
-          'joinRequests': FieldValue.arrayRemove([request.userId, request.id]),
-          'membersCount': FieldValue.increment(1),
-          'requestedCount': safeRequestedDecrement,
-          'isActive': true,
-        };
+      await SupabaseService.client.from('lfg_posts').update(updateMap).eq('id', postId);
+      await SupabaseService.client.from('squads').update(updateMap).eq('id', postId);
 
-        if (lfgSnap.exists) {
-          tx.update(lfgPostRef, updateData);
-        } else {
-          tx.set(lfgPostRef, {
-            ...squad.toMap(),
-            'members': FieldValue.arrayUnion([squad.userId, request.userId]),
-            'membersCount': 2,
-            'requestedCount': 0,
-          }, SetOptions(merge: true));
-        }
-
-        if (squadSnap.exists) {
-          tx.update(squadRef, updateData);
-        } else {
-          tx.set(squadRef, {
-            ...squad.toMap(),
-            'members': FieldValue.arrayUnion([squad.userId, request.userId]),
-            'membersCount': 2,
-            'requestedCount': 0,
-          }, SetOptions(merge: true));
-        }
-
-        // Delete from requests subcollection
-        final reqLfg = lfgPostRef.collection('requests').doc(request.id);
-        final reqSquad = squadRef.collection('requests').doc(request.id);
-        final reqUserIdLfg = lfgPostRef.collection('requests').doc(request.userId);
-        final reqUserIdSquad = squadRef.collection('requests').doc(request.userId);
-
-        tx.delete(reqLfg);
-        tx.delete(reqSquad);
-        tx.delete(reqUserIdLfg);
-        tx.delete(reqUserIdSquad);
-      });
-
-      // Mirror to legacy if needed
+      // Delete from squad_requests
       try {
-        await _legacySquadRef.doc(postId).set({
-          'members': FieldValue.arrayUnion([request.userId]),
-          'joinRequests': FieldValue.arrayRemove([request.userId]),
-          'membersCount': FieldValue.increment(1),
-          'requestedCount': FieldValue.increment(-1),
-        }, SetOptions(merge: true));
+        await SupabaseService.client
+            .from('squad_requests')
+            .delete()
+            .or('id.eq.${request.id},id.eq.${postId}_${request.userId}');
+      } catch (_) {}
+
+      // Add as room member in Supabase
+      try {
+        await SupabaseService.addRoomMember({
+          'room_id': postId,
+          'user_id': request.userId,
+          'username': request.name,
+          'joined_at': now.toIso8601String(),
+        });
       } catch (_) {}
 
       // Send notification to applicant
       try {
-        await _notificationsRef.add({
+        await SupabaseService.sendNotification({
           'recipientUid': request.userId,
+          'recipient_id': request.userId,
           'senderUid': squad.userId,
+          'sender_id': squad.userId,
           'type': 'squad_accepted',
+          'title': 'Squad Request Accepted! 🎮',
           'message': 'accepted your request to join squad (${squad.mode})! Leader BGMI UID: ${squad.inGameUid}',
+          'body': 'accepted your request to join squad (${squad.mode})! Leader BGMI UID: ${squad.inGameUid}',
           'postId': postId,
+          'post_id': postId,
           'read': false,
-          'createdAt': FieldValue.serverTimestamp(),
+          'created_at': now.toIso8601String(),
         });
       } catch (_) {}
 
@@ -653,52 +540,52 @@ class SquadService {
     }
   }
 
-  /// Reject join request: delete request doc, remove from joinRequests array, decrement requestedCount
+  /// Reject join request
   Future<void> rejectSquadRequest({
     required String postId,
     required String requestId,
     required String userId,
   }) async {
     try {
-      int currentRequested = 0;
+      final now = DateTime.now();
+
+      // Delete from squad_requests
       try {
-        final postDoc = await _lfgPostsRef.doc(postId).get();
-        if (postDoc.exists) {
-          final data = postDoc.data() as Map<String, dynamic>? ?? {};
-          currentRequested = (data['requestedCount'] as num?)?.toInt() ?? 0;
+        await SupabaseService.client
+            .from('squad_requests')
+            .delete()
+            .or('id.eq.$requestId,id.eq.${postId}_$userId');
+      } catch (_) {}
+
+      // Update lfg_posts
+      try {
+        final postRow = await SupabaseService.client
+            .from('lfg_posts')
+            .select('joinRequests, requestedCount')
+            .eq('id', postId)
+            .maybeSingle();
+
+        if (postRow != null) {
+          final List<dynamic> joinReqs = List.from(postRow['joinRequests'] ?? []);
+          joinReqs.remove(userId);
+          joinReqs.remove(requestId);
+          int reqCount = (postRow['requestedCount'] as num?)?.toInt() ?? 0;
+          reqCount = reqCount <= 1 ? 0 : reqCount - 1;
+
+          await SupabaseService.client.from('lfg_posts').update({
+            'joinRequests': joinReqs,
+            'requestedCount': reqCount,
+            'updated_at': now.toIso8601String(),
+          }).eq('id', postId);
+
+          await SupabaseService.client.from('squads').update({
+            'joinRequests': joinReqs,
+            'requestedCount': reqCount,
+            'updated_at': now.toIso8601String(),
+          }).eq('id', postId);
         }
       } catch (_) {}
 
-      final dynamic safeRequestedDecrement = (currentRequested <= 1) ? 0 : FieldValue.increment(-1);
-      final batch = _firestore.batch();
-
-      // 1. Delete request doc
-      batch.delete(_lfgPostsRef.doc(postId).collection('requests').doc(requestId));
-      batch.delete(_squadRef.doc(postId).collection('requests').doc(requestId));
-      if (requestId != userId) {
-        batch.delete(_lfgPostsRef.doc(postId).collection('requests').doc(userId));
-        batch.delete(_squadRef.doc(postId).collection('requests').doc(userId));
-      }
-
-      // 2. Remove from joinRequests array and decrement requestedCount
-      batch.set(_squadRef.doc(postId), {
-        'joinRequests': FieldValue.arrayRemove([userId, requestId]),
-        'requestedCount': safeRequestedDecrement,
-      }, SetOptions(merge: true));
-
-      batch.set(_lfgPostsRef.doc(postId), {
-        'joinRequests': FieldValue.arrayRemove([userId, requestId]),
-        'requestedCount': safeRequestedDecrement,
-      }, SetOptions(merge: true));
-
-      try {
-        batch.set(_legacySquadRef.doc(postId), {
-          'joinRequests': FieldValue.arrayRemove([userId, requestId]),
-          'requestedCount': safeRequestedDecrement,
-        }, SetOptions(merge: true));
-      } catch (_) {}
-
-      await batch.commit();
       debugPrint('[SquadService] Successfully rejected squad request $requestId');
     } catch (e) {
       debugPrint('[SquadService] Error rejecting squad request: $e');
@@ -708,84 +595,52 @@ class SquadService {
 
   Future<void> closeSquadPost(String postId) async {
     try {
-      final batch = _firestore.batch();
-      batch.update(_squadRef.doc(postId), {'isActive': false});
-      batch.update(_lfgPostsRef.doc(postId), {'isActive': false});
-      await batch.commit();
+      final now = DateTime.now();
+      await SupabaseService.client
+          .from('lfg_posts')
+          .update({'isActive': false, 'is_active': false, 'updated_at': now.toIso8601String()})
+          .eq('id', postId);
+
+      await SupabaseService.client
+          .from('squads')
+          .update({'isActive': false, 'is_active': false, 'updated_at': now.toIso8601String()})
+          .eq('id', postId);
+
       debugPrint('[SquadService] Closed squad post $postId');
     } catch (e) {
       debugPrint('[SquadService] Error closing squad post: $e');
-      // Fallback
-      await _squadRef.doc(postId).set({'isActive': false}, SetOptions(merge: true)).catchError((_) {});
-      await _lfgPostsRef.doc(postId).set({'isActive': false}, SetOptions(merge: true)).catchError((_) {});
     }
   }
 
-  /// Delete Permanently:
-  /// Confirms ownerId == auth.uid
-  /// Batch deletes chats/{postId}/messages
-  /// Deletes chats/{postId}
-  /// Batch deletes lfg_posts/{postId}/requests
-  /// Deletes lfg_posts/{postId}
-  /// Deletes squads/{postId}
+  /// Delete Permanently
   Future<void> deleteSquadPermanently({required String postId, required String ownerId}) async {
-    final currentUid = FirebaseAuth.instance.currentUser?.uid ?? GamerAuthService().currentUid;
+    final currentUid = GamerAuthService().currentUid ??
+        SupabaseService.client.auth.currentUser?.id;
     if (currentUid == null || (currentUid != ownerId && ownerId.isNotEmpty)) {
       throw 'Only the squad leader can permanently delete this squad.';
     }
 
     try {
-      // 1. Delete all messages in chats/{postId}/messages
-      final chatRef = _firestore.collection('chats').doc(postId);
+      // 1. Delete messages
       try {
-        final messagesSnap = await chatRef.collection('messages').get();
-        if (messagesSnap.docs.isNotEmpty) {
-          final batch = _firestore.batch();
-          for (final doc in messagesSnap.docs) {
-            batch.delete(doc.reference);
-          }
-          await batch.commit();
-        }
-      } catch (e) {
-        debugPrint('[SquadService] Error deleting messages: $e');
-      }
-
-      // 2. Delete chats/{postId}
-      try {
-        await chatRef.delete();
-      } catch (e) {
-        debugPrint('[SquadService] Error deleting chat doc: $e');
-      }
-
-      // 3. Delete all requests in lfg_posts/{postId}/requests and squads/{postId}/requests
-      try {
-        final reqLfg = await _lfgPostsRef.doc(postId).collection('requests').get();
-        if (reqLfg.docs.isNotEmpty) {
-          final batch = _firestore.batch();
-          for (final doc in reqLfg.docs) {
-            batch.delete(doc.reference);
-          }
-          await batch.commit();
-        }
+        await SupabaseService.client
+            .from('messages')
+            .delete()
+            .or('squad_id.eq.$postId,chat_id.eq.$postId,room_id.eq.$postId');
       } catch (_) {}
 
+      // 2. Delete squad requests
       try {
-        final reqSquad = await _squadRef.doc(postId).collection('requests').get();
-        if (reqSquad.docs.isNotEmpty) {
-          final batch = _firestore.batch();
-          for (final doc in reqSquad.docs) {
-            batch.delete(doc.reference);
-          }
-          await batch.commit();
-        }
+        await SupabaseService.client
+            .from('squad_requests')
+            .delete()
+            .or('postId.eq.$postId,post_id.eq.$postId');
       } catch (_) {}
 
-      // 4. Delete lfg_posts and squads docs
-      final batch = _firestore.batch();
-      batch.delete(_lfgPostsRef.doc(postId));
-      batch.delete(_squadRef.doc(postId));
-      batch.delete(_legacySquadRef.doc(postId));
-      await batch.commit();
+      // 3. Delete from lfg_posts and squads
+      await SupabaseService.client.from('lfg_posts').delete().eq('id', postId);
+      await SupabaseService.client.from('squads').delete().eq('id', postId);
+
       debugPrint('[SquadService] Permanently deleted squad post $postId');
     } catch (e) {
       debugPrint('[SquadService] Error deleting squad permanently: $e');
@@ -795,17 +650,11 @@ class SquadService {
 
   Future<void> deleteSquadPost(String postId) async {
     try {
-      await _squadRef.doc(postId).delete();
-      try {
-        await _lfgPostsRef.doc(postId).delete();
-      } catch (_) {}
-      try {
-        await _legacySquadRef.doc(postId).delete();
-      } catch (_) {}
+      await SupabaseService.client.from('lfg_posts').delete().eq('id', postId);
+      await SupabaseService.client.from('squads').delete().eq('id', postId);
       debugPrint('[SquadService] Deleted squad post $postId');
     } catch (e) {
       debugPrint('[SquadService] Error deleting squad post: $e');
     }
   }
 }
-

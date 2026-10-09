@@ -1,10 +1,7 @@
 import 'dart:ui' as ui;
 import 'package:flutter/material.dart';
-import 'package:firebase_core/firebase_core.dart';
-import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:easy_localization/easy_localization.dart' hide TextDirection;
-import '../firebase_options.dart';
 import '../models/news_model.dart';
 import '../services/firestore_service.dart';
 import '../services/bookmark_service.dart';
@@ -83,36 +80,11 @@ class _HomeScreenState extends State<HomeScreen> {
 
   Future<void> _initFirebaseAndServices() async {
     try {
-      if (Firebase.apps.isEmpty) {
-        if (DefaultFirebaseOptions.currentPlatform.apiKey.isNotEmpty &&
-            !DefaultFirebaseOptions.currentPlatform.apiKey.contains('Dummy')) {
-          await Firebase.initializeApp(
-            options: DefaultFirebaseOptions.currentPlatform,
-          ).timeout(const Duration(seconds: 3));
-        } else {
-          await Firebase.initializeApp().timeout(const Duration(seconds: 3));
-        }
-      }
-    } catch (_) {
-      try {
-        if (Firebase.apps.isEmpty) {
-          await Firebase.initializeApp().timeout(const Duration(seconds: 3));
-        }
-      } catch (_) {}
-    }
-
-    try {
       await BookmarkService().init().timeout(const Duration(seconds: 2));
     } catch (_) {}
 
     try {
-      FirebaseMessaging.onBackgroundMessage(firebaseMessagingBackgroundHandler);
-    } catch (_) {}
-
-    try {
-      final messaging = FirebaseMessaging.instance;
-      await messaging.requestPermission().timeout(const Duration(seconds: 3));
-      await messaging.subscribeToTopic('all_news').timeout(const Duration(seconds: 3));
+      await NotificationService().initialize().timeout(const Duration(seconds: 3));
     } catch (_) {}
 
     _firestoreService.refreshNews();

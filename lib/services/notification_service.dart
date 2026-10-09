@@ -1,21 +1,10 @@
 import 'dart:convert';
 import 'package:flutter/material.dart';
-import 'package:firebase_core/firebase_core.dart';
-import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:http/http.dart' as http;
 import '../models/news_model.dart';
 import 'firestore_service.dart';
 import 'supabase_service.dart';
-
-/// Top-level background message handler for FCM
-@pragma('vm:entry-point')
-Future<void> firebaseMessagingBackgroundHandler(RemoteMessage message) async {
-  try {
-    await Firebase.initializeApp();
-  } catch (_) {}
-  // FCM automatically handles notification display in system tray when app is in background/killed
-}
 
 class NotificationService {
   static final NotificationService _instance = NotificationService._internal();
@@ -23,14 +12,6 @@ class NotificationService {
   NotificationService._internal();
 
   static final GlobalKey<NavigatorState> navigatorKey = GlobalKey<NavigatorState>();
-
-  FirebaseMessaging? get _fcm {
-    try {
-      return FirebaseMessaging.instance;
-    } catch (_) {
-      return null;
-    }
-  }
 
   final FlutterLocalNotificationsPlugin _localNotifications = FlutterLocalNotificationsPlugin();
 
@@ -52,7 +33,7 @@ class NotificationService {
 
   bool _isInitialized = false;
 
-  /// Initialize Push Notifications on App Launch
+  /// Initialize Push & Local Notifications on App Launch
   Future<void> initialize() async {
     if (_isInitialized) return;
     _isInitialized = true;
@@ -63,49 +44,16 @@ class NotificationService {
     // 2. Setup Local Notifications (for Foreground notification display)
     await _setupLocalNotifications();
 
-    // 3. Subscribe all users to topic 'all_news'
-    await subscribeToAllNewsTopic();
-
-    // 4. Foreground Message Handler
-    try {
-      FirebaseMessaging.onMessage.listen((RemoteMessage message) {
-        _showForegroundNotification(message);
-      });
-    } catch (_) {}
-
-    // 5. Background Notification Tap Handler (App running in background)
-    try {
-      FirebaseMessaging.onMessageOpenedApp.listen((RemoteMessage message) {
-        _handleMessageTap(message.data);
-      });
-    } catch (_) {}
-
-    // 6. Terminated State Notification Tap Handler (App launched from notification)
-    _checkInitialMessage();
-
-    // 7. Listen for newly added Firestore docs in real-time and notify "New: {gameName}"
+    // 3. Listen for newly added news docs in real-time and notify "New: {gameName}"
     _listenForNewNewsDocuments();
 
-    // 8. Listen for squad request / acceptance notifications for current user
+    // 4. Listen for squad request / acceptance notifications for current user
     _listenForSquadNotifications();
   }
 
-  /// Saves FCM device token to Supabase users table
-  Future<void> saveUserFcmToken([String? explicitUid]) async {
-    try {
-      final uid = explicitUid ?? SupabaseService.client.auth.currentUser?.id;
-      if (uid == null || uid.isEmpty) return;
-      final token = await _fcm?.getToken();
-      if (token != null && token.isNotEmpty) {
-        await SupabaseService.client.from('users').update({
-          'fcm_token': token,
-          'updated_at': DateTime.now().toIso8601String(),
-        }).or('id.eq.$uid,uid.eq.$uid');
-      }
-    } catch (e) {
-      debugPrint('[NotificationService] Error saving FCM token to Supabase: $e');
-    }
-  }
+  /// Saves FCM device token to Supabase users table (stub)
+  /// Saves FCM device token to Supabase users table (stub)
+  Future<void> saveUserFcmToken([String? explicitUid]) async {}
 
   /// Real-time listener for current user's squad notifications (e.g. requests, accepts)
   void _listenForSquadNotifications() {
@@ -299,21 +247,9 @@ class NotificationService {
   }
 
   /// Request permissions for iOS and Android 13+ (POST_NOTIFICATIONS)
+  /// Request permissions for iOS and Android 13+ (POST_NOTIFICATIONS)
   Future<void> requestPermissions() async {
     try {
-      final fcm = _fcm;
-      if (fcm != null) {
-        await fcm.requestPermission(
-          alert: true,
-          announcement: false,
-          badge: true,
-          carPlay: false,
-          criticalAlert: false,
-          provisional: false,
-          sound: true,
-        );
-      }
-
       // Setup Android notification channel
       final androidPlugin = _localNotifications.resolvePlatformSpecificImplementation<
           AndroidFlutterLocalNotificationsPlugin>();
@@ -325,14 +261,7 @@ class NotificationService {
   }
 
   /// Subscribe to topic 'all_news'
-  Future<void> subscribeToAllNewsTopic() async {
-    try {
-      final fcm = _fcm;
-      if (fcm != null) {
-        await fcm.subscribeToTopic(topicName);
-      }
-    } catch (_) {}
-  }
+  Future<void> subscribeToAllNewsTopic() async {}
 
   /// Configure flutter_local_notifications plugin
   Future<void> _setupLocalNotifications() async {
@@ -364,25 +293,16 @@ class NotificationService {
   }
 
   /// Check if app was opened from a terminated notification
-  Future<void> _checkInitialMessage() async {
-    try {
-      final initialMessage = await _fcm?.getInitialMessage();
-      if (initialMessage != null) {
-        // Slight delay to allow navigation stack / widget tree to be fully ready
-        Future.delayed(const Duration(milliseconds: 500), () {
-          _handleMessageTap(initialMessage.data);
-        });
-      }
-    } catch (_) {}
-  }
+  Future<void> _checkInitialMessage() async {}
 
   /// Show Foreground Heads-Up Banner Notification with Sound & Vibration
-  Future<void> _showForegroundNotification(RemoteMessage message) async {
-    final notification = message.notification;
-    final data = message.data;
-
-    final title = notification?.title ?? data['title'] ?? 'Games Khabar 🎮';
-    final body = notification?.body ?? data['body'] ?? data['description'] ?? 'Check out the latest gaming update!';
+  Future<void> _showForegroundNotification({
+    required Map<String, dynamic> data,
+    String? title,
+    String? body,
+  }) async {
+    final effectiveTitle = title ?? data['title'] ?? 'Games Khabar 🎮';
+    final effectiveBody = body ?? data['body'] ?? data['description'] ?? 'Check out the latest gaming update!';
 
     final androidDetails = AndroidNotificationDetails(
       _androidChannel.id,

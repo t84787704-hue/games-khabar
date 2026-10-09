@@ -1,6 +1,5 @@
 import 'dart:convert';
 import 'package:flutter/foundation.dart';
-import 'package:games_khabar/compat/cloud_firestore.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../models/tournament_room_model.dart';
 import '../constants/tournament_game_categories.dart';
@@ -15,15 +14,11 @@ class TournamentService extends ChangeNotifier {
     _loadFromLocal();
   }
 
-  final FirebaseFirestore _firestore = FirebaseFirestore.instance;
   final CoinWalletService _walletService = CoinWalletService();
   static const String _storageKey = 'cached_tournament_rooms_v3';
 
   List<TournamentRoom> _rooms = [];
   List<TournamentRoom> get rooms => List.unmodifiable(_rooms);
-
-  CollectionReference get _roomsRef => _firestore.collection('tournament_rooms');
-  CollectionReference get _notificationsRef => _firestore.collection('notifications');
 
   /// Load cached rooms from local storage
   Future<void> _loadFromLocal() async {
@@ -113,12 +108,12 @@ class TournamentService extends ChangeNotifier {
     }
   }
 
-  /// Actually adds room to rooms list, calls notifyListeners(), saves to local storage, and syncs to Firestore
+  /// Actually adds room to rooms list, calls notifyListeners(), saves to local storage, and syncs to Supabase
   Future<TournamentRoom> publishRoom(TournamentRoom room) async {
     debugPrint('TournamentService: publishRoom() called for room "${room.title}"');
-    final doc = room.id.isNotEmpty ? _roomsRef.doc(room.id) : _roomsRef.doc();
+    final newId = room.id.isNotEmpty ? room.id : 'room_${DateTime.now().millisecondsSinceEpoch}';
     final publishedRoom = room.copyWith(
-      id: room.id.isNotEmpty ? room.id : doc.id,
+      id: newId,
       createdAt: room.createdAt ?? DateTime.now(),
       isLive: true,
       status: 'OPEN',
@@ -134,11 +129,11 @@ class TournamentService extends ChangeNotifier {
     // 3. Call notifyListeners()
     notifyListeners();
 
-    // 4. Sync to Firestore in background
+    // 4. Sync to Supabase tournament_rooms table
     try {
-      await doc.set(publishedRoom.toMap());
+      await SupabaseService.client.from('tournament_rooms').upsert(publishedRoom.toMap());
     } catch (e) {
-      debugPrint('TournamentService: publishRoom Firestore sync notice: $e');
+      debugPrint('TournamentService: publishRoom Supabase sync notice: $e');
     }
 
     // 5. Sync to Supabase rooms table
@@ -170,34 +165,39 @@ class TournamentService extends ChangeNotifier {
     await publishRoom(room);
   }
 
-  /// Fetches rooms from Firestore and local storage, updates rooms list, and notifies listeners
+  /// Fetches rooms from Supabase and local storage, updates rooms list, and notifies listeners
   Future<List<TournamentRoom>> fetchRooms() async {
     try {
       if (_rooms.isEmpty) {
         await _loadFromLocal();
       }
 
-      final snap = await _roomsRef
-          .where('isLive', isEqualTo: true)
-          .orderBy('startTime', descending: false)
-          .get();
+      final res = await SupabaseService.client
+          .from('tournament_rooms')
+          .select()
+          .eq('isLive', true)
+          .order('startTime', ascending: true);
 
-      final firestoreRooms = snap.docs.map((d) => TournamentRoom.fromFirestore(d)).toList();
+      final supabaseRooms = (res as List).map((d) => TournamentRoom.fromFirestore(d)).toList();
 
       // Deduplicate by ID and auto-delete completed rooms older than 5 minutes
       final Map<String, TournamentRoom> roomMap = {};
       for (final r in _rooms) {
         if (r.isExpiredCompleted) {
-          _roomsRef.doc(r.id).delete().catchError((_) {});
-          FirebaseFirestore.instance.collection('rooms').doc(r.id).delete().catchError((_) {});
+          try {
+            await SupabaseService.client.from('tournament_rooms').delete().eq('id', r.id);
+            await SupabaseService.client.from('rooms').delete().eq('id', r.id);
+          } catch (_) {}
           continue;
         }
         if (r.isLive) roomMap[r.id] = r;
       }
-      for (final r in firestoreRooms) {
+      for (final r in supabaseRooms) {
         if (r.isExpiredCompleted) {
-          _roomsRef.doc(r.id).delete().catchError((_) {});
-          FirebaseFirestore.instance.collection('rooms').doc(r.id).delete().catchError((_) {});
+          try {
+            await SupabaseService.client.from('tournament_rooms').delete().eq('id', r.id);
+            await SupabaseService.client.from('rooms').delete().eq('id', r.id);
+          } catch (_) {}
           continue;
         }
         roomMap[r.id] = r;
@@ -219,13 +219,14 @@ class TournamentService extends ChangeNotifier {
   }
 
   Stream<List<TournamentRoom>> getLiveRoomsStream({String? gameName}) {
-    Query query = _roomsRef.where('isLive', isEqualTo: true);
-
-    return query
-        .orderBy('startTime', descending: false)
-        .snapshots()
+    return SupabaseService.client
+        .from('tournament_rooms')
+        .stream(primaryKey: ['id'])
         .map((snap) {
-          final streamRooms = snap.docs.map((d) => TournamentRoom.fromFirestore(d)).toList();
+          final streamRooms = snap
+              .where((d) => d['isLive'] == true)
+              .map((d) => TournamentRoom.fromFirestore(d))
+              .toList();
           final Map<String, TournamentRoom> map = {};
           for (final r in _rooms) {
             if (!r.isExpiredCompleted) {
@@ -234,13 +235,14 @@ class TournamentService extends ChangeNotifier {
           }
           for (final sr in streamRooms) {
             if (sr.isExpiredCompleted) {
-              _roomsRef.doc(sr.id).delete().catchError((_) {});
-              FirebaseFirestore.instance.collection('rooms').doc(sr.id).delete().catchError((_) {});
+              SupabaseService.client.from('tournament_rooms').delete().eq('id', sr.id).catchError((_) {});
+              SupabaseService.client.from('rooms').delete().eq('id', sr.id).catchError((_) {});
               continue;
             }
             map[sr.id] = sr;
           }
           _rooms = map.values.toList();
+          _rooms.sort((a, b) => (b.startTime).compareTo(a.startTime));
 
           if (gameName != null && gameName.isNotEmpty && gameName != 'All Games') {
             final target = gameName.toLowerCase().trim();
@@ -268,8 +270,14 @@ class TournamentService extends ChangeNotifier {
       if (index != -1) {
         targetRoom = _rooms[index];
       } else {
-        final doc = await _roomsRef.doc(roomId).get();
-        if (doc.exists) targetRoom = TournamentRoom.fromFirestore(doc);
+        try {
+          final res = await SupabaseService.client
+              .from('tournament_rooms')
+              .select()
+              .eq('id', roomId)
+              .maybeSingle();
+          if (res != null) targetRoom = TournamentRoom.fromFirestore(res);
+        } catch (_) {}
       }
 
       if (targetRoom == null) return false;
@@ -304,23 +312,30 @@ class TournamentService extends ChangeNotifier {
       await _saveToLocal();
       notifyListeners();
 
-      // Update Firestore
-      await _roomsRef.doc(roomId).update({
-        'joinedPlayers': FieldValue.arrayUnion([playerUid]),
-        'joinedPlayerNames.$playerUid': playerName,
-        'escrowCoins': updatedRoom.escrowCoins,
-      });
+      // Update Supabase
+      try {
+        await SupabaseService.client.from('tournament_rooms').update({
+          'joinedPlayers': updatedRoom.joinedPlayers,
+          'joinedPlayerNames': updatedRoom.joinedPlayerNames,
+          'escrowCoins': updatedRoom.escrowCoins,
+          'updatedAt': DateTime.now().toIso8601String(),
+        }).eq('id', roomId);
+      } catch (e) {
+        debugPrint('TournamentService: Supabase join update error: $e');
+      }
 
       if (hostUid != playerUid) {
-        await _notificationsRef.add({
-          'recipientUid': hostUid,
-          'senderUid': playerUid,
-          'type': 'room_joined',
-          'message': 'joined your Custom Tournament ($playerName)!',
-          'roomId': roomId,
-          'read': false,
-          'createdAt': FieldValue.serverTimestamp(),
-        });
+        try {
+          await SupabaseService.client.from('notifications').insert({
+            'recipientUid': hostUid,
+            'senderUid': playerUid,
+            'type': 'room_joined',
+            'message': 'joined your Custom Tournament ($playerName)!',
+            'roomId': roomId,
+            'read': false,
+            'createdAt': DateTime.now().toIso8601String(),
+          });
+        } catch (_) {}
       }
 
       // Sync to Supabase room_members table
@@ -364,9 +379,12 @@ class TournamentService extends ChangeNotifier {
         }
       }
 
-      await _roomsRef.doc(roomId).update({
-        'joinedPlayers': FieldValue.arrayRemove([playerUid]),
-      });
+      try {
+        await SupabaseService.client.from('tournament_rooms').update({
+          'joinedPlayers': _rooms.firstWhere((r) => r.id == roomId, orElse: () => _rooms.first).joinedPlayers,
+          'updatedAt': DateTime.now().toIso8601String(),
+        }).eq('id', roomId);
+      } catch (_) {}
 
       // Sync removal from Supabase room_members
       try {
@@ -506,27 +524,30 @@ class TournamentService extends ChangeNotifier {
       }
 
       try {
-        await _roomsRef.doc(roomId).set({
+        final nowStr = now.toIso8601String();
+        await SupabaseService.client.from('tournament_rooms').update({
           'status': 'completed',
           'rewardStatus': 'sent',
           'winnerUid': combinedWinnerUid,
           'winnerName': combinedWinnerName,
-          'completedAt': FieldValue.serverTimestamp(),
+          'completedAt': nowStr,
           'isLive': false,
-          'updatedAt': FieldValue.serverTimestamp(),
-        }, SetOptions(merge: true));
+          'updatedAt': nowStr,
+        }).eq('id', roomId);
 
-        await FirebaseFirestore.instance.collection('rooms').doc(roomId).set({
-          'status': 'completed',
-          'rewardStatus': 'sent',
-          'winnerId': combinedWinnerUid,
-          'winnerName': combinedWinnerName,
-          'completedAt': FieldValue.serverTimestamp(),
-          'isCompleted': true,
-          'isLive': false,
-        }, SetOptions(merge: true));
+        try {
+          await SupabaseService.client.from('rooms').update({
+            'status': 'completed',
+            'rewardStatus': 'sent',
+            'winnerId': combinedWinnerUid,
+            'winnerName': combinedWinnerName,
+            'completedAt': nowStr,
+            'isCompleted': true,
+            'isLive': false,
+          }).eq('id', roomId);
+        } catch (_) {}
       } catch (e) {
-        debugPrint('TournamentService Firestore update error: $e');
+        debugPrint('TournamentService Supabase update error: $e');
       }
 
       return true;
@@ -559,24 +580,27 @@ class TournamentService extends ChangeNotifier {
       notifyListeners();
     }
     try {
-      await _roomsRef.doc(roomId).set({
+      final nowStr = now.toIso8601String();
+      await SupabaseService.client.from('tournament_rooms').update({
         'status': 'reward_waiting',
         'rewardStatus': 'pending',
         'winProofUrl': winProofUrl,
-        'winProofUploadedAt': FieldValue.serverTimestamp(),
+        'winProofUploadedAt': nowStr,
         if (winnerUid != null) 'winnerUid': winnerUid,
         if (winnerName != null) 'winnerName': winnerName,
-        'updatedAt': FieldValue.serverTimestamp(),
-      }, SetOptions(merge: true));
+        'updatedAt': nowStr,
+      }).eq('id', roomId);
 
-      await FirebaseFirestore.instance.collection('rooms').doc(roomId).set({
-        'status': 'reward_waiting',
-        'rewardStatus': 'pending',
-        'winProofUrl': winProofUrl,
-        'winProofUploadedAt': FieldValue.serverTimestamp(),
-        if (winnerUid != null) 'winnerId': winnerUid,
-        if (winnerName != null) 'winnerName': winnerName,
-      }, SetOptions(merge: true));
+      try {
+        await SupabaseService.client.from('rooms').update({
+          'status': 'reward_waiting',
+          'rewardStatus': 'pending',
+          'winProofUrl': winProofUrl,
+          'winProofUploadedAt': nowStr,
+          if (winnerUid != null) 'winnerId': winnerUid,
+          if (winnerName != null) 'winnerName': winnerName,
+        }).eq('id', roomId);
+      } catch (_) {}
     } catch (e) {
       debugPrint('TournamentService markRewardWaiting error: $e');
     }
@@ -599,18 +623,21 @@ class TournamentService extends ChangeNotifier {
       notifyListeners();
     }
     try {
-      await _roomsRef.doc(roomId).set({
+      final nowStr = DateTime.now().toIso8601String();
+      await SupabaseService.client.from('tournament_rooms').update({
         'status': 'proof_rejected',
         'rewardStatus': 'rejected_by_app',
         'winProofUrl': winProofUrl,
-        'updatedAt': FieldValue.serverTimestamp(),
-      }, SetOptions(merge: true));
+        'updatedAt': nowStr,
+      }).eq('id', roomId);
 
-      await FirebaseFirestore.instance.collection('rooms').doc(roomId).set({
-        'status': 'proof_rejected',
-        'rewardStatus': 'rejected_by_app',
-        'winProofUrl': winProofUrl,
-      }, SetOptions(merge: true));
+      try {
+        await SupabaseService.client.from('rooms').update({
+          'status': 'proof_rejected',
+          'rewardStatus': 'rejected_by_app',
+          'winProofUrl': winProofUrl,
+        }).eq('id', roomId);
+      } catch (_) {}
     } catch (e) {
       debugPrint('TournamentService markProofRejected error: $e');
     }
@@ -631,26 +658,29 @@ class TournamentService extends ChangeNotifier {
       notifyListeners();
     }
     try {
-      await _roomsRef.doc(roomId).update({
+      final nowStr = DateTime.now().toIso8601String();
+      await SupabaseService.client.from('tournament_rooms').update({
         'status': 'IN_PROGRESS',
         'rewardStatus': 'idle',
-        'winProofUrl': FieldValue.delete(),
-        'winProofUploadedAt': FieldValue.delete(),
-        'updatedAt': FieldValue.serverTimestamp(),
-      });
+        'winProofUrl': null,
+        'winProofUploadedAt': null,
+        'updatedAt': nowStr,
+      }).eq('id', roomId);
 
-      await FirebaseFirestore.instance.collection('rooms').doc(roomId).update({
-        'status': 'IN_PROGRESS',
-        'rewardStatus': 'idle',
-        'proofUrl': FieldValue.delete(),
-        'winProofUrl': FieldValue.delete(),
-        'winProofUploadedAt': FieldValue.delete(),
-        'ocrStatus': FieldValue.delete(),
-        'ocrScore': 0,
-        'ocrText': FieldValue.delete(),
-        'detectedScreenshotName': FieldValue.delete(),
-        'accountIdName': FieldValue.delete(),
-      });
+      try {
+        await SupabaseService.client.from('rooms').update({
+          'status': 'IN_PROGRESS',
+          'rewardStatus': 'idle',
+          'proofUrl': null,
+          'winProofUrl': null,
+          'winProofUploadedAt': null,
+          'ocrStatus': null,
+          'ocrScore': 0,
+          'ocrText': null,
+          'detectedScreenshotName': null,
+          'accountIdName': null,
+        }).eq('id', roomId);
+      } catch (_) {}
     } catch (e) {
       debugPrint('TournamentService clearWinProof error: $e');
     }
@@ -666,9 +696,13 @@ class TournamentService extends ChangeNotifier {
         room = _rooms[index];
       } else {
         try {
-          final doc = await _roomsRef.doc(roomId).get();
-          if (doc.exists) {
-            room = TournamentRoom.fromFirestore(doc);
+          final res = await SupabaseService.client
+              .from('tournament_rooms')
+              .select()
+              .eq('id', roomId)
+              .maybeSingle();
+          if (res != null) {
+            room = TournamentRoom.fromFirestore(res);
           }
         } catch (_) {}
       }
@@ -697,11 +731,11 @@ class TournamentService extends ChangeNotifier {
       }
 
       try {
-        await _roomsRef.doc(roomId).set({
+        await SupabaseService.client.from('tournament_rooms').update({
           'status': 'EXPIRED',
           'isLive': false,
-          'updatedAt': FieldValue.serverTimestamp(),
-        }, SetOptions(merge: true));
+          'updatedAt': DateTime.now().toIso8601String(),
+        }).eq('id', roomId);
       } catch (_) {}
     } catch (e) {
       debugPrint('TournamentService cancelOrExpireRoom error: $e');
@@ -725,18 +759,18 @@ class TournamentService extends ChangeNotifier {
         notifyListeners();
       }
 
-      await _roomsRef.doc(roomId).update({
+      await SupabaseService.client.from('tournament_rooms').update({
         'roomId': inGameRoomId,
         'password': password,
         'isRoomRevealed': true,
-      });
+      }).eq('id', roomId);
     } catch (e) {
       debugPrint('TournamentService: updateRoomCredentials error: $e');
     }
   }
 
   /// Host starts the match:
-  /// Updates status to 'IN_PROGRESS', syncs local & Firestore, notifies participants
+  /// Updates status to 'IN_PROGRESS', syncs local & Supabase, notifies participants
   Future<bool> startMatch(String roomId) async {
     try {
       debugPrint('TournamentService: startMatch() for roomId: $roomId');
@@ -751,12 +785,13 @@ class TournamentService extends ChangeNotifier {
         notifyListeners();
       }
 
-      await _roomsRef.doc(roomId).set({
+      final nowStr = DateTime.now().toIso8601String();
+      await SupabaseService.client.from('tournament_rooms').update({
         'status': 'IN_PROGRESS',
         'isLive': true,
-        'matchStartedAt': FieldValue.serverTimestamp(),
-        'updatedAt': FieldValue.serverTimestamp(),
-      }, SetOptions(merge: true));
+        'matchStartedAt': nowStr,
+        'updatedAt': nowStr,
+      }).eq('id', roomId);
 
       return true;
     } catch (e) {
@@ -771,7 +806,11 @@ class TournamentService extends ChangeNotifier {
       await _saveToLocal();
       notifyListeners();
 
-      await _roomsRef.doc(roomId).update({'isLive': false});
+      await SupabaseService.client.from('tournament_rooms').update({'isLive': false}).eq('id', roomId);
+    } catch (e) {
+      debugPrint('TournamentService: closeRoom error: $e');
+    }
+  }
     } catch (e) {
       debugPrint('TournamentService: closeRoom error: $e');
     }

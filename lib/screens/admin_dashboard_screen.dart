@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
-import 'package:games_khabar/compat/firebase_auth.dart';
-import 'package:games_khabar/compat/cloud_firestore.dart';
+import '../services/supabase_service.dart';
 import '../models/news_model.dart';
 import '../services/firestore_service.dart';
 import '../services/auto_news_scraper.dart';
@@ -335,10 +334,10 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
           maxChildSize: 0.95,
           expand: false,
           builder: (context, scrollController) {
-            return StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
-              stream: FirebaseFirestore.instance.collection('scraper_sources').snapshots(),
+            return StreamBuilder<List<Map<String, dynamic>>>(
+              stream: SupabaseService.client.from('scraper_sources').stream(primaryKey: ['id']),
               builder: (context, snapshot) {
-                final docs = snapshot.data?.docs ?? [];
+                final docs = snapshot.data ?? [];
                 
                 // If query is ready but empty, auto seed once
                 if (snapshot.connectionState == ConnectionState.active && docs.isEmpty) {
@@ -598,8 +597,8 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
                                   itemCount: docs.length,
                                   separatorBuilder: (_, __) => const SizedBox(height: 10),
                                   itemBuilder: (context, idx) {
-                                    final doc = docs[idx];
-                                    final data = doc.data();
+                                    final data = docs[idx];
+                                    final docId = (data['id'] ?? '').toString();
                                     final name = data['name'] as String? ?? 'Gaming Feed';
                                     final url = data['url'] as String? ?? '';
                                     final category = (data['category'] ?? data['categoryHint'] ?? 'Gaming News') as String;
@@ -689,14 +688,14 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
                                             inactiveThumbColor: textGray,
                                             inactiveTrackColor: cardDark2,
                                             onChanged: (val) {
-                                              AutoNewsScraper.toggleFirestoreSource(doc.id, val);
+                                              AutoNewsScraper.toggleFirestoreSource(docId, val);
                                             },
                                           ),
                                           IconButton(
                                             icon: const Icon(Icons.delete_outline, color: alertRed, size: 20),
                                             tooltip: 'Delete Source',
                                             onPressed: () async {
-                                              await AutoNewsScraper.deleteFirestoreSource(doc.id);
+                                              await AutoNewsScraper.deleteFirestoreSource(docId);
                                             },
                                           ),
                                         ],
@@ -819,7 +818,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
             icon: Icon(Icons.logout_rounded, color: alertRed, size: 22),
             onPressed: () async {
               try {
-                await FirebaseAuth.instance.signOut();
+                await SupabaseService.client.auth.signOut();
               } catch (_) {}
               if (context.mounted) {
                 Navigator.pushReplacementNamed(context, '/');

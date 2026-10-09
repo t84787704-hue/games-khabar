@@ -3,7 +3,7 @@ import 'dart:convert';
 import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
 import 'package:html/parser.dart' as html_parser;
-import 'package:games_khabar/compat/cloud_firestore.dart';
+import 'supabase_service.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../data/fallback_images.dart';
 import '../services/translation_service.dart';
@@ -161,17 +161,18 @@ class AutoNewsScraper {
 
   AutoNewsScraper._internal();
 
-  /// Seed 10 default sources to Firestore 'rss_sources' and 'scraper_sources' collections if empty
+  /// Seed 10 default sources to Supabase 'scraper_sources' and 'rss_sources' collections if empty
   static Future<void> seedDefaultSourcesIfEmpty() async {
     try {
-      final snap = await FirebaseFirestore.instance.collection('rss_sources').limit(1).get();
-      if (snap.docs.isEmpty) {
-        final batch = FirebaseFirestore.instance.batch();
+      final snap = await SupabaseService.client
+          .from('scraper_sources')
+          .select('id')
+          .limit(1);
+      if (snap.isEmpty) {
         for (int i = 0; i < defaultFirestoreSources.length; i++) {
           final s = defaultFirestoreSources[i];
-          final docRef1 = FirebaseFirestore.instance.collection('rss_sources').doc(s['id'] as String);
-          final docRef2 = FirebaseFirestore.instance.collection('scraper_sources').doc(s['id'] as String);
           final data = {
+            'id': s['id'],
             'name': s['name'],
             'url': s['url'],
             'category': s['category'],
@@ -179,35 +180,30 @@ class AutoNewsScraper {
             'isActive': true,
             'isEnabled': true,
             'order': s['order'] ?? (i + 1),
-            'createdAt': FieldValue.serverTimestamp(),
+            'createdAt': DateTime.now().toIso8601String(),
           };
-          batch.set(docRef1, data);
-          batch.set(docRef2, data);
+          await SupabaseService.client.from('scraper_sources').upsert(data);
+          try {
+            await SupabaseService.client.from('rss_sources').upsert(data);
+          } catch (_) {}
         }
-        await batch.commit();
       }
     } catch (e) {
       debugPrint('Error seeding default sources: $e');
     }
   }
 
-  /// Reset to 10 default sources in Firestore
+  /// Reset to 10 default sources in Supabase
   static Future<void> resetDefaultSources() async {
     try {
-      final snap1 = await FirebaseFirestore.instance.collection('rss_sources').get();
-      final snap2 = await FirebaseFirestore.instance.collection('scraper_sources').get();
-      final batch = FirebaseFirestore.instance.batch();
-      for (final doc in snap1.docs) {
-        batch.delete(doc.reference);
-      }
-      for (final doc in snap2.docs) {
-        batch.delete(doc.reference);
-      }
+      try {
+        await SupabaseService.client.from('scraper_sources').delete().neq('id', '___');
+        await SupabaseService.client.from('rss_sources').delete().neq('id', '___');
+      } catch (_) {}
       for (int i = 0; i < defaultFirestoreSources.length; i++) {
         final s = defaultFirestoreSources[i];
-        final docRef1 = FirebaseFirestore.instance.collection('rss_sources').doc(s['id'] as String);
-        final docRef2 = FirebaseFirestore.instance.collection('scraper_sources').doc(s['id'] as String);
         final data = {
+          'id': s['id'],
           'name': s['name'],
           'url': s['url'],
           'category': s['category'],
@@ -215,18 +211,19 @@ class AutoNewsScraper {
           'isActive': true,
           'isEnabled': true,
           'order': s['order'] ?? (i + 1),
-          'createdAt': FieldValue.serverTimestamp(),
+          'createdAt': DateTime.now().toIso8601String(),
         };
-        batch.set(docRef1, data);
-        batch.set(docRef2, data);
+        await SupabaseService.client.from('scraper_sources').upsert(data);
+        try {
+          await SupabaseService.client.from('rss_sources').upsert(data);
+        } catch (_) {}
       }
-      await batch.commit();
     } catch (e) {
       debugPrint('Error resetting default sources: $e');
     }
   }
 
-  /// Add a source to Firestore 'rss_sources' and 'scraper_sources'
+  /// Add a source to Supabase 'rss_sources' and 'scraper_sources'
   static Future<void> addFirestoreSource({
     required String name,
     required String url,
@@ -236,7 +233,9 @@ class AutoNewsScraper {
     if (cleanUrl.isEmpty) return;
 
     try {
+      final docId = 'source_${DateTime.now().millisecondsSinceEpoch}';
       final data = {
+        'id': docId,
         'name': name.trim().isEmpty ? 'Custom RSS Feed' : name.trim(),
         'url': cleanUrl,
         'category': category.trim().isEmpty ? 'Gaming News' : category.trim(),
@@ -244,36 +243,42 @@ class AutoNewsScraper {
         'isActive': true,
         'isEnabled': true,
         'order': DateTime.now().millisecondsSinceEpoch,
-        'createdAt': FieldValue.serverTimestamp(),
+        'createdAt': DateTime.now().toIso8601String(),
       };
-      await FirebaseFirestore.instance.collection('rss_sources').add(data);
-      await FirebaseFirestore.instance.collection('scraper_sources').add(data);
+      await SupabaseService.client.from('scraper_sources').upsert(data);
+      try {
+        await SupabaseService.client.from('rss_sources').upsert(data);
+      } catch (_) {}
     } catch (e) {
       debugPrint('Error adding source: $e');
     }
   }
 
-  /// Delete a source from Firestore
+  /// Delete a source from Supabase
   static Future<void> deleteFirestoreSource(String docId) async {
     try {
-      await FirebaseFirestore.instance.collection('rss_sources').doc(docId).delete();
-      await FirebaseFirestore.instance.collection('scraper_sources').doc(docId).delete();
+      await SupabaseService.client.from('scraper_sources').delete().or('id.eq.$docId');
+      try {
+        await SupabaseService.client.from('rss_sources').delete().or('id.eq.$docId');
+      } catch (_) {}
     } catch (e) {
       debugPrint('Error deleting source: $e');
     }
   }
 
-  /// Toggle source enabled state in Firestore
+  /// Toggle source enabled state in Supabase
   static Future<void> toggleFirestoreSource(String docId, bool isEnabled) async {
     try {
-      await FirebaseFirestore.instance.collection('rss_sources').doc(docId).update({
+      await SupabaseService.client.from('scraper_sources').update({
         'isActive': isEnabled,
         'isEnabled': isEnabled,
-      });
-      await FirebaseFirestore.instance.collection('scraper_sources').doc(docId).update({
-        'isActive': isEnabled,
-        'isEnabled': isEnabled,
-      });
+      }).or('id.eq.$docId');
+      try {
+        await SupabaseService.client.from('rss_sources').update({
+          'isActive': isEnabled,
+          'isEnabled': isEnabled,
+        }).or('id.eq.$docId');
+      } catch (_) {}
     } catch (e) {
       debugPrint('Error toggling source: $e');
     }
@@ -289,9 +294,9 @@ class AutoNewsScraper {
   Future<void> _loadSources() async {
     try {
       await seedDefaultSourcesIfEmpty();
-      final snap = await FirebaseFirestore.instance.collection(collectionName).get();
-      if (snap.docs.isNotEmpty) {
-        final list = snap.docs.map((d) => RssSource.fromJson(d.data(), d.id)).toList();
+      final snap = await SupabaseService.client.from(collectionName).select();
+      if (snap.isNotEmpty) {
+        final list = snap.map((d) => RssSource.fromJson(d, (d['id'] ?? '').toString())).toList();
         sourcesNotifier.value = list;
         return;
       }
@@ -575,18 +580,17 @@ class AutoNewsScraper {
     return result.trim().isNotEmpty ? result : clean;
   }
 
-  /// Duplicate check in Firestore
+  /// Duplicate check in Supabase
   Future<bool> _checkFirestoreDuplicate(String sourceUrl) async {
     try {
-      final db = FirebaseFirestore.instance;
-      final query = await db
-          .collection('news')
-          .where('sourceUrl', isEqualTo: sourceUrl)
+      final query = await SupabaseService.client
+          .from('news')
+          .select('id')
+          .or('sourceUrl.eq.$sourceUrl,source_url.eq.$sourceUrl')
           .limit(1)
-          .get()
           .timeout(const Duration(seconds: 4));
 
-      return query.docs.isNotEmpty;
+      return query.isNotEmpty;
     } catch (_) {
       return false;
     }
@@ -664,15 +668,14 @@ class AutoNewsScraper {
     );
   }
 
-  /// One-time migration function that updates existing Firestore news documents
+  /// One-time migration function that updates existing news documents in Supabase
   /// where imageUrl is empty or matches category default image.
   Future<int> fixOldNewsImages() async {
     int updatedCount = 0;
     try {
-      final db = FirebaseFirestore.instance;
-      final snap = await db.collection('news').get();
-      for (final doc in snap.docs) {
-        final data = doc.data();
+      final snap = await SupabaseService.client.from('news').select();
+      for (final data in snap) {
+        final docId = (data['id'] ?? '').toString();
         final rawImg = (data['imageUrl'] ?? '').toString().trim();
         final sourceUrl = (data['sourceUrl'] ?? '').toString().trim();
         final category = (data['category'] ?? 'Gaming News').toString();
@@ -696,14 +699,14 @@ class AutoNewsScraper {
               category: category,
               title: title,
               content: content,
-              docId: doc.id,
+              docId: docId,
             );
           }
 
           if (newImg.isNotEmpty && newImg != rawImg) {
-            await doc.reference.update({'imageUrl': newImg});
+            await SupabaseService.client.from('news').update({'imageUrl': newImg}).or('id.eq.$docId');
             updatedCount++;
-            debugPrint('AutoNewsScraper: Fixed image for news doc ${doc.id} ($category): $newImg');
+            debugPrint('AutoNewsScraper: Fixed image for news doc $docId ($category): $newImg');
           }
         }
       }
@@ -881,7 +884,7 @@ class AutoNewsScraper {
     return noTags.replaceAll(RegExp(r'\s+'), ' ').trim();
   }
 
-  /// Save to Firestore with isAuto: true
+  /// Save to Supabase with isAuto: true
   Future<bool> _saveToFirestore({
     required Map<String, String> titleMap,
     required Map<String, String> descriptionMap,
@@ -891,15 +894,18 @@ class AutoNewsScraper {
     String? videoUrl,
   }) async {
     try {
-      final db = FirebaseFirestore.instance;
-      await db.collection('news').add({
+      final newId = 'news_${DateTime.now().millisecondsSinceEpoch}_${sourceUrl.hashCode.abs()}';
+      final nowStr = DateTime.now().toIso8601String();
+      await SupabaseService.client.from('news').upsert({
+        'id': newId,
         'title': titleMap,
         'content': descriptionMap,
         'description': descriptionMap,
         'category': category,
         'imageUrl': imageUrl,
         'videoUrl': videoUrl ?? '',
-        'timestamp': FieldValue.serverTimestamp(),
+        'timestamp': nowStr,
+        'created_at': nowStr,
         'isPublished': true,
         'isAuto': true,
         'views': 0,
@@ -913,7 +919,7 @@ class AutoNewsScraper {
       FirestoreService().refreshNews();
       return true;
     } catch (e) {
-      debugPrint('Failed to save scraped news to Firestore: $e');
+      debugPrint('Failed to save scraped news to Supabase: $e');
       return false;
     }
   }

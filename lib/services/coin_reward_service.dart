@@ -1,9 +1,9 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
-import 'package:games_khabar/compat/cloud_firestore.dart';
-import 'package:games_khabar/compat/firebase_auth.dart';
 import 'package:google_mobile_ads/google_mobile_ads.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'supabase_service.dart';
+import 'gamer_auth_service.dart';
 
 class CoinRewardService {
   static final CoinRewardService _instance = CoinRewardService._internal();
@@ -34,7 +34,7 @@ class CoinRewardService {
   double get hiddenRevenueRs => _hiddenRevenueRs;
 
   bool _isInitialized = false;
-  StreamSubscription<DocumentSnapshot<Map<String, dynamic>>>? _userSub;
+  StreamSubscription<List<Map<String, dynamic>>>? _userSub;
 
   /// Timezone helper for Asia/Karachi (UTC+5, Pakistan Standard Time)
   static String todayPakistanDate() {
@@ -51,24 +51,18 @@ class CoinRewardService {
       final prefs = await SharedPreferences.getInstance();
 
       // Determine or create User ID
-      final authUser = FirebaseAuth.instance.currentUser;
-      if (authUser != null && authUser.uid.isNotEmpty) {
-        _userId = authUser.uid;
+      final currentUid = GamerAuthService().currentUid ?? SupabaseService.client.auth.currentUser?.id;
+      if (currentUid != null && currentUid.isNotEmpty) {
+        _userId = currentUid;
       } else {
-        // Attempt anonymous login or persistent ID fallback
-        try {
-          final anonCred = await FirebaseAuth.instance.signInAnonymously();
-          _userId = anonCred.user?.uid ?? '';
-        } catch (_) {
-          _userId = prefs.getString(_prefsUserIdKey) ?? '';
-          if (_userId.isEmpty) {
-            _userId = 'gk_user_${DateTime.now().millisecondsSinceEpoch}';
-            await prefs.setString(_prefsUserIdKey, _userId);
-          }
+        _userId = prefs.getString(_prefsUserIdKey) ?? '';
+        if (_userId.isEmpty) {
+          _userId = 'gk_user_${DateTime.now().millisecondsSinceEpoch}';
+          await prefs.setString(_prefsUserIdKey, _userId);
         }
       }
 
-      // Initialize Firestore document if not exists
+      // Initialize document if not exists
       await _ensureUserDocExists();
 
       // Listen to real-time user document changes
@@ -90,40 +84,50 @@ class CoinRewardService {
   /// Ensure users/{uid} document exists with all required fields
   Future<void> _ensureUserDocExists() async {
     if (_userId.isEmpty) return;
-    final userRef = FirebaseFirestore.instance.collection('users').doc(_userId);
-    final doc = await userRef.get();
     final today = todayPakistanDate();
+    try {
+      final res = await SupabaseService.client
+          .from('users')
+          .select()
+          .or('id.eq.$_userId,uid.eq.$_userId')
+          .maybeSingle();
 
-    if (!doc.exists) {
-      await userRef.set({
-        'coins': 100,
-        'adImpressions': 0,
-        'lastAdTime': FieldValue.serverTimestamp(),
-        'todayNewsCount': 0,
-        'todayPostCount': 0,
-        'lastEarnDate': today,
-        'dailyLoginDate': '',
-        'totalAdsToday': 0,
-        'totalAdsYesterday': 0,
-        'createdAt': FieldValue.serverTimestamp(),
-      }, SetOptions(merge: true));
-    } else {
-      final data = doc.data() ?? {};
-      if (data['coins'] == null) {
-        await userRef.set({'coins': 100}, SetOptions(merge: true));
-      }
-      // Check if lastEarnDate is from a previous day and needs counter rotation
-      final lastEarn = data['lastEarnDate'] as String? ?? '';
-      if (lastEarn != today) {
-        final totalToday = (data['totalAdsToday'] as num?)?.toInt() ?? 0;
-        await userRef.update({
+      if (res == null) {
+        await SupabaseService.client.from('users').upsert({
+          'id': _userId,
+          'uid': _userId,
+          'coins': 100,
+          'adImpressions': 0,
+          'lastAdTime': DateTime.now().toIso8601String(),
           'todayNewsCount': 0,
           'todayPostCount': 0,
-          'totalAdsYesterday': totalToday,
-          'totalAdsToday': 0,
           'lastEarnDate': today,
+          'dailyLoginDate': '',
+          'totalAdsToday': 0,
+          'totalAdsYesterday': 0,
+          'created_at': DateTime.now().toIso8601String(),
         });
+      } else {
+        if (res['coins'] == null) {
+          await SupabaseService.client
+              .from('users')
+              .update({'coins': 100})
+              .or('id.eq.$_userId,uid.eq.$_userId');
+        }
+        final lastEarn = res['lastEarnDate'] as String? ?? '';
+        if (lastEarn != today) {
+          final totalToday = (res['totalAdsToday'] as num?)?.toInt() ?? 0;
+          await SupabaseService.client.from('users').update({
+            'todayNewsCount': 0,
+            'todayPostCount': 0,
+            'totalAdsYesterday': totalToday,
+            'totalAdsToday': 0,
+            'lastEarnDate': today,
+          }).or('id.eq.$_userId,uid.eq.$_userId');
+        }
       }
+    } catch (e) {
+      debugPrint('[CoinRewardService] _ensureUserDocExists error: $e');
     }
   }
 
@@ -131,13 +135,13 @@ class CoinRewardService {
   void _listenToUserDoc() {
     if (_userId.isEmpty) return;
     _userSub?.cancel();
-    _userSub = FirebaseFirestore.instance
-        .collection('users')
-        .doc(_userId)
-        .snapshots()
-        .listen((snapshot) {
-      if (snapshot.exists) {
-        final data = snapshot.data() ?? {};
+    _userSub = SupabaseService.client
+        .from('users')
+        .stream(primaryKey: ['id'])
+        .eq('id', _userId)
+        .listen((list) {
+      if (list.isNotEmpty) {
+        final data = list.first;
         final c = (data['coins'] as num?)?.toInt() ?? 0;
         final ads = (data['adImpressions'] as num?)?.toInt() ?? 0;
         final news = (data['todayNewsCount'] as num?)?.toInt() ?? 0;
@@ -219,14 +223,21 @@ class CoinRewardService {
         _newsReadSinceLastAd = 0;
         _hiddenRevenueRs += 4.0; // 4 Rs hidden revenue per ad
 
-        // Update Firestore: increment adImpressions & totalAdsToday, update lastAdTime
+        // Update Supabase: increment adImpressions & totalAdsToday, update lastAdTime
         if (_userId.isNotEmpty) {
           try {
-            await FirebaseFirestore.instance.collection('users').doc(_userId).update({
-              'adImpressions': FieldValue.increment(1),
-              'totalAdsToday': FieldValue.increment(1),
-              'lastAdTime': FieldValue.serverTimestamp(),
-            });
+            final res = await SupabaseService.client
+                .from('users')
+                .select('adImpressions,totalAdsToday')
+                .or('id.eq.$_userId,uid.eq.$_userId')
+                .maybeSingle();
+            final currentAds = (res?['adImpressions'] as num?)?.toInt() ?? 0;
+            final currentTodayAds = (res?['totalAdsToday'] as num?)?.toInt() ?? 0;
+            await SupabaseService.client.from('users').update({
+              'adImpressions': currentAds + 1,
+              'totalAdsToday': currentTodayAds + 1,
+              'lastAdTime': DateTime.now().toIso8601String(),
+            }).or('id.eq.$_userId,uid.eq.$_userId');
           } catch (e) {
             debugPrint('[CoinRewardService] Error incrementing adImpressions: $e');
           }
@@ -322,24 +333,30 @@ class CoinRewardService {
     }
 
     final today = todayPakistanDate();
-    final userRef = FirebaseFirestore.instance.collection('users').doc(_userId);
-
     try {
-      // 1. Check current ad impressions in Firestore or local state
-      final currentDoc = await userRef.get();
-      if (!currentDoc.exists) {
+      final currentDoc = await SupabaseService.client
+          .from('users')
+          .select()
+          .or('id.eq.$_userId,uid.eq.$_userId')
+          .maybeSingle();
+
+      if (currentDoc == null) {
         await _ensureUserDocExists();
       }
 
-      int adImpressions = (currentDoc.data()?['adImpressions'] as num?)?.toInt() ?? 0;
+      int adImpressions = (currentDoc?['adImpressions'] as num?)?.toInt() ?? 0;
 
       // If adImpressions <= 0, try showing an interstitial ad first naturally (if cooldown passed)
       if (adImpressions <= 0) {
         final showedAd = await _maybeShowInterstitial(reason: 'ad_impression_refill');
         if (showedAd) {
           // Fetch updated adImpressions
-          final refetched = await userRef.get();
-          adImpressions = (refetched.data()?['adImpressions'] as num?)?.toInt() ?? 0;
+          final refetched = await SupabaseService.client
+              .from('users')
+              .select('adImpressions')
+              .or('id.eq.$_userId,uid.eq.$_userId')
+              .maybeSingle();
+          adImpressions = (refetched?['adImpressions'] as num?)?.toInt() ?? 0;
         }
       }
 
@@ -349,81 +366,71 @@ class CoinRewardService {
         return false;
       }
 
-      // 2. Perform Transaction to update coins & decrement adImpressions
-      bool awarded = false;
+      final data = currentDoc ?? {};
+      final lastEarn = data['lastEarnDate'] as String? ?? '';
+      int todayNews = (data['todayNewsCount'] as num?)?.toInt() ?? 0;
+      int todayPosts = (data['todayPostCount'] as num?)?.toInt() ?? 0;
+      int totalAdsToday = (data['totalAdsToday'] as num?)?.toInt() ?? 0;
+      int totalAdsYesterday = (data['totalAdsYesterday'] as num?)?.toInt() ?? 0;
+      String dailyLogin = data['dailyLoginDate'] as String? ?? '';
+      int currentCoins = (data['coins'] as num?)?.toInt() ?? 0;
+      int currentAdImpressions = adImpressions;
 
-      await FirebaseFirestore.instance.runTransaction((transaction) async {
-        final snapshot = await transaction.get(userRef);
-        if (!snapshot.exists) return;
+      // Rotate daily counts if new day in Pakistan
+      if (lastEarn != today) {
+        todayNews = 0;
+        todayPosts = 0;
+        totalAdsYesterday = totalAdsToday;
+        totalAdsToday = 0;
+      }
 
-        final data = snapshot.data() ?? {};
-        final lastEarn = data['lastEarnDate'] as String? ?? '';
-        int todayNews = (data['todayNewsCount'] as num?)?.toInt() ?? 0;
-        int todayPosts = (data['todayPostCount'] as num?)?.toInt() ?? 0;
-        int totalAdsToday = (data['totalAdsToday'] as num?)?.toInt() ?? 0;
-        int totalAdsYesterday = (data['totalAdsYesterday'] as num?)?.toInt() ?? 0;
-        String dailyLogin = data['dailyLoginDate'] as String? ?? '';
-        int currentCoins = (data['coins'] as num?)?.toInt() ?? 0;
-        int currentAdImpressions = (data['adImpressions'] as num?)?.toInt() ?? 0;
+      // Check Activity Limits
+      if (activityName == 'Daily Login') {
+        if (dailyLogin == today) return false; // Already claimed today
+        dailyLogin = today;
+      } else if (activityName == 'News Read') {
+        if (todayNews >= 5) return false; // Max 5 news per day
+        todayNews += 1;
+      } else if (activityName == 'Post Created') {
+        if (todayPosts >= 3) return false; // Max 3 posts per day
+        todayPosts += 1;
+      }
 
-        // Rotate daily counts if new day in Pakistan
-        if (lastEarn != today) {
-          todayNews = 0;
-          todayPosts = 0;
-          totalAdsYesterday = totalAdsToday;
-          totalAdsToday = 0;
-        }
+      if (currentAdImpressions <= 0) return false;
 
-        // Check Activity Limits
-        if (activityName == 'Daily Login') {
-          if (dailyLogin == today) return; // Already claimed today
-          dailyLogin = today;
-        } else if (activityName == 'News Read') {
-          if (todayNews >= 5) return; // Max 5 news per day
-          todayNews += 1;
-        } else if (activityName == 'Post Created') {
-          if (todayPosts >= 3) return; // Max 3 posts per day
-          todayPosts += 1;
-        }
+      // Award Coins & Consume 1 Impression
+      final newCoins = currentCoins + coinsToShow;
+      final newImpressions = currentAdImpressions - 1;
+      final nowStr = DateTime.now().toIso8601String();
 
-        if (currentAdImpressions <= 0) return;
+      await SupabaseService.client.from('users').update({
+        'coins': newCoins,
+        'adImpressions': newImpressions,
+        'todayNewsCount': todayNews,
+        'todayPostCount': todayPosts,
+        'dailyLoginDate': dailyLogin,
+        'totalAdsToday': totalAdsToday,
+        'totalAdsYesterday': totalAdsYesterday,
+        'lastEarnDate': today,
+        'lastEarnTime': nowStr,
+      }).or('id.eq.$_userId,uid.eq.$_userId');
 
-        // Award Coins & Consume 1 Impression
-        final newCoins = currentCoins + coinsToShow;
-        final newImpressions = currentAdImpressions - 1;
-
-        transaction.update(userRef, {
-          'coins': newCoins,
-          'adImpressions': newImpressions,
-          'todayNewsCount': todayNews,
-          'todayPostCount': todayPosts,
-          'dailyLoginDate': dailyLogin,
-          'totalAdsToday': totalAdsToday,
-          'totalAdsYesterday': totalAdsYesterday,
-          'lastEarnDate': today,
-          'lastEarnTime': FieldValue.serverTimestamp(),
-        });
-
-        // Also synchronize coin_wallets atomically
-        final walletRef = FirebaseFirestore.instance.collection('coin_wallets').doc(_userId);
-        transaction.set(walletRef, {
+      // Also synchronize coin_wallets
+      try {
+        await SupabaseService.client.from('coin_wallets').upsert({
           'userId': _userId,
           'coins': newCoins,
-          'updatedAt': FieldValue.serverTimestamp(),
-        }, SetOptions(merge: true));
+          'updatedAt': nowStr,
+        });
+      } catch (_) {}
 
-        awarded = true;
-      });
-
-      if (awarded) {
-        debugPrint('[CoinRewardService] Successfully awarded +$coinsToShow coins for $activityName');
-        if (context != null && context.mounted) {
-          _showCoinRewardToast(context, activityName, coinsToShow);
-        }
-        return true;
+      debugPrint('[CoinRewardService] Successfully awarded +$coinsToShow coins for $activityName');
+      if (context != null && context.mounted) {
+        _showCoinRewardToast(context, activityName, coinsToShow);
       }
+      return true;
     } catch (e) {
-      debugPrint('[CoinRewardService] Transaction error: $e');
+      debugPrint('[CoinRewardService] Reward activity error: $e');
     }
 
     return false;
@@ -437,32 +444,40 @@ class CoinRewardService {
     if (postAuthorId.isEmpty || postAuthorId == _userId) return false;
 
     try {
-      final authorRef = FirebaseFirestore.instance.collection('users').doc(postAuthorId);
-      final postRef = FirebaseFirestore.instance.collection('community_posts').doc(postId);
+      final authorData = await SupabaseService.client
+          .from('users')
+          .select('coins')
+          .or('id.eq.$postAuthorId,uid.eq.$postAuthorId')
+          .maybeSingle();
 
-      await FirebaseFirestore.instance.runTransaction((transaction) async {
-        final authorSnap = await transaction.get(authorRef);
-        final postSnap = await transaction.get(postRef);
+      final currentCoins = (authorData?['coins'] as num?)?.toInt() ?? 0;
+      final newAuthorCoins = currentCoins + 5;
+      final nowStr = DateTime.now().toIso8601String();
 
-        if (!authorSnap.exists || !postSnap.exists) return;
+      await SupabaseService.client
+          .from('users')
+          .update({'coins': newAuthorCoins})
+          .or('id.eq.$postAuthorId,uid.eq.$postAuthorId');
 
-        final currentCoins = (authorSnap.data()?['coins'] as num?)?.toInt() ?? 0;
-        final newAuthorCoins = currentCoins + 5;
-        transaction.update(authorRef, {
-          'coins': newAuthorCoins,
-        });
-
-        final authorWalletRef = FirebaseFirestore.instance.collection('coin_wallets').doc(postAuthorId);
-        transaction.set(authorWalletRef, {
+      try {
+        await SupabaseService.client.from('coin_wallets').upsert({
           'userId': postAuthorId,
           'coins': newAuthorCoins,
-          'updatedAt': FieldValue.serverTimestamp(),
-        }, SetOptions(merge: true));
-
-        transaction.update(postRef, {
-          'helpfulCount': FieldValue.increment(1),
+          'updatedAt': nowStr,
         });
-      });
+      } catch (_) {}
+
+      final postData = await SupabaseService.client
+          .from('community_posts')
+          .select('helpfulCount')
+          .or('id.eq.$postId')
+          .maybeSingle();
+      final currentHelpful = (postData?['helpfulCount'] as num?)?.toInt() ?? 0;
+
+      await SupabaseService.client
+          .from('community_posts')
+          .update({'helpfulCount': currentHelpful + 1})
+          .or('id.eq.$postId');
 
       return true;
     } catch (e) {

@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
-import 'package:games_khabar/compat/cloud_firestore.dart';
 import 'package:easy_localization/easy_localization.dart';
-import 'package:games_khabar/compat/firebase_auth.dart';
+import '../services/supabase_service.dart';
 import 'package:url_launcher/url_launcher.dart';
 import '../utils/admin_security.dart';
 import '../services/bookmark_service.dart';
@@ -169,17 +168,17 @@ class _ProfileScreenState extends State<ProfileScreen> {
               ),
             ),
             actions: [
-              StreamBuilder<DocumentSnapshot>(
-                stream: FirebaseAuth.instance.currentUser?.uid != null
-                    ? FirebaseFirestore.instance
-                        .collection('users')
-                        .doc(FirebaseAuth.instance.currentUser!.uid)
-                        .snapshots()
+              StreamBuilder<List<Map<String, dynamic>>>(
+                stream: (GamerAuthService().currentUid != null)
+                    ? SupabaseService.client
+                        .from('users')
+                        .stream(primaryKey: ['id'])
+                        .eq('id', GamerAuthService().currentUid!)
                     : const Stream.empty(),
                 builder: (context, snapshot) {
                   int coins = 0;
-                  if (snapshot.hasData && snapshot.data != null && snapshot.data!.exists) {
-                    final data = snapshot.data!.data() as Map<String, dynamic>? ?? {};
+                  if (snapshot.hasData && snapshot.data!.isNotEmpty) {
+                    final data = snapshot.data!.first;
                     final rawCoins = data['gCoins'] ?? data['coins'];
                     if (rawCoins is num) {
                       coins = rawCoins.toInt();
@@ -189,7 +188,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                   }
                   return GestureDetector(
                     onTap: () {
-                      final uid = FirebaseAuth.instance.currentUser?.uid ?? '';
+                      final uid = GamerAuthService().currentUid ?? '';
                       CoinHistorySheet.show(context, userId: uid);
                     },
                     child: Container(
@@ -300,7 +299,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                           border: Border.all(color: borderDark),
                         ),
                         child: Text(
-                          "Email: ${FirebaseAuth.instance.currentUser?.email} | UID: ${FirebaseAuth.instance.currentUser?.uid}",
+                          "Email: ${SupabaseService.client.auth.currentUser?.email ?? GamerAuthService().currentGamer?.email ?? 'N/A'} | UID: ${SupabaseService.client.auth.currentUser?.id ?? GamerAuthService().currentUid ?? 'N/A'}",
                           style: const TextStyle(
                             color: Color(0xFF38BDF8),
                             fontSize: 11,
@@ -665,18 +664,18 @@ class _ProfileScreenState extends State<ProfileScreen> {
                       Divider(color: borderDark, height: 1),
 
                       // GK Coins & Earn Screen Entry
-                      StreamBuilder<DocumentSnapshot>(
-                        stream: FirebaseAuth.instance.currentUser?.uid != null
-                            ? FirebaseFirestore.instance
-                                .collection('users')
-                                .doc(FirebaseAuth.instance.currentUser!.uid)
-                                .snapshots()
+                      StreamBuilder<List<Map<String, dynamic>>>(
+                        stream: (GamerAuthService().currentUid != null)
+                            ? SupabaseService.client
+                                .from('users')
+                                .stream(primaryKey: ['id'])
+                                .eq('id', GamerAuthService().currentUid!)
                             : const Stream.empty(),
                         builder: (context, snapshot) {
                           int coins = 0;
                           int inEscrow = 0;
-                          if (snapshot.hasData && snapshot.data != null && snapshot.data!.exists) {
-                            final data = snapshot.data!.data() as Map<String, dynamic>? ?? {};
+                          if (snapshot.hasData && snapshot.data!.isNotEmpty) {
+                            final data = snapshot.data!.first;
                             final rawCoins = data['gCoins'] ?? data['coins'];
                             if (rawCoins is num) coins = rawCoins.toInt();
                             final rawEscrow = data['inEscrow'];
@@ -743,7 +742,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                             ),
                             trailing: Icon(Icons.arrow_forward_ios_rounded, color: textGray, size: 14),
                             onTap: () {
-                              final uid = FirebaseAuth.instance.currentUser?.uid ?? '';
+                              final uid = GamerAuthService().currentUid ?? '';
                               CoinHistorySheet.show(context, userId: uid);
                             },
                           );
@@ -771,7 +770,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                         ),
                         trailing: Icon(Icons.arrow_forward_ios_rounded, color: textGray, size: 14),
                         onTap: () {
-                          final uid = FirebaseAuth.instance.currentUser?.uid ?? '';
+                          final uid = GamerAuthService().currentUid ?? '';
                           CoinHistorySheet.show(context, userId: uid);
                         },
                       ),
@@ -953,7 +952,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                 const SizedBox(height: 20),
 
                 // User Account Sign Out Section (For switching between test accounts)
-                if (FirebaseAuth.instance.currentUser != null) ...[
+                if (GamerAuthService().currentUid != null || SupabaseService.client.auth.currentUser != null) ...[
                   Container(
                     margin: const EdgeInsets.only(bottom: 20),
                     decoration: BoxDecoration(
@@ -976,7 +975,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                         style: TextStyle(color: Colors.redAccent, fontWeight: FontWeight.bold, fontSize: 14),
                       ),
                       subtitle: Text(
-                        FirebaseAuth.instance.currentUser?.email ?? 'Switch testing account',
+                        SupabaseService.client.auth.currentUser?.email ?? GamerAuthService().currentGamer?.email ?? 'Switch testing account',
                         style: TextStyle(color: textGray, fontSize: 12),
                       ),
                       trailing: const Icon(Icons.arrow_forward_ios_rounded, color: Colors.redAccent, size: 14),
@@ -1007,7 +1006,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
 
                         if (confirm == true) {
                           await GamerAuthService().signOut();
-                          await FirebaseAuth.instance.signOut();
+                          await SupabaseService.client.auth.signOut();
                           if (context.mounted) {
                             ScaffoldMessenger.of(context).showSnackBar(
                               const SnackBar(

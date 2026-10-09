@@ -1,6 +1,5 @@
 import 'dart:math';
-import 'package:games_khabar/compat/cloud_firestore.dart';
-import 'package:games_khabar/compat/firebase_auth.dart';
+import 'gamer_auth_service.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../models/community_post_model.dart';
 import '../utils/admin_security.dart';
@@ -33,10 +32,10 @@ class CommunityService {
     try {
       final prefs = await SharedPreferences.getInstance();
 
-      // Check FirebaseAuth uid first if signed in
-      final authUser = FirebaseAuth.instance.currentUser;
-      if (authUser != null && authUser.uid.isNotEmpty) {
-        _userId = authUser.uid;
+      // Check signed in user
+      final currentUid = GamerAuthService().currentUid ?? SupabaseService.client.auth.currentUser?.id;
+      if (currentUid != null && currentUid.isNotEmpty) {
+        _userId = currentUid;
       } else {
         _userId = prefs.getString(_prefsUserIdKey) ?? '';
         if (_userId.isEmpty) {
@@ -90,21 +89,16 @@ class CommunityService {
 
   /// Real-time stream of community posts
   Stream<List<CommunityPostModel>> streamPosts({required String selectedFilter}) {
-    final collection = FirebaseFirestore.instance.collection(_collectionName);
-
-    Query<Map<String, dynamic>> query = collection.where('isApproved', isEqualTo: true);
-
-    if (selectedFilter != 'All') {
-      query = query.where('gameName', isEqualTo: selectedFilter);
-    }
-
-    return query.snapshots().map((snapshot) {
-      final posts = snapshot.docs
-          .map((doc) => CommunityPostModel.fromFirestore(doc))
+    return SupabaseService.client
+        .from(_collectionName)
+        .stream(primaryKey: ['id'])
+        .map((list) {
+      final posts = list
+          .where((data) => data['isApproved'] != false)
+          .where((data) => selectedFilter == 'All' || data['gameName'] == selectedFilter)
+          .map((data) => CommunityPostModel.fromFirestore(data))
           .toList();
 
-      // Sort client-side by createdAt descending to guarantee chronological order
-      // without requiring Firestore composite indexes
       posts.sort((a, b) => b.createdAt.compareTo(a.createdAt));
       return posts;
     });
@@ -132,47 +126,36 @@ class CommunityService {
 
     await init();
 
-    final post = CommunityPostModel(
-      id: '',
-      userId: _userId,
-      userName: _userName,
-      isVIP: isUserVIP,
-      gameName: gameName,
-      text: trimmed,
-      imageUrl: imageUrl,
-      likes: 0,
-      reportCount: 0,
-      isApproved: true,
-      createdAt: DateTime.now(),
-    );
+    final newId = 'post_${DateTime.now().millisecondsSinceEpoch}_${Random().nextInt(9999)}';
+    final postMap = {
+      'id': newId,
+      'userId': _userId,
+      'userName': _userName,
+      'isVIP': isUserVIP,
+      'gameName': gameName,
+      'text': trimmed,
+      'imageUrl': imageUrl,
+      'likes': 0,
+      'reportCount': 0,
+      'isApproved': true,
+      'createdAt': DateTime.now().toIso8601String(),
+      'created_at': DateTime.now().toIso8601String(),
+    };
 
-    final docRef = await FirebaseFirestore.instance.collection(_collectionName).add(post.toMap());
+    await SupabaseService.client.from(_collectionName).upsert(postMap);
 
     // Sync to Supabase posts table
     try {
-      // Resolve Supabase UUID
-      String? supabaseUserId = await SupabaseService.getCurrentUserId();
-      final uuidRegex = RegExp(r'^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$');
-      if (supabaseUserId == null || !uuidRegex.hasMatch(supabaseUserId)) {
-        if (uuidRegex.hasMatch(_userId)) {
-          supabaseUserId = _userId;
-        } else {
-          supabaseUserId = null;
-        }
-      }
-
-      if (supabaseUserId != null) {
-        await SupabaseService.savePost({
-          'post_id': docRef.id,
-          'user_id': supabaseUserId,
-          'username': _userName,
-          'content': trimmed,
-          'media_url': imageUrl,
-          'media_type': 'image',
-          'game': gameName,
-          'created_at': DateTime.now().toIso8601String(),
-        });
-      }
+      await SupabaseService.savePost({
+        'post_id': newId,
+        'user_id': _userId,
+        'username': _userName,
+        'content': trimmed,
+        'media_url': imageUrl,
+        'media_type': 'image',
+        'game': gameName,
+        'created_at': DateTime.now().toIso8601String(),
+      });
     } catch (e) {
       debugPrint('[CommunityService] Supabase post sync notice: $e');
     }
@@ -189,9 +172,16 @@ class CommunityService {
     } catch (_) {}
 
     try {
-      await FirebaseFirestore.instance.collection(_collectionName).doc(postId).update({
-        'likes': FieldValue.increment(1),
-      });
+      final postData = await SupabaseService.client
+          .from(_collectionName)
+          .select('likes')
+          .or('id.eq.$postId')
+          .maybeSingle();
+      final currentLikes = (postData?['likes'] as num?)?.toInt() ?? 0;
+      await SupabaseService.client
+          .from(_collectionName)
+          .update({'likes': currentLikes + 1})
+          .or('id.eq.$postId');
     } catch (_) {}
 
     // Sync to Supabase likes table
@@ -211,14 +201,17 @@ class CommunityService {
     try {
       final newReportCount = currentReportCount + 1;
       final updateData = <String, dynamic>{
-        'reportCount': FieldValue.increment(1),
+        'reportCount': newReportCount,
       };
 
       if (newReportCount >= 3) {
         updateData['isApproved'] = false;
       }
 
-      await FirebaseFirestore.instance.collection(_collectionName).doc(postId).update(updateData);
+      await SupabaseService.client
+          .from(_collectionName)
+          .update(updateData)
+          .or('id.eq.$postId');
       return newReportCount >= 3;
     } catch (_) {
       return false;
@@ -227,13 +220,12 @@ class CommunityService {
 
   /// Real-time stream of comments for a post
   Stream<List<CommunityCommentModel>> streamComments(String postId) {
-    return FirebaseFirestore.instance
-        .collection(_collectionName)
-        .doc(postId)
-        .collection('comments')
-        .snapshots()
-        .map((snapshot) {
-      final comments = snapshot.docs
+    return SupabaseService.client
+        .from('community_comments')
+        .stream(primaryKey: ['id'])
+        .eq('postId', postId)
+        .map((list) {
+      final comments = list
           .map((doc) => CommunityCommentModel.fromFirestore(doc))
           .toList();
       comments.sort((a, b) => a.createdAt.compareTo(b.createdAt));
@@ -251,8 +243,9 @@ class CommunityService {
 
     await init();
 
+    final commentId = 'comment_${DateTime.now().millisecondsSinceEpoch}_${Random().nextInt(9999)}';
     final comment = CommunityCommentModel(
-      id: '',
+      id: commentId,
       userId: _userId,
       userName: _userName,
       isVIP: isUserVIP,
@@ -260,12 +253,31 @@ class CommunityService {
       createdAt: DateTime.now(),
     );
 
-    final postRef = FirebaseFirestore.instance.collection(_collectionName).doc(postId);
-    await postRef.collection('comments').add(comment.toMap());
+    final commentMap = {
+      'id': commentId,
+      'postId': postId,
+      'userId': _userId,
+      'userName': _userName,
+      'isVIP': isUserVIP,
+      'text': trimmed,
+      'createdAt': DateTime.now().toIso8601String(),
+      'created_at': DateTime.now().toIso8601String(),
+    };
+
+    await SupabaseService.client.from('community_comments').upsert(commentMap);
+
     try {
-      await postRef.update({
-        'commentCount': FieldValue.increment(1),
-      });
+      final postData = await SupabaseService.client
+          .from(_collectionName)
+          .select('commentCount')
+          .or('id.eq.$postId')
+          .maybeSingle();
+      final currentComments = (postData?['commentCount'] as num?)?.toInt() ?? 0;
+      await SupabaseService.client
+          .from(_collectionName)
+          .update({
+            'commentCount': currentComments + 1,
+          }).or('id.eq.$postId');
     } catch (_) {}
 
     // Sync comment to Supabase comments table

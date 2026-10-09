@@ -1,7 +1,6 @@
 import 'dart:async';
 import 'dart:io';
-import 'package:games_khabar/compat/cloud_firestore.dart';
-import 'package:games_khabar/compat/firebase_auth.dart';
+import '../services/supabase_store.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:image_picker/image_picker.dart';
@@ -128,7 +127,7 @@ class GamerRoom {
     return DateTime.now().difference(completedAt!).inMinutes >= 5;
   }
 
-  factory GamerRoom.fromFirestore(DocumentSnapshot doc) {
+  factory GamerRoom.fromFirestore(SupaDoc doc) {
     final data = doc.data() as Map<String, dynamic>? ?? {};
 
     final id = doc.id;
@@ -182,7 +181,7 @@ class GamerRoom {
           'id': uid,
           'name': pNames[uid] ?? (uid == hostId ? hostName : 'Player'),
           'photo': '',
-          'joinedAt': data['createdAt'] ?? Timestamp.now(),
+          'joinedAt': data['createdAt'] ?? SupaTime.now(),
         });
       }
     }
@@ -206,22 +205,22 @@ class GamerRoom {
     final proofUrl = data['proofUrl']?.toString() ?? winProofUrl;
 
     DateTime? winProofUploadedAt;
-    if (data['winProofUploadedAt'] is Timestamp) {
-      winProofUploadedAt = (data['winProofUploadedAt'] as Timestamp).toDate();
+    if (data['winProofUploadedAt'] is SupaTime) {
+      winProofUploadedAt = (data['winProofUploadedAt'] as SupaTime).toDate();
     } else if (data['winProofUploadedAt'] is String) {
       winProofUploadedAt = DateTime.tryParse(data['winProofUploadedAt']);
     }
 
     DateTime? completedAt;
-    if (data['completedAt'] is Timestamp) {
-      completedAt = (data['completedAt'] as Timestamp).toDate();
+    if (data['completedAt'] is SupaTime) {
+      completedAt = (data['completedAt'] as SupaTime).toDate();
     } else if (data['completedAt'] is String) {
       completedAt = DateTime.tryParse(data['completedAt']);
     }
 
     DateTime? autoApproveAt;
-    if (data['autoApproveAt'] is Timestamp) {
-      autoApproveAt = (data['autoApproveAt'] as Timestamp).toDate();
+    if (data['autoApproveAt'] is SupaTime) {
+      autoApproveAt = (data['autoApproveAt'] as SupaTime).toDate();
     } else if (data['autoApproveAt'] is String) {
       autoApproveAt = DateTime.tryParse(data['autoApproveAt']);
     }
@@ -232,20 +231,20 @@ class GamerRoom {
     final String? disputeReason = data['disputeReason']?.toString();
     final String? disputeProofUrl = data['disputeProofUrl']?.toString();
     DateTime? disputedAt;
-    if (data['disputedAt'] is Timestamp) {
-      disputedAt = (data['disputedAt'] as Timestamp).toDate();
+    if (data['disputedAt'] is SupaTime) {
+      disputedAt = (data['disputedAt'] as SupaTime).toDate();
     } else if (data['disputedAt'] is String) {
       disputedAt = DateTime.tryParse(data['disputedAt']);
     }
 
     DateTime created = DateTime.now();
-    if (data['createdAt'] is Timestamp) {
-      created = (data['createdAt'] as Timestamp).toDate();
+    if (data['createdAt'] is SupaTime) {
+      created = (data['createdAt'] as SupaTime).toDate();
     }
 
     DateTime start = DateTime.now().add(const Duration(minutes: 15));
-    if (data['startTime'] is Timestamp) {
-      start = (data['startTime'] as Timestamp).toDate();
+    if (data['startTime'] is SupaTime) {
+      start = (data['startTime'] as SupaTime).toDate();
     } else if (data['startTime'] is String) {
       start = DateTime.tryParse(data['startTime']) ?? start;
     }
@@ -452,7 +451,7 @@ class _GamerRoomsScreenState extends State<GamerRoomsScreen> {
   Future<void> _ensureHostNameLoaded(String hostId) async {
     if (hostId.isEmpty || (_hostNameCache.containsKey(hostId) && _hostNameCache[hostId]!.toLowerCase() != 'host')) return;
     try {
-      final doc = await FirebaseFirestore.instance.collection('users').doc(hostId).get();
+      final doc = await SupaStore.instance.collection('users').doc(hostId).get();
       if (doc.exists) {
         final data = doc.data() as Map<String, dynamic>? ?? {};
         final username = (data['username'] ?? data['displayName'] ?? data['name'] ?? data['bgmiId'])?.toString().trim() ?? '';
@@ -462,7 +461,7 @@ class _GamerRoomsScreenState extends State<GamerRoomsScreen> {
           return;
         }
       }
-      final tQuery = await FirebaseFirestore.instance.collection('tournament_rooms').where('hostId', isEqualTo: hostId).limit(1).get();
+      final tQuery = await SupaStore.instance.collection('tournament_rooms').where('hostId', isEqualTo: hostId).limit(1).get();
       if (tQuery.docs.isNotEmpty) {
         final tData = tQuery.docs.first.data();
         final tHost = (tData['hostName'] ?? tData['host'] ?? tData['hostUsername'])?.toString().trim() ?? '';
@@ -492,18 +491,18 @@ class _GamerRoomsScreenState extends State<GamerRoomsScreen> {
   ];
 
   String get currentUserId =>
-      FirebaseAuth.instance.currentUser?.uid ??
+      _authService.currentGamer?.uid ?? _authService.currentUid ?? SupabaseService.client.auth.currentUser?.id ??
       _authService.currentGamer?.uid ??
       _authService.currentUid ??
       'guest';
 
   String get currentUserName =>
-      FirebaseAuth.instance.currentUser?.displayName ??
+      _authService.currentGamer?.displayName ?? SupabaseService.client.auth.currentUser?.userMetadata?["full_name"]?.toString() ??
       _authService.currentGamer?.displayName ??
       'Gamer';
 
   String get currentUserPhoto =>
-      FirebaseAuth.instance.currentUser?.photoURL ??
+      _authService.currentGamer?.photoUrl ?? SupabaseService.client.auth.currentUser?.userMetadata?["avatar_url"]?.toString() ??
       _authService.currentGamer?.photoUrl ??
       '';
 
@@ -549,7 +548,7 @@ class _GamerRoomsScreenState extends State<GamerRoomsScreen> {
   Future<void> _purgeExpiredCompletedRooms() async {
     try {
       final now = DateTime.now();
-      final snap = await FirebaseFirestore.instance
+      final snap = await SupaStore.instance
           .collection('rooms')
           .where('status', isEqualTo: 'completed')
           .get();
@@ -557,14 +556,14 @@ class _GamerRoomsScreenState extends State<GamerRoomsScreen> {
       for (final doc in snap.docs) {
         final data = doc.data();
         DateTime? completedAt;
-        if (data['completedAt'] is Timestamp) {
-          completedAt = (data['completedAt'] as Timestamp).toDate();
+        if (data['completedAt'] is SupaTime) {
+          completedAt = (data['completedAt'] as SupaTime).toDate();
         } else if (data['completedAt'] is String) {
           completedAt = DateTime.tryParse(data['completedAt']);
         }
         if (completedAt != null && now.difference(completedAt).inMinutes >= 5) {
           await doc.reference.delete().catchError((_) {});
-          FirebaseFirestore.instance
+          SupaStore.instance
               .collection('tournament_rooms')
               .doc(doc.id)
               .delete()
@@ -579,7 +578,7 @@ class _GamerRoomsScreenState extends State<GamerRoomsScreen> {
   Future<void> _checkAutoApproveRooms() async {
     try {
       final now = DateTime.now();
-      final snap = await FirebaseFirestore.instance
+      final snap = await SupaStore.instance
           .collection('rooms')
           .where('status', isEqualTo: 'reward_waiting')
           .get();
@@ -589,16 +588,16 @@ class _GamerRoomsScreenState extends State<GamerRoomsScreen> {
         if (data['disputed'] == true || data['status'] == 'disputed') continue;
 
         DateTime? autoApproveAt;
-        if (data['autoApproveAt'] is Timestamp) {
-          autoApproveAt = (data['autoApproveAt'] as Timestamp).toDate();
+        if (data['autoApproveAt'] is SupaTime) {
+          autoApproveAt = (data['autoApproveAt'] as SupaTime).toDate();
         } else if (data['autoApproveAt'] is String) {
           autoApproveAt = DateTime.tryParse(data['autoApproveAt']);
         }
 
         // Fallback: winProofUploadedAt + 15 mins
         if (autoApproveAt == null && data['winProofUploadedAt'] != null) {
-          if (data['winProofUploadedAt'] is Timestamp) {
-            autoApproveAt = (data['winProofUploadedAt'] as Timestamp).toDate().add(const Duration(minutes: 15));
+          if (data['winProofUploadedAt'] is SupaTime) {
+            autoApproveAt = (data['winProofUploadedAt'] as SupaTime).toDate().add(const Duration(minutes: 15));
           } else if (data['winProofUploadedAt'] is String) {
             final p = DateTime.tryParse(data['winProofUploadedAt']);
             if (p != null) autoApproveAt = p.add(const Duration(minutes: 15));
@@ -615,7 +614,7 @@ class _GamerRoomsScreenState extends State<GamerRoomsScreen> {
 
   /// Execute automatic reward sending from App
   Future<void> _executeAutoApprove(GamerRoom room) async {
-    final roomRef = FirebaseFirestore.instance.collection('rooms').doc(room.id);
+    final roomRef = SupaStore.instance.collection('rooms').doc(room.id);
     try {
       final snap = await roomRef.get();
       if (!snap.exists) return;
@@ -642,9 +641,9 @@ class _GamerRoomsScreenState extends State<GamerRoomsScreen> {
       if (resolvedWinnerName.isEmpty) resolvedWinnerName = 'Winner';
 
       final int prize = room.prize;
-      final DocumentReference winnerRef = FirebaseFirestore.instance.collection('users').doc(resolvedWinnerId);
+      final SupaDocRef winnerRef = SupaStore.instance.collection('users').doc(resolvedWinnerId);
 
-      await FirebaseFirestore.instance.runTransaction((transaction) async {
+      await SupaStore.instance.runTransaction((transaction) async {
         final winnerSnap = await transaction.get(winnerRef);
         final txRoomSnap = await transaction.get(roomRef);
 
@@ -675,7 +674,7 @@ class _GamerRoomsScreenState extends State<GamerRoomsScreen> {
             'coins': updatedCoins,
             'totalWinnings': currentWinnings + prize,
             'wins': currentWins + 1,
-            'lastRewardAt': FieldValue.serverTimestamp(),
+            'lastRewardAt': SupaField.serverTimestamp(),
           });
         } else {
           transaction.set(winnerRef, {
@@ -683,11 +682,11 @@ class _GamerRoomsScreenState extends State<GamerRoomsScreen> {
             'coins': updatedCoins,
             'totalWinnings': prize,
             'wins': 1,
-            'lastRewardAt': FieldValue.serverTimestamp(),
+            'lastRewardAt': SupaField.serverTimestamp(),
           });
         }
 
-        final DocumentReference txRef = FirebaseFirestore.instance.collection('transactions').doc();
+        final SupaDocRef txRef = SupaStore.instance.collection('transactions').doc();
         final String txId = txRef.id;
         final txLogData = {
           'id': txId,
@@ -703,11 +702,11 @@ class _GamerRoomsScreenState extends State<GamerRoomsScreen> {
           'prizeSource': 'application',
           'status': 'completed',
           'winProofUrl': room.winProofUrl ?? room.proofUrl,
-          'createdAt': FieldValue.serverTimestamp(),
-          'timestamp': FieldValue.serverTimestamp(),
+          'createdAt': SupaField.serverTimestamp(),
+          'timestamp': SupaField.serverTimestamp(),
         };
         transaction.set(txRef, txLogData);
-        transaction.set(FirebaseFirestore.instance.collection('coin_transactions').doc(txId), txLogData);
+        transaction.set(SupaStore.instance.collection('coin_transactions').doc(txId), txLogData);
 
         transaction.update(roomRef, {
           'rewardStatus': 'sent',
@@ -715,17 +714,17 @@ class _GamerRoomsScreenState extends State<GamerRoomsScreen> {
           'winnerId': resolvedWinnerId,
           'winnerName': resolvedWinnerName,
           'prizeSource': 'application',
-          'rewardSentAt': FieldValue.serverTimestamp(),
+          'rewardSentAt': SupaField.serverTimestamp(),
           'isCompleted': true,
           'isLive': false,
-          'completedAt': FieldValue.serverTimestamp(),
+          'completedAt': SupaField.serverTimestamp(),
         });
 
-        final DocumentReference msgRef = roomRef.collection('messages').doc();
+        final SupaDocRef msgRef = roomRef.collection('messages').doc();
         transaction.set(msgRef, {
           'type': 'system_reward',
           'message': '🏆 REWARD AUTO-SENT! 15 minutes passed with no dispute. $prize Coins sent to $resolvedWinnerName from App!',
-          'timestamp': FieldValue.serverTimestamp(),
+          'timestamp': SupaField.serverTimestamp(),
           'senderId': 'system',
           'senderName': 'ROOM BOT',
           'isHost': false,
@@ -733,14 +732,14 @@ class _GamerRoomsScreenState extends State<GamerRoomsScreen> {
       });
 
       try {
-        await FirebaseFirestore.instance.collection('tournament_rooms').doc(room.id).set({
+        await SupaStore.instance.collection('tournament_rooms').doc(room.id).set({
           'status': 'completed',
           'rewardStatus': 'sent',
           'winnerId': resolvedWinnerId,
           'winnerName': resolvedWinnerName,
-          'completedAt': FieldValue.serverTimestamp(),
+          'completedAt': SupaField.serverTimestamp(),
           'isLive': false,
-        }, SetOptions(merge: true));
+        }, SupaSetOptions(merge: true));
       } catch (_) {}
 
       debugPrint('AUTO-APPROVE SUCCESS: $prize Coins to $resolvedWinnerId');
@@ -751,7 +750,7 @@ class _GamerRoomsScreenState extends State<GamerRoomsScreen> {
 
   /// Real-time stream for rooms from Firestore with auto-deletion after 5 minutes
   Stream<List<GamerRoom>> _getRoomsStream() {
-    return FirebaseFirestore.instance
+    return SupaStore.instance
         .collection('rooms')
         .snapshots()
         .map((snapshot) {
@@ -760,7 +759,7 @@ class _GamerRoomsScreenState extends State<GamerRoomsScreen> {
         final room = GamerRoom.fromFirestore(doc);
         if (room.isExpiredCompleted) {
           doc.reference.delete().catchError((_) {});
-          FirebaseFirestore.instance
+          SupaStore.instance
               .collection('tournament_rooms')
               .doc(room.id)
               .delete()
@@ -776,7 +775,7 @@ class _GamerRoomsScreenState extends State<GamerRoomsScreen> {
   }
 
   /// =========================================================================
-  /// 3. JOIN LOGIC - FIX OVER-JOIN BUG (Firestore Transaction)
+  /// 3. JOIN LOGIC - FIX OVER-JOIN BUG (Firestore SupaTx)
   /// =========================================================================
   Future<void> joinRoom(GamerRoom room) async {
     final uid = currentUserId;
@@ -807,10 +806,10 @@ class _GamerRoomsScreenState extends State<GamerRoomsScreen> {
       context: context,
       actionTitle: 'Watch 1 Ad to Join Room',
       onRewardEarned: () async {
-        final roomRef = FirebaseFirestore.instance.collection('rooms').doc(room.id);
+        final roomRef = SupaStore.instance.collection('rooms').doc(room.id);
 
         try {
-          await FirebaseFirestore.instance.runTransaction((transaction) async {
+          await SupaStore.instance.runTransaction((transaction) async {
             final snapshot = await transaction.get(roomRef);
             if (!snapshot.exists) {
               throw Exception('Room does not exist');
@@ -836,16 +835,16 @@ class _GamerRoomsScreenState extends State<GamerRoomsScreen> {
               'id': uid,
               'name': name,
               'photo': photo,
-              'joinedAt': Timestamp.now(),
+              'joinedAt': SupaTime.now(),
             };
 
             // FREE ENTRY: Update filled and joined users, NO coin deduction
             transaction.update(roomRef, {
-              'filled': FieldValue.increment(1),
-              'currentSlots': FieldValue.increment(1),
-              'joinedUserIds': FieldValue.arrayUnion([uid]),
-              'joinedPlayers': FieldValue.arrayUnion([uid]),
-              'joinedUsers': FieldValue.arrayUnion([newUserMap]),
+              'filled': SupaField.increment(1),
+              'currentSlots': SupaField.increment(1),
+              'joinedUserIds': SupaField.arrayUnion([uid]),
+              'joinedPlayers': SupaField.arrayUnion([uid]),
+              'joinedUsers': SupaField.arrayUnion([newUserMap]),
               'joinedPlayerNames.$uid': name,
             });
 
@@ -854,7 +853,7 @@ class _GamerRoomsScreenState extends State<GamerRoomsScreen> {
             transaction.set(msgRef, {
               'type': 'system',
               'message': '$name joined the room',
-              'timestamp': FieldValue.serverTimestamp(),
+              'timestamp': SupaField.serverTimestamp(),
               'senderId': 'system',
               'senderName': 'ROOM BOT',
               'isHost': false,
@@ -920,7 +919,7 @@ class _GamerRoomsScreenState extends State<GamerRoomsScreen> {
           onLeaveRoom: () async {
             final uid = currentUserId;
             final name = currentUserName;
-            final roomRef = FirebaseFirestore.instance.collection('rooms').doc(room.id);
+            final roomRef = SupaStore.instance.collection('rooms').doc(room.id);
 
             try {
               // Find matching user map
@@ -933,18 +932,18 @@ class _GamerRoomsScreenState extends State<GamerRoomsScreen> {
               }
 
               final updates = <String, dynamic>{
-                'filled': FieldValue.increment(-1),
-                'currentSlots': FieldValue.increment(-1),
-                'joinedUserIds': FieldValue.arrayRemove([uid]),
-                'joinedPlayers': FieldValue.arrayRemove([uid]),
-                'joinedPlayerNames.$uid': FieldValue.delete(),
+                'filled': SupaField.increment(-1),
+                'currentSlots': SupaField.increment(-1),
+                'joinedUserIds': SupaField.arrayRemove([uid]),
+                'joinedPlayers': SupaField.arrayRemove([uid]),
+                'joinedPlayerNames.$uid': SupaField.delete(),
               };
 
               if (matchingUser != null) {
-                updates['joinedUsers'] = FieldValue.arrayRemove([matchingUser]);
+                updates['joinedUsers'] = SupaField.arrayRemove([matchingUser]);
               }
 
-              final batch = FirebaseFirestore.instance.batch();
+              final batch = SupaStore.instance.batch();
               batch.update(roomRef, updates);
 
               // Add leave system message
@@ -952,7 +951,7 @@ class _GamerRoomsScreenState extends State<GamerRoomsScreen> {
               batch.set(msgRef, {
                 'type': 'system',
                 'message': '$name left the room',
-                'timestamp': FieldValue.serverTimestamp(),
+                'timestamp': SupaField.serverTimestamp(),
                 'senderId': 'system',
                 'senderName': 'ROOM BOT',
                 'isHost': false,
@@ -1341,7 +1340,7 @@ class _GamerRoomsScreenState extends State<GamerRoomsScreen> {
                               final uid = currentUserId;
                               final name = currentUserName;
                               final photo = currentUserPhoto;
-                              final docRef = FirebaseFirestore.instance.collection('rooms').doc();
+                              final docRef = SupaStore.instance.collection('rooms').doc();
 
                               final newRoomData = {
                                 'id': docRef.id,
@@ -1368,7 +1367,7 @@ class _GamerRoomsScreenState extends State<GamerRoomsScreen> {
                                     'id': uid,
                                     'name': name,
                                     'photo': photo,
-                                    'joinedAt': Timestamp.now(),
+                                    'joinedAt': SupaTime.now(),
                                   }
                                 ],
                                 'joinedPlayerNames': {uid: name},
@@ -1376,8 +1375,8 @@ class _GamerRoomsScreenState extends State<GamerRoomsScreen> {
                                 'roomId': roomIdController.text.trim(),
                                 'password': passController.text.trim(),
                                 'status': 'active',
-                                'createdAt': FieldValue.serverTimestamp(),
-                                'startTime': Timestamp.fromDate(DateTime.now().add(const Duration(minutes: 15))),
+                                'createdAt': SupaField.serverTimestamp(),
+                                'startTime': SupaTime.fromDate(DateTime.now().add(const Duration(minutes: 15))),
                                 'isLive': true,
                               };
 
@@ -1938,8 +1937,8 @@ class _GamerRoomsScreenState extends State<GamerRoomsScreen> {
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
                   // G-Coins button (Live Stream from users collection)
-                  StreamBuilder<DocumentSnapshot>(
-                    stream: FirebaseFirestore.instance
+                  StreamBuilder<SupaDoc>(
+                    stream: SupaStore.instance
                         .collection('users')
                         .doc(currentUserId)
                         .snapshots(),
@@ -2260,7 +2259,7 @@ class _InRoomBottomSheetContentState extends State<_InRoomBottomSheetContent> {
     }
 
     try {
-      final uDoc = await FirebaseFirestore.instance.collection('users').doc(hostId).get();
+      final uDoc = await SupaStore.instance.collection('users').doc(hostId).get();
       if (uDoc.exists) {
         final data = uDoc.data() as Map<String, dynamic>? ?? {};
         final name = (data['username'] ?? data['displayName'] ?? data['name'] ?? data['bgmiId'])?.toString().trim() ?? '';
@@ -2272,7 +2271,7 @@ class _InRoomBottomSheetContentState extends State<_InRoomBottomSheetContent> {
     } catch (_) {}
 
     try {
-      final tDoc = await FirebaseFirestore.instance.collection('tournament_rooms').doc(room.id).get();
+      final tDoc = await SupaStore.instance.collection('tournament_rooms').doc(room.id).get();
       if (tDoc.exists) {
         final data = tDoc.data() as Map<String, dynamic>? ?? {};
         final name = (data['hostName'] ?? data['host'] ?? data['hostUsername'])?.toString().trim() ?? '';
@@ -2538,7 +2537,7 @@ class _InRoomBottomSheetContentState extends State<_InRoomBottomSheetContent> {
                                       ? reasonController.text.trim()
                                       : 'Loser claims winner screenshot is fake/wrong';
 
-                                  final roomRef = FirebaseFirestore.instance.collection('rooms').doc(room.id);
+                                  final roomRef = SupaStore.instance.collection('rooms').doc(room.id);
                                   await roomRef.update({
                                     'status': 'disputed',
                                     'disputed': true,
@@ -2546,19 +2545,19 @@ class _InRoomBottomSheetContentState extends State<_InRoomBottomSheetContent> {
                                     'disputedByName': widget.currentUserName,
                                     'disputeProofUrl': disputeUrl,
                                     'disputeReason': reason,
-                                    'disputedAt': FieldValue.serverTimestamp(),
+                                    'disputedAt': SupaField.serverTimestamp(),
                                   });
 
                                   try {
-                                    await FirebaseFirestore.instance.collection('tournament_rooms').doc(room.id).set({
+                                    await SupaStore.instance.collection('tournament_rooms').doc(room.id).set({
                                       'status': 'disputed',
                                       'disputed': true,
                                       'disputedBy': widget.currentUserId,
                                       'disputedByName': widget.currentUserName,
                                       'disputeProofUrl': disputeUrl,
                                       'disputeReason': reason,
-                                      'disputedAt': FieldValue.serverTimestamp(),
-                                    }, SetOptions(merge: true));
+                                      'disputedAt': SupaField.serverTimestamp(),
+                                    }, SupaSetOptions(merge: true));
                                   } catch (_) {}
 
                                   // Add dispute proof message into chat
@@ -2569,7 +2568,7 @@ class _InRoomBottomSheetContentState extends State<_InRoomBottomSheetContent> {
                                     'message': reason,
                                     'imageUrl': disputeUrl,
                                     'type': 'dispute_proof',
-                                    'timestamp': FieldValue.serverTimestamp(),
+                                    'timestamp': SupaField.serverTimestamp(),
                                     'isHost': widget.currentUserId == room.hostId,
                                   });
 
@@ -2580,7 +2579,7 @@ class _InRoomBottomSheetContentState extends State<_InRoomBottomSheetContent> {
                                     'senderInitial': '⚠️',
                                     'message': '⚠️ DISPUTE RAISED with screenshot proof by ${widget.currentUserName}! Match placed under Admin review.',
                                     'type': 'system',
-                                    'timestamp': FieldValue.serverTimestamp(),
+                                    'timestamp': SupaField.serverTimestamp(),
                                     'isHost': false,
                                   });
 
@@ -2662,26 +2661,26 @@ class _InRoomBottomSheetContentState extends State<_InRoomBottomSheetContent> {
     }
 
     try {
-      final roomRef = FirebaseFirestore.instance.collection('rooms').doc(room.id);
+      final roomRef = SupaStore.instance.collection('rooms').doc(room.id);
       await roomRef.update({
         'status': 'reward_waiting',
         'disputed': false,
-        'disputedBy': FieldValue.delete(),
-        'disputedByName': FieldValue.delete(),
-        'disputeProofUrl': FieldValue.delete(),
-        'disputeReason': FieldValue.delete(),
-        'disputedAt': FieldValue.delete(),
+        'disputedBy': SupaField.delete(),
+        'disputedByName': SupaField.delete(),
+        'disputeProofUrl': SupaField.delete(),
+        'disputeReason': SupaField.delete(),
+        'disputedAt': SupaField.delete(),
       });
 
       try {
-        await FirebaseFirestore.instance.collection('tournament_rooms').doc(room.id).update({
+        await SupaStore.instance.collection('tournament_rooms').doc(room.id).update({
           'status': 'reward_waiting',
           'disputed': false,
-          'disputedBy': FieldValue.delete(),
-          'disputedByName': FieldValue.delete(),
-          'disputeProofUrl': FieldValue.delete(),
-          'disputeReason': FieldValue.delete(),
-          'disputedAt': FieldValue.delete(),
+          'disputedBy': SupaField.delete(),
+          'disputedByName': SupaField.delete(),
+          'disputeProofUrl': SupaField.delete(),
+          'disputeReason': SupaField.delete(),
+          'disputedAt': SupaField.delete(),
         });
       } catch (_) {}
 
@@ -2693,7 +2692,7 @@ class _InRoomBottomSheetContentState extends State<_InRoomBottomSheetContent> {
         'senderInitial': 'ℹ️',
         'message': '🗑️ Dispute proof was removed by ${widget.currentUserName}. Match returned to awaiting confirmation.',
         'type': 'system',
-        'timestamp': FieldValue.serverTimestamp(),
+        'timestamp': SupaField.serverTimestamp(),
         'isHost': false,
       });
 
@@ -2828,12 +2827,12 @@ class _InRoomBottomSheetContentState extends State<_InRoomBottomSheetContent> {
       final autoApproveTime = DateTime.now().add(const Duration(minutes: 15));
 
       // Firestore update: status becomes 'reward_waiting' with 15-minute autoApprove timer
-      await FirebaseFirestore.instance.collection('rooms').doc(roomId).update({
+      await SupaStore.instance.collection('rooms').doc(roomId).update({
         'status': newStatus,
         'proofUrl': downloadUrl,
         'winProofUrl': downloadUrl,
-        'winProofUploadedAt': FieldValue.serverTimestamp(),
-        'autoApproveAt': Timestamp.fromDate(autoApproveTime),
+        'winProofUploadedAt': SupaField.serverTimestamp(),
+        'autoApproveAt': SupaTime.fromDate(autoApproveTime),
         'winnerId': widget.currentUserId,
         'winnerName': widget.currentUserName,
         'proofUploadedBy': widget.currentUserId,
@@ -2847,17 +2846,17 @@ class _InRoomBottomSheetContentState extends State<_InRoomBottomSheetContent> {
       });
 
       try {
-        await FirebaseFirestore.instance.collection('tournament_rooms').doc(roomId).set({
+        await SupaStore.instance.collection('tournament_rooms').doc(roomId).set({
           'status': newStatus,
           'winProofUrl': downloadUrl,
-          'winProofUploadedAt': FieldValue.serverTimestamp(),
-          'autoApproveAt': Timestamp.fromDate(autoApproveTime),
+          'winProofUploadedAt': SupaField.serverTimestamp(),
+          'autoApproveAt': SupaTime.fromDate(autoApproveTime),
           'winnerId': widget.currentUserId,
           'winnerName': widget.currentUserName,
           'proofUploadedBy': widget.currentUserId,
           'proofUploadedByName': widget.currentUserName,
           'rewardStatus': newRewardStatus,
-        }, SetOptions(merge: true));
+        }, SupaSetOptions(merge: true));
       } catch (_) {}
 
       return validationResult;
@@ -2865,12 +2864,12 @@ class _InRoomBottomSheetContentState extends State<_InRoomBottomSheetContent> {
       debugPrint('OCR Error: $e');
       final errText = 'Error reading screenshot: $e';
       final autoApproveTime = DateTime.now().add(const Duration(minutes: 15));
-      await FirebaseFirestore.instance.collection('rooms').doc(roomId).update({
+      await SupaStore.instance.collection('rooms').doc(roomId).update({
         'status': 'reward_waiting',
         'proofUrl': downloadUrl,
         'winProofUrl': downloadUrl,
-        'winProofUploadedAt': FieldValue.serverTimestamp(),
-        'autoApproveAt': Timestamp.fromDate(autoApproveTime),
+        'winProofUploadedAt': SupaField.serverTimestamp(),
+        'autoApproveAt': SupaTime.fromDate(autoApproveTime),
         'winnerId': widget.currentUserId,
         'winnerName': widget.currentUserName,
         'proofUploadedBy': widget.currentUserId,
@@ -2915,40 +2914,40 @@ class _InRoomBottomSheetContentState extends State<_InRoomBottomSheetContent> {
 
     try {
       // 1. Clear Firestore proof fields and reset status
-      await FirebaseFirestore.instance.collection('rooms').doc(room.id).update({
+      await SupaStore.instance.collection('rooms').doc(room.id).update({
         'status': 'IN_PROGRESS',
-        'proofUrl': FieldValue.delete(),
-        'winProofUrl': FieldValue.delete(),
-        'winProofUploadedAt': FieldValue.delete(),
-        'autoApproveAt': FieldValue.delete(),
-        'winnerId': FieldValue.delete(),
-        'winnerName': FieldValue.delete(),
-        'proofUploadedBy': FieldValue.delete(),
-        'proofUploadedByName': FieldValue.delete(),
-        'ocrStatus': FieldValue.delete(),
+        'proofUrl': SupaField.delete(),
+        'winProofUrl': SupaField.delete(),
+        'winProofUploadedAt': SupaField.delete(),
+        'autoApproveAt': SupaField.delete(),
+        'winnerId': SupaField.delete(),
+        'winnerName': SupaField.delete(),
+        'proofUploadedBy': SupaField.delete(),
+        'proofUploadedByName': SupaField.delete(),
+        'ocrStatus': SupaField.delete(),
         'ocrScore': 0,
-        'ocrText': FieldValue.delete(),
-        'detectedScreenshotName': FieldValue.delete(),
-        'accountIdName': FieldValue.delete(),
+        'ocrText': SupaField.delete(),
+        'detectedScreenshotName': SupaField.delete(),
+        'accountIdName': SupaField.delete(),
         'rewardStatus': 'idle',
       });
 
       try {
-        await FirebaseFirestore.instance.collection('tournament_rooms').doc(room.id).update({
+        await SupaStore.instance.collection('tournament_rooms').doc(room.id).update({
           'status': 'IN_PROGRESS',
-          'winProofUrl': FieldValue.delete(),
-          'winProofUploadedAt': FieldValue.delete(),
-          'autoApproveAt': FieldValue.delete(),
-          'winnerId': FieldValue.delete(),
-          'winnerName': FieldValue.delete(),
-          'proofUploadedBy': FieldValue.delete(),
-          'proofUploadedByName': FieldValue.delete(),
+          'winProofUrl': SupaField.delete(),
+          'winProofUploadedAt': SupaField.delete(),
+          'autoApproveAt': SupaField.delete(),
+          'winnerId': SupaField.delete(),
+          'winnerName': SupaField.delete(),
+          'proofUploadedBy': SupaField.delete(),
+          'proofUploadedByName': SupaField.delete(),
           'rewardStatus': 'idle',
         });
       } catch (_) {}
 
       // 2. Delete the rejected message
-      await FirebaseFirestore.instance
+      await SupaStore.instance
           .collection('rooms')
           .doc(room.id)
           .collection('messages')
@@ -2957,7 +2956,7 @@ class _InRoomBottomSheetContentState extends State<_InRoomBottomSheetContent> {
           .catchError((_) {});
 
       // 3. Post a clean notification in chat
-      await FirebaseFirestore.instance
+      await SupaStore.instance
           .collection('rooms')
           .doc(room.id)
           .collection('messages')
@@ -2967,7 +2966,7 @@ class _InRoomBottomSheetContentState extends State<_InRoomBottomSheetContent> {
         'senderInitial': '🤖',
         'message': '🗑️ Win proof was removed by ${widget.currentUserName}. You can now upload a fresh screenshot.',
         'type': 'system',
-        'timestamp': FieldValue.serverTimestamp(),
+        'timestamp': SupaField.serverTimestamp(),
         'isHost': false,
       });
 
@@ -3045,7 +3044,7 @@ class _InRoomBottomSheetContentState extends State<_InRoomBottomSheetContent> {
       });
 
       // 1. Delete old rejected message from chat
-      await FirebaseFirestore.instance
+      await SupaStore.instance
           .collection('rooms')
           .doc(room.id)
           .collection('messages')
@@ -3081,7 +3080,7 @@ class _InRoomBottomSheetContentState extends State<_InRoomBottomSheetContent> {
       );
 
       // 5. Add new win_proof message
-      await FirebaseFirestore.instance
+      await SupaStore.instance
           .collection('rooms')
           .doc(room.id)
           .collection('messages')
@@ -3098,12 +3097,12 @@ class _InRoomBottomSheetContentState extends State<_InRoomBottomSheetContent> {
         'detectedName': valRes.detectedScreenshotName,
         'accountName': accountIdName,
         'aiCheckMsg': valRes.message,
-        'timestamp': FieldValue.serverTimestamp(),
+        'timestamp': SupaField.serverTimestamp(),
         'isHost': false,
       });
 
       // 6. Add system check message
-      await FirebaseFirestore.instance
+      await SupaStore.instance
           .collection('rooms')
           .doc(room.id)
           .collection('messages')
@@ -3113,7 +3112,7 @@ class _InRoomBottomSheetContentState extends State<_InRoomBottomSheetContent> {
         'senderInitial': '🤖',
         'message': valRes.message,
         'type': 'system',
-        'timestamp': FieldValue.serverTimestamp(),
+        'timestamp': SupaField.serverTimestamp(),
         'isHost': false,
       });
 
@@ -3163,7 +3162,7 @@ class _InRoomBottomSheetContentState extends State<_InRoomBottomSheetContent> {
     final text = _msgController.text.trim();
     if (text.isEmpty && _selectedProofImage == null) return;
 
-    final messagesRef = FirebaseFirestore.instance
+    final messagesRef = SupaStore.instance
         .collection('rooms')
         .doc(widget.room.id)
         .collection('messages');
@@ -3220,7 +3219,7 @@ class _InRoomBottomSheetContentState extends State<_InRoomBottomSheetContent> {
           'detectedName': detectedName,
           'accountName': accountIdName,
           'aiCheckMsg': valRes.message,
-          'timestamp': FieldValue.serverTimestamp(),
+          'timestamp': SupaField.serverTimestamp(),
           'isHost': isHost,
         });
 
@@ -3231,7 +3230,7 @@ class _InRoomBottomSheetContentState extends State<_InRoomBottomSheetContent> {
           'senderInitial': '🤖',
           'message': valRes.message,
           'type': 'system',
-          'timestamp': FieldValue.serverTimestamp(),
+          'timestamp': SupaField.serverTimestamp(),
           'isHost': false,
         });
 
@@ -3278,7 +3277,7 @@ class _InRoomBottomSheetContentState extends State<_InRoomBottomSheetContent> {
         'senderInitial': widget.currentUserName.isNotEmpty ? widget.currentUserName[0].toUpperCase() : 'G',
         'message': text,
         'type': 'text',
-        'timestamp': FieldValue.serverTimestamp(),
+        'timestamp': SupaField.serverTimestamp(),
         'isHost': isHost,
       });
     }
@@ -3347,7 +3346,7 @@ class _InRoomBottomSheetContentState extends State<_InRoomBottomSheetContent> {
     required String winProofUrl,
     required GamerRoom room,
   }) async {
-    final roomRef = FirebaseFirestore.instance.collection('rooms').doc(room.id);
+    final roomRef = SupaStore.instance.collection('rooms').doc(room.id);
 
     // SAB SE IMPORTANT CHECK - APP KA VETO
     try {
@@ -3422,7 +3421,7 @@ class _InRoomBottomSheetContentState extends State<_InRoomBottomSheetContent> {
 
     // Idempotency lock
     try {
-      final DocumentSnapshot roomSnap = await roomRef.get();
+      final SupaDoc roomSnap = await roomRef.get();
       final roomData = roomSnap.data() as Map<String, dynamic>? ?? {};
       if (roomData['rewardStatus'] == 'sent') {
         if (mounted) {
@@ -3476,13 +3475,13 @@ class _InRoomBottomSheetContentState extends State<_InRoomBottomSheetContent> {
         resolvedWinnerId = winnerId.isNotEmpty ? winnerId : widget.currentUserId;
       }
 
-      final DocumentReference winnerRef = FirebaseFirestore.instance.collection('users').doc(resolvedWinnerId);
+      final SupaDocRef winnerRef = SupaStore.instance.collection('users').doc(resolvedWinnerId);
 
       // Use atomic transaction NOT batch for guarantee
-      await FirebaseFirestore.instance.runTransaction((transaction) async {
+      await SupaStore.instance.runTransaction((transaction) async {
         // All gets first
-        final DocumentSnapshot winnerSnap = await transaction.get(winnerRef);
-        final DocumentSnapshot txRoomSnap = await transaction.get(roomRef);
+        final SupaDoc winnerSnap = await transaction.get(winnerRef);
+        final SupaDoc txRoomSnap = await transaction.get(roomRef);
 
         final txRoomData = txRoomSnap.data() as Map<String, dynamic>? ?? {};
         if (txRoomData['ocrStatus'] != 'verified') {
@@ -3508,14 +3507,14 @@ class _InRoomBottomSheetContentState extends State<_InRoomBottomSheetContent> {
 
         final int updatedCoins = currentCoins + prize;
 
-        // 1. Increment winner using direct value (NO FieldValue.increment inside transaction)
+        // 1. Increment winner using direct value (NO SupaField.increment inside transaction)
         if (winnerSnap.exists) {
           transaction.update(winnerRef, {
             'gCoins': updatedCoins,
             'coins': updatedCoins,
             'totalWinnings': currentWinnings + prize,
             'wins': currentWins + 1,
-            'lastRewardAt': FieldValue.serverTimestamp(),
+            'lastRewardAt': SupaField.serverTimestamp(),
           });
         } else {
           transaction.set(winnerRef, {
@@ -3523,12 +3522,12 @@ class _InRoomBottomSheetContentState extends State<_InRoomBottomSheetContent> {
             'coins': updatedCoins,
             'totalWinnings': prize,
             'wins': 1,
-            'lastRewardAt': FieldValue.serverTimestamp(),
+            'lastRewardAt': SupaField.serverTimestamp(),
           });
         }
 
         // 2. Create transaction log with App Veto verification status
-        final DocumentReference txRef = FirebaseFirestore.instance.collection('transactions').doc();
+        final SupaDocRef txRef = SupaStore.instance.collection('transactions').doc();
         final String txId = txRef.id;
         final txLogData = {
           'id': txId,
@@ -3545,12 +3544,12 @@ class _InRoomBottomSheetContentState extends State<_InRoomBottomSheetContent> {
           'ocrStatus': 'verified',
           'status': 'completed',
           'winProofUrl': winProofUrl,
-          'createdAt': FieldValue.serverTimestamp(),
-          'timestamp': FieldValue.serverTimestamp(),
+          'createdAt': SupaField.serverTimestamp(),
+          'timestamp': SupaField.serverTimestamp(),
         };
         transaction.set(txRef, txLogData);
 
-        final DocumentReference coinTxRef = FirebaseFirestore.instance.collection('coin_transactions').doc(txId);
+        final SupaDocRef coinTxRef = SupaStore.instance.collection('coin_transactions').doc(txId);
         transaction.set(coinTxRef, txLogData);
 
         // 3. Mark room sent
@@ -3560,18 +3559,18 @@ class _InRoomBottomSheetContentState extends State<_InRoomBottomSheetContent> {
           'winnerId': resolvedWinnerId,
           'winnerName': winnerName,
           'prizeSource': 'application',
-          'rewardSentAt': FieldValue.serverTimestamp(),
+          'rewardSentAt': SupaField.serverTimestamp(),
           'isCompleted': true,
           'isLive': false,
-          'completedAt': FieldValue.serverTimestamp(),
+          'completedAt': SupaField.serverTimestamp(),
         });
 
         // 4. System Announcement
-        final DocumentReference msgRef = roomRef.collection('messages').doc();
+        final SupaDocRef msgRef = roomRef.collection('messages').doc();
         transaction.set(msgRef, {
           'type': 'system_reward',
           'message': '🎉 $winnerName won and received $prize Coins from App!',
-          'timestamp': FieldValue.serverTimestamp(),
+          'timestamp': SupaField.serverTimestamp(),
           'senderId': 'system',
           'senderName': 'ROOM BOT',
           'isHost': false,
@@ -3579,14 +3578,14 @@ class _InRoomBottomSheetContentState extends State<_InRoomBottomSheetContent> {
       });
 
       try {
-        await FirebaseFirestore.instance.collection('tournament_rooms').doc(roomId).set({
+        await SupaStore.instance.collection('tournament_rooms').doc(roomId).set({
           'status': 'completed',
           'rewardStatus': 'sent',
           'winnerId': resolvedWinnerId,
           'winnerName': winnerName,
-          'completedAt': FieldValue.serverTimestamp(),
+          'completedAt': SupaField.serverTimestamp(),
           'isLive': false,
-        }, SetOptions(merge: true));
+        }, SupaSetOptions(merge: true));
       } catch (_) {}
 
       debugPrint('REWARD SUCCESS: $prize to $resolvedWinnerId');
@@ -3617,7 +3616,7 @@ class _InRoomBottomSheetContentState extends State<_InRoomBottomSheetContent> {
 
   // Host Reward Rejection
   Future<void> _rejectReward(String winnerName) async {
-    await FirebaseFirestore.instance
+    await SupaStore.instance
         .collection('rooms')
         .doc(widget.room.id)
         .collection('messages')
@@ -3626,7 +3625,7 @@ class _InRoomBottomSheetContentState extends State<_InRoomBottomSheetContent> {
       'senderName': 'ROOM BOT',
       'message': '⚠️ Win proof submitted by $winnerName was rejected by the host.',
       'type': 'system',
-      'timestamp': FieldValue.serverTimestamp(),
+      'timestamp': SupaField.serverTimestamp(),
       'isHost': false,
     });
 
@@ -3652,21 +3651,21 @@ class _InRoomBottomSheetContentState extends State<_InRoomBottomSheetContent> {
 
     try {
       // 1. Update Firestore 'rooms' document
-      await FirebaseFirestore.instance.collection('rooms').doc(room.id).update({
+      await SupaStore.instance.collection('rooms').doc(room.id).update({
         'status': 'IN_PROGRESS',
         'isMatchStarted': true,
-        'matchStartedAt': FieldValue.serverTimestamp(),
+        'matchStartedAt': SupaField.serverTimestamp(),
       });
 
       // 2. Also update 'tournament_rooms' collection if exists
       try {
-        await FirebaseFirestore.instance.collection('tournament_rooms').doc(room.id).set({
+        await SupaStore.instance.collection('tournament_rooms').doc(room.id).set({
           'status': 'IN_PROGRESS',
           'isLive': true,
           'isMatchStarted': true,
-          'matchStartedAt': FieldValue.serverTimestamp(),
-          'updatedAt': FieldValue.serverTimestamp(),
-        }, SetOptions(merge: true));
+          'matchStartedAt': SupaField.serverTimestamp(),
+          'updatedAt': SupaField.serverTimestamp(),
+        }, SupaSetOptions(merge: true));
       } catch (_) {}
 
       // 3. Update TournamentService local state
@@ -3676,7 +3675,7 @@ class _InRoomBottomSheetContentState extends State<_InRoomBottomSheetContent> {
 
       // 4. Send system announcement in room chat
       try {
-        await FirebaseFirestore.instance
+        await SupaStore.instance
             .collection('rooms')
             .doc(room.id)
             .collection('messages')
@@ -3686,7 +3685,7 @@ class _InRoomBottomSheetContentState extends State<_InRoomBottomSheetContent> {
           'senderInitial': '🎮',
           'message': '⚔️ MATCH STARTED! The host has initiated the match. Enter the game room now and good luck players! Remember to screenshot your victory screen to claim reward.',
           'type': 'system',
-          'timestamp': FieldValue.serverTimestamp(),
+          'timestamp': SupaField.serverTimestamp(),
           'isHost': false,
         });
       } catch (_) {}
@@ -3695,14 +3694,14 @@ class _InRoomBottomSheetContentState extends State<_InRoomBottomSheetContent> {
       for (final uid in room.joinedUserIds) {
         if (uid != widget.currentUserId) {
           try {
-            await FirebaseFirestore.instance.collection('notifications').add({
+            await SupaStore.instance.collection('notifications').add({
               'recipientUid': uid,
               'senderUid': widget.currentUserId,
               'type': 'match_started',
               'message': 'Host started the match for "${room.title}"! Join the game now.',
               'roomId': room.id,
               'read': false,
-              'createdAt': FieldValue.serverTimestamp(),
+              'createdAt': SupaField.serverTimestamp(),
             });
           } catch (_) {}
         }
@@ -3785,8 +3784,8 @@ class _InRoomBottomSheetContentState extends State<_InRoomBottomSheetContent> {
 
   @override
   Widget build(BuildContext context) {
-    return StreamBuilder<DocumentSnapshot>(
-      stream: FirebaseFirestore.instance.collection('rooms').doc(widget.room.id).snapshots(),
+    return StreamBuilder<SupaDoc>(
+      stream: SupaStore.instance.collection('rooms').doc(widget.room.id).snapshots(),
       builder: (context, roomSnapshot) {
         GamerRoom room = widget.room;
         if (roomSnapshot.hasData && roomSnapshot.data != null && roomSnapshot.data!.exists) {
@@ -4410,8 +4409,8 @@ class _InRoomBottomSheetContentState extends State<_InRoomBottomSheetContent> {
                   child: Stack(
                     children: [
                       // Stream of messages
-                      StreamBuilder<QuerySnapshot>(
-                        stream: FirebaseFirestore.instance
+                      StreamBuilder<SupaSnap>(
+                        stream: SupaStore.instance
                             .collection('rooms')
                             .doc(widget.room.id)
                             .collection('messages')
@@ -4463,10 +4462,10 @@ class _InRoomBottomSheetContentState extends State<_InRoomBottomSheetContent> {
                                   isDoubt ||
                                   (!isVerified && (msgOcrScore == 0 || room.isProofRejected));
 
-                              // Timestamp display
+                              // SupaTime display
                               String timeStr = 'now';
-                              if (msg['timestamp'] is Timestamp) {
-                                final dt = (msg['timestamp'] as Timestamp).toDate();
+                              if (msg['timestamp'] is SupaTime) {
+                                final dt = (msg['timestamp'] as SupaTime).toDate();
                                 timeStr = DateFormat('hh:mm a').format(dt);
                               }
 
