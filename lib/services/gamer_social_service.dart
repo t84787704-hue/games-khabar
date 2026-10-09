@@ -239,8 +239,6 @@ class GamerSocialService {
     }
   }
 
-  /// ✅ FIXED: Get list of users who follow `targetUid`
-  /// Excludes self + counts only real followers
   Future<List<GamerUser>> getFollowers(String targetUid) async {
     if (targetUid.isEmpty) return [];
     try {
@@ -279,8 +277,6 @@ class GamerSocialService {
     }
   }
 
-  /// ✅ FIXED: Get list of users that `followerUid` is following
-  /// Excludes self + deduplicates
   Future<List<GamerUser>> getFollowing(String followerUid) async {
     if (followerUid.isEmpty) return [];
     try {
@@ -319,7 +315,6 @@ class GamerSocialService {
     }
   }
 
-  /// ✅ FIXED: id ko priority do (kyunki follows table id use karta hai)
   GamerUser? _rowToGamerUser(Map<String, dynamic> row) {
     try {
       final rawUid = (row['id'] ?? row['uid'] ?? '').toString();
@@ -328,7 +323,8 @@ class GamerSocialService {
       return GamerUser(
         uid: rawUid,
         username: (row['username'] ?? 'gamer').toString(),
-        displayName: (row['display_name'] ?? row['username'] ?? 'Gamer').toString(),
+        displayName:
+            (row['display_name'] ?? row['username'] ?? 'Gamer').toString(),
         photoUrl: (row['avatar_url'] ?? '').toString(),
         coverUrl: (row['cover_url'] ?? '').toString(),
         bio: (row['bio'] ?? '').toString(),
@@ -374,17 +370,24 @@ class GamerSocialService {
     String? content,
     String? game,
   }) async {
+    // ============ FIX: Sirf auth.currentUser.id — koi fallback nahi ============
+    final authUserId = _supabase.auth.currentUser?.id;
+
+    if (authUserId == null || authUserId.isEmpty) {
+      throw Exception(
+          'User not authenticated. Please log in again to publish a post.');
+    }
+
+    // Parameter `userId` ko ignore kar rahe hain — sirf auth ID use karo
+    final effectiveUserId = authUserId;
+
+    final postUuid = stringToUuid(effectiveUserId);
+
     final postContent = text.isNotEmpty ? text : (content ?? '');
     final finalGame =
         (gameTag.isNotEmpty && gameTag != 'BGMI') ? gameTag : (game ?? gameTag);
     final finalMedia = imageUrl ?? mediaUrl;
     final finalVideo = videoUrl;
-
-    final effectiveUserId = (_supabase.auth.currentUser?.id?.isNotEmpty == true)
-        ? _supabase.auth.currentUser!.id
-        : userId;
-
-    final postUuid = stringToUuid(effectiveUserId);
 
     await _ensureUserExists(
       userId: effectiveUserId,
