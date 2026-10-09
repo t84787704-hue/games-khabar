@@ -1,7 +1,5 @@
 import 'package:flutter/material.dart';
-import 'package:uuid/uuid.dart';
 import '../constants/gamer_theme.dart';
-import '../models/gamer_post_model.dart';
 import '../services/gamer_auth_service.dart';
 import '../services/gamer_social_service.dart';
 import '../services/supabase_service.dart';
@@ -52,16 +50,26 @@ class _CreatePostScreenState extends State<CreatePostScreen> {
     setState(() => _isLoading = true);
 
     try {
-      // 1. Resolve logged-in user profile & ID
-      final gamer = _authService.currentGamer;
-      final rawUid = _authService.currentUid;
+      // ============ FIX: Sirf Supabase Auth ID use karo ============
+      // Cached rawUid ya fake fallback bilkul nahi.
       final sbUserId = await SupabaseService.getCurrentUserId();
 
-      // Ensure we have a valid user identifier
-      final effectiveUid = (rawUid != null && rawUid.isNotEmpty)
-          ? rawUid
-          : (sbUserId != null && sbUserId.isNotEmpty ? sbUserId : 'user_${DateTime.now().millisecondsSinceEpoch}');
+      if (sbUserId == null || sbUserId.isEmpty) {
+        if (mounted) {
+          setState(() => _isLoading = false);
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('Pehle login karein. Post publish nahi ho sakti.'),
+              backgroundColor: GamerTheme.redAccent,
+            ),
+          );
+        }
+        return;
+      }
 
+      final effectiveUid = sbUserId;
+
+      final gamer = _authService.currentGamer;
       final username = (gamer?.username.isNotEmpty == true)
           ? gamer!.username
           : 'gamer';
@@ -69,9 +77,10 @@ class _CreatePostScreenState extends State<CreatePostScreen> {
           ? gamer!.displayName
           : (gamer?.username.isNotEmpty == true ? gamer!.username : 'Gamer');
       final userPhoto = gamer?.photoUrl ?? '';
-      final gameTag = (_selectedGame == 'Mobile Games' || _selectedGame == 'All') ? 'BGMI' : _selectedGame;
+      final gameTag = (_selectedGame == 'Mobile Games' || _selectedGame == 'All')
+          ? 'BGMI'
+          : _selectedGame;
 
-      // 2. Publish post using GamerSocialService which syncs to Supabase posts table
       await _socialService.createPost(
         userId: effectiveUid,
         username: username,
@@ -95,7 +104,7 @@ class _CreatePostScreenState extends State<CreatePostScreen> {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text('Post publish ho gayi ya warning: $e'),
+            content: Text('Post publish nahi ho saki: $e'),
             backgroundColor: GamerTheme.redAccent,
           ),
         );
@@ -111,7 +120,8 @@ class _CreatePostScreenState extends State<CreatePostScreen> {
     final displayName = gamer?.displayName.isNotEmpty == true
         ? gamer!.displayName
         : (gamer?.username.isNotEmpty == true ? gamer!.username : 'Gamer');
-    final username = gamer?.username.isNotEmpty == true ? gamer!.username : 'gamer';
+    final username =
+        gamer?.username.isNotEmpty == true ? gamer!.username : 'gamer';
 
     return Scaffold(
       backgroundColor: GamerTheme.bgDark,
@@ -124,7 +134,8 @@ class _CreatePostScreenState extends State<CreatePostScreen> {
         ),
         title: const Text(
           'Create Post',
-          style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 18),
+          style: TextStyle(
+              color: Colors.white, fontWeight: FontWeight.bold, fontSize: 18),
         ),
         actions: [
           Padding(
@@ -134,7 +145,8 @@ class _CreatePostScreenState extends State<CreatePostScreen> {
                     child: SizedBox(
                       width: 20,
                       height: 20,
-                      child: CircularProgressIndicator(strokeWidth: 2, color: GamerTheme.accentBlue),
+                      child: CircularProgressIndicator(
+                          strokeWidth: 2, color: GamerTheme.accentBlue),
                     ),
                   )
                 : TextButton(
@@ -143,11 +155,15 @@ class _CreatePostScreenState extends State<CreatePostScreen> {
                       backgroundColor: GamerTheme.accentBlue,
                       foregroundColor: GamerTheme.bgDark,
                       padding: const EdgeInsets.symmetric(horizontal: 16),
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                      shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(8)),
                     ),
                     child: const Text(
                       'POST',
-                      style: TextStyle(fontWeight: FontWeight.w900, fontSize: 13, letterSpacing: 0.5),
+                      style: TextStyle(
+                          fontWeight: FontWeight.w900,
+                          fontSize: 13,
+                          letterSpacing: 0.5),
                     ),
                   ),
           ),
@@ -159,7 +175,6 @@ class _CreatePostScreenState extends State<CreatePostScreen> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              // User header & Game Tag
               Row(
                 children: [
                   GamerAvatar(
@@ -192,7 +207,8 @@ class _CreatePostScreenState extends State<CreatePostScreen> {
                     ),
                   ),
                   Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 2),
+                    padding:
+                        const EdgeInsets.symmetric(horizontal: 10, vertical: 2),
                     decoration: BoxDecoration(
                       color: GamerTheme.cardElevated,
                       borderRadius: BorderRadius.circular(10),
@@ -202,15 +218,24 @@ class _CreatePostScreenState extends State<CreatePostScreen> {
                       child: DropdownButton<String>(
                         value: _selectedGame,
                         dropdownColor: GamerTheme.cardElevated,
-                        icon: const Icon(Icons.arrow_drop_down, color: Colors.white70),
-                        style: const TextStyle(color: Colors.white, fontSize: 13, fontWeight: FontWeight.bold),
+                        icon: const Icon(Icons.arrow_drop_down,
+                            color: Colors.white70),
+                        style: const TextStyle(
+                            color: Colors.white,
+                            fontSize: 13,
+                            fontWeight: FontWeight.bold),
                         items: const [
-                          DropdownMenuItem(value: 'Mobile Games', child: Text('Mobile Games')),
+                          DropdownMenuItem(
+                              value: 'Mobile Games', child: Text('Mobile Games')),
                           DropdownMenuItem(value: 'BGMI', child: Text('BGMI')),
-                          DropdownMenuItem(value: 'Free Fire', child: Text('Free Fire')),
-                          DropdownMenuItem(value: 'COD Mobile', child: Text('COD Mobile')),
-                          DropdownMenuItem(value: 'PUBG PC', child: Text('PUBG PC')),
-                          DropdownMenuItem(value: 'Valorant', child: Text('Valorant')),
+                          DropdownMenuItem(
+                              value: 'Free Fire', child: Text('Free Fire')),
+                          DropdownMenuItem(
+                              value: 'COD Mobile', child: Text('COD Mobile')),
+                          DropdownMenuItem(
+                              value: 'PUBG PC', child: Text('PUBG PC')),
+                          DropdownMenuItem(
+                              value: 'Valorant', child: Text('Valorant')),
                           DropdownMenuItem(value: 'GTA V', child: Text('GTA V')),
                         ],
                         onChanged: (v) {
@@ -222,18 +247,19 @@ class _CreatePostScreenState extends State<CreatePostScreen> {
                 ],
               ),
               const SizedBox(height: 18),
-
-              // Post content input
               Expanded(
                 child: TextField(
                   controller: _textController,
                   maxLines: null,
                   expands: true,
                   textAlignVertical: TextAlignVertical.top,
-                  style: const TextStyle(color: Colors.white, fontSize: 16, height: 1.4),
+                  style: const TextStyle(
+                      color: Colors.white, fontSize: 16, height: 1.4),
                   decoration: const InputDecoration(
-                    hintText: "What's on your gaming mind?\n\nShare clips, custom room codes, squad requests...",
-                    hintStyle: TextStyle(color: GamerTheme.textMuted, fontSize: 15),
+                    hintText:
+                        "What's on your gaming mind?\n\nShare clips, custom room codes, squad requests...",
+                    hintStyle: TextStyle(
+                        color: GamerTheme.textMuted, fontSize: 15),
                     border: InputBorder.none,
                   ),
                 ),
