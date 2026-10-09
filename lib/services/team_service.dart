@@ -195,8 +195,6 @@ class TeamService {
       final now = DateTime.now().toIso8601String();
 
       // ============ FIX: Sirf woh columns jo teams table mein hain ============
-      // Extra columns hataye: team_id, leader_name, leader_avatar,
-      // members, member_count, updated_at
       final row = {
         "id": teamUuid,
         "name": name.trim(),
@@ -215,12 +213,12 @@ class TeamService {
 
       await SupabaseService.client.from("teams").insert(row);
 
-      // Team member add karo
+      // ============ FIX: team_members mein 'username' column nahi hai ============
+      // team_members columns: id, team_id, user_id, role, joined_at
       try {
         await SupabaseService.client.from("team_members").insert({
           "team_id": teamUuid,
           "user_id": effectiveLeaderId,
-          "username": leaderName,
           "role": "Owner",
           "joined_at": now,
         });
@@ -395,7 +393,6 @@ class TeamService {
       await SupabaseService.client.from("team_members").insert({
         "team_id": teamUuid,
         "user_id": userUuid,
-        "username": userName ?? "Member",
         "role": "Member",
         "joined_at": DateTime.now().toIso8601String(),
       });
