@@ -8,7 +8,6 @@ import '../models/gamer_post_model.dart';
 import '../models/post_comment_model.dart';
 import 'supabase_service.dart';
 
-// Gamer Social Service - Migrated fully to Supabase
 class GamerSocialService {
   static final GamerSocialService _instance = GamerSocialService._internal();
   factory GamerSocialService() => _instance;
@@ -16,7 +15,6 @@ class GamerSocialService {
 
   SupabaseClient get _supabase => SupabaseService.client;
 
-  /// Helper to convert any string (e.g. User ID) deterministically to a valid RFC4122 UUID v4/v5 format
   static String stringToUuid(String input) {
     if (input.isEmpty) return '00000000-0000-0000-0000-000000000000';
     final uuidRegex = RegExp(
@@ -119,9 +117,6 @@ class GamerSocialService {
       final followerUuid = stringToUuid(currentUid);
       final followingUuid = stringToUuid(targetUid);
 
-      debugPrint('[Follow] Inserting: $followerUuid -> $followingUuid');
-
-      // Prevent duplicate follow
       final existing = await _supabase
           .from('follows')
           .select('id')
@@ -129,31 +124,25 @@ class GamerSocialService {
           .eq('following_id', followingUuid)
           .maybeSingle();
       if (existing != null) {
-        debugPrint('[Follow] Already following, skipping');
         return;
       }
 
-      // Insert into follows table
       await _supabase.from('follows').insert({
         'follower_id': followerUuid,
         'following_id': followingUuid,
       });
 
-      // Update following_count for current user
       await _incrementCounter(
         userId: followerUuid,
         column: 'following_count',
         delta: 1,
       );
 
-      // Update followers_count for target user
       await _incrementCounter(
         userId: followingUuid,
         column: 'followers_count',
         delta: 1,
       );
-
-      debugPrint('[Follow] Success!');
     } catch (e) {
       debugPrint('Error following user: $e');
     }
@@ -170,21 +159,18 @@ class GamerSocialService {
       final followerUuid = stringToUuid(currentUid);
       final followingUuid = stringToUuid(targetUid);
 
-      // Delete from follows table
       await _supabase
           .from('follows')
           .delete()
           .eq('follower_id', followerUuid)
           .eq('following_id', followingUuid);
 
-      // Update following_count for current user
       await _incrementCounter(
         userId: followerUuid,
         column: 'following_count',
         delta: -1,
       );
 
-      // Update followers_count for target user
       await _incrementCounter(
         userId: followingUuid,
         column: 'followers_count',
@@ -195,7 +181,6 @@ class GamerSocialService {
     }
   }
 
-  /// Safely increment/decrement a counter column on the users table.
   Future<void> _incrementCounter({
     required String userId,
     required String column,
@@ -211,13 +196,11 @@ class GamerSocialService {
 
     try {
       await _supabase.rpc(rpcName, params: {'user_id': userId});
-      debugPrint('[Counter] RPC $rpcName success for $userId');
       return;
     } catch (e) {
       debugPrint('[Counter] RPC $rpcName failed: $e — using manual fallback');
     }
 
-    // Manual fallback
     try {
       final row = await _supabase
           .from('users')
@@ -227,7 +210,6 @@ class GamerSocialService {
       final current = (row?[column] as num?)?.toInt() ?? 0;
       final updated = (current + delta).clamp(0, 999999999);
       await _supabase.from('users').update({column: updated}).eq('id', userId);
-      debugPrint('[Counter] Manual $column=$updated for $userId');
     } catch (e) {
       debugPrint('[Counter] Manual update failed: $e');
     }
@@ -247,6 +229,7 @@ class GamerSocialService {
             .eq('follower_id', followerUuid);
         final list = (res as List)
             .map((item) => item['following_id'].toString())
+            .where((id) => id.isNotEmpty && id != followerUuid)
             .toList();
         yield list;
       } catch (e) {
@@ -256,14 +239,13 @@ class GamerSocialService {
     }
   }
 
-  /// FIXED: Get list of users who follow `targetUid`
-  /// Excludes self from the list
+  /// ✅ FIXED: Get list of users who follow `targetUid`
+  /// Excludes self + counts only real followers
   Future<List<GamerUser>> getFollowers(String targetUid) async {
     if (targetUid.isEmpty) return [];
     try {
       final targetUuid = stringToUuid(targetUid);
 
-      // 1. Get all follower_ids from follows table
       final followRows = await _supabase
           .from('follows')
           .select('follower_id')
@@ -273,22 +255,21 @@ class GamerSocialService {
 
       final followerUuids = followRows
           .map((r) => r['follower_id']?.toString() ?? '')
-          .where((id) => id.isNotEmpty && id != targetUuid) // ✅ Exclude self
+          .where((id) => id.isNotEmpty && id != targetUuid)
+          .toSet()
           .toList();
 
       if (followerUuids.isEmpty) return [];
 
-      // 2. Fetch user profiles for these follower IDs
       final userRows = await _supabase
           .from('users')
           .select()
           .inFilter('id', followerUuids);
 
-      // 3. Convert to GamerUser list, exclude self
       final users = (userRows as List)
           .map((row) => _rowToGamerUser(row))
           .whereType<GamerUser>()
-          .where((u) => u.uid != targetUid) // ✅ Double check
+          .where((u) => u.uid != targetUuid && u.uid != targetUid)
           .toList();
 
       return users;
@@ -298,14 +279,13 @@ class GamerSocialService {
     }
   }
 
-  /// FIXED: Get list of users that `followerUid` is following
-  /// Excludes self from the list
+  /// ✅ FIXED: Get list of users that `followerUid` is following
+  /// Excludes self + deduplicates
   Future<List<GamerUser>> getFollowing(String followerUid) async {
     if (followerUid.isEmpty) return [];
     try {
       final followerUuid = stringToUuid(followerUid);
 
-      // 1. Get all following_ids from follows table
       final followRows = await _supabase
           .from('follows')
           .select('following_id')
@@ -315,22 +295,21 @@ class GamerSocialService {
 
       final followingUuids = followRows
           .map((r) => r['following_id']?.toString() ?? '')
-          .where((id) => id.isNotEmpty && id != followerUuid) // ✅ Exclude self
+          .where((id) => id.isNotEmpty && id != followerUuid)
+          .toSet()
           .toList();
 
       if (followingUuids.isEmpty) return [];
 
-      // 2. Fetch user profiles for these following IDs
       final userRows = await _supabase
           .from('users')
           .select()
           .inFilter('id', followingUuids);
 
-      // 3. Convert to GamerUser list, exclude self
       final users = (userRows as List)
           .map((row) => _rowToGamerUser(row))
           .whereType<GamerUser>()
-          .where((u) => u.uid != followerUid) // ✅ Double check
+          .where((u) => u.uid != followerUuid && u.uid != followerUid)
           .toList();
 
       return users;
@@ -340,8 +319,7 @@ class GamerSocialService {
     }
   }
 
-  /// Helper: Convert Supabase user row to GamerUser model
-  /// ✅ FIX: id ko priority do (kyunki follows table id use karta hai)
+  /// ✅ FIXED: id ko priority do (kyunki follows table id use karta hai)
   GamerUser? _rowToGamerUser(Map<String, dynamic> row) {
     try {
       final rawUid = (row['id'] ?? row['uid'] ?? '').toString();
@@ -350,8 +328,7 @@ class GamerSocialService {
       return GamerUser(
         uid: rawUid,
         username: (row['username'] ?? 'gamer').toString(),
-        displayName:
-            (row['display_name'] ?? row['username'] ?? 'Gamer').toString(),
+        displayName: (row['display_name'] ?? row['username'] ?? 'Gamer').toString(),
         photoUrl: (row['avatar_url'] ?? '').toString(),
         coverUrl: (row['cover_url'] ?? '').toString(),
         bio: (row['bio'] ?? '').toString(),
@@ -409,9 +386,6 @@ class GamerSocialService {
 
     final postUuid = stringToUuid(effectiveUserId);
 
-    debugPrint(
-        '[GamerSocialService] Attempting to create post for user: $effectiveUserId (UUID: $postUuid)');
-
     await _ensureUserExists(
       userId: effectiveUserId,
       username: username,
@@ -435,8 +409,6 @@ class GamerSocialService {
           .select()
           .single();
 
-      debugPrint(
-          '[GamerSocialService] Post saved successfully: ${response['id']}');
       feedRefreshNotifier.value++;
       return response['id'].toString();
     } catch (e) {
@@ -486,7 +458,6 @@ class GamerSocialService {
     }
   }
 
-  /// FIXED: only returns posts whose user_id exactly equals this user's UUID.
   Stream<List<GamerPost>> getUserPostsStream(String userId,
       [String? username]) async* {
     while (true) {
