@@ -158,53 +158,9 @@ class _GamerProfileScreenState extends State<GamerProfileScreen>
     return null;
   }
 
-  /// ✅ Helper: Supabase row ko GamerUser mein convert karo
-  /// `id` ko priority do (kyunki follows table id use karta hai)
+  /// ✅ FIXED: GamerUser.fromMap use karo — saare fields (privacy, isOwner, isAdmin) sahi parse honge
   GamerUser _rowToGamerUser(Map<String, dynamic> row, String fallbackUid) {
-    return GamerUser(
-      uid: (row['id'] ?? fallbackUid).toString(),
-      username: (row['username'] ?? 'gamer').toString(),
-      displayName:
-          (row['display_name'] ?? row['username'] ?? 'Gamer').toString(),
-      photoUrl: (row['avatar_url'] ?? '').toString(),
-      coverUrl: (row['cover_url'] ?? '').toString(),
-      bio: (row['bio'] ?? '').toString(),
-      favoriteGame: (row['favorite_game'] ?? 'BGMI').toString(),
-      selectedGame: (row['selected_game'] ?? '').toString(),
-      selectedRank: (row['selected_rank'] ?? '').toString(),
-      rank: (row['rank'] ?? '').toString(),
-      rankScreenshot: (row['rank_screenshot'] ?? '').toString(),
-      rankStatus: (row['rank_status'] ?? 'None').toString(),
-      rankVerifiedBy: (row['rank_verified_by'] ?? '').toString(),
-      rankRejectReason: (row['rank_reject_reason'] ?? '').toString(),
-      isRankVerified: row['is_rank_verified'] == true,
-      gameId: (row['game_id'] ?? '').toString(),
-      coins: (row['coins'] as num?)?.toInt() ?? 0,
-      followersCount: (row['followers_count'] as num?)?.toInt() ?? 0,
-      followingCount: (row['following_count'] as num?)?.toInt() ?? 0,
-      postsCount: (row['posts_count'] as num?)?.toInt() ?? 0,
-      likesReceived: (row['likes_received'] as num?)?.toInt() ?? 0,
-      reportsCount: (row['reports_count'] as num?)?.toInt() ?? 0,
-      isVerified: row['is_verified'] == true,
-      verificationStatus: (row['blue_tick_status'] ?? 'none').toString(),
-      activeFrame: (row['active_frame'] ?? '').toString(),
-      unlockedFrames: List<String>.from(row['unlocked_frames'] ?? []),
-      activeBadge: (row['active_badge'] ?? '').toString(),
-      unlockedBadges: List<String>.from(row['unlocked_badges'] ?? []),
-      chatColor: (row['chat_color'] ?? '#00FF66').toString(),
-      unlockedChatColors: List<String>.from(row['unlocked_chat_colors'] ?? []),
-      isVipMember: row['is_vip_member'] == true,
-      kdRatio: (row['kd_ratio'] as num?)?.toDouble() ?? 0.0,
-      createdAt: DateTime.tryParse((row['created_at'] ?? '').toString()),
-      isRankPublic: row['is_rank_public'] != false,
-      isUidPublic: row['is_uid_public'] == true,
-      isCoinsPublic: row['is_coins_public'] == true,
-      isMemberSincePublic: row['is_member_since_public'] == true,
-      isFollowingPublic: row['is_following_public'] != false,
-      isFollowersPublic: row['is_followers_public'] != false,
-      isBioPublic: row['is_bio_public'] != false,
-      isGamePublic: row['is_game_public'] != false,
-    );
+    return GamerUser.fromMap(row, fallbackUid);
   }
 
   Stream<GamerUser?> _gamerStream(String userId) async* {
