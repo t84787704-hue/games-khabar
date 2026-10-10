@@ -403,7 +403,7 @@ class _TeamsScreenState extends State<TeamsScreen> {
                   },
                 ),
 
-              // 2. ACTIVE MATCH BANNER (Persists on restart, deduplicated by id Map, checks myTeamId and myTeamUuid)
+              // 2. ACTIVE MATCH BANNER
               if (myTeamId.isNotEmpty)
                 StreamBuilder<List<Map<String, dynamic>>>(
                   stream: SupabaseService.client.from("active_matches").stream(primaryKey: ["id"]),
@@ -448,8 +448,17 @@ class _TeamsScreenState extends State<TeamsScreen> {
                         final proofStatus = (match["proof_status"] ?? "").toString().toLowerCase();
                         final adminNote = match["admin_note"]?.toString() ?? "Invalid proof screenshot";
 
+                        // ✅ FIX: Kaunsi team ne proof submit kiya
+                        final submittedBy = (match["submitted_by_team_id"] ?? match["winner_team_id"] ?? "").toString().toLowerCase();
+                        final myIdLower = myTeamId.toLowerCase();
+                        final myUuidLower = myTeamUuid.toLowerCase();
+                        final isSubmitter = submittedBy == myIdLower || submittedBy == myUuidLower;
+
                         // Case 3: under_review & accepted -> 3 second auto-hide
                         if (status == "under_review" && proofStatus == "accepted") {
+                          // ✅ FIX: Sirf submitter ko dikhao
+                          if (!isSubmitter) return const SizedBox.shrink();
+
                           if (!_autoCompletingMatchIds.contains(matchId.toString())) {
                             _autoCompletingMatchIds.add(matchId.toString());
                             Future.delayed(const Duration(seconds: 3), () async {
@@ -479,6 +488,9 @@ class _TeamsScreenState extends State<TeamsScreen> {
 
                         // Case 4: rejected -> Red banner + Add Proof Again
                         if (status == "rejected" || (status == "under_review" && proofStatus == "rejected")) {
+                          // ✅ FIX: Sirf submitter ko dikhao
+                          if (!isSubmitter) return const SizedBox.shrink();
+
                           return Container(
                             margin: const EdgeInsets.fromLTRB(16, 4, 16, 8),
                             padding: const EdgeInsets.all(12),
@@ -520,6 +532,9 @@ class _TeamsScreenState extends State<TeamsScreen> {
 
                         // Case 2: under_review & pending -> Yellow banner + View Proof
                         if (status == "under_review") {
+                          // ✅ FIX: Sirf submitter ko dikhao
+                          if (!isSubmitter) return const SizedBox.shrink();
+
                           final proofUrl = match["proof_url"]?.toString();
                           return Container(
                             margin: const EdgeInsets.fromLTRB(16, 4, 16, 8),
