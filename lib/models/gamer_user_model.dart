@@ -572,9 +572,19 @@ class GamerUser {
           (data['kdRatio'] as num?)?.toDouble() ??
           0.0,
       rankBadgeType: _parseRankBadgeType(data['rankBadgeType']?.toString()),
-      followersCount: (data['followersCount'] as num?)?.toInt() ?? 0,
-      followingCount: (data['followingCount'] as num?)?.toInt() ?? 0,
-      postsCount: (data['postsCount'] as num?)?.toInt() ?? 0,
+      // ═══════════════════════════════════════════════════════════
+      // FIXED: Pehle snake_case check karo, phir camelCase
+      // ═══════════════════════════════════════════════════════════
+      followersCount: (data['followers_count'] as num?)?.toInt()
+          ?? (data['followersCount'] as num?)?.toInt()
+          ?? 0,
+      followingCount: (data['following_count'] as num?)?.toInt()
+          ?? (data['followingCount'] as num?)?.toInt()
+          ?? 0,
+      postsCount: (data['posts_count'] as num?)?.toInt()
+          ?? (data['postsCount'] as num?)?.toInt()
+          ?? 0,
+      // ═══════════════════════════════════════════════════════════
       likesReceived: (data['likesReceived'] as num?)?.toInt() ?? 0,
       reportsCount: (data['reportsCount'] as num?)?.toInt() ?? 0,
       isVerified: hasApprovedBlueTick,
