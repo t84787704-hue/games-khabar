@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:share_plus/share_plus.dart';
 import '../services/supabase_service.dart';
 import 'gamer_profile_screen.dart';
+import 'user_search_screen.dart';
 
 class GamerFeedScreen extends StatefulWidget {
   const GamerFeedScreen({super.key});
@@ -36,7 +37,6 @@ class _GamerFeedScreenState extends State<GamerFeedScreen> {
 
   Future<void> _loadCurrentUserInfo() async {
     try {
-      // 1. Supabase Auth se current user id lo
       String? sbId = SupabaseService.client.auth.currentUser?.id;
       if (sbId == null || sbId.isEmpty) {
         sbId = await SupabaseService.getCurrentUserId();
@@ -45,7 +45,6 @@ class _GamerFeedScreenState extends State<GamerFeedScreen> {
       if (sbId != null && sbId.isNotEmpty && _uuidRegex.hasMatch(sbId)) {
         currentUserId = sbId;
 
-        // Supabase se user ka username/avatar lo
         try {
           final res = await SupabaseService.client
               .from('users')
@@ -62,7 +61,6 @@ class _GamerFeedScreenState extends State<GamerFeedScreen> {
         } catch (_) {}
       }
 
-      // 2. Fallback: email se lookup
       if (currentUserId.isEmpty) {
         final sbEmail = SupabaseService.client.auth.currentUser?.email;
         if (sbEmail != null && sbEmail.isNotEmpty) {
@@ -86,7 +84,6 @@ class _GamerFeedScreenState extends State<GamerFeedScreen> {
         }
       }
 
-      // 3. Fallback: first user
       if (currentUserId.isEmpty) {
         try {
           final anyUser = await SupabaseService.client
@@ -695,6 +692,21 @@ https://play.google.com/store/apps/details?id=com.gameskhabar.app
             fontSize: 22,
           ),
         ),
+        actions: [
+          IconButton(
+            icon: const Icon(Icons.search_rounded,
+                color: Color(0xFF1877F2), size: 26),
+            tooltip: 'Search Gamers',
+            onPressed: () {
+              Navigator.of(context).push(
+                MaterialPageRoute(
+                  builder: (_) => const UserSearchScreen(),
+                ),
+              );
+            },
+          ),
+          const SizedBox(width: 8),
+        ],
       ),
       body: RefreshIndicator(
         onRefresh: _loadFeed,
