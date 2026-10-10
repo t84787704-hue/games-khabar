@@ -16,12 +16,14 @@ import '../services/supabase_service.dart';
 import '../services/team_service.dart';
 import '../models/team_model.dart';
 import 'admin/admin_team_matches_screen.dart';
+import 'admin/admin_proofs_tabs.dart'; // ✅ NAYA IMPORT
 
 class GamerAdminDashboardScreen extends StatefulWidget {
   const GamerAdminDashboardScreen({super.key});
 
   @override
-  State<GamerAdminDashboardScreen> createState() => _GamerAdminDashboardScreenState();
+  State<GamerAdminDashboardScreen> createState() =>
+      _GamerAdminDashboardScreenState();
 }
 
 class _GamerAdminDashboardScreenState extends State<GamerAdminDashboardScreen>
@@ -40,7 +42,8 @@ class _GamerAdminDashboardScreenState extends State<GamerAdminDashboardScreen>
   @override
   void initState() {
     super.initState();
-    _tabController = TabController(length: 7, vsync: this);
+    // ✅ FIX: 7 se 9 tabs
+    _tabController = TabController(length: 9, vsync: this);
     _ensureSampleQueueExists();
   }
 
@@ -69,7 +72,8 @@ class _GamerAdminDashboardScreenState extends State<GamerAdminDashboardScreen>
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
-            content: Text('Successfully created 10 Professional Demo Accounts with Posts!'),
+            content: Text(
+                'Successfully created 10 Professional Demo Accounts with Posts!'),
             backgroundColor: Color(0xFF00FF88),
           ),
         );
@@ -77,7 +81,9 @@ class _GamerAdminDashboardScreenState extends State<GamerAdminDashboardScreen>
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Error seeding demo accounts: $e'), backgroundColor: const Color(0xFFFF4655)),
+          SnackBar(
+              content: Text('Error seeding demo accounts: $e'),
+              backgroundColor: const Color(0xFFFF4655)),
         );
       }
     } finally {
@@ -95,7 +101,11 @@ class _GamerAdminDashboardScreenState extends State<GamerAdminDashboardScreen>
           children: [
             Icon(Icons.warning_amber_rounded, color: Color(0xFFFF4655)),
             SizedBox(width: 8),
-            Text('Delete All Demo Accounts?', style: TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.bold)),
+            Text('Delete All Demo Accounts?',
+                style: TextStyle(
+                    color: Colors.white,
+                    fontSize: 16,
+                    fontWeight: FontWeight.bold)),
           ],
         ),
         content: const Text(
@@ -105,7 +115,8 @@ class _GamerAdminDashboardScreenState extends State<GamerAdminDashboardScreen>
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(ctx, false),
-            child: const Text('Cancel', style: TextStyle(color: Colors.white70)),
+            child: const Text('Cancel',
+                style: TextStyle(color: Colors.white70)),
           ),
           ElevatedButton(
             onPressed: () => Navigator.pop(ctx, true),
@@ -113,7 +124,8 @@ class _GamerAdminDashboardScreenState extends State<GamerAdminDashboardScreen>
               backgroundColor: const Color(0xFFFF4655),
               foregroundColor: Colors.white,
             ),
-            child: const Text('Delete All', style: TextStyle(fontWeight: FontWeight.bold)),
+            child: const Text('Delete All',
+                style: TextStyle(fontWeight: FontWeight.bold)),
           ),
         ],
       ),
@@ -127,7 +139,8 @@ class _GamerAdminDashboardScreenState extends State<GamerAdminDashboardScreen>
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text('Successfully deleted $count demo accounts and associated data.'),
+            content:
+                Text('Successfully deleted $count demo accounts and associated data.'),
             backgroundColor: const Color(0xFFFF4655),
           ),
         );
@@ -135,7 +148,9 @@ class _GamerAdminDashboardScreenState extends State<GamerAdminDashboardScreen>
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Error deleting demo accounts: $e'), backgroundColor: const Color(0xFFFF4655)),
+          SnackBar(
+              content: Text('Error deleting demo accounts: $e'),
+              backgroundColor: const Color(0xFFFF4655)),
         );
       }
     } finally {
@@ -158,8 +173,7 @@ class _GamerAdminDashboardScreenState extends State<GamerAdminDashboardScreen>
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       _buildHeader(),
-                      const SizedBox(height: 14),
-                      _buildPendingProofsReviewSection(),
+                      // ✅ FIX: _buildPendingProofsReviewSection() HATA DIYA
                       const SizedBox(height: 14),
                       _buildStatsCards(),
                       const SizedBox(height: 16),
@@ -178,8 +192,10 @@ class _GamerAdminDashboardScreenState extends State<GamerAdminDashboardScreen>
                     indicatorWeight: 3,
                     labelColor: const Color(0xFF00FF88),
                     unselectedLabelColor: const Color(0xFF8B949E),
-                    labelStyle: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13),
-                    unselectedLabelStyle: const TextStyle(fontWeight: FontWeight.w600, fontSize: 13),
+                    labelStyle: const TextStyle(
+                        fontWeight: FontWeight.bold, fontSize: 13),
+                    unselectedLabelStyle: const TextStyle(
+                        fontWeight: FontWeight.w600, fontSize: 13),
                     tabs: [
                       const Tab(text: 'Users'),
                       _buildRankVerifyTabTitle(),
@@ -188,6 +204,9 @@ class _GamerAdminDashboardScreenState extends State<GamerAdminDashboardScreen>
                       const Tab(text: 'Team Matches ⚔️'),
                       const Tab(text: 'Reports'),
                       const Tab(text: 'Coins'),
+                      // ✅ NAYE TABS
+                      const Tab(text: 'Under Review 🔍'),
+                      const Tab(text: 'History 📜'),
                     ],
                   ),
                 ),
@@ -204,6 +223,9 @@ class _GamerAdminDashboardScreenState extends State<GamerAdminDashboardScreen>
               const AdminTeamMatchesScreen(),
               _buildReportsTab(),
               _buildCoinsTab(),
+              // ✅ NAYE TAB VIEWS
+              const AdminUnderReviewTab(),
+              const AdminProofHistoryTab(),
             ],
           ),
         ),
@@ -295,7 +317,8 @@ class _GamerAdminDashboardScreenState extends State<GamerAdminDashboardScreen>
                 decoration: BoxDecoration(
                   color: const Color(0xFF00FF88).withOpacity(0.12),
                   borderRadius: BorderRadius.circular(12),
-                  border: Border.all(color: const Color(0xFF00FF88).withOpacity(0.4)),
+                  border: Border.all(
+                      color: const Color(0xFF00FF88).withOpacity(0.4)),
                 ),
                 child: const Icon(
                   Icons.shield_rounded,
@@ -339,7 +362,8 @@ class _GamerAdminDashboardScreenState extends State<GamerAdminDashboardScreen>
                 ),
               ),
               Container(
-                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                 decoration: BoxDecoration(
                   color: const Color(0xFF00FF88).withOpacity(0.15),
                   borderRadius: BorderRadius.circular(8),
@@ -348,7 +372,8 @@ class _GamerAdminDashboardScreenState extends State<GamerAdminDashboardScreen>
                 child: const Row(
                   mainAxisSize: MainAxisSize.min,
                   children: [
-                    Icon(Icons.fiber_manual_record, color: Color(0xFF00FF88), size: 10),
+                    Icon(Icons.fiber_manual_record,
+                        color: Color(0xFF00FF88), size: 10),
                     SizedBox(width: 4),
                     Text(
                       'LIVE',
@@ -361,120 +386,6 @@ class _GamerAdminDashboardScreenState extends State<GamerAdminDashboardScreen>
                   ],
                 ),
               ),
-            ],
-          ),
-        );
-      },
-    );
-  }
-
-  Widget _buildPendingProofsReviewSection() {
-    return StreamBuilder<List<Map<String, dynamic>>>(
-      stream: SupabaseService.client
-          .from('active_matches')
-          .stream(primaryKey: ['id']),
-      builder: (context, snapshot) {
-        final matches = snapshot.data ?? [];
-        final pendingProofs = matches.where((m) {
-          final st = (m['status'] ?? '').toString().toLowerCase();
-          final pst = (m['proof_status'] ?? '').toString().toLowerCase();
-          return st == 'under_review' && (pst == 'pending' || pst.isEmpty);
-        }).toList();
-
-        return Container(
-          width: double.infinity,
-          margin: const EdgeInsets.only(bottom: 4),
-          padding: const EdgeInsets.all(14),
-          decoration: BoxDecoration(
-            color: const Color(0xFF131A29),
-            borderRadius: BorderRadius.circular(16),
-            border: Border.all(
-              color: pendingProofs.isNotEmpty ? const Color(0xFFFFB800) : const Color(0xFF2A3447),
-              width: pendingProofs.isNotEmpty ? 1.5 : 1.0,
-            ),
-            boxShadow: [
-              if (pendingProofs.isNotEmpty)
-                BoxShadow(
-                  color: const Color(0xFFFFB800).withOpacity(0.12),
-                  blurRadius: 10,
-                  offset: const Offset(0, 3),
-                ),
-            ],
-          ),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Row(
-                children: [
-                  Container(
-                    padding: const EdgeInsets.all(8),
-                    decoration: BoxDecoration(
-                      color: pendingProofs.isNotEmpty
-                          ? const Color(0xFFFFB800).withOpacity(0.15)
-                          : const Color(0xFF1B2436),
-                      borderRadius: BorderRadius.circular(10),
-                    ),
-                    child: Icon(
-                      Icons.fact_check_rounded,
-                      color: pendingProofs.isNotEmpty ? const Color(0xFFFFB800) : const Color(0xFF00FF88),
-                      size: 20,
-                    ),
-                  ),
-                  const SizedBox(width: 10),
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        const Text(
-                          'Pending Proofs Review',
-                          style: TextStyle(
-                            color: Colors.white,
-                            fontSize: 15,
-                            fontWeight: FontWeight.w900,
-                          ),
-                        ),
-                        const SizedBox(height: 2),
-                        Text(
-                          pendingProofs.isNotEmpty
-                              ? '${pendingProofs.length} match proof(s) awaiting verification'
-                              : 'No match proofs pending review',
-                          style: const TextStyle(
-                            color: Color(0xFF8B949E),
-                            fontSize: 11,
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                  Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                    decoration: BoxDecoration(
-                      color: pendingProofs.isNotEmpty
-                          ? const Color(0xFFFFB800)
-                          : const Color(0xFF00FF88).withOpacity(0.2),
-                      borderRadius: BorderRadius.circular(12),
-                    ),
-                    child: Text(
-                      pendingProofs.isNotEmpty ? '${pendingProofs.length} PENDING' : 'ALL CLEAR ✅',
-                      style: TextStyle(
-                        color: pendingProofs.isNotEmpty ? Colors.black : const Color(0xFF00FF88),
-                        fontWeight: FontWeight.w900,
-                        fontSize: 11,
-                      ),
-                    ),
-                  ),
-                ],
-              ),
-              if (pendingProofs.isNotEmpty) ...[
-                const SizedBox(height: 14),
-                const Divider(color: Color(0xFF2A3447), height: 1),
-                const SizedBox(height: 12),
-                ...pendingProofs.map((match) => _AdminPendingProofCard(
-                  key: ValueKey(match['id']),
-                  match: match,
-                  teamService: TeamService(),
-                )),
-              ],
             ],
           ),
         );
@@ -594,6 +505,7 @@ class _GamerAdminDashboardScreenState extends State<GamerAdminDashboardScreen>
     );
   }
 
+  // ===================== TAB 1: USERS =====================
   Widget _buildUsersTab() {
     return Column(
       children: [
@@ -606,7 +518,8 @@ class _GamerAdminDashboardScreenState extends State<GamerAdminDashboardScreen>
             style: const TextStyle(color: Colors.white, fontSize: 13),
             decoration: InputDecoration(
               hintText: 'Search users by name, @username, or tag...',
-              hintStyle: const TextStyle(color: Color(0xFF8B949E), fontSize: 13),
+              hintStyle:
+                  const TextStyle(color: Color(0xFF8B949E), fontSize: 13),
               prefixIcon: const Icon(Icons.search_rounded,
                   color: Color(0xFF8B949E), size: 20),
               suffixIcon: _userSearchQuery.isNotEmpty
@@ -638,7 +551,6 @@ class _GamerAdminDashboardScreenState extends State<GamerAdminDashboardScreen>
             ),
           ),
         ),
-
         Padding(
           padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
           child: Row(
@@ -647,9 +559,11 @@ class _GamerAdminDashboardScreenState extends State<GamerAdminDashboardScreen>
                 child: ElevatedButton.icon(
                   onPressed: _isSeedingDemo ? null : _handleSeedDemoAccounts,
                   style: ElevatedButton.styleFrom(
-                    backgroundColor: const Color(0xFF00FF88).withOpacity(0.12),
+                    backgroundColor:
+                        const Color(0xFF00FF88).withOpacity(0.12),
                     foregroundColor: const Color(0xFF00FF88),
-                    side: const BorderSide(color: Color(0xFF00FF88), width: 1.2),
+                    side: const BorderSide(
+                        color: Color(0xFF00FF88), width: 1.2),
                     padding: const EdgeInsets.symmetric(
                         horizontal: 10, vertical: 10),
                     shape: RoundedRectangleBorder(
@@ -676,9 +590,11 @@ class _GamerAdminDashboardScreenState extends State<GamerAdminDashboardScreen>
                   onPressed:
                       _isDeletingDemo ? null : _handleDeleteAllDemoAccounts,
                   style: ElevatedButton.styleFrom(
-                    backgroundColor: const Color(0xFFFF4655).withOpacity(0.12),
+                    backgroundColor:
+                        const Color(0xFFFF4655).withOpacity(0.12),
                     foregroundColor: const Color(0xFFFF4655),
-                    side: const BorderSide(color: Color(0xFFFF4655), width: 1.2),
+                    side: const BorderSide(
+                        color: Color(0xFFFF4655), width: 1.2),
                     padding: const EdgeInsets.symmetric(
                         horizontal: 10, vertical: 10),
                     shape: RoundedRectangleBorder(
@@ -741,7 +657,8 @@ class _GamerAdminDashboardScreenState extends State<GamerAdminDashboardScreen>
               if (snapshot.connectionState == ConnectionState.waiting &&
                   !snapshot.hasData) {
                 return const Center(
-                  child: CircularProgressIndicator(color: Color(0xFF00FF88)),
+                  child:
+                      CircularProgressIndicator(color: Color(0xFF00FF88)),
                 );
               }
 
@@ -751,7 +668,9 @@ class _GamerAdminDashboardScreenState extends State<GamerAdminDashboardScreen>
 
               if (_userSearchQuery.isNotEmpty) {
                 users = users.where((u) {
-                  return u.displayName.toLowerCase().contains(_userSearchQuery) ||
+                  return u.displayName
+                          .toLowerCase()
+                          .contains(_userSearchQuery) ||
                       u.username.toLowerCase().contains(_userSearchQuery) ||
                       u.uid.toLowerCase().contains(_userSearchQuery);
                 }).toList();
@@ -769,7 +688,8 @@ class _GamerAdminDashboardScreenState extends State<GamerAdminDashboardScreen>
                           decoration: BoxDecoration(
                             color: const Color(0xFF10141D),
                             shape: BoxShape.circle,
-                            border: Border.all(color: const Color(0xFF1F2B3E)),
+                            border:
+                                Border.all(color: const Color(0xFF1F2B3E)),
                           ),
                           child: const Icon(Icons.people_outline_rounded,
                               color: Color(0xFF8B949E), size: 40),
@@ -840,7 +760,9 @@ class _GamerAdminDashboardScreenState extends State<GamerAdminDashboardScreen>
                 photoUrl: user.photoUrl,
                 displayName: user.displayName,
                 radius: 22,
-                borderColor: user.isBanned ? const Color(0xFFFF4655) : const Color(0xFFFF8A00),
+                borderColor: user.isBanned
+                    ? const Color(0xFFFF4655)
+                    : const Color(0xFFFF8A00),
               ),
               const SizedBox(width: 12),
               Expanded(
@@ -851,7 +773,9 @@ class _GamerAdminDashboardScreenState extends State<GamerAdminDashboardScreen>
                       children: [
                         Flexible(
                           child: Text(
-                            user.displayName.isNotEmpty ? user.displayName : '@${user.username}',
+                            user.displayName.isNotEmpty
+                                ? user.displayName
+                                : '@${user.username}',
                             style: const TextStyle(
                               color: Colors.white,
                               fontWeight: FontWeight.w900,
@@ -862,10 +786,14 @@ class _GamerAdminDashboardScreenState extends State<GamerAdminDashboardScreen>
                         ),
                         if (user.hasBlueTick) ...[
                           const SizedBox(width: 4),
-                          const Icon(Icons.verified, color: Color(0xFF38BDF8), size: 16),
+                          const Icon(Icons.verified,
+                              color: Color(0xFF38BDF8), size: 16),
                         ],
                         const SizedBox(width: 6),
-                        RankBadgeWidget(badge: user.getRankBadge(), size: 14, showLabel: true),
+                        RankBadgeWidget(
+                            badge: user.getRankBadge(),
+                            size: 14,
+                            showLabel: true),
                       ],
                     ),
                     const SizedBox(height: 2),
@@ -873,7 +801,8 @@ class _GamerAdminDashboardScreenState extends State<GamerAdminDashboardScreen>
                       children: [
                         Text(
                           '@${user.username}',
-                          style: const TextStyle(color: Color(0xFF8B949E), fontSize: 12),
+                          style: const TextStyle(
+                              color: Color(0xFF8B949E), fontSize: 12),
                         ),
                         const SizedBox(width: 8),
                         Text(
@@ -891,16 +820,19 @@ class _GamerAdminDashboardScreenState extends State<GamerAdminDashboardScreen>
                       children: [
                         Text(
                           joinedText,
-                          style: const TextStyle(color: Color(0xFF6E7681), fontSize: 11),
+                          style: const TextStyle(
+                              color: Color(0xFF6E7681), fontSize: 11),
                         ),
                         if (user.isDemoAccount) ...[
                           const SizedBox(width: 8),
                           Container(
-                            padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 1.5),
+                            padding: const EdgeInsets.symmetric(
+                                horizontal: 6, vertical: 1.5),
                             decoration: BoxDecoration(
                               color: const Color(0xFF21262D),
                               borderRadius: BorderRadius.circular(4),
-                              border: Border.all(color: const Color(0xFF8B949E), width: 0.8),
+                              border: Border.all(
+                                  color: const Color(0xFF8B949E), width: 0.8),
                             ),
                             child: const Text(
                               'DEMO',
@@ -916,11 +848,14 @@ class _GamerAdminDashboardScreenState extends State<GamerAdminDashboardScreen>
                         if (user.isBanned) ...[
                           const SizedBox(width: 8),
                           Container(
-                            padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 1),
+                            padding: const EdgeInsets.symmetric(
+                                horizontal: 6, vertical: 1),
                             decoration: BoxDecoration(
-                              color: const Color(0xFFFF4655).withOpacity(0.2),
+                              color:
+                                  const Color(0xFFFF4655).withOpacity(0.2),
                               borderRadius: BorderRadius.circular(4),
-                              border: Border.all(color: const Color(0xFFFF4655)),
+                              border:
+                                  Border.all(color: const Color(0xFFFF4655)),
                             ),
                             child: const Text(
                               'BANNED',
@@ -948,20 +883,29 @@ class _GamerAdminDashboardScreenState extends State<GamerAdminDashboardScreen>
               OutlinedButton.icon(
                 onPressed: () => _toggleBanUser(user),
                 style: OutlinedButton.styleFrom(
-                  foregroundColor: user.isBanned ? const Color(0xFF00FF88) : const Color(0xFFFF4655),
+                  foregroundColor: user.isBanned
+                      ? const Color(0xFF00FF88)
+                      : const Color(0xFFFF4655),
                   side: BorderSide(
-                    color: user.isBanned ? const Color(0xFF00FF88) : const Color(0xFFFF4655),
+                    color: user.isBanned
+                        ? const Color(0xFF00FF88)
+                        : const Color(0xFFFF4655),
                   ),
-                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                  shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(8)),
                 ),
                 icon: Icon(
-                  user.isBanned ? Icons.check_circle_outline : Icons.block_rounded,
+                  user.isBanned
+                      ? Icons.check_circle_outline
+                      : Icons.block_rounded,
                   size: 14,
                 ),
                 label: Text(
                   user.isBanned ? 'Unban' : 'Ban',
-                  style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 12),
+                  style: const TextStyle(
+                      fontWeight: FontWeight.bold, fontSize: 12),
                 ),
               ),
             ],
@@ -997,7 +941,9 @@ class _GamerAdminDashboardScreenState extends State<GamerAdminDashboardScreen>
                   : 'Error updating ban status',
             ),
             backgroundColor: ok
-                ? (nextBanned ? const Color(0xFFFF4655) : const Color(0xFF00FF88))
+                ? (nextBanned
+                    ? const Color(0xFFFF4655)
+                    : const Color(0xFF00FF88))
                 : const Color(0xFFFF4655),
           ),
         );
@@ -1005,12 +951,15 @@ class _GamerAdminDashboardScreenState extends State<GamerAdminDashboardScreen>
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Error updating user ban: $e'), backgroundColor: const Color(0xFFFF4655)),
+          SnackBar(
+              content: Text('Error updating user ban: $e'),
+              backgroundColor: const Color(0xFFFF4655)),
         );
       }
     }
   }
 
+  // ===================== TAB 2: RANK VERIFY =====================
   Widget _buildRankVerifyTab() {
     return Column(
       children: [
@@ -1025,11 +974,14 @@ class _GamerAdminDashboardScreenState extends State<GamerAdminDashboardScreen>
                 style: const TextStyle(color: Colors.white, fontSize: 13),
                 decoration: InputDecoration(
                   hintText: 'Search by username or Game ID...',
-                  hintStyle: const TextStyle(color: Color(0xFF6E7681), fontSize: 13),
-                  prefixIcon: const Icon(Icons.search_rounded, color: Color(0xFF00FF88), size: 18),
+                  hintStyle:
+                      const TextStyle(color: Color(0xFF6E7681), fontSize: 13),
+                  prefixIcon: const Icon(Icons.search_rounded,
+                      color: Color(0xFF00FF88), size: 18),
                   suffixIcon: _rankSearchQuery.isNotEmpty
                       ? IconButton(
-                          icon: const Icon(Icons.clear, color: Color(0xFF6E7681), size: 16),
+                          icon: const Icon(Icons.clear,
+                              color: Color(0xFF6E7681), size: 16),
                           onPressed: () {
                             _rankSearchController.clear();
                             setState(() => _rankSearchQuery = '');
@@ -1038,7 +990,8 @@ class _GamerAdminDashboardScreenState extends State<GamerAdminDashboardScreen>
                       : null,
                   filled: true,
                   fillColor: const Color(0xFF10141D),
-                  contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                  contentPadding:
+                      const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
                   border: OutlineInputBorder(
                     borderRadius: BorderRadius.circular(10),
                     borderSide: const BorderSide(color: Color(0xFF1F2B3E)),
@@ -1052,34 +1005,43 @@ class _GamerAdminDashboardScreenState extends State<GamerAdminDashboardScreen>
                     borderSide: const BorderSide(color: Color(0xFF00FF88)),
                   ),
                 ),
-                onChanged: (val) => setState(() => _rankSearchQuery = val.trim().toLowerCase()),
+                onChanged: (val) => setState(
+                    () => _rankSearchQuery = val.trim().toLowerCase()),
               ),
               const SizedBox(height: 10),
-
               SingleChildScrollView(
                 scrollDirection: Axis.horizontal,
                 child: Row(
                   children: [
-                    for (final game in ['All', ...MobileGamesRankData.games]) ...[
+                    for (final game in [
+                      'All',
+                      ...MobileGamesRankData.games
+                    ]) ...[
                       Padding(
                         padding: const EdgeInsets.only(right: 6),
                         child: ChoiceChip(
                           label: Text(game),
                           selected: _selectedRankGameFilter == game,
                           onSelected: (selected) {
-                            if (selected) setState(() => _selectedRankGameFilter = game);
+                            if (selected) {
+                              setState(() => _selectedRankGameFilter = game);
+                            }
                           },
                           selectedColor: const Color(0xFF00FF88),
                           backgroundColor: const Color(0xFF161B26),
                           labelStyle: TextStyle(
-                            color: _selectedRankGameFilter == game ? const Color(0xFF0B0F14) : Colors.white70,
+                            color: _selectedRankGameFilter == game
+                                ? const Color(0xFF0B0F14)
+                                : Colors.white70,
                             fontWeight: FontWeight.bold,
                             fontSize: 12,
                           ),
                           shape: RoundedRectangleBorder(
                             borderRadius: BorderRadius.circular(20),
                             side: BorderSide(
-                              color: _selectedRankGameFilter == game ? const Color(0xFF00FF88) : const Color(0xFF1F2B3E),
+                              color: _selectedRankGameFilter == game
+                                  ? const Color(0xFF00FF88)
+                                  : const Color(0xFF1F2B3E),
                             ),
                           ),
                         ),
@@ -1087,20 +1049,28 @@ class _GamerAdminDashboardScreenState extends State<GamerAdminDashboardScreen>
                     ],
                     const SizedBox(width: 6),
                     FilterChip(
-                      label: Text(_showOnlyPendingRanks ? '⏳ Pending' : '📋 All History'),
+                      label: Text(_showOnlyPendingRanks
+                          ? '⏳ Pending'
+                          : '📋 All History'),
                       selected: _showOnlyPendingRanks,
-                      onSelected: (val) => setState(() => _showOnlyPendingRanks = val),
-                      selectedColor: const Color(0xFFFF8A00).withOpacity(0.2),
+                      onSelected: (val) =>
+                          setState(() => _showOnlyPendingRanks = val),
+                      selectedColor:
+                          const Color(0xFFFF8A00).withOpacity(0.2),
                       backgroundColor: const Color(0xFF161B26),
                       labelStyle: TextStyle(
-                        color: _showOnlyPendingRanks ? const Color(0xFFFF8A00) : const Color(0xFF8B949E),
+                        color: _showOnlyPendingRanks
+                            ? const Color(0xFFFF8A00)
+                            : const Color(0xFF8B949E),
                         fontWeight: FontWeight.bold,
                         fontSize: 12,
                       ),
                       shape: RoundedRectangleBorder(
                         borderRadius: BorderRadius.circular(20),
                         side: BorderSide(
-                          color: _showOnlyPendingRanks ? const Color(0xFFFF8A00) : const Color(0xFF1F2B3E),
+                          color: _showOnlyPendingRanks
+                              ? const Color(0xFFFF8A00)
+                              : const Color(0xFF1F2B3E),
                         ),
                       ),
                     ),
@@ -1110,7 +1080,6 @@ class _GamerAdminDashboardScreenState extends State<GamerAdminDashboardScreen>
             ],
           ),
         ),
-
         Expanded(
           child: StreamBuilder<List<Map<String, dynamic>>>(
             stream: SupabaseService.getRealtimeUsers(),
@@ -1122,22 +1091,30 @@ class _GamerAdminDashboardScreenState extends State<GamerAdminDashboardScreen>
                     child: Column(
                       mainAxisAlignment: MainAxisAlignment.center,
                       children: [
-                        const Icon(Icons.error_outline_rounded, color: Color(0xFFFF4655), size: 48),
+                        const Icon(Icons.error_outline_rounded,
+                            color: Color(0xFFFF4655), size: 48),
                         const SizedBox(height: 14),
                         const Text('Could not load rank requests',
-                            style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 15)),
+                            style: TextStyle(
+                                color: Colors.white,
+                                fontWeight: FontWeight.bold,
+                                fontSize: 15)),
                         const SizedBox(height: 6),
                         Text('${snapshot.error}',
                             textAlign: TextAlign.center,
-                            style: const TextStyle(color: Color(0xFF8B949E), fontSize: 12)),
+                            style: const TextStyle(
+                                color: Color(0xFF8B949E), fontSize: 12)),
                       ],
                     ),
                   ),
                 );
               }
 
-              if (snapshot.connectionState == ConnectionState.waiting && !snapshot.hasData) {
-                return const Center(child: CircularProgressIndicator(color: Color(0xFF00FF88)));
+              if (snapshot.connectionState == ConnectionState.waiting &&
+                  !snapshot.hasData) {
+                return const Center(
+                    child:
+                        CircularProgressIndicator(color: Color(0xFF00FF88)));
               }
 
               final docs = snapshot.data ?? [];
@@ -1147,12 +1124,12 @@ class _GamerAdminDashboardScreenState extends State<GamerAdminDashboardScreen>
                 final user = GamerUser.fromMap(doc);
                 for (int i = 0; i < user.games.length; i++) {
                   final game = user.games[i];
-                  allItems.add(_RankQueueItem(user: user, game: game, gameIndex: i));
+                  allItems.add(
+                      _RankQueueItem(user: user, game: game, gameIndex: i));
                 }
 
-                final bool hasGameForRank = user.games.any(
-                  (g) => g.claimedRank.toLowerCase() == user.rank.toLowerCase(),
-                );
+                final bool hasGameForRank = user.games.any((g) =>
+                    g.claimedRank.toLowerCase() == user.rank.toLowerCase());
                 if (!hasGameForRank &&
                     user.rank.isNotEmpty &&
                     user.rank.toLowerCase() != 'none' &&
@@ -1169,18 +1146,25 @@ class _GamerAdminDashboardScreenState extends State<GamerAdminDashboardScreen>
                     id: 'primary_${user.uid}',
                     gameName: user.selectedGame.isNotEmpty
                         ? user.selectedGame
-                        : (user.favoriteGame.isNotEmpty ? user.favoriteGame : 'BGMI'),
+                        : (user.favoriteGame.isNotEmpty
+                            ? user.favoriteGame
+                            : 'BGMI'),
                     gameId: user.gameId.isNotEmpty ? user.gameId : 'N/A',
                     claimedRank: user.rank,
-                    verifiedRank: (user.isRankApproved || rankStatus == 'verified') ? user.rank : '',
-                    isVerified: user.isRankApproved || rankStatus == 'verified',
+                    verifiedRank: (user.isRankApproved ||
+                            rankStatus == 'verified')
+                        ? user.rank
+                        : '',
+                    isVerified:
+                        user.isRankApproved || rankStatus == 'verified',
                     screenshotUrl: user.rankScreenshot,
                     status: normalizedStatus,
                     submittedAt: user.createdAt,
                     rejectReason: user.rankRejectReason,
                     ownerUid: user.uid,
                   );
-                  allItems.add(_RankQueueItem(user: user, game: primaryGame, gameIndex: -1));
+                  allItems.add(_RankQueueItem(
+                      user: user, game: primaryGame, gameIndex: -1));
                 }
               }
 
@@ -1189,7 +1173,8 @@ class _GamerAdminDashboardScreenState extends State<GamerAdminDashboardScreen>
                   return false;
                 }
                 if (_selectedRankGameFilter != 'All' &&
-                    item.game.gameName.toLowerCase() != _selectedRankGameFilter.toLowerCase()) {
+                    item.game.gameName.toLowerCase() !=
+                        _selectedRankGameFilter.toLowerCase()) {
                   return false;
                 }
                 if (_rankSearchQuery.isNotEmpty) {
@@ -1208,8 +1193,10 @@ class _GamerAdminDashboardScreenState extends State<GamerAdminDashboardScreen>
               }).toList();
 
               filtered.sort((a, b) {
-                if (a.game.status == 'pending' && b.game.status != 'pending') return -1;
-                if (a.game.status != 'pending' && b.game.status == 'pending') return 1;
+                if (a.game.status == 'pending' &&
+                    b.game.status != 'pending') return -1;
+                if (a.game.status != 'pending' &&
+                    b.game.status == 'pending') return 1;
                 final aTime = a.game.submittedAt ?? DateTime(2020);
                 final bTime = b.game.submittedAt ?? DateTime(2020);
                 return bTime.compareTo(aTime);
@@ -1227,14 +1214,19 @@ class _GamerAdminDashboardScreenState extends State<GamerAdminDashboardScreen>
                           decoration: BoxDecoration(
                             color: const Color(0xFF10141D),
                             shape: BoxShape.circle,
-                            border: Border.all(color: const Color(0xFF1F2B3E)),
+                            border:
+                                Border.all(color: const Color(0xFF1F2B3E)),
                           ),
-                          child: const Icon(Icons.verified_outlined, color: Color(0xFF8B949E), size: 40),
+                          child: const Icon(Icons.verified_outlined,
+                              color: Color(0xFF8B949E), size: 40),
                         ),
                         const SizedBox(height: 14),
                         const Text(
                           'No rank verification requests found',
-                          style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 15),
+                          style: TextStyle(
+                              color: Colors.white,
+                              fontWeight: FontWeight.bold,
+                              fontSize: 15),
                         ),
                         const SizedBox(height: 6),
                         Text(
@@ -1242,7 +1234,8 @@ class _GamerAdminDashboardScreenState extends State<GamerAdminDashboardScreen>
                               ? 'All pending screenshot rank submissions have been reviewed!'
                               : 'No requests match the selected filters.',
                           textAlign: TextAlign.center,
-                          style: const TextStyle(color: Color(0xFF8B949E), fontSize: 12),
+                          style: const TextStyle(
+                              color: Color(0xFF8B949E), fontSize: 12),
                         ),
                       ],
                     ),
@@ -1290,7 +1283,9 @@ class _GamerAdminDashboardScreenState extends State<GamerAdminDashboardScreen>
         color: const Color(0xFF10141D),
         borderRadius: BorderRadius.circular(16),
         border: Border.all(
-          color: isPending ? const Color(0xFFFF8A00).withOpacity(0.4) : const Color(0xFF1F2B3E),
+          color: isPending
+              ? const Color(0xFFFF8A00).withOpacity(0.4)
+              : const Color(0xFF1F2B3E),
         ),
       ),
       child: Column(
@@ -1301,7 +1296,9 @@ class _GamerAdminDashboardScreenState extends State<GamerAdminDashboardScreen>
               GamerAvatar(
                 photoUrl: user.photoUrl,
                 radius: 20,
-                displayName: user.displayName.isNotEmpty ? user.displayName : user.username,
+                displayName: user.displayName.isNotEmpty
+                    ? user.displayName
+                    : user.username,
               ),
               const SizedBox(width: 10),
               Expanded(
@@ -1309,22 +1306,30 @@ class _GamerAdminDashboardScreenState extends State<GamerAdminDashboardScreen>
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
-                      user.displayName.isNotEmpty ? user.displayName : user.username,
-                      style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 14),
+                      user.displayName.isNotEmpty
+                          ? user.displayName
+                          : user.username,
+                      style: const TextStyle(
+                          color: Colors.white,
+                          fontWeight: FontWeight.bold,
+                          fontSize: 14),
                     ),
                     Text(
                       '@${user.username} • UID: ${user.uid.length > 8 ? user.uid.substring(0, 8) : user.uid}',
-                      style: const TextStyle(color: Color(0xFF8B949E), fontSize: 11),
+                      style: const TextStyle(
+                          color: Color(0xFF8B949E), fontSize: 11),
                     ),
                   ],
                 ),
               ),
               Container(
-                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                 decoration: BoxDecoration(
                   color: statusColor.withOpacity(0.15),
                   borderRadius: BorderRadius.circular(8),
-                  border: Border.all(color: statusColor.withOpacity(0.5)),
+                  border:
+                      Border.all(color: statusColor.withOpacity(0.5)),
                 ),
                 child: Text(
                   statusLabel,
@@ -1337,15 +1342,14 @@ class _GamerAdminDashboardScreenState extends State<GamerAdminDashboardScreen>
               ),
             ],
           ),
-
           const SizedBox(height: 12),
           const Divider(color: Color(0xFF1F2B3E), height: 1),
           const SizedBox(height: 10),
-
           Row(
             children: [
               Container(
-                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                 decoration: BoxDecoration(
                   color: const Color(0xFF161B26),
                   borderRadius: BorderRadius.circular(6),
@@ -1354,11 +1358,15 @@ class _GamerAdminDashboardScreenState extends State<GamerAdminDashboardScreen>
                 child: Row(
                   mainAxisSize: MainAxisSize.min,
                   children: [
-                    const Icon(Icons.sports_esports_rounded, size: 14, color: Color(0xFF00FF88)),
+                    const Icon(Icons.sports_esports_rounded,
+                        size: 14, color: Color(0xFF00FF88)),
                     const SizedBox(width: 4),
                     Text(
                       game.gameName,
-                      style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 12),
+                      style: const TextStyle(
+                          color: Colors.white,
+                          fontWeight: FontWeight.bold,
+                          fontSize: 12),
                     ),
                   ],
                 ),
@@ -1377,13 +1385,12 @@ class _GamerAdminDashboardScreenState extends State<GamerAdminDashboardScreen>
               ),
               Text(
                 dateStr,
-                style: const TextStyle(color: Color(0xFF6E7681), fontSize: 11),
+                style:
+                    const TextStyle(color: Color(0xFF6E7681), fontSize: 11),
               ),
             ],
           ),
-
           const SizedBox(height: 8),
-
           Row(
             children: [
               const Text(
@@ -1391,11 +1398,13 @@ class _GamerAdminDashboardScreenState extends State<GamerAdminDashboardScreen>
                 style: TextStyle(color: Color(0xFF8B949E), fontSize: 12),
               ),
               Container(
-                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
                 decoration: BoxDecoration(
                   color: const Color(0xFFFF8A00).withOpacity(0.2),
                   borderRadius: BorderRadius.circular(6),
-                  border: Border.all(color: const Color(0xFFFF8A00).withOpacity(0.5)),
+                  border: Border.all(
+                      color: const Color(0xFFFF8A00).withOpacity(0.5)),
                 ),
                 child: Text(
                   game.claimedRank,
@@ -1408,14 +1417,17 @@ class _GamerAdminDashboardScreenState extends State<GamerAdminDashboardScreen>
               ),
               if (isApproved && game.verifiedRank.isNotEmpty) ...[
                 const SizedBox(width: 8),
-                const Icon(Icons.arrow_forward_rounded, size: 12, color: Color(0xFF8B949E)),
+                const Icon(Icons.arrow_forward_rounded,
+                    size: 12, color: Color(0xFF8B949E)),
                 const SizedBox(width: 8),
                 Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
                   decoration: BoxDecoration(
                     color: const Color(0xFF00FF88).withOpacity(0.2),
                     borderRadius: BorderRadius.circular(6),
-                    border: Border.all(color: const Color(0xFF00FF88).withOpacity(0.5)),
+                    border: Border.all(
+                        color: const Color(0xFF00FF88).withOpacity(0.5)),
                   ),
                   child: Text(
                     'Verified: ${game.verifiedRank}',
@@ -1429,14 +1441,13 @@ class _GamerAdminDashboardScreenState extends State<GamerAdminDashboardScreen>
               ],
             ],
           ),
-
           const SizedBox(height: 10),
-
           if (game.screenshotUrl.isNotEmpty) ...[
             GestureDetector(
               onTap: () => _showScreenshotViewerDialog(
                 imageUrl: game.screenshotUrl,
-                title: '${user.displayName} • ${game.gameName} Rank Proof',
+                title:
+                    '${user.displayName} • ${game.gameName} Rank Proof',
               ),
               child: ClipRRect(
                 borderRadius: BorderRadius.circular(10),
@@ -1451,14 +1462,16 @@ class _GamerAdminDashboardScreenState extends State<GamerAdminDashboardScreen>
                         height: 140,
                         color: const Color(0xFF161B26),
                         child: const Center(
-                          child: CircularProgressIndicator(color: Color(0xFF00FF88), strokeWidth: 2),
+                          child: CircularProgressIndicator(
+                              color: Color(0xFF00FF88), strokeWidth: 2),
                         ),
                       ),
                       errorWidget: (_, __, ___) => Container(
                         height: 140,
                         color: const Color(0xFF161B26),
                         child: const Center(
-                          child: Icon(Icons.broken_image_rounded, color: Colors.white38, size: 36),
+                          child: Icon(Icons.broken_image_rounded,
+                              color: Colors.white38, size: 36),
                         ),
                       ),
                     ),
@@ -1466,7 +1479,8 @@ class _GamerAdminDashboardScreenState extends State<GamerAdminDashboardScreen>
                       bottom: 6,
                       right: 6,
                       child: Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 8, vertical: 4),
                         decoration: BoxDecoration(
                           color: Colors.black.withOpacity(0.75),
                           borderRadius: BorderRadius.circular(6),
@@ -1475,11 +1489,15 @@ class _GamerAdminDashboardScreenState extends State<GamerAdminDashboardScreen>
                         child: const Row(
                           mainAxisSize: MainAxisSize.min,
                           children: [
-                            Icon(Icons.zoom_in_rounded, size: 14, color: Colors.white),
+                            Icon(Icons.zoom_in_rounded,
+                                size: 14, color: Colors.white),
                             SizedBox(width: 4),
                             Text(
                               'Tap to inspect proof',
-                              style: TextStyle(color: Colors.white, fontSize: 11, fontWeight: FontWeight.bold),
+                              style: TextStyle(
+                                  color: Colors.white,
+                                  fontSize: 11,
+                                  fontWeight: FontWeight.bold),
                             ),
                           ],
                         ),
@@ -1498,41 +1516,46 @@ class _GamerAdminDashboardScreenState extends State<GamerAdminDashboardScreen>
               ),
               child: const Row(
                 children: [
-                  Icon(Icons.image_not_supported_rounded, color: Color(0xFF8B949E), size: 16),
+                  Icon(Icons.image_not_supported_rounded,
+                      color: Color(0xFF8B949E), size: 16),
                   SizedBox(width: 6),
                   Text(
                     'No screenshot uploaded',
-                    style: TextStyle(color: Color(0xFF8B949E), fontSize: 12),
+                    style:
+                        TextStyle(color: Color(0xFF8B949E), fontSize: 12),
                   ),
                 ],
               ),
             ),
           ],
-
-          if (isRejected && game.rejectReason != null && game.rejectReason!.isNotEmpty) ...[
+          if (isRejected &&
+              game.rejectReason != null &&
+              game.rejectReason!.isNotEmpty) ...[
             const SizedBox(height: 10),
             Container(
               padding: const EdgeInsets.all(10),
               decoration: BoxDecoration(
                 color: const Color(0xFFFF4655).withOpacity(0.12),
                 borderRadius: BorderRadius.circular(8),
-                border: Border.all(color: const Color(0xFFFF4655).withOpacity(0.3)),
+                border: Border.all(
+                    color: const Color(0xFFFF4655).withOpacity(0.3)),
               ),
               child: Row(
                 children: [
-                  const Icon(Icons.info_outline_rounded, color: Color(0xFFFF4655), size: 16),
+                  const Icon(Icons.info_outline_rounded,
+                      color: Color(0xFFFF4655), size: 16),
                   const SizedBox(width: 8),
                   Expanded(
                     child: Text(
                       'Reason: ${game.rejectReason}',
-                      style: const TextStyle(color: Color(0xFFFF4655), fontSize: 12),
+                      style: const TextStyle(
+                          color: Color(0xFFFF4655), fontSize: 12),
                     ),
                   ),
                 ],
               ),
             ),
           ],
-
           if (isPending) ...[
             const SizedBox(height: 12),
             _AdminRankActionButtons(
@@ -1546,13 +1569,15 @@ class _GamerAdminDashboardScreenState extends State<GamerAdminDashboardScreen>
     );
   }
 
-  void _showScreenshotViewerDialog({required String imageUrl, required String title}) {
+  void _showScreenshotViewerDialog(
+      {required String imageUrl, required String title}) {
     showDialog(
       context: context,
       builder: (ctx) => Dialog(
         backgroundColor: const Color(0xFF10141D),
         insetPadding: const EdgeInsets.all(16),
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        shape:
+            RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
@@ -1563,12 +1588,16 @@ class _GamerAdminDashboardScreenState extends State<GamerAdminDashboardScreen>
                   Expanded(
                     child: Text(
                       title,
-                      style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 14),
+                      style: const TextStyle(
+                          color: Colors.white,
+                          fontWeight: FontWeight.bold,
+                          fontSize: 14),
                       overflow: TextOverflow.ellipsis,
                     ),
                   ),
                   IconButton(
-                    icon: const Icon(Icons.close, color: Colors.white70, size: 20),
+                    icon: const Icon(Icons.close,
+                        color: Colors.white70, size: 20),
                     onPressed: () => Navigator.pop(ctx),
                   ),
                 ],
@@ -1587,11 +1616,13 @@ class _GamerAdminDashboardScreenState extends State<GamerAdminDashboardScreen>
                     fit: BoxFit.contain,
                     placeholder: (_, __) => const Padding(
                       padding: EdgeInsets.all(48),
-                      child: CircularProgressIndicator(color: Color(0xFF00FF88)),
+                      child: CircularProgressIndicator(
+                          color: Color(0xFF00FF88)),
                     ),
                     errorWidget: (_, __, ___) => const Padding(
                       padding: EdgeInsets.all(48),
-                      child: Icon(Icons.broken_image_rounded, color: Colors.red, size: 48),
+                      child: Icon(Icons.broken_image_rounded,
+                          color: Colors.red, size: 48),
                     ),
                   ),
                 ),
@@ -1605,8 +1636,11 @@ class _GamerAdminDashboardScreenState extends State<GamerAdminDashboardScreen>
 
   Future<void> _approveRankVerification(_RankQueueItem item) async {
     try {
-      final targetUserId = item.game.ownerUid.isNotEmpty ? item.game.ownerUid : item.user.uid;
-      final currentAdmin = GamerAuthService().currentGamer?.displayName ?? 'Admin';
+      final targetUserId = item.game.ownerUid.isNotEmpty
+          ? item.game.ownerUid
+          : item.user.uid;
+      final currentAdmin =
+          GamerAuthService().currentGamer?.displayName ?? 'Admin';
 
       final ok = await SupabaseService.approveRank(
         userId: targetUserId,
@@ -1619,7 +1653,8 @@ class _GamerAdminDashboardScreenState extends State<GamerAdminDashboardScreen>
         await NotificationService().createNotification(
           userId: targetUserId,
           title: 'Rank Verified! 🎉',
-          body: 'آپ کا ${item.game.claimedRank} (${item.game.gameName}) رینک ایڈمن کی طرف سے منظور ہو گیا ہے۔',
+          body:
+              'آپ کا ${item.game.claimedRank} (${item.game.gameName}) رینک ایڈمن کی طرف سے منظور ہو گیا ہے۔',
           type: 'rank_verified',
         );
       } catch (e) {}
@@ -1632,25 +1667,34 @@ class _GamerAdminDashboardScreenState extends State<GamerAdminDashboardScreen>
                   ? 'Approved ${item.game.gameName} rank (${item.game.claimedRank}) for @${item.user.username}!'
                   : 'Error approving rank',
             ),
-            backgroundColor: ok ? const Color(0xFF00FF88) : const Color(0xFFFF4655),
+            backgroundColor:
+                ok ? const Color(0xFF00FF88) : const Color(0xFFFF4655),
           ),
         );
       }
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Error approving rank: $e'), backgroundColor: const Color(0xFFFF4655)),
+          SnackBar(
+              content: Text('Error approving rank: $e'),
+              backgroundColor: const Color(0xFFFF4655)),
         );
       }
     }
   }
 
-  Future<void> _rejectRankVerification(_RankQueueItem item, String reason) async {
+  Future<void> _rejectRankVerification(
+      _RankQueueItem item, String reason) async {
     try {
-      final targetUserId = item.game.ownerUid.isNotEmpty ? item.game.ownerUid : item.user.uid;
-      final currentAdmin = GamerAuthService().currentGamer?.displayName ?? 'Admin';
-      const defaultUrduMsg = 'آپ کا اسکرین شاٹ درست نہیں ہے، دوبارہ اپلوڈ کریں';
-      final finalReason = reason.trim().isNotEmpty ? reason.trim() : defaultUrduMsg;
+      final targetUserId = item.game.ownerUid.isNotEmpty
+          ? item.game.ownerUid
+          : item.user.uid;
+      final currentAdmin =
+          GamerAuthService().currentGamer?.displayName ?? 'Admin';
+      const defaultUrduMsg =
+          'آپ کا اسکرین شاٹ درست نہیں ہے، دوبارہ اپلوڈ کریں';
+      final finalReason =
+          reason.trim().isNotEmpty ? reason.trim() : defaultUrduMsg;
 
       final ok = await SupabaseService.rejectRank(
         userId: targetUserId,
@@ -1675,19 +1719,23 @@ class _GamerAdminDashboardScreenState extends State<GamerAdminDashboardScreen>
                   ? 'Rejected ${item.game.gameName} rank verification for @${item.user.username}'
                   : 'Error rejecting rank',
             ),
-            backgroundColor: ok ? const Color(0xFFFF8A00) : const Color(0xFFFF4655),
+            backgroundColor:
+                ok ? const Color(0xFFFF8A00) : const Color(0xFFFF4655),
           ),
         );
       }
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Error rejecting rank: $e'), backgroundColor: const Color(0xFFFF4655)),
+          SnackBar(
+              content: Text('Error rejecting rank: $e'),
+              backgroundColor: const Color(0xFFFF4655)),
         );
       }
     }
   }
 
+  // ===================== TAB 3: BLUE TICK =====================
   Widget _buildBlueTickRequestsTab() {
     return StreamBuilder<List<Map<String, dynamic>>>(
       stream: SupabaseService.getRealtimeUsers(),
@@ -1699,22 +1747,29 @@ class _GamerAdminDashboardScreenState extends State<GamerAdminDashboardScreen>
               child: Column(
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
-                  const Icon(Icons.error_outline_rounded, color: Color(0xFFFF4655), size: 48),
+                  const Icon(Icons.error_outline_rounded,
+                      color: Color(0xFFFF4655), size: 48),
                   const SizedBox(height: 14),
                   const Text('Could not load blue tick requests',
-                      style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 15)),
+                      style: TextStyle(
+                          color: Colors.white,
+                          fontWeight: FontWeight.bold,
+                          fontSize: 15)),
                   const SizedBox(height: 6),
                   Text('${snapshot.error}',
                       textAlign: TextAlign.center,
-                      style: const TextStyle(color: Color(0xFF8B949E), fontSize: 12)),
+                      style: const TextStyle(
+                          color: Color(0xFF8B949E), fontSize: 12)),
                 ],
               ),
             ),
           );
         }
 
-        if (snapshot.connectionState == ConnectionState.waiting && !snapshot.hasData) {
-          return const Center(child: CircularProgressIndicator(color: Color(0xFF00FF88)));
+        if (snapshot.connectionState == ConnectionState.waiting &&
+            !snapshot.hasData) {
+          return const Center(
+              child: CircularProgressIndicator(color: Color(0xFF00FF88)));
         }
 
         final docs = snapshot.data ?? [];
@@ -1723,7 +1778,8 @@ class _GamerAdminDashboardScreenState extends State<GamerAdminDashboardScreen>
         List<GamerUser> requests = allUsers
             .where((u) =>
                 !u.hasBlueTick &&
-                (u.verificationStatus == 'pending' || u.blueTickStatus == 'pending'))
+                (u.verificationStatus == 'pending' ||
+                    u.blueTickStatus == 'pending'))
             .toList();
 
         if (requests.isEmpty) {
@@ -1740,18 +1796,23 @@ class _GamerAdminDashboardScreenState extends State<GamerAdminDashboardScreen>
                       shape: BoxShape.circle,
                       border: Border.all(color: const Color(0xFF1F2B3E)),
                     ),
-                    child: const Icon(Icons.verified_outlined, color: Color(0xFF38BDF8), size: 40),
+                    child: const Icon(Icons.verified_outlined,
+                        color: Color(0xFF38BDF8), size: 40),
                   ),
                   const SizedBox(height: 14),
                   const Text(
                     'No Blue Tick Requests',
-                    style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 15),
+                    style: TextStyle(
+                        color: Colors.white,
+                        fontWeight: FontWeight.bold,
+                        fontSize: 15),
                   ),
                   const SizedBox(height: 6),
                   const Text(
                     'All verification requests have been reviewed!',
                     textAlign: TextAlign.center,
-                    style: TextStyle(color: Color(0xFF8B949E), fontSize: 12),
+                    style:
+                        TextStyle(color: Color(0xFF8B949E), fontSize: 12),
                   ),
                 ],
               ),
@@ -1810,13 +1871,17 @@ class _GamerAdminDashboardScreenState extends State<GamerAdminDashboardScreen>
                           ),
                         ),
                         const SizedBox(width: 6),
-                        RankBadgeWidget(badge: user.getRankBadge(), size: 14, showLabel: true),
+                        RankBadgeWidget(
+                            badge: user.getRankBadge(),
+                            size: 14,
+                            showLabel: true),
                       ],
                     ),
                     const SizedBox(height: 2),
                     Text(
                       '@${user.username} • BGMI UID: ${user.gameId.isNotEmpty ? user.gameId : '512903819'}',
-                      style: const TextStyle(color: Color(0xFF8B949E), fontSize: 12),
+                      style: const TextStyle(
+                          color: Color(0xFF8B949E), fontSize: 12),
                     ),
                     const SizedBox(height: 2),
                     Text(
@@ -1831,7 +1896,8 @@ class _GamerAdminDashboardScreenState extends State<GamerAdminDashboardScreen>
                 ),
               ),
               Container(
-                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
                 decoration: BoxDecoration(
                   color: Colors.blue.withOpacity(0.15),
                   borderRadius: BorderRadius.circular(6),
@@ -1859,11 +1925,14 @@ class _GamerAdminDashboardScreenState extends State<GamerAdminDashboardScreen>
                 style: OutlinedButton.styleFrom(
                   foregroundColor: const Color(0xFFFF4655),
                   side: const BorderSide(color: Color(0xFFFF4655)),
-                  padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                  padding: const EdgeInsets.symmetric(
+                      horizontal: 14, vertical: 8),
+                  shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(8)),
                 ),
                 icon: const Icon(Icons.close_rounded, size: 16),
-                label: const Text('Reject', style: TextStyle(fontWeight: FontWeight.bold)),
+                label: const Text('Reject',
+                    style: TextStyle(fontWeight: FontWeight.bold)),
               ),
               const SizedBox(width: 10),
               ElevatedButton.icon(
@@ -1872,11 +1941,14 @@ class _GamerAdminDashboardScreenState extends State<GamerAdminDashboardScreen>
                   backgroundColor: const Color(0xFF1D9BF0),
                   foregroundColor: Colors.white,
                   elevation: 0,
-                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                  padding: const EdgeInsets.symmetric(
+                      horizontal: 16, vertical: 8),
+                  shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(8)),
                 ),
                 icon: const Icon(Icons.verified, size: 16),
-                label: const Text('Approve Blue Tick', style: TextStyle(fontWeight: FontWeight.bold)),
+                label: const Text('Approve Blue Tick',
+                    style: TextStyle(fontWeight: FontWeight.bold)),
               ),
             ],
           ),
@@ -1896,17 +1968,22 @@ class _GamerAdminDashboardScreenState extends State<GamerAdminDashboardScreen>
               children: [
                 const Icon(Icons.verified, color: Colors.white, size: 18),
                 const SizedBox(width: 8),
-                Text(ok ? 'Approved! Blue tick added to @${user.username}' : 'Error approving'),
+                Text(ok
+                    ? 'Approved! Blue tick added to @${user.username}'
+                    : 'Error approving'),
               ],
             ),
-            backgroundColor: ok ? const Color(0xFF1D9BF0) : const Color(0xFFFF4655),
+            backgroundColor:
+                ok ? const Color(0xFF1D9BF0) : const Color(0xFFFF4655),
           ),
         );
       }
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Error approving verification: $e'), backgroundColor: const Color(0xFFFF4655)),
+          SnackBar(
+              content: Text('Error approving verification: $e'),
+              backgroundColor: const Color(0xFFFF4655)),
         );
       }
     }
@@ -1919,20 +1996,26 @@ class _GamerAdminDashboardScreenState extends State<GamerAdminDashboardScreen>
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text(ok ? 'Rejected verification for @${user.username}' : 'Error rejecting'),
-            backgroundColor: ok ? const Color(0xFFFF4655) : const Color(0xFFFF4655),
+            content: Text(ok
+                ? 'Rejected verification for @${user.username}'
+                : 'Error rejecting'),
+            backgroundColor:
+                ok ? const Color(0xFFFF4655) : const Color(0xFFFF4655),
           ),
         );
       }
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Error rejecting: $e'), backgroundColor: const Color(0xFFFF4655)),
+          SnackBar(
+              content: Text('Error rejecting: $e'),
+              backgroundColor: const Color(0xFFFF4655)),
         );
       }
     }
   }
 
+  // ===================== TAB 4: POSTS MODERATION =====================
   Widget _buildPostsModerationTab() {
     return StreamBuilder<List<Map<String, dynamic>>>(
       stream: SupabaseService.getRealtimePosts(),
@@ -1944,22 +2027,29 @@ class _GamerAdminDashboardScreenState extends State<GamerAdminDashboardScreen>
               child: Column(
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
-                  const Icon(Icons.error_outline_rounded, color: Color(0xFFFF4655), size: 48),
+                  const Icon(Icons.error_outline_rounded,
+                      color: Color(0xFFFF4655), size: 48),
                   const SizedBox(height: 14),
                   const Text('Could not load posts',
-                      style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 15)),
+                      style: TextStyle(
+                          color: Colors.white,
+                          fontWeight: FontWeight.bold,
+                          fontSize: 15)),
                   const SizedBox(height: 6),
                   Text('${snapshot.error}',
                       textAlign: TextAlign.center,
-                      style: const TextStyle(color: Color(0xFF8B949E), fontSize: 12)),
+                      style: const TextStyle(
+                          color: Color(0xFF8B949E), fontSize: 12)),
                 ],
               ),
             ),
           );
         }
 
-        if (snapshot.connectionState == ConnectionState.waiting && !snapshot.hasData) {
-          return const Center(child: CircularProgressIndicator(color: Color(0xFF00FF88)));
+        if (snapshot.connectionState == ConnectionState.waiting &&
+            !snapshot.hasData) {
+          return const Center(
+              child: CircularProgressIndicator(color: Color(0xFF00FF88)));
         }
 
         final docs = snapshot.data ?? [];
@@ -1978,18 +2068,23 @@ class _GamerAdminDashboardScreenState extends State<GamerAdminDashboardScreen>
                       shape: BoxShape.circle,
                       border: Border.all(color: const Color(0xFF1F2B3E)),
                     ),
-                    child: const Icon(Icons.dynamic_feed_rounded, color: Color(0xFF8B949E), size: 40),
+                    child: const Icon(Icons.dynamic_feed_rounded,
+                        color: Color(0xFF8B949E), size: 40),
                   ),
                   const SizedBox(height: 14),
                   const Text(
                     'No posts to moderate',
-                    style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 15),
+                    style: TextStyle(
+                        color: Colors.white,
+                        fontWeight: FontWeight.bold,
+                        fontSize: 15),
                   ),
                   const SizedBox(height: 6),
                   const Text(
                     'Community is clean — no posts need review!',
                     textAlign: TextAlign.center,
-                    style: TextStyle(color: Color(0xFF8B949E), fontSize: 12),
+                    style:
+                        TextStyle(color: Color(0xFF8B949E), fontSize: 12),
                   ),
                 ],
               ),
@@ -2072,8 +2167,11 @@ class _GamerAdminDashboardScreenState extends State<GamerAdminDashboardScreen>
                           if (context.mounted) {
                             ScaffoldMessenger.of(context).showSnackBar(
                               SnackBar(
-                                  content: Text(ok ? 'Post deleted by admin' : 'Error deleting'),
-                                  backgroundColor: const Color(0xFFFF4655)),
+                                  content: Text(ok
+                                      ? 'Post deleted by admin'
+                                      : 'Error deleting'),
+                                  backgroundColor:
+                                      const Color(0xFFFF4655)),
                             );
                           }
                         },
@@ -2081,17 +2179,16 @@ class _GamerAdminDashboardScreenState extends State<GamerAdminDashboardScreen>
                     ],
                   ),
                   const SizedBox(height: 10),
-
                   if (text.isNotEmpty) ...[
                     Text(
                       text,
-                      style: const TextStyle(color: Color(0xFFCBD5E1), fontSize: 13),
+                      style: const TextStyle(
+                          color: Color(0xFFCBD5E1), fontSize: 13),
                       maxLines: 3,
                       overflow: TextOverflow.ellipsis,
                     ),
                     const SizedBox(height: 8),
                   ],
-
                   if (imageUrl.isNotEmpty) ...[
                     ClipRRect(
                       borderRadius: BorderRadius.circular(8),
@@ -2120,7 +2217,6 @@ class _GamerAdminDashboardScreenState extends State<GamerAdminDashboardScreen>
                     ),
                     const SizedBox(height: 8),
                   ],
-
                   Row(
                     children: [
                       Text(
@@ -2134,7 +2230,9 @@ class _GamerAdminDashboardScreenState extends State<GamerAdminDashboardScreen>
                       if (userId.isNotEmpty)
                         TextButton(
                           onPressed: () async {
-                            final sbAdminId = SupabaseService.client.auth.currentUser?.id ?? '';
+                            final sbAdminId =
+                                SupabaseService.client.auth.currentUser?.id ??
+                                    '';
                             final ok = await SupabaseService.banUser(
                               userId: userId,
                               adminId: sbAdminId,
@@ -2143,13 +2241,17 @@ class _GamerAdminDashboardScreenState extends State<GamerAdminDashboardScreen>
                             if (context.mounted) {
                               ScaffoldMessenger.of(context).showSnackBar(
                                 SnackBar(
-                                    content: Text(ok ? 'Author $author banned' : 'Error banning'),
-                                    backgroundColor: const Color(0xFFFF4655)),
+                                    content: Text(ok
+                                        ? 'Author $author banned'
+                                        : 'Error banning'),
+                                    backgroundColor:
+                                        const Color(0xFFFF4655)),
                               );
                             }
                           },
                           child: const Text('Ban Author',
-                              style: TextStyle(color: Color(0xFFFF4655), fontSize: 11)),
+                              style: TextStyle(
+                                  color: Color(0xFFFF4655), fontSize: 11)),
                         ),
                     ],
                   ),
@@ -2162,6 +2264,7 @@ class _GamerAdminDashboardScreenState extends State<GamerAdminDashboardScreen>
     );
   }
 
+  // ===================== TAB 6: REPORTS =====================
   Widget _buildReportsTab() {
     return StreamBuilder<List<Map<String, dynamic>>>(
       stream: SupabaseService.getRealtimeReports(),
@@ -2173,22 +2276,29 @@ class _GamerAdminDashboardScreenState extends State<GamerAdminDashboardScreen>
               child: Column(
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
-                  const Icon(Icons.error_outline_rounded, color: Color(0xFFFF4655), size: 48),
+                  const Icon(Icons.error_outline_rounded,
+                      color: Color(0xFFFF4655), size: 48),
                   const SizedBox(height: 14),
                   const Text('Could not load reports',
-                      style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 15)),
+                      style: TextStyle(
+                          color: Colors.white,
+                          fontWeight: FontWeight.bold,
+                          fontSize: 15)),
                   const SizedBox(height: 6),
                   Text('${snapshot.error}',
                       textAlign: TextAlign.center,
-                      style: const TextStyle(color: Color(0xFF8B949E), fontSize: 12)),
+                      style: const TextStyle(
+                          color: Color(0xFF8B949E), fontSize: 12)),
                 ],
               ),
             ),
           );
         }
 
-        if (snapshot.connectionState == ConnectionState.waiting && !snapshot.hasData) {
-          return const Center(child: CircularProgressIndicator(color: Color(0xFF00FF88)));
+        if (snapshot.connectionState == ConnectionState.waiting &&
+            !snapshot.hasData) {
+          return const Center(
+              child: CircularProgressIndicator(color: Color(0xFF00FF88)));
         }
 
         final docs = snapshot.data ?? [];
@@ -2212,13 +2322,17 @@ class _GamerAdminDashboardScreenState extends State<GamerAdminDashboardScreen>
                   const SizedBox(height: 14),
                   const Text(
                     'Community Safe • 0 Open Reports',
-                    style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 16),
+                    style: TextStyle(
+                        color: Colors.white,
+                        fontWeight: FontWeight.bold,
+                        fontSize: 16),
                   ),
                   const SizedBox(height: 6),
                   const Text(
                     'No offensive content or active player violations reported.',
                     textAlign: TextAlign.center,
-                    style: TextStyle(color: Color(0xFF8B949E), fontSize: 12),
+                    style:
+                        TextStyle(color: Color(0xFF8B949E), fontSize: 12),
                   ),
                 ],
               ),
@@ -2233,7 +2347,8 @@ class _GamerAdminDashboardScreenState extends State<GamerAdminDashboardScreen>
           itemBuilder: (context, index) {
             final data = docs[index];
             final reportId = (data['id'] ?? '').toString();
-            final reporterName = (data['reporter_username'] ?? 'Player').toString();
+            final reporterName =
+                (data['reporter_username'] ?? 'Player').toString();
             final reason = (data['reason'] ?? 'Report').toString();
             final targetType = (data['target_type'] ?? '').toString();
             final targetId = (data['target_id'] ?? '').toString();
@@ -2259,11 +2374,14 @@ class _GamerAdminDashboardScreenState extends State<GamerAdminDashboardScreen>
                   Row(
                     children: [
                       Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 8, vertical: 3),
                         decoration: BoxDecoration(
                           color: const Color(0xFFFF4655).withOpacity(0.15),
                           borderRadius: BorderRadius.circular(6),
-                          border: Border.all(color: const Color(0xFFFF4655).withOpacity(0.5)),
+                          border: Border.all(
+                              color: const Color(0xFFFF4655)
+                                  .withOpacity(0.5)),
                         ),
                         child: Row(
                           mainAxisSize: MainAxisSize.min,
@@ -2272,7 +2390,9 @@ class _GamerAdminDashboardScreenState extends State<GamerAdminDashboardScreen>
                                 color: Color(0xFFFF4655), size: 12),
                             const SizedBox(width: 4),
                             Text(
-                              targetType.isNotEmpty ? targetType.toUpperCase() : 'REPORT',
+                              targetType.isNotEmpty
+                                  ? targetType.toUpperCase()
+                                  : 'REPORT',
                               style: const TextStyle(
                                   color: Color(0xFFFF4655),
                                   fontSize: 10,
@@ -2283,11 +2403,13 @@ class _GamerAdminDashboardScreenState extends State<GamerAdminDashboardScreen>
                       ),
                       const SizedBox(width: 8),
                       Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 8, vertical: 3),
                         decoration: BoxDecoration(
                           color: statusColor.withOpacity(0.15),
                           borderRadius: BorderRadius.circular(6),
-                          border: Border.all(color: statusColor.withOpacity(0.5)),
+                          border: Border.all(
+                              color: statusColor.withOpacity(0.5)),
                         ),
                         child: Text(
                           status.toUpperCase(),
@@ -2303,12 +2425,16 @@ class _GamerAdminDashboardScreenState extends State<GamerAdminDashboardScreen>
                             color: Color(0xFFFF4655), size: 20),
                         tooltip: 'Delete Report',
                         onPressed: () async {
-                          final ok = await SupabaseService.deleteReport(reportId);
+                          final ok =
+                              await SupabaseService.deleteReport(reportId);
                           if (context.mounted) {
                             ScaffoldMessenger.of(context).showSnackBar(
                               SnackBar(
-                                  content: Text(ok ? 'Report deleted' : 'Error'),
-                                  backgroundColor: const Color(0xFFFF4655)),
+                                  content: Text(ok
+                                      ? 'Report deleted'
+                                      : 'Error'),
+                                  backgroundColor:
+                                      const Color(0xFFFF4655)),
                             );
                           }
                         },
@@ -2316,7 +2442,6 @@ class _GamerAdminDashboardScreenState extends State<GamerAdminDashboardScreen>
                     ],
                   ),
                   const SizedBox(height: 8),
-
                   Row(
                     children: [
                       const Icon(Icons.person_outline_rounded,
@@ -2335,7 +2460,6 @@ class _GamerAdminDashboardScreenState extends State<GamerAdminDashboardScreen>
                     ],
                   ),
                   const SizedBox(height: 6),
-
                   if (reason.isNotEmpty) ...[
                     Container(
                       padding: const EdgeInsets.all(10),
@@ -2361,20 +2485,20 @@ class _GamerAdminDashboardScreenState extends State<GamerAdminDashboardScreen>
                     ),
                     const SizedBox(height: 8),
                   ],
-
                   if (targetContent.isNotEmpty) ...[
                     const Text('Reported Content:',
-                        style: TextStyle(color: Color(0xFF8B949E), fontSize: 11)),
+                        style: TextStyle(
+                            color: Color(0xFF8B949E), fontSize: 11)),
                     const SizedBox(height: 4),
                     Text(
                       targetContent,
-                      style: const TextStyle(color: Color(0xFFCBD5E1), fontSize: 12),
+                      style: const TextStyle(
+                          color: Color(0xFFCBD5E1), fontSize: 12),
                       maxLines: 3,
                       overflow: TextOverflow.ellipsis,
                     ),
                     const SizedBox(height: 8),
                   ],
-
                   Row(
                     children: [
                       if (targetId.isNotEmpty)
@@ -2393,10 +2517,12 @@ class _GamerAdminDashboardScreenState extends State<GamerAdminDashboardScreen>
                             padding: const EdgeInsets.symmetric(
                                 horizontal: 8, vertical: 4),
                           ),
-                          icon: const Icon(Icons.check_circle_outline, size: 14),
+                          icon: const Icon(Icons.check_circle_outline,
+                              size: 14),
                           label: const Text('Mark Resolved',
                               style: TextStyle(
-                                  fontSize: 11, fontWeight: FontWeight.bold)),
+                                  fontSize: 11,
+                                  fontWeight: FontWeight.bold)),
                           onPressed: () async {
                             final ok = await SupabaseService.updateReport(
                               reportId: reportId,
@@ -2405,8 +2531,11 @@ class _GamerAdminDashboardScreenState extends State<GamerAdminDashboardScreen>
                             if (context.mounted) {
                               ScaffoldMessenger.of(context).showSnackBar(
                                 SnackBar(
-                                    content: Text(ok ? 'Report marked resolved' : 'Error'),
-                                    backgroundColor: const Color(0xFF00FF88)),
+                                    content: Text(ok
+                                        ? 'Report marked resolved'
+                                        : 'Error'),
+                                    backgroundColor:
+                                        const Color(0xFF00FF88)),
                               );
                             }
                           },
@@ -2422,6 +2551,7 @@ class _GamerAdminDashboardScreenState extends State<GamerAdminDashboardScreen>
     );
   }
 
+  // ===================== TAB 7: COINS =====================
   Widget _buildCoinsTab() {
     return const _AdminCoinsVaultTab();
   }
@@ -2436,7 +2566,8 @@ class _AdminCoinsVaultTab extends StatefulWidget {
 
 class _AdminCoinsVaultTabState extends State<_AdminCoinsVaultTab> {
   final TextEditingController _targetController = TextEditingController();
-  final TextEditingController _amountController = TextEditingController(text: '100');
+  final TextEditingController _amountController =
+      TextEditingController(text: '100');
 
   bool _isSearching = false;
   bool _isAwarding = false;
@@ -2457,7 +2588,8 @@ class _AdminCoinsVaultTabState extends State<_AdminCoinsVaultTab> {
     if (raw.isEmpty) return null;
 
     try {
-      final users = await SupabaseService.query('users', select: '*', limit: 500);
+      final users =
+          await SupabaseService.query('users', select: '*', limit: 500);
       final clean = raw.toLowerCase().replaceAll('@', '').trim();
 
       for (final u in users) {
@@ -2465,7 +2597,8 @@ class _AdminCoinsVaultTabState extends State<_AdminCoinsVaultTab> {
         final uUid = (u['uid'] ?? docId).toString().trim();
         final uName = (u['username'] ?? '').toString().toLowerCase().trim();
         final uEmail = (u['email'] ?? '').toString().toLowerCase().trim();
-        final uDisplay = (u['display_name'] ?? '').toString().toLowerCase().trim();
+        final uDisplay =
+            (u['display_name'] ?? '').toString().toLowerCase().trim();
 
         if (docId == raw ||
             docId.toLowerCase() == clean ||
@@ -2531,19 +2664,22 @@ class _AdminCoinsVaultTabState extends State<_AdminCoinsVaultTab> {
         SnackBar(
           content: Row(
             children: [
-              const Icon(Icons.error_outline_rounded, color: Colors.white, size: 20),
+              const Icon(Icons.error_outline_rounded,
+                  color: Colors.white, size: 20),
               const SizedBox(width: 8),
               Expanded(
                 child: Text(
                   'صارف نہیں ملا ("$target")',
-                  style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13),
+                  style: const TextStyle(
+                      fontWeight: FontWeight.bold, fontSize: 13),
                 ),
               ),
             ],
           ),
           backgroundColor: const Color(0xFFFF4655),
           behavior: SnackBarBehavior.floating,
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+          shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(10)),
         ),
       );
     }
@@ -2559,10 +2695,12 @@ class _AdminCoinsVaultTabState extends State<_AdminCoinsVaultTab> {
     final amountText = _amountController.text.trim();
     final amount = int.tryParse(amountText);
     if (amount == null || amount <= 0) {
-      setState(() => _errorMessage = 'براہ کرم 1 یا اس سے زیادہ سکے کی درست تعداد درج کریں');
+      setState(
+          () => _errorMessage = 'براہ کرم 1 یا اس سے زیادہ سکے کی درست تعداد درج کریں');
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
-          content: Text('براہ کرم 1 یا اس سے زیادہ سکے کی درست تعداد درج کریں'),
+          content:
+              Text('براہ کرم 1 یا اس سے زیادہ سکے کی درست تعداد درج کریں'),
           backgroundColor: Color(0xFFFF4655),
         ),
       );
@@ -2623,7 +2761,8 @@ class _AdminCoinsVaultTabState extends State<_AdminCoinsVaultTab> {
 
       final freshUser = await _findUser(target);
 
-      final successText = 'کامیابی! $targetDisplayName کو $amount سکے بھیج دیے گئے';
+      final successText =
+          'کامیابی! $targetDisplayName کو $amount سکے بھیج دیے گئے';
 
       if (!mounted) return;
       setState(() {
@@ -2638,7 +2777,8 @@ class _AdminCoinsVaultTabState extends State<_AdminCoinsVaultTab> {
         SnackBar(
           content: Row(
             children: [
-              const Icon(Icons.check_circle_rounded, color: Colors.black, size: 20),
+              const Icon(Icons.check_circle_rounded,
+                  color: Colors.black, size: 20),
               const SizedBox(width: 8),
               Expanded(
                 child: Text(
@@ -2653,7 +2793,8 @@ class _AdminCoinsVaultTabState extends State<_AdminCoinsVaultTab> {
           ),
           backgroundColor: const Color(0xFF00FF88),
           behavior: SnackBarBehavior.floating,
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+          shape:
+              RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
           duration: const Duration(seconds: 4),
         ),
       );
@@ -2682,7 +2823,8 @@ class _AdminCoinsVaultTabState extends State<_AdminCoinsVaultTab> {
                 end: Alignment.bottomRight,
               ),
               borderRadius: BorderRadius.circular(16),
-              border: Border.all(color: const Color(0xFFFFD700).withOpacity(0.3)),
+              border:
+                  Border.all(color: const Color(0xFFFFD700).withOpacity(0.3)),
             ),
             child: Row(
               children: [
@@ -2710,7 +2852,8 @@ class _AdminCoinsVaultTabState extends State<_AdminCoinsVaultTab> {
                       SizedBox(height: 2),
                       Text(
                         'Grant coins to players by Username, UID, or Email',
-                        style: TextStyle(color: Color(0xFF8B949E), fontSize: 12),
+                        style: TextStyle(
+                            color: Color(0xFF8B949E), fontSize: 12),
                       ),
                     ],
                   ),
@@ -2719,11 +2862,12 @@ class _AdminCoinsVaultTabState extends State<_AdminCoinsVaultTab> {
             ),
           ),
           const SizedBox(height: 20),
-
           const Text(
             'Grant Coins to Player',
             style: TextStyle(
-                color: Colors.white, fontWeight: FontWeight.bold, fontSize: 15),
+                color: Colors.white,
+                fontWeight: FontWeight.bold,
+                fontSize: 15),
           ),
           const SizedBox(height: 4),
           const Text(
@@ -2731,7 +2875,6 @@ class _AdminCoinsVaultTabState extends State<_AdminCoinsVaultTab> {
             style: TextStyle(color: Color(0xFF8B949E), fontSize: 12),
           ),
           const SizedBox(height: 12),
-
           Row(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
@@ -2753,7 +2896,8 @@ class _AdminCoinsVaultTabState extends State<_AdminCoinsVaultTab> {
                   decoration: InputDecoration(
                     labelText: 'Target Username or UID',
                     hintText: 'e.g. fua, @user, UID, or email',
-                    hintStyle: const TextStyle(color: Color(0xFF555E6D), fontSize: 13),
+                    hintStyle: const TextStyle(
+                        color: Color(0xFF555E6D), fontSize: 13),
                     labelStyle: const TextStyle(color: Color(0xFF8B949E)),
                     prefixIcon: const Icon(Icons.person_search_rounded,
                         color: Color(0xFF38BDF8)),
@@ -2778,7 +2922,8 @@ class _AdminCoinsVaultTabState extends State<_AdminCoinsVaultTab> {
                         borderRadius: BorderRadius.circular(12)),
                     focusedBorder: OutlineInputBorder(
                       borderRadius: BorderRadius.circular(12),
-                      borderSide: const BorderSide(color: Color(0xFFFFD700)),
+                      borderSide:
+                          const BorderSide(color: Color(0xFFFFD700)),
                     ),
                   ),
                 ),
@@ -2808,14 +2953,14 @@ class _AdminCoinsVaultTabState extends State<_AdminCoinsVaultTab> {
                             Icon(Icons.search_rounded, size: 20),
                             Text('تلاش کریں',
                                 style: TextStyle(
-                                    fontSize: 10, fontWeight: FontWeight.bold)),
+                                    fontSize: 10,
+                                    fontWeight: FontWeight.bold)),
                           ],
                         ),
                 ),
               ),
             ],
           ),
-
           if (_foundUser != null) ...[
             const SizedBox(height: 12),
             Container(
@@ -2823,8 +2968,8 @@ class _AdminCoinsVaultTabState extends State<_AdminCoinsVaultTab> {
               decoration: BoxDecoration(
                 color: const Color(0xFF0D2319),
                 borderRadius: BorderRadius.circular(12),
-                border:
-                    Border.all(color: const Color(0xFF00FF88).withOpacity(0.5)),
+                border: Border.all(
+                    color: const Color(0xFF00FF88).withOpacity(0.5)),
               ),
               child: Row(
                 children: [
@@ -2867,7 +3012,8 @@ class _AdminCoinsVaultTabState extends State<_AdminCoinsVaultTab> {
                               padding: const EdgeInsets.symmetric(
                                   horizontal: 6, vertical: 2),
                               decoration: BoxDecoration(
-                                color: const Color(0xFF00FF88).withOpacity(0.2),
+                                color: const Color(0xFF00FF88)
+                                    .withOpacity(0.2),
                                 borderRadius: BorderRadius.circular(6),
                               ),
                               child: const Row(
@@ -2919,9 +3065,7 @@ class _AdminCoinsVaultTabState extends State<_AdminCoinsVaultTab> {
               ),
             ),
           ],
-
           const SizedBox(height: 14),
-
           TextField(
             controller: _amountController,
             keyboardType: TextInputType.number,
@@ -2931,9 +3075,10 @@ class _AdminCoinsVaultTabState extends State<_AdminCoinsVaultTab> {
               labelStyle: const TextStyle(color: Color(0xFF8B949E)),
               prefixIcon: const Icon(Icons.monetization_on_rounded,
                   color: Color(0xFFFFD700)),
-              helperText: 'کوئی حد نہیں — ایڈمن جتنی چاہے سکے بھیج سکتا ہے',
-              helperStyle:
-                  const TextStyle(color: Color(0xFF8B949E), fontSize: 11),
+              helperText:
+                  'کوئی حد نہیں — ایڈمن جتنی چاہے سکے بھیج سکتا ہے',
+              helperStyle: const TextStyle(
+                  color: Color(0xFF8B949E), fontSize: 11),
               filled: true,
               fillColor: const Color(0xFF10141D),
               border:
@@ -2945,7 +3090,6 @@ class _AdminCoinsVaultTabState extends State<_AdminCoinsVaultTab> {
             ),
           ),
           const SizedBox(height: 8),
-
           SingleChildScrollView(
             scrollDirection: Axis.horizontal,
             child: Row(
@@ -2959,7 +3103,8 @@ class _AdminCoinsVaultTabState extends State<_AdminCoinsVaultTab> {
                           fontSize: 11, fontWeight: FontWeight.bold),
                     ),
                     backgroundColor: const Color(0xFF1A2130),
-                    labelStyle: const TextStyle(color: Color(0xFFFFD700)),
+                    labelStyle:
+                        const TextStyle(color: Color(0xFFFFD700)),
                     shape: RoundedRectangleBorder(
                       borderRadius: BorderRadius.circular(8),
                       side: const BorderSide(color: Color(0xFF26354D)),
@@ -2973,10 +3118,10 @@ class _AdminCoinsVaultTabState extends State<_AdminCoinsVaultTab> {
             ),
           ),
           const SizedBox(height: 14),
-
           if (_errorMessage != null) ...[
             Container(
-              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+              padding:
+                  const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
               decoration: BoxDecoration(
                 color: const Color(0xFF2D1216),
                 borderRadius: BorderRadius.circular(10),
@@ -3002,10 +3147,10 @@ class _AdminCoinsVaultTabState extends State<_AdminCoinsVaultTab> {
             ),
             const SizedBox(height: 12),
           ],
-
           if (_successMessage != null) ...[
             Container(
-              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+              padding:
+                  const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
               decoration: BoxDecoration(
                 color: const Color(0xFF0E281C),
                 borderRadius: BorderRadius.circular(10),
@@ -3031,7 +3176,6 @@ class _AdminCoinsVaultTabState extends State<_AdminCoinsVaultTab> {
             ),
             const SizedBox(height: 12),
           ],
-
           SizedBox(
             width: double.infinity,
             height: 50,
@@ -3060,7 +3204,6 @@ class _AdminCoinsVaultTabState extends State<_AdminCoinsVaultTab> {
             ),
           ),
           const SizedBox(height: 28),
-
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
@@ -3096,17 +3239,18 @@ class _AdminCoinsVaultTabState extends State<_AdminCoinsVaultTab> {
             ],
           ),
           const SizedBox(height: 10),
-
           StreamBuilder<List<Map<String, dynamic>>>(
             stream: SupabaseService.getRealtimeCoinTransactions(),
             builder: (context, snap) {
               if (snap.hasError) {
                 return Text('Error loading history: ${snap.error}',
-                    style: const TextStyle(color: Colors.red, fontSize: 12));
+                    style:
+                        const TextStyle(color: Colors.red, fontSize: 12));
               }
               final docs = (snap.data ?? [])
                   .where((t) =>
-                      t['type'] == 'admin_grant' || t['type'] == 'coin_grant')
+                      t['type'] == 'admin_grant' ||
+                      t['type'] == 'coin_grant')
                   .take(10)
                   .toList();
 
@@ -3121,7 +3265,8 @@ class _AdminCoinsVaultTabState extends State<_AdminCoinsVaultTab> {
                   child: const Center(
                     child: Text(
                       'کوئی حالیہ ٹرانزیکشن نہیں ملی',
-                      style: TextStyle(color: Color(0xFF8B949E), fontSize: 12),
+                      style:
+                          TextStyle(color: Color(0xFF8B949E), fontSize: 12),
                     ),
                   ),
                 );
@@ -3135,10 +3280,11 @@ class _AdminCoinsVaultTabState extends State<_AdminCoinsVaultTab> {
                 itemBuilder: (context, index) {
                   final data = docs[index];
                   final amount = (data['amount'] as num?)?.toInt() ?? 0;
-                  final description =
-                      data['description'] ?? 'Admin ne $amount coins diye';
+                  final description = data['description'] ??
+                      'Admin ne $amount coins diye';
                   final date = data['created_at']?.toString() ?? '';
-                  final targetUserId = (data['user_id'] ?? '').toString();
+                  final targetUserId =
+                      (data['user_id'] ?? '').toString();
 
                   return Container(
                     padding: const EdgeInsets.symmetric(
@@ -3153,7 +3299,8 @@ class _AdminCoinsVaultTabState extends State<_AdminCoinsVaultTab> {
                         Container(
                           padding: const EdgeInsets.all(8),
                           decoration: BoxDecoration(
-                            color: const Color(0xFFFFD700).withOpacity(0.12),
+                            color:
+                                const Color(0xFFFFD700).withOpacity(0.12),
                             borderRadius: BorderRadius.circular(8),
                           ),
                           child: const Icon(Icons.monetization_on_rounded,
@@ -3175,7 +3322,8 @@ class _AdminCoinsVaultTabState extends State<_AdminCoinsVaultTab> {
                               Text(
                                 'UID: $targetUserId ${date.isNotEmpty ? '• ${date.substring(0, 19).replaceAll('T', ' ')}' : ''}',
                                 style: const TextStyle(
-                                    color: Color(0xFF8B949E), fontSize: 10.5),
+                                    color: Color(0xFF8B949E),
+                                    fontSize: 10.5),
                                 overflow: TextOverflow.ellipsis,
                               ),
                             ],
@@ -3214,7 +3362,8 @@ class _SliverAppBarDelegate extends SliverPersistentHeaderDelegate {
   double get maxExtent => _tabBar.preferredSize.height;
 
   @override
-  Widget build(BuildContext context, double shrinkOffset, bool overlapsContent) {
+  Widget build(
+      BuildContext context, double shrinkOffset, bool overlapsContent) {
     return Container(
       color: const Color(0xFF0B0F14),
       child: _tabBar,
@@ -3251,7 +3400,8 @@ class _AdminRankActionButtons extends StatefulWidget {
   });
 
   @override
-  State<_AdminRankActionButtons> createState() => _AdminRankActionButtonsState();
+  State<_AdminRankActionButtons> createState() =>
+      _AdminRankActionButtonsState();
 }
 
 class _AdminRankActionButtonsState extends State<_AdminRankActionButtons> {
@@ -3275,7 +3425,8 @@ class _AdminRankActionButtonsState extends State<_AdminRankActionButtons> {
             decoration: BoxDecoration(
               color: const Color(0xFF161B26),
               borderRadius: BorderRadius.circular(8),
-              border: Border.all(color: const Color(0xFFFF4655).withOpacity(0.5)),
+              border: Border.all(
+                  color: const Color(0xFFFF4655).withOpacity(0.5)),
             ),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
@@ -3284,9 +3435,12 @@ class _AdminRankActionButtonsState extends State<_AdminRankActionButtons> {
                   controller: _reasonController,
                   style: const TextStyle(color: Colors.white, fontSize: 12),
                   decoration: const InputDecoration(
-                    hintText: 'Enter rejection reason (e.g. Screenshot unclear, UID mismatch)...',
-                    hintStyle: TextStyle(color: Color(0xFF8B949E), fontSize: 11),
-                    contentPadding: EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+                    hintText:
+                        'Enter rejection reason (e.g. Screenshot unclear, UID mismatch)...',
+                    hintStyle: TextStyle(
+                        color: Color(0xFF8B949E), fontSize: 11),
+                    contentPadding: EdgeInsets.symmetric(
+                        horizontal: 10, vertical: 8),
                     border: InputBorder.none,
                   ),
                 ),
@@ -3308,14 +3462,16 @@ class _AdminRankActionButtonsState extends State<_AdminRankActionButtons> {
                           });
                         },
                         child: Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                          padding: const EdgeInsets.symmetric(
+                              horizontal: 6, vertical: 2),
                           decoration: BoxDecoration(
                             color: const Color(0xFF1F2B3E),
                             borderRadius: BorderRadius.circular(4),
                           ),
                           child: Text(
                             reason,
-                            style: const TextStyle(color: Color(0xFF38BDF8), fontSize: 10),
+                            style: const TextStyle(
+                                color: Color(0xFF38BDF8), fontSize: 10),
                           ),
                         ),
                       );
@@ -3339,15 +3495,18 @@ class _AdminRankActionButtonsState extends State<_AdminRankActionButtons> {
                 },
                 style: OutlinedButton.styleFrom(
                   side: const BorderSide(color: Color(0xFFFF4655)),
-                  backgroundColor: const Color(0xFFFF4655).withOpacity(0.1),
+                  backgroundColor:
+                      const Color(0xFFFF4655).withOpacity(0.1),
                   foregroundColor: const Color(0xFFFF4655),
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                  shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(8)),
                   padding: const EdgeInsets.symmetric(vertical: 8),
                 ),
                 icon: const Icon(Icons.close_rounded, size: 14),
                 label: Text(
                   _showReasonField ? 'Confirm Reject' : 'Reject',
-                  style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 12),
+                  style: const TextStyle(
+                      fontWeight: FontWeight.bold, fontSize: 12),
                 ),
               ),
             ),
@@ -3359,476 +3518,21 @@ class _AdminRankActionButtonsState extends State<_AdminRankActionButtons> {
                   backgroundColor: const Color(0xFF00FF88),
                   foregroundColor: const Color(0xFF0B0F14),
                   elevation: 0,
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                  shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(8)),
                   padding: const EdgeInsets.symmetric(vertical: 8),
                 ),
                 icon: const Icon(Icons.check_rounded, size: 14),
                 label: const Text(
                   'Approve Rank',
-                  style: TextStyle(fontWeight: FontWeight.w900, fontSize: 12),
+                  style:
+                      TextStyle(fontWeight: FontWeight.w900, fontSize: 12),
                 ),
               ),
             ),
           ],
         ),
       ],
-    );
-  }
-}
-
-class _AdminPendingProofCard extends StatefulWidget {
-  final Map<String, dynamic> match;
-  final TeamService teamService;
-
-  const _AdminPendingProofCard({
-    super.key,
-    required this.match,
-    required this.teamService,
-  });
-
-  @override
-  State<_AdminPendingProofCard> createState() => _AdminPendingProofCardState();
-}
-
-class _AdminPendingProofCardState extends State<_AdminPendingProofCard> {
-  final TextEditingController _reasonController = TextEditingController();
-  bool _isProcessing = false;
-
-  @override
-  void dispose() {
-    _reasonController.dispose();
-    super.dispose();
-  }
-
-  // ============ FIX: Full-screen proof viewer ============
-  void _showProofViewer(BuildContext context, String imageUrl) {
-    showDialog(
-      context: context,
-      builder: (ctx) => Dialog(
-        backgroundColor: const Color(0xFF131A29),
-        insetPadding: const EdgeInsets.all(12),
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Padding(
-              padding: const EdgeInsets.fromLTRB(16, 12, 8, 12),
-              child: Row(
-                children: [
-                  const Expanded(
-                    child: Text(
-                      'Proof Screenshot 📸',
-                      style: TextStyle(
-                          color: Colors.white,
-                          fontWeight: FontWeight.bold,
-                          fontSize: 14),
-                    ),
-                  ),
-                  IconButton(
-                    icon: const Icon(Icons.close, color: Colors.white70, size: 20),
-                    onPressed: () => Navigator.pop(ctx),
-                  ),
-                ],
-              ),
-            ),
-            Flexible(
-              child: ClipRRect(
-                borderRadius: const BorderRadius.only(
-                  bottomLeft: Radius.circular(16),
-                  bottomRight: Radius.circular(16),
-                ),
-                child: InteractiveViewer(
-                  maxScale: 4.0,
-                  child: CachedNetworkImage(
-                    imageUrl: imageUrl,
-                    fit: BoxFit.contain,
-                    placeholder: (_, __) => const Padding(
-                      padding: EdgeInsets.all(48),
-                      child: CircularProgressIndicator(color: Color(0xFF00FF88)),
-                    ),
-                    errorWidget: (_, __, ___) => const Padding(
-                      padding: EdgeInsets.all(48),
-                      child: Icon(Icons.broken_image_rounded,
-                          color: Colors.red, size: 48),
-                    ),
-                  ),
-                ),
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Future<void> _handleAccept() async {
-    if (_isProcessing) return;
-    setState(() => _isProcessing = true);
-
-    try {
-      final matchId = widget.match['id'];
-      final team1Id = (widget.match['team1_id'] ?? '').toString();
-      final team2Id = (widget.match['team2_id'] ?? '').toString();
-      final submittedByRaw = (widget.match['submitted_by_team_id'] ??
-              widget.match['winner_team_id'])
-          ?.toString();
-      final winnerId = (submittedByRaw != null && submittedByRaw.isNotEmpty)
-          ? submittedByRaw
-          : (widget.match['winner_team_id'] ?? '').toString();
-      final winnerUuid = winnerId.isNotEmpty ? SupabaseService.toUuid(winnerId) : '';
-
-      final ok = await SupabaseService.approveProof(
-        matchId: matchId.toString(),
-        winnerTeamId: winnerUuid,
-      );
-
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(ok
-                ? '✅ Proof accepted! Match completed.'
-                : 'Error accepting proof'),
-            backgroundColor:
-                ok ? const Color(0xFF00FF88) : const Color(0xFFFF4655),
-          ),
-        );
-      }
-    } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-              content: Text('Error accepting proof: $e'),
-              backgroundColor: const Color(0xFFFF4655)),
-        );
-      }
-    } finally {
-      if (mounted) setState(() => _isProcessing = false);
-    }
-  }
-
-  Future<void> _handleReject() async {
-    if (_isProcessing) return;
-    setState(() => _isProcessing = true);
-
-    try {
-      final matchId = widget.match['id'];
-      final reason = _reasonController.text.trim();
-      final finalReason =
-          reason.isNotEmpty ? reason : 'Proof screenshot was unclear or invalid';
-
-      final ok = await SupabaseService.rejectProof(
-        matchId: matchId.toString(),
-        reason: finalReason,
-      );
-
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(ok
-                ? '❌ Proof rejected with note: $finalReason'
-                : 'Error rejecting'),
-            backgroundColor:
-                ok ? const Color(0xFFFF4655) : const Color(0xFFFF4655),
-          ),
-        );
-      }
-    } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-              content: Text('Error rejecting proof: $e'),
-              backgroundColor: const Color(0xFFFF4655)),
-        );
-      }
-    } finally {
-      if (mounted) setState(() => _isProcessing = false);
-    }
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final t1 = (widget.match['team1_id'] ?? '').toString();
-    final t2 = (widget.match['team2_id'] ?? '').toString();
-    final result = (widget.match['result'] ?? 'WIN').toString().toUpperCase();
-    final proofUrl = widget.match['proof_url']?.toString();
-    final dateRaw = widget.match['ended_at'] ?? widget.match['created_at'];
-    String formattedDate = '';
-    if (dateRaw != null) {
-      try {
-        final dt = DateTime.parse(dateRaw.toString()).toLocal();
-        formattedDate = DateFormat('dd MMM, hh:mm a').format(dt);
-      } catch (_) {
-        formattedDate = dateRaw.toString();
-      }
-    }
-
-    return Container(
-      margin: const EdgeInsets.only(bottom: 12),
-      padding: const EdgeInsets.all(12),
-      decoration: BoxDecoration(
-        color: const Color(0xFF1B2436),
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: const Color(0xFF2A3447)),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              Expanded(
-                child: FutureBuilder<List<TeamModel?>>(
-                  future: Future.wait([
-                    widget.teamService.getTeam(t1),
-                    widget.teamService.getTeam(t2),
-                  ]),
-                  builder: (context, snap) {
-                    final t1Name = snap.data?[0]?.name ??
-                        widget.match['team1_name'] ??
-                        'Team 1';
-                    final t2Name = snap.data?[1]?.name ??
-                        widget.match['team2_name'] ??
-                        'Team 2';
-                    return Text(
-                      '$t1Name  ⚔️  $t2Name',
-                      style: const TextStyle(
-                        color: Colors.white,
-                        fontWeight: FontWeight.bold,
-                        fontSize: 14,
-                      ),
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                    );
-                  },
-                ),
-              ),
-              Container(
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-                decoration: BoxDecoration(
-                  color: const Color(0xFF00FF88).withOpacity(0.18),
-                  borderRadius: BorderRadius.circular(6),
-                  border:
-                      Border.all(color: const Color(0xFF00FF88).withOpacity(0.4)),
-                ),
-                child: Text(
-                  'Claim: $result',
-                  style: const TextStyle(
-                    color: Color(0xFF00FF88),
-                    fontWeight: FontWeight.bold,
-                    fontSize: 11,
-                  ),
-                ),
-              ),
-            ],
-          ),
-          if (formattedDate.isNotEmpty) ...[
-            const SizedBox(height: 4),
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                FutureBuilder<TeamModel?>(
-                  future:
-                      (widget.match['submitted_by_team_id'] ??
-                                  widget.match['winner_team_id']) !=
-                              null
-                          ? widget.teamService.getTeam(
-                              (widget.match['submitted_by_team_id'] ??
-                                      widget.match['winner_team_id'])
-                                  .toString())
-                          : Future.value(null),
-                  builder: (context, snap) {
-                    final subName = snap.data?.name ??
-                        (widget.match['submitted_by_team_id'] != null
-                            ? 'Team'
-                            : 'Submitter');
-                    return Text(
-                      'Submitted By: $subName',
-                      style: const TextStyle(
-                          color: Color(0xFF38BDF8),
-                          fontWeight: FontWeight.bold,
-                          fontSize: 11.5),
-                    );
-                  },
-                ),
-                Text(
-                  'Date: $formattedDate',
-                  style: const TextStyle(color: Color(0xFF8B949E), fontSize: 11),
-                ),
-              ],
-            ),
-          ],
-          const SizedBox(height: 10),
-
-          // ============ FIX: Chhoti thumbnail + tap to view full ============
-          if (proofUrl != null && proofUrl.isNotEmpty) ...[
-            Row(
-              children: [
-                GestureDetector(
-                  onTap: () => _showProofViewer(context, proofUrl),
-                  child: ClipRRect(
-                    borderRadius: BorderRadius.circular(8),
-                    child: CachedNetworkImage(
-                      imageUrl: proofUrl,
-                      height: 56,
-                      width: 56,
-                      fit: BoxFit.cover,
-                      placeholder: (c, u) => Container(
-                        height: 56,
-                        width: 56,
-                        color: const Color(0xFF10141D),
-                        child: const Center(
-                          child: SizedBox(
-                            width: 16,
-                            height: 16,
-                            child: CircularProgressIndicator(
-                                strokeWidth: 2, color: Color(0xFF00FF88)),
-                          ),
-                        ),
-                      ),
-                      errorWidget: (c, u, e) => Container(
-                        height: 56,
-                        width: 56,
-                        color: const Color(0xFF10141D),
-                        child: const Icon(Icons.broken_image,
-                            color: Colors.white30, size: 20),
-                      ),
-                    ),
-                  ),
-                ),
-                const SizedBox(width: 10),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      const Text(
-                        'Proof Screenshot Attached',
-                        style: TextStyle(
-                            color: Colors.white,
-                            fontSize: 12.5,
-                            fontWeight: FontWeight.bold),
-                      ),
-                      const SizedBox(height: 2),
-                      InkWell(
-                        onTap: () => _showProofViewer(context, proofUrl),
-                        child: const Row(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            Icon(Icons.zoom_in_rounded,
-                                color: Color(0xFF38BDF8), size: 14),
-                            SizedBox(width: 4),
-                            Text('Tap to View Full',
-                                style: TextStyle(
-                                    color: Color(0xFF38BDF8),
-                                    fontSize: 11,
-                                    fontWeight: FontWeight.bold)),
-                          ],
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              ],
-            ),
-            const SizedBox(height: 10),
-          ] else ...[
-            Container(
-              height: 60,
-              decoration: BoxDecoration(
-                color: const Color(0xFF10141D),
-                borderRadius: BorderRadius.circular(8),
-              ),
-              child: const Center(
-                child: Text('No screenshot attached',
-                    style: TextStyle(color: Colors.white38, fontSize: 12)),
-              ),
-            ),
-            const SizedBox(height: 10),
-          ],
-
-          TextField(
-            controller: _reasonController,
-            style: const TextStyle(color: Colors.white, fontSize: 12.5),
-            decoration: InputDecoration(
-              hintText: 'Reject reason (ضروری اگر Reject کرنا ہو)...',
-              hintStyle: const TextStyle(color: Colors.white38, fontSize: 12),
-              filled: true,
-              fillColor: const Color(0xFF10141D),
-              contentPadding:
-                  const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-              border: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(8),
-                borderSide: const BorderSide(color: Color(0xFF2A3447)),
-              ),
-              enabledBorder: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(8),
-                borderSide: const BorderSide(color: Color(0xFF2A3447)),
-              ),
-              focusedBorder: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(8),
-                borderSide: const BorderSide(color: Color(0xFFFF4655)),
-              ),
-            ),
-          ),
-          const SizedBox(height: 10),
-
-          if (_isProcessing)
-            const Center(
-              child: Padding(
-                padding: EdgeInsets.all(8),
-                child: CircularProgressIndicator(color: Color(0xFF00FF88)),
-              ),
-            )
-          else
-            Row(
-              children: [
-                Expanded(
-                  child: SizedBox(
-                    height: 40,
-                    child: ElevatedButton.icon(
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: const Color(0xFFFF4655),
-                        foregroundColor: Colors.white,
-                        shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(8)),
-                        elevation: 0,
-                      ),
-                      icon: const Icon(Icons.close_rounded, size: 16),
-                      label: const Text(
-                        'Reject Proof ❌',
-                        style: TextStyle(
-                            fontWeight: FontWeight.bold, fontSize: 12),
-                      ),
-                      onPressed: _handleReject,
-                    ),
-                  ),
-                ),
-                const SizedBox(width: 10),
-                Expanded(
-                  child: SizedBox(
-                    height: 40,
-                    child: ElevatedButton.icon(
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: const Color(0xFF00FF88),
-                        foregroundColor: Colors.black,
-                        shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(8)),
-                        elevation: 0,
-                      ),
-                      icon: const Icon(Icons.check_rounded,
-                          size: 16, color: Colors.black),
-                      label: const Text(
-                        'Accept Proof ✅',
-                        style: TextStyle(
-                            fontWeight: FontWeight.w900, fontSize: 12),
-                      ),
-                      onPressed: _handleAccept,
-                    ),
-                  ),
-                ),
-              ],
-            ),
-        ],
-      ),
     );
   }
 }
