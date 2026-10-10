@@ -11,12 +11,16 @@ class AdFreeService {
 
   static const String prefsKey = 'ad_free_until';
   // Google Mobile Ads Test Rewarded Ad Unit ID
-  static const String rewardedTestAdUnitId = 'ca-app-pub-3940256099942544/5224354917';
+  static const String rewardedTestAdUnitId =
+      'ca-app-pub-3940256099942544/5224354917';
 
   // ValueNotifiers for reactive UI updates
-  static final ValueNotifier<DateTime?> adFreeUntilNotifier = ValueNotifier<DateTime?>(null);
-  static final ValueNotifier<String> remainingTimeNotifier = ValueNotifier<String>('');
-  static final ValueNotifier<bool> isLoadingAdNotifier = ValueNotifier<bool>(false);
+  static final ValueNotifier<DateTime?> adFreeUntilNotifier =
+      ValueNotifier<DateTime?>(null);
+  static final ValueNotifier<String> remainingTimeNotifier =
+      ValueNotifier<String>('');
+  static final ValueNotifier<bool> isLoadingAdNotifier =
+      ValueNotifier<bool>(false);
 
   Timer? _tickerTimer;
   bool _isInitialized = false;
@@ -34,7 +38,6 @@ class AdFreeService {
           _updateRemainingTime();
           _startTicker();
         } else {
-          // Expired already
           await prefs.remove(prefsKey);
           adFreeUntilNotifier.value = null;
           remainingTimeNotifier.value = '';
@@ -53,7 +56,7 @@ class AdFreeService {
     return DateTime.now().isBefore(until);
   }
 
-  /// Get remaining time string formatted (e.g., "42m left" or "59m left" or "45s left")
+  /// Get remaining time string formatted
   String get remainingFormatted {
     final until = adFreeUntilNotifier.value;
     if (until == null) return '';
@@ -96,8 +99,9 @@ class AdFreeService {
     });
   }
 
-  /// Set ad-free duration (e.g. 1 hour) and save to SharedPreferences
-  Future<void> activateAdFree({Duration duration = const Duration(hours: 1)}) async {
+  /// Set ad-free duration and save to SharedPreferences
+  Future<void> activateAdFree(
+      {Duration duration = const Duration(hours: 1)}) async {
     final until = DateTime.now().add(duration);
     adFreeUntilNotifier.value = until;
     _updateRemainingTime();
@@ -112,13 +116,11 @@ class AdFreeService {
   }
 
   /// Load and display rewarded ad on user button tap
-  /// Does NOT auto-load on app start, only loads when requested by user.
   Future<void> showRewardedAd(BuildContext context) async {
     if (isLoadingAdNotifier.value) return;
 
     isLoadingAdNotifier.value = true;
 
-    // Show small loading feedback
     ScaffoldMessenger.of(context).hideCurrentSnackBar();
     ScaffoldMessenger.of(context).showSnackBar(
       const SnackBar(
@@ -138,7 +140,10 @@ class AdFreeService {
             SizedBox(width: 12),
             Text(
               'Loading Rewarded Ad...',
-              style: TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.bold),
+              style: TextStyle(
+                  color: Colors.white,
+                  fontSize: 12,
+                  fontWeight: FontWeight.bold),
             ),
           ],
         ),
@@ -179,8 +184,8 @@ class AdFreeService {
 
           ad.show(
             onUserEarnedReward: (AdWithoutView ad, RewardItem reward) async {
-              debugPrint('User earned reward: ${reward.amount} ${reward.type}');
-              // 1 hour ad-free activation
+              debugPrint(
+                  'User earned reward: ${reward.amount} ${reward.type}');
               await activateAdFree(duration: const Duration(hours: 1));
 
               if (context.mounted) {
@@ -191,7 +196,8 @@ class AdFreeService {
                     behavior: SnackBarBehavior.floating,
                     shape: RoundedRectangleBorder(
                       borderRadius: BorderRadius.circular(10),
-                      side: const BorderSide(color: Color(0xFF00FF88), width: 1.5),
+                      side: const BorderSide(
+                          color: Color(0xFF00FF88), width: 1.5),
                     ),
                     duration: const Duration(seconds: 4),
                     content: const Row(
@@ -226,7 +232,8 @@ class AdFreeService {
                 backgroundColor: const Color(0xFF1E1F28),
                 content: Text(
                   'Ad could not be loaded: ${error.message}',
-                  style: const TextStyle(color: Colors.redAccent, fontSize: 12),
+                  style: const TextStyle(
+                      color: Colors.redAccent, fontSize: 12),
                 ),
               ),
             );
@@ -236,43 +243,124 @@ class AdFreeService {
     );
   }
 
-  /// Show Rewarded Ad specifically required for an action (e.g., joining tournament, claiming coins)
-  /// Triggers onUserEarnedReward callback once watched
+  /// =========================================================================
+  /// FIXED: Show Rewarded Ad for Action (earn coins, join tournament, etc.)
+  /// Guarantees reward via fallback if ad is skipped or fails
+  /// =========================================================================
   Future<void> showRewardedAdForAction({
     required BuildContext context,
     required String actionTitle,
     required VoidCallback onRewardEarned,
   }) async {
+    if (isLoadingAdNotifier.value) return;
+    isLoadingAdNotifier.value = true;
+
+    if (context.mounted) {
+      ScaffoldMessenger.of(context).hideCurrentSnackBar();
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          backgroundColor: Color(0xFF1E1F28),
+          behavior: SnackBarBehavior.floating,
+          duration: Duration(seconds: 2),
+          content: Row(
+            children: [
+              SizedBox(
+                width: 16,
+                height: 16,
+                child: CircularProgressIndicator(
+                  strokeWidth: 2,
+                  valueColor:
+                      AlwaysStoppedAnimation<Color>(Color(0xFF00FF88)),
+                ),
+              ),
+              SizedBox(width: 12),
+              Text(
+                'Loading Ad...',
+                style: TextStyle(
+                    color: Colors.white,
+                    fontSize: 12,
+                    fontWeight: FontWeight.bold),
+              ),
+            ],
+          ),
+        ),
+      );
+    }
+
+    bool rewardGiven = false;
+
     RewardedAd.load(
       adUnitId: rewardedTestAdUnitId,
       request: const AdRequest(),
       rewardedAdLoadCallback: RewardedAdLoadCallback(
         onAdLoaded: (RewardedAd ad) {
+          isLoadingAdNotifier.value = false;
+
           ad.fullScreenContentCallback = FullScreenContentCallback(
-            onAdDismissedFullScreenContent: (ad) => ad.dispose(),
-            onAdFailedToShowFullScreenContent: (ad, err) {
+            onAdShowedFullScreenContent: (ad) {
+              debugPrint('Rewarded ad showed for action: $actionTitle');
+            },
+            onAdDismissedFullScreenContent: (ad) {
+              debugPrint('Rewarded ad dismissed.');
               ad.dispose();
-              _showFallbackAdDialog(context, actionTitle, onRewardEarned);
+
+              // Agar user ne ad poora nahi dekha (reward nahi mila),
+              // to fallback dialog dikhao taaki reward mile
+              if (!rewardGiven && context.mounted) {
+                _showFallbackAdDialog(context, actionTitle, () {
+                  if (!rewardGiven) {
+                    rewardGiven = true;
+                    onRewardEarned();
+                  }
+                });
+              }
+            },
+            onAdFailedToShowFullScreenContent: (ad, err) {
+              debugPrint('Rewarded ad failed to show: $err');
+              ad.dispose();
+              if (!rewardGiven && context.mounted) {
+                _showFallbackAdDialog(context, actionTitle, () {
+                  if (!rewardGiven) {
+                    rewardGiven = true;
+                    onRewardEarned();
+                  }
+                });
+              }
             },
           );
+
           ad.show(
-            onUserEarnedReward: (ad, reward) {
-              onRewardEarned();
+            onUserEarnedReward: (AdWithoutView ad, RewardItem reward) {
+              debugPrint('User earned reward for action: $actionTitle');
+              if (!rewardGiven) {
+                rewardGiven = true;
+                onRewardEarned();
+              }
             },
           );
         },
-        onAdFailedToLoad: (err) {
-          debugPrint('RewardedAd load failed ($err), using sponsored ad dialog fallback');
-          _showFallbackAdDialog(context, actionTitle, onRewardEarned);
+        onAdFailedToLoad: (LoadAdError error) {
+          isLoadingAdNotifier.value = false;
+          debugPrint('Rewarded ad failed to load: $error');
+          if (!rewardGiven && context.mounted) {
+            _showFallbackAdDialog(context, actionTitle, () {
+              if (!rewardGiven) {
+                rewardGiven = true;
+                onRewardEarned();
+              }
+            });
+          }
         },
       ),
     );
   }
 
-  void _showFallbackAdDialog(BuildContext context, String actionTitle, VoidCallback onRewardEarned) {
+  void _showFallbackAdDialog(
+      BuildContext context, String actionTitle, VoidCallback onRewardEarned) {
     if (!context.mounted) return;
     int remaining = 5;
     Timer? timer;
+    bool completed = false;
 
     showDialog(
       context: context,
@@ -284,8 +372,11 @@ class AdFreeService {
               setState(() => remaining--);
             } else {
               t.cancel();
-              Navigator.pop(ctx);
-              onRewardEarned();
+              if (!completed) {
+                completed = true;
+                Navigator.pop(ctx);
+                onRewardEarned();
+              }
             }
           });
 
@@ -297,18 +388,29 @@ class AdFreeService {
             ),
             title: Row(
               children: [
-                const Icon(Icons.play_circle_filled_rounded, color: Color(0xFF00FF88), size: 24),
+                const Icon(Icons.play_circle_filled_rounded,
+                    color: Color(0xFF00FF88), size: 24),
                 const SizedBox(width: 8),
                 Expanded(
                   child: Text(
                     actionTitle.toUpperCase(),
-                    style: const TextStyle(color: Colors.white, fontSize: 13, fontWeight: FontWeight.w900),
+                    style: const TextStyle(
+                        color: Colors.white,
+                        fontSize: 13,
+                        fontWeight: FontWeight.w900),
                   ),
                 ),
                 Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                  decoration: BoxDecoration(color: Colors.white10, borderRadius: BorderRadius.circular(12)),
-                  child: Text('${remaining}s', style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 12)),
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                  decoration: BoxDecoration(
+                      color: Colors.white10,
+                      borderRadius: BorderRadius.circular(12)),
+                  child: Text('${remaining}s',
+                      style: const TextStyle(
+                          color: Colors.white,
+                          fontWeight: FontWeight.bold,
+                          fontSize: 12)),
                 ),
               ],
             ),
@@ -326,16 +428,21 @@ class AdFreeService {
                     child: Column(
                       mainAxisAlignment: MainAxisAlignment.center,
                       children: [
-                        Icon(Icons.tv_rounded, color: Color(0xFF00FF88), size: 36),
+                        Icon(Icons.tv_rounded,
+                            color: Color(0xFF00FF88), size: 36),
                         SizedBox(height: 8),
                         Text(
-                          'Sponsored Tournament Video Ad',
-                          style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 13),
+                          'Sponsored Ad',
+                          style: TextStyle(
+                              color: Colors.white,
+                              fontWeight: FontWeight.bold,
+                              fontSize: 13),
                         ),
                         SizedBox(height: 4),
                         Text(
-                          'Verifying free entry reward...',
-                          style: TextStyle(color: Color(0xFF94A3B8), fontSize: 11),
+                          'Verifying reward...',
+                          style: TextStyle(
+                              color: Color(0xFF94A3B8), fontSize: 11),
                         ),
                       ],
                     ),
@@ -353,6 +460,12 @@ class AdFreeService {
           );
         },
       ),
-    ).then((_) => timer?.cancel());
+    ).then((_) {
+      timer?.cancel();
+      if (!completed) {
+        completed = true;
+        onRewardEarned();
+      }
+    });
   }
 }
