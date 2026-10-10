@@ -26,6 +26,7 @@ import 'gamer_privacy_policy_screen.dart';
 import 'gamer_terms_of_service_screen.dart';
 import 'blocked_users_screen.dart';
 import '../widgets/coin_history_sheet.dart';
+import 'coin_wallet_screen.dart';
 
 class GamerProfileScreen extends StatefulWidget {
   final String? userId;
@@ -113,12 +114,9 @@ class _GamerProfileScreenState extends State<GamerProfileScreen>
     });
   }
 
-  /// ✅ FIXED: Fetch gamer profile from Supabase
-  /// Priority: id → uid → username (no toUuid conversion)
   Future<GamerUser?> _fetchGamerFromSupabase(String userId) async {
     if (userId.isEmpty) return null;
     try {
-      // 1. Pehle `id` se exact match karo
       final rowById = await SupabaseService.client
           .from('users')
           .select()
@@ -129,7 +127,6 @@ class _GamerProfileScreenState extends State<GamerProfileScreen>
         return _rowToGamerUser(rowById, userId);
       }
 
-      // 2. Agar `id` se nahi mila, to `uid` se try karo
       final rowByUid = await SupabaseService.client
           .from('users')
           .select()
@@ -141,7 +138,6 @@ class _GamerProfileScreenState extends State<GamerProfileScreen>
         return _rowToGamerUser(rowByUid, actualId);
       }
 
-      // 3. Agar wo bhi nahi mila, to `username` se try karo
       final rowByUsername = await SupabaseService.client
           .from('users')
           .select()
@@ -158,7 +154,6 @@ class _GamerProfileScreenState extends State<GamerProfileScreen>
     return null;
   }
 
-  /// ✅ FIXED: GamerUser.fromMap use karo — saare fields (privacy, isOwner, isAdmin) sahi parse honge
   GamerUser _rowToGamerUser(Map<String, dynamic> row, String fallbackUid) {
     return GamerUser.fromMap(row, fallbackUid);
   }
@@ -1879,7 +1874,7 @@ class _GamerProfileScreenState extends State<GamerProfileScreen>
                           fontSize: 14),
                     ),
                     subtitle: Text(
-                      '${user.coins} Coins • Tap for Transaction History',
+                      '${user.coins} Coins • Tap to open Wallet',
                       style: const TextStyle(
                           color: Color(0xFF65676B), fontSize: 12),
                     ),
@@ -1901,7 +1896,11 @@ class _GamerProfileScreenState extends State<GamerProfileScreen>
                     ),
                     onTap: () {
                       Navigator.pop(ctx);
-                      CoinHistorySheet.show(context, userId: user.uid);
+                      Navigator.of(context).push(
+                        MaterialPageRoute(
+                          builder: (_) => const CoinWalletScreen(),
+                        ),
+                      );
                     },
                   ),
                   ListTile(
