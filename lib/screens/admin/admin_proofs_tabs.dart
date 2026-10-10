@@ -20,7 +20,10 @@ class AdminUnderReviewTab extends StatelessWidget {
           .stream(primaryKey: ['id']),
       builder: (context, snapshot) {
         if (snapshot.hasError) {
-          return _buildErrorState('Could not load under-review proofs', snapshot.error);
+          return _buildErrorState(
+            'Could not load under-review proofs',
+            snapshot.error,
+          );
         }
 
         if (snapshot.connectionState == ConnectionState.waiting &&
@@ -92,11 +95,14 @@ class _AdminProofHistoryTabState extends State<AdminProofHistoryTab> {
           padding: const EdgeInsets.fromLTRB(16, 12, 16, 8),
           child: Row(
             children: [
-              _buildFilterChip('All', Icons.list_alt_rounded, const Color(0xFF8B949E)),
+              _buildFilterChip(
+                  'All', Icons.list_alt_rounded, const Color(0xFF8B949E)),
               const SizedBox(width: 8),
-              _buildFilterChip('Accepted', Icons.check_circle_rounded, const Color(0xFF00FF88)),
+              _buildFilterChip(
+                  'Accepted', Icons.check_circle_rounded, const Color(0xFF00FF88)),
               const SizedBox(width: 8),
-              _buildFilterChip('Rejected', Icons.cancel_rounded, const Color(0xFFFF4655)),
+              _buildFilterChip(
+                  'Rejected', Icons.cancel_rounded, const Color(0xFFFF4655)),
             ],
           ),
         ),
@@ -108,7 +114,10 @@ class _AdminProofHistoryTabState extends State<AdminProofHistoryTab> {
                 .stream(primaryKey: ['id']),
             builder: (context, snapshot) {
               if (snapshot.hasError) {
-                return _buildErrorState('Could not load proof history', snapshot.error);
+                return _buildErrorState(
+                  'Could not load proof history',
+                  snapshot.error,
+                );
               }
 
               if (snapshot.connectionState == ConnectionState.waiting &&
@@ -871,8 +880,9 @@ Widget _buildEmptyState({
 
 // ============================================================
 // HELPER: Error State
+// FIX: 'Object? error' aur null-check
 // ============================================================
-Widget _buildErrorState(String title, Object error) {
+Widget _buildErrorState(String title, Object? error) {
   return Center(
     child: Padding(
       padding: const EdgeInsets.all(32),
@@ -892,7 +902,7 @@ Widget _buildErrorState(String title, Object error) {
           ),
           const SizedBox(height: 6),
           Text(
-            '$error',
+            '${error ?? "Unknown error"}',
             textAlign: TextAlign.center,
             style: const TextStyle(color: Color(0xFF8B949E), fontSize: 12),
           ),
