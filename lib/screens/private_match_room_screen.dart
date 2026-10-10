@@ -45,6 +45,12 @@ class _PrivateMatchRoomScreenState extends State<PrivateMatchRoomScreen> {
   List<Map<String, dynamic>> _messages = [];
   Timer? _pollTimer;
   StreamSubscription? _streamSub;
+  StreamSubscription? _roomInfoSub;
+
+  // ============ NAYA: Room Info state ============
+  Map<String, dynamic>? _roomInfo;
+  bool _isRoomInfoLoading = true;
+  // ===============================================
 
   @override
   void initState() {
@@ -55,14 +61,43 @@ class _PrivateMatchRoomScreenState extends State<PrivateMatchRoomScreen> {
     _markAsRead();
     _fetchMessages(initial: true);
     _subscribeToStream();
+    _subscribeToRoomInfo(); // ============ NAYA
 
     _scrollController.addListener(_onScroll);
 
-    // 2-second periodic polling ensures both teams receive messages reliably even if Realtime websocket drops
     _pollTimer = Timer.periodic(const Duration(seconds: 2), (_) {
       if (mounted) _fetchMessages(silent: true);
     });
   }
+
+  // ============ NAYA: Room Info stream ============
+  void _subscribeToRoomInfo() {
+    final cleanId = widget.matchId.trim();
+    if (cleanId.isEmpty) return;
+    try {
+      _roomInfoSub = SupabaseService.client
+          .from('match_room_info')
+          .stream(primaryKey: ['id'])
+          .eq('match_id', cleanId)
+          .listen(
+        (data) {
+          if (!mounted) return;
+          setState(() {
+            _roomInfo = (data.isNotEmpty) ? data.first : null;
+            _isRoomInfoLoading = false;
+          });
+        },
+        onError: (err) {
+          debugPrint("[PrivateMatchRoom] room info stream error: $err");
+          if (mounted) setState(() => _isRoomInfoLoading = false);
+        },
+      );
+    } catch (e) {
+      debugPrint("[PrivateMatchRoom] room info subscribe error: $e");
+      if (mounted) setState(() => _isRoomInfoLoading = false);
+    }
+  }
+  // =================================================
 
   void _onScroll() {
     if (_scrollController.hasClients) {
@@ -91,6 +126,7 @@ class _PrivateMatchRoomScreenState extends State<PrivateMatchRoomScreen> {
   void dispose() {
     _pollTimer?.cancel();
     _streamSub?.cancel();
+    _roomInfoSub?.cancel(); // ============ NAYA
     _scrollController.removeListener(_onScroll);
     _messageController.dispose();
     _scrollController.dispose();
@@ -171,7 +207,6 @@ class _PrivateMatchRoomScreenState extends State<PrivateMatchRoomScreen> {
   void _mergeMessages(List<Map<String, dynamic>> incoming, {bool shouldScrollToBottom = false}) {
     final map = <String, Map<String, dynamic>>{};
 
-    // 1. Keep pending optimistic messages that haven't been confirmed yet
     for (final m in _messages) {
       final id = m["id"]?.toString() ?? "";
       if (id.startsWith("temp_")) {
@@ -179,11 +214,9 @@ class _PrivateMatchRoomScreenState extends State<PrivateMatchRoomScreen> {
       }
     }
 
-    // 2. Add incoming messages from DB
     for (final m in incoming) {
       final id = m["id"]?.toString() ?? "";
       if (id.isNotEmpty) {
-        // Remove matching temporary optimistic message
         map.removeWhere((k, v) => k.startsWith("temp_") && (v["message"] == m["message"] || (v["_local_path"] != null && m["message_type"] == "image")));
         map[id] = m;
       }
@@ -199,7 +232,6 @@ class _PrivateMatchRoomScreenState extends State<PrivateMatchRoomScreen> {
       final myTeamUuid = SupabaseService.toUuid(widget.myTeamId).toLowerCase();
       final myTeamRaw = widget.myTeamId.toLowerCase();
 
-      // Check if new incoming message was from opponent
       if (combined.length > _messages.length && _messages.isNotEmpty) {
         final newLast = combined.last;
         final sender = (newLast["sender_team_id"] ?? "").toString().toLowerCase();
@@ -243,7 +275,6 @@ class _PrivateMatchRoomScreenState extends State<PrivateMatchRoomScreen> {
     final myUuid = SupabaseService.toUuid(widget.myTeamId).toLowerCase();
     final isUidShare = msg.contains("ROOM UID");
 
-    // 1. Instant optimistic add so sender sees the message immediately
     final tempId = "temp_${DateTime.now().millisecondsSinceEpoch}";
     final optimisticMsg = {
       "id": tempId,
@@ -261,7 +292,6 @@ class _PrivateMatchRoomScreenState extends State<PrivateMatchRoomScreen> {
     });
     _scrollToBottom();
 
-    // 2. Insert into Supabase match_messages table
     final payload = {
       "match_id": cleanId,
       "sender_team_id": myUuid,
@@ -319,7 +349,6 @@ class _PrivateMatchRoomScreenState extends State<PrivateMatchRoomScreen> {
     }
   }
 
-  // REQUIREMENT 2: Screenshot / Photo Sharing
   Future<void> _pickAndSendImage(ImageSource source) async {
     try {
       final picker = ImagePicker();
@@ -333,7 +362,6 @@ class _PrivateMatchRoomScreenState extends State<PrivateMatchRoomScreen> {
       final myUuid = SupabaseService.toUuid(widget.myTeamId).toLowerCase();
       final tempId = "temp_${DateTime.now().millisecondsSinceEpoch}";
 
-      // 1. Optimistic photo preview
       final optimistic = {
         "id": tempId,
         "match_id": cleanId,
@@ -352,7 +380,6 @@ class _PrivateMatchRoomScreenState extends State<PrivateMatchRoomScreen> {
       });
       _scrollToBottom();
 
-      // 2. Upload to Supabase Storage bucket 'match_proofs'
       final publicUrl = await SupabaseService.uploadFile(
         file: file,
         bucket: "match_proofs",
@@ -372,7 +399,6 @@ class _PrivateMatchRoomScreenState extends State<PrivateMatchRoomScreen> {
         return;
       }
 
-      // 3. Insert photo message into match_messages
       final payload = {
         "match_id": cleanId,
         "sender_team_id": myUuid,
@@ -486,7 +512,6 @@ class _PrivateMatchRoomScreenState extends State<PrivateMatchRoomScreen> {
     );
   }
 
-  // REQUIREMENT 3: Message Delete & Clear Chat
   Future<void> _deleteMessage(String id) async {
     if (id.isEmpty) return;
     setState(() {
@@ -638,7 +663,6 @@ class _PrivateMatchRoomScreenState extends State<PrivateMatchRoomScreen> {
     );
   }
 
-  // REQUIREMENT 1: Date & Time Formatting
   String _formatDateDivider(DateTime dt) {
     final now = DateTime.now();
     final today = DateTime(now.year, now.month, now.day);
@@ -659,20 +683,24 @@ class _PrivateMatchRoomScreenState extends State<PrivateMatchRoomScreen> {
     }
   }
 
-  void _showUidPassDialog() {
-    final uidController = TextEditingController();
-    final passController = TextEditingController();
+  // ============ NAYA: Room Info Sheet (structured) ============
+  void _showRoomInfoDialog() {
+    final isFirstTime = _roomInfo == null;
+    final uidController = TextEditingController(text: isFirstTime ? '' : (_roomInfo!['room_id'] ?? '').toString());
+    final passController = TextEditingController(text: isFirstTime ? '' : (_roomInfo!['room_password'] ?? '').toString());
 
     showDialog(
       context: context,
       builder: (ctx) => AlertDialog(
         backgroundColor: const Color(0xFF131A29),
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-        title: const Row(
+        title: Row(
           children: [
-            Icon(Icons.vpn_key_rounded, color: Color(0xFFFFD600), size: 22),
-            SizedBox(width: 8),
-            Text("Share Room UID / Pass", style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 16)),
+            const Icon(Icons.vpn_key_rounded, color: Color(0xFFFFD600), size: 22),
+            const SizedBox(width: 8),
+            Expanded(
+              child: Text(isFirstTime ? "Share Room Info" : "Update Room Info", style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 16)),
+            ),
           ],
         ),
         content: Column(
@@ -713,24 +741,80 @@ class _PrivateMatchRoomScreenState extends State<PrivateMatchRoomScreen> {
         actions: [
           TextButton(onPressed: () => Navigator.pop(ctx), child: const Text("Cancel", style: TextStyle(color: Color(0xFF8B949E)))),
           ElevatedButton(
-            onPressed: () {
+            onPressed: () async {
               final uid = uidController.text.trim();
               final pass = passController.text.trim();
-              if (uid.isEmpty) return;
+              if (uid.isEmpty) {
+                ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Room ID zaroori hai"), backgroundColor: Color(0xFFFF4655)));
+                return;
+              }
               Navigator.pop(ctx);
-              final shareMsg = "🎮 ROOM UID: $uid | PASS: ${pass.isNotEmpty ? pass : "None"}";
-              _sendMessage(shareMsg);
-              ScaffoldMessenger.of(context).showSnackBar(
-                const SnackBar(content: Text("Room UID & Password share ho gaya!"), backgroundColor: Color(0xFF2E7D32)),
-              );
+              await _saveRoomInfo(uid, pass);
             },
             style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFFFFD600), foregroundColor: Colors.black, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8))),
-            child: const Text("SHARE KARO", style: TextStyle(fontWeight: FontWeight.bold)),
+            child: Text(isFirstTime ? "SHARE KARO" : "UPDATE KARO", style: const TextStyle(fontWeight: FontWeight.bold)),
           ),
         ],
       ),
     );
   }
+
+  Future<void> _saveRoomInfo(String roomId, String password) async {
+    try {
+      final cleanId = widget.matchId.trim();
+      final myTeamUuid = SupabaseService.toUuid(widget.myTeamId);
+      final myUid = SupabaseService.client.auth.currentUser?.id;
+
+      if (myUid == null || myUid.isEmpty) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text("Login required"), backgroundColor: Color(0xFFFF4655)),
+          );
+        }
+        return;
+      }
+
+      final payload = {
+        'match_id': cleanId,
+        'team_id': myTeamUuid,
+        'room_id': roomId,
+        'room_password': password,
+        'shared_by_uid': myUid,
+        'shared_at': DateTime.now().toUtc().toIso8601String(),
+        'updated_at': DateTime.now().toUtc().toIso8601String(),
+      };
+
+      // Upsert (INSERT ya UPDATE automatically)
+      await SupabaseService.client
+          .from('match_room_info')
+          .upsert(payload, onConflict: 'match_id,team_id');
+
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text("✅ Room info save ho gayi!"), backgroundColor: Color(0xFF2E7D32)),
+        );
+      }
+    } catch (e) {
+      debugPrint("[PrivateMatchRoom] Save room info error: $e");
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text("Room info save nahi hui: $e"), backgroundColor: const Color(0xFFFF4655)),
+        );
+      }
+    }
+  }
+
+  void _copyRoomInfo() {
+    if (_roomInfo == null) return;
+    final uid = _roomInfo!['room_id']?.toString() ?? '';
+    final pass = _roomInfo!['room_password']?.toString() ?? '';
+    final text = pass.isNotEmpty ? 'Room ID: $uid | Password: $pass' : 'Room ID: $uid';
+    Clipboard.setData(ClipboardData(text: text));
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(content: Text("Room info copied!"), duration: Duration(seconds: 1), backgroundColor: Color(0xFF1877F2)),
+    );
+  }
+  // =============================================================
 
   @override
   Widget build(BuildContext context) {
@@ -739,6 +823,10 @@ class _PrivateMatchRoomScreenState extends State<PrivateMatchRoomScreen> {
     final myTeamRaw = widget.myTeamId.toLowerCase();
     final oppUuid = SupabaseService.toUuid(widget.opponentId).toLowerCase();
     final oppRaw = widget.opponentId.toLowerCase();
+
+    final myUid = SupabaseService.client.auth.currentUser?.id;
+    final myTeamUuidForRoom = SupabaseService.toUuid(widget.myTeamId);
+    final isMyTeamShared = _roomInfo != null && (_roomInfo!['team_id']?.toString() == myTeamUuidForRoom);
 
     return Scaffold(
       backgroundColor: const Color(0xFF0B0E16),
@@ -802,36 +890,140 @@ class _PrivateMatchRoomScreenState extends State<PrivateMatchRoomScreen> {
         children: [
           Column(
             children: [
-              // Top Info Banner & Share UID/Password Button
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-                color: const Color(0xFF131A29),
-                child: Column(
-                  children: [
-                    const Row(
-                      children: [
-                        Icon(Icons.lock_rounded, color: Color(0xFFFFD600), size: 16),
-                        SizedBox(width: 8),
-                        Expanded(
-                          child: Text("Ye chat bilkul private hai dono teams ke darmiyan. Yahan game room ID aur password share karen.", style: TextStyle(color: Color(0xFF8B949E), fontSize: 11.5)),
-                        ),
-                      ],
-                    ),
-                    const SizedBox(height: 8),
-                    SizedBox(
-                      width: double.infinity,
-                      child: ElevatedButton.icon(
-                        onPressed: _showUidPassDialog,
-                        style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFFFFD600), foregroundColor: Colors.black, padding: const EdgeInsets.symmetric(vertical: 8), shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)), elevation: 0),
-                        icon: const Icon(Icons.vpn_key_rounded, size: 16, color: Colors.black),
-                        label: const Text("UID / Password Share Karo", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
+              // ============ NAYA: Room Info Card ============
+              if (!_isRoomInfoLoading)
+                Container(
+                  margin: const EdgeInsets.fromLTRB(12, 10, 12, 6),
+                  padding: const EdgeInsets.all(12),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFF1A1500),
+                    borderRadius: BorderRadius.circular(12),
+                    border: Border.all(color: const Color(0xFFFFD600), width: 1.5),
+                    boxShadow: [
+                      BoxShadow(
+                        color: const Color(0xFFFFD600).withOpacity(0.1),
+                        blurRadius: 8,
+                        offset: const Offset(0, 2),
                       ),
+                    ],
+                  ),
+                  child: _roomInfo == null
+                      ? Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            const Row(
+                              children: [
+                                Icon(Icons.vpn_key_rounded, color: Color(0xFFFFD600), size: 18),
+                                SizedBox(width: 8),
+                                Expanded(
+                                  child: Text(
+                                    "🏠 ROOM INFO — Abhi tak share nahi hui",
+                                    style: TextStyle(color: Color(0xFFFFD600), fontWeight: FontWeight.bold, fontSize: 12.5),
+                                  ),
+                                ),
+                              ],
+                            ),
+                            const SizedBox(height: 8),
+                            const Text(
+                              "Game shuru karne ke liye Room ID aur Password share karen.",
+                              style: TextStyle(color: Color(0xFF8B949E), fontSize: 11.5),
+                            ),
+                            const SizedBox(height: 10),
+                            SizedBox(
+                              width: double.infinity,
+                              child: ElevatedButton.icon(
+                                onPressed: _showRoomInfoDialog,
+                                style: ElevatedButton.styleFrom(
+                                  backgroundColor: const Color(0xFFFFD600),
+                                  foregroundColor: Colors.black,
+                                  padding: const EdgeInsets.symmetric(vertical: 10),
+                                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                                  elevation: 0,
+                                ),
+                                icon: const Icon(Icons.add_rounded, size: 18),
+                                label: const Text("Room Info Share Karo", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
+                              ),
+                            ),
+                          ],
+                        )
+                      : Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Row(
+                              children: [
+                                const Icon(Icons.vpn_key_rounded, color: Color(0xFFFFD600), size: 18),
+                                const SizedBox(width: 8),
+                                const Expanded(
+                                  child: Text(
+                                    "🏠 ROOM INFO",
+                                    style: TextStyle(color: Color(0xFFFFD600), fontWeight: FontWeight.bold, fontSize: 12.5, letterSpacing: 0.5),
+                                  ),
+                                ),
+                                IconButton(
+                                  icon: const Icon(Icons.copy_rounded, color: Color(0xFFFFD600), size: 18),
+                                  tooltip: "Copy",
+                                  onPressed: _copyRoomInfo,
+                                  padding: EdgeInsets.zero,
+                                  constraints: const BoxConstraints(minWidth: 30, minHeight: 30),
+                                ),
+                                if (isMyTeamShared)
+                                  IconButton(
+                                    icon: const Icon(Icons.edit_rounded, color: Color(0xFFFFD600), size: 18),
+                                    tooltip: "Edit",
+                                    onPressed: _showRoomInfoDialog,
+                                    padding: EdgeInsets.zero,
+                                    constraints: const BoxConstraints(minWidth: 30, minHeight: 30),
+                                  ),
+                              ],
+                            ),
+                            const SizedBox(height: 8),
+                            _buildRoomInfoRow(label: "Room ID", value: (_roomInfo!['room_id'] ?? '').toString()),
+                            const SizedBox(height: 6),
+                            _buildRoomInfoRow(label: "Password", value: (_roomInfo!['room_password'] ?? '').toString()),
+                            const SizedBox(height: 8),
+                            Row(
+                              children: [
+                                const Icon(Icons.access_time_rounded, color: Color(0xFF8B949E), size: 12),
+                                const SizedBox(width: 4),
+                                Text(
+                                  "Shared ${_timeAgo(_roomInfo!['updated_at']?.toString())}",
+                                  style: const TextStyle(color: Color(0xFF8B949E), fontSize: 10.5),
+                                ),
+                                const Spacer(),
+                                if (isMyTeamShared)
+                                  TextButton.icon(
+                                    onPressed: _confirmDeleteRoomInfo,
+                                    style: TextButton.styleFrom(
+                                      foregroundColor: const Color(0xFFFF4655),
+                                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                                      minimumSize: const Size(0, 28),
+                                    ),
+                                    icon: const Icon(Icons.delete_outline_rounded, size: 14),
+                                    label: const Text("Delete", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 11)),
+                                  ),
+                              ],
+                            ),
+                          ],
+                        ),
+                ),
+              // ===============================================
+
+              // Top Info Banner
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                color: const Color(0xFF131A29),
+                child: const Row(
+                  children: [
+                    Icon(Icons.lock_rounded, color: Color(0xFFFFD600), size: 14),
+                    SizedBox(width: 8),
+                    Expanded(
+                      child: Text("Ye chat bilkul private hai dono teams ke darmiyan.", style: TextStyle(color: Color(0xFF8B949E), fontSize: 11)),
                     ),
                   ],
                 ),
               ),
 
-              // Messages List with RefreshIndicator & Date Dividers
+              // Messages List
               Expanded(
                 child: _isLoading && _messages.isEmpty
                     ? const Center(child: CircularProgressIndicator(color: Color(0xFF1877F2)))
@@ -843,7 +1035,7 @@ class _PrivateMatchRoomScreenState extends State<PrivateMatchRoomScreen> {
                             ? ListView(
                                 physics: const AlwaysScrollableScrollPhysics(),
                                 children: [
-                                  SizedBox(height: MediaQuery.of(context).size.height * 0.2),
+                                  SizedBox(height: MediaQuery.of(context).size.height * 0.15),
                                   Center(
                                     child: Padding(
                                       padding: const EdgeInsets.all(32),
@@ -884,7 +1076,6 @@ class _PrivateMatchRoomScreenState extends State<PrivateMatchRoomScreen> {
                                   final msgDt = DateTime.tryParse(createdAtStr) ?? DateTime.now();
                                   final timeStr = _formatTime(createdAtStr);
 
-                                  // Date divider logic
                                   bool showDateDivider = false;
                                   if (index == 0) {
                                     showDateDivider = true;
@@ -949,7 +1140,6 @@ class _PrivateMatchRoomScreenState extends State<PrivateMatchRoomScreen> {
                                                           child: Text("ROOM UID & PASSWORD • $senderTeamName", style: const TextStyle(color: Color(0xFFFFD600), fontWeight: FontWeight.bold, fontSize: 12), overflow: TextOverflow.ellipsis),
                                                         ),
                                                         if (isPending) ...[
-                                                          const SizedBox(width: 4),
                                                           const SizedBox(width: 12, height: 12, child: CircularProgressIndicator(strokeWidth: 1.5, color: Color(0xFFFFD600))),
                                                         ],
                                                         IconButton(
@@ -1082,7 +1272,7 @@ class _PrivateMatchRoomScreenState extends State<PrivateMatchRoomScreen> {
                       ),
               ),
 
-              // Message Input Field with Photo/Screenshot Button
+              // Message Input Field
               Container(
                 padding: const EdgeInsets.fromLTRB(8, 8, 12, 12),
                 color: const Color(0xFF131A29),
@@ -1090,7 +1280,6 @@ class _PrivateMatchRoomScreenState extends State<PrivateMatchRoomScreen> {
                   top: false,
                   child: Row(
                     children: [
-                      // Camera / Gallery Photo Picker Button
                       IconButton(
                         icon: _isUploadingImage
                             ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2, color: Color(0xFFFFD600)))
@@ -1125,7 +1314,6 @@ class _PrivateMatchRoomScreenState extends State<PrivateMatchRoomScreen> {
             ],
           ),
 
-          // REQUIREMENT 4: Floating "New Message" indicator when scrolled up
           if (_showScrollDownButton)
             Positioned(
               bottom: 74,
@@ -1166,4 +1354,104 @@ class _PrivateMatchRoomScreenState extends State<PrivateMatchRoomScreen> {
       ),
     );
   }
+
+  // ============ NAYA: Helper Methods ============
+  Widget _buildRoomInfoRow({required String label, required String value}) {
+    return Row(
+      children: [
+        SizedBox(
+          width: 80,
+          child: Text("$label:", style: const TextStyle(color: Color(0xFF8B949E), fontSize: 12, fontWeight: FontWeight.w600)),
+        ),
+        Expanded(
+          child: Container(
+            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+            decoration: BoxDecoration(
+              color: const Color(0xFF0B0E16),
+              borderRadius: BorderRadius.circular(6),
+              border: Border.all(color: const Color(0xFFFFD600).withOpacity(0.3)),
+            ),
+            child: SelectableText(
+              value,
+              style: const TextStyle(color: Colors.white, fontSize: 13, fontWeight: FontWeight.bold, letterSpacing: 0.5),
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+
+  String _timeAgo(String? dateStr) {
+    if (dateStr == null || dateStr.isEmpty) return "recently";
+    try {
+      final dt = DateTime.parse(dateStr).toLocal();
+      final diff = DateTime.now().difference(dt);
+      if (diff.inSeconds < 60) return "just now";
+      if (diff.inMinutes < 60) return "${diff.inMinutes} min ago";
+      if (diff.inHours < 24) return "${diff.inHours} hr ago";
+      if (diff.inDays < 7) return "${diff.inDays} day${diff.inDays > 1 ? "s" : ""} ago";
+      return DateFormat("dd MMM, hh:mm a").format(dt);
+    } catch (_) {
+      return "recently";
+    }
+  }
+
+  Future<void> _confirmDeleteRoomInfo() async {
+    final confirm = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: const Color(0xFF131A29),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        title: const Row(
+          children: [
+            Icon(Icons.warning_amber_rounded, color: Color(0xFFFF4655), size: 22),
+            SizedBox(width: 8),
+            Text("Delete Room Info?", style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 15)),
+          ],
+        ),
+        content: const Text(
+          "Aap apni team ki room info delete kar dena chahte hain? Doosri team ko notification nahi jayega.",
+          style: TextStyle(color: Color(0xFF8B949E), fontSize: 12.5),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text("Cancel", style: TextStyle(color: Color(0xFF8B949E))),
+          ),
+          ElevatedButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFFFF4655), foregroundColor: Colors.white, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8))),
+            child: const Text("DELETE", style: TextStyle(fontWeight: FontWeight.bold)),
+          ),
+        ],
+      ),
+    );
+
+    if (confirm != true) return;
+
+    try {
+      final cleanId = widget.matchId.trim();
+      final myTeamUuid = SupabaseService.toUuid(widget.myTeamId);
+
+      await SupabaseService.client
+          .from('match_room_info')
+          .delete()
+          .eq('match_id', cleanId)
+          .eq('team_id', myTeamUuid);
+
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text("Room info delete ho gayi"), backgroundColor: Color(0xFFFF4655)),
+        );
+      }
+    } catch (e) {
+      debugPrint("[PrivateMatchRoom] Delete room info error: $e");
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text("Delete nahi hui: $e"), backgroundColor: const Color(0xFFFF4655)),
+        );
+      }
+    }
+  }
+  // ============================================
 }
