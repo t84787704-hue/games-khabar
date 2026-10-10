@@ -4,12 +4,7 @@ import 'supabase_service.dart';
 
 /// =========================================================================
 /// SupaStore — A thin, safe wrapper over Supabase that mimics the
-/// Firebase-style API used across the app (collection/doc/get/set/update/
-/// snapshots/batch/runTransaction + SupaField/SupaTime/SupaSetOptions).
-///
-/// This keeps `gamer_rooms_screen.dart` and other legacy screens working
-/// without rewriting them all at once, while every operation still goes
-/// straight to Supabase underneath.
+/// Firebase-style API used across the app.
 /// =========================================================================
 class SupaStore {
   SupaStore._();
@@ -147,6 +142,21 @@ class SupaQuery {
       return SupaQueryResult([]);
     }
   }
+
+  Stream<SupaSnap> snapshots() {
+    return SupabaseService.client
+        .from(table)
+        .stream(primaryKey: ['id'])
+        .map((rows) {
+      final docs = rows
+          .map((row) => SupaDoc(
+                SupaDocRef(table, row['id']?.toString() ?? ''),
+                Map<String, dynamic>.from(row),
+              ))
+          .toList();
+      return SupaSnap(docs);
+    });
+  }
 }
 
 /// =========================================================================
@@ -176,7 +186,7 @@ class SupaDocRef {
     }
   }
 
-  Future<void> set(Map<String, dynamic> data) async {
+  Future<void> set(Map<String, dynamic> data, [SupaSetOptions? opts]) async {
     await SupabaseService.client
         .from(collectionName)
         .upsert({...data, 'id': id});
@@ -331,7 +341,7 @@ class SupaBatch {
   final List<Future<void> Function()> _ops = [];
 
   void set(SupaDocRef ref, Map<String, dynamic> data, [SupaSetOptions? opts]) {
-    _ops.add(() => ref.set(data));
+    _ops.add(() => ref.set(data, opts));
   }
 
   void update(SupaDocRef ref, Map<String, dynamic> data) {
@@ -358,8 +368,8 @@ class SupaTransaction {
 
   Future<SupaDoc> get(SupaDocRef ref) => ref.get();
 
-  void set(SupaDocRef ref, Map<String, dynamic> data) {
-    _ops.add(() => ref.set(data));
+  void set(SupaDocRef ref, Map<String, dynamic> data, [SupaSetOptions? opts]) {
+    _ops.add(() => ref.set(data, opts));
   }
 
   void update(SupaDocRef ref, Map<String, dynamic> data) {
