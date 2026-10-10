@@ -51,6 +51,12 @@ class SupaCollection {
     return SupaQuery(name).where(field, isEqualTo: isEqualTo);
   }
 
+  SupaQuery orderBy(String field, {bool descending = false}) {
+    return SupaQuery(name).orderBy(field, descending: descending);
+  }
+
+  SupaQuery limit(int n) => SupaQuery(name).limit(n);
+
   Future<SupaQueryResult> get() async {
     return await SupaQuery(name).get();
   }
@@ -91,7 +97,6 @@ class SupaQuery {
   String? _orderField;
   bool _orderDesc = false;
   int? _limitCount;
-  bool _limitToLast = false;
   String _selectStr = '*';
 
   SupaQuery(this.table);
@@ -119,7 +124,7 @@ class SupaQuery {
 
   Future<SupaQueryResult> get() async {
     try {
-      var q = SupabaseService.client.from(table).select(_selectStr);
+      dynamic q = SupabaseService.client.from(table).select(_selectStr);
       for (final f in _filters) {
         q = q.eq(f.key, f.value);
       }
@@ -184,7 +189,6 @@ class SupaDocRef {
       if (v is Map && v['__op'] == 'delete') {
         clean[entry.key] = null;
       } else if (v is Map && v['__op'] == 'increment') {
-        // Read current value then increment
         try {
           final row = await SupabaseService.client
               .from(collectionName)
@@ -197,8 +201,8 @@ class SupaDocRef {
         } catch (_) {
           clean[entry.key] = (v['value'] as num?)?.toInt() ?? 0;
         }
-      } else if (v is Map && (v['__op'] == 'arrayUnion' || v['__op'] == 'arrayRemove')) {
-        // Read current array then modify
+      } else if (v is Map &&
+          (v['__op'] == 'arrayUnion' || v['__op'] == 'arrayRemove')) {
         try {
           final row = await SupabaseService.client
               .from(collectionName)
