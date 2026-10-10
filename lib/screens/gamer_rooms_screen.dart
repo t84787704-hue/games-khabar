@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
+import 'dart:math';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:image_picker/image_picker.dart';
@@ -270,6 +271,19 @@ class _GamerRoomsScreenState extends State<GamerRoomsScreen> {
       '';
 
   Timer? _cleanupTimer;
+
+  String _generateUuid() {
+    final now = DateTime.now().microsecondsSinceEpoch;
+    final rand = Random().nextInt(0xFFFFFF);
+    String hex(int n, int len) =>
+        n.toRadixString(16).padLeft(len, '0').substring(0, len);
+    final p1 = hex(now & 0xFFFFFFFF, 8);
+    final p2 = hex((now >> 32) & 0xFFFF, 4);
+    final p3 = '4${hex((now >> 16) & 0xFFF, 3)}';
+    final p4 = '${'89ab'[(rand >> 8) & 3]}${hex(rand & 0xFFF, 3)}';
+    final p5 = hex((now * 31 + rand) & 0xFFFFFFFFFFFF, 12);
+    return '$p1-$p2-$p3-$p4-$p5';
+  }
 
   String _getCompletedDeleteRemainingText(GamerRoom room) {
     if (room.completedAt == null) return 'COMPLETED';
@@ -865,8 +879,7 @@ class _GamerRoomsScreenState extends State<GamerRoomsScreen> {
                               final uid = currentUserId;
                               final name = currentUserName;
                               if (uid.isEmpty) return;
-                              final roomId =
-                                  '${DateTime.now().millisecondsSinceEpoch}_${DateTime.now().microsecondsSinceEpoch.toRadixString(36)}';
+                              final roomId = _generateUuid();
                               final now = DateTime.now().toIso8601String();
                               try {
                                 await SupabaseService.client.from('rooms').insert({
