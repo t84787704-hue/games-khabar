@@ -56,9 +56,9 @@ class _CoinWalletScreenState extends State<CoinWalletScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: GamerTheme.backgroundDark,
+      backgroundColor: const Color(0xFF0B101B),
       appBar: AppBar(
-        backgroundColor: GamerTheme.backgroundDark,
+        backgroundColor: const Color(0xFF0B101B),
         elevation: 0,
         leading: IconButton(
           icon: const Icon(Icons.arrow_back_rounded, color: Colors.white),
