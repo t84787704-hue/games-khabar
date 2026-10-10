@@ -470,7 +470,10 @@ class _GamerRoomsScreenState extends State<GamerRoomsScreen> {
       for (final row in rows) {
         try {
           final room = GamerRoom.fromSupabase(Map<String, dynamic>.from(row));
-          if (room.isExpiredCompleted) {
+          // Auto-delete sirf completed rooms ke liye, jo 5 minute purane hain
+          if (room.status.toLowerCase() == 'completed' &&
+              room.completedAt != null &&
+              DateTime.now().difference(room.completedAt!).inMinutes >= 5) {
             SupabaseService.client
                 .from('rooms')
                 .delete()
@@ -881,6 +884,10 @@ class _GamerRoomsScreenState extends State<GamerRoomsScreen> {
                               if (uid.isEmpty) return;
                               final roomId = _generateUuid();
                               final now = DateTime.now().toIso8601String();
+                              // start_time 15 minute future mein
+                              final startTime = DateTime.now()
+                                  .add(const Duration(minutes: 15))
+                                  .toIso8601String();
                               try {
                                 await SupabaseService.client.from('rooms').insert({
                                   'id': roomId,
@@ -904,7 +911,7 @@ class _GamerRoomsScreenState extends State<GamerRoomsScreen> {
                                       'joinedAt': now,
                                     }
                                   ]),
-                                  'start_time': now,
+                                  'start_time': startTime,
                                 });
                                 if (mounted) {
                                   setState(() => _joinedRoomIds.add(roomId));
