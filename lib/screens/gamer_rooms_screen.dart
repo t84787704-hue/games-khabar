@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:convert';
 import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -321,10 +322,6 @@ class _GamerRoomsScreenState extends State<GamerRoomsScreen> {
             now.difference(completedAt).inMinutes >= 5) {
           final id = data['id'];
           await SupabaseService.client.from('rooms').delete().eq('id', id);
-          await SupabaseService.client
-              .from('tournament_rooms')
-              .delete()
-              .eq('id', id);
         }
       }
     } catch (_) {}
@@ -388,7 +385,6 @@ class _GamerRoomsScreenState extends State<GamerRoomsScreen> {
       }
       if (resolvedWinnerName.isEmpty) resolvedWinnerName = 'Winner';
       final int prize = room.prize;
-      // Winner ka user row update karo
       final winnerRow = await SupabaseService.client
           .from('users')
           .select()
@@ -428,7 +424,6 @@ class _GamerRoomsScreenState extends State<GamerRoomsScreen> {
           'lastRewardAt': DateTime.now().toIso8601String(),
         });
       }
-      // Room update
       await SupabaseService.client.from('rooms').update({
         'reward_status': 'sent',
         'status': 'completed',
@@ -436,18 +431,6 @@ class _GamerRoomsScreenState extends State<GamerRoomsScreen> {
         'winner_name': resolvedWinnerName,
         'completed_at': DateTime.now().toIso8601String(),
       }).eq('id', room.id);
-      // Tournament rooms sync
-      try {
-        await SupabaseService.client.from('tournament_rooms').upsert({
-          'id': room.id,
-          'status': 'completed',
-          'reward_status': 'sent',
-          'winner_id': resolvedWinnerId,
-          'winner_name': resolvedWinnerName,
-          'completed_at': DateTime.now().toIso8601String(),
-        });
-      } catch (_) {}
-      // Chat message
       try {
         await SupabaseService.client.from('messages').insert({
           'room_id': room.id,
@@ -544,8 +527,8 @@ class _GamerRoomsScreenState extends State<GamerRoomsScreen> {
           });
           await SupabaseService.client.from('rooms').update({
             'filled_slots': currentFilled + 1,
-            'joined_user_ids': newJoinedIds,
-            'joined_users': joinedUsersList,
+            'joined_user_ids': jsonEncode(newJoinedIds),
+            'joined_users': jsonEncode(joinedUsersList),
           }).eq('id', room.id);
           if (mounted) {
             setState(() => _joinedRoomIds.add(room.id));
@@ -619,8 +602,8 @@ class _GamerRoomsScreenState extends State<GamerRoomsScreen> {
                       : 1;
               await SupabaseService.client.from('rooms').update({
                 'filled_slots': (currentFilled - 1).clamp(0, 100),
-                'joined_user_ids': joinedIds,
-                'joined_users': joinedUsersList,
+                'joined_user_ids': jsonEncode(joinedIds),
+                'joined_users': jsonEncode(joinedUsersList),
               }).eq('id', room.id);
               if (ctx.mounted) Navigator.pop(ctx);
               if (mounted) {
@@ -885,53 +868,53 @@ class _GamerRoomsScreenState extends State<GamerRoomsScreen> {
                               final roomId =
                                   '${DateTime.now().millisecondsSinceEpoch}_${DateTime.now().microsecondsSinceEpoch.toRadixString(36)}';
                               final now = DateTime.now().toIso8601String();
-                              await SupabaseService.client.from('rooms').insert({
-                                'id': roomId,
-                                'host_id': uid,
-                                'game': selectedGame,
-                                'mode': selectedMap,
-                                'room_id': roomIdController.text.trim(),
-                                'room_password': passController.text.trim(),
-                                'prize_pool': prizeCoins,
-                                'total_slots': maxSlots,
-                                'filled_slots': 1,
-                                'status': 'active',
-                                'created_at': now,
-                                'host_name': name,
-                                'joined_user_ids': [uid],
-                                'joined_users': [
-                                  {
-                                    'id': uid,
-                                    'name': name,
-                                    'photo': currentUserPhoto,
-                                    'joinedAt': now,
-                                  }
-                                ],
-                                'start_time': now,
-                              });
                               try {
-                                await SupabaseService.saveRoom({
-                                  'room_id': roomId,
-                                  'title': titleController.text.trim(),
+                                await SupabaseService.client.from('rooms').insert({
+                                  'id': roomId,
+                                  'host_id': uid,
                                   'game': selectedGame,
                                   'mode': selectedMap,
-                                  'host_id': uid,
-                                  'host_name': name,
-                                  'max_players': maxSlots,
-                                  'current_players': 1,
+                                  'room_id': roomIdController.text.trim(),
+                                  'room_password': passController.text.trim(),
+                                  'prize_pool': prizeCoins,
+                                  'total_slots': maxSlots,
+                                  'filled_slots': 1,
                                   'status': 'active',
                                   'created_at': now,
+                                  'host_name': name,
+                                  'joined_user_ids': jsonEncode([uid]),
+                                  'joined_users': jsonEncode([
+                                    {
+                                      'id': uid,
+                                      'name': name,
+                                      'photo': currentUserPhoto,
+                                      'joinedAt': now,
+                                    }
+                                  ]),
+                                  'start_time': now,
                                 });
-                              } catch (_) {}
-                              if (mounted) {
-                                setState(() => _joinedRoomIds.add(roomId));
-                                Navigator.pop(ctx);
-                                ScaffoldMessenger.of(context).showSnackBar(
-                                  const SnackBar(
-                                    content: Text('🎉 Room published!'),
-                                    backgroundColor: _fbBlue,
-                                  ),
-                                );
+                                if (mounted) {
+                                  setState(() => _joinedRoomIds.add(roomId));
+                                  Navigator.pop(ctx);
+                                  ScaffoldMessenger.of(context).showSnackBar(
+                                    const SnackBar(
+                                      content: Text('🎉 Room published!'),
+                                      backgroundColor: _fbBlue,
+                                    ),
+                                  );
+                                }
+                              } catch (e) {
+                                debugPrint('Room insert failed: $e');
+                                if (mounted) {
+                                  ScaffoldMessenger.of(context).showSnackBar(
+                                    SnackBar(
+                                      content: Text('Failed: $e'),
+                                      backgroundColor: GamerTheme.redAccent,
+                                      behavior: SnackBarBehavior.floating,
+                                      duration: const Duration(seconds: 6),
+                                    ),
+                                  );
+                                }
                               }
                             }
                           : null,
@@ -1368,7 +1351,8 @@ class _InRoomBottomSheetContentState extends State<_InRoomBottomSheetContent> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text('Prize: ${room.prize} Coins • Slots: ${room.filled}/${room.total}',
+                    Text(
+                        'Prize: ${room.prize} Coins • Slots: ${room.filled}/${room.total}',
                         style: const TextStyle(
                             fontWeight: FontWeight.bold, fontSize: 13)),
                     const SizedBox(height: 8),
