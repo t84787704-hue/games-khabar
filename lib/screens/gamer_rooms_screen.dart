@@ -1,14 +1,11 @@
 import 'dart:async';
 import 'dart:io';
-import '../services/supabase_store.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:intl/intl.dart';
 import 'package:google_mlkit_text_recognition/google_mlkit_text_recognition.dart';
 import '../constants/gamer_theme.dart';
-import '../models/tournament_room_model.dart';
-import '../models/coin_wallet_model.dart';
 import '../services/gamer_auth_service.dart';
 import '../services/tournament_service.dart';
 import '../services/coin_wallet_service.dart';
@@ -18,35 +15,26 @@ import '../services/win_proof_validator.dart';
 import 'coin_store_screen.dart';
 import '../widgets/coin_history_sheet.dart';
 
-// Backwards compatibility across older navigators
-// TournamentBoardScreen is defined in tournament_board_screen.dart
-
-/// =========================================================================
-/// 1. DATA MODEL: GamerRoom
-/// =========================================================================
 class GamerRoom {
   final String id;
-  final String title;
   final String hostId;
-  final String hostName;
-  final String map;
   final String game;
-  final int prize;
-  final String entryFee;
-  final int total;
-  final int filled;
-  final List<String> joinedUserIds;
-  final List<Map<String, dynamic>> joinedUsers;
-  final String roomIdCode;
-  final String password;
+  final String mode;
+  final String roomId;
+  final String roomPassword;
+  final int prizePool;
+  final int totalSlots;
+  final int filledSlots;
   final String status;
   final DateTime createdAt;
+  final String hostName;
+  final List<String> joinedUserIds;
+  final List<Map<String, dynamic>> joinedUsers;
   final DateTime startTime;
-  final String rewardStatus; // 'idle', 'sending', 'sent', 'pending_host', 'rejected_by_app'
+  final String rewardStatus;
   final String? winnerId;
   final String? winnerName;
-  final String prizeSource; // 'application'
-  final String ocrStatus; // 'verified', 'doubt', 'none'
+  final String ocrStatus;
   final String ocrText;
   final int ocrScore;
   final String? proofUrl;
@@ -63,26 +51,23 @@ class GamerRoom {
 
   const GamerRoom({
     required this.id,
-    required this.title,
     required this.hostId,
-    required this.hostName,
-    required this.map,
     required this.game,
-    required this.prize,
-    required this.entryFee,
-    required this.total,
-    required this.filled,
-    required this.joinedUserIds,
-    required this.joinedUsers,
-    required this.roomIdCode,
-    required this.password,
+    required this.mode,
+    required this.roomId,
+    required this.roomPassword,
+    required this.prizePool,
+    required this.totalSlots,
+    required this.filledSlots,
     required this.status,
     required this.createdAt,
-    required this.startTime,
+    this.hostName = 'Host',
+    this.joinedUserIds = const [],
+    this.joinedUsers = const [],
+    DateTime? startTime,
     this.rewardStatus = 'idle',
     this.winnerId,
     this.winnerName,
-    this.prizeSource = 'application',
     this.ocrStatus = 'none',
     this.ocrText = '',
     this.ocrScore = 0,
@@ -97,12 +82,28 @@ class GamerRoom {
     this.disputeReason,
     this.disputeProofUrl,
     this.disputedAt,
-  });
+  }) : startTime = startTime ?? createdAt;
 
-  bool get isFull => filled >= total;
-  bool get isCompleted => status.toLowerCase() == 'completed' || rewardStatus.toLowerCase() == 'sent';
-  bool get isDisputed => disputed || status.toLowerCase() == 'disputed' || status.toLowerCase() == 'under_review';
-  bool get isUnderReview => status.toLowerCase() == 'under_review' || isDisputed;
+  String get title => '$game $mode';
+  String get map => mode;
+  int get prize => prizePool;
+  int get total => totalSlots;
+  int get filled => filledSlots;
+  String get roomIdCode => roomId;
+  String get password => roomPassword;
+  String get entryFee => 'FREE';
+  String get prizeSource => 'application';
+
+  bool get isFull => filledSlots >= totalSlots;
+  bool get isCompleted =>
+      status.toLowerCase() == 'completed' ||
+      rewardStatus.toLowerCase() == 'sent';
+  bool get isDisputed =>
+      disputed ||
+      status.toLowerCase() == 'disputed' ||
+      status.toLowerCase() == 'under_review';
+  bool get isUnderReview =>
+      status.toLowerCase() == 'under_review' || isDisputed;
   bool get isProofRejected {
     if (isCompleted) return false;
     final st = status.toLowerCase();
@@ -119,180 +120,107 @@ class GamerRoom {
       (status.toLowerCase() == 'reward_waiting' ||
           rewardStatus.toLowerCase() == 'pending' ||
           rewardStatus.toLowerCase() == 'pending_host' ||
-          ((proofUrl != null && proofUrl!.isNotEmpty) || (winProofUrl != null && winProofUrl!.isNotEmpty)));
-  bool get isInProgress => !isCompleted && !isRewardWaiting && !isDisputed && !isProofRejected && (status.toUpperCase() == 'IN_PROGRESS' || status.toUpperCase() == 'STARTED' || status.toUpperCase() == 'MATCH_STARTED');
-  bool get isActive => !isCompleted && !isRewardWaiting && !isDisputed && !isProofRejected && (status.toLowerCase() == 'active' || status.toUpperCase() == 'OPEN');
+          ((proofUrl != null && proofUrl!.isNotEmpty) ||
+              (winProofUrl != null && winProofUrl!.isNotEmpty)));
+  bool get isInProgress =>
+      !isCompleted &&
+      !isRewardWaiting &&
+      !isDisputed &&
+      !isProofRejected &&
+      (status.toUpperCase() == 'IN_PROGRESS' ||
+          status.toUpperCase() == 'STARTED' ||
+          status.toUpperCase() == 'MATCH_STARTED');
+  bool get isActive =>
+      !isCompleted &&
+      !isRewardWaiting &&
+      !isDisputed &&
+      !isProofRejected &&
+      (status.toLowerCase() == 'active' || status.toUpperCase() == 'OPEN');
   bool get isExpiredCompleted {
     if (!isCompleted || completedAt == null) return false;
     return DateTime.now().difference(completedAt!).inMinutes >= 5;
   }
 
-  factory GamerRoom.fromFirestore(SupaDoc doc) => GamerRoom.fromSupabase(doc);
-  factory GamerRoom.fromSupabase(SupaDoc doc) {
-    final data = doc.data() as Map<String, dynamic>? ?? {};
-
-    final id = doc.id;
-    final title = (data['title'] ?? 'Custom Match').toString();
-    final hostId = (data['hostId'] ?? '').toString();
-    String hostName = (data['hostName'] ?? data['host'] ?? data['hostUsername'] ?? '').toString().trim();
-    if (hostName.isEmpty || hostName.toLowerCase() == 'host') {
-      if (data['hostUsername'] != null && data['hostUsername'].toString().trim().isNotEmpty && data['hostUsername'].toString().trim().toLowerCase() != 'host') {
-        hostName = data['hostUsername'].toString().trim();
-      } else if (data['hostDisplayName'] != null && data['hostDisplayName'].toString().trim().isNotEmpty && data['hostDisplayName'].toString().trim().toLowerCase() != 'host') {
-        hostName = data['hostDisplayName'].toString().trim();
-      }
+  factory GamerRoom.fromSupabase(Map<String, dynamic> row) {
+    DateTime created = DateTime.now();
+    if (row['created_at'] is String) {
+      created = DateTime.tryParse(row['created_at']) ?? created;
     }
-    if (hostName.isEmpty || hostName.toLowerCase() == 'host') {
-      final pNames = Map<String, dynamic>.from(data['joinedPlayerNames'] ?? {});
-      if (pNames.containsKey(hostId) && pNames[hostId].toString().trim().isNotEmpty && pNames[hostId].toString().trim().toLowerCase() != 'host') {
-        hostName = pNames[hostId].toString().trim();
-      }
-    }
-    if (hostName.isEmpty) hostName = 'Host';
-    final map = (data['map'] ?? 'Erangel').toString();
-    final game = (data['game'] ?? data['gameType'] ?? data['gameName'] ?? 'BGMI').toString();
-
-    int prize = 500;
-    if (data['prize'] is num) {
-      prize = (data['prize'] as num).toInt();
-    } else if (data['prizePoolCoins'] is num) {
-      prize = (data['prizePoolCoins'] as num).toInt();
-    }
-
-    // Free entry for all rooms
-    const entryFee = 'FREE';
-
-    final int total = (data['total'] ?? data['totalSlots'] ?? data['maxSlots'] ?? 2) as int;
-
-    final List<String> joinedUserIds = List<String>.from(data['joinedUserIds'] ?? data['joinedPlayers'] ?? []);
-
-    final List<Map<String, dynamic>> joinedUsers = [];
-    if (data['joinedUsers'] is List) {
-      for (final item in (data['joinedUsers'] as List)) {
+    final joinedUserIds = (row['joined_user_ids'] is List)
+        ? List<String>.from(
+            (row['joined_user_ids'] as List).map((e) => e.toString()))
+        : <String>[];
+    final joinedUsers = <Map<String, dynamic>>[];
+    if (row['joined_users'] is List) {
+      for (final item in (row['joined_users'] as List)) {
         if (item is Map) {
           joinedUsers.add(Map<String, dynamic>.from(item));
         }
       }
     }
-
-    if (joinedUsers.isEmpty && joinedUserIds.isNotEmpty) {
-      final pNames = Map<String, dynamic>.from(data['joinedPlayerNames'] ?? {});
-      for (final uid in joinedUserIds) {
-        joinedUsers.add({
-          'id': uid,
-          'name': pNames[uid] ?? (uid == hostId ? hostName : 'Player'),
-          'photo': '',
-          'joinedAt': data['createdAt'] ?? SupaTime.now(),
-        });
-      }
-    }
-
-    final int filled = (data['filled'] ??
-        (joinedUsers.isNotEmpty
-            ? joinedUsers.length
-            : (joinedUserIds.isNotEmpty ? joinedUserIds.length : (data['currentSlots'] ?? 1)))) as int;
-
-    final roomIdCode = (data['roomIdCode'] ?? data['roomId'] ?? '').toString();
-    final password = (data['password'] ?? '').toString();
-    final status = (data['status'] ?? 'active').toString();
-    final rewardStatus = (data['rewardStatus'] ?? (status.toLowerCase() == 'completed' ? 'sent' : 'idle')).toString();
-    final winnerId = data['winnerId']?.toString();
-    final winnerName = data['winnerName']?.toString();
-    final prizeSource = (data['prizeSource'] ?? 'application').toString();
-    final ocrStatus = (data['ocrStatus'] ?? 'none').toString();
-    final ocrText = (data['ocrText'] ?? '').toString();
-    final int ocrScore = (data['ocrScore'] is num) ? (data['ocrScore'] as num).toInt() : 0;
-    final winProofUrl = data['winProofUrl']?.toString() ?? data['proofUrl']?.toString();
-    final proofUrl = data['proofUrl']?.toString() ?? winProofUrl;
-
     DateTime? winProofUploadedAt;
-    if (data['winProofUploadedAt'] is SupaTime) {
-      winProofUploadedAt = (data['winProofUploadedAt'] as SupaTime).toDate();
-    } else if (data['winProofUploadedAt'] is String) {
-      winProofUploadedAt = DateTime.tryParse(data['winProofUploadedAt']);
+    if (row['win_proof_uploaded_at'] is String) {
+      winProofUploadedAt = DateTime.tryParse(row['win_proof_uploaded_at']);
     }
-
     DateTime? completedAt;
-    if (data['completedAt'] is SupaTime) {
-      completedAt = (data['completedAt'] as SupaTime).toDate();
-    } else if (data['completedAt'] is String) {
-      completedAt = DateTime.tryParse(data['completedAt']);
+    if (row['completed_at'] is String) {
+      completedAt = DateTime.tryParse(row['completed_at']);
     }
-
     DateTime? autoApproveAt;
-    if (data['autoApproveAt'] is SupaTime) {
-      autoApproveAt = (data['autoApproveAt'] as SupaTime).toDate();
-    } else if (data['autoApproveAt'] is String) {
-      autoApproveAt = DateTime.tryParse(data['autoApproveAt']);
+    if (row['auto_approve_at'] is String) {
+      autoApproveAt = DateTime.tryParse(row['auto_approve_at']);
     }
-
-    final bool disputed = data['disputed'] == true || status.toLowerCase() == 'disputed' || status.toLowerCase() == 'under_review';
-    final String? disputedBy = data['disputedBy']?.toString();
-    final String? disputedByName = data['disputedByName']?.toString();
-    final String? disputeReason = data['disputeReason']?.toString();
-    final String? disputeProofUrl = data['disputeProofUrl']?.toString();
     DateTime? disputedAt;
-    if (data['disputedAt'] is SupaTime) {
-      disputedAt = (data['disputedAt'] as SupaTime).toDate();
-    } else if (data['disputedAt'] is String) {
-      disputedAt = DateTime.tryParse(data['disputedAt']);
+    if (row['disputed_at'] is String) {
+      disputedAt = DateTime.tryParse(row['disputed_at']);
     }
-
-    DateTime created = DateTime.now();
-    if (data['createdAt'] is SupaTime) {
-      created = (data['createdAt'] as SupaTime).toDate();
+    DateTime? startTime;
+    if (row['start_time'] is String) {
+      startTime = DateTime.tryParse(row['start_time']);
     }
-
-    DateTime start = DateTime.now().add(const Duration(minutes: 15));
-    if (data['startTime'] is SupaTime) {
-      start = (data['startTime'] as SupaTime).toDate();
-    } else if (data['startTime'] is String) {
-      start = DateTime.tryParse(data['startTime']) ?? start;
-    }
-
     return GamerRoom(
-      id: id,
-      title: title,
-      hostId: hostId,
-      hostName: hostName,
-      map: map,
-      game: game,
-      prize: prize,
-      entryFee: entryFee,
-      total: total > 0 ? total : 2,
-      filled: filled.clamp(0, total > 0 ? total : 2),
+      id: (row['id'] ?? '').toString(),
+      hostId: (row['host_id'] ?? '').toString(),
+      game: (row['game'] ?? 'BGMI').toString(),
+      mode: (row['mode'] ?? 'Erangel').toString(),
+      roomId: (row['room_id'] ?? '').toString(),
+      roomPassword: (row['room_password'] ?? '').toString(),
+      prizePool:
+          (row['prize_pool'] is num) ? (row['prize_pool'] as num).toInt() : 0,
+      totalSlots: (row['total_slots'] is num)
+          ? (row['total_slots'] as num).toInt()
+          : 2,
+      filledSlots: (row['filled_slots'] is num)
+          ? (row['filled_slots'] as num).toInt()
+          : 1,
+      status: (row['status'] ?? 'active').toString(),
+      createdAt: created,
+      hostName: (row['host_name'] ?? 'Host').toString(),
       joinedUserIds: joinedUserIds,
       joinedUsers: joinedUsers,
-      roomIdCode: roomIdCode,
-      password: password,
-      status: status,
-      createdAt: created,
-      startTime: start,
-      rewardStatus: rewardStatus,
-      winnerId: winnerId,
-      winnerName: winnerName,
-      prizeSource: prizeSource,
-      ocrStatus: ocrStatus,
-      ocrText: ocrText,
-      ocrScore: ocrScore,
-      proofUrl: proofUrl,
-      winProofUrl: winProofUrl,
+      startTime: startTime ?? created,
+      rewardStatus: (row['reward_status'] ?? 'idle').toString(),
+      winnerId: row['winner_id']?.toString(),
+      winnerName: row['winner_name']?.toString(),
+      ocrStatus: (row['ocr_status'] ?? 'none').toString(),
+      ocrText: (row['ocr_text'] ?? '').toString(),
+      ocrScore:
+          (row['ocr_score'] is num) ? (row['ocr_score'] as num).toInt() : 0,
+      proofUrl: row['proof_url']?.toString(),
+      winProofUrl: row['win_proof_url']?.toString(),
       winProofUploadedAt: winProofUploadedAt,
       completedAt: completedAt,
       autoApproveAt: autoApproveAt,
-      disputed: disputed,
-      disputedBy: disputedBy,
-      disputedByName: disputedByName,
-      disputeReason: disputeReason,
-      disputeProofUrl: disputeProofUrl,
+      disputed: row['disputed'] == true,
+      disputedBy: row['disputed_by']?.toString(),
+      disputedByName: row['disputed_by_name']?.toString(),
+      disputeReason: row['dispute_reason']?.toString(),
+      disputeProofUrl: row['dispute_proof_url']?.toString(),
       disputedAt: disputedAt,
     );
   }
 }
 
-/// =========================================================================
-/// 2. MAIN SCREEN: GamerRoomsScreen
-/// =========================================================================
 class GamerRoomsScreen extends StatefulWidget {
   const GamerRoomsScreen({super.key});
 
@@ -309,175 +237,6 @@ class _GamerRoomsScreenState extends State<GamerRoomsScreen> {
   String _selectedCategory = 'All Games';
   bool _isWatchingAdFromRooms = false;
 
-  void _watchRewardedAdForCoins() {
-    if (_isWatchingAdFromRooms) return;
-    final uid = currentUserId;
-    if (uid.isEmpty) return;
-
-    setState(() => _isWatchingAdFromRooms = true);
-    int remainingSeconds = 5;
-    Timer? adTimer;
-
-    showDialog(
-      context: context,
-      barrierDismissible: false,
-      builder: (dialogCtx) => StatefulBuilder(
-        builder: (context, setDialogState) {
-          adTimer ??= Timer.periodic(const Duration(seconds: 1), (t) {
-            if (remainingSeconds > 1) {
-              setDialogState(() => remainingSeconds--);
-            } else {
-              t.cancel();
-              Navigator.pop(dialogCtx);
-              CoinWalletService().rewardAdCoins(uid);
-              if (mounted) {
-                setState(() => _isWatchingAdFromRooms = false);
-                ScaffoldMessenger.of(this.context).showSnackBar(
-                  const SnackBar(
-                    backgroundColor: Color(0xFF1877F2),
-                    content: Row(
-                      children: [
-                        Text('💰', style: TextStyle(fontSize: 20)),
-                        SizedBox(width: 10),
-                        Text(
-                          '+50 G-Coins added for watching sponsored ad!',
-                          style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
-                        ),
-                      ],
-                    ),
-                    duration: Duration(seconds: 3),
-                  ),
-                );
-              }
-            }
-          });
-
-          return AlertDialog(
-            backgroundColor: Colors.white,
-            shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(16),
-            ),
-            title: Row(
-              children: [
-                Container(
-                  padding: const EdgeInsets.all(6),
-                  decoration: const BoxDecoration(
-                    color: Color(0xFFE7F3FF),
-                    shape: BoxShape.circle,
-                  ),
-                  child: const Icon(Icons.play_arrow_rounded, color: Color(0xFF1877F2), size: 20),
-                ),
-                const SizedBox(width: 10),
-                const Expanded(
-                  child: Text(
-                    'REWARDED SPONSOR AD',
-                    style: TextStyle(
-                      color: Color(0xFF1877F2),
-                      fontSize: 13,
-                      fontWeight: FontWeight.bold,
-                      letterSpacing: 0.8,
-                    ),
-                  ),
-                ),
-                Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                  decoration: BoxDecoration(
-                    color: const Color(0xFFF0F2F5),
-                    borderRadius: BorderRadius.circular(12),
-                  ),
-                  child: Text(
-                    '${remainingSeconds}s',
-                    style: const TextStyle(color: Color(0xFF050505), fontWeight: FontWeight.bold, fontSize: 12),
-                  ),
-                ),
-              ],
-            ),
-            content: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Container(
-                  height: 130,
-                  width: double.infinity,
-                  decoration: BoxDecoration(
-                    gradient: const LinearGradient(
-                      colors: [Color(0xFFE7F3FF), Color(0xFFF0F2F5)],
-                      begin: Alignment.topLeft,
-                      end: Alignment.bottomRight,
-                    ),
-                    borderRadius: BorderRadius.circular(16),
-                    border: Border.all(color: const Color(0xFFCED0D4)),
-                  ),
-                  child: const Center(
-                    child: Column(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        Icon(Icons.sports_esports_rounded, color: Color(0xFF1877F2), size: 44),
-                        SizedBox(height: 8),
-                        Text(
-                          'Sponsored Gaming Partner',
-                          style: TextStyle(color: Color(0xFF050505), fontWeight: FontWeight.bold, fontSize: 13),
-                        ),
-                        SizedBox(height: 4),
-                        Text(
-                          'Watch 5s ad to earn +50 G-Coins...',
-                          style: TextStyle(color: Color(0xFF65676B), fontSize: 11),
-                        ),
-                      ],
-                    ),
-                  ),
-                ),
-                const SizedBox(height: 12),
-                LinearProgressIndicator(
-                  value: (5 - remainingSeconds) / 5.0,
-                  backgroundColor: const Color(0xFFE4E6EB),
-                  color: const Color(0xFF1877F2),
-                  minHeight: 6,
-                  borderRadius: BorderRadius.circular(3),
-                ),
-              ],
-            ),
-          );
-        },
-      ),
-    ).then((_) {
-      adTimer?.cancel();
-      if (mounted) setState(() => _isWatchingAdFromRooms = false);
-    });
-  }
-
-  // Cache for host usernames fetched from 'users' collection to avoid repeated reads
-  final Map<String, String> _hostNameCache = {};
-
-  /// Ensure host display name is loaded into cache (reads users collection once per hostId)
-  Future<void> _ensureHostNameLoaded(String hostId) async {
-    if (hostId.isEmpty || (_hostNameCache.containsKey(hostId) && _hostNameCache[hostId]!.toLowerCase() != 'host')) return;
-    try {
-      final doc = await SupaStore.instance.collection('users').doc(hostId).get();
-      if (doc.exists) {
-        final data = doc.data() as Map<String, dynamic>? ?? {};
-        final username = (data['username'] ?? data['displayName'] ?? data['name'] ?? data['bgmiId'])?.toString().trim() ?? '';
-        if (username.isNotEmpty && username.toLowerCase() != 'host') {
-          _hostNameCache[hostId] = username;
-          if (mounted) setState(() {});
-          return;
-        }
-      }
-      final tQuery = await SupaStore.instance.collection('tournament_rooms').where('hostId', isEqualTo: hostId).limit(1).get();
-      if (tQuery.docs.isNotEmpty) {
-        final tData = tQuery.docs.first.data() ?? {};
-        final tHost = (tData['hostName'] ?? tData['host'] ?? tData['hostUsername'])?.toString().trim() ?? '';
-        if (tHost.isNotEmpty && tHost.toLowerCase() != 'host') {
-          _hostNameCache[hostId] = tHost;
-          if (mounted) setState(() {});
-          return;
-        }
-      }
-    } catch (_) {}
-    if (!_hostNameCache.containsKey(hostId)) {
-      _hostNameCache[hostId] = 'Host';
-    }
-  }
-
   static const Color _fbBlue = Color(0xFF1877F2);
 
   static const List<String> _gameCategories = [
@@ -492,19 +251,21 @@ class _GamerRoomsScreenState extends State<GamerRoomsScreen> {
   ];
 
   String get currentUserId =>
-      _authService.currentGamer?.uid ?? _authService.currentUid ?? SupabaseService.client.auth.currentUser?.id ??
       _authService.currentGamer?.uid ??
       _authService.currentUid ??
+      SupabaseService.client.auth.currentUser?.id ??
       'guest';
 
   String get currentUserName =>
-      _authService.currentGamer?.displayName ?? SupabaseService.client.auth.currentUser?.userMetadata?["full_name"]?.toString() ??
       _authService.currentGamer?.displayName ??
+      SupabaseService.client.auth.currentUser?.userMetadata?["full_name"]
+          ?.toString() ??
       'Gamer';
 
   String get currentUserPhoto =>
-      _authService.currentGamer?.photoUrl ?? SupabaseService.client.auth.currentUser?.userMetadata?["avatar_url"]?.toString() ??
       _authService.currentGamer?.photoUrl ??
+      SupabaseService.client.auth.currentUser?.userMetadata?["avatar_url"]
+          ?.toString() ??
       '';
 
   Timer? _cleanupTimer;
@@ -524,9 +285,6 @@ class _GamerRoomsScreenState extends State<GamerRoomsScreen> {
     super.initState();
     _walletService.getOrCreateWallet(currentUserId);
     _walletService.addListener(_onWalletChanged);
-
-    // Check every 10 seconds to refresh UI countdown, delete expired completed rooms,
-    // and auto-approve 15m elapsed win proofs
     _cleanupTimer = Timer.periodic(const Duration(seconds: 10), (_) {
       if (!mounted) return;
       setState(() {});
@@ -549,248 +307,198 @@ class _GamerRoomsScreenState extends State<GamerRoomsScreen> {
   Future<void> _purgeExpiredCompletedRooms() async {
     try {
       final now = DateTime.now();
-      final snap = await SupaStore.instance
-          .collection('rooms')
-          .where('status', isEqualTo: 'completed')
-          .get();
-
-      for (final doc in snap.docs) {
-        final data = doc.data() ?? {};
+      final rows = await SupabaseService.client
+          .from('rooms')
+          .select()
+          .eq('status', 'completed');
+      for (final row in (rows as List)) {
+        final data = Map<String, dynamic>.from(row);
         DateTime? completedAt;
-        if (data['completedAt'] is SupaTime) {
-          completedAt = (data['completedAt'] as SupaTime).toDate();
-        } else if (data['completedAt'] is String) {
-          completedAt = DateTime.tryParse(data['completedAt']);
+        if (data['completed_at'] is String) {
+          completedAt = DateTime.tryParse(data['completed_at']);
         }
-        if (completedAt != null && now.difference(completedAt).inMinutes >= 5) {
-          await doc.reference.delete().catchError((_) {});
-          SupaStore.instance
-              .collection('tournament_rooms')
-              .doc(doc.id)
+        if (completedAt != null &&
+            now.difference(completedAt).inMinutes >= 5) {
+          final id = data['id'];
+          await SupabaseService.client.from('rooms').delete().eq('id', id);
+          await SupabaseService.client
+              .from('tournament_rooms')
               .delete()
-              .catchError((_) {});
-          debugPrint('Auto-deleted completed room ${doc.id} after 5 minutes');
+              .eq('id', id);
         }
       }
     } catch (_) {}
   }
 
-  /// Automatically approve rooms after 15 minutes if no dispute was raised
   Future<void> _checkAutoApproveRooms() async {
     try {
       final now = DateTime.now();
-      final snap = await SupaStore.instance
-          .collection('rooms')
-          .where('status', isEqualTo: 'reward_waiting')
-          .get();
-
-      for (final doc in snap.docs) {
-        final data = doc.data() ?? {};
+      final rows = await SupabaseService.client
+          .from('rooms')
+          .select()
+          .eq('status', 'reward_waiting');
+      for (final row in (rows as List)) {
+        final data = Map<String, dynamic>.from(row);
         if (data['disputed'] == true || data['status'] == 'disputed') continue;
-
         DateTime? autoApproveAt;
-        if (data['autoApproveAt'] is SupaTime) {
-          autoApproveAt = (data['autoApproveAt'] as SupaTime).toDate();
-        } else if (data['autoApproveAt'] is String) {
-          autoApproveAt = DateTime.tryParse(data['autoApproveAt']);
+        if (data['auto_approve_at'] is String) {
+          autoApproveAt = DateTime.tryParse(data['auto_approve_at']);
         }
-
-        // Fallback: winProofUploadedAt + 15 mins
-        if (autoApproveAt == null && data['winProofUploadedAt'] != null) {
-          if (data['winProofUploadedAt'] is SupaTime) {
-            autoApproveAt = (data['winProofUploadedAt'] as SupaTime).toDate().add(const Duration(minutes: 15));
-          } else if (data['winProofUploadedAt'] is String) {
-            final p = DateTime.tryParse(data['winProofUploadedAt']);
+        if (autoApproveAt == null && data['win_proof_uploaded_at'] != null) {
+          if (data['win_proof_uploaded_at'] is String) {
+            final p = DateTime.tryParse(data['win_proof_uploaded_at']);
             if (p != null) autoApproveAt = p.add(const Duration(minutes: 15));
           }
         }
-
         if (autoApproveAt != null && now.isAfter(autoApproveAt)) {
-          final room = GamerRoom.fromSupabase(doc);
+          final room = GamerRoom.fromSupabase(data);
           await _executeAutoApprove(room);
         }
       }
     } catch (_) {}
   }
 
-  /// Execute automatic reward sending from App
   Future<void> _executeAutoApprove(GamerRoom room) async {
-    final roomRef = SupaStore.instance.collection('rooms').doc(room.id);
     try {
-      final snap = await roomRef.get();
-      if (!snap.exists) return;
-      final data = snap.data() ?? {};
-      if (data['rewardStatus'] == 'sent' || data['status'] == 'completed' || data['disputed'] == true) {
+      final row = await SupabaseService.client
+          .from('rooms')
+          .select()
+          .eq('id', room.id)
+          .maybeSingle();
+      if (row == null) return;
+      final data = Map<String, dynamic>.from(row);
+      if (data['reward_status'] == 'sent' ||
+          data['status'] == 'completed' ||
+          data['disputed'] == true) {
         return;
       }
-
-      String resolvedWinnerId = (data['winnerId'] ?? room.winnerId ?? '').toString();
-      String resolvedWinnerName = (data['winnerName'] ?? room.winnerName ?? '').toString();
-
+      String resolvedWinnerId =
+          (data['winner_id'] ?? room.winnerId ?? '').toString();
+      String resolvedWinnerName =
+          (data['winner_name'] ?? room.winnerName ?? '').toString();
       if (resolvedWinnerId.isEmpty || resolvedWinnerId == 'guest') {
         if (room.joinedUsers.length > 1) {
           resolvedWinnerId = (room.joinedUsers[1]['id'] ?? '').toString();
-          resolvedWinnerName = (room.joinedUsers[1]['name'] ?? 'Winner').toString();
+          resolvedWinnerName =
+              (room.joinedUsers[1]['name'] ?? 'Winner').toString();
         } else if (room.joinedUserIds.length > 1) {
           resolvedWinnerId = room.joinedUserIds[1];
-          resolvedWinnerName = 'Winner';
-        } else if (room.joinedUserIds.isNotEmpty) {
-          resolvedWinnerId = room.joinedUserIds.first;
           resolvedWinnerName = 'Winner';
         }
       }
       if (resolvedWinnerName.isEmpty) resolvedWinnerName = 'Winner';
-
       final int prize = room.prize;
-      final SupaDocRef winnerRef = SupaStore.instance.collection('users').doc(resolvedWinnerId);
-
-      await SupaStore.instance.runTransaction((transaction) async {
-        final winnerSnap = await transaction.get(winnerRef);
-        final txRoomSnap = await transaction.get(roomRef);
-
-        final txRoomData = txRoomSnap.data() as Map<String, dynamic>? ?? {};
-        if (txRoomData['rewardStatus'] == 'sent' || txRoomData['disputed'] == true) {
-          return;
-        }
-
-        int currentCoins = 0;
-        int currentWins = 0;
-        int currentWinnings = 0;
-
-        if (winnerSnap.exists) {
-          final winnerData = winnerSnap.data() as Map<String, dynamic>? ?? {};
-          final rawCoins = winnerData['gCoins'] ?? winnerData['coins'];
-          if (rawCoins is num) currentCoins = rawCoins.toInt();
-          final rawWins = winnerData['wins'];
-          if (rawWins is num) currentWins = rawWins.toInt();
-          final rawWinnings = winnerData['totalWinnings'];
-          if (rawWinnings is num) currentWinnings = rawWinnings.toInt();
-        }
-
-        final int updatedCoins = currentCoins + prize;
-
-        if (winnerSnap.exists) {
-          transaction.update(winnerRef, {
-            'gCoins': updatedCoins,
-            'coins': updatedCoins,
-            'totalWinnings': currentWinnings + prize,
-            'wins': currentWins + 1,
-            'lastRewardAt': SupaField.serverTimestamp(),
-          });
-        } else {
-          transaction.set(winnerRef, {
-            'gCoins': updatedCoins,
-            'coins': updatedCoins,
-            'totalWinnings': prize,
-            'wins': 1,
-            'lastRewardAt': SupaField.serverTimestamp(),
-          });
-        }
-
-        final SupaDocRef txRef = SupaStore.instance.collection('transactions').doc();
-        final String txId = txRef.id;
-        final txLogData = {
-          'id': txId,
-          'userId': resolvedWinnerId,
-          'amount': prize,
-          'type': 'win_reward',
-          'from': 'app_auto_approved',
-          'to': resolvedWinnerId,
-          'title': 'Match Victory Reward 🏆 (Auto-Approved)',
-          'description': 'Won ${room.game} Match: ${room.title} - Auto-approved after 15m without dispute',
-          'roomId': room.id,
-          'approvedBy': 'system_auto_timer',
-          'prizeSource': 'application',
-          'status': 'completed',
-          'winProofUrl': room.winProofUrl ?? room.proofUrl,
-          'createdAt': SupaField.serverTimestamp(),
-          'timestamp': SupaField.serverTimestamp(),
-        };
-        transaction.set(txRef, txLogData);
-        transaction.set(SupaStore.instance.collection('coin_transactions').doc(txId), txLogData);
-
-        transaction.update(roomRef, {
-          'rewardStatus': 'sent',
-          'status': 'completed',
-          'winnerId': resolvedWinnerId,
-          'winnerName': resolvedWinnerName,
-          'prizeSource': 'application',
-          'rewardSentAt': SupaField.serverTimestamp(),
-          'isCompleted': true,
-          'isLive': false,
-          'completedAt': SupaField.serverTimestamp(),
+      // Winner ka user row update karo
+      final winnerRow = await SupabaseService.client
+          .from('users')
+          .select()
+          .eq('id', resolvedWinnerId)
+          .maybeSingle();
+      int currentCoins = 0;
+      int currentWins = 0;
+      int currentWinnings = 0;
+      if (winnerRow != null) {
+        final wd = Map<String, dynamic>.from(winnerRow);
+        currentCoins = (wd['gCoins'] ?? wd['coins'] ?? 0) is num
+            ? ((wd['gCoins'] ?? wd['coins']) as num).toInt()
+            : 0;
+        currentWins = (wd['wins'] ?? 0) is num
+            ? (wd['wins'] as num).toInt()
+            : 0;
+        currentWinnings = (wd['totalWinnings'] ?? 0) is num
+            ? (wd['totalWinnings'] as num).toInt()
+            : 0;
+      }
+      final updatedCoins = currentCoins + prize;
+      if (winnerRow != null) {
+        await SupabaseService.client.from('users').update({
+          'gCoins': updatedCoins,
+          'coins': updatedCoins,
+          'totalWinnings': currentWinnings + prize,
+          'wins': currentWins + 1,
+          'lastRewardAt': DateTime.now().toIso8601String(),
+        }).eq('id', resolvedWinnerId);
+      } else {
+        await SupabaseService.client.from('users').upsert({
+          'id': resolvedWinnerId,
+          'gCoins': updatedCoins,
+          'coins': updatedCoins,
+          'totalWinnings': prize,
+          'wins': 1,
+          'lastRewardAt': DateTime.now().toIso8601String(),
         });
-
-        final SupaDocRef msgRef = roomRef.collection('messages').doc();
-        transaction.set(msgRef, {
-          'type': 'system_reward',
-          'message': '🏆 REWARD AUTO-SENT! 15 minutes passed with no dispute. $prize Coins sent to $resolvedWinnerName from App!',
-          'timestamp': SupaField.serverTimestamp(),
-          'senderId': 'system',
-          'senderName': 'ROOM BOT',
-          'isHost': false,
-        });
-      });
-
+      }
+      // Room update
+      await SupabaseService.client.from('rooms').update({
+        'reward_status': 'sent',
+        'status': 'completed',
+        'winner_id': resolvedWinnerId,
+        'winner_name': resolvedWinnerName,
+        'completed_at': DateTime.now().toIso8601String(),
+      }).eq('id', room.id);
+      // Tournament rooms sync
       try {
-        await SupaStore.instance.collection('tournament_rooms').doc(room.id).set({
+        await SupabaseService.client.from('tournament_rooms').upsert({
+          'id': room.id,
           'status': 'completed',
-          'rewardStatus': 'sent',
-          'winnerId': resolvedWinnerId,
-          'winnerName': resolvedWinnerName,
-          'completedAt': SupaField.serverTimestamp(),
-          'isLive': false,
-        }, SupaSetOptions(merge: true));
+          'reward_status': 'sent',
+          'winner_id': resolvedWinnerId,
+          'winner_name': resolvedWinnerName,
+          'completed_at': DateTime.now().toIso8601String(),
+        });
       } catch (_) {}
-
-      debugPrint('AUTO-APPROVE SUCCESS: $prize Coins to $resolvedWinnerId');
+      // Chat message
+      try {
+        await SupabaseService.client.from('messages').insert({
+          'room_id': room.id,
+          'sender_id': 'system',
+          'sender_name': 'ROOM BOT',
+          'message':
+              '🏆 REWARD AUTO-SENT! $prize Coins sent to $resolvedWinnerName!',
+          'type': 'system_reward',
+          'created_at': DateTime.now().toIso8601String(),
+        });
+      } catch (_) {}
     } catch (e) {
       debugPrint('Auto-approve error: $e');
     }
   }
 
-  /// Real-time stream for rooms from database with auto-deletion after 5 minutes
   Stream<List<GamerRoom>> _getRoomsStream() {
-    return SupaStore.instance
-        .collection('rooms')
-        .snapshots()
-        .map((snapshot) {
+    return SupabaseService.client
+        .from('rooms')
+        .stream(primaryKey: ['id'])
+        .map((rows) {
       final list = <GamerRoom>[];
-      for (final doc in snapshot.docs) {
-        final room = GamerRoom.fromSupabase(doc);
-        if (room.isExpiredCompleted) {
-          doc.reference.delete().catchError((_) {});
-          SupaStore.instance
-              .collection('tournament_rooms')
-              .doc(room.id)
-              .delete()
-              .catchError((_) {});
-          continue;
-        }
-        list.add(room);
+      for (final row in rows) {
+        try {
+          final room = GamerRoom.fromSupabase(Map<String, dynamic>.from(row));
+          if (room.isExpiredCompleted) {
+            SupabaseService.client
+                .from('rooms')
+                .delete()
+                .eq('id', room.id)
+                .catchError((_) {});
+            continue;
+          }
+          list.add(room);
+        } catch (_) {}
       }
-      // Sort newest first
       list.sort((a, b) => b.createdAt.compareTo(a.createdAt));
       return list;
     });
   }
 
-  /// =========================================================================
-  /// 3. JOIN LOGIC - FIX OVER-JOIN BUG (SupaTx)
-  /// =========================================================================
   Future<void> joinRoom(GamerRoom room) async {
     final uid = currentUserId;
     final name = currentUserName;
-    final photo = currentUserPhoto;
-
-    final isAlreadyJoined = _joinedRoomIds.contains(room.id) || room.joinedUserIds.contains(uid);
+    final isAlreadyJoined =
+        _joinedRoomIds.contains(room.id) || room.joinedUserIds.contains(uid);
     final isHost = room.hostId == uid;
-
     if (isAlreadyJoined || isHost) {
       _showRoomBottomSheet(room);
       return;
     }
-
     if (room.filled >= room.total) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
@@ -801,91 +509,63 @@ class _GamerRoomsScreenState extends State<GamerRoomsScreen> {
       );
       return;
     }
-
-    // All rooms have 100% FREE entry - No coin deduction, no escrow hold
     await AdFreeService().showRewardedAdForAction(
       context: context,
       actionTitle: 'Watch 1 Ad to Join Room',
       onRewardEarned: () async {
-        final roomRef = SupaStore.instance.collection('rooms').doc(room.id);
-
         try {
-          await SupaStore.instance.runTransaction((transaction) async {
-            final snapshot = await transaction.get(roomRef);
-            if (!snapshot.exists) {
-              throw Exception('Room does not exist');
-            }
-
-            final data = snapshot.data() ?? {};
-            final int total = (data['total'] ?? data['totalSlots'] ?? data['maxSlots'] ?? 2) as int;
-            final int currentFilled = (data['filled'] ??
-                (data['joinedUserIds'] as List?)?.length ??
-                (data['joinedPlayers'] as List?)?.length ??
-                0) as int;
-
-            if (currentFilled >= total) {
-              throw Exception('full');
-            }
-
-            final List joinedIds = List.from(data['joinedUserIds'] ?? data['joinedPlayers'] ?? []);
-            if (joinedIds.contains(uid)) {
-              return;
-            }
-
-            final newUserMap = {
-              'id': uid,
-              'name': name,
-              'photo': photo,
-              'joinedAt': SupaTime.now(),
-            };
-
-            // FREE ENTRY: Update filled and joined users, NO coin deduction
-            transaction.update(roomRef, {
-              'filled': SupaField.increment(1),
-              'currentSlots': SupaField.increment(1),
-              'joinedUserIds': SupaField.arrayUnion([uid]),
-              'joinedPlayers': SupaField.arrayUnion([uid]),
-              'joinedUsers': SupaField.arrayUnion([newUserMap]),
-              'joinedPlayerNames.$uid': name,
-            });
-
-            // System message: "$name joined the room"
-            final msgRef = roomRef.collection('messages').doc();
-            transaction.set(msgRef, {
-              'type': 'system',
-              'message': '$name joined the room',
-              'timestamp': SupaField.serverTimestamp(),
-              'senderId': 'system',
-              'senderName': 'ROOM BOT',
-              'isHost': false,
-            });
+          final row = await SupabaseService.client
+              .from('rooms')
+              .select()
+              .eq('id', room.id)
+              .maybeSingle();
+          if (row == null) throw Exception('Room does not exist');
+          final data = Map<String, dynamic>.from(row);
+          final int total = (data['total_slots'] ?? 2) is num
+              ? (data['total_slots'] as num).toInt()
+              : 2;
+          final int currentFilled = (data['filled_slots'] ?? 0) is num
+              ? (data['filled_slots'] as num).toInt()
+              : 0;
+          if (currentFilled >= total) throw Exception('full');
+          final List joinedIds = (data['joined_user_ids'] is List)
+              ? List.from(data['joined_user_ids'])
+              : [];
+          if (joinedIds.contains(uid)) return;
+          final newJoinedIds = [...joinedIds, uid];
+          final List joinedUsersList = (data['joined_users'] is List)
+              ? List.from(data['joined_users'])
+              : [];
+          joinedUsersList.add({
+            'id': uid,
+            'name': name,
+            'photo': currentUserPhoto,
+            'joinedAt': DateTime.now().toIso8601String(),
           });
-
+          await SupabaseService.client.from('rooms').update({
+            'filled_slots': currentFilled + 1,
+            'joined_user_ids': newJoinedIds,
+            'joined_users': joinedUsersList,
+          }).eq('id', room.id);
           if (mounted) {
-            setState(() {
-              _joinedRoomIds.add(room.id);
-            });
+            setState(() => _joinedRoomIds.add(room.id));
             await _walletService.recordTournamentJoinedAndCheckReferral(uid);
-
             ScaffoldMessenger.of(context).showSnackBar(
               const SnackBar(
-                content: Text('Joined! Free Entry - Room ID will be visible 10 mins before match'),
+                content: Text('Joined! Free Entry'),
                 backgroundColor: _fbBlue,
                 behavior: SnackBarBehavior.floating,
               ),
             );
-
-            // Fetch fresh room copy and open sheet
-            final updatedDoc = await roomRef.get();
-            if (mounted && updatedDoc.exists) {
-              _showRoomBottomSheet(GamerRoom.fromSupabase(updatedDoc));
-            }
+            _showRoomBottomSheet(room);
           }
         } catch (e) {
           if (mounted) {
             ScaffoldMessenger.of(context).showSnackBar(
               SnackBar(
-                content: Text(e.toString().contains('full') ? 'Room is full' : 'Could not join room: $e'),
+                content: Text(e.toString().contains('full')
+                    ? 'Room is full'
+                    : 'Could not join room: $e'),
                 backgroundColor: GamerTheme.redAccent,
                 behavior: SnackBarBehavior.floating,
               ),
@@ -896,9 +576,6 @@ class _GamerRoomsScreenState extends State<GamerRoomsScreen> {
     );
   }
 
-  /// =========================================================================
-  /// 4. BOTTOM SHEET
-  /// =========================================================================
   void _showRoomBottomSheet(GamerRoom room) {
     showModalBottomSheet(
       context: context,
@@ -919,53 +596,35 @@ class _GamerRoomsScreenState extends State<GamerRoomsScreen> {
           },
           onLeaveRoom: () async {
             final uid = currentUserId;
-            final name = currentUserName;
-            final roomRef = SupaStore.instance.collection('rooms').doc(room.id);
-
             try {
-              // Find matching user map
-              Map<String, dynamic>? matchingUser;
-              for (final u in room.joinedUsers) {
-                if (u['id'] == uid) {
-                  matchingUser = u;
-                  break;
-                }
-              }
-
-              final updates = <String, dynamic>{
-                'filled': SupaField.increment(-1),
-                'currentSlots': SupaField.increment(-1),
-                'joinedUserIds': SupaField.arrayRemove([uid]),
-                'joinedPlayers': SupaField.arrayRemove([uid]),
-                'joinedPlayerNames.$uid': SupaField.delete(),
-              };
-
-              if (matchingUser != null) {
-                updates['joinedUsers'] = SupaField.arrayRemove([matchingUser]);
-              }
-
-              final batch = SupaStore.instance.batch();
-              batch.update(roomRef, updates);
-
-              // Add leave system message
-              final msgRef = roomRef.collection('messages').doc();
-              batch.set(msgRef, {
-                'type': 'system',
-                'message': '$name left the room',
-                'timestamp': SupaField.serverTimestamp(),
-                'senderId': 'system',
-                'senderName': 'ROOM BOT',
-                'isHost': false,
-              });
-
-              await batch.commit();
-
-              setState(() {
-                _joinedRoomIds.remove(room.id);
-              });
-
+              final row = await SupabaseService.client
+                  .from('rooms')
+                  .select()
+                  .eq('id', room.id)
+                  .maybeSingle();
+              if (row == null) return;
+              final data = Map<String, dynamic>.from(row);
+              final List joinedIds = (data['joined_user_ids'] is List)
+                  ? List.from(data['joined_user_ids'])
+                  : [];
+              joinedIds.remove(uid);
+              final List joinedUsersList = (data['joined_users'] is List)
+                  ? List.from(data['joined_users'])
+                  : [];
+              joinedUsersList.removeWhere(
+                  (u) => u is Map && u['id'] == uid);
+              final int currentFilled =
+                  (data['filled_slots'] ?? 1) is num
+                      ? (data['filled_slots'] as num).toInt()
+                      : 1;
+              await SupabaseService.client.from('rooms').update({
+                'filled_slots': (currentFilled - 1).clamp(0, 100),
+                'joined_user_ids': joinedIds,
+                'joined_users': joinedUsersList,
+              }).eq('id', room.id);
               if (ctx.mounted) Navigator.pop(ctx);
               if (mounted) {
+                setState(() => _joinedRoomIds.remove(room.id));
                 ScaffoldMessenger.of(context).showSnackBar(
                   const SnackBar(
                     content: Text('You left the room.'),
@@ -983,31 +642,22 @@ class _GamerRoomsScreenState extends State<GamerRoomsScreen> {
     );
   }
 
-  /// Create / Host Room Dialog
   void _showCreateRoomDialog() {
-    String selectedGame = _selectedCategory == 'All Games' ? 'BGMI' : _selectedCategory;
+    String selectedGame =
+        _selectedCategory == 'All Games' ? 'BGMI' : _selectedCategory;
     String selectedMap = 'Erangel';
     int maxSlots = 2;
-    int prizeCoins = 100; // default for 2 slots
+    int prizeCoins = 100;
 
     String generateRoomTitle(String map, int slots, int prize) {
-      final String slotPart = (slots == 2)
-          ? '1v1'
-          : (slots == 4 ? '2v2' : '$slots slots');
-      return 'BGMI $map $slotPart - $prize Coins';
-    }
-
-    int getDefaultPrizeForSlots(int slots) {
-      if (slots == 2) return 100;
-      if (slots == 4) return 250;
-      if (slots == 10) return 500;
-      return 500;
+      final String slotPart =
+          (slots == 2) ? '1v1' : (slots == 4 ? '2v2' : '$slots slots');
+      return '$selectedGame $map $slotPart - $prize Coins';
     }
 
     final titleController = TextEditingController(
       text: generateRoomTitle(selectedMap, maxSlots, prizeCoins),
     );
-    final mapController = TextEditingController(text: selectedMap);
     final roomIdController = TextEditingController();
     final passController = TextEditingController();
 
@@ -1023,7 +673,6 @@ class _GamerRoomsScreenState extends State<GamerRoomsScreen> {
           final bool isRoomIdEmpty = roomIdController.text.trim().isEmpty;
           final bool isPassEmpty = passController.text.trim().isEmpty;
           final bool isPublishEnabled = !isRoomIdEmpty && !isPassEmpty;
-
           return Padding(
             padding: EdgeInsets.only(
               left: 16,
@@ -1038,356 +687,232 @@ class _GamerRoomsScreenState extends State<GamerRoomsScreen> {
                 children: [
                   Row(
                     children: [
-                      Container(
-                        padding: const EdgeInsets.all(6),
-                        decoration: const BoxDecoration(
-                          color: Color(0xFFE7F3FF),
-                          shape: BoxShape.circle,
-                        ),
-                        child: const Icon(Icons.add_moderator_rounded, color: Color(0xFF1877F2), size: 20),
-                      ),
-                      const SizedBox(width: 10),
-                      const Text(
-                        'Host Custom Room',
-                        style: TextStyle(color: Color(0xFF050505), fontWeight: FontWeight.bold, fontSize: 17),
-                      ),
+                      const Icon(Icons.add_moderator_rounded,
+                          color: Color(0xFF1877F2), size: 22),
+                      const SizedBox(width: 8),
+                      const Text('Host Custom Room',
+                          style: TextStyle(
+                              fontWeight: FontWeight.bold, fontSize: 17)),
                       const Spacer(),
                       IconButton(
-                        icon: const Icon(Icons.close_rounded, color: Color(0xFF65676B)),
+                        icon: const Icon(Icons.close_rounded,
+                            color: Color(0xFF65676B)),
                         onPressed: () => Navigator.pop(ctx),
                       ),
                     ],
                   ),
                   const SizedBox(height: 14),
-
-                  // Game Dropdown
-                  const Text('SELECT GAME', style: TextStyle(color: Color(0xFF65676B), fontSize: 11, fontWeight: FontWeight.bold)),
+                  const Text('SELECT GAME',
+                      style: TextStyle(
+                          fontSize: 11, fontWeight: FontWeight.bold)),
                   const SizedBox(height: 6),
                   DropdownButtonFormField<String>(
                     value: selectedGame,
-                    dropdownColor: Colors.white,
-                    decoration: InputDecoration(
-                      filled: true,
-                      fillColor: const Color(0xFFF0F2F5),
-                      border: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: const BorderSide(color: Color(0xFFCED0D4))),
-                      enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: const BorderSide(color: Color(0xFFCED0D4))),
-                      focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: const BorderSide(color: Color(0xFF1877F2))),
-                      contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-                    ),
-                    style: const TextStyle(color: Color(0xFF050505), fontSize: 13, fontWeight: FontWeight.bold),
                     items: _gameCategories
                         .where((g) => g != 'All Games')
-                        .map((g) => DropdownMenuItem(value: g, child: Text(g)))
+                        .map((g) =>
+                            DropdownMenuItem(value: g, child: Text(g)))
                         .toList(),
                     onChanged: (val) {
                       if (val != null) {
-                        setSheetState(() => selectedGame = val);
-                      }
-                    },
-                  ),
-                  const SizedBox(height: 12),
-
-                  // Room Title (auto-generated, user can edit)
-                  const Text('ROOM TITLE', style: TextStyle(color: Color(0xFF65676B), fontSize: 11, fontWeight: FontWeight.bold)),
-                  const SizedBox(height: 6),
-                  TextField(
-                    controller: titleController,
-                    style: const TextStyle(color: Color(0xFF050505), fontSize: 13),
-                    decoration: InputDecoration(
-                      filled: true,
-                      fillColor: const Color(0xFFF0F2F5),
-                      hintText: 'Enter room title',
-                      hintStyle: const TextStyle(color: Color(0xFF8A8D91), fontSize: 12),
-                      border: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: const BorderSide(color: Color(0xFFCED0D4))),
-                      enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: const BorderSide(color: Color(0xFFCED0D4))),
-                      focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: const BorderSide(color: Color(0xFF1877F2))),
-                      contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-                    ),
-                  ),
-                  const SizedBox(height: 12),
-
-                  // Map & Slots Dropdowns
-                  Row(
-                    children: [
-                      // MAP Dropdown
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            const Text('MAP', style: TextStyle(color: Color(0xFF65676B), fontSize: 11, fontWeight: FontWeight.bold)),
-                            const SizedBox(height: 6),
-                            DropdownButtonFormField<String>(
-                              value: selectedMap,
-                              dropdownColor: Colors.white,
-                              decoration: InputDecoration(
-                                filled: true,
-                                fillColor: const Color(0xFFF0F2F5),
-                                border: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: const BorderSide(color: Color(0xFFCED0D4))),
-                                enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: const BorderSide(color: Color(0xFFCED0D4))),
-                                focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: const BorderSide(color: Color(0xFF1877F2))),
-                                contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-                              ),
-                              style: const TextStyle(color: Color(0xFF050505), fontSize: 13, fontWeight: FontWeight.bold),
-                              items: const [
-                                DropdownMenuItem(value: 'Erangel', child: Text('Erangel')),
-                                DropdownMenuItem(value: 'Miramar', child: Text('Miramar')),
-                                DropdownMenuItem(value: 'Sanhok', child: Text('Sanhok')),
-                                DropdownMenuItem(value: 'Vikendi', child: Text('Vikendi')),
-                                DropdownMenuItem(value: 'Livik', child: Text('Livik')),
-                                DropdownMenuItem(value: 'Karakin', child: Text('Karakin')),
-                              ],
-                              onChanged: (val) {
-                                if (val != null) {
-                                  setSheetState(() {
-                                    selectedMap = val;
-                                    mapController.text = val;
-                                    titleController.text = generateRoomTitle(selectedMap, maxSlots, prizeCoins);
-                                  });
-                                }
-                              },
-                            ),
-                          ],
-                        ),
-                      ),
-                      const SizedBox(width: 12),
-
-                      // SLOTS Dropdown
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            const Text('SLOTS', style: TextStyle(color: Color(0xFF65676B), fontSize: 11, fontWeight: FontWeight.bold)),
-                            const SizedBox(height: 6),
-                            DropdownButtonFormField<int>(
-                              value: maxSlots,
-                              dropdownColor: Colors.white,
-                              decoration: InputDecoration(
-                                filled: true,
-                                fillColor: const Color(0xFFF0F2F5),
-                                border: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: const BorderSide(color: Color(0xFFCED0D4))),
-                                enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: const BorderSide(color: Color(0xFFCED0D4))),
-                                focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: const BorderSide(color: Color(0xFF1877F2))),
-                                contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-                              ),
-                              style: const TextStyle(color: Color(0xFF050505), fontSize: 13, fontWeight: FontWeight.bold),
-                              items: const [
-                                DropdownMenuItem(value: 2, child: Text('2 (1v1)')),
-                                DropdownMenuItem(value: 4, child: Text('4 (2v2)')),
-                                DropdownMenuItem(value: 10, child: Text('10 slots')),
-                                DropdownMenuItem(value: 12, child: Text('12 slots')),
-                                DropdownMenuItem(value: 24, child: Text('24 slots')),
-                                DropdownMenuItem(value: 50, child: Text('50 slots')),
-                                DropdownMenuItem(value: 100, child: Text('100 slots')),
-                              ],
-                              onChanged: (val) {
-                                if (val != null) {
-                                  setSheetState(() {
-                                    maxSlots = val;
-                                    prizeCoins = getDefaultPrizeForSlots(val);
-                                    titleController.text = generateRoomTitle(selectedMap, maxSlots, prizeCoins);
-                                  });
-                                }
-                              },
-                            ),
-                          ],
-                        ),
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 12),
-
-                  // PRIZE Dropdown
-                  const Text('PRIZE POOL', style: TextStyle(color: Color(0xFF65676B), fontSize: 11, fontWeight: FontWeight.bold)),
-                  const SizedBox(height: 6),
-                  DropdownButtonFormField<int>(
-                    value: prizeCoins,
-                    dropdownColor: Colors.white,
-                    decoration: InputDecoration(
-                      filled: true,
-                      fillColor: const Color(0xFFF0F2F5),
-                      border: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: const BorderSide(color: Color(0xFFCED0D4))),
-                      enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: const BorderSide(color: Color(0xFFCED0D4))),
-                      focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: const BorderSide(color: Color(0xFF1877F2))),
-                      contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-                    ),
-                    style: const TextStyle(color: Color(0xFF050505), fontSize: 13, fontWeight: FontWeight.bold),
-                    items: const [
-                      DropdownMenuItem(value: 100, child: Text('💰 100 Coins')),
-                      DropdownMenuItem(value: 250, child: Text('💰 250 Coins')),
-                      DropdownMenuItem(value: 500, child: Text('💰 500 Coins')),
-                      DropdownMenuItem(value: 1000, child: Text('💰 1000 Coins')),
-                    ],
-                    onChanged: (val) {
-                      if (val != null) {
                         setSheetState(() {
-                          prizeCoins = val;
-                          titleController.text = generateRoomTitle(selectedMap, maxSlots, prizeCoins);
+                          selectedGame = val;
+                          titleController.text = generateRoomTitle(
+                              selectedMap, maxSlots, prizeCoins);
                         });
                       }
                     },
                   ),
                   const SizedBox(height: 12),
-
-                  // In-Game Room ID & Password (Required with red * and errorText)
+                  const Text('ROOM TITLE',
+                      style: TextStyle(
+                          fontSize: 11, fontWeight: FontWeight.bold)),
+                  const SizedBox(height: 6),
+                  TextField(controller: titleController),
+                  const SizedBox(height: 12),
                   Row(
-                    crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      // ROOM ID
                       Expanded(
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            Row(
-                              children: const [
-                                Text(
-                                  'IN-GAME ROOM ID',
-                                  style: TextStyle(color: Color(0xFF65676B), fontSize: 11, fontWeight: FontWeight.bold),
-                                ),
-                                Text(
-                                  ' *',
-                                  style: TextStyle(color: Colors.redAccent, fontSize: 12, fontWeight: FontWeight.bold),
-                                ),
-                              ],
-                            ),
+                            const Text('MAP',
+                                style: TextStyle(
+                                    fontSize: 11,
+                                    fontWeight: FontWeight.bold)),
                             const SizedBox(height: 6),
-                            TextField(
-                              controller: roomIdController,
-                              style: const TextStyle(color: Color(0xFF050505), fontSize: 13),
-                              onChanged: (_) => setSheetState(() {}),
-                              decoration: InputDecoration(
-                                filled: true,
-                                fillColor: const Color(0xFFF0F2F5),
-                                hintText: 'e.g. 88453219',
-                                hintStyle: const TextStyle(color: Color(0xFF8A8D91), fontSize: 12),
-                                errorText: isRoomIdEmpty ? 'Room ID is required' : null,
-                                border: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: const BorderSide(color: Color(0xFFCED0D4))),
-                                enabledBorder: OutlineInputBorder(
-                                  borderRadius: BorderRadius.circular(10),
-                                  borderSide: BorderSide(color: isRoomIdEmpty ? Colors.redAccent.withOpacity(0.8) : const Color(0xFFCED0D4)),
-                                ),
-                                focusedBorder: OutlineInputBorder(
-                                  borderRadius: BorderRadius.circular(10),
-                                  borderSide: const BorderSide(color: Color(0xFF1877F2)),
-                                ),
-                                contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-                              ),
+                            DropdownButtonFormField<String>(
+                              value: selectedMap,
+                              items: const [
+                                DropdownMenuItem(
+                                    value: 'Erangel', child: Text('Erangel')),
+                                DropdownMenuItem(
+                                    value: 'Miramar', child: Text('Miramar')),
+                                DropdownMenuItem(
+                                    value: 'Sanhok', child: Text('Sanhok')),
+                                DropdownMenuItem(
+                                    value: 'Vikendi', child: Text('Vikendi')),
+                                DropdownMenuItem(
+                                    value: 'Livik', child: Text('Livik')),
+                                DropdownMenuItem(
+                                    value: 'Karakin', child: Text('Karakin')),
+                              ],
+                              onChanged: (val) {
+                                if (val != null) {
+                                  setSheetState(() {
+                                    selectedMap = val;
+                                    titleController.text = generateRoomTitle(
+                                        selectedMap, maxSlots, prizeCoins);
+                                  });
+                                }
+                              },
                             ),
                           ],
                         ),
                       ),
                       const SizedBox(width: 12),
-
-                      // PASSWORD
                       Expanded(
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            Row(
-                              children: const [
-                                Text(
-                                  'PASSWORD',
-                                  style: TextStyle(color: Color(0xFF65676B), fontSize: 11, fontWeight: FontWeight.bold),
-                                ),
-                                Text(
-                                  ' *',
-                                  style: TextStyle(color: Colors.redAccent, fontSize: 12, fontWeight: FontWeight.bold),
-                                ),
-                              ],
-                            ),
+                            const Text('SLOTS',
+                                style: TextStyle(
+                                    fontSize: 11,
+                                    fontWeight: FontWeight.bold)),
                             const SizedBox(height: 6),
-                            TextField(
-                              controller: passController,
-                              style: const TextStyle(color: Color(0xFF050505), fontSize: 13),
-                              onChanged: (_) => setSheetState(() {}),
-                              decoration: InputDecoration(
-                                filled: true,
-                                fillColor: const Color(0xFFF0F2F5),
-                                hintText: 'e.g. pubg123',
-                                hintStyle: const TextStyle(color: Color(0xFF8A8D91), fontSize: 12),
-                                errorText: isPassEmpty ? 'Password is required' : null,
-                                border: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: const BorderSide(color: Color(0xFFCED0D4))),
-                                enabledBorder: OutlineInputBorder(
-                                  borderRadius: BorderRadius.circular(10),
-                                  borderSide: BorderSide(color: isPassEmpty ? Colors.redAccent.withOpacity(0.8) : const Color(0xFFCED0D4)),
-                                ),
-                                focusedBorder: OutlineInputBorder(
-                                  borderRadius: BorderRadius.circular(10),
-                                  borderSide: const BorderSide(color: Color(0xFF1877F2)),
-                                ),
-                                contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-                              ),
+                            DropdownButtonFormField<int>(
+                              value: maxSlots,
+                              items: const [
+                                DropdownMenuItem(
+                                    value: 2, child: Text('2 (1v1)')),
+                                DropdownMenuItem(
+                                    value: 4, child: Text('4 (2v2)')),
+                                DropdownMenuItem(
+                                    value: 10, child: Text('10 slots')),
+                                DropdownMenuItem(
+                                    value: 12, child: Text('12 slots')),
+                                DropdownMenuItem(
+                                    value: 24, child: Text('24 slots')),
+                                DropdownMenuItem(
+                                    value: 50, child: Text('50 slots')),
+                                DropdownMenuItem(
+                                    value: 100, child: Text('100 slots')),
+                              ],
+                              onChanged: (val) {
+                                if (val != null) {
+                                  setSheetState(() {
+                                    maxSlots = val;
+                                    titleController.text = generateRoomTitle(
+                                        selectedMap, maxSlots, prizeCoins);
+                                  });
+                                }
+                              },
                             ),
                           ],
                         ),
                       ),
                     ],
                   ),
+                  const SizedBox(height: 12),
+                  const Text('PRIZE POOL',
+                      style: TextStyle(
+                          fontSize: 11, fontWeight: FontWeight.bold)),
+                  const SizedBox(height: 6),
+                  DropdownButtonFormField<int>(
+                    value: prizeCoins,
+                    items: const [
+                      DropdownMenuItem(
+                          value: 100, child: Text('💰 100 Coins')),
+                      DropdownMenuItem(
+                          value: 250, child: Text('💰 250 Coins')),
+                      DropdownMenuItem(
+                          value: 500, child: Text('💰 500 Coins')),
+                      DropdownMenuItem(
+                          value: 1000, child: Text('💰 1000 Coins')),
+                    ],
+                    onChanged: (val) {
+                      if (val != null) {
+                        setSheetState(() {
+                          prizeCoins = val;
+                          titleController.text = generateRoomTitle(
+                              selectedMap, maxSlots, prizeCoins);
+                        });
+                      }
+                    },
+                  ),
+                  const SizedBox(height: 12),
+                  Row(
+                    children: [
+                      Expanded(
+                        child: TextField(
+                          controller: roomIdController,
+                          onChanged: (_) => setSheetState(() {}),
+                          decoration: InputDecoration(
+                            labelText: 'IN-GAME ROOM ID *',
+                            errorText:
+                                isRoomIdEmpty ? 'Required' : null,
+                          ),
+                        ),
+                      ),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: TextField(
+                          controller: passController,
+                          onChanged: (_) => setSheetState(() {}),
+                          decoration: InputDecoration(
+                            labelText: 'PASSWORD *',
+                            errorText: isPassEmpty ? 'Required' : null,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
                   const SizedBox(height: 20),
-
-                  // PUBLISH ROOM Button (disabled when Room ID or Password is empty)
                   SizedBox(
                     width: double.infinity,
                     height: 46,
                     child: ElevatedButton(
                       style: ElevatedButton.styleFrom(
-                        backgroundColor: isPublishEnabled ? const Color(0xFF1877F2) : const Color(0xFFE4E6EB),
-                        foregroundColor: Colors.white,
-                        disabledBackgroundColor: const Color(0xFFE4E6EB),
-                        elevation: 0,
-                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                        backgroundColor: isPublishEnabled
+                            ? const Color(0xFF1877F2)
+                            : const Color(0xFFE4E6EB),
                       ),
                       onPressed: isPublishEnabled
                           ? () async {
                               final uid = currentUserId;
                               final name = currentUserName;
-                              final photo = currentUserPhoto;
-                              final docRef = SupaStore.instance.collection('rooms').doc();
-
-                              final newRoomData = {
-                                'id': docRef.id,
-                                'title': titleController.text.trim().isNotEmpty ? titleController.text.trim() : '$selectedGame Match',
-                                'hostId': uid,
-                                'hostName': name,
-                                'hostAvatar': photo,
+                              if (uid.isEmpty) return;
+                              final roomId =
+                                  '${DateTime.now().millisecondsSinceEpoch}_${DateTime.now().microsecondsSinceEpoch.toRadixString(36)}';
+                              final now = DateTime.now().toIso8601String();
+                              await SupabaseService.client.from('rooms').insert({
+                                'id': roomId,
+                                'host_id': uid,
                                 'game': selectedGame,
-                                'gameType': selectedGame,
-                                'map': selectedMap,
-                                'prize': prizeCoins,
-                                'prizePoolCoins': prizeCoins,
-                                'entryFee': 'FREE',
-                                'entryFeeCoins': 0,
-                                'total': maxSlots,
-                                'totalSlots': maxSlots,
-                                'maxSlots': maxSlots,
-                                'filled': 1,
-                                'currentSlots': 1,
-                                'joinedUserIds': [uid],
-                                'joinedPlayers': [uid],
-                                'joinedUsers': [
+                                'mode': selectedMap,
+                                'room_id': roomIdController.text.trim(),
+                                'room_password': passController.text.trim(),
+                                'prize_pool': prizeCoins,
+                                'total_slots': maxSlots,
+                                'filled_slots': 1,
+                                'status': 'active',
+                                'created_at': now,
+                                'host_name': name,
+                                'joined_user_ids': [uid],
+                                'joined_users': [
                                   {
                                     'id': uid,
                                     'name': name,
-                                    'photo': photo,
-                                    'joinedAt': SupaTime.now(),
+                                    'photo': currentUserPhoto,
+                                    'joinedAt': now,
                                   }
                                 ],
-                                'joinedPlayerNames': {uid: name},
-                                'roomIdCode': roomIdController.text.trim(),
-                                'roomId': roomIdController.text.trim(),
-                                'password': passController.text.trim(),
-                                'status': 'active',
-                                'createdAt': SupaField.serverTimestamp(),
-                                'startTime': SupaTime.fromDate(DateTime.now().add(const Duration(minutes: 15))),
-                                'isLive': true,
-                              };
-
-                              await docRef.set(newRoomData);
-
-                              // Sync room to Supabase rooms and room_members table
+                                'start_time': now,
+                              });
                               try {
                                 await SupabaseService.saveRoom({
-                                  'room_id': docRef.id,
-                                  'title': newRoomData['title']?.toString() ?? '$selectedGame Match',
+                                  'room_id': roomId,
+                                  'title': titleController.text.trim(),
                                   'game': selectedGame,
                                   'mode': selectedMap,
                                   'host_id': uid,
@@ -1395,38 +920,26 @@ class _GamerRoomsScreenState extends State<GamerRoomsScreen> {
                                   'max_players': maxSlots,
                                   'current_players': 1,
                                   'status': 'active',
-                                  'created_at': DateTime.now().toIso8601String(),
-                                });
-                                await SupabaseService.addRoomMember({
-                                  'room_id': docRef.id,
-                                  'user_id': uid,
-                                  'username': name,
-                                  'joined_at': DateTime.now().toIso8601String(),
+                                  'created_at': now,
                                 });
                               } catch (_) {}
-
                               if (mounted) {
-                                setState(() {
-                                  _joinedRoomIds.add(docRef.id);
-                                });
+                                setState(() => _joinedRoomIds.add(roomId));
                                 Navigator.pop(ctx);
                                 ScaffoldMessenger.of(context).showSnackBar(
                                   const SnackBar(
-                                    content: Text('🎉 Room published successfully!'),
+                                    content: Text('🎉 Room published!'),
                                     backgroundColor: _fbBlue,
                                   ),
                                 );
                               }
                             }
                           : null,
-                      child: Text(
-                        'PUBLISH ROOM',
-                        style: TextStyle(
-                          color: isPublishEnabled ? Colors.white : Colors.white38,
-                          fontWeight: FontWeight.bold,
-                          fontSize: 14,
-                        ),
-                      ),
+                      child: const Text('PUBLISH ROOM',
+                          style: TextStyle(
+                              color: Colors.white,
+                              fontWeight: FontWeight.bold,
+                              fontSize: 14)),
                     ),
                   ),
                 ],
@@ -1438,46 +951,22 @@ class _GamerRoomsScreenState extends State<GamerRoomsScreen> {
     );
   }
 
-  /// =========================================================================
-  /// ROOM CARD WIDGET
-  /// =========================================================================
   Widget _buildRoomCard(GamerRoom room) {
     final uid = currentUserId;
     final bool isHost = room.hostId == uid;
-    final bool isJoined = _joinedRoomIds.contains(room.id) || room.joinedUserIds.contains(uid);
-
+    final bool isJoined = _joinedRoomIds.contains(room.id) ||
+        room.joinedUserIds.contains(uid);
     final int total = room.total > 0 ? room.total : 2;
     final int filled = room.filled.clamp(0, total);
-    final double fillRatio = total > 0 ? (filled / total).clamp(0.0, 1.0) : 0.0;
-
-    // hostDisplay logic: if room.hostName is not null, not empty, and not equal to map values like
-    // "Erangel", "Miramar", "Sanhok", "Vikendi" then use room.hostName.
-    // Else, fetch username from 'users' table docId = room.hostId.
-    // Use field 'username' -> 'displayName' -> 'name' in that order.
-    // Cache result in a Map<String, String> _hostNameCache to avoid repeated reads.
-    final String rawHostName = room.hostName.trim();
-    const mapNames = ['Erangel', 'Miramar', 'Sanhok', 'Vikendi', 'Livik', 'Karakin', 'Nusa', 'Warehouse'];
-    final bool isMapValue = mapNames.any((m) => m.toLowerCase() == rawHostName.toLowerCase()) ||
-        (room.map.trim().isNotEmpty && rawHostName.toLowerCase() == room.map.trim().toLowerCase());
-
-    final String hostDisplay;
-    if (rawHostName.isNotEmpty && !isMapValue) {
-      hostDisplay = rawHostName;
-    } else {
-      if (_hostNameCache.containsKey(room.hostId) && _hostNameCache[room.hostId]!.isNotEmpty) {
-        hostDisplay = _hostNameCache[room.hostId]!;
-      } else {
-        if (room.hostId.isNotEmpty) {
-          _ensureHostNameLoaded(room.hostId);
-        }
-        hostDisplay = rawHostName.isNotEmpty && !isMapValue ? rawHostName : 'Host';
-      }
-    }
-
+    final double fillRatio =
+        total > 0 ? (filled / total).clamp(0.0, 1.0) : 0.0;
     final initial = isHost || isJoined
-        ? (currentUserName.isNotEmpty ? currentUserName[0].toUpperCase() : 'Y')
-        : (hostDisplay.isNotEmpty ? hostDisplay[0].toUpperCase() : 'G');
-
+        ? (currentUserName.isNotEmpty
+            ? currentUserName[0].toUpperCase()
+            : 'Y')
+        : (room.hostName.isNotEmpty
+            ? room.hostName[0].toUpperCase()
+            : 'G');
     return Container(
       margin: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
       padding: const EdgeInsets.all(14),
@@ -1488,429 +977,146 @@ class _GamerRoomsScreenState extends State<GamerRoomsScreen> {
           color: isJoined ? const Color(0xFF1877F2) : const Color(0xFFE4E6EB),
           width: isJoined ? 1.5 : 1.0,
         ),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withOpacity(0.04),
-            blurRadius: 4,
-            offset: const Offset(0, 1),
-          ),
-        ],
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // Top Row: Avatar + Title + Game Badge
           Row(
             children: [
               CircleAvatar(
                 radius: 20,
-                backgroundColor: isJoined ? const Color(0xFF1877F2) : const Color(0xFFE4E6EB),
-                child: Text(
-                  initial,
-                  style: TextStyle(
-                    color: isJoined ? Colors.white : const Color(0xFF1C1E21),
-                    fontWeight: FontWeight.bold,
-                    fontSize: 16,
-                  ),
-                ),
+                backgroundColor: isJoined
+                    ? const Color(0xFF1877F2)
+                    : const Color(0xFFE4E6EB),
+                child: Text(initial,
+                    style: const TextStyle(
+                        color: Colors.white, fontWeight: FontWeight.bold)),
               ),
               const SizedBox(width: 10),
               Expanded(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text(
-                      room.title,
-                      style: const TextStyle(
-                        color: Color(0xFF050505),
-                        fontSize: 14.5,
-                        fontWeight: FontWeight.bold,
-                      ),
-                      maxLines: 2,
-                      overflow: TextOverflow.ellipsis,
-                    ),
+                    Text(room.title,
+                        style: const TextStyle(
+                            fontSize: 14.5, fontWeight: FontWeight.bold),
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis),
                     const SizedBox(height: 2),
-                    Text(
-                      'Host: $hostDisplay • ${room.map}',
-                      style: const TextStyle(
-                        color: Color(0xFF65676B),
-                        fontSize: 12,
-                      ),
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                    ),
+                    Text('Host: ${room.hostName} • ${room.map}',
+                        style: const TextStyle(
+                            color: Color(0xFF65676B), fontSize: 12),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis),
                   ],
                 ),
               ),
-              const SizedBox(width: 8),
               Container(
-                height: 28,
-                alignment: Alignment.center,
-                padding: const EdgeInsets.symmetric(horizontal: 8),
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                 decoration: BoxDecoration(
                   color: const Color(0xFFF0F2F5),
                   borderRadius: BorderRadius.circular(6),
-                  border: Border.all(
-                    color: isJoined ? const Color(0xFF1877F2).withOpacity(0.3) : const Color(0xFFE4E6EB),
-                  ),
                 ),
-                child: Text(
-                  room.game,
-                  style: const TextStyle(
-                    color: Color(0xFF1877F2),
-                    fontSize: 11,
-                    fontWeight: FontWeight.bold,
-                  ),
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  textAlign: TextAlign.center,
-                ),
+                child: Text(room.game,
+                    style: const TextStyle(
+                        color: Color(0xFF1877F2),
+                        fontSize: 11,
+                        fontWeight: FontWeight.bold)),
               ),
             ],
           ),
           const SizedBox(height: 12),
-
-          // Middle: Container with Prize, Entry Fee, Slots
           Container(
+            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 10),
             decoration: BoxDecoration(
               color: const Color(0xFFF0F2F5),
               borderRadius: BorderRadius.circular(10),
             ),
-            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 10),
             child: Row(
               children: [
-                // PRIZE POOL
                 Expanded(
-                  child: Column(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Row(
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          const Icon(Icons.monetization_on_rounded, size: 14, color: Color(0xFF1877F2)),
-                          const SizedBox(width: 3),
-                          Flexible(
-                            child: Text(
-                              '${room.prize} Coins',
-                              style: const TextStyle(
-                                color: Color(0xFF1877F2),
-                                fontSize: 13,
-                                fontWeight: FontWeight.bold,
-                              ),
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
-                            ),
-                          ),
-                        ],
-                      ),
-                      const SizedBox(height: 1),
-                      const Text(
-                        '(From App)',
-                        style: TextStyle(
-                          color: Color(0xFF65676B),
-                          fontSize: 9,
-                          fontWeight: FontWeight.w600,
-                        ),
-                      ),
-                      const SizedBox(height: 1),
-                      const Text(
-                        'PRIZE POOL',
-                        style: TextStyle(
-                          color: Color(0xFF65676B),
-                          fontSize: 10,
-                          fontWeight: FontWeight.bold,
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-                Container(height: 24, width: 1, color: const Color(0xFFCED0D4)),
-
-                // ENTRY FEE
-                Expanded(
-                  child: Column(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-                        decoration: BoxDecoration(
-                          color: const Color(0xFFE7F3FF),
-                          borderRadius: BorderRadius.circular(6),
-                          border: Border.all(color: const Color(0xFF1877F2).withOpacity(0.3)),
-                        ),
-                        child: const Text(
-                          'FREE',
-                          style: TextStyle(
-                            color: Color(0xFF1877F2),
-                            fontSize: 11.5,
-                            fontWeight: FontWeight.bold,
-                            letterSpacing: 0.5,
-                          ),
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                        ),
-                      ),
-                      const SizedBox(height: 3),
-                      const Text(
-                        'ENTRY FEE',
-                        style: TextStyle(
-                          color: Color(0xFF65676B),
-                          fontSize: 10,
-                          fontWeight: FontWeight.bold,
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-                Container(height: 24, width: 1, color: const Color(0xFFCED0D4)),
-
-                // SLOTS
-                Expanded(
-                  child: Column(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Text(
-                        '${room.joinedUsers.isNotEmpty ? room.joinedUsers.length : filled}/$total',
+                  child: Column(children: [
+                    Text('${room.prize} Coins',
                         style: const TextStyle(
-                          color: Color(0xFF050505),
-                          fontSize: 13.5,
-                          fontWeight: FontWeight.bold,
-                        ),
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                      ),
-                      const SizedBox(height: 2),
-                      const Text(
-                        'SLOTS',
+                            color: Color(0xFF1877F2),
+                            fontSize: 13,
+                            fontWeight: FontWeight.bold)),
+                    const Text('PRIZE POOL',
+                        style:
+                            TextStyle(fontSize: 10, color: Color(0xFF65676B))),
+                  ]),
+                ),
+                Expanded(
+                  child: Column(children: const [
+                    Text('FREE',
                         style: TextStyle(
-                          color: Color(0xFF65676B),
-                          fontSize: 10,
-                          fontWeight: FontWeight.bold,
-                        ),
-                      ),
-                    ],
-                  ),
+                            color: Color(0xFF1877F2),
+                            fontSize: 13,
+                            fontWeight: FontWeight.bold)),
+                    Text('ENTRY FEE',
+                        style:
+                            TextStyle(fontSize: 10, color: Color(0xFF65676B))),
+                  ]),
+                ),
+                Expanded(
+                  child: Column(children: [
+                    Text('$filled/$total',
+                        style: const TextStyle(
+                            fontSize: 13, fontWeight: FontWeight.bold)),
+                    const Text('SLOTS',
+                        style:
+                            TextStyle(fontSize: 10, color: Color(0xFF65676B))),
+                  ]),
                 ),
               ],
             ),
           ),
           const SizedBox(height: 10),
-
-          // Progress bar
           ClipRRect(
             borderRadius: BorderRadius.circular(4),
             child: LinearProgressIndicator(
               value: fillRatio,
               minHeight: 4,
               backgroundColor: const Color(0xFFE4E6EB),
-              valueColor: const AlwaysStoppedAnimation<Color>(Color(0xFF1877F2)),
+              valueColor: const AlwaysStoppedAnimation<Color>(
+                  Color(0xFF1877F2)),
             ),
           ),
           const SizedBox(height: 12),
-
-          // Bottom Row: Status dot + Spacer + Action Button
           Row(
             children: [
-              Container(
-                width: 8,
-                height: 8,
-                decoration: BoxDecoration(
-                  color: room.isCompleted
-                      ? const Color(0xFF1877F2)
-                      : (room.isDisputed
-                          ? const Color(0xFFFA383E)
-                          : (room.isProofRejected
-                              ? const Color(0xFFFA383E)
-                              : (room.isRewardWaiting ? const Color(0xFFF7B125) : const Color(0xFF31A24C)))),
-                  shape: BoxShape.circle,
-                ),
-              ),
-              const SizedBox(width: 6),
               Text(
                 room.isCompleted
                     ? 'COMPLETED'
-                    : (room.isDisputed
+                    : room.isDisputed
                         ? 'DISPUTED'
-                        : (room.isProofRejected
-                            ? 'PROOF REJECTED'
-                            : (room.isRewardWaiting
-                                ? 'REWARD WAITING'
-                                : (room.isInProgress ? 'MATCH LIVE' : 'ACTIVE MATCH')))),
-                style: TextStyle(
-                  color: room.isCompleted
-                      ? const Color(0xFF1877F2)
-                      : (room.isDisputed
-                          ? const Color(0xFFFA383E)
-                          : (room.isProofRejected
-                              ? const Color(0xFFFA383E)
-                              : (room.isRewardWaiting
-                                  ? const Color(0xFFB45309)
-                                  : const Color(0xFF31A24C)))),
-                  fontSize: 11.5,
-                  fontWeight: FontWeight.bold,
-                ),
+                        : room.isInProgress
+                            ? 'MATCH LIVE'
+                            : 'ACTIVE',
+                style: const TextStyle(
+                    fontSize: 11.5, fontWeight: FontWeight.bold),
               ),
               const Spacer(),
-              // Button logic
-              if (room.isCompleted)
-                InkWell(
-                  onTap: () => _showRoomBottomSheet(room),
-                  borderRadius: BorderRadius.circular(8),
-                  child: Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-                    decoration: BoxDecoration(
-                      color: const Color(0xFFE7F3FF),
-                      borderRadius: BorderRadius.circular(8),
-                      border: Border.all(color: const Color(0xFF1877F2).withOpacity(0.4), width: 1),
-                    ),
-                    child: Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        const Icon(Icons.check_circle_rounded, size: 13, color: Color(0xFF1877F2)),
-                        const SizedBox(width: 4),
-                        Text(
-                          _getCompletedDeleteRemainingText(room),
-                          style: const TextStyle(
-                            color: Color(0xFF1877F2),
-                            fontWeight: FontWeight.bold,
-                            fontSize: 11,
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                )
-              else if (room.isDisputed)
-                InkWell(
-                  onTap: () => _showRoomBottomSheet(room),
-                  borderRadius: BorderRadius.circular(8),
-                  child: Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-                    decoration: BoxDecoration(
-                      color: const Color(0xFFFDE8E8),
-                      borderRadius: BorderRadius.circular(8),
-                      border: Border.all(color: const Color(0xFFFA383E).withOpacity(0.6), width: 1),
-                    ),
-                    child: const Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Icon(Icons.warning_amber_rounded, size: 13, color: Color(0xFFFA383E)),
-                        SizedBox(width: 4),
-                        Text(
-                          'DISPUTED',
-                          style: TextStyle(
-                            color: Color(0xFFFA383E),
-                            fontWeight: FontWeight.bold,
-                            fontSize: 11,
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                )
-              else if (room.isProofRejected)
-                InkWell(
-                  onTap: () => _showRoomBottomSheet(room),
-                  borderRadius: BorderRadius.circular(8),
-                  child: Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-                    decoration: BoxDecoration(
-                      color: const Color(0xFFFDE8E8),
-                      borderRadius: BorderRadius.circular(8),
-                      border: Border.all(color: const Color(0xFFFA383E).withOpacity(0.6), width: 1),
-                    ),
-                    child: const Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Icon(Icons.cancel_rounded, size: 13, color: Color(0xFFFA383E)),
-                        SizedBox(width: 4),
-                        Text(
-                          'PROOF REJECTED',
-                          style: TextStyle(
-                            color: Color(0xFFFA383E),
-                            fontWeight: FontWeight.bold,
-                            fontSize: 11,
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                )
-              else if (room.isRewardWaiting)
-                InkWell(
-                  onTap: () => _showRoomBottomSheet(room),
-                  borderRadius: BorderRadius.circular(8),
-                  child: Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-                    decoration: BoxDecoration(
-                      color: const Color(0xFFFEF3D6),
-                      borderRadius: BorderRadius.circular(8),
-                      border: Border.all(color: const Color(0xFFF7B125).withOpacity(0.6), width: 1),
-                    ),
-                    child: const Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Icon(Icons.hourglass_top_rounded, size: 13, color: Color(0xFFB45309)),
-                        SizedBox(width: 4),
-                        Text(
-                          'REWARD WAITING',
-                          style: TextStyle(
-                            color: Color(0xFFB45309),
-                            fontWeight: FontWeight.bold,
-                            fontSize: 11,
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                )
-              else if (room.isFull && !isJoined && !isHost)
+              if (room.isFull && !isJoined && !isHost)
                 ElevatedButton(
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: const Color(0xFFE4E6EB),
-                    foregroundColor: const Color(0xFF8D949E),
-                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-                    elevation: 0,
-                  ),
                   onPressed: null,
-                  child: const Text('FULL', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12)),
+                  child: const Text('FULL'),
                 )
               else if (isHost)
                 OutlinedButton(
-                  style: OutlinedButton.styleFrom(
-                    foregroundColor: const Color(0xFF1877F2),
-                    side: const BorderSide(color: Color(0xFF1877F2), width: 1.2),
-                    padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-                  ),
                   onPressed: () => _showRoomBottomSheet(room),
-                  child: const Text('MANAGE ✓', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12)),
+                  child: const Text('MANAGE ✓'),
                 )
               else if (isJoined)
                 ElevatedButton(
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: const Color(0xFFE7F3FF),
-                    foregroundColor: const Color(0xFF1877F2),
-                    padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-                    elevation: 0,
-                  ),
                   onPressed: () => _showRoomBottomSheet(room),
-                  child: const Text('JOINED ✓', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12)),
+                  child: const Text('JOINED ✓'),
                 )
               else
                 ElevatedButton(
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: const Color(0xFF1877F2),
-                    foregroundColor: Colors.white,
-                    padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-                    elevation: 0,
-                  ),
                   onPressed: () => joinRoom(room),
-                  child: const Text('JOIN ROOM', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12)),
+                  child: const Text('JOIN ROOM'),
                 ),
             ],
           ),
@@ -1926,131 +1132,23 @@ class _GamerRoomsScreenState extends State<GamerRoomsScreen> {
       body: SafeArea(
         child: Column(
           children: [
-            // Top Bar: G-Coins + STORE + EARN COINS (height 52)
             Container(
-              height: 52,
-              padding: const EdgeInsets.symmetric(horizontal: 14),
-              decoration: const BoxDecoration(
-                color: Colors.white,
-                border: Border(bottom: BorderSide(color: Color(0xFFE4E6EB), width: 1)),
-              ),
+              height: 44,
+              color: Colors.white,
               child: Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
-                  // G-Coins button (Live Stream from users collection)
-                  StreamBuilder<SupaDoc>(
-                    stream: SupaStore.instance
-                        .collection('users')
-                        .doc(currentUserId)
-                        .snapshots(),
-                    builder: (context, snapshot) {
-                      int coins = 0;
-                      if (snapshot.hasData && snapshot.data != null && snapshot.data!.exists) {
-                        final data = snapshot.data!.data() as Map<String, dynamic>?;
-                        if (data != null) {
-                          final raw = data['gCoins'] ?? data['coins'];
-                          if (raw is num) coins = raw.toInt();
-                        }
-                      }
-                      return GestureDetector(
-                        onTap: () => CoinHistorySheet.show(context, userId: currentUserId),
-                        child: Container(
-                          height: 36,
-                          padding: const EdgeInsets.symmetric(horizontal: 10),
-                          decoration: BoxDecoration(
-                            color: const Color(0xFFF0F2F5),
-                            borderRadius: BorderRadius.circular(8),
-                            border: Border.all(color: const Color(0xFFE4E6EB)),
-                          ),
-                          child: Row(
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              const Text('🪙', style: TextStyle(fontSize: 15)),
-                              const SizedBox(width: 6),
-                              Text(
-                                '${NumberFormat("#,###").format(coins)} G-Coins',
-                                style: const TextStyle(
-                                  color: Color(0xFF050505),
-                                  fontWeight: FontWeight.bold,
-                                  fontSize: 12.5,
-                                ),
-                              ),
-                            ],
-                          ),
-                        ),
-                      );
-                    },
-                  ),
-                  // Action buttons: STORE + EARN COINS
-                  Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      InkWell(
-                        onTap: () {
-                          Navigator.push(context, MaterialPageRoute(builder: (_) => const CoinStoreScreen()));
-                        },
-                        borderRadius: BorderRadius.circular(8),
-                        child: Container(
-                          height: 36,
-                          padding: const EdgeInsets.symmetric(horizontal: 10),
-                          alignment: Alignment.center,
-                          decoration: BoxDecoration(
-                            color: const Color(0xFFE4E6EB),
-                            borderRadius: BorderRadius.circular(8),
-                          ),
-                          child: const Row(
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              Icon(Icons.storefront_rounded, color: Color(0xFF050505), size: 14),
-                              SizedBox(width: 4),
-                              Text(
-                                'STORE',
-                                style: TextStyle(
-                                  color: Color(0xFF050505),
-                                  fontWeight: FontWeight.bold,
-                                  fontSize: 11.5,
-                                ),
-                              ),
-                            ],
-                          ),
-                        ),
-                      ),
-                      const SizedBox(width: 8),
-                      InkWell(
-                        onTap: _watchRewardedAdForCoins,
-                        borderRadius: BorderRadius.circular(8),
-                        child: Container(
-                          height: 36,
-                          padding: const EdgeInsets.symmetric(horizontal: 10),
-                          alignment: Alignment.center,
-                          decoration: BoxDecoration(
-                            color: const Color(0xFF1877F2),
-                            borderRadius: BorderRadius.circular(8),
-                          ),
-                          child: const Row(
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              Icon(Icons.play_circle_fill_rounded, color: Colors.white, size: 14),
-                              SizedBox(width: 4),
-                              Text(
-                                'EARN COINS',
-                                style: TextStyle(
-                                  color: Colors.white,
-                                  fontWeight: FontWeight.bold,
-                                  fontSize: 11.5,
-                                ),
-                              ),
-                            ],
-                          ),
-                        ),
-                      ),
-                    ],
+                  const SizedBox(width: 14),
+                  const Text('Rooms',
+                      style: TextStyle(
+                          fontWeight: FontWeight.bold, fontSize: 16)),
+                  const Spacer(),
+                  IconButton(
+                    icon: const Icon(Icons.add),
+                    onPressed: _showCreateRoomDialog,
                   ),
                 ],
               ),
             ),
-
-            // Filter chips: All Games, BGMI, Free Fire, PUBG Mobile
             Container(
               color: Colors.white,
               padding: const EdgeInsets.symmetric(vertical: 8),
@@ -2065,30 +1163,25 @@ class _GamerRoomsScreenState extends State<GamerRoomsScreen> {
                     final name = _gameCategories[idx];
                     final isSelected = _selectedCategory == name;
                     return GestureDetector(
-                      onTap: () {
-                        setState(() {
-                          _selectedCategory = name;
-                        });
-                      },
+                      onTap: () => setState(() => _selectedCategory = name),
                       child: Container(
-                        height: 34,
                         padding: const EdgeInsets.symmetric(horizontal: 14),
                         alignment: Alignment.center,
                         decoration: BoxDecoration(
-                          color: isSelected ? const Color(0xFF1877F2) : const Color(0xFFE4E6EB),
+                          color: isSelected
+                              ? const Color(0xFF1877F2)
+                              : const Color(0xFFE4E6EB),
                           borderRadius: BorderRadius.circular(17),
-                          border: Border.all(
-                            color: isSelected ? const Color(0xFF1877F2) : const Color(0xFFCED0D4),
-                          ),
                         ),
-                        child: Text(
-                          name,
-                          style: TextStyle(
-                            color: isSelected ? Colors.white : const Color(0xFF050505),
-                            fontSize: 12.5,
-                            fontWeight: isSelected ? FontWeight.bold : FontWeight.w600,
-                          ),
-                        ),
+                        child: Text(name,
+                            style: TextStyle(
+                                color: isSelected
+                                    ? Colors.white
+                                    : const Color(0xFF050505),
+                                fontSize: 12.5,
+                                fontWeight: isSelected
+                                    ? FontWeight.bold
+                                    : FontWeight.w600)),
                       ),
                     );
                   },
@@ -2096,80 +1189,48 @@ class _GamerRoomsScreenState extends State<GamerRoomsScreen> {
               ),
             ),
             const Divider(color: Color(0xFFE4E6EB), height: 1),
-
-            // Main Room List
             Expanded(
               child: StreamBuilder<List<GamerRoom>>(
                 stream: _getRoomsStream(),
                 builder: (context, snapshot) {
-                  if (snapshot.connectionState == ConnectionState.waiting && !snapshot.hasData) {
-                    return const Center(child: CircularProgressIndicator(color: Color(0xFF1877F2)));
+                  if (snapshot.connectionState == ConnectionState.waiting &&
+                      !snapshot.hasData) {
+                    return const Center(
+                        child: CircularProgressIndicator(
+                            color: Color(0xFF1877F2)));
                   }
-
                   final allRooms = snapshot.data ?? [];
                   final filtered = allRooms.where((r) {
                     if (_selectedCategory == 'All Games') return true;
-                    return r.game.toLowerCase().trim() == _selectedCategory.toLowerCase().trim();
+                    return r.game.toLowerCase().trim() ==
+                        _selectedCategory.toLowerCase().trim();
                   }).toList();
-
-                  // Sort: User's joined/hosted rooms float to top
-                  filtered.sort((a, b) {
-                    final aJoined = _joinedRoomIds.contains(a.id) || a.joinedUserIds.contains(currentUserId);
-                    final bJoined = _joinedRoomIds.contains(b.id) || b.joinedUserIds.contains(currentUserId);
-                    if (aJoined && !bJoined) return -1;
-                    if (!aJoined && bJoined) return 1;
-                    return b.createdAt.compareTo(a.createdAt);
-                  });
-
                   if (filtered.isEmpty) {
                     return Center(
                       child: Column(
                         mainAxisAlignment: MainAxisAlignment.center,
                         children: [
-                          Container(
-                            padding: const EdgeInsets.all(18),
-                            decoration: BoxDecoration(
-                              color: const Color(0xFFE4E6EB),
-                              shape: BoxShape.circle,
-                              border: Border.all(color: const Color(0xFFCED0D4)),
-                            ),
-                            child: const Icon(Icons.sports_esports_rounded, size: 44, color: Color(0xFF65676B)),
-                          ),
+                          const Icon(Icons.sports_esports_rounded,
+                              size: 44, color: Color(0xFF65676B)),
                           const SizedBox(height: 14),
-                          const Text(
-                            'No rooms found',
-                            style: TextStyle(color: Color(0xFF050505), fontSize: 16, fontWeight: FontWeight.bold),
-                          ),
+                          const Text('No rooms found',
+                              style: TextStyle(
+                                  fontSize: 16, fontWeight: FontWeight.bold)),
                           const SizedBox(height: 14),
                           ElevatedButton.icon(
-                            style: ElevatedButton.styleFrom(
-                              backgroundColor: const Color(0xFF1877F2),
-                              foregroundColor: Colors.white,
-                              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-                              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-                              elevation: 0,
-                            ),
                             icon: const Icon(Icons.add_rounded, size: 16),
-                            label: const Text('Host First Room', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
+                            label: const Text('Host First Room'),
                             onPressed: _showCreateRoomDialog,
                           ),
                         ],
                       ),
                     );
                   }
-
-                  return RefreshIndicator(
-                    onRefresh: () async {
-                      setState(() {});
-                    },
-                    color: const Color(0xFF1877F2),
-                    backgroundColor: Colors.white,
-                    child: ListView.builder(
-                      // Padding bottom 120 avoids FAB and bottom nav overlap
-                      padding: const EdgeInsets.only(bottom: 120, top: 8),
-                      itemCount: filtered.length,
-                      itemBuilder: (context, index) => _buildRoomCard(filtered[index]),
-                    ),
+                  return ListView.builder(
+                    padding: const EdgeInsets.only(bottom: 120, top: 8),
+                    itemCount: filtered.length,
+                    itemBuilder: (context, index) =>
+                        _buildRoomCard(filtered[index]),
                   );
                 },
               ),
@@ -2177,28 +1238,18 @@ class _GamerRoomsScreenState extends State<GamerRoomsScreen> {
           ],
         ),
       ),
-      // Positioned above bottom nav bar cleanly
-      floatingActionButton: Padding(
-        padding: const EdgeInsets.only(bottom: 20),
-        child: FloatingActionButton.extended(
-          backgroundColor: const Color(0xFF1877F2),
-          foregroundColor: Colors.white,
-          elevation: 2,
-          icon: const Icon(Icons.add_moderator_rounded, size: 20),
-          label: const Text(
-            'HOST ROOM',
-            style: TextStyle(fontWeight: FontWeight.bold, letterSpacing: 0.5, fontSize: 13),
-          ),
-          onPressed: _showCreateRoomDialog,
-        ),
+      floatingActionButton: FloatingActionButton.extended(
+        backgroundColor: const Color(0xFF1877F2),
+        foregroundColor: Colors.white,
+        icon: const Icon(Icons.add_moderator_rounded),
+        label: const Text('HOST ROOM',
+            style: TextStyle(fontWeight: FontWeight.bold)),
+        onPressed: _showCreateRoomDialog,
       ),
     );
   }
 }
 
-/// =========================================================================
-/// 4. IN-ROOM BOTTOM SHEET CONTENT
-/// =========================================================================
 class _InRoomBottomSheetContent extends StatefulWidget {
   final GamerRoom room;
   final String currentUserId;
@@ -2215,535 +1266,41 @@ class _InRoomBottomSheetContent extends StatefulWidget {
   });
 
   @override
-  State<_InRoomBottomSheetContent> createState() => _InRoomBottomSheetContentState();
+  State<_InRoomBottomSheetContent> createState() =>
+      _InRoomBottomSheetContentState();
 }
 
 class _InRoomBottomSheetContentState extends State<_InRoomBottomSheetContent> {
   final TextEditingController _msgController = TextEditingController();
-  final ScrollController _scrollController = ScrollController();
-  final ImagePicker _picker = ImagePicker();
-
   Timer? _countdownTimer;
   Duration _remainingTime = Duration.zero;
-
-  File? _selectedProofImage;
-  bool _isUploadingProof = false;
-  DateTime? _lastSendTime;
-
-  static const Color _fbBlue = Color(0xFF1877F2);
+  bool _isStartingMatch = false;
 
   bool get isHost => widget.room.hostId == widget.currentUserId;
-  bool get isJoined => widget.room.joinedUserIds.contains(widget.currentUserId);
+  bool get isJoined =>
+      widget.room.joinedUserIds.contains(widget.currentUserId);
   bool get canAccess => isHost || isJoined;
-
-  String _sheetHostName = '';
 
   @override
   void initState() {
     super.initState();
-    _startCountdown();
-    _resolveSheetHostName(widget.room);
-  }
-
-  Future<void> _resolveSheetHostName(GamerRoom room) async {
-    final hostId = room.hostId;
-    if (hostId.isEmpty) return;
-
-    for (final u in room.joinedUsers) {
-      if (u['id'] == hostId) {
-        final name = (u['name'] ?? '').toString().trim();
-        if (name.isNotEmpty && name.toLowerCase() != 'host') {
-          if (mounted) setState(() => _sheetHostName = name);
-          return;
-        }
-      }
-    }
-
-    try {
-      final uDoc = await SupaStore.instance.collection('users').doc(hostId).get();
-      if (uDoc.exists) {
-        final data = uDoc.data() as Map<String, dynamic>? ?? {};
-        final name = (data['username'] ?? data['displayName'] ?? data['name'] ?? data['bgmiId'])?.toString().trim() ?? '';
-        if (name.isNotEmpty && name.toLowerCase() != 'host') {
-          if (mounted) setState(() => _sheetHostName = name);
-          return;
-        }
-      }
-    } catch (_) {}
-
-    try {
-      final tDoc = await SupaStore.instance.collection('tournament_rooms').doc(room.id).get();
-      if (tDoc.exists) {
-        final data = tDoc.data() as Map<String, dynamic>? ?? {};
-        final name = (data['hostName'] ?? data['host'] ?? data['hostUsername'])?.toString().trim() ?? '';
-        if (name.isNotEmpty && name.toLowerCase() != 'host') {
-          if (mounted) setState(() => _sheetHostName = name);
-          return;
-        }
-      }
-    } catch (_) {}
-  }
-
-  String _formatAutoApproveCountdown(DateTime? autoApproveAt) {
-    if (autoApproveAt == null) return 'Auto-approving soon';
-    final now = DateTime.now();
-    final diff = autoApproveAt.difference(now);
-    if (diff.isNegative || diff.inSeconds <= 0) {
-      return 'Auto-approving now...';
-    }
-    final mins = diff.inMinutes;
-    final secs = diff.inSeconds % 60;
-    return 'Auto-approving in ${mins.toString().padLeft(2, '0')}:${secs.toString().padLeft(2, '0')}';
-  }
-
-  Future<void> _disputeResult(GamerRoom room) async {
-    // Only players who are NOT the winner can dispute
-    if (widget.currentUserId == room.winnerId) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('⚠️ Winners cannot dispute their own match!'),
-            backgroundColor: GamerTheme.redAccent,
-          ),
-        );
-      }
-      return;
-    }
-
-    File? disputeImage;
-    final reasonController = TextEditingController();
-    bool isSubmitting = false;
-
-    await showModalBottomSheet(
-      context: context,
-      isScrollControlled: true,
-      backgroundColor: Colors.transparent,
-      builder: (sheetCtx) => StatefulBuilder(
-        builder: (context, setSheetState) {
-          return Padding(
-            padding: EdgeInsets.only(
-              bottom: MediaQuery.of(context).viewInsets.bottom,
-            ),
-            child: Container(
-              padding: const EdgeInsets.all(20),
-              decoration: const BoxDecoration(
-                color: Colors.white,
-                borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
-                border: Border(top: BorderSide(color: Color(0xFFCED0D4), width: 1.5)),
-              ),
-              child: SingleChildScrollView(
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Row(
-                      children: [
-                        Container(
-                          padding: const EdgeInsets.all(8),
-                          decoration: BoxDecoration(
-                            color: const Color(0xFFFFEBEE),
-                            borderRadius: BorderRadius.circular(8),
-                          ),
-                          child: const Icon(Icons.warning_amber_rounded, color: Color(0xFFDC2626), size: 22),
-                        ),
-                        const SizedBox(width: 12),
-                        const Expanded(
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Text(
-                                'Raise Dispute with Proof',
-                                style: TextStyle(color: Color(0xFF050505), fontWeight: FontWeight.bold, fontSize: 16),
-                              ),
-                              SizedBox(height: 2),
-                              Text(
-                                'Submit screenshot proof to Admin review',
-                                style: TextStyle(color: Color(0xFF65676B), fontSize: 11),
-                              ),
-                            ],
-                          ),
-                        ),
-                        IconButton(
-                          icon: const Icon(Icons.close, color: Color(0xFF65676B)),
-                          onPressed: isSubmitting ? null : () => Navigator.pop(sheetCtx),
-                        ),
-                      ],
-                    ),
-                    const SizedBox(height: 16),
-                    const Text(
-                      'Dispute Screenshot (Required):',
-                      style: TextStyle(color: Color(0xFF050505), fontSize: 12, fontWeight: FontWeight.bold),
-                    ),
-                    const SizedBox(height: 8),
-                    if (disputeImage == null)
-                      InkWell(
-                        onTap: isSubmitting
-                            ? null
-                            : () async {
-                                final picker = ImagePicker();
-                                final picked = await picker.pickImage(
-                                  source: ImageSource.gallery,
-                                  imageQuality: 85,
-                                  maxWidth: 1080,
-                                );
-                                if (picked != null) {
-                                  setSheetState(() {
-                                    disputeImage = File(picked.path);
-                                  });
-                                }
-                              },
-                        borderRadius: BorderRadius.circular(10),
-                        child: Container(
-                          width: double.infinity,
-                          height: 110,
-                          decoration: BoxDecoration(
-                            color: const Color(0xFFF0F2F5),
-                            borderRadius: BorderRadius.circular(10),
-                            border: Border.all(color: const Color(0xFFCED0D4)),
-                          ),
-                          child: const Column(
-                            mainAxisAlignment: MainAxisAlignment.center,
-                            children: [
-                              Icon(Icons.add_photo_alternate_rounded, color: Color(0xFF1877F2), size: 32),
-                              SizedBox(height: 6),
-                              Text(
-                                '📷 Upload Your Result / Defeat Screenshot',
-                                style: TextStyle(color: Color(0xFF050505), fontSize: 12, fontWeight: FontWeight.bold),
-                              ),
-                              SizedBox(height: 2),
-                              Text(
-                                'Select image showing match end or scoreboard',
-                                style: TextStyle(color: Color(0xFF65676B), fontSize: 10),
-                              ),
-                            ],
-                          ),
-                        ),
-                      )
-                    else
-                      Stack(
-                        children: [
-                          ClipRRect(
-                            borderRadius: BorderRadius.circular(10),
-                            child: Image.file(
-                              disputeImage!,
-                              height: 140,
-                              width: double.infinity,
-                              fit: BoxFit.cover,
-                            ),
-                          ),
-                          Positioned(
-                            top: 8,
-                            right: 8,
-                            child: CircleAvatar(
-                              radius: 14,
-                              backgroundColor: Colors.black.withOpacity(0.7),
-                              child: IconButton(
-                                padding: EdgeInsets.zero,
-                                icon: const Icon(Icons.close, color: Colors.white, size: 16),
-                                onPressed: isSubmitting
-                                    ? null
-                                    : () {
-                                        setSheetState(() {
-                                          disputeImage = null;
-                                        });
-                                      },
-                              ),
-                            ),
-                          ),
-                          Positioned(
-                            bottom: 8,
-                            left: 8,
-                            child: Container(
-                              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                              decoration: BoxDecoration(
-                                color: Colors.black.withOpacity(0.7),
-                                borderRadius: BorderRadius.circular(4),
-                              ),
-                              child: const Row(
-                                children: [
-                                  Icon(Icons.check_circle, color: Color(0xFF1877F2), size: 12),
-                                  SizedBox(width: 4),
-                                  Text('Dispute Proof Selected', style: TextStyle(color: Colors.white, fontSize: 10)),
-                                ],
-                              ),
-                            ),
-                          ),
-                        ],
-                      ),
-                    const SizedBox(height: 14),
-                    const Text(
-                      'Reason for Dispute (Optional):',
-                      style: TextStyle(color: Color(0xFF050505), fontSize: 12, fontWeight: FontWeight.bold),
-                    ),
-                    const SizedBox(height: 6),
-                    TextField(
-                      controller: reasonController,
-                      enabled: !isSubmitting,
-                      style: const TextStyle(color: Color(0xFF050505), fontSize: 13),
-                      decoration: InputDecoration(
-                        hintText: 'e.g. Winner screenshot is fake / from different match',
-                        hintStyle: const TextStyle(color: Color(0xFF8A8D91), fontSize: 12),
-                        filled: true,
-                        fillColor: const Color(0xFFF0F2F5),
-                        contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-                        border: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(8),
-                          borderSide: const BorderSide(color: Color(0xFFCED0D4)),
-                        ),
-                        focusedBorder: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(8),
-                          borderSide: const BorderSide(color: Color(0xFF1877F2)),
-                        ),
-                      ),
-                    ),
-                    const SizedBox(height: 18),
-                    SizedBox(
-                      width: double.infinity,
-                      child: ElevatedButton(
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: const Color(0xFFDC2626),
-                          foregroundColor: Colors.white,
-                          padding: const EdgeInsets.symmetric(vertical: 14),
-                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-                        ),
-                        onPressed: isSubmitting
-                            ? null
-                            : () async {
-                                if (disputeImage == null) {
-                                  ScaffoldMessenger.of(context).showSnackBar(
-                                    const SnackBar(
-                                      content: Text('⚠️ Please select a dispute screenshot proof first!'),
-                                      backgroundColor: GamerTheme.redAccent,
-                                    ),
-                                  );
-                                  return;
-                                }
-
-                                setSheetState(() {
-                                  isSubmitting = true;
-                                });
-
-                                try {
-                                  final disputeUrl = await SupabaseService.uploadFile(
-                                    file: disputeImage!,
-                                    folder: 'dispute_proofs',
-                                    bucket: SupabaseService.bucketMatchProofs,
-                                  );
-
-                                  if (disputeUrl == null || disputeUrl.isEmpty) {
-                                    throw Exception('Dispute image upload failed');
-                                  }
-
-                                  final reason = reasonController.text.trim().isNotEmpty
-                                      ? reasonController.text.trim()
-                                      : 'Loser claims winner screenshot is fake/wrong';
-
-                                  final roomRef = SupaStore.instance.collection('rooms').doc(room.id);
-                                  await roomRef.update({
-                                    'status': 'disputed',
-                                    'disputed': true,
-                                    'disputedBy': widget.currentUserId,
-                                    'disputedByName': widget.currentUserName,
-                                    'disputeProofUrl': disputeUrl,
-                                    'disputeReason': reason,
-                                    'disputedAt': SupaField.serverTimestamp(),
-                                  });
-
-                                  try {
-                                    await SupaStore.instance.collection('tournament_rooms').doc(room.id).set({
-                                      'status': 'disputed',
-                                      'disputed': true,
-                                      'disputedBy': widget.currentUserId,
-                                      'disputedByName': widget.currentUserName,
-                                      'disputeProofUrl': disputeUrl,
-                                      'disputeReason': reason,
-                                      'disputedAt': SupaField.serverTimestamp(),
-                                    }, SupaSetOptions(merge: true));
-                                  } catch (_) {}
-
-                                  // Add dispute proof message into chat
-                                  await roomRef.collection('messages').add({
-                                    'senderId': widget.currentUserId,
-                                    'senderName': widget.currentUserName,
-                                    'senderInitial': widget.currentUserName.isNotEmpty ? widget.currentUserName[0].toUpperCase() : 'L',
-                                    'message': reason,
-                                    'imageUrl': disputeUrl,
-                                    'type': 'dispute_proof',
-                                    'timestamp': SupaField.serverTimestamp(),
-                                    'isHost': widget.currentUserId == room.hostId,
-                                  });
-
-                                  // System announcement
-                                  await roomRef.collection('messages').add({
-                                    'senderId': 'system',
-                                    'senderName': 'ROOM BOT',
-                                    'senderInitial': '⚠️',
-                                    'message': '⚠️ DISPUTE RAISED with screenshot proof by ${widget.currentUserName}! Match placed under Admin review.',
-                                    'type': 'system',
-                                    'timestamp': SupaField.serverTimestamp(),
-                                    'isHost': false,
-                                  });
-
-                                  if (mounted) {
-                                    Navigator.pop(sheetCtx);
-                                    ScaffoldMessenger.of(context).showSnackBar(
-                                      const SnackBar(
-                                        content: Text('⚠️ Dispute submitted with proof! Match under Admin review.'),
-                                        backgroundColor: GamerTheme.redAccent,
-                                        behavior: SnackBarBehavior.floating,
-                                      ),
-                                    );
-                                  }
-                                } catch (e) {
-                                  setSheetState(() {
-                                    isSubmitting = false;
-                                  });
-                                  if (mounted) {
-                                    ScaffoldMessenger.of(context).showSnackBar(
-                                      SnackBar(
-                                        content: Text('Failed to submit dispute: $e'),
-                                        backgroundColor: GamerTheme.redAccent,
-                                      ),
-                                    );
-                                  }
-                                }
-                              },
-                        child: isSubmitting
-                            ? const Row(
-                                mainAxisAlignment: MainAxisAlignment.center,
-                                children: [
-                                  SizedBox(
-                                    width: 18,
-                                    height: 18,
-                                    child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
-                                  ),
-                                  SizedBox(width: 10),
-                                  Text('Uploading Dispute Proof...', style: TextStyle(fontWeight: FontWeight.bold)),
-                                ],
-                              )
-                            : const Row(
-                                mainAxisAlignment: MainAxisAlignment.center,
-                                children: [
-                                  Icon(Icons.gavel_rounded, size: 18, color: Colors.white),
-                                  SizedBox(width: 8),
-                                  Text('Submit Dispute & Proof', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14)),
-                                ],
-                              ),
-                      ),
-                    ),
-                    const SizedBox(height: 10),
-                  ],
-                ),
-              ),
-            ),
-          );
-        },
-      ),
-    );
-  }
-
-  // Remove dispute proof: ONLY the loser who uploaded it can delete it!
-  Future<void> _removeDisputeProof({
-    required String msgDocId,
-    required GamerRoom room,
-    required String senderId,
-  }) async {
-    // Security check: ONLY the person who uploaded this dispute proof can remove it
-    if (senderId != widget.currentUserId) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('⚠️ You can only remove your own dispute proof!'),
-            backgroundColor: GamerTheme.redAccent,
-          ),
-        );
-      }
-      return;
-    }
-
-    try {
-      final roomRef = SupaStore.instance.collection('rooms').doc(room.id);
-      await roomRef.update({
-        'status': 'reward_waiting',
-        'disputed': false,
-        'disputedBy': SupaField.delete(),
-        'disputedByName': SupaField.delete(),
-        'disputeProofUrl': SupaField.delete(),
-        'disputeReason': SupaField.delete(),
-        'disputedAt': SupaField.delete(),
-      });
-
-      try {
-        await SupaStore.instance.collection('tournament_rooms').doc(room.id).update({
-          'status': 'reward_waiting',
-          'disputed': false,
-          'disputedBy': SupaField.delete(),
-          'disputedByName': SupaField.delete(),
-          'disputeProofUrl': SupaField.delete(),
-          'disputeReason': SupaField.delete(),
-          'disputedAt': SupaField.delete(),
-        });
-      } catch (_) {}
-
-      await roomRef.collection('messages').doc(msgDocId).delete().catchError((_) {});
-
-      await roomRef.collection('messages').add({
-        'senderId': 'system',
-        'senderName': 'ROOM BOT',
-        'senderInitial': 'ℹ️',
-        'message': '🗑️ Dispute proof was removed by ${widget.currentUserName}. Match returned to awaiting confirmation.',
-        'type': 'system',
-        'timestamp': SupaField.serverTimestamp(),
-        'isHost': false,
-      });
-
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('🗑️ Dispute proof removed.'),
-            backgroundColor: const Color(0xFF050505),
-            behavior: SnackBarBehavior.floating,
-          ),
-        );
-      }
-    } catch (e) {
-      debugPrint('Error removing dispute proof: $e');
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Failed to remove dispute proof: $e'),
-            backgroundColor: GamerTheme.redAccent,
-          ),
-        );
-      }
-    }
-  }
-
-  void _startCountdown() {
     _updateRemainingTime();
     _countdownTimer = Timer.periodic(const Duration(seconds: 1), (_) {
-      if (mounted) {
-        setState(() {
-          _updateRemainingTime();
-        });
-      }
+      if (mounted) setState(() => _updateRemainingTime());
     });
   }
 
   void _updateRemainingTime() {
     final now = DateTime.now();
-    if (widget.room.startTime.isAfter(now)) {
-      _remainingTime = widget.room.startTime.difference(now);
-    } else {
-      _remainingTime = Duration.zero;
-    }
+    _remainingTime = widget.room.startTime.isAfter(now)
+        ? widget.room.startTime.difference(now)
+        : Duration.zero;
   }
 
   @override
   void dispose() {
     _countdownTimer?.cancel();
     _msgController.dispose();
-    _scrollController.dispose();
     super.dispose();
   }
 
@@ -2752,1074 +1309,25 @@ class _InRoomBottomSheetContentState extends State<_InRoomBottomSheetContent> {
     final hours = d.inHours;
     final minutes = d.inMinutes % 60;
     final seconds = d.inSeconds % 60;
-    if (hours > 0) {
-      return 'Starts in: ${hours}h ${minutes}m ${seconds}s';
-    }
+    if (hours > 0) return 'Starts in: ${hours}h ${minutes}m ${seconds}s';
     return 'Starts in: ${minutes}m ${seconds}s';
-  }
-
-  // Copy helper with feedback
-  void _copyToClipboard(String label, String text) {
-    if (text.isEmpty) return;
-    Clipboard.setData(ClipboardData(text: text));
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text('$label copied to clipboard!'),
-        backgroundColor: _fbBlue,
-        behavior: SnackBarBehavior.floating,
-        duration: const Duration(seconds: 2),
-      ),
-    );
-  }
-
-  // Pick Image for Win Proof
-  Future<void> _pickImage(ImageSource source) async {
-    if (!canAccess) return;
-    try {
-      final picked = await _picker.pickImage(
-        source: source,
-        imageQuality: 70,
-        maxWidth: 1080,
-      );
-      if (picked != null) {
-        final file = File(picked.path);
-        final sizeBytes = await file.length();
-        if (sizeBytes > 5 * 1024 * 1024) {
-          if (mounted) {
-            ScaffoldMessenger.of(context).showSnackBar(
-              const SnackBar(
-                content: Text('Image size must be less than 5MB'),
-                backgroundColor: GamerTheme.redAccent,
-              ),
-            );
-          }
-          return;
-        }
-        setState(() {
-          _selectedProofImage = file;
-        });
-      }
-    } catch (e) {
-      debugPrint('Error picking image: $e');
-    }
-  }
-
-  /// ON SCREENSHOT UPLOAD - APP AUTO-READ OCR & WIN PROOF NAME VALIDATION SYSTEM
-  Future<WinProofValidationResult> autoReadProof(
-    File imageFile,
-    String roomId,
-    String downloadUrl,
-    String accountIdName,
-  ) async {
-    try {
-      final validationResult = await WinProofValidator.validate(
-        imageFile: imageFile,
-        userId: widget.currentUserId,
-        accountIdName: accountIdName,
-        roomId: roomId,
-      );
-
-      final String trimmedText = validationResult.fullOcrText.length > 300
-          ? validationResult.fullOcrText.substring(0, 300)
-          : validationResult.fullOcrText;
-
-      const newStatus = 'reward_waiting';
-      const newRewardStatus = 'pending';
-      final autoApproveTime = DateTime.now().add(const Duration(minutes: 15));
-
-      // Database update: status becomes 'reward_waiting' with 15-minute autoApprove timer
-      await SupaStore.instance.collection('rooms').doc(roomId).update({
-        'status': newStatus,
-        'proofUrl': downloadUrl,
-        'winProofUrl': downloadUrl,
-        'winProofUploadedAt': SupaField.serverTimestamp(),
-        'autoApproveAt': SupaTime.fromDate(autoApproveTime),
-        'winnerId': widget.currentUserId,
-        'winnerName': widget.currentUserName,
-        'proofUploadedBy': widget.currentUserId,
-        'proofUploadedByName': widget.currentUserName,
-        'ocrText': trimmedText,
-        'ocrScore': validationResult.score,
-        'ocrStatus': validationResult.status, // 'verified', 'mismatch', or 'doubt'
-        'rewardStatus': newRewardStatus,
-        'detectedScreenshotName': validationResult.detectedScreenshotName,
-        'accountIdName': validationResult.accountIdName,
-      });
-
-      try {
-        await SupaStore.instance.collection('tournament_rooms').doc(roomId).set({
-          'status': newStatus,
-          'winProofUrl': downloadUrl,
-          'winProofUploadedAt': SupaField.serverTimestamp(),
-          'autoApproveAt': SupaTime.fromDate(autoApproveTime),
-          'winnerId': widget.currentUserId,
-          'winnerName': widget.currentUserName,
-          'proofUploadedBy': widget.currentUserId,
-          'proofUploadedByName': widget.currentUserName,
-          'rewardStatus': newRewardStatus,
-        }, SupaSetOptions(merge: true));
-      } catch (_) {}
-
-      return validationResult;
-    } catch (e) {
-      debugPrint('OCR Error: $e');
-      final errText = 'Error reading screenshot: $e';
-      final autoApproveTime = DateTime.now().add(const Duration(minutes: 15));
-      await SupaStore.instance.collection('rooms').doc(roomId).update({
-        'status': 'reward_waiting',
-        'proofUrl': downloadUrl,
-        'winProofUrl': downloadUrl,
-        'winProofUploadedAt': SupaField.serverTimestamp(),
-        'autoApproveAt': SupaTime.fromDate(autoApproveTime),
-        'winnerId': widget.currentUserId,
-        'winnerName': widget.currentUserName,
-        'proofUploadedBy': widget.currentUserId,
-        'proofUploadedByName': widget.currentUserName,
-        'ocrText': errText,
-        'ocrScore': 0,
-        'ocrStatus': 'doubt',
-        'rewardStatus': 'pending',
-      });
-      return WinProofValidationResult(
-        isVerified: false,
-        score: 0,
-        status: 'doubt',
-        detectedScreenshotName: 'Unknown',
-        accountIdName: accountIdName,
-        message: '⚠️ App AI Check: Detected: None | Expected: \'$accountIdName\' -> Warning (0/4)',
-        fullOcrText: errText,
-        isNameMatched: false,
-        hasVictoryKeyword: false,
-      );
-    }
-  }
-
-  // Remove win proof and reset status so user can re-upload
-  Future<void> _removeProof({
-    required String msgDocId,
-    required GamerRoom room,
-    required String senderId,
-  }) async {
-    // Security check: ONLY the person who uploaded this win proof can remove it!
-    if (senderId != widget.currentUserId) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('⚠️ You cannot delete someone else\'s win proof!'),
-            backgroundColor: GamerTheme.redAccent,
-          ),
-        );
-      }
-      return;
-    }
-
-    try {
-      // 1. Clear database proof fields and reset status
-      await SupaStore.instance.collection('rooms').doc(room.id).update({
-        'status': 'IN_PROGRESS',
-        'proofUrl': SupaField.delete(),
-        'winProofUrl': SupaField.delete(),
-        'winProofUploadedAt': SupaField.delete(),
-        'autoApproveAt': SupaField.delete(),
-        'winnerId': SupaField.delete(),
-        'winnerName': SupaField.delete(),
-        'proofUploadedBy': SupaField.delete(),
-        'proofUploadedByName': SupaField.delete(),
-        'ocrStatus': SupaField.delete(),
-        'ocrScore': 0,
-        'ocrText': SupaField.delete(),
-        'detectedScreenshotName': SupaField.delete(),
-        'accountIdName': SupaField.delete(),
-        'rewardStatus': 'idle',
-      });
-
-      try {
-        await SupaStore.instance.collection('tournament_rooms').doc(room.id).update({
-          'status': 'IN_PROGRESS',
-          'winProofUrl': SupaField.delete(),
-          'winProofUploadedAt': SupaField.delete(),
-          'autoApproveAt': SupaField.delete(),
-          'winnerId': SupaField.delete(),
-          'winnerName': SupaField.delete(),
-          'proofUploadedBy': SupaField.delete(),
-          'proofUploadedByName': SupaField.delete(),
-          'rewardStatus': 'idle',
-        });
-      } catch (_) {}
-
-      // 2. Delete the rejected message
-      await SupaStore.instance
-          .collection('rooms')
-          .doc(room.id)
-          .collection('messages')
-          .doc(msgDocId)
-          .delete()
-          .catchError((_) {});
-
-      // 3. Post a clean notification in chat
-      await SupaStore.instance
-          .collection('rooms')
-          .doc(room.id)
-          .collection('messages')
-          .add({
-        'senderId': 'system',
-        'senderName': 'APP BOT',
-        'senderInitial': '🤖',
-        'message': '🗑️ Win proof was removed by ${widget.currentUserName}. You can now upload a fresh screenshot.',
-        'type': 'system',
-        'timestamp': SupaField.serverTimestamp(),
-        'isHost': false,
-      });
-
-      // 4. Reset local state
-      setState(() {
-        _selectedProofImage = null;
-        _isUploadingProof = false;
-      });
-
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('🗑️ Proof removed. You can upload a new screenshot now.'),
-            backgroundColor: const Color(0xFF050505),
-            behavior: SnackBarBehavior.floating,
-          ),
-        );
-      }
-    } catch (e) {
-      debugPrint('Error removing proof: $e');
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Failed to remove proof: $e'),
-            backgroundColor: GamerTheme.redAccent,
-          ),
-        );
-      }
-    }
-  }
-
-  // Re-upload win proof directly
-  Future<void> _reuploadProof({
-    required String msgDocId,
-    required GamerRoom room,
-    required String senderId,
-  }) async {
-    // Security check: ONLY the person who uploaded this win proof can replace it!
-    if (senderId != widget.currentUserId) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('⚠️ You cannot replace someone else\'s win proof!'),
-            backgroundColor: GamerTheme.redAccent,
-          ),
-        );
-      }
-      return;
-    }
-    try {
-      final picker = ImagePicker();
-      final picked = await picker.pickImage(
-        source: ImageSource.gallery,
-        imageQuality: 85,
-        maxWidth: 1080,
-      );
-      if (picked == null) return;
-
-      final file = File(picked.path);
-      final sizeBytes = await file.length();
-      if (sizeBytes > 5 * 1024 * 1024) {
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-              content: Text('Image size must be less than 5MB'),
-              backgroundColor: GamerTheme.redAccent,
-            ),
-          );
-        }
-        return;
-      }
-
-      setState(() {
-        _isUploadingProof = true;
-      });
-
-      // 1. Delete old rejected message from chat
-      await SupaStore.instance
-          .collection('rooms')
-          .doc(room.id)
-          .collection('messages')
-          .doc(msgDocId)
-          .delete()
-          .catchError((_) {});
-
-      // 2. Resolve accountIdName
-      final accountIdName = await WinProofValidator.resolveAccountIdName(
-        userId: widget.currentUserId,
-        fallbackName: widget.currentUserName,
-        joinedUsers: room.joinedUsers,
-        roomId: room.id,
-      );
-
-      // 3. Upload new image to Supabase Storage
-      final uploadedUrl = await SupabaseService.uploadFile(
-        file: file,
-        folder: 'win_proofs',
-        bucket: SupabaseService.bucketMatchProofs,
-      );
-
-      if (uploadedUrl == null || uploadedUrl.isEmpty) {
-        throw Exception('Image upload failed');
-      }
-
-      // 4. Run validation & OCR
-      final valRes = await autoReadProof(
-        file,
-        room.id,
-        uploadedUrl,
-        accountIdName,
-      );
-
-      // 5. Add new win_proof message
-      await SupaStore.instance
-          .collection('rooms')
-          .doc(room.id)
-          .collection('messages')
-          .add({
-        'senderId': widget.currentUserId,
-        'senderName': widget.currentUserName,
-        'senderInitial': widget.currentUserName.isNotEmpty ? widget.currentUserName[0].toUpperCase() : 'G',
-        'message': 'Submitted Match Win Proof',
-        'imageUrl': uploadedUrl,
-        'type': 'win_proof',
-        'ocrStatus': valRes.status,
-        'ocrScore': valRes.score,
-        'ocrText': valRes.fullOcrText,
-        'detectedName': valRes.detectedScreenshotName,
-        'accountName': accountIdName,
-        'aiCheckMsg': valRes.message,
-        'timestamp': SupaField.serverTimestamp(),
-        'isHost': false,
-      });
-
-      // 6. Add system check message
-      await SupaStore.instance
-          .collection('rooms')
-          .doc(room.id)
-          .collection('messages')
-          .add({
-        'senderId': 'system',
-        'senderName': 'APP BOT',
-        'senderInitial': '🤖',
-        'message': valRes.message,
-        'type': 'system',
-        'timestamp': SupaField.serverTimestamp(),
-        'isHost': false,
-      });
-
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(
-              valRes.isVerified
-                  ? '✅ Win Proof Verified! Awaiting reward.'
-                  : valRes.message,
-            ),
-            backgroundColor: valRes.isVerified ? _fbBlue : GamerTheme.redAccent,
-            behavior: SnackBarBehavior.floating,
-          ),
-        );
-      }
-    } catch (e) {
-      debugPrint('Error re-uploading proof: $e');
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Failed to re-upload proof: $e'),
-            backgroundColor: GamerTheme.redAccent,
-          ),
-        );
-      }
-    } finally {
-      if (mounted) {
-        setState(() {
-          _isUploadingProof = false;
-        });
-      }
-    }
-  }
-
-  // Send message or Win Proof
-  Future<void> _sendMessage() async {
-    if (!canAccess) return;
-
-    // 1-second spam protection
-    final now = DateTime.now();
-    if (_lastSendTime != null && now.difference(_lastSendTime!) < const Duration(seconds: 1)) {
-      return;
-    }
-    _lastSendTime = now;
-
-    final text = _msgController.text.trim();
-    if (text.isEmpty && _selectedProofImage == null) return;
-
-    final messagesRef = SupaStore.instance
-        .collection('rooms')
-        .doc(widget.room.id)
-        .collection('messages');
-
-    if (_selectedProofImage != null) {
-      setState(() {
-        _isUploadingProof = true;
-      });
-
-      try {
-        // 1. Resolve uploader's real ID name:
-        // Slot allocation name (e.g. "1083") or users collection -> bgmiName / username
-        final accountIdName = await WinProofValidator.resolveAccountIdName(
-          userId: widget.currentUserId,
-          fallbackName: widget.currentUserName,
-          joinedUsers: widget.room.joinedUsers,
-          roomId: widget.room.id,
-        );
-
-        // 2. Upload to Supabase Storage folder win_proofs
-        String? uploadedUrl = await SupabaseService.uploadFile(
-          file: _selectedProofImage!,
-          folder: 'win_proofs',
-          bucket: SupabaseService.bucketMatchProofs,
-        );
-
-        if (uploadedUrl == null || uploadedUrl.isEmpty) {
-          throw Exception('Upload failed');
-        }
-
-        // 3. Run OCR with Win Proof Name Match Validation
-        final valRes = await autoReadProof(
-          _selectedProofImage!,
-          widget.room.id,
-          uploadedUrl,
-          accountIdName,
-        );
-
-        final String ocrStatus = valRes.status;
-        final int ocrScore = valRes.score;
-        final String ocrText = valRes.fullOcrText;
-        final String? detectedName = valRes.detectedScreenshotName;
-
-        await messagesRef.add({
-          'senderId': widget.currentUserId,
-          'senderName': widget.currentUserName,
-          'senderInitial': widget.currentUserName.isNotEmpty ? widget.currentUserName[0].toUpperCase() : 'G',
-          'message': text.isNotEmpty ? text : 'Submitted Match Win Proof',
-          'imageUrl': uploadedUrl,
-          'type': 'win_proof',
-          'ocrStatus': ocrStatus,
-          'ocrScore': ocrScore,
-          'ocrText': ocrText,
-          'detectedName': detectedName,
-          'accountName': accountIdName,
-          'aiCheckMsg': valRes.message,
-          'timestamp': SupaField.serverTimestamp(),
-          'isHost': isHost,
-        });
-
-        // 4. App AI Bot Announcement with Name Match Validation
-        await messagesRef.add({
-          'senderId': 'system',
-          'senderName': 'APP BOT',
-          'senderInitial': '🤖',
-          'message': valRes.message,
-          'type': 'system',
-          'timestamp': SupaField.serverTimestamp(),
-          'isHost': false,
-        });
-
-        setState(() {
-          _selectedProofImage = null;
-          _isUploadingProof = false;
-          _msgController.clear();
-        });
-
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: Text(
-                valRes.isVerified
-                    ? '✅ Verified - Name Matched (Score 4/4)! Awaiting host approval.'
-                    : valRes.message,
-              ),
-              backgroundColor: valRes.isVerified ? _fbBlue : GamerTheme.redAccent,
-              behavior: SnackBarBehavior.floating,
-              duration: const Duration(seconds: 4),
-            ),
-          );
-        }
-      } catch (e) {
-        setState(() {
-          _isUploadingProof = false;
-        });
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: Text('Failed to upload win proof: $e'),
-              backgroundColor: GamerTheme.redAccent,
-              behavior: SnackBarBehavior.floating,
-            ),
-          );
-        }
-        return;
-      }
-    } else {
-      _msgController.clear();
-      await messagesRef.add({
-        'senderId': widget.currentUserId,
-        'senderName': widget.currentUserName,
-        'senderInitial': widget.currentUserName.isNotEmpty ? widget.currentUserName[0].toUpperCase() : 'G',
-        'message': text,
-        'type': 'text',
-        'timestamp': SupaField.serverTimestamp(),
-        'isHost': isHost,
-      });
-    }
-
-    _scrollToBottom();
-  }
-
-  void _scrollToBottom() {
-    Future.delayed(const Duration(milliseconds: 200), () {
-      if (_scrollController.hasClients) {
-        _scrollController.animateTo(
-          _scrollController.position.maxScrollExtent,
-          duration: const Duration(milliseconds: 300),
-          curve: Curves.easeOut,
-        );
-      }
-    });
-  }
-
-  // Fullscreen pinch-zoom viewer for win proof
-  void _openFullscreenImage(String imageUrl) {
-    Navigator.push(
-      context,
-      MaterialPageRoute(
-        builder: (_) => Scaffold(
-          backgroundColor: Colors.black,
-          appBar: AppBar(
-            backgroundColor: Colors.black,
-            foregroundColor: Colors.white,
-            title: const Text('Win Proof Submission', style: TextStyle(fontSize: 16)),
-            actions: [
-              IconButton(
-                icon: const Icon(Icons.copy_rounded),
-                tooltip: 'Copy Image URL',
-                onPressed: () => _copyToClipboard('Image URL', imageUrl),
-              ),
-            ],
-          ),
-          body: Center(
-            child: InteractiveViewer(
-              panEnabled: true,
-              minScale: 0.5,
-              maxScale: 4.0,
-              child: Image.network(
-                imageUrl,
-                fit: BoxFit.contain,
-                loadingBuilder: (ctx, child, progress) {
-                  if (progress == null) return child;
-                  return const Center(child: CircularProgressIndicator(color: _fbBlue));
-                },
-                errorBuilder: (_, __, ___) => const Center(
-                  child: Text('Failed to load image', style: TextStyle(color: Colors.white)),
-                ),
-              ),
-            ),
-          ),
-        ),
-      ),
-    );
-  }
-
-  // Host Reward Approval - Prize Funded by Application
-  Future<void> _approveReward({
-    required String winnerId,
-    required String winnerName,
-    required String winProofUrl,
-    required GamerRoom room,
-  }) async {
-    final roomRef = SupaStore.instance.collection('rooms').doc(room.id);
-
-    // SAB SE IMPORTANT CHECK - APP KA VETO
-    try {
-      final freshDoc = await roomRef.get();
-      final freshData = freshDoc.data() ?? {};
-      final currentOcrStatus = (freshData['ocrStatus'] ?? room.ocrStatus).toString();
-      final currentOcrText = (freshData['ocrText'] ?? room.ocrText).toString();
-      final currentRewardStatus = (freshData['rewardStatus'] ?? room.rewardStatus).toString();
-
-      if (currentOcrStatus != 'verified') {
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: Text(
-                'Blocked by App: App ko is screenshot me doubt hai (${currentOcrText.isNotEmpty ? currentOcrText : "No text detected"}), isliye reward host ke approve se bhi nahi jayega. User ko clear winner screenshot upload karne ko bolo.',
-              ),
-              backgroundColor: GamerTheme.redAccent,
-              behavior: SnackBarBehavior.floating,
-              duration: const Duration(seconds: 5),
-            ),
-          );
-        }
-        return; // YAHAN SE AAGE JAYEGA HI NAHI
-      }
-
-      if (currentRewardStatus == 'sent') {
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-              content: Text('Reward already sent!'),
-              backgroundColor: Color(0xFF1877F2),
-              behavior: SnackBarBehavior.floating,
-            ),
-          );
-        }
-        return;
-      }
-    } catch (_) {}
-
-    final confirmed = await showDialog<bool>(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        backgroundColor: Colors.white,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-        title: const Text('Approve Reward', style: TextStyle(color: Color(0xFF050505), fontWeight: FontWeight.bold)),
-        content: Text(
-          'Send ${room.prize} Coins to $winnerName directly from the Application and mark match completed?',
-          style: const TextStyle(color: Color(0xFF65676B)),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(ctx, false),
-            child: const Text('Cancel', style: TextStyle(color: Color(0xFF65676B))),
-          ),
-          ElevatedButton(
-            style: ElevatedButton.styleFrom(
-              backgroundColor: const Color(0xFF1877F2),
-              foregroundColor: Colors.white,
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-            ),
-            onPressed: () => Navigator.pop(ctx, true),
-            child: const Text('Approve & Send', style: TextStyle(fontWeight: FontWeight.bold)),
-          ),
-        ],
-      ),
-    );
-
-    if (confirmed != true) return;
-
-    final String roomId = room.id;
-    final int prize = room.prize;
-
-    // Idempotency lock
-    try {
-      final SupaDoc roomSnap = await roomRef.get();
-      final roomData = roomSnap.data() as Map<String, dynamic>? ?? {};
-      if (roomData['rewardStatus'] == 'sent') {
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-              content: Text('Reward already sent!'),
-              backgroundColor: Color(0xFF1877F2),
-              behavior: SnackBarBehavior.floating,
-            ),
-          );
-        }
-        return;
-      }
-    } catch (_) {}
-
-    await roomRef.update({'rewardStatus': 'sending'});
-
-    try {
-      // Resolve winner ID
-      String resolvedWinnerId = winnerId;
-      for (final u in room.joinedUsers) {
-        final uId = (u['id'] ?? '').toString();
-        final uName = (u['name'] ?? '').toString();
-        if (uName.toLowerCase().trim() == winnerName.toLowerCase().trim() && uId.isNotEmpty && uId != 'guest' && uId != 'anonymous') {
-          resolvedWinnerId = uId;
-          break;
-        }
-        if (uId == winnerId && uId.isNotEmpty && uId != 'guest' && uId != 'anonymous') {
-          resolvedWinnerId = uId;
-          break;
-        }
-      }
-
-      if ((resolvedWinnerId.isEmpty || resolvedWinnerId == 'guest' || resolvedWinnerId == 'anonymous') && room.joinedUsers.length > 1) {
-        final slot2Id = (room.joinedUsers[1]['id'] ?? '').toString();
-        if (slot2Id.isNotEmpty && slot2Id != 'guest') {
-          resolvedWinnerId = slot2Id;
-        }
-      }
-
-      if (resolvedWinnerId.isEmpty || resolvedWinnerId == 'guest' || resolvedWinnerId == 'anonymous') {
-        for (final uid in room.joinedUserIds) {
-          if (uid != room.hostId && uid.isNotEmpty && uid != 'guest') {
-            resolvedWinnerId = uid;
-            break;
-          }
-        }
-      }
-
-      if (resolvedWinnerId.isEmpty || resolvedWinnerId == 'guest' || resolvedWinnerId == 'anonymous') {
-        resolvedWinnerId = winnerId.isNotEmpty ? winnerId : widget.currentUserId;
-      }
-
-      final SupaDocRef winnerRef = SupaStore.instance.collection('users').doc(resolvedWinnerId);
-
-      // Use atomic transaction NOT batch for guarantee
-      await SupaStore.instance.runTransaction((transaction) async {
-        // All gets first
-        final SupaDoc winnerSnap = await transaction.get(winnerRef);
-        final SupaDoc txRoomSnap = await transaction.get(roomRef);
-
-        final txRoomData = txRoomSnap.data() as Map<String, dynamic>? ?? {};
-        if (txRoomData['ocrStatus'] != 'verified') {
-          throw 'Blocked by App: App ko is screenshot me doubt hai, reward blocked.';
-        }
-        if (txRoomData['rewardStatus'] == 'sent') {
-          throw 'Already sent';
-        }
-
-        int currentCoins = 0;
-        int currentWins = 0;
-        int currentWinnings = 0;
-
-        if (winnerSnap.exists) {
-          final winnerData = winnerSnap.data() as Map<String, dynamic>? ?? {};
-          final rawCoins = winnerData['gCoins'] ?? winnerData['coins'];
-          if (rawCoins is num) currentCoins = rawCoins.toInt();
-          final rawWins = winnerData['wins'];
-          if (rawWins is num) currentWins = rawWins.toInt();
-          final rawWinnings = winnerData['totalWinnings'];
-          if (rawWinnings is num) currentWinnings = rawWinnings.toInt();
-        }
-
-        final int updatedCoins = currentCoins + prize;
-
-        // 1. Increment winner using direct value (NO SupaField.increment inside transaction)
-        if (winnerSnap.exists) {
-          transaction.update(winnerRef, {
-            'gCoins': updatedCoins,
-            'coins': updatedCoins,
-            'totalWinnings': currentWinnings + prize,
-            'wins': currentWins + 1,
-            'lastRewardAt': SupaField.serverTimestamp(),
-          });
-        } else {
-          transaction.set(winnerRef, {
-            'gCoins': updatedCoins,
-            'coins': updatedCoins,
-            'totalWinnings': prize,
-            'wins': 1,
-            'lastRewardAt': SupaField.serverTimestamp(),
-          });
-        }
-
-        // 2. Create transaction log with App Veto verification status
-        final SupaDocRef txRef = SupaStore.instance.collection('transactions').doc();
-        final String txId = txRef.id;
-        final txLogData = {
-          'id': txId,
-          'userId': resolvedWinnerId,
-          'amount': prize, // +500
-          'type': 'win_reward',
-          'from': 'app_verified',
-          'to': resolvedWinnerId,
-          'title': 'Match Victory Reward 🏆 (From App)',
-          'description': 'Won ${room.game} Match: ${room.title} - Prize from App',
-          'roomId': roomId,
-          'approvedBy': widget.currentUserId,
-          'prizeSource': 'application',
-          'ocrStatus': 'verified',
-          'status': 'completed',
-          'winProofUrl': winProofUrl,
-          'createdAt': SupaField.serverTimestamp(),
-          'timestamp': SupaField.serverTimestamp(),
-        };
-        transaction.set(txRef, txLogData);
-
-        final SupaDocRef coinTxRef = SupaStore.instance.collection('coin_transactions').doc(txId);
-        transaction.set(coinTxRef, txLogData);
-
-        // 3. Mark room sent
-        transaction.update(roomRef, {
-          'rewardStatus': 'sent',
-          'status': 'completed',
-          'winnerId': resolvedWinnerId,
-          'winnerName': winnerName,
-          'prizeSource': 'application',
-          'rewardSentAt': SupaField.serverTimestamp(),
-          'isCompleted': true,
-          'isLive': false,
-          'completedAt': SupaField.serverTimestamp(),
-        });
-
-        // 4. System Announcement
-        final SupaDocRef msgRef = roomRef.collection('messages').doc();
-        transaction.set(msgRef, {
-          'type': 'system_reward',
-          'message': '🎉 $winnerName won and received $prize Coins from App!',
-          'timestamp': SupaField.serverTimestamp(),
-          'senderId': 'system',
-          'senderName': 'ROOM BOT',
-          'isHost': false,
-        });
-      });
-
-      try {
-        await SupaStore.instance.collection('tournament_rooms').doc(roomId).set({
-          'status': 'completed',
-          'rewardStatus': 'sent',
-          'winnerId': resolvedWinnerId,
-          'winnerName': winnerName,
-          'completedAt': SupaField.serverTimestamp(),
-          'isLive': false,
-        }, SupaSetOptions(merge: true));
-      } catch (_) {}
-
-      debugPrint('REWARD SUCCESS: $prize to $resolvedWinnerId');
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('✓ $prize Coins sent to $winnerName from Application!'),
-            backgroundColor: _fbBlue,
-            behavior: SnackBarBehavior.floating,
-            duration: const Duration(seconds: 4),
-          ),
-        );
-      }
-    } catch (e) {
-      await roomRef.update({'rewardStatus': 'pending'});
-      debugPrint('REWARD FAILED: $e');
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Failed: $e'),
-            backgroundColor: GamerTheme.redAccent,
-            behavior: SnackBarBehavior.floating,
-          ),
-        );
-      }
-    }
-  }
-
-  // Host Reward Rejection
-  Future<void> _rejectReward(String winnerName) async {
-    await SupaStore.instance
-        .collection('rooms')
-        .doc(widget.room.id)
-        .collection('messages')
-        .add({
-      'senderId': 'system',
-      'senderName': 'ROOM BOT',
-      'message': '⚠️ Win proof submitted by $winnerName was rejected by the host.',
-      'type': 'system',
-      'timestamp': SupaField.serverTimestamp(),
-      'isHost': false,
-    });
-
-    if (mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Win proof rejected.'),
-          backgroundColor: GamerTheme.redAccent,
-        ),
-      );
-    }
-  }
-
-  bool _isStartingMatch = false;
-
-  /// Host starts the match: updates status to 'IN_PROGRESS' in database & local TournamentService,
-  /// announces in room chat, and alerts all room participants.
-  Future<void> _startMatch(GamerRoom room) async {
-    if (_isStartingMatch) return;
-    setState(() {
-      _isStartingMatch = true;
-    });
-
-    try {
-      // 1. Update database 'rooms' document
-      await SupaStore.instance.collection('rooms').doc(room.id).update({
-        'status': 'IN_PROGRESS',
-        'isMatchStarted': true,
-        'matchStartedAt': SupaField.serverTimestamp(),
-      });
-
-      // 2. Also update 'tournament_rooms' collection if exists
-      try {
-        await SupaStore.instance.collection('tournament_rooms').doc(room.id).set({
-          'status': 'IN_PROGRESS',
-          'isLive': true,
-          'isMatchStarted': true,
-          'matchStartedAt': SupaField.serverTimestamp(),
-          'updatedAt': SupaField.serverTimestamp(),
-        }, SupaSetOptions(merge: true));
-      } catch (_) {}
-
-      // 3. Update TournamentService local state
-      try {
-        await TournamentService().startMatch(room.id);
-      } catch (_) {}
-
-      // 4. Send system announcement in room chat
-      try {
-        await SupaStore.instance
-            .collection('rooms')
-            .doc(room.id)
-            .collection('messages')
-            .add({
-          'senderId': 'system',
-          'senderName': 'APP BOT',
-          'senderInitial': '🎮',
-          'message': '⚔️ MATCH STARTED! The host has initiated the match. Enter the game room now and good luck players! Remember to screenshot your victory screen to claim reward.',
-          'type': 'system',
-          'timestamp': SupaField.serverTimestamp(),
-          'isHost': false,
-        });
-      } catch (_) {}
-
-      // 5. Send in-app notification to all players in the room
-      for (final uid in room.joinedUserIds) {
-        if (uid != widget.currentUserId) {
-          try {
-            await SupaStore.instance.collection('notifications').add({
-              'recipientUid': uid,
-              'senderUid': widget.currentUserId,
-              'type': 'match_started',
-              'message': 'Host started the match for "${room.title}"! Join the game now.',
-              'roomId': room.id,
-              'read': false,
-              'createdAt': SupaField.serverTimestamp(),
-            });
-          } catch (_) {}
-        }
-      }
-
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('🔥 Match started successfully! All players have been notified.'),
-            backgroundColor: _fbBlue,
-            behavior: SnackBarBehavior.floating,
-            duration: Duration(seconds: 3),
-          ),
-        );
-      }
-    } catch (e) {
-      debugPrint('Error starting match: $e');
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Failed to start match: $e'),
-            backgroundColor: GamerTheme.redAccent,
-            behavior: SnackBarBehavior.floating,
-          ),
-        );
-      }
-    } finally {
-      if (mounted) {
-        setState(() {
-          _isStartingMatch = false;
-        });
-      }
-    }
-  }
-
-  void _showMatchDetailsDialog(GamerRoom room) {
-    showDialog(
-      context: context,
-      builder: (dCtx) => AlertDialog(
-        backgroundColor: Colors.white,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-        title: Text('${room.game} Match Details', style: const TextStyle(color: Color(0xFF050505), fontWeight: FontWeight.bold)),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text('Title: ${room.title}', style: const TextStyle(color: Color(0xFF050505), fontWeight: FontWeight.w600)),
-            const SizedBox(height: 4),
-            Text('Map: ${room.map}', style: const TextStyle(color: Color(0xFF65676B))),
-            const SizedBox(height: 4),
-            Text('Prize: ${room.prize} G-Coins', style: const TextStyle(color: Color(0xFF1877F2), fontWeight: FontWeight.bold)),
-            const SizedBox(height: 4),
-            Text('Entry Fee: ${room.entryFee}', style: const TextStyle(color: Color(0xFF050505))),
-            const SizedBox(height: 8),
-            const Text(
-              'Rules: Fair play only. Screenshot win screen and upload in chat to claim reward.',
-              style: TextStyle(color: Color(0xFF65676B), fontSize: 11),
-            ),
-          ],
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(dCtx),
-            child: const Text('Got it', style: TextStyle(color: Color(0xFF1877F2), fontWeight: FontWeight.bold)),
-          ),
-        ],
-      ),
-    );
-  }
-
-  String _getCompletedDeleteRemainingText(GamerRoom room) {
-    if (room.completedAt == null) return 'COMPLETED';
-    final elapsedSec = DateTime.now().difference(room.completedAt!).inSeconds;
-    final remainingSec = (300 - elapsedSec).clamp(0, 300);
-    if (remainingSec <= 0) return 'AUTO-DELETING...';
-    final mins = remainingSec ~/ 60;
-    final secs = remainingSec % 60;
-    return 'COMPLETED (${mins}m ${secs.toString().padLeft(2, '0')}s)';
   }
 
   @override
   Widget build(BuildContext context) {
-    return StreamBuilder<SupaDoc>(
-      stream: SupaStore.instance.collection('rooms').doc(widget.room.id).snapshots(),
-      builder: (context, roomSnapshot) {
-        GamerRoom room = widget.room;
-        if (roomSnapshot.hasData && roomSnapshot.data != null && roomSnapshot.data!.exists) {
-          room = GamerRoom.fromSupabase(roomSnapshot.data!);
-        }
-
-        final now = DateTime.now();
-        final bool isWithin10Mins = room.startTime.difference(now).inMinutes <= 10;
-        final bool isHost = room.hostId == widget.currentUserId;
-        final bool isJoined = room.joinedUserIds.contains(widget.currentUserId);
-        final bool canAccess = isHost || isJoined;
-        final int onlineCount = room.joinedUsers.isNotEmpty
-            ? room.joinedUsers.length
-            : (room.joinedUserIds.isNotEmpty ? room.joinedUserIds.length : 1);
-        final String rewardStatus = room.rewardStatus;
-        final bool isMatchStarted = room.isInProgress ||
-            room.status.toUpperCase() == 'IN_PROGRESS' ||
-            room.status.toUpperCase() == 'STARTED' ||
-            room.status.toUpperCase() == 'MATCH_STARTED' ||
-            (roomSnapshot.data?.data() as Map<String, dynamic>?)?['isMatchStarted'] == true;
-        final bool isCompleted = room.isCompleted;
-
-        final String rawHostName = room.hostName.trim();
-        const mapNames = ['Erangel', 'Miramar', 'Sanhok', 'Vikendi', 'Livik', 'Karakin', 'Nusa', 'Warehouse'];
-        final bool isMapValue = mapNames.any((m) => m.toLowerCase() == rawHostName.toLowerCase()) ||
-            (room.map.trim().isNotEmpty && rawHostName.toLowerCase() == room.map.trim().toLowerCase());
-        final String sheetHostDisplay = (!isMapValue && rawHostName.isNotEmpty && rawHostName.toLowerCase() != 'host')
-            ? rawHostName
-            : (_sheetHostName.isNotEmpty ? _sheetHostName : 'Host');
-
-        return Column(
+    final room = widget.room;
+    final isH = room.hostId == widget.currentUserId;
+    final isJ = room.joinedUserIds.contains(widget.currentUserId);
+    final access = isH || isJ;
+    return Container(
+      decoration: const BoxDecoration(
+        color: Color(0xFFF0F2F5),
+        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+      ),
+      child: SafeArea(
+        top: false,
+        child: Column(
           children: [
-            // Handle bar
             Container(
               width: 40,
               height: 4,
@@ -3829,8 +1337,6 @@ class _InRoomBottomSheetContentState extends State<_InRoomBottomSheetContent> {
                 borderRadius: BorderRadius.circular(2),
               ),
             ),
-
-            // Header: Title + Host • Map + Badge + Close X
             Padding(
               padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
               child: Row(
@@ -3839,1596 +1345,224 @@ class _InRoomBottomSheetContentState extends State<_InRoomBottomSheetContent> {
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        Text(
-                          room.title,
-                          style: const TextStyle(
-                            color: Color(0xFF050505),
-                            fontWeight: FontWeight.bold,
-                            fontSize: 16,
-                          ),
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                        ),
-                        const SizedBox(height: 2),
-                        Text(
-                          'Host: $sheetHostDisplay • ${room.map}',
-                          style: const TextStyle(color: Color(0xFF65676B), fontSize: 12),
-                        ),
+                        Text(room.title,
+                            style: const TextStyle(
+                                fontWeight: FontWeight.bold, fontSize: 16)),
+                        Text('Host: ${room.hostName} • ${room.map}',
+                            style: const TextStyle(
+                                color: Color(0xFF65676B), fontSize: 12)),
                       ],
                     ),
                   ),
-                  Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                    decoration: BoxDecoration(
-                      color: isCompleted
-                          ? Colors.teal.withOpacity(0.12)
-                          : (room.isDisputed
-                              ? Colors.red.withOpacity(0.12)
-                              : (room.isProofRejected
-                                  ? Colors.red.withOpacity(0.12)
-                                  : (room.isRewardWaiting
-                                      ? Colors.amber.withOpacity(0.15)
-                                      : (isMatchStarted
-                                          ? const Color(0xFFE7F3FF)
-                                          : (isHost
-                                              ? const Color(0xFFE7F3FF)
-                                              : (isJoined ? const Color(0xFFE7F3FF) : const Color(0xFFF0F2F5))))))),
-                      borderRadius: BorderRadius.circular(6),
-                      border: isCompleted
-                          ? Border.all(color: Colors.teal.withOpacity(0.5))
-                          : (room.isDisputed
-                              ? Border.all(color: Colors.red.withOpacity(0.6), width: 1.2)
-                              : (room.isProofRejected
-                                  ? Border.all(color: Colors.red.withOpacity(0.6), width: 1.2)
-                                  : (room.isRewardWaiting
-                                      ? Border.all(color: Colors.amber.shade700)
-                                      : (isMatchStarted
-                                          ? Border.all(color: const Color(0xFF1877F2))
-                                          : null)))),
-                    ),
-                    child: Text(
-                      isCompleted
-                          ? 'COMPLETED'
-                          : (room.isDisputed
-                              ? '⚠️ DISPUTED'
-                              : (room.isProofRejected
-                                  ? '❌ PROOF REJECTED'
-                                  : (room.isRewardWaiting
-                                      ? 'REWARD WAITING'
-                                      : (isMatchStarted
-                                          ? 'MATCH LIVE'
-                                          : (isHost ? 'HOSTING' : (isJoined ? 'JOINED' : (room.isFull ? 'FULL' : 'OPEN'))))))),
-                      style: TextStyle(
-                        color: isCompleted
-                            ? Colors.teal
-                            : (room.isDisputed
-                                ? Colors.red
-                                : (room.isProofRejected
-                                    ? Colors.red
-                                    : (room.isRewardWaiting
-                                        ? Colors.amber.shade900
-                                        : (isMatchStarted
-                                            ? const Color(0xFF1877F2)
-                                            : (isJoined && !isHost ? const Color(0xFF1877F2) : const Color(0xFF050505)))))),
-                        fontSize: 10,
-                        fontWeight: FontWeight.bold,
-                      ),
-                    ),
-                  ),
-                  const SizedBox(width: 8),
                   IconButton(
-                    icon: const Icon(Icons.close_rounded, color: Color(0xFF65676B), size: 20),
+                    icon: const Icon(Icons.close_rounded),
                     onPressed: () => Navigator.pop(context),
                   ),
                 ],
               ),
             ),
-            const Divider(color: Color(0xFFCED0D4), height: 1),
-
-            // Scrollable Body
+            const Divider(height: 1),
             Expanded(
               child: SingleChildScrollView(
-                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                padding: const EdgeInsets.all(16),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    // Status Alert Banner (COMPLETED / DISPUTED / PROOF REJECTED / REWARD WAITING)
-                    if (isCompleted)
-                      Container(
-                        margin: const EdgeInsets.only(bottom: 12),
-                        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-                        decoration: BoxDecoration(
-                          color: Colors.teal.withOpacity(0.12),
-                          borderRadius: BorderRadius.circular(10),
-                          border: Border.all(color: Colors.tealAccent.withOpacity(0.5)),
-                        ),
-                        child: Row(
-                          children: [
-                            const Icon(Icons.check_circle_rounded, color: Colors.tealAccent, size: 20),
-                            const SizedBox(width: 10),
-                            Expanded(
-                              child: Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  const Text(
-                                    'MATCH COMPLETED & REWARD SENT',
-                                    style: TextStyle(
-                                      color: Colors.tealAccent,
-                                      fontSize: 12,
-                                      fontWeight: FontWeight.bold,
-                                    ),
-                                  ),
-                                  const SizedBox(height: 2),
-                                  Text(
-                                    'Reward has been sent to the winner. This room will auto-delete 5 minutes after completion. (${_getCompletedDeleteRemainingText(room)})',
-                                    style: TextStyle(color: Colors.tealAccent.withOpacity(0.85), fontSize: 10.5),
-                                  ),
-                                ],
-                              ),
-                            ),
-                          ],
-                        ),
-                      )
-                    else if (room.isDisputed)
-                      Container(
-                        margin: const EdgeInsets.only(bottom: 12),
-                        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-                        decoration: BoxDecoration(
-                          color: const Color(0xFFFFEBEE),
-                          borderRadius: BorderRadius.circular(10),
-                          border: Border.all(color: const Color(0xFFFFCDD2), width: 1.2),
-                        ),
-                        child: const Row(
-                          children: [
-                            Icon(Icons.warning_amber_rounded, color: Color(0xFFDC2626), size: 22),
-                            SizedBox(width: 10),
-                            Expanded(
-                              child: Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  Text(
-                                    '⚠️ DISPUTE RAISED - UNDER REVIEW',
-                                    style: TextStyle(
-                                      color: Color(0xFFDC2626),
-                                      fontSize: 12,
-                                      fontWeight: FontWeight.bold,
-                                    ),
-                                  ),
-                                  SizedBox(height: 2),
-                                  Text(
-                                    'Dispute Raised! Under review by Admin. Loser claims winner screenshot is fake/wrong.',
-                                    style: TextStyle(color: Color(0xFF4B5563), fontSize: 10.5),
-                                  ),
-                                ],
-                              ),
-                            ),
-                          ],
-                        ),
-                      )
-                    else if (room.isProofRejected)
-                      Container(
-                        margin: const EdgeInsets.only(bottom: 12),
-                        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-                        decoration: BoxDecoration(
-                          color: const Color(0xFFFFEBEE),
-                          borderRadius: BorderRadius.circular(10),
-                          border: Border.all(color: const Color(0xFFFFCDD2)),
-                        ),
-                        child: const Row(
-                          children: [
-                            Icon(Icons.cancel_rounded, color: Color(0xFFDC2626), size: 20),
-                            SizedBox(width: 10),
-                            Expanded(
-                              child: Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  Text(
-                                    'STATUS: PROOF REJECTED',
-                                    style: TextStyle(
-                                      color: Color(0xFFDC2626),
-                                      fontSize: 12,
-                                      fontWeight: FontWeight.bold,
-                                    ),
-                                  ),
-                                  SizedBox(height: 2),
-                                  Text(
-                                    'Uploaded screenshot does not match player ID. Please remove the rejected proof or upload a new valid screenshot.',
-                                    style: TextStyle(color: Color(0xFF4B5563), fontSize: 10.5),
-                                  ),
-                                ],
-                              ),
-                            ),
-                          ],
-                        ),
-                      )
-                    else if (room.isRewardWaiting)
-                      Container(
-                        margin: const EdgeInsets.only(bottom: 12),
-                        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-                        decoration: BoxDecoration(
-                          color: const Color(0xFFFFFBEB),
-                          borderRadius: BorderRadius.circular(10),
-                          border: Border.all(color: const Color(0xFFFDE68A), width: 1.1),
-                        ),
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Row(
-                              children: [
-                                const Icon(Icons.hourglass_top_rounded, color: Color(0xFFD97706), size: 20),
-                                const SizedBox(width: 8),
-                                const Expanded(
-                                  child: Text(
-                                    'STATUS: REWARD WAITING',
-                                    style: TextStyle(
-                                      color: Color(0xFFD97706),
-                                      fontSize: 12,
-                                      fontWeight: FontWeight.bold,
-                                    ),
-                                  ),
-                                ),
-                                Container(
-                                  padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
-                                  decoration: BoxDecoration(
-                                    color: const Color(0xFFFEF3C7),
-                                    borderRadius: BorderRadius.circular(6),
-                                    border: Border.all(color: const Color(0xFFF59E0B)),
-                                  ),
-                                  child: Text(
-                                    _formatAutoApproveCountdown(room.autoApproveAt),
-                                    style: const TextStyle(
-                                      color: Color(0xFFB45309),
-                                      fontSize: 10.5,
-                                      fontWeight: FontWeight.bold,
-                                    ),
-                                  ),
-                                ),
-                              ],
-                            ),
-                            const SizedBox(height: 4),
-                            const Text(
-                              'Winner has uploaded proof. Awaiting confirmation. Once reward sent, room will complete and auto delete in 5 mins.',
-                              style: TextStyle(color: Color(0xFF4B5563), fontSize: 10.5),
-                            ),
-                            if (canAccess && !room.isDisputed && widget.currentUserId != room.winnerId) ...[
-                              const SizedBox(height: 8),
-                              Align(
-                                alignment: Alignment.centerRight,
-                                child: InkWell(
-                                  onTap: () => _disputeResult(room),
-                                  borderRadius: BorderRadius.circular(6),
-                                  child: Container(
-                                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
-                                    decoration: BoxDecoration(
-                                      color: const Color(0xFFFFEBEE),
-                                      borderRadius: BorderRadius.circular(6),
-                                      border: Border.all(color: const Color(0xFFDC2626)),
-                                    ),
-                                    child: const Row(
-                                      mainAxisSize: MainAxisSize.min,
-                                      children: [
-                                        Icon(Icons.warning_amber_rounded, color: Color(0xFFDC2626), size: 14),
-                                        SizedBox(width: 4),
-                                        Text(
-                                          '⚠️ Dispute Result',
-                                          style: TextStyle(
-                                            color: Color(0xFFDC2626),
-                                            fontWeight: FontWeight.bold,
-                                            fontSize: 11,
-                                          ),
-                                        ),
-                                      ],
-                                    ),
-                                  ),
-                                ),
-                              ),
-                            ],
-                          ],
-                        ),
-                      ),
-                    // MATCH STATS BANNER: PRIZE POOL (FROM APP) + ENTRY FEE (FREE) + ESCROW
+                    Text('Prize: ${room.prize} Coins • Slots: ${room.filled}/${room.total}',
+                        style: const TextStyle(
+                            fontWeight: FontWeight.bold, fontSize: 13)),
+                    const SizedBox(height: 8),
                     Container(
-                      margin: const EdgeInsets.only(bottom: 12),
-                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 14, vertical: 8),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFFE7F3FF),
+                        borderRadius: BorderRadius.circular(20),
+                      ),
+                      child: Text(
+                        room.isCompleted
+                            ? 'COMPLETED'
+                            : room.isInProgress
+                                ? 'MATCH IN PROGRESS'
+                                : _formatDuration(_remainingTime),
+                        style: const TextStyle(
+                            color: Color(0xFF1877F2),
+                            fontWeight: FontWeight.bold,
+                            fontSize: 12),
+                      ),
+                    ),
+                    const SizedBox(height: 14),
+                    Container(
+                      height: 200,
                       decoration: BoxDecoration(
                         color: Colors.white,
                         borderRadius: BorderRadius.circular(12),
                         border: Border.all(color: const Color(0xFFCED0D4)),
                       ),
-                      child: Row(
-                        children: [
-                          // Prize Pool
-                          Expanded(
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                const Text(
-                                  'PRIZE POOL',
-                                  style: TextStyle(color: Color(0xFF65676B), fontSize: 10, fontWeight: FontWeight.bold),
-                                ),
-                                const SizedBox(height: 3),
-                                Row(
-                                  children: [
-                                    const Icon(Icons.monetization_on_rounded, size: 14, color: Color(0xFF1877F2)),
-                                    const SizedBox(width: 3),
-                                    Flexible(
-                                      child: Text(
-                                        '${room.prize} Coins',
-                                        style: const TextStyle(
-                                          color: Color(0xFF1877F2),
-                                          fontSize: 12.5,
-                                          fontWeight: FontWeight.bold,
-                                        ),
-                                        maxLines: 1,
-                                        overflow: TextOverflow.ellipsis,
-                                      ),
-                                    ),
-                                  ],
-                                ),
-                                const SizedBox(height: 1),
-                                const Text(
-                                  '(From App)',
-                                  style: TextStyle(
-                                    color: Color(0xFF65676B),
-                                    fontSize: 9.5,
-                                    fontWeight: FontWeight.w600,
-                                  ),
-                                ),
-                              ],
-                            ),
-                          ),
-                          Container(height: 32, width: 1, color: const Color(0xFFCED0D4), margin: const EdgeInsets.symmetric(horizontal: 8)),
-
-                          // Entry Fee
-                          Expanded(
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                const Text(
-                                  'ENTRY FEE',
-                                  style: TextStyle(color: Color(0xFF65676B), fontSize: 10, fontWeight: FontWeight.bold),
-                                ),
-                                const SizedBox(height: 4),
-                                Container(
-                                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-                                  decoration: BoxDecoration(
-                                    color: const Color(0xFFE7F3FF),
-                                    borderRadius: BorderRadius.circular(6),
-                                    border: Border.all(color: const Color(0xFF1877F2).withOpacity(0.3)),
-                                  ),
-                                  child: const Text(
-                                    'FREE',
-                                    style: TextStyle(
-                                      color: Color(0xFF1877F2),
-                                      fontSize: 11,
-                                      fontWeight: FontWeight.w900,
-                                      letterSpacing: 0.5,
-                                    ),
-                                  ),
-                                ),
-                                const SizedBox(height: 2),
-                                const Text(
-                                  'No Coins Needed',
-                                  style: TextStyle(color: Color(0xFF65676B), fontSize: 8.5),
-                                ),
-                              ],
-                            ),
-                          ),
-                          Container(height: 32, width: 1, color: const Color(0xFFCED0D4), margin: const EdgeInsets.symmetric(horizontal: 8)),
-
-                          // Escrow
-                          const Expanded(
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Text(
-                                  'ESCROW',
-                                  style: TextStyle(color: Color(0xFF65676B), fontSize: 10, fontWeight: FontWeight.bold),
-                                ),
-                                SizedBox(height: 3),
-                                Text(
-                                  '0 Coins',
-                                  style: TextStyle(color: Color(0xFF050505), fontSize: 12.5, fontWeight: FontWeight.bold),
-                                ),
-                                SizedBox(height: 1),
-                                Text(
-                                  'Free Entry',
-                                  style: TextStyle(color: Color(0xFF65676B), fontSize: 9),
-                                ),
-                              ],
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-
-                    // Room ID & Password Row
-                    Container(
-                      padding: const EdgeInsets.all(12),
-                      decoration: BoxDecoration(
-                        color: const Color(0xFFF0F2F5),
-                        borderRadius: BorderRadius.circular(12),
-                        border: Border.all(color: const Color(0xFFCED0D4)),
-                      ),
-                      child: Row(
-                        children: [
-                          // Room ID Code
-                          Expanded(
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                const Text(
-                                  'ROOM ID',
-                                  style: TextStyle(color: Color(0xFF65676B), fontSize: 10, fontWeight: FontWeight.bold),
-                                ),
-                                const SizedBox(height: 4),
-                                Text(
-                                  canAccess
-                                      ? (room.roomIdCode.isNotEmpty ? room.roomIdCode : '88453219')
-                                      : '••••••••',
-                                  style: const TextStyle(
-                                    color: Color(0xFF050505),
-                                    fontWeight: FontWeight.bold,
-                                    fontSize: 14,
-                                    letterSpacing: 1,
-                                  ),
-                                ),
-                              ],
-                            ),
-                          ),
-                          if (canAccess)
-                            IconButton(
-                              icon: const Icon(Icons.copy_rounded, color: Color(0xFF1877F2), size: 18),
-                              tooltip: 'Copy Room ID',
-                              onPressed: () => _copyToClipboard('Room ID', room.roomIdCode.isNotEmpty ? room.roomIdCode : '88453219'),
-                            )
-                          else
-                            const Icon(Icons.lock_rounded, color: Color(0xFF65676B), size: 18),
-                          Container(height: 32, width: 1, color: const Color(0xFFCED0D4), margin: const EdgeInsets.symmetric(horizontal: 8)),
-
-                          // Password
-                          Expanded(
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                const Text(
-                                  'PASSWORD',
-                                  style: TextStyle(color: Color(0xFF65676B), fontSize: 10, fontWeight: FontWeight.bold),
-                                ),
-                                const SizedBox(height: 4),
-                                Text(
-                                  canAccess
-                                      ? (isWithin10Mins || isHost || room.isCompleted
-                                          ? (room.password.isNotEmpty ? room.password : 'pubg123')
-                                          : '••••')
-                                      : '••••',
-                                  style: const TextStyle(
-                                    color: Color(0xFF050505),
-                                    fontWeight: FontWeight.bold,
-                                    fontSize: 14,
-                                    letterSpacing: 1,
-                                  ),
-                                ),
-                                if (canAccess && !isWithin10Mins && !isHost && !room.isCompleted)
-                                  const Text(
-                                    'Visible 10 mins before match',
-                                    style: TextStyle(color: Color(0xFF65676B), fontSize: 8),
-                                  ),
-                              ],
-                            ),
-                          ),
-                          if (canAccess && (isWithin10Mins || isHost || room.isCompleted))
-                            IconButton(
-                              icon: const Icon(Icons.copy_rounded, color: Color(0xFF1877F2), size: 18),
-                              tooltip: 'Copy Password',
-                              onPressed: () => _copyToClipboard('Password', room.password.isNotEmpty ? room.password : 'pubg123'),
-                            )
-                          else
-                            const Icon(Icons.lock_rounded, color: Color(0xFF65676B), size: 18),
-                        ],
-                      ),
-                    ),
-                const SizedBox(height: 10),
-
-                // Countdown Timer / Match Status Banner
-                Center(
-                  child: Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
-                    decoration: BoxDecoration(
-                      color: isCompleted
-                          ? Colors.amber.withOpacity(0.12)
-                          : const Color(0xFFE7F3FF),
-                      borderRadius: BorderRadius.circular(20),
-                      border: Border.all(
-                        color: isCompleted
-                            ? Colors.amber
-                            : const Color(0xFF1877F2).withOpacity(0.4),
-                      ),
-                    ),
-                    child: Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Icon(
-                          isCompleted
-                              ? Icons.emoji_events_rounded
-                              : (isMatchStarted
-                                  ? Icons.sports_esports_rounded
-                                  : Icons.timer_outlined),
-                          color: isCompleted
-                              ? Colors.amber.shade800
-                              : const Color(0xFF1877F2),
-                          size: 16,
-                        ),
-                        const SizedBox(width: 6),
-                        Text(
-                          isCompleted
-                              ? 'MATCH COMPLETED'
-                              : (isMatchStarted
-                                  ? 'MATCH IN PROGRESS ⚔️'
-                                  : (_remainingTime == Duration.zero || _remainingTime.isNegative
-                                      ? (isHost ? 'READY TO START (TAP START MATCH)' : 'WAITING FOR HOST TO START')
-                                      : _formatDuration(_remainingTime))),
-                          style: TextStyle(
-                            color: isCompleted
-                                ? Colors.amber.shade900
-                                : const Color(0xFF1877F2),
-                            fontWeight: FontWeight.bold,
-                            fontSize: 12,
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                ),
-                const SizedBox(height: 14),
-
-                // Room Chat Header
-                Row(
-                  children: [
-                    Container(
-                      width: 8,
-                      height: 8,
-                      decoration: const BoxDecoration(color: Color(0xFF1877F2), shape: BoxShape.circle),
-                    ),
-                    const SizedBox(width: 6),
-                    Text(
-                      'Room Chat ($onlineCount online)',
-                      style: const TextStyle(color: Color(0xFF050505), fontWeight: FontWeight.bold, fontSize: 13),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 8),
-
-                // Chat Messages Box (Height 250 with Stack Overlay if !canAccess)
-                Container(
-                  height: 250,
-                  decoration: BoxDecoration(
-                    color: const Color(0xFFF0F2F5),
-                    borderRadius: BorderRadius.circular(12),
-                    border: Border.all(color: const Color(0xFFCED0D4)),
-                  ),
-                  child: Stack(
-                    children: [
-                      // Stream of messages
-                      StreamBuilder<SupaSnap>(
-                        stream: SupaStore.instance
-                            .collection('rooms')
-                            .doc(widget.room.id)
-                            .collection('messages')
-                            .orderBy('timestamp', descending: false)
-                            .snapshots(),
+                      child: StreamBuilder<List<Map<String, dynamic>>>(
+                        stream: SupabaseService.client
+                            .from('messages')
+                            .stream(primaryKey: ['id'])
+                            .eq('room_id', room.id)
+                            .map((rows) => rows
+                                .map((r) => Map<String, dynamic>.from(r))
+                                .toList()),
                         builder: (context, snapshot) {
-                          if (snapshot.hasError) {
-                            return const Center(
-                              child: Text('Chat requires joining room', style: TextStyle(color: Color(0xFF65676B), fontSize: 12)),
-                            );
-                          }
-
-                          final docs = snapshot.data?.docs ?? [];
+                          final docs = snapshot.data ?? [];
                           if (docs.isEmpty) {
                             return const Center(
-                              child: Text(
-                                'No messages yet. Say hello to your squad!',
-                                style: TextStyle(color: Color(0xFF65676B), fontSize: 12),
-                              ),
+                              child: Text('No messages yet',
+                                  style: TextStyle(
+                                      color: Color(0xFF65676B),
+                                      fontSize: 12)),
                             );
                           }
-
                           return ListView.builder(
-                            controller: _scrollController,
-                            padding: const EdgeInsets.all(10),
                             itemCount: docs.length,
+                            padding: const EdgeInsets.all(10),
                             itemBuilder: (context, index) {
-                              final msg = docs[index].data() as Map<String, dynamic>;
-                              final senderId = msg['senderId'] ?? '';
-                              final senderName = msg['senderName'] ?? 'Player';
-                              final senderInitial = msg['senderInitial'] ?? (senderName.isNotEmpty ? senderName[0].toUpperCase() : 'P');
-                              final text = msg['message'] ?? '';
-                              final type = msg['type'] ?? 'text';
-                              final imageUrl = msg['imageUrl'] as String?;
-                              final msgIsHost = msg['isHost'] == true || senderId == widget.room.hostId;
-                              final isMe = senderId == widget.currentUserId;
-                              final isSystem = type == 'system' || senderId == 'system';
-                              final msgOcrStatus = (msg['ocrStatus'] ?? (imageUrl != null ? room.ocrStatus : 'none')).toString();
-                              final int msgOcrScore = (msg['ocrScore'] is num) ? (msg['ocrScore'] as num).toInt() : room.ocrScore;
-                              final msgOcrText = (msg['ocrText'] ?? (imageUrl != null ? room.ocrText : '')).toString();
-                              final String? detectedName = msg['detectedName']?.toString();
-                              final String? accountName = msg['accountName']?.toString();
-                              final String? aiCheckMsg = msg['aiCheckMsg']?.toString();
-                              final bool isVerified = msgOcrStatus == 'verified';
-                              final bool isMismatch = msgOcrStatus == 'mismatch';
-                              final bool isDoubt = msgOcrStatus == 'doubt';
-                              final bool isRejectedProof = isMismatch ||
-                                  msgOcrStatus == 'rejected' ||
-                                  isDoubt ||
-                                  (!isVerified && (msgOcrScore == 0 || room.isProofRejected));
-
-                              // SupaTime display
-                              String timeStr = 'now';
-                              if (msg['timestamp'] is SupaTime) {
-                                final dt = (msg['timestamp'] as SupaTime).toDate();
-                                timeStr = DateFormat('hh:mm a').format(dt);
-                              }
-
+                              final msg = docs[index];
+                              final senderId =
+                                  msg['sender_id']?.toString() ?? '';
+                              final text =
+                                  msg['message']?.toString() ?? '';
+                              final isSystem = senderId == 'system' ||
+                                  msg['type'] == 'system';
+                              final isMe =
+                                  senderId == widget.currentUserId;
                               if (isSystem) {
                                 return Padding(
-                                  padding: const EdgeInsets.symmetric(vertical: 4),
+                                  padding: const EdgeInsets.symmetric(
+                                      vertical: 4),
                                   child: Center(
                                     child: Container(
-                                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                                      padding:
+                                          const EdgeInsets.symmetric(
+                                              horizontal: 10, vertical: 4),
                                       decoration: BoxDecoration(
                                         color: const Color(0xFFE4E6EB),
-                                        borderRadius: BorderRadius.circular(12),
+                                        borderRadius:
+                                            BorderRadius.circular(12),
                                       ),
-                                      child: Text(
-                                        text,
-                                        style: const TextStyle(color: Color(0xFF1877F2), fontSize: 11, fontWeight: FontWeight.bold),
-                                      ),
+                                      child: Text(text,
+                                          style: const TextStyle(
+                                              color: Color(0xFF1877F2),
+                                              fontSize: 11,
+                                              fontWeight:
+                                                  FontWeight.bold)),
                                     ),
                                   ),
                                 );
                               }
-
-                              return Padding(
-                                padding: const EdgeInsets.only(bottom: 8),
-                                child: Column(
-                                  crossAxisAlignment: isMe ? CrossAxisAlignment.end : CrossAxisAlignment.start,
-                                  children: [
-                                    Row(
-                                      mainAxisAlignment: isMe ? MainAxisAlignment.end : MainAxisAlignment.start,
-                                      crossAxisAlignment: CrossAxisAlignment.start,
-                                      children: [
-                                        if (!isMe) ...[
-                                          Container(
-                                            width: 28,
-                                            height: 28,
-                                            alignment: Alignment.center,
-                                            decoration: BoxDecoration(
-                                              shape: BoxShape.circle,
-                                              color: msgIsHost ? Colors.amber.shade800 : const Color(0xFFCED0D4),
-                                              border: msgIsHost ? Border.all(color: Colors.amber, width: 1.5) : null,
-                                            ),
-                                            child: Text(
-                                              senderInitial,
-                                              style: TextStyle(
-                                                color: msgIsHost ? Colors.white : const Color(0xFF050505),
-                                                fontWeight: FontWeight.bold,
-                                                fontSize: 11,
-                                              ),
-                                            ),
-                                          ),
-                                          const SizedBox(width: 6),
-                                        ],
-                                        Flexible(
-                                          child: Container(
-                                            padding: const EdgeInsets.all(10),
-                                            decoration: BoxDecoration(
-                                              color: isMe
-                                                  ? const Color(0xFF1877F2)
-                                                  : const Color(0xFFE4E6EB),
-                                              borderRadius: BorderRadius.circular(12),
-                                              border: msgIsHost && !isMe
-                                                  ? Border.all(color: Colors.amber.shade400)
-                                                  : null,
-                                            ),
-                                            child: Column(
-                                              crossAxisAlignment: CrossAxisAlignment.start,
-                                              children: [
-                                                if (!isMe)
-                                                  Row(
-                                                    mainAxisSize: MainAxisSize.min,
-                                                    children: [
-                                                      Text(
-                                                        senderName,
-                                                        style: TextStyle(
-                                                          color: msgIsHost ? Colors.amber.shade900 : const Color(0xFF65676B),
-                                                          fontWeight: FontWeight.bold,
-                                                          fontSize: 11,
-                                                        ),
-                                                      ),
-                                                      if (msgIsHost) ...[
-                                                        const SizedBox(width: 4),
-                                                        const Icon(Icons.check_circle_rounded, color: Color(0xFF1877F2), size: 12),
-                                                      ],
-                                                    ],
-                                                  ),
-                                                if (type == 'win_proof' && imageUrl != null) ...[
-                                                  const SizedBox(height: 4),
-                                                  GestureDetector(
-                                                    onTap: () => _openFullscreenImage(imageUrl),
-                                                    child: ClipRRect(
-                                                      borderRadius: BorderRadius.circular(8),
-                                                      child: Container(
-                                                        height: 140,
-                                                        width: double.infinity,
-                                                        decoration: BoxDecoration(
-                                                          border: Border.all(
-                                                            color: isDoubt
-                                                                ? const Color(0xFFDC2626)
-                                                                : (isVerified ? const Color(0xFF1877F2) : const Color(0xFFCED0D4)),
-                                                            width: 1.5,
-                                                          ),
-                                                          borderRadius: BorderRadius.circular(8),
-                                                        ),
-                                                        child: Stack(
-                                                          alignment: Alignment.center,
-                                                          children: [
-                                                            Image.network(
-                                                              imageUrl,
-                                                              height: 140,
-                                                              width: double.infinity,
-                                                              fit: BoxFit.cover,
-                                                              errorBuilder: (_, __, ___) => const Icon(Icons.broken_image, color: Colors.white),
-                                                            ),
-                                                            Container(
-                                                              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                                                              color: Colors.black.withOpacity(0.65),
-                                                              child: const Row(
-                                                                mainAxisSize: MainAxisSize.min,
-                                                                children: [
-                                                                  Icon(Icons.visibility_rounded, color: _fbBlue, size: 14),
-                                                                  SizedBox(width: 4),
-                                                                  Text(
-                                                                    'Win Proof • Tap to view full',
-                                                                    style: TextStyle(color: Colors.white, fontSize: 10, fontWeight: FontWeight.bold),
-                                                                  ),
-                                                                ],
-                                                              ),
-                                                            ),
-                                                          ],
-                                                        ),
-                                                      ),
-                                                    ),
-                                                  ),
-
-                                                  // APP VETO & NAME MATCH SYSTEM STATUS BADGE (Red or Green Box)
-                                                  if (isMismatch)
-                                                    Container(
-                                                      margin: const EdgeInsets.only(top: 6),
-                                                      padding: const EdgeInsets.all(8),
-                                                      decoration: BoxDecoration(
-                                                        color: GamerTheme.redAccent.withOpacity(0.15),
-                                                        borderRadius: BorderRadius.circular(8),
-                                                        border: Border.all(color: GamerTheme.redAccent),
-                                                      ),
-                                                      child: Column(
-                                                        crossAxisAlignment: CrossAxisAlignment.start,
-                                                        children: [
-                                                          Row(
-                                                            crossAxisAlignment: CrossAxisAlignment.start,
-                                                            children: [
-                                                              const Icon(Icons.cancel_rounded, color: GamerTheme.redAccent, size: 16),
-                                                              const SizedBox(width: 6),
-                                                              Expanded(
-                                                                child: Text(
-                                                                  aiCheckMsg ??
-                                                                      '❌ App AI Check: REJECTED - Name Mismatch. Screenshot has \'${detectedName ?? 'Dtive'}\' but your ID is \'${accountName ?? senderName}\'',
-                                                                  style: const TextStyle(color: GamerTheme.redAccent, fontSize: 11, fontWeight: FontWeight.bold),
-                                                                ),
-                                                             ),
-                                                            ],
-                                                          ),
-                                                          const SizedBox(height: 4),
-                                                          const Text(
-                                                            'Reward BLOCKED by App (Score 0/4) • ID name and screenshot name must match',
-                                                            style: TextStyle(color: Colors.white70, fontSize: 10),
-                                                          ),
-                                                        ],
-                                                      ),
-                                                    )
-                                                  else if (isDoubt)
-                                                    Container(
-                                                      margin: const EdgeInsets.only(top: 6),
-                                                      padding: const EdgeInsets.all(8),
-                                                      decoration: BoxDecoration(
-                                                        color: GamerTheme.redAccent.withOpacity(0.15),
-                                                        borderRadius: BorderRadius.circular(8),
-                                                        border: Border.all(color: GamerTheme.redAccent),
-                                                      ),
-                                                      child: Column(
-                                                        crossAxisAlignment: CrossAxisAlignment.start,
-                                                        children: [
-                                                          const Row(
-                                                            children: [
-                                                              Icon(Icons.cancel_rounded, color: GamerTheme.redAccent, size: 16),
-                                                              SizedBox(width: 6),
-                                                              Expanded(
-                                                                child: Text(
-                                                                  '❌ App Doubt: Not a clear winner screenshot. Reward BLOCKED even if host approves.',
-                                                                  style: TextStyle(color: GamerTheme.redAccent, fontSize: 11, fontWeight: FontWeight.bold),
-                                                                ),
-                                                              ),
-                                                            ],
-                                                          ),
-                                                          if (msgOcrText.isNotEmpty) ...[
-                                                            const SizedBox(height: 4),
-                                                            Text(
-                                                              'OCR Read: "$msgOcrText"',
-                                                              style: const TextStyle(color: Colors.white70, fontSize: 10),
-                                                              maxLines: 2,
-                                                              overflow: TextOverflow.ellipsis,
-                                                            ),
-                                                          ],
-                                                        ],
-                                                      ),
-                                                    )
-                                                  else if (isVerified)
-                                                    Container(
-                                                      margin: const EdgeInsets.only(top: 6),
-                                                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
-                                                      decoration: BoxDecoration(
-                                                        color: _fbBlue.withOpacity(0.15),
-                                                        borderRadius: BorderRadius.circular(8),
-                                                        border: Border.all(color: _fbBlue),
-                                                      ),
-                                                      child: Row(
-                                                        children: [
-                                                          const Icon(Icons.check_circle_rounded, color: _fbBlue, size: 16),
-                                                          const SizedBox(width: 6),
-                                                          Expanded(
-                                                            child: Text(
-                                                              '✅ App Verified: Winner Detected (Score $msgOcrScore/4)',
-                                                              style: const TextStyle(color: _fbBlue, fontSize: 11, fontWeight: FontWeight.bold),
-                                                            ),
-                                                          ),
-                                                        ],
-                                                      ),
-                                                    ),
-                                                  // Action Buttons on Win Proof: ONLY the uploader can remove or re-upload their proof!
-                                                  if (type == 'win_proof' && !room.isCompleted && isMe) ...[
-                                                    const SizedBox(height: 8),
-                                                    Row(
-                                                      children: [
-                                                        Expanded(
-                                                          child: InkWell(
-                                                            onTap: () => _removeProof(
-                                                              msgDocId: docs[index].id,
-                                                              room: room,
-                                                              senderId: senderId,
-                                                            ),
-                                                            borderRadius: BorderRadius.circular(8),
-                                                            child: Container(
-                                                              padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 7),
-                                                              decoration: BoxDecoration(
-                                                                color: Colors.black.withOpacity(0.55),
-                                                                borderRadius: BorderRadius.circular(8),
-                                                                border: Border.all(color: GamerTheme.redAccent.withOpacity(0.9), width: 1.1),
-                                                              ),
-                                                              child: const Row(
-                                                                mainAxisAlignment: MainAxisAlignment.center,
-                                                                children: [
-                                                                  Icon(Icons.delete_outline_rounded, size: 13, color: GamerTheme.redAccent),
-                                                                  SizedBox(width: 4),
-                                                                  Text(
-                                                                    'Remove Proof',
-                                                                    style: TextStyle(
-                                                                      color: Colors.white,
-                                                                      fontSize: 11,
-                                                                      fontWeight: FontWeight.bold,
-                                                                    ),
-                                                                  ),
-                                                                ],
-                                                              ),
-                                                            ),
-                                                          ),
-                                                        ),
-                                                        const SizedBox(width: 6),
-                                                        Expanded(
-                                                          child: InkWell(
-                                                            onTap: () => _reuploadProof(
-                                                              msgDocId: docs[index].id,
-                                                              room: room,
-                                                              senderId: senderId,
-                                                            ),
-                                                            borderRadius: BorderRadius.circular(8),
-                                                            child: Container(
-                                                              padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 7),
-                                                              decoration: BoxDecoration(
-                                                                color: Colors.black.withOpacity(0.85),
-                                                                borderRadius: BorderRadius.circular(8),
-                                                                border: Border.all(color: _fbBlue, width: 1.2),
-                                                              ),
-                                                              child: const Row(
-                                                                mainAxisAlignment: MainAxisAlignment.center,
-                                                                children: [
-                                                                  Icon(Icons.camera_alt_rounded, size: 13, color: _fbBlue),
-                                                                  SizedBox(width: 4),
-                                                                  Text(
-                                                                    'Upload New Proof',
-                                                                    style: TextStyle(
-                                                                      color: _fbBlue,
-                                                                      fontSize: 11,
-                                                                      fontWeight: FontWeight.bold,
-                                                                    ),
-                                                                  ),
-                                                                ],
-                                                              ),
-                                                            ),
-                                                          ),
-                                                        ),
-                                                      ],
-                                                    ),
-                                                  ],
-                                                ] else if (type == 'dispute_proof' && imageUrl != null) ...[
-                                                  const SizedBox(height: 4),
-                                                  GestureDetector(
-                                                    onTap: () => _openFullscreenImage(imageUrl),
-                                                    child: ClipRRect(
-                                                      borderRadius: BorderRadius.circular(8),
-                                                      child: Container(
-                                                        height: 140,
-                                                        width: double.infinity,
-                                                        decoration: BoxDecoration(
-                                                          border: Border.all(
-                                                            color: GamerTheme.redAccent,
-                                                            width: 1.5,
-                                                          ),
-                                                          borderRadius: BorderRadius.circular(8),
-                                                        ),
-                                                        child: Stack(
-                                                          alignment: Alignment.center,
-                                                          children: [
-                                                            Image.network(
-                                                              imageUrl,
-                                                              height: 140,
-                                                              width: double.infinity,
-                                                              fit: BoxFit.cover,
-                                                              errorBuilder: (_, __, ___) => const Icon(Icons.broken_image, color: Colors.white),
-                                                            ),
-                                                            Container(
-                                                              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                                                              color: Colors.black.withOpacity(0.7),
-                                                              child: const Row(
-                                                                mainAxisSize: MainAxisSize.min,
-                                                                children: [
-                                                                  Icon(Icons.warning_amber_rounded, color: GamerTheme.redAccent, size: 14),
-                                                                  SizedBox(width: 4),
-                                                                  Text(
-                                                                    'Dispute Proof • Tap to view full',
-                                                                    style: TextStyle(color: Colors.white, fontSize: 10, fontWeight: FontWeight.bold),
-                                                                  ),
-                                                                ],
-                                                              ),
-                                                            ),
-                                                          ],
-                                                        ),
-                                                      ),
-                                                    ),
-                                                  ),
-                                                  Container(
-                                                    margin: const EdgeInsets.only(top: 6),
-                                                    padding: const EdgeInsets.all(8),
-                                                    decoration: BoxDecoration(
-                                                      color: GamerTheme.redAccent.withOpacity(0.15),
-                                                      borderRadius: BorderRadius.circular(8),
-                                                      border: Border.all(color: GamerTheme.redAccent),
-                                                    ),
-                                                    child: Row(
-                                                      children: [
-                                                        const Icon(Icons.gavel_rounded, color: GamerTheme.redAccent, size: 16),
-                                                        const SizedBox(width: 6),
-                                                        Expanded(
-                                                          child: Text(
-                                                            '⚠️ Dispute Proof Submitted by ',
-                                                            style: const TextStyle(color: GamerTheme.redAccent, fontSize: 11, fontWeight: FontWeight.bold),
-                                                          ),
-                                                        ),
-                                                      ],
-                                                    ),
-                                                  ),
-                                                  if (text.isNotEmpty) ...[
-                                                    const SizedBox(height: 4),
-                                                    Text(
-                                                      text,
-                                                      style: TextStyle(color: isMe ? Colors.black : Colors.white, fontSize: 11),
-                                                    ),
-                                                  ],
-                                                  // Action Button for Loser: ONLY the person who uploaded this dispute proof can remove it!
-                                                  if (isMe) ...[
-                                                    const SizedBox(height: 8),
-                                                    InkWell(
-                                                      onTap: () => _removeDisputeProof(
-                                                        msgDocId: docs[index].id,
-                                                        room: room,
-                                                        senderId: senderId,
-                                                      ),
-                                                      borderRadius: BorderRadius.circular(8),
-                                                      child: Container(
-                                                        padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 7),
-                                                        decoration: BoxDecoration(
-                                                          color: Colors.black.withOpacity(0.65),
-                                                          borderRadius: BorderRadius.circular(8),
-                                                          border: Border.all(color: GamerTheme.redAccent.withOpacity(0.9), width: 1.1),
-                                                        ),
-                                                        child: const Row(
-                                                          mainAxisAlignment: MainAxisAlignment.center,
-                                                          children: [
-                                                            Icon(Icons.delete_outline_rounded, size: 13, color: GamerTheme.redAccent),
-                                                            SizedBox(width: 4),
-                                                            Text(
-                                                              'Remove Dispute Proof',
-                                                              style: TextStyle(
-                                                                color: Colors.white,
-                                                                fontSize: 11,
-                                                                fontWeight: FontWeight.bold,
-                                                              ),
-                                                            ),
-                                                          ],
-                                                        ),
-                                                      ),
-                                                    ),
-                                                  ],
-                                                ] else ...[
-                                                  Text(
-                                                    text,
-                                                    style: TextStyle(
-                                                      color: isMe ? Colors.white : const Color(0xFF050505),
-                                                      fontSize: 12.5,
-                                                    ),
-                                                  ),
-                                                ],
-                                                const SizedBox(height: 2),
-                                                Align(
-                                                  alignment: Alignment.bottomRight,
-                                                  child: Text(
-                                                    timeStr,
-                                                    style: TextStyle(
-                                                      color: isMe ? Colors.white70 : const Color(0xFF65676B),
-                                                      fontSize: 9,
-                                                    ),
-                                                  ),
-                                                ),
-                                              ],
-                                            ),
-                                          ),
-                                        ),
-                                        if (isMe) ...[
-                                          const SizedBox(width: 6),
-                                          CircleAvatar(
-                                            radius: 14,
-                                            backgroundColor: const Color(0xFF1877F2),
-                                            child: Text(
-                                              senderInitial,
-                                              style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 11),
-                                            ),
-                                          ),
-                                        ],
-                                      ],
-                                    ),
-
-                                    // Win proof Auto-Approval & Dispute indicator (Host approval removed - prize from app)
-                                    if (type == 'win_proof' && imageUrl != null) ...[
-                                      const SizedBox(height: 6),
-                                      Row(
-                                        mainAxisAlignment: MainAxisAlignment.end,
-                                        children: [
-                                          if (room.isCompleted || rewardStatus == 'sent')
-                                            Container(
-                                              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
-                                              decoration: BoxDecoration(
-                                                color: Colors.teal.withOpacity(0.2),
-                                                borderRadius: BorderRadius.circular(8),
-                                                border: Border.all(color: Colors.tealAccent.withOpacity(0.6)),
-                                              ),
-                                              child: Row(
-                                                mainAxisSize: MainAxisSize.min,
-                                                children: [
-                                                  const Icon(Icons.check_circle_rounded, color: Colors.tealAccent, size: 14),
-                                                  const SizedBox(width: 4),
-                                                  Text(
-                                                    '✓ Reward Sent - ${room.prize} Coins from App',
-                                                    style: const TextStyle(color: Colors.tealAccent, fontSize: 11, fontWeight: FontWeight.bold),
-                                                  ),
-                                                ],
-                                              ),
-                                            )
-                                          else if (room.isDisputed)
-                                            Container(
-                                              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
-                                              decoration: BoxDecoration(
-                                                color: GamerTheme.redAccent.withOpacity(0.2),
-                                                borderRadius: BorderRadius.circular(8),
-                                                border: Border.all(color: GamerTheme.redAccent.withOpacity(0.8)),
-                                              ),
-                                              child: const Row(
-                                                mainAxisSize: MainAxisSize.min,
-                                                children: [
-                                                  Icon(Icons.warning_amber_rounded, color: GamerTheme.redAccent, size: 14),
-                                                  SizedBox(width: 4),
-                                                  Text(
-                                                    '⚠️ Disputed - Admin Review',
-                                                    style: TextStyle(color: GamerTheme.redAccent, fontSize: 11, fontWeight: FontWeight.bold),
-                                                  ),
-                                                ],
-                                              ),
-                                            )
-                                          else if (room.isRewardWaiting) ...[
-                                            Container(
-                                              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
-                                              decoration: BoxDecoration(
-                                                color: Colors.amber.withOpacity(0.2),
-                                                borderRadius: BorderRadius.circular(8),
-                                                border: Border.all(color: Colors.amberAccent.withOpacity(0.7)),
-                                              ),
-                                              child: Row(
-                                                mainAxisSize: MainAxisSize.min,
-                                                children: [
-                                                  const Icon(Icons.hourglass_top_rounded, color: Colors.amberAccent, size: 13),
-                                                  const SizedBox(width: 4),
-                                                  Text(
-                                                    _formatAutoApproveCountdown(room.autoApproveAt),
-                                                    style: const TextStyle(color: Colors.amberAccent, fontSize: 11, fontWeight: FontWeight.bold),
-                                                  ),
-                                                ],
-                                              ),
-                                            ),
-                                            if (canAccess && !room.isDisputed && widget.currentUserId != senderId && widget.currentUserId != room.winnerId) ...[
-                                              const SizedBox(width: 8),
-                                              ElevatedButton(
-                                                style: ElevatedButton.styleFrom(
-                                                  backgroundColor: GamerTheme.redAccent,
-                                                  foregroundColor: Colors.white,
-                                                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
-                                                  minimumSize: Size.zero,
-                                                  tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                                                ),
-                                                onPressed: () => _disputeResult(room),
-                                                child: const Row(
-                                                  mainAxisSize: MainAxisSize.min,
-                                                  children: [
-                                                    Icon(Icons.warning_amber_rounded, size: 12, color: Colors.white),
-                                                    SizedBox(width: 4),
-                                                    Text('⚠️ Dispute Result', style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold)),
-                                                  ],
-                                                ),
-                                              ),
-                                            ],
-                                          ],
-                                        ],
-                                      ),
-                                    ],
-                                  ],
+                              return Align(
+                                alignment: isMe
+                                    ? Alignment.centerRight
+                                    : Alignment.centerLeft,
+                                child: Container(
+                                  margin:
+                                      const EdgeInsets.only(bottom: 6),
+                                  padding: const EdgeInsets.symmetric(
+                                      horizontal: 10, vertical: 6),
+                                  decoration: BoxDecoration(
+                                    color: isMe
+                                        ? const Color(0xFF1877F2)
+                                        : const Color(0xFFE4E6EB),
+                                    borderRadius:
+                                        BorderRadius.circular(10),
+                                  ),
+                                  child: Text(text,
+                                      style: TextStyle(
+                                          color: isMe
+                                              ? Colors.white
+                                              : const Color(0xFF050505),
+                                          fontSize: 12)),
                                 ),
                               );
                             },
                           );
                         },
                       ),
-
-                      // Lock Overlay if not joined and not host
-                      if (!canAccess)
-                        Positioned.fill(
-                          child: Container(
-                            decoration: BoxDecoration(
-                              color: Colors.white.withOpacity(0.92),
-                              borderRadius: BorderRadius.circular(12),
-                            ),
-                            padding: const EdgeInsets.all(20),
-                            child: Column(
-                              mainAxisAlignment: MainAxisAlignment.center,
-                              children: [
-                                const Icon(Icons.lock_rounded, color: Color(0xFF65676B), size: 36),
-                                const SizedBox(height: 8),
-                                const Text(
-                                  'Join room to chat & view details',
-                                  style: TextStyle(color: Color(0xFF050505), fontSize: 13, fontWeight: FontWeight.bold),
-                                  textAlign: TextAlign.center,
-                                ),
-                                const SizedBox(height: 12),
-                                ElevatedButton(
-                                  style: ElevatedButton.styleFrom(
-                                    backgroundColor: const Color(0xFF1877F2),
-                                    foregroundColor: Colors.white,
-                                    padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 8),
-                                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-                                    elevation: 0,
-                                  ),
-                                  onPressed: widget.onJoinRoomRequested,
-                                  child: const Text(
-                                    'JOIN ROOM - FREE',
-                                    style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12),
-                                  ),
-                                ),
-                              ],
-                            ),
-                          ),
-                        ),
-                    ],
-                  ),
-                ),
-                const SizedBox(height: 8),
-
-                // Selected Image Preview (Above Input Bar)
-                if (_selectedProofImage != null)
-                  Container(
-                    margin: const EdgeInsets.only(bottom: 8),
-                    padding: const EdgeInsets.all(8),
-                    decoration: BoxDecoration(
-                      color: Colors.white,
-                      borderRadius: BorderRadius.circular(12),
-                      border: Border.all(color: const Color(0xFF1877F2)),
                     ),
-                    child: Row(
-                      children: [
-                        ClipRRect(
-                          borderRadius: BorderRadius.circular(8),
-                          child: Image.file(
-                            _selectedProofImage!,
-                            width: 60,
-                            height: 60,
-                            fit: BoxFit.cover,
-                          ),
-                        ),
-                        const SizedBox(width: 10),
-                        Expanded(
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              const Text('Match Win Proof Ready', style: TextStyle(color: Color(0xFF050505), fontSize: 12, fontWeight: FontWeight.bold)),
-                              const SizedBox(height: 2),
-                              Text('${(_selectedProofImage!.lengthSync() / 1024).toStringAsFixed(0)} KB', style: const TextStyle(color: Color(0xFF65676B), fontSize: 10)),
-                            ],
-                          ),
-                        ),
-                        IconButton(
-                          icon: const Icon(Icons.close_rounded, color: Color(0xFFDC2626), size: 20),
-                          onPressed: () => setState(() => _selectedProofImage = null),
-                        ),
-                        ElevatedButton(
-                          style: ElevatedButton.styleFrom(
-                            backgroundColor: const Color(0xFF1877F2),
-                            foregroundColor: Colors.white,
-                            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-                            minimumSize: Size.zero,
-                            tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                          ),
-                          onPressed: _isUploadingProof ? null : _sendMessage,
-                          child: _isUploadingProof
-                              ? const SizedBox(width: 14, height: 14, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
-                              : const Text('SEND AS WIN PROOF', style: TextStyle(fontSize: 10, fontWeight: FontWeight.bold)),
-                        ),
-                      ],
-                    ),
-                  ),
-
-                // Chat Input Row
-                Row(
-                  children: [
-                    // Attachment button
-                    IconButton(
-                      icon: const Icon(Icons.camera_alt_rounded, color: Color(0xFF1877F2), size: 22),
-                      onPressed: canAccess
-                          ? () {
-                              showModalBottomSheet(
-                                context: context,
-                                backgroundColor: Colors.white,
-                                shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(16))),
-                                builder: (sheetCtx) => SafeArea(
-                                  child: Column(
-                                    mainAxisSize: MainAxisSize.min,
-                                    children: [
-                                      ListTile(
-                                        leading: const Icon(Icons.camera_rounded, color: Color(0xFF1877F2)),
-                                        title: const Text('Take Photo', style: TextStyle(color: Color(0xFF050505), fontWeight: FontWeight.bold)),
-                                        onTap: () {
-                                          Navigator.pop(sheetCtx);
-                                          _pickImage(ImageSource.camera);
-                                        },
-                                      ),
-                                      ListTile(
-                                        leading: const Icon(Icons.photo_library_rounded, color: Color(0xFF1877F2)),
-                                        title: const Text('Choose from Gallery', style: TextStyle(color: Color(0xFF050505), fontWeight: FontWeight.bold)),
-                                        onTap: () {
-                                          Navigator.pop(sheetCtx);
-                                          _pickImage(ImageSource.gallery);
-                                        },
-                                      ),
-                                      ListTile(
-                                        leading: const Icon(Icons.emoji_events_rounded, color: Colors.amber),
-                                        title: const Text('Send Win Proof', style: TextStyle(color: Color(0xFF050505), fontWeight: FontWeight.bold)),
-                                        onTap: () {
-                                          Navigator.pop(sheetCtx);
-                                          _pickImage(ImageSource.gallery);
-                                        },
-                                      ),
-                                    ],
-                                  ),
-                                ),
-                              );
-                            }
-                          : null,
-                    ),
-                    Expanded(
-                      child: Container(
-                        decoration: BoxDecoration(
-                          color: const Color(0xFFF0F2F5),
-                          borderRadius: BorderRadius.circular(24),
-                          border: Border.all(color: const Color(0xFFCED0D4)),
-                        ),
-                        child: TextField(
-                          controller: _msgController,
-                          enabled: canAccess,
-                          maxLength: 200,
-                          style: const TextStyle(color: Color(0xFF050505), fontSize: 13),
-                          onSubmitted: (_) => _sendMessage(),
-                          decoration: InputDecoration(
-                            counterText: '',
-                            hintText: canAccess ? 'Type a message...' : 'Join room to chat...',
-                            hintStyle: const TextStyle(color: Color(0xFF8A8D91), fontSize: 12),
-                            prefixIcon: const Icon(Icons.sentiment_satisfied_alt_rounded, color: Color(0xFF65676B), size: 20),
-                            border: InputBorder.none,
-                            contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-                          ),
-                        ),
-                      ),
-                    ),
-                    const SizedBox(width: 8),
-                    InkWell(
-                      onTap: canAccess ? _sendMessage : null,
-                      borderRadius: BorderRadius.circular(22),
-                      child: Container(
-                        width: 40,
-                        height: 40,
-                        decoration: BoxDecoration(
-                          color: canAccess ? const Color(0xFF1877F2) : const Color(0xFFE4E6EB),
-                          shape: BoxShape.circle,
-                        ),
-                        child: Icon(
-                          Icons.send_rounded,
-                          color: canAccess ? Colors.white : const Color(0xFF8A8D91),
-                          size: 18,
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 16),
-
-                // Slot List Header
-                const Text(
-                  'SLOT ALLOCATION',
-                  style: TextStyle(color: Color(0xFF65676B), fontSize: 11, fontWeight: FontWeight.bold),
-                ),
-                const SizedBox(height: 8),
-
-                // Slot List: 0 to total-1
-                ListView.separated(
-                  shrinkWrap: true,
-                  physics: const NeverScrollableScrollPhysics(),
-                  itemCount: room.total > 0 ? room.total : 2,
-                  separatorBuilder: (_, __) => const SizedBox(height: 6),
-                  itemBuilder: (context, i) {
-                    final isOccupied = i < room.joinedUsers.length;
-                    String displayName = 'Empty';
-                    if (isOccupied) {
-                      final u = room.joinedUsers[i];
-                      displayName = canAccess ? (u['name'] ?? 'Player') : '•••••';
-                    }
-
-                    return Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                      decoration: BoxDecoration(
-                        color: Colors.white,
-                        borderRadius: BorderRadius.circular(8),
-                        border: Border.all(
-                          color: isOccupied ? const Color(0xFF1877F2) : const Color(0xFFCED0D4),
-                          width: isOccupied ? 1.2 : 1,
-                        ),
-                      ),
-                      child: Row(
+                    const SizedBox(height: 12),
+                    if (access)
+                      Row(
                         children: [
-                          Text(
-                            'Slot ${i + 1}',
-                            style: TextStyle(
-                              color: isOccupied ? const Color(0xFF1877F2) : const Color(0xFF65676B),
-                              fontWeight: FontWeight.bold,
-                              fontSize: 12,
-                            ),
-                          ),
-                          const SizedBox(width: 10),
                           Expanded(
-                            child: Text(
-                              displayName,
-                              style: TextStyle(
-                                color: isOccupied ? const Color(0xFF050505) : const Color(0xFF65676B),
-                                fontSize: 12,
-                                fontWeight: isOccupied ? FontWeight.w600 : FontWeight.normal,
+                            child: TextField(
+                              controller: _msgController,
+                              decoration: const InputDecoration(
+                                hintText: 'Type a message...',
+                                filled: true,
+                                fillColor: Colors.white,
+                                border: OutlineInputBorder(
+                                    borderSide: BorderSide.none),
                               ),
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
                             ),
                           ),
-                          if (isOccupied)
-                            const Icon(Icons.check_circle_rounded, color: Color(0xFF1877F2), size: 16)
-                          else
-                            const Icon(Icons.radio_button_unchecked_rounded, color: Color(0xFFCED0D4), size: 16),
-                        ],
-                      ),
-                    );
-                  },
-                ),
-                const SizedBox(height: 20),
-
-                // Bottom Buttons: LEAVE ROOM + VIEW DETAILS / START MATCH
-                Row(
-                  children: [
-                    if (isJoined && !isHost) ...[
-                      Expanded(
-                        child: OutlinedButton(
-                          style: OutlinedButton.styleFrom(
-                            foregroundColor: Colors.red,
-                            side: const BorderSide(color: Colors.red, width: 1.2),
-                            padding: const EdgeInsets.symmetric(vertical: 12),
-                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                          const SizedBox(width: 8),
+                          IconButton(
+                            onPressed: () async {
+                              final text = _msgController.text.trim();
+                              if (text.isEmpty) return;
+                              _msgController.clear();
+                              await SupabaseService.client
+                                  .from('messages')
+                                  .insert({
+                                'room_id': room.id,
+                                'sender_id': widget.currentUserId,
+                                'sender_name': widget.currentUserName,
+                                'message': text,
+                                'type': 'text',
+                                'created_at':
+                                    DateTime.now().toIso8601String(),
+                              });
+                            },
+                            icon: const Icon(Icons.send_rounded,
+                                color: Color(0xFF1877F2)),
                           ),
-                          onPressed: () {
-                            showDialog(
-                              context: context,
-                              builder: (dCtx) => AlertDialog(
-                                backgroundColor: Colors.white,
-                                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-                                title: const Text('Leave Room?', style: TextStyle(color: Color(0xFF050505), fontWeight: FontWeight.bold)),
-                                content: const Text('Are you sure you want to leave this room?', style: TextStyle(color: Color(0xFF65676B))),
-                                actions: [
-                                  TextButton(onPressed: () => Navigator.pop(dCtx), child: const Text('Cancel', style: TextStyle(color: Color(0xFF65676B)))),
-                                  ElevatedButton(
-                                    style: ElevatedButton.styleFrom(
-                                      backgroundColor: Colors.red,
-                                      foregroundColor: Colors.white,
-                                      elevation: 0,
-                                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-                                    ),
-                                    onPressed: () {
-                                      Navigator.pop(dCtx);
-                                      widget.onLeaveRoom();
-                                    },
-                                    child: const Text('Leave'),
-                                  ),
-                                ],
-                              ),
-                            );
-                          },
-                          child: const Text('LEAVE ROOM', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12)),
-                        ),
+                        ],
+                      )
+                    else
+                      ElevatedButton(
+                        onPressed: widget.onJoinRoomRequested,
+                        child: const Text('JOIN ROOM - FREE'),
                       ),
-                      const SizedBox(width: 12),
-                    ],
-                    Expanded(
-                      child: isCompleted
-                          ? ElevatedButton.icon(
-                              style: ElevatedButton.styleFrom(
-                                backgroundColor: Colors.teal.withOpacity(0.12),
-                                foregroundColor: Colors.teal,
-                                side: const BorderSide(color: Colors.teal, width: 1.2),
-                                padding: const EdgeInsets.symmetric(vertical: 12),
-                                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-                                elevation: 0,
-                              ),
-                              onPressed: () => _showMatchDetailsDialog(room),
-                              icon: const Icon(Icons.check_circle_outline_rounded, size: 16),
-                              label: Text(_getCompletedDeleteRemainingText(room), style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 12)),
-                            )
-                          : room.isProofRejected
-                              ? ElevatedButton.icon(
-                                  style: ElevatedButton.styleFrom(
-                                    backgroundColor: Colors.red.withOpacity(0.12),
-                                    foregroundColor: Colors.red,
-                                    side: const BorderSide(color: Colors.red, width: 1.2),
-                                    padding: const EdgeInsets.symmetric(vertical: 12),
-                                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-                                    elevation: 0,
-                                  ),
-                                  onPressed: () => _showMatchDetailsDialog(room),
-                                  icon: const Icon(Icons.cancel_rounded, size: 16, color: Colors.red),
-                                  label: const Text('PROOF REJECTED', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12, color: Colors.red)),
-                                )
-                          : room.isRewardWaiting
-                              ? ElevatedButton.icon(
-                                  style: ElevatedButton.styleFrom(
-                                    backgroundColor: Colors.amber.withOpacity(0.15),
-                                    foregroundColor: Colors.amber.shade900,
-                                    side: BorderSide(color: Colors.amber.shade700, width: 1.2),
-                                    padding: const EdgeInsets.symmetric(vertical: 12),
-                                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-                                    elevation: 0,
-                                  ),
-                                  onPressed: () => _showMatchDetailsDialog(room),
-                                  icon: Icon(Icons.hourglass_top_rounded, size: 16, color: Colors.amber.shade900),
-                                  label: Text('REWARD WAITING', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12, color: Colors.amber.shade900)),
-                                )
-                              : isHost
-                              ? (isMatchStarted
-                                  ? OutlinedButton.icon(
-                                      style: OutlinedButton.styleFrom(
-                                        foregroundColor: const Color(0xFF1877F2),
-                                        side: const BorderSide(color: Color(0xFF1877F2), width: 1.2),
-                                        backgroundColor: const Color(0xFFE7F3FF),
-                                        padding: const EdgeInsets.symmetric(vertical: 12),
-                                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-                                      ),
-                                      onPressed: () {
-                                        ScaffoldMessenger.of(context).showSnackBar(
-                                          const SnackBar(
-                                            content: Text('🎮 Match is IN PROGRESS! Players are in game. Awaiting victory screenshot in chat.'),
-                                            backgroundColor: Color(0xFF1877F2),
-                                            behavior: SnackBarBehavior.floating,
-                                            duration: Duration(seconds: 3),
-                                          ),
-                                        );
-                                      },
-                                      icon: const Icon(Icons.sports_esports_rounded, size: 16, color: Color(0xFF1877F2)),
-                                      label: const Text(
-                                        'MATCH IN PROGRESS',
-                                        style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12, color: Color(0xFF1877F2)),
-                                      ),
-                                    )
-                                  : ElevatedButton.icon(
-                                      style: ElevatedButton.styleFrom(
-                                        backgroundColor: _isStartingMatch ? const Color(0xFFE4E6EB) : const Color(0xFF1877F2),
-                                        foregroundColor: Colors.white,
-                                        elevation: 0,
-                                        padding: const EdgeInsets.symmetric(vertical: 12),
-                                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-                                      ),
-                                      onPressed: _isStartingMatch ? null : () => _startMatch(room),
-                                      icon: _isStartingMatch
-                                          ? const SizedBox(
-                                              width: 14,
-                                              height: 14,
-                                              child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
-                                            )
-                                          : const Icon(Icons.play_arrow_rounded, size: 18),
-                                      label: Text(
-                                        _isStartingMatch ? 'STARTING MATCH...' : 'START MATCH',
-                                        style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 12),
-                                      ),
-                                    ))
-                              : ElevatedButton.icon(
-                                  style: ElevatedButton.styleFrom(
-                                    backgroundColor: isMatchStarted ? const Color(0xFFE7F3FF) : const Color(0xFF1877F2),
-                                    foregroundColor: isMatchStarted ? const Color(0xFF1877F2) : Colors.white,
-                                    side: isMatchStarted ? const BorderSide(color: Color(0xFF1877F2), width: 1.2) : null,
-                                    elevation: 0,
-                                    padding: const EdgeInsets.symmetric(vertical: 12),
-                                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-                                  ),
-                                  onPressed: () => _showMatchDetailsDialog(room),
-                                  icon: Icon(isMatchStarted ? Icons.sports_esports_rounded : Icons.info_outline_rounded, size: 16),
-                                  label: Text(
-                                    isMatchStarted ? 'MATCH IN PROGRESS' : 'VIEW DETAILS',
-                                    style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 12),
-                                  ),
-                                ),
-                    ),
+                    const SizedBox(height: 12),
+                    if (isH)
+                      ElevatedButton.icon(
+                        icon: const Icon(Icons.play_arrow_rounded),
+                        label: Text(_isStartingMatch
+                            ? 'STARTING...'
+                            : 'START MATCH'),
+                        onPressed: _isStartingMatch
+                            ? null
+                            : () async {
+                                setState(() => _isStartingMatch = true);
+                                try {
+                                  await SupabaseService.client
+                                      .from('rooms')
+                                      .update({
+                                    'status': 'IN_PROGRESS',
+                                  }).eq('id', room.id);
+                                } catch (_) {}
+                                if (mounted) {
+                                  setState(
+                                      () => _isStartingMatch = false);
+                                }
+                              },
+                      ),
+                    if (isJ && !isH)
+                      OutlinedButton(
+                        onPressed: widget.onLeaveRoom,
+                        child: const Text('LEAVE ROOM'),
+                      ),
                   ],
                 ),
-              ],
+              ),
             ),
-          ),
+          ],
         ),
-      ],
+      ),
     );
-  },
-);
   }
 }
