@@ -590,8 +590,25 @@ class _TeamProfileScreenState extends State<TeamProfileScreen> {
                                       ?.toString() ??
                                   'Invalid proof screenshot';
 
+                              // ✅ FIX: Sirf usi team ko dikhao jisne proof submit kiya
+                              final submittedBy = (activeMatch[
+                                          'submitted_by_team_id'] ??
+                                      activeMatch['winner_team_id'] ??
+                                      '')
+                                  .toString()
+                                  .toLowerCase();
+                              final myIdLower = myTeamIdInMatch.toLowerCase();
+                              final myUuidLower = SupabaseService.toUuid(
+                                      myTeamIdInMatch)
+                                  .toLowerCase();
+                              final isSubmitter = submittedBy == myIdLower ||
+                                  submittedBy == myUuidLower;
+
                               if (matchStatus == 'under_review' &&
                                   proofStatus == 'accepted') {
+                                if (!isSubmitter)
+                                  return const SizedBox.shrink();
+
                                 if (!_autoCompletingMatchIds
                                     .contains(activeMatchId)) {
                                   _autoCompletingMatchIds.add(activeMatchId);
@@ -654,6 +671,9 @@ class _TeamProfileScreenState extends State<TeamProfileScreen> {
                               if (matchStatus == 'rejected' ||
                                   (matchStatus == 'under_review' &&
                                       proofStatus == 'rejected')) {
+                                if (!isSubmitter)
+                                  return const SizedBox.shrink();
+
                                 return Container(
                                   margin: const EdgeInsets.only(bottom: 14),
                                   padding: const EdgeInsets.all(14),
@@ -756,6 +776,9 @@ class _TeamProfileScreenState extends State<TeamProfileScreen> {
                               }
 
                               if (matchStatus == 'under_review') {
+                                if (!isSubmitter)
+                                  return const SizedBox.shrink();
+
                                 return Container(
                                   margin: const EdgeInsets.only(bottom: 14),
                                   padding: const EdgeInsets.all(14),
