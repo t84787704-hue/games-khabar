@@ -257,7 +257,6 @@ class _GamerAdminDashboardScreenState extends State<GamerAdminDashboardScreen>
     );
   }
 
-  // ─────────────── HEADER (100% Supabase) ───────────────
   Widget _buildHeader() {
     return StreamBuilder<List<Map<String, dynamic>>>(
       stream: SupabaseService.getRealtimeUsers(),
@@ -483,7 +482,6 @@ class _GamerAdminDashboardScreenState extends State<GamerAdminDashboardScreen>
     );
   }
 
-  // ─────────────── STATS CARDS (100% Supabase) ───────────────
   Widget _buildStatsCards() {
     return StreamBuilder<List<Map<String, dynamic>>>(
       stream: SupabaseService.getRealtimeUsers(),
@@ -596,7 +594,6 @@ class _GamerAdminDashboardScreenState extends State<GamerAdminDashboardScreen>
     );
   }
 
-  // ===================== TAB 1: USERS LIST (SUPABASE) =====================
   Widget _buildUsersTab() {
     return Column(
       children: [
@@ -1014,7 +1011,6 @@ class _GamerAdminDashboardScreenState extends State<GamerAdminDashboardScreen>
     }
   }
 
-  // ===================== TAB 2: RANK VERIFICATION TAB (SUPABASE) =====================
   Widget _buildRankVerifyTab() {
     return Column(
       children: [
@@ -1692,7 +1688,6 @@ class _GamerAdminDashboardScreenState extends State<GamerAdminDashboardScreen>
     }
   }
 
-  // ===================== TAB 3: BLUE TICK QUEUE (SUPABASE) =====================
   Widget _buildBlueTickRequestsTab() {
     return StreamBuilder<List<Map<String, dynamic>>>(
       stream: SupabaseService.getRealtimeUsers(),
@@ -1938,7 +1933,6 @@ class _GamerAdminDashboardScreenState extends State<GamerAdminDashboardScreen>
     }
   }
 
-  // ===================== TAB 4: POSTS MODERATION (SUPABASE) =====================
   Widget _buildPostsModerationTab() {
     return StreamBuilder<List<Map<String, dynamic>>>(
       stream: SupabaseService.getRealtimePosts(),
@@ -2168,7 +2162,6 @@ class _GamerAdminDashboardScreenState extends State<GamerAdminDashboardScreen>
     );
   }
 
-  // ===================== TAB 6: REPORTS (SUPABASE) =====================
   Widget _buildReportsTab() {
     return StreamBuilder<List<Map<String, dynamic>>>(
       stream: SupabaseService.getRealtimeReports(),
@@ -2429,7 +2422,6 @@ class _GamerAdminDashboardScreenState extends State<GamerAdminDashboardScreen>
     );
   }
 
-  // ===================== TAB 7: COINS (SUPABASE) =====================
   Widget _buildCoinsTab() {
     return const _AdminCoinsVaultTab();
   }
@@ -2629,7 +2621,6 @@ class _AdminCoinsVaultTabState extends State<_AdminCoinsVaultTab> {
         return;
       }
 
-      // Refresh user coins
       final freshUser = await _findUser(target);
 
       final successText = 'کامیابی! $targetDisplayName کو $amount سکے بھیج دیے گئے';
@@ -3409,50 +3400,58 @@ class _AdminPendingProofCardState extends State<_AdminPendingProofCard> {
     super.dispose();
   }
 
-  void _showImageDialog(BuildContext context, String imageUrl) {
+  // ============ FIX: Full-screen proof viewer ============
+  void _showProofViewer(BuildContext context, String imageUrl) {
     showDialog(
       context: context,
       builder: (ctx) => Dialog(
         backgroundColor: const Color(0xFF131A29),
+        insetPadding: const EdgeInsets.all(12),
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
         child: Column(
           mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
             Padding(
-              padding: const EdgeInsets.all(12),
+              padding: const EdgeInsets.fromLTRB(16, 12, 8, 12),
               child: Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
-                  const Text('Proof Screenshot 📸',
+                  const Expanded(
+                    child: Text(
+                      'Proof Screenshot 📸',
                       style: TextStyle(
                           color: Colors.white,
                           fontWeight: FontWeight.bold,
-                          fontSize: 14)),
+                          fontSize: 14),
+                    ),
+                  ),
                   IconButton(
-                    icon: const Icon(Icons.close, color: Colors.white54, size: 20),
+                    icon: const Icon(Icons.close, color: Colors.white70, size: 20),
                     onPressed: () => Navigator.pop(ctx),
                   ),
                 ],
               ),
             ),
-            InteractiveViewer(
+            Flexible(
               child: ClipRRect(
-                borderRadius:
-                    const BorderRadius.vertical(bottom: Radius.circular(16)),
-                child: CachedNetworkImage(
-                  imageUrl: imageUrl,
-                  fit: BoxFit.contain,
-                  placeholder: (c, u) => const SizedBox(
-                      height: 200,
-                      child: Center(
-                          child: CircularProgressIndicator(
-                              color: Color(0xFF00FF88)))),
-                  errorWidget: (c, u, e) => const SizedBox(
-                      height: 200,
-                      child: Center(
-                          child: Icon(Icons.broken_image,
-                              color: Colors.white30))),
+                borderRadius: const BorderRadius.only(
+                  bottomLeft: Radius.circular(16),
+                  bottomRight: Radius.circular(16),
+                ),
+                child: InteractiveViewer(
+                  maxScale: 4.0,
+                  child: CachedNetworkImage(
+                    imageUrl: imageUrl,
+                    fit: BoxFit.contain,
+                    placeholder: (_, __) => const Padding(
+                      padding: EdgeInsets.all(48),
+                      child: CircularProgressIndicator(color: Color(0xFF00FF88)),
+                    ),
+                    errorWidget: (_, __, ___) => const Padding(
+                      padding: EdgeInsets.all(48),
+                      child: Icon(Icons.broken_image_rounded,
+                          color: Colors.red, size: 48),
+                    ),
+                  ),
                 ),
               ),
             ),
@@ -3660,68 +3659,75 @@ class _AdminPendingProofCardState extends State<_AdminPendingProofCard> {
           ],
           const SizedBox(height: 10),
 
+          // ============ FIX: Chhoti thumbnail + tap to view full ============
           if (proofUrl != null && proofUrl.isNotEmpty) ...[
-            GestureDetector(
-              onTap: () => _showImageDialog(context, proofUrl),
-              child: Stack(
-                alignment: Alignment.bottomRight,
-                children: [
-                  ClipRRect(
-                    borderRadius: BorderRadius.circular(10),
+            Row(
+              children: [
+                GestureDetector(
+                  onTap: () => _showProofViewer(context, proofUrl),
+                  child: ClipRRect(
+                    borderRadius: BorderRadius.circular(8),
                     child: CachedNetworkImage(
                       imageUrl: proofUrl,
-                      height: 160,
-                      width: double.infinity,
+                      height: 56,
+                      width: 56,
                       fit: BoxFit.cover,
                       placeholder: (c, u) => Container(
-                        height: 160,
+                        height: 56,
+                        width: 56,
                         color: const Color(0xFF10141D),
                         child: const Center(
-                          child: CircularProgressIndicator(
-                              color: Color(0xFF00FF88)),
-                        ),
-                      ),
-                      errorWidget: (c, u, e) => Container(
-                        height: 100,
-                        color: const Color(0xFF10141D),
-                        child: const Center(
-                          child: Row(
-                            mainAxisAlignment: MainAxisAlignment.center,
-                            children: [
-                              Icon(Icons.broken_image, color: Colors.white30),
-                              SizedBox(width: 8),
-                              Text('Could not load image',
-                                  style: TextStyle(
-                                      color: Colors.white30, fontSize: 12)),
-                            ],
+                          child: SizedBox(
+                            width: 16,
+                            height: 16,
+                            child: CircularProgressIndicator(
+                                strokeWidth: 2, color: Color(0xFF00FF88)),
                           ),
                         ),
                       ),
+                      errorWidget: (c, u, e) => Container(
+                        height: 56,
+                        width: 56,
+                        color: const Color(0xFF10141D),
+                        child: const Icon(Icons.broken_image,
+                            color: Colors.white30, size: 20),
+                      ),
                     ),
                   ),
-                  Container(
-                    margin: const EdgeInsets.all(8),
-                    padding:
-                        const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                    decoration: BoxDecoration(
-                      color: Colors.black.withOpacity(0.75),
-                      borderRadius: BorderRadius.circular(6),
-                    ),
-                    child: const Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Icon(Icons.zoom_in, color: Colors.white, size: 14),
-                        SizedBox(width: 4),
-                        Text('Tap to View',
-                            style: TextStyle(
-                                color: Colors.white,
-                                fontSize: 10,
-                                fontWeight: FontWeight.bold)),
-                      ],
-                    ),
+                ),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      const Text(
+                        'Proof Screenshot Attached',
+                        style: TextStyle(
+                            color: Colors.white,
+                            fontSize: 12.5,
+                            fontWeight: FontWeight.bold),
+                      ),
+                      const SizedBox(height: 2),
+                      InkWell(
+                        onTap: () => _showProofViewer(context, proofUrl),
+                        child: const Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Icon(Icons.zoom_in_rounded,
+                                color: Color(0xFF38BDF8), size: 14),
+                            SizedBox(width: 4),
+                            Text('Tap to View Full',
+                                style: TextStyle(
+                                    color: Color(0xFF38BDF8),
+                                    fontSize: 11,
+                                    fontWeight: FontWeight.bold)),
+                          ],
+                        ),
+                      ),
+                    ],
                   ),
-                ],
-              ),
+                ),
+              ],
             ),
             const SizedBox(height: 10),
           ] else ...[
