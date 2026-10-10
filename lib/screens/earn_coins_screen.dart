@@ -56,9 +56,9 @@ class _EarnCoinsScreenState extends State<EarnCoinsScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: GamerTheme.backgroundDark,
+      backgroundColor: const Color(0xFF0B101B),
       appBar: AppBar(
-        backgroundColor: GamerTheme.backgroundDark,
+        backgroundColor: const Color(0xFF0B101B),
         elevation: 0,
         leading: IconButton(
           icon: const Icon(Icons.arrow_back_rounded, color: Colors.white),
@@ -322,7 +322,7 @@ class _EarnCoinsScreenState extends State<EarnCoinsScreen> {
           Container(
             padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
             decoration: BoxDecoration(
-              color: GamerTheme.backgroundDark,
+              color: const Color(0xFF0B101B),
               borderRadius: BorderRadius.circular(10),
               border: Border.all(
                   color: GamerTheme.neonGreen.withOpacity(0.4)),
