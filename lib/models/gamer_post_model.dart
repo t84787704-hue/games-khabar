@@ -99,14 +99,16 @@ class GamerPost {
     return GamerPost(
       postId: (data['id'] ?? data['post_id'] ?? data['postId'] ?? '').toString(),
       userId: (data['user_id'] ?? data['userId'] ?? '').toString(),
-      username: data['username'] ?? 'gamer',
-      userPhoto: data['user_avatar'] ?? data['userPhoto'] ?? '',
-      displayName: data['displayName'] ?? data['username'] ?? 'Gamer',
-      text: data['content'] ?? data['text'] ?? '',
+      username: (data['username'] ?? 'gamer').toString(),
+      // FIX: user_avatar ko priority, empty check ke saath
+      userPhoto: (data['user_avatar'] ?? data['userPhoto'] ?? data['avatar_url'] ?? '').toString(),
+      // FIX: display_name (snake_case) ko priority
+      displayName: (data['display_name'] ?? data['displayName'] ?? data['username'] ?? 'Gamer').toString(),
+      text: (data['content'] ?? data['text'] ?? '').toString(),
       imageUrl: (data['image_url'] ?? data['imageUrl'] ?? data['media_url']) as String?,
       videoUrl: (data['video_url'] ?? data['videoUrl'] ?? data['mediaUrl']) as String?,
-      gameTag: data['game'] ?? data['gameTag'] ?? data['game_tag'] ?? 'BGMI',
-      userRank: data['userRank'] ?? data['user_rank'] ?? 'Ace',
+      gameTag: (data['game'] ?? data['gameTag'] ?? data['game_tag'] ?? 'BGMI').toString(),
+      userRank: (data['userRank'] ?? data['user_rank'] ?? 'Ace').toString(),
       userKd: (data['userKd'] ?? data['user_kd'] as num?)?.toDouble() ?? 0.0,
       likesCount: (data['likes_count'] ?? data['likesCount'] as num?)?.toInt() ?? 0,
       commentsCount: (data['comments_count'] ?? data['commentsCount'] as num?)?.toInt() ?? 0,
@@ -117,6 +119,7 @@ class GamerPost {
   }
 
   factory GamerPost.fromFirestore(dynamic doc) => GamerPost.fromSupabase(doc);
+
   factory GamerPost.fromSupabase(dynamic doc) {
     Map<String, dynamic> data = {};
     String docId = '';
@@ -143,26 +146,28 @@ class GamerPost {
       }
     }
     return GamerPost(
-      postId: data['postId'] ?? data['id'] ?? docId,
-      userId: data['userId'] ?? data['user_id'] ?? '',
-      username: data['username'] ?? 'gamer',
-      userPhoto: data['userPhoto'] ?? data['user_avatar'] ?? '',
-      displayName: data['displayName'] ?? 'Gamer',
-      text: data['text'] ?? data['content'] ?? '',
+      postId: (data['postId'] ?? data['id'] ?? docId).toString(),
+      userId: (data['userId'] ?? data['user_id'] ?? '').toString(),
+      username: (data['username'] ?? 'gamer').toString(),
+      // FIX: user_avatar ko priority
+      userPhoto: (data['user_avatar'] ?? data['userPhoto'] ?? data['avatar_url'] ?? '').toString(),
+      // FIX: display_name (snake_case) ko priority
+      displayName: (data['display_name'] ?? data['displayName'] ?? data['username'] ?? 'Gamer').toString(),
+      text: (data['text'] ?? data['content'] ?? '').toString(),
       imageUrl: (data['imageUrl'] ?? data['image_url']) as String?,
       videoUrl: (data['videoUrl'] ?? data['video_url'] ?? data['mediaUrl']) as String?,
-      gameTag: data['gameTag'] ?? data['game'] ?? 'BGMI',
-      userRank: data['userRank'] ?? 'Ace',
-      userKd: (data['userKd'] as num?)?.toDouble() ?? 0.0,
+      gameTag: (data['gameTag'] ?? data['game'] ?? 'BGMI').toString(),
+      userRank: (data['user_rank'] ?? data['userRank'] ?? 'Ace').toString(),
+      userKd: (data['userKd'] ?? data['user_kd'] as num?)?.toDouble() ?? 0.0,
       likesCount: (data['likesCount'] ?? data['likes_count'] as num?)?.toInt() ?? 0,
       commentsCount: (data['commentsCount'] ?? data['comments_count'] as num?)?.toInt() ?? 0,
-      isVerified: data['isVerified'] == true,
-      isDemoAccount: data['isDemoAccount'] == true,
+      isVerified: data['isVerified'] == true || data['is_verified'] == true,
+      isDemoAccount: data['isDemoAccount'] == true || data['is_demo_account'] == true,
       createdAt: created,
     );
   }
 
-  // YE SUPABASE KE LIYE SAHI MAP HAI
+  // SUPABASE MAP
   Map<String, dynamic> toMap() {
     return {
       'user_id': userId,
