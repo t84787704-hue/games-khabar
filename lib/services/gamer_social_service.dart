@@ -378,10 +378,32 @@ class GamerSocialService {
           'User not authenticated. Please log in again to publish a post.');
     }
 
-    // Parameter `userId` ko ignore kar rahe hain — sirf auth ID use karo
     final effectiveUserId = authUserId;
-
     final postUuid = stringToUuid(effectiveUserId);
+
+    // ============ FIX: users table se FRESH display_name aur avatar lo ============
+    String freshUsername = username;
+    String freshDisplayName = displayName;
+    String freshAvatar = userPhoto;
+
+    try {
+      final userRow = await _supabase
+          .from('users')
+          .select('username, display_name, avatar_url')
+          .eq('id', effectiveUserId)
+          .maybeSingle();
+
+      if (userRow != null) {
+        final u = (userRow['username'] ?? '').toString();
+        final d = (userRow['display_name'] ?? '').toString();
+        final a = (userRow['avatar_url'] ?? '').toString();
+        if (u.isNotEmpty) freshUsername = u;
+        if (d.isNotEmpty) freshDisplayName = d;
+        if (a.isNotEmpty) freshAvatar = a;
+      }
+    } catch (e) {
+      debugPrint('[GamerSocialService] Note fetching fresh user data: $e');
+    }
 
     final postContent = text.isNotEmpty ? text : (content ?? '');
     final finalGame =
@@ -391,9 +413,9 @@ class GamerSocialService {
 
     await _ensureUserExists(
       userId: effectiveUserId,
-      username: username,
-      displayName: displayName,
-      userPhoto: userPhoto,
+      username: freshUsername,
+      displayName: freshDisplayName,
+      userPhoto: freshAvatar,
     );
 
     try {
@@ -401,6 +423,9 @@ class GamerSocialService {
           .from('posts')
           .insert({
             'user_id': postUuid,
+            'username': freshUsername,
+            'display_name': freshDisplayName,
+            'user_avatar': freshAvatar,
             'content': postContent,
             'image_url': finalMedia,
             'video_url': finalVideo,
