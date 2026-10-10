@@ -11,7 +11,6 @@ import "../models/team_model.dart";
 import "../services/team_service.dart";
 import "../widgets/end_match_dialog.dart";
 
-/// Private Match Room Screen (Private chat between 2 teams only)
 class PrivateMatchRoomScreen extends StatefulWidget {
   final String matchId;
   final String myTeamId;
@@ -47,10 +46,8 @@ class _PrivateMatchRoomScreenState extends State<PrivateMatchRoomScreen> {
   StreamSubscription? _streamSub;
   StreamSubscription? _roomInfoSub;
 
-  // ============ NAYA: Room Info state ============
   Map<String, dynamic>? _roomInfo;
   bool _isRoomInfoLoading = true;
-  // ===============================================
 
   @override
   void initState() {
@@ -61,7 +58,7 @@ class _PrivateMatchRoomScreenState extends State<PrivateMatchRoomScreen> {
     _markAsRead();
     _fetchMessages(initial: true);
     _subscribeToStream();
-    _subscribeToRoomInfo(); // ============ NAYA
+    _subscribeToRoomInfo();
 
     _scrollController.addListener(_onScroll);
 
@@ -70,10 +67,13 @@ class _PrivateMatchRoomScreenState extends State<PrivateMatchRoomScreen> {
     });
   }
 
-  // ============ NAYA: Room Info stream ============
+  // ============ FIXED: Room Info stream — infinite loop fix ============
   void _subscribeToRoomInfo() {
     final cleanId = widget.matchId.trim();
-    if (cleanId.isEmpty) return;
+    if (cleanId.isEmpty) {
+      if (mounted) setState(() => _isRoomInfoLoading = false);
+      return;
+    }
     try {
       _roomInfoSub = SupabaseService.client
           .from('match_room_info')
@@ -82,14 +82,38 @@ class _PrivateMatchRoomScreenState extends State<PrivateMatchRoomScreen> {
           .listen(
         (data) {
           if (!mounted) return;
+          final newRoomInfo = (data.isNotEmpty) ? data.first : null;
+
+          // Agar data same hai to setState mat karo — infinite loop se bacho
+          final oldId = _roomInfo?['id']?.toString() ?? '';
+          final newId = newRoomInfo?['id']?.toString() ?? '';
+          final oldUpdated = _roomInfo?['updated_at']?.toString() ?? '';
+          final newUpdated = newRoomInfo?['updated_at']?.toString() ?? '';
+
+          if (oldId == newId &&
+              oldUpdated == newUpdated &&
+              _roomInfo != null &&
+              newRoomInfo != null) {
+            return; // same data
+          }
+
+          if (_roomInfo == null && newRoomInfo == null) {
+            if (_isRoomInfoLoading) {
+              setState(() => _isRoomInfoLoading = false);
+            }
+            return;
+          }
+
           setState(() {
-            _roomInfo = (data.isNotEmpty) ? data.first : null;
+            _roomInfo = newRoomInfo;
             _isRoomInfoLoading = false;
           });
         },
         onError: (err) {
           debugPrint("[PrivateMatchRoom] room info stream error: $err");
-          if (mounted) setState(() => _isRoomInfoLoading = false);
+          if (mounted && _isRoomInfoLoading) {
+            setState(() => _isRoomInfoLoading = false);
+          }
         },
       );
     } catch (e) {
@@ -97,11 +121,11 @@ class _PrivateMatchRoomScreenState extends State<PrivateMatchRoomScreen> {
       if (mounted) setState(() => _isRoomInfoLoading = false);
     }
   }
-  // =================================================
 
   void _onScroll() {
     if (_scrollController.hasClients) {
-      final isNearBottom = _scrollController.position.maxScrollExtent - _scrollController.offset < 120;
+      final isNearBottom =
+          _scrollController.position.maxScrollExtent - _scrollController.offset < 120;
       if (isNearBottom && _showScrollDownButton) {
         setState(() {
           _showScrollDownButton = false;
@@ -118,7 +142,8 @@ class _PrivateMatchRoomScreenState extends State<PrivateMatchRoomScreen> {
     if (cleanId.isEmpty) return;
     try {
       final prefs = await SharedPreferences.getInstance();
-      await prefs.setString("last_read_match_$cleanId", DateTime.now().toUtc().toIso8601String());
+      await prefs.setString(
+          "last_read_match_$cleanId", DateTime.now().toUtc().toIso8601String());
     } catch (_) {}
   }
 
@@ -126,7 +151,7 @@ class _PrivateMatchRoomScreenState extends State<PrivateMatchRoomScreen> {
   void dispose() {
     _pollTimer?.cancel();
     _streamSub?.cancel();
-    _roomInfoSub?.cancel(); // ============ NAYA
+    _roomInfoSub?.cancel();
     _scrollController.removeListener(_onScroll);
     _messageController.dispose();
     _scrollController.dispose();
@@ -135,11 +160,13 @@ class _PrivateMatchRoomScreenState extends State<PrivateMatchRoomScreen> {
 
   Future<void> _resolveTeamNames() async {
     final teamService = TeamService();
-    if ((_myTeamName == 'My Team' || _myTeamName.isEmpty) && widget.myTeamId.isNotEmpty) {
+    if ((_myTeamName == 'My Team' || _myTeamName.isEmpty) &&
+        widget.myTeamId.isNotEmpty) {
       final t = await teamService.getTeam(widget.myTeamId);
       if (t != null && mounted) setState(() => _myTeamName = t.name);
     }
-    if ((_opponentName == 'Opponent' || _opponentName.isEmpty) && widget.opponentId.isNotEmpty) {
+    if ((_opponentName == 'Opponent' || _opponentName.isEmpty) &&
+        widget.opponentId.isNotEmpty) {
       final t = await teamService.getTeam(widget.opponentId);
       if (t != null && mounted) setState(() => _opponentName = t.name);
     }
@@ -172,7 +199,7 @@ class _PrivateMatchRoomScreenState extends State<PrivateMatchRoomScreen> {
           }
         },
         onError: (err) {
-          debugPrint("[PrivateMatchRoom] stream error (polling fallback active): $err");
+          debugPrint("[PrivateMatchRoom] stream error: $err");
         },
       );
     } catch (e) {
@@ -180,7 +207,8 @@ class _PrivateMatchRoomScreenState extends State<PrivateMatchRoomScreen> {
     }
   }
 
-  Future<void> _fetchMessages({bool silent = false, bool initial = false}) async {
+  Future<void> _fetchMessages(
+      {bool silent = false, bool initial = false}) async {
     final cleanId = widget.matchId.trim();
     if (cleanId.isEmpty) return;
 
@@ -204,7 +232,8 @@ class _PrivateMatchRoomScreenState extends State<PrivateMatchRoomScreen> {
     }
   }
 
-  void _mergeMessages(List<Map<String, dynamic>> incoming, {bool shouldScrollToBottom = false}) {
+  void _mergeMessages(List<Map<String, dynamic>> incoming,
+      {bool shouldScrollToBottom = false}) {
     final map = <String, Map<String, dynamic>>{};
 
     for (final m in _messages) {
@@ -217,27 +246,35 @@ class _PrivateMatchRoomScreenState extends State<PrivateMatchRoomScreen> {
     for (final m in incoming) {
       final id = m["id"]?.toString() ?? "";
       if (id.isNotEmpty) {
-        map.removeWhere((k, v) => k.startsWith("temp_") && (v["message"] == m["message"] || (v["_local_path"] != null && m["message_type"] == "image")));
+        map.removeWhere((k, v) =>
+            k.startsWith("temp_") &&
+            (v["message"] == m["message"] ||
+                (v["_local_path"] != null && m["message_type"] == "image")));
         map[id] = m;
       }
     }
 
     final combined = map.values.toList();
-    combined.sort((a, b) => (a["created_at"] ?? "").toString().compareTo((b["created_at"] ?? "").toString()));
+    combined.sort((a, b) => (a["created_at"] ?? "")
+        .toString()
+        .compareTo((b["created_at"] ?? "").toString()));
 
     final bool countChanged = combined.length != _messages.length;
     final bool contentChanged = !_areListsEqual(_messages, combined);
 
     if (countChanged || contentChanged) {
-      final myTeamUuid = SupabaseService.toUuid(widget.myTeamId).toLowerCase();
+      final myTeamUuid =
+          SupabaseService.toUuid(widget.myTeamId).toLowerCase();
       final myTeamRaw = widget.myTeamId.toLowerCase();
 
       if (combined.length > _messages.length && _messages.isNotEmpty) {
         final newLast = combined.last;
-        final sender = (newLast["sender_team_id"] ?? "").toString().toLowerCase();
+        final sender =
+            (newLast["sender_team_id"] ?? "").toString().toLowerCase();
         final isFromOpponent = sender != myTeamUuid && sender != myTeamRaw;
         if (isFromOpponent && _showScrollDownButton) {
-          _newMessagesCountWhileScrolled += (combined.length - _messages.length);
+          _newMessagesCountWhileScrolled +=
+              (combined.length - _messages.length);
         }
       }
 
@@ -256,10 +293,12 @@ class _PrivateMatchRoomScreenState extends State<PrivateMatchRoomScreen> {
     }
   }
 
-  bool _areListsEqual(List<Map<String, dynamic>> a, List<Map<String, dynamic>> b) {
+  bool _areListsEqual(
+      List<Map<String, dynamic>> a, List<Map<String, dynamic>> b) {
     if (a.length != b.length) return false;
     for (int i = 0; i < a.length; i++) {
-      if (a[i]["id"] != b[i]["id"] || a[i]["message"] != b[i]["message"]) return false;
+      if (a[i]["id"] != b[i]["id"] || a[i]["message"] != b[i]["message"])
+        return false;
     }
     return true;
   }
@@ -280,7 +319,8 @@ class _PrivateMatchRoomScreenState extends State<PrivateMatchRoomScreen> {
       "id": tempId,
       "match_id": cleanId,
       "sender_team_id": myUuid,
-      "sender_team_name": _myTeamName.isNotEmpty ? _myTeamName : widget.myTeamName,
+      "sender_team_name":
+          _myTeamName.isNotEmpty ? _myTeamName : widget.myTeamName,
       "message": msg,
       "message_type": isUidShare ? "uid_share" : "text",
       "created_at": DateTime.now().toUtc().toIso8601String(),
@@ -320,12 +360,16 @@ class _PrivateMatchRoomScreenState extends State<PrivateMatchRoomScreen> {
     } catch (e) {
       debugPrint("[PrivateMatchRoom] Error inserting message: $e");
       try {
-        final fallbackRes = await SupabaseService.client.from("match_messages").insert({
-          "match_id": cleanId,
-          "sender_team_id": myUuid,
-          "message": msg,
-          "created_at": DateTime.now().toUtc().toIso8601String(),
-        }).select().maybeSingle();
+        final fallbackRes = await SupabaseService.client
+            .from("match_messages")
+            .insert({
+              "match_id": cleanId,
+              "sender_team_id": myUuid,
+              "message": msg,
+              "created_at": DateTime.now().toUtc().toIso8601String(),
+            })
+            .select()
+            .maybeSingle();
 
         if (fallbackRes != null && mounted) {
           setState(() {
@@ -340,7 +384,9 @@ class _PrivateMatchRoomScreenState extends State<PrivateMatchRoomScreen> {
       } catch (err2) {
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(content: Text("Message bhejne me masla: $err2"), backgroundColor: const Color(0xFFFF4655)),
+            SnackBar(
+                content: Text("Message bhejne me masla: $err2"),
+                backgroundColor: const Color(0xFFFF4655)),
           );
         }
       }
@@ -366,7 +412,8 @@ class _PrivateMatchRoomScreenState extends State<PrivateMatchRoomScreen> {
         "id": tempId,
         "match_id": cleanId,
         "sender_team_id": myUuid,
-        "sender_team_name": _myTeamName.isNotEmpty ? _myTeamName : widget.myTeamName,
+        "sender_team_name":
+            _myTeamName.isNotEmpty ? _myTeamName : widget.myTeamName,
         "message": file.path,
         "message_type": "image",
         "created_at": DateTime.now().toUtc().toIso8601String(),
@@ -393,7 +440,9 @@ class _PrivateMatchRoomScreenState extends State<PrivateMatchRoomScreen> {
             _isUploadingImage = false;
           });
           ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text("Image upload fail ho gayi. Dobara try karen."), backgroundColor: Color(0xFFFF4655)),
+            const SnackBar(
+                content: Text("Image upload fail ho gayi. Dobara try karen."),
+                backgroundColor: Color(0xFFFF4655)),
           );
         }
         return;
@@ -417,11 +466,13 @@ class _PrivateMatchRoomScreenState extends State<PrivateMatchRoomScreen> {
         setState(() {
           final idx = _messages.indexWhere((m) => m["id"] == tempId);
           if (idx != -1) {
-            _messages[idx] = res != null ? Map<String, dynamic>.from(res) : {
-              ...optimistic,
-              "message": publicUrl,
-              "_is_pending": false,
-            };
+            _messages[idx] = res != null
+                ? Map<String, dynamic>.from(res)
+                : {
+                    ...optimistic,
+                    "message": publicUrl,
+                    "_is_pending": false,
+                  };
           }
           _isUploadingImage = false;
         });
@@ -433,7 +484,9 @@ class _PrivateMatchRoomScreenState extends State<PrivateMatchRoomScreen> {
       if (mounted) {
         setState(() => _isUploadingImage = false);
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text("Photo bhejne me masla: $e"), backgroundColor: const Color(0xFFFF4655)),
+          SnackBar(
+              content: Text("Photo bhejne me masla: $e"),
+              backgroundColor: const Color(0xFFFF4655)),
         );
       }
     }
@@ -443,7 +496,8 @@ class _PrivateMatchRoomScreenState extends State<PrivateMatchRoomScreen> {
     showModalBottomSheet(
       context: context,
       backgroundColor: const Color(0xFF131A29),
-      shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(16))),
+      shape: const RoundedRectangleBorder(
+          borderRadius: BorderRadius.vertical(top: Radius.circular(16))),
       builder: (ctx) => SafeArea(
         child: Padding(
           padding: const EdgeInsets.symmetric(vertical: 16),
@@ -454,9 +508,15 @@ class _PrivateMatchRoomScreenState extends State<PrivateMatchRoomScreen> {
                 width: 36,
                 height: 4,
                 margin: const EdgeInsets.only(bottom: 16),
-                decoration: BoxDecoration(color: const Color(0xFF2A3447), borderRadius: BorderRadius.circular(2)),
+                decoration: BoxDecoration(
+                    color: const Color(0xFF2A3447),
+                    borderRadius: BorderRadius.circular(2)),
               ),
-              const Text("Screenshot ya Photo Bhejo 📸", style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 16)),
+              const Text("Screenshot ya Photo Bhejo 📸",
+                  style: TextStyle(
+                      color: Colors.white,
+                      fontWeight: FontWeight.bold,
+                      fontSize: 16)),
               const SizedBox(height: 18),
               Row(
                 mainAxisAlignment: MainAxisAlignment.spaceEvenly,
@@ -489,7 +549,11 @@ class _PrivateMatchRoomScreenState extends State<PrivateMatchRoomScreen> {
     );
   }
 
-  Widget _buildPickerOption({required IconData icon, required Color color, required String label, required VoidCallback onTap}) {
+  Widget _buildPickerOption(
+      {required IconData icon,
+      required Color color,
+      required String label,
+      required VoidCallback onTap}) {
     return InkWell(
       onTap: onTap,
       borderRadius: BorderRadius.circular(14),
@@ -505,7 +569,11 @@ class _PrivateMatchRoomScreenState extends State<PrivateMatchRoomScreen> {
           children: [
             Icon(icon, color: color, size: 32),
             const SizedBox(height: 8),
-            Text(label, style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 13)),
+            Text(label,
+                style: const TextStyle(
+                    color: Colors.white,
+                    fontWeight: FontWeight.bold,
+                    fontSize: 13)),
           ],
         ),
       ),
@@ -522,7 +590,9 @@ class _PrivateMatchRoomScreenState extends State<PrivateMatchRoomScreen> {
       _fetchMessages(silent: true);
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text("Message delete ho gaya"), duration: Duration(seconds: 1)),
+          const SnackBar(
+              content: Text("Message delete ho gaya"),
+              duration: Duration(seconds: 1)),
         );
       }
     } catch (e) {
@@ -538,9 +608,14 @@ class _PrivateMatchRoomScreenState extends State<PrivateMatchRoomScreen> {
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
         title: const Row(
           children: [
-            Icon(Icons.delete_sweep_rounded, color: Color(0xFFFF4655), size: 22),
+            Icon(Icons.delete_sweep_rounded,
+                color: Color(0xFFFF4655), size: 22),
             SizedBox(width: 8),
-            Text("Clear Chat?", style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 16)),
+            Text("Clear Chat?",
+                style: TextStyle(
+                    color: Colors.white,
+                    fontWeight: FontWeight.bold,
+                    fontSize: 16)),
           ],
         ),
         content: const Text(
@@ -550,7 +625,8 @@ class _PrivateMatchRoomScreenState extends State<PrivateMatchRoomScreen> {
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(ctx),
-            child: const Text("Cancel", style: TextStyle(color: Color(0xFF8B949E))),
+            child: const Text("Cancel",
+                style: TextStyle(color: Color(0xFF8B949E))),
           ),
           ElevatedButton(
             onPressed: () async {
@@ -560,18 +636,28 @@ class _PrivateMatchRoomScreenState extends State<PrivateMatchRoomScreen> {
                 _messages.clear();
               });
               try {
-                await SupabaseService.client.from("match_messages").delete().eq("match_id", cleanId);
+                await SupabaseService.client
+                    .from("match_messages")
+                    .delete()
+                    .eq("match_id", cleanId);
                 if (mounted) {
                   ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(content: Text("Chat clear ho gayi!"), backgroundColor: Color(0xFF2E7D32)),
+                    const SnackBar(
+                        content: Text("Chat clear ho gayi!"),
+                        backgroundColor: Color(0xFF2E7D32)),
                   );
                 }
               } catch (e) {
                 debugPrint("[PrivateMatchRoom] Error clearing chat: $e");
               }
             },
-            style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFFFF4655), foregroundColor: Colors.white, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8))),
-            child: const Text("CLEAR CHAT", style: TextStyle(fontWeight: FontWeight.bold)),
+            style: ElevatedButton.styleFrom(
+                backgroundColor: const Color(0xFFFF4655),
+                foregroundColor: Colors.white,
+                shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(8))),
+            child: const Text("CLEAR CHAT",
+                style: TextStyle(fontWeight: FontWeight.bold)),
           ),
         ],
       ),
@@ -581,12 +667,14 @@ class _PrivateMatchRoomScreenState extends State<PrivateMatchRoomScreen> {
   void _showMessageOptions(Map<String, dynamic> msg, bool isMyTeam) {
     final msgText = msg["message"]?.toString() ?? "";
     final msgId = msg["id"]?.toString() ?? "";
-    final isImage = msg["message_type"] == "image" || msg["_local_path"] != null;
+    final isImage =
+        msg["message_type"] == "image" || msg["_local_path"] != null;
 
     showModalBottomSheet(
       context: context,
       backgroundColor: const Color(0xFF131A29),
-      shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(16))),
+      shape: const RoundedRectangleBorder(
+          borderRadius: BorderRadius.vertical(top: Radius.circular(16))),
       builder: (ctx) => SafeArea(
         child: Column(
           mainAxisSize: MainAxisSize.min,
@@ -595,22 +683,31 @@ class _PrivateMatchRoomScreenState extends State<PrivateMatchRoomScreen> {
               width: 36,
               height: 4,
               margin: const EdgeInsets.only(top: 8, bottom: 8),
-              decoration: BoxDecoration(color: const Color(0xFF2A3447), borderRadius: BorderRadius.circular(2)),
+              decoration: BoxDecoration(
+                  color: const Color(0xFF2A3447),
+                  borderRadius: BorderRadius.circular(2)),
             ),
             if (!isImage)
               ListTile(
                 leading: const Icon(Icons.copy_rounded, color: Colors.white70),
-                title: const Text("Copy Text", style: TextStyle(color: Colors.white)),
+                title: const Text("Copy Text",
+                    style: TextStyle(color: Colors.white)),
                 onTap: () {
                   Navigator.pop(ctx);
                   Clipboard.setData(ClipboardData(text: msgText));
-                  ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Copied!"), duration: Duration(seconds: 1)));
+                  ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+                      content: Text("Copied!"),
+                      duration: Duration(seconds: 1)));
                 },
               ),
             if (isMyTeam) ...[
               ListTile(
-                leading: const Icon(Icons.delete_outline_rounded, color: Color(0xFFFF4655)),
-                title: const Text("Delete Message 🗑️", style: TextStyle(color: Color(0xFFFF4655), fontWeight: FontWeight.bold)),
+                leading: const Icon(Icons.delete_outline_rounded,
+                    color: Color(0xFFFF4655)),
+                title: const Text("Delete Message 🗑️",
+                    style: TextStyle(
+                        color: Color(0xFFFF4655),
+                        fontWeight: FontWeight.bold)),
                 onTap: () {
                   Navigator.pop(ctx);
                   _deleteMessage(msgId);
@@ -623,7 +720,8 @@ class _PrivateMatchRoomScreenState extends State<PrivateMatchRoomScreen> {
     );
   }
 
-  void _showFullScreenImageDialog(BuildContext context, String imageUrl, {String? localPath}) {
+  void _showFullScreenImageDialog(BuildContext context, String imageUrl,
+      {String? localPath}) {
     showDialog(
       context: context,
       builder: (ctx) => Dialog(
@@ -641,8 +739,13 @@ class _PrivateMatchRoomScreenState extends State<PrivateMatchRoomScreen> {
                     : CachedNetworkImage(
                         imageUrl: imageUrl,
                         fit: BoxFit.contain,
-                        placeholder: (_, __) => const Center(child: CircularProgressIndicator(color: Color(0xFF1877F2))),
-                        errorWidget: (_, __, ___) => const Icon(Icons.broken_image_rounded, color: Colors.white54, size: 60),
+                        placeholder: (_, __) => const Center(
+                            child: CircularProgressIndicator(
+                                color: Color(0xFF1877F2))),
+                        errorWidget: (_, __, ___) => const Icon(
+                            Icons.broken_image_rounded,
+                            color: Colors.white54,
+                            size: 60),
                       ),
               ),
             ),
@@ -652,7 +755,8 @@ class _PrivateMatchRoomScreenState extends State<PrivateMatchRoomScreen> {
               child: CircleAvatar(
                 backgroundColor: Colors.black54,
                 child: IconButton(
-                  icon: const Icon(Icons.close_rounded, color: Colors.white, size: 22),
+                  icon: const Icon(Icons.close_rounded,
+                      color: Colors.white, size: 22),
                   onPressed: () => Navigator.pop(ctx),
                 ),
               ),
@@ -683,11 +787,13 @@ class _PrivateMatchRoomScreenState extends State<PrivateMatchRoomScreen> {
     }
   }
 
-  // ============ NAYA: Room Info Sheet (structured) ============
+  // ============ Room Info — Share Dialog ============
   void _showRoomInfoDialog() {
     final isFirstTime = _roomInfo == null;
-    final uidController = TextEditingController(text: isFirstTime ? '' : (_roomInfo!['room_id'] ?? '').toString());
-    final passController = TextEditingController(text: isFirstTime ? '' : (_roomInfo!['room_password'] ?? '').toString());
+    final uidController = TextEditingController(
+        text: isFirstTime ? '' : (_roomInfo!['room_id'] ?? '').toString());
+    final passController = TextEditingController(
+        text: isFirstTime ? '' : (_roomInfo!['room_password'] ?? '').toString());
 
     showDialog(
       context: context,
@@ -696,10 +802,15 @@ class _PrivateMatchRoomScreenState extends State<PrivateMatchRoomScreen> {
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
         title: Row(
           children: [
-            const Icon(Icons.vpn_key_rounded, color: Color(0xFFFFD600), size: 22),
+            const Icon(Icons.vpn_key_rounded,
+                color: Color(0xFFFFD600), size: 22),
             const SizedBox(width: 8),
             Expanded(
-              child: Text(isFirstTime ? "Share Room Info" : "Update Room Info", style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 16)),
+              child: Text(isFirstTime ? "Share Room Info" : "Update Room Info",
+                  style: const TextStyle(
+                      color: Colors.white,
+                      fontWeight: FontWeight.bold,
+                      fontSize: 16)),
             ),
           ],
         ),
@@ -707,19 +818,24 @@ class _PrivateMatchRoomScreenState extends State<PrivateMatchRoomScreen> {
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            const Text("Game Room ID aur Password darj karen:", style: TextStyle(color: Color(0xFF8B949E), fontSize: 12)),
+            const Text("Game Room ID aur Password darj karen:",
+                style: TextStyle(color: Color(0xFF8B949E), fontSize: 12)),
             const SizedBox(height: 12),
             TextField(
               controller: uidController,
               style: const TextStyle(color: Colors.white, fontSize: 14),
               decoration: InputDecoration(
                 labelText: "Room ID / UID",
-                labelStyle: const TextStyle(color: Color(0xFFFFD600), fontSize: 12),
+                labelStyle:
+                    const TextStyle(color: Color(0xFFFFD600), fontSize: 12),
                 hintText: "e.g. 5839201",
-                hintStyle: const TextStyle(color: Colors.white30, fontSize: 12),
+                hintStyle:
+                    const TextStyle(color: Colors.white30, fontSize: 12),
                 filled: true,
                 fillColor: const Color(0xFF0B0E16),
-                border: OutlineInputBorder(borderRadius: BorderRadius.circular(8), borderSide: BorderSide.none),
+                border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(8),
+                    borderSide: BorderSide.none),
               ),
             ),
             const SizedBox(height: 10),
@@ -728,31 +844,46 @@ class _PrivateMatchRoomScreenState extends State<PrivateMatchRoomScreen> {
               style: const TextStyle(color: Colors.white, fontSize: 14),
               decoration: InputDecoration(
                 labelText: "Password",
-                labelStyle: const TextStyle(color: Color(0xFFFFD600), fontSize: 12),
+                labelStyle:
+                    const TextStyle(color: Color(0xFFFFD600), fontSize: 12),
                 hintText: "e.g. 1234",
-                hintStyle: const TextStyle(color: Colors.white30, fontSize: 12),
+                hintStyle:
+                    const TextStyle(color: Colors.white30, fontSize: 12),
                 filled: true,
                 fillColor: const Color(0xFF0B0E16),
-                border: OutlineInputBorder(borderRadius: BorderRadius.circular(8), borderSide: BorderSide.none),
+                border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(8),
+                    borderSide: BorderSide.none),
               ),
             ),
           ],
         ),
         actions: [
-          TextButton(onPressed: () => Navigator.pop(ctx), child: const Text("Cancel", style: TextStyle(color: Color(0xFF8B949E)))),
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text("Cancel",
+                style: TextStyle(color: Color(0xFF8B949E))),
+          ),
           ElevatedButton(
             onPressed: () async {
               final uid = uidController.text.trim();
               final pass = passController.text.trim();
               if (uid.isEmpty) {
-                ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Room ID zaroori hai"), backgroundColor: Color(0xFFFF4655)));
+                ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+                    content: Text("Room ID zaroori hai"),
+                    backgroundColor: Color(0xFFFF4655)));
                 return;
               }
               Navigator.pop(ctx);
               await _saveRoomInfo(uid, pass);
             },
-            style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFFFFD600), foregroundColor: Colors.black, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8))),
-            child: Text(isFirstTime ? "SHARE KARO" : "UPDATE KARO", style: const TextStyle(fontWeight: FontWeight.bold)),
+            style: ElevatedButton.styleFrom(
+                backgroundColor: const Color(0xFFFFD600),
+                foregroundColor: Colors.black,
+                shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(8))),
+            child: Text(isFirstTime ? "SHARE KARO" : "UPDATE KARO",
+                style: const TextStyle(fontWeight: FontWeight.bold)),
           ),
         ],
       ),
@@ -767,9 +898,9 @@ class _PrivateMatchRoomScreenState extends State<PrivateMatchRoomScreen> {
 
       if (myUid == null || myUid.isEmpty) {
         if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text("Login required"), backgroundColor: Color(0xFFFF4655)),
-          );
+          ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+              content: Text("Login required"),
+              backgroundColor: Color(0xFFFF4655)));
         }
         return;
       }
@@ -784,21 +915,24 @@ class _PrivateMatchRoomScreenState extends State<PrivateMatchRoomScreen> {
         'updated_at': DateTime.now().toUtc().toIso8601String(),
       };
 
-      // Upsert (INSERT ya UPDATE automatically)
       await SupabaseService.client
           .from('match_room_info')
           .upsert(payload, onConflict: 'match_id,team_id');
 
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text("✅ Room info save ho gayi!"), backgroundColor: Color(0xFF2E7D32)),
+          const SnackBar(
+              content: Text("✅ Room info save ho gayi!"),
+              backgroundColor: Color(0xFF2E7D32)),
         );
       }
     } catch (e) {
       debugPrint("[PrivateMatchRoom] Save room info error: $e");
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text("Room info save nahi hui: $e"), backgroundColor: const Color(0xFFFF4655)),
+          SnackBar(
+              content: Text("Room info save nahi hui: $e"),
+              backgroundColor: const Color(0xFFFF4655)),
         );
       }
     }
@@ -808,592 +942,13 @@ class _PrivateMatchRoomScreenState extends State<PrivateMatchRoomScreen> {
     if (_roomInfo == null) return;
     final uid = _roomInfo!['room_id']?.toString() ?? '';
     final pass = _roomInfo!['room_password']?.toString() ?? '';
-    final text = pass.isNotEmpty ? 'Room ID: $uid | Password: $pass' : 'Room ID: $uid';
+    final text =
+        pass.isNotEmpty ? 'Room ID: $uid | Password: $pass' : 'Room ID: $uid';
     Clipboard.setData(ClipboardData(text: text));
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text("Room info copied!"), duration: Duration(seconds: 1), backgroundColor: Color(0xFF1877F2)),
-    );
-  }
-  // =============================================================
-
-  @override
-  Widget build(BuildContext context) {
-    final title = "$_myTeamName VS $_opponentName - Private Room";
-    final myTeamUuid = SupabaseService.toUuid(widget.myTeamId).toLowerCase();
-    final myTeamRaw = widget.myTeamId.toLowerCase();
-    final oppUuid = SupabaseService.toUuid(widget.opponentId).toLowerCase();
-    final oppRaw = widget.opponentId.toLowerCase();
-
-    final myUid = SupabaseService.client.auth.currentUser?.id;
-    final myTeamUuidForRoom = SupabaseService.toUuid(widget.myTeamId);
-    final isMyTeamShared = _roomInfo != null && (_roomInfo!['team_id']?.toString() == myTeamUuidForRoom);
-
-    return Scaffold(
-      backgroundColor: const Color(0xFF0B0E16),
-      appBar: AppBar(
-        backgroundColor: const Color(0xFF131A29),
-        elevation: 0,
-        leading: IconButton(
-          icon: const Icon(Icons.arrow_back_ios_new_rounded, color: Colors.white, size: 20),
-          onPressed: () => Navigator.pop(context),
-        ),
-        title: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(title, style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 15), maxLines: 1, overflow: TextOverflow.ellipsis),
-            const Text("Private Room • UID / Password Share", style: TextStyle(color: Color(0xFFFFD600), fontWeight: FontWeight.w600, fontSize: 11)),
-          ],
-        ),
-        actions: [
-          IconButton(
-            icon: const Icon(Icons.refresh_rounded, color: Colors.white70, size: 20),
-            tooltip: "Refresh messages",
-            onPressed: () => _fetchMessages(silent: false),
-          ),
-          PopupMenuButton<String>(
-            icon: const Icon(Icons.more_vert_rounded, color: Colors.white70, size: 20),
-            color: const Color(0xFF131A29),
-            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-            onSelected: (val) {
-              if (val == "clear") {
-                _confirmClearChat();
-              } else if (val == "refresh") {
-                _fetchMessages(silent: false);
-              }
-            },
-            itemBuilder: (ctx) => [
-              const PopupMenuItem(
-                value: "refresh",
-                child: Row(
-                  children: [
-                    Icon(Icons.refresh_rounded, color: Colors.white70, size: 18),
-                    SizedBox(width: 8),
-                    Text("Refresh Chat", style: TextStyle(color: Colors.white, fontSize: 13)),
-                  ],
-                ),
-              ),
-              const PopupMenuItem(
-                value: "clear",
-                child: Row(
-                  children: [
-                    Icon(Icons.delete_sweep_rounded, color: Color(0xFFFF4655), size: 18),
-                    SizedBox(width: 8),
-                    Text("Clear Chat 🧹", style: TextStyle(color: Color(0xFFFF4655), fontWeight: FontWeight.bold, fontSize: 13)),
-                  ],
-                ),
-              ),
-            ],
-          ),
-        ],
-      ),
-      body: Stack(
-        children: [
-          Column(
-            children: [
-              // ============ NAYA: Room Info Card ============
-              if (!_isRoomInfoLoading)
-                Container(
-                  margin: const EdgeInsets.fromLTRB(12, 10, 12, 6),
-                  padding: const EdgeInsets.all(12),
-                  decoration: BoxDecoration(
-                    color: const Color(0xFF1A1500),
-                    borderRadius: BorderRadius.circular(12),
-                    border: Border.all(color: const Color(0xFFFFD600), width: 1.5),
-                    boxShadow: [
-                      BoxShadow(
-                        color: const Color(0xFFFFD600).withOpacity(0.1),
-                        blurRadius: 8,
-                        offset: const Offset(0, 2),
-                      ),
-                    ],
-                  ),
-                  child: _roomInfo == null
-                      ? Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            const Row(
-                              children: [
-                                Icon(Icons.vpn_key_rounded, color: Color(0xFFFFD600), size: 18),
-                                SizedBox(width: 8),
-                                Expanded(
-                                  child: Text(
-                                    "🏠 ROOM INFO — Abhi tak share nahi hui",
-                                    style: TextStyle(color: Color(0xFFFFD600), fontWeight: FontWeight.bold, fontSize: 12.5),
-                                  ),
-                                ),
-                              ],
-                            ),
-                            const SizedBox(height: 8),
-                            const Text(
-                              "Game shuru karne ke liye Room ID aur Password share karen.",
-                              style: TextStyle(color: Color(0xFF8B949E), fontSize: 11.5),
-                            ),
-                            const SizedBox(height: 10),
-                            SizedBox(
-                              width: double.infinity,
-                              child: ElevatedButton.icon(
-                                onPressed: _showRoomInfoDialog,
-                                style: ElevatedButton.styleFrom(
-                                  backgroundColor: const Color(0xFFFFD600),
-                                  foregroundColor: Colors.black,
-                                  padding: const EdgeInsets.symmetric(vertical: 10),
-                                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-                                  elevation: 0,
-                                ),
-                                icon: const Icon(Icons.add_rounded, size: 18),
-                                label: const Text("Room Info Share Karo", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
-                              ),
-                            ),
-                          ],
-                        )
-                      : Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Row(
-                              children: [
-                                const Icon(Icons.vpn_key_rounded, color: Color(0xFFFFD600), size: 18),
-                                const SizedBox(width: 8),
-                                const Expanded(
-                                  child: Text(
-                                    "🏠 ROOM INFO",
-                                    style: TextStyle(color: Color(0xFFFFD600), fontWeight: FontWeight.bold, fontSize: 12.5, letterSpacing: 0.5),
-                                  ),
-                                ),
-                                IconButton(
-                                  icon: const Icon(Icons.copy_rounded, color: Color(0xFFFFD600), size: 18),
-                                  tooltip: "Copy",
-                                  onPressed: _copyRoomInfo,
-                                  padding: EdgeInsets.zero,
-                                  constraints: const BoxConstraints(minWidth: 30, minHeight: 30),
-                                ),
-                                if (isMyTeamShared)
-                                  IconButton(
-                                    icon: const Icon(Icons.edit_rounded, color: Color(0xFFFFD600), size: 18),
-                                    tooltip: "Edit",
-                                    onPressed: _showRoomInfoDialog,
-                                    padding: EdgeInsets.zero,
-                                    constraints: const BoxConstraints(minWidth: 30, minHeight: 30),
-                                  ),
-                              ],
-                            ),
-                            const SizedBox(height: 8),
-                            _buildRoomInfoRow(label: "Room ID", value: (_roomInfo!['room_id'] ?? '').toString()),
-                            const SizedBox(height: 6),
-                            _buildRoomInfoRow(label: "Password", value: (_roomInfo!['room_password'] ?? '').toString()),
-                            const SizedBox(height: 8),
-                            Row(
-                              children: [
-                                const Icon(Icons.access_time_rounded, color: Color(0xFF8B949E), size: 12),
-                                const SizedBox(width: 4),
-                                Text(
-                                  "Shared ${_timeAgo(_roomInfo!['updated_at']?.toString())}",
-                                  style: const TextStyle(color: Color(0xFF8B949E), fontSize: 10.5),
-                                ),
-                                const Spacer(),
-                                if (isMyTeamShared)
-                                  TextButton.icon(
-                                    onPressed: _confirmDeleteRoomInfo,
-                                    style: TextButton.styleFrom(
-                                      foregroundColor: const Color(0xFFFF4655),
-                                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-                                      minimumSize: const Size(0, 28),
-                                    ),
-                                    icon: const Icon(Icons.delete_outline_rounded, size: 14),
-                                    label: const Text("Delete", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 11)),
-                                  ),
-                              ],
-                            ),
-                          ],
-                        ),
-                ),
-              // ===============================================
-
-              // Top Info Banner
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                color: const Color(0xFF131A29),
-                child: const Row(
-                  children: [
-                    Icon(Icons.lock_rounded, color: Color(0xFFFFD600), size: 14),
-                    SizedBox(width: 8),
-                    Expanded(
-                      child: Text("Ye chat bilkul private hai dono teams ke darmiyan.", style: TextStyle(color: Color(0xFF8B949E), fontSize: 11)),
-                    ),
-                  ],
-                ),
-              ),
-
-              // Messages List
-              Expanded(
-                child: _isLoading && _messages.isEmpty
-                    ? const Center(child: CircularProgressIndicator(color: Color(0xFF1877F2)))
-                    : RefreshIndicator(
-                        onRefresh: () => _fetchMessages(silent: false),
-                        color: const Color(0xFF1877F2),
-                        backgroundColor: const Color(0xFF131A29),
-                        child: _messages.isEmpty
-                            ? ListView(
-                                physics: const AlwaysScrollableScrollPhysics(),
-                                children: [
-                                  SizedBox(height: MediaQuery.of(context).size.height * 0.15),
-                                  Center(
-                                    child: Padding(
-                                      padding: const EdgeInsets.all(32),
-                                      child: Column(
-                                        mainAxisAlignment: MainAxisAlignment.center,
-                                        children: [
-                                          Container(
-                                            padding: const EdgeInsets.all(16),
-                                            decoration: BoxDecoration(color: const Color(0xFF131A29), shape: BoxShape.circle, border: Border.all(color: const Color(0xFF2A3447))),
-                                            child: const Icon(Icons.chat_bubble_outline_rounded, color: Color(0xFF8B949E), size: 36),
-                                          ),
-                                          const SizedBox(height: 12),
-                                          const Text("No Messages Yet", style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 16)),
-                                          const SizedBox(height: 4),
-                                          const Text("Opponent ke sath room ID, screenshot ya bat cheet shuru karen!", textAlign: TextAlign.center, style: TextStyle(color: Color(0xFF8B949E), fontSize: 12)),
-                                        ],
-                                      ),
-                                    ),
-                                  ),
-                                ],
-                              )
-                            : ListView.builder(
-                                controller: _scrollController,
-                                physics: const AlwaysScrollableScrollPhysics(),
-                                padding: const EdgeInsets.fromLTRB(16, 12, 16, 16),
-                                itemCount: _messages.length,
-                                itemBuilder: (context, index) {
-                                  final m = _messages[index];
-                                  final msgText = m["message"]?.toString() ?? "";
-                                  final senderTeamId = (m["sender_team_id"] ?? "").toString().toLowerCase();
-                                  final isMyTeam = (senderTeamId == myTeamUuid || senderTeamId == myTeamRaw);
-                                  final isOppTeam = (senderTeamId == oppUuid || senderTeamId == oppRaw);
-                                  final isPending = m["_is_pending"] == true;
-                                  final isUidShare = msgText.contains("ROOM UID");
-                                  final isImage = m["message_type"] == "image" || m["_local_path"] != null || (msgText.startsWith("http") && (msgText.contains("/match_proofs/") || msgText.endsWith(".jpg") || msgText.endsWith(".png") || msgText.endsWith(".jpeg") || msgText.endsWith(".webp")));
-
-                                  final createdAtStr = m["created_at"]?.toString() ?? "";
-                                  final msgDt = DateTime.tryParse(createdAtStr) ?? DateTime.now();
-                                  final timeStr = _formatTime(createdAtStr);
-
-                                  bool showDateDivider = false;
-                                  if (index == 0) {
-                                    showDateDivider = true;
-                                  } else {
-                                    final prevCreatedAtStr = _messages[index - 1]["created_at"]?.toString() ?? "";
-                                    final prevDt = DateTime.tryParse(prevCreatedAtStr);
-                                    if (prevDt == null || prevDt.toLocal().year != msgDt.toLocal().year || prevDt.toLocal().month != msgDt.toLocal().month || prevDt.toLocal().day != msgDt.toLocal().day) {
-                                      showDateDivider = true;
-                                    }
-                                  }
-
-                                  String senderTeamName = m["sender_team_name"]?.toString() ?? "";
-                                  if (senderTeamName.isEmpty) {
-                                    if (isMyTeam) {
-                                      senderTeamName = _myTeamName.isNotEmpty ? _myTeamName : widget.myTeamName;
-                                    } else if (isOppTeam) {
-                                      senderTeamName = _opponentName.isNotEmpty ? _opponentName : widget.opponentName;
-                                    } else {
-                                      senderTeamName = widget.opponentName;
-                                    }
-                                  }
-
-                                  return Column(
-                                    crossAxisAlignment: CrossAxisAlignment.stretch,
-                                    children: [
-                                      if (showDateDivider)
-                                        Center(
-                                          child: Container(
-                                            margin: const EdgeInsets.symmetric(vertical: 14),
-                                            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
-                                            decoration: BoxDecoration(
-                                              color: const Color(0xFF131A29),
-                                              borderRadius: BorderRadius.circular(12),
-                                              border: Border.all(color: const Color(0xFF2A3447)),
-                                            ),
-                                            child: Text(
-                                              _formatDateDivider(msgDt.toLocal()),
-                                              style: const TextStyle(color: Color(0xFF8B949E), fontSize: 11, fontWeight: FontWeight.bold),
-                                            ),
-                                          ),
-                                        ),
-
-                                      GestureDetector(
-                                        onLongPress: () => _showMessageOptions(m, isMyTeam),
-                                        child: isUidShare
-                                            ? Container(
-                                                margin: const EdgeInsets.only(bottom: 12),
-                                                padding: const EdgeInsets.all(12),
-                                                decoration: BoxDecoration(
-                                                  color: const Color(0xFF241D05),
-                                                  borderRadius: BorderRadius.circular(12),
-                                                  border: Border.all(color: const Color(0xFFFFD600), width: 1.5),
-                                                ),
-                                                child: Column(
-                                                  crossAxisAlignment: CrossAxisAlignment.start,
-                                                  children: [
-                                                    Row(
-                                                      children: [
-                                                        const Icon(Icons.sports_esports_rounded, color: Color(0xFFFFD600), size: 18),
-                                                        const SizedBox(width: 8),
-                                                        Expanded(
-                                                          child: Text("ROOM UID & PASSWORD • $senderTeamName", style: const TextStyle(color: Color(0xFFFFD600), fontWeight: FontWeight.bold, fontSize: 12), overflow: TextOverflow.ellipsis),
-                                                        ),
-                                                        if (isPending) ...[
-                                                          const SizedBox(width: 12, height: 12, child: CircularProgressIndicator(strokeWidth: 1.5, color: Color(0xFFFFD600))),
-                                                        ],
-                                                        IconButton(
-                                                          icon: const Icon(Icons.copy_rounded, color: Color(0xFFFFD600), size: 16),
-                                                          onPressed: () {
-                                                            Clipboard.setData(ClipboardData(text: msgText));
-                                                            ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Room UID & Pass Copied!"), backgroundColor: Color(0xFF1877F2), duration: Duration(seconds: 2)));
-                                                          },
-                                                        ),
-                                                      ],
-                                                    ),
-                                                    const SizedBox(height: 6),
-                                                    SelectableText(msgText, style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 14, letterSpacing: 0.5)),
-                                                    const SizedBox(height: 4),
-                                                    Align(
-                                                      alignment: Alignment.centerRight,
-                                                      child: Text(timeStr, style: const TextStyle(color: Color(0xFFFFD600), fontSize: 10)),
-                                                    ),
-                                                  ],
-                                                ),
-                                              )
-                                            : isImage
-                                                ? Align(
-                                                    alignment: isMyTeam ? Alignment.centerRight : Alignment.centerLeft,
-                                                    child: Container(
-                                                      margin: const EdgeInsets.only(bottom: 10),
-                                                      constraints: BoxConstraints(maxWidth: MediaQuery.of(context).size.width * 0.72),
-                                                      padding: const EdgeInsets.all(6),
-                                                      decoration: BoxDecoration(
-                                                        color: isMyTeam ? const Color(0xFF1877F2) : const Color(0xFF131A29),
-                                                        borderRadius: BorderRadius.circular(14),
-                                                        border: Border.all(color: isMyTeam ? Colors.transparent : const Color(0xFF2A3447)),
-                                                      ),
-                                                      child: Column(
-                                                        crossAxisAlignment: isMyTeam ? CrossAxisAlignment.end : CrossAxisAlignment.start,
-                                                        children: [
-                                                          Padding(
-                                                            padding: const EdgeInsets.only(left: 4, right: 4, bottom: 4),
-                                                            child: Text(senderTeamName, style: TextStyle(color: isMyTeam ? Colors.white70 : const Color(0xFFFFD600), fontSize: 10.5, fontWeight: FontWeight.bold)),
-                                                          ),
-                                                          ClipRRect(
-                                                            borderRadius: BorderRadius.circular(10),
-                                                            child: InkWell(
-                                                              onTap: () => _showFullScreenImageDialog(context, msgText, localPath: m["_local_path"]?.toString()),
-                                                              child: Stack(
-                                                                children: [
-                                                                  m["_local_path"] != null && File(m["_local_path"].toString()).existsSync()
-                                                                      ? Image.file(File(m["_local_path"].toString()), height: 200, width: double.infinity, fit: BoxFit.cover)
-                                                                      : CachedNetworkImage(
-                                                                          imageUrl: msgText,
-                                                                          height: 200,
-                                                                          width: double.infinity,
-                                                                          fit: BoxFit.cover,
-                                                                          placeholder: (_, __) => Container(
-                                                                            height: 200,
-                                                                            color: const Color(0xFF0B0E16),
-                                                                            child: const Center(child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2)),
-                                                                          ),
-                                                                          errorWidget: (_, __, ___) => Container(
-                                                                            height: 120,
-                                                                            color: const Color(0xFF0B0E16),
-                                                                            child: const Center(child: Icon(Icons.broken_image_rounded, color: Colors.white30, size: 36)),
-                                                                          ),
-                                                                        ),
-                                                                  if (isPending)
-                                                                    Positioned.fill(
-                                                                      child: Container(
-                                                                        color: Colors.black45,
-                                                                        child: const Center(
-                                                                          child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2.5),
-                                                                        ),
-                                                                      ),
-                                                                    ),
-                                                                ],
-                                                              ),
-                                                            ),
-                                                          ),
-                                                          const SizedBox(height: 4),
-                                                          Row(
-                                                            mainAxisSize: MainAxisSize.min,
-                                                            children: [
-                                                              Text(timeStr, style: const TextStyle(color: Colors.white70, fontSize: 9.5)),
-                                                              if (isPending) ...[
-                                                                const SizedBox(width: 4),
-                                                                const Icon(Icons.access_time_rounded, size: 10, color: Colors.white70),
-                                                              ],
-                                                            ],
-                                                          ),
-                                                        ],
-                                                      ),
-                                                    ),
-                                                  )
-                                                : Align(
-                                                    alignment: isMyTeam ? Alignment.centerRight : Alignment.centerLeft,
-                                                    child: Container(
-                                                      margin: const EdgeInsets.only(bottom: 8),
-                                                      constraints: BoxConstraints(maxWidth: MediaQuery.of(context).size.width * 0.75),
-                                                      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-                                                      decoration: BoxDecoration(
-                                                        color: isMyTeam ? const Color(0xFF1877F2) : const Color(0xFF131A29),
-                                                        borderRadius: BorderRadius.circular(12),
-                                                        border: Border.all(color: isMyTeam ? Colors.transparent : const Color(0xFF2A3447)),
-                                                      ),
-                                                      child: Column(
-                                                        crossAxisAlignment: isMyTeam ? CrossAxisAlignment.end : CrossAxisAlignment.start,
-                                                        children: [
-                                                          Text(senderTeamName, style: TextStyle(color: isMyTeam ? Colors.white70 : const Color(0xFFFFD600), fontSize: 10.5, fontWeight: FontWeight.bold)),
-                                                          const SizedBox(height: 3),
-                                                          Text(msgText, style: const TextStyle(color: Colors.white, fontSize: 13.5)),
-                                                          const SizedBox(height: 4),
-                                                          Row(
-                                                            mainAxisSize: MainAxisSize.min,
-                                                            children: [
-                                                              Text(timeStr, style: TextStyle(color: isMyTeam ? Colors.white60 : const Color(0xFF8B949E), fontSize: 9.5)),
-                                                              if (isPending) ...[
-                                                                const SizedBox(width: 4),
-                                                                const Icon(Icons.access_time_rounded, size: 10, color: Colors.white60),
-                                                              ],
-                                                            ],
-                                                          ),
-                                                        ],
-                                                      ),
-                                                    ),
-                                                  ),
-                                      ),
-                                    ],
-                                  );
-                                },
-                              ),
-                      ),
-              ),
-
-              // Message Input Field
-              Container(
-                padding: const EdgeInsets.fromLTRB(8, 8, 12, 12),
-                color: const Color(0xFF131A29),
-                child: SafeArea(
-                  top: false,
-                  child: Row(
-                    children: [
-                      IconButton(
-                        icon: _isUploadingImage
-                            ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2, color: Color(0xFFFFD600)))
-                            : const Icon(Icons.add_photo_alternate_rounded, color: Color(0xFFFFD600), size: 24),
-                        tooltip: "Screenshot / Photo",
-                        onPressed: _isUploadingImage ? null : _showImagePickerSheet,
-                      ),
-                      Expanded(
-                        child: Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 14),
-                          decoration: BoxDecoration(color: const Color(0xFF0B0E16), borderRadius: BorderRadius.circular(24), border: Border.all(color: const Color(0xFF2A3447))),
-                          child: TextField(
-                            controller: _messageController,
-                            style: const TextStyle(color: Colors.white, fontSize: 13.5),
-                            decoration: const InputDecoration(hintText: "Message likho...", hintStyle: TextStyle(color: Color(0xFF8B949E), fontSize: 13), border: InputBorder.none, contentPadding: EdgeInsets.symmetric(vertical: 10)),
-                            onSubmitted: (val) => _sendMessage(val),
-                          ),
-                        ),
-                      ),
-                      const SizedBox(width: 8),
-                      Container(
-                        decoration: const BoxDecoration(color: Color(0xFF1877F2), shape: BoxShape.circle),
-                        child: IconButton(
-                          icon: _isSending ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2)) : const Icon(Icons.send_rounded, color: Colors.white, size: 18),
-                          onPressed: () => _sendMessage(_messageController.text),
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              ),
-            ],
-          ),
-
-          if (_showScrollDownButton)
-            Positioned(
-              bottom: 74,
-              right: 16,
-              child: InkWell(
-                onTap: () {
-                  _scrollToBottom();
-                  setState(() {
-                    _showScrollDownButton = false;
-                    _newMessagesCountWhileScrolled = 0;
-                  });
-                },
-                borderRadius: BorderRadius.circular(20),
-                child: Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
-                  decoration: BoxDecoration(
-                    color: const Color(0xFF1877F2),
-                    borderRadius: BorderRadius.circular(20),
-                    boxShadow: [
-                      BoxShadow(color: Colors.black.withOpacity(0.5), blurRadius: 8, offset: const Offset(0, 3)),
-                    ],
-                  ),
-                  child: Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      const Icon(Icons.arrow_downward_rounded, size: 16, color: Colors.white),
-                      const SizedBox(width: 6),
-                      Text(
-                        _newMessagesCountWhileScrolled > 0 ? "Naya Message ($_newMessagesCountWhileScrolled)" : "Neeche Jao",
-                        style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 12),
-                      ),
-                    ],
-                  ),
-                ),
-              ),
-            ),
-        ],
-      ),
-    );
-  }
-
-  // ============ NAYA: Helper Methods ============
-  Widget _buildRoomInfoRow({required String label, required String value}) {
-    return Row(
-      children: [
-        SizedBox(
-          width: 80,
-          child: Text("$label:", style: const TextStyle(color: Color(0xFF8B949E), fontSize: 12, fontWeight: FontWeight.w600)),
-        ),
-        Expanded(
-          child: Container(
-            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-            decoration: BoxDecoration(
-              color: const Color(0xFF0B0E16),
-              borderRadius: BorderRadius.circular(6),
-              border: Border.all(color: const Color(0xFFFFD600).withOpacity(0.3)),
-            ),
-            child: SelectableText(
-              value,
-              style: const TextStyle(color: Colors.white, fontSize: 13, fontWeight: FontWeight.bold, letterSpacing: 0.5),
-            ),
-          ),
-        ),
-      ],
-    );
-  }
-
-  String _timeAgo(String? dateStr) {
-    if (dateStr == null || dateStr.isEmpty) return "recently";
-    try {
-      final dt = DateTime.parse(dateStr).toLocal();
-      final diff = DateTime.now().difference(dt);
-      if (diff.inSeconds < 60) return "just now";
-      if (diff.inMinutes < 60) return "${diff.inMinutes} min ago";
-      if (diff.inHours < 24) return "${diff.inHours} hr ago";
-      if (diff.inDays < 7) return "${diff.inDays} day${diff.inDays > 1 ? "s" : ""} ago";
-      return DateFormat("dd MMM, hh:mm a").format(dt);
-    } catch (_) {
-      return "recently";
-    }
+    ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+        content: Text("Room info copied!"),
+        duration: Duration(seconds: 1),
+        backgroundColor: Color(0xFF1877F2)));
   }
 
   Future<void> _confirmDeleteRoomInfo() async {
@@ -1404,9 +959,14 @@ class _PrivateMatchRoomScreenState extends State<PrivateMatchRoomScreen> {
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
         title: const Row(
           children: [
-            Icon(Icons.warning_amber_rounded, color: Color(0xFFFF4655), size: 22),
+            Icon(Icons.warning_amber_rounded,
+                color: Color(0xFFFF4655), size: 22),
             SizedBox(width: 8),
-            Text("Delete Room Info?", style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 15)),
+            Text("Delete Room Info?",
+                style: TextStyle(
+                    color: Colors.white,
+                    fontWeight: FontWeight.bold,
+                    fontSize: 15)),
           ],
         ),
         content: const Text(
@@ -1416,12 +976,18 @@ class _PrivateMatchRoomScreenState extends State<PrivateMatchRoomScreen> {
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(ctx, false),
-            child: const Text("Cancel", style: TextStyle(color: Color(0xFF8B949E))),
+            child: const Text("Cancel",
+                style: TextStyle(color: Color(0xFF8B949E))),
           ),
           ElevatedButton(
             onPressed: () => Navigator.pop(ctx, true),
-            style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFFFF4655), foregroundColor: Colors.white, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8))),
-            child: const Text("DELETE", style: TextStyle(fontWeight: FontWeight.bold)),
+            style: ElevatedButton.styleFrom(
+                backgroundColor: const Color(0xFFFF4655),
+                foregroundColor: Colors.white,
+                shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(8))),
+            child: const Text("DELETE",
+                style: TextStyle(fontWeight: FontWeight.bold)),
           ),
         ],
       ),
@@ -1440,18 +1006,1029 @@ class _PrivateMatchRoomScreenState extends State<PrivateMatchRoomScreen> {
           .eq('team_id', myTeamUuid);
 
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text("Room info delete ho gayi"), backgroundColor: Color(0xFFFF4655)),
-        );
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+            content: Text("Room info delete ho gayi"),
+            backgroundColor: Color(0xFFFF4655)));
       }
     } catch (e) {
       debugPrint("[PrivateMatchRoom] Delete room info error: $e");
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text("Delete nahi hui: $e"), backgroundColor: const Color(0xFFFF4655)),
-        );
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+            content: Text("Delete nahi hui: $e"),
+            backgroundColor: const Color(0xFFFF4655)));
       }
     }
   }
-  // ============================================
+
+  Widget _buildRoomInfoRow(
+      {required String label, required String value}) {
+    return Row(
+      children: [
+        SizedBox(
+          width: 80,
+          child: Text("$label:",
+              style: const TextStyle(
+                  color: Color(0xFF8B949E),
+                  fontSize: 12,
+                  fontWeight: FontWeight.w600)),
+        ),
+        Expanded(
+          child: Container(
+            padding:
+                const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+            decoration: BoxDecoration(
+              color: const Color(0xFF0B0E16),
+              borderRadius: BorderRadius.circular(6),
+              border: Border.all(
+                  color: const Color(0xFFFFD600).withOpacity(0.3)),
+            ),
+            child: SelectableText(
+              value,
+              style: const TextStyle(
+                  color: Colors.white,
+                  fontSize: 13,
+                  fontWeight: FontWeight.bold,
+                  letterSpacing: 0.5),
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+
+  String _timeAgo(String? dateStr) {
+    if (dateStr == null || dateStr.isEmpty) return "recently";
+    try {
+      final dt = DateTime.parse(dateStr).toLocal();
+      final diff = DateTime.now().difference(dt);
+      if (diff.inSeconds < 60) return "just now";
+      if (diff.inMinutes < 60) return "${diff.inMinutes} min ago";
+      if (diff.inHours < 24) return "${diff.inHours} hr ago";
+      if (diff.inDays < 7)
+        return "${diff.inDays} day${diff.inDays > 1 ? "s" : ""} ago";
+      return DateFormat("dd MMM, hh:mm a").format(dt);
+    } catch (_) {
+      return "recently";
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final title = "$_myTeamName VS $_opponentName - Private Room";
+    final myTeamUuid = SupabaseService.toUuid(widget.myTeamId).toLowerCase();
+    final myTeamRaw = widget.myTeamId.toLowerCase();
+    final oppUuid = SupabaseService.toUuid(widget.opponentId).toLowerCase();
+    final oppRaw = widget.opponentId.toLowerCase();
+
+    final myTeamUuidForRoom = SupabaseService.toUuid(widget.myTeamId);
+    final isMyTeamShared = _roomInfo != null &&
+        (_roomInfo!['team_id']?.toString() == myTeamUuidForRoom);
+
+    return Scaffold(
+      backgroundColor: const Color(0xFF0B0E16),
+      appBar: AppBar(
+        backgroundColor: const Color(0xFF131A29),
+        elevation: 0,
+        leading: IconButton(
+          icon: const Icon(Icons.arrow_back_ios_new_rounded,
+              color: Colors.white, size: 20),
+          onPressed: () => Navigator.pop(context),
+        ),
+        title: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(title,
+                style: const TextStyle(
+                    color: Colors.white,
+                    fontWeight: FontWeight.bold,
+                    fontSize: 15),
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis),
+            const Text("Private Room • UID / Password Share",
+                style: TextStyle(
+                    color: Color(0xFFFFD600),
+                    fontWeight: FontWeight.w600,
+                    fontSize: 11)),
+          ],
+        ),
+        actions: [
+          IconButton(
+            icon: const Icon(Icons.refresh_rounded,
+                color: Colors.white70, size: 20),
+            tooltip: "Refresh messages",
+            onPressed: () => _fetchMessages(silent: false),
+          ),
+          PopupMenuButton<String>(
+            icon: const Icon(Icons.more_vert_rounded,
+                color: Colors.white70, size: 20),
+            color: const Color(0xFF131A29),
+            shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(12)),
+            onSelected: (val) {
+              if (val == "clear") {
+                _confirmClearChat();
+              } else if (val == "refresh") {
+                _fetchMessages(silent: false);
+              }
+            },
+            itemBuilder: (ctx) => [
+              const PopupMenuItem(
+                value: "refresh",
+                child: Row(
+                  children: [
+                    Icon(Icons.refresh_rounded,
+                        color: Colors.white70, size: 18),
+                    SizedBox(width: 8),
+                    Text("Refresh Chat",
+                        style:
+                            TextStyle(color: Colors.white, fontSize: 13)),
+                  ],
+                ),
+              ),
+              const PopupMenuItem(
+                value: "clear",
+                child: Row(
+                  children: [
+                    Icon(Icons.delete_sweep_rounded,
+                        color: Color(0xFFFF4655), size: 18),
+                    SizedBox(width: 8),
+                    Text("Clear Chat 🧹",
+                        style: TextStyle(
+                            color: Color(0xFFFF4655),
+                            fontWeight: FontWeight.bold,
+                            fontSize: 13)),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        ],
+      ),
+      body: Stack(
+        children: [
+          Column(
+            children: [
+              // ============ Room Info Card ============
+              if (!_isRoomInfoLoading)
+                Container(
+                  margin: const EdgeInsets.fromLTRB(12, 10, 12, 6),
+                  padding: const EdgeInsets.all(12),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFF1A1500),
+                    borderRadius: BorderRadius.circular(12),
+                    border: Border.all(
+                        color: const Color(0xFFFFD600), width: 1.5),
+                    boxShadow: [
+                      BoxShadow(
+                        color: const Color(0xFFFFD600).withOpacity(0.1),
+                        blurRadius: 8,
+                        offset: const Offset(0, 2),
+                      ),
+                    ],
+                  ),
+                  child: _roomInfo == null
+                      ? Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            const Row(
+                              children: [
+                                Icon(Icons.vpn_key_rounded,
+                                    color: Color(0xFFFFD600), size: 18),
+                                SizedBox(width: 8),
+                                Expanded(
+                                  child: Text(
+                                    "🏠 ROOM INFO — Abhi tak share nahi hui",
+                                    style: TextStyle(
+                                        color: Color(0xFFFFD600),
+                                        fontWeight: FontWeight.bold,
+                                        fontSize: 12.5),
+                                  ),
+                                ),
+                              ],
+                            ),
+                            const SizedBox(height: 8),
+                            const Text(
+                              "Game shuru karne ke liye Room ID aur Password share karen.",
+                              style: TextStyle(
+                                  color: Color(0xFF8B949E), fontSize: 11.5),
+                            ),
+                            const SizedBox(height: 10),
+                            SizedBox(
+                              width: double.infinity,
+                              child: ElevatedButton.icon(
+                                onPressed: _showRoomInfoDialog,
+                                style: ElevatedButton.styleFrom(
+                                  backgroundColor:
+                                      const Color(0xFFFFD600),
+                                  foregroundColor: Colors.black,
+                                  padding: const EdgeInsets.symmetric(
+                                      vertical: 10),
+                                  shape: RoundedRectangleBorder(
+                                      borderRadius:
+                                          BorderRadius.circular(8)),
+                                  elevation: 0,
+                                ),
+                                icon: const Icon(Icons.add_rounded,
+                                    size: 18),
+                                label: const Text("Room Info Share Karo",
+                                    style: TextStyle(
+                                        fontWeight: FontWeight.bold,
+                                        fontSize: 13)),
+                              ),
+                            ),
+                          ],
+                        )
+                      : Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Row(
+                              children: [
+                                const Icon(Icons.vpn_key_rounded,
+                                    color: Color(0xFFFFD600), size: 18),
+                                const SizedBox(width: 8),
+                                const Expanded(
+                                  child: Text(
+                                    "🏠 ROOM INFO",
+                                    style: TextStyle(
+                                        color: Color(0xFFFFD600),
+                                        fontWeight: FontWeight.bold,
+                                        fontSize: 12.5,
+                                        letterSpacing: 0.5),
+                                  ),
+                                ),
+                                IconButton(
+                                  icon: const Icon(Icons.copy_rounded,
+                                      color: Color(0xFFFFD600), size: 18),
+                                  tooltip: "Copy",
+                                  onPressed: _copyRoomInfo,
+                                  padding: EdgeInsets.zero,
+                                  constraints: const BoxConstraints(
+                                      minWidth: 30, minHeight: 30),
+                                ),
+                                if (isMyTeamShared)
+                                  IconButton(
+                                    icon: const Icon(Icons.edit_rounded,
+                                        color: Color(0xFFFFD600), size: 18),
+                                    tooltip: "Edit",
+                                    onPressed: _showRoomInfoDialog,
+                                    padding: EdgeInsets.zero,
+                                    constraints: const BoxConstraints(
+                                        minWidth: 30, minHeight: 30),
+                                  ),
+                              ],
+                            ),
+                            const SizedBox(height: 8),
+                            _buildRoomInfoRow(
+                                label: "Room ID",
+                                value:
+                                    (_roomInfo!['room_id'] ?? '').toString()),
+                            const SizedBox(height: 6),
+                            _buildRoomInfoRow(
+                                label: "Password",
+                                value: (_roomInfo!['room_password'] ?? '')
+                                    .toString()),
+                            const SizedBox(height: 8),
+                            Row(
+                              children: [
+                                const Icon(Icons.access_time_rounded,
+                                    color: Color(0xFF8B949E), size: 12),
+                                const SizedBox(width: 4),
+                                Text(
+                                  "Shared ${_timeAgo(_roomInfo!['updated_at']?.toString())}",
+                                  style: const TextStyle(
+                                      color: Color(0xFF8B949E),
+                                      fontSize: 10.5),
+                                ),
+                                const Spacer(),
+                                if (isMyTeamShared)
+                                  TextButton.icon(
+                                    onPressed: _confirmDeleteRoomInfo,
+                                    style: TextButton.styleFrom(
+                                      foregroundColor:
+                                          const Color(0xFFFF4655),
+                                      padding: const EdgeInsets.symmetric(
+                                          horizontal: 8, vertical: 2),
+                                      minimumSize: const Size(0, 28),
+                                    ),
+                                    icon: const Icon(
+                                        Icons.delete_outline_rounded,
+                                        size: 14),
+                                    label: const Text("Delete",
+                                        style: TextStyle(
+                                            fontWeight: FontWeight.bold,
+                                            fontSize: 11)),
+                                  ),
+                              ],
+                            ),
+                          ],
+                        ),
+                ),
+
+              // Top info banner
+              Container(
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                color: const Color(0xFF131A29),
+                child: const Row(
+                  children: [
+                    Icon(Icons.lock_rounded,
+                        color: Color(0xFFFFD600), size: 14),
+                    SizedBox(width: 8),
+                    Expanded(
+                      child: Text(
+                          "Ye chat bilkul private hai dono teams ke darmiyan.",
+                          style: TextStyle(
+                              color: Color(0xFF8B949E), fontSize: 11)),
+                    ),
+                  ],
+                ),
+              ),
+
+              // Messages
+              Expanded(
+                child: _isLoading && _messages.isEmpty
+                    ? const Center(
+                        child: CircularProgressIndicator(
+                            color: Color(0xFF1877F2)))
+                    : RefreshIndicator(
+                        onRefresh: () => _fetchMessages(silent: false),
+                        color: const Color(0xFF1877F2),
+                        backgroundColor: const Color(0xFF131A29),
+                        child: _messages.isEmpty
+                            ? ListView(
+                                physics:
+                                    const AlwaysScrollableScrollPhysics(),
+                                children: [
+                                  SizedBox(
+                                      height: MediaQuery.of(context)
+                                              .size
+                                              .height *
+                                          0.15),
+                                  Center(
+                                    child: Padding(
+                                      padding: const EdgeInsets.all(32),
+                                      child: Column(
+                                        mainAxisAlignment:
+                                            MainAxisAlignment.center,
+                                        children: [
+                                          Container(
+                                            padding:
+                                                const EdgeInsets.all(16),
+                                            decoration: BoxDecoration(
+                                                color: const Color(
+                                                    0xFF131A29),
+                                                shape: BoxShape.circle,
+                                                border: Border.all(
+                                                    color: const Color(
+                                                        0xFF2A3447))),
+                                            child: const Icon(
+                                                Icons
+                                                    .chat_bubble_outline_rounded,
+                                                color:
+                                                    Color(0xFF8B949E),
+                                                size: 36),
+                                          ),
+                                          const SizedBox(height: 12),
+                                          const Text("No Messages Yet",
+                                              style: TextStyle(
+                                                  color: Colors.white,
+                                                  fontWeight:
+                                                      FontWeight.bold,
+                                                  fontSize: 16)),
+                                          const SizedBox(height: 4),
+                                          const Text(
+                                              "Opponent ke sath room ID, screenshot ya bat cheet shuru karen!",
+                                              textAlign:
+                                                  TextAlign.center,
+                                              style: TextStyle(
+                                                  color:
+                                                      Color(0xFF8B949E),
+                                                  fontSize: 12)),
+                                        ],
+                                      ),
+                                    ),
+                                  ),
+                                ],
+                              )
+                            : ListView.builder(
+                                controller: _scrollController,
+                                physics:
+                                    const AlwaysScrollableScrollPhysics(),
+                                padding: const EdgeInsets.fromLTRB(
+                                    16, 12, 16, 16),
+                                itemCount: _messages.length,
+                                itemBuilder: (context, index) {
+                                  final m = _messages[index];
+                                  final msgText =
+                                      m["message"]?.toString() ?? "";
+                                  final senderTeamId =
+                                      (m["sender_team_id"] ?? "")
+                                          .toString()
+                                          .toLowerCase();
+                                  final isMyTeam = (senderTeamId ==
+                                          myTeamUuid ||
+                                      senderTeamId == myTeamRaw);
+                                  final isOppTeam = (senderTeamId ==
+                                          oppUuid ||
+                                      senderTeamId == oppRaw);
+                                  final isPending =
+                                      m["_is_pending"] == true;
+                                  final isUidShare =
+                                      msgText.contains("ROOM UID");
+                                  final isImage = m["message_type"] ==
+                                          "image" ||
+                                      m["_local_path"] != null ||
+                                      (msgText.startsWith("http") &&
+                                          (msgText.contains(
+                                                  "/match_proofs/") ||
+                                              msgText.endsWith(".jpg") ||
+                                              msgText.endsWith(".png") ||
+                                              msgText.endsWith(".jpeg") ||
+                                              msgText.endsWith(".webp")));
+
+                                  final createdAtStr =
+                                      m["created_at"]?.toString() ?? "";
+                                  final msgDt =
+                                      DateTime.tryParse(createdAtStr) ??
+                                          DateTime.now();
+                                  final timeStr = _formatTime(createdAtStr);
+
+                                  bool showDateDivider = false;
+                                  if (index == 0) {
+                                    showDateDivider = true;
+                                  } else {
+                                    final prevCreatedAtStr =
+                                        _messages[index - 1]
+                                                ["created_at"]
+                                            ?.toString() ??
+                                            "";
+                                    final prevDt =
+                                        DateTime.tryParse(prevCreatedAtStr);
+                                    if (prevDt == null ||
+                                        prevDt.toLocal().year !=
+                                            msgDt.toLocal().year ||
+                                        prevDt.toLocal().month !=
+                                            msgDt.toLocal().month ||
+                                        prevDt.toLocal().day !=
+                                            msgDt.toLocal().day) {
+                                      showDateDivider = true;
+                                    }
+                                  }
+
+                                  String senderTeamName =
+                                      m["sender_team_name"]?.toString() ??
+                                          "";
+                                  if (senderTeamName.isEmpty) {
+                                    if (isMyTeam) {
+                                      senderTeamName =
+                                          _myTeamName.isNotEmpty
+                                              ? _myTeamName
+                                              : widget.myTeamName;
+                                    } else if (isOppTeam) {
+                                      senderTeamName =
+                                          _opponentName.isNotEmpty
+                                              ? _opponentName
+                                              : widget.opponentName;
+                                    } else {
+                                      senderTeamName =
+                                          widget.opponentName;
+                                    }
+                                  }
+
+                                  return Column(
+                                    crossAxisAlignment:
+                                        CrossAxisAlignment.stretch,
+                                    children: [
+                                      if (showDateDivider)
+                                        Center(
+                                          child: Container(
+                                            margin: const EdgeInsets
+                                                .symmetric(vertical: 14),
+                                            padding: const EdgeInsets
+                                                .symmetric(
+                                                horizontal: 12,
+                                                vertical: 4),
+                                            decoration: BoxDecoration(
+                                              color: const Color(
+                                                  0xFF131A29),
+                                              borderRadius:
+                                                  BorderRadius.circular(
+                                                      12),
+                                              border: Border.all(
+                                                  color: const Color(
+                                                      0xFF2A3447)),
+                                            ),
+                                            child: Text(
+                                              _formatDateDivider(
+                                                  msgDt.toLocal()),
+                                              style: const TextStyle(
+                                                  color:
+                                                      Color(0xFF8B949E),
+                                                  fontSize: 11,
+                                                  fontWeight:
+                                                      FontWeight.bold),
+                                            ),
+                                          ),
+                                        ),
+                                      GestureDetector(
+                                        onLongPress: () =>
+                                            _showMessageOptions(
+                                                m, isMyTeam),
+                                        child: isUidShare
+                                            ? Container(
+                                                margin: const EdgeInsets
+                                                    .only(bottom: 12),
+                                                padding:
+                                                    const EdgeInsets.all(
+                                                        12),
+                                                decoration:
+                                                    BoxDecoration(
+                                                  color: const Color(
+                                                      0xFF241D05),
+                                                  borderRadius:
+                                                      BorderRadius
+                                                          .circular(12),
+                                                  border: Border.all(
+                                                      color: const Color(
+                                                          0xFFFFD600),
+                                                      width: 1.5),
+                                                ),
+                                                child: Column(
+                                                  crossAxisAlignment:
+                                                      CrossAxisAlignment
+                                                          .start,
+                                                  children: [
+                                                    Row(
+                                                      children: [
+                                                        const Icon(
+                                                            Icons
+                                                                .sports_esports_rounded,
+                                                            color: Color(
+                                                                0xFFFFD600),
+                                                            size: 18),
+                                                        const SizedBox(
+                                                            width: 8),
+                                                        Expanded(
+                                                          child: Text(
+                                                            "ROOM UID & PASSWORD • $senderTeamName",
+                                                            style: const TextStyle(
+                                                                color: Color(
+                                                                    0xFFFFD600),
+                                                                fontWeight:
+                                                                    FontWeight
+                                                                        .bold,
+                                                                fontSize:
+                                                                    12),
+                                                            overflow:
+                                                                TextOverflow
+                                                                    .ellipsis,
+                                                          ),
+                                                        ),
+                                                        if (isPending) ...[
+                                                          const SizedBox(
+                                                              width: 12,
+                                                              height: 12,
+                                                              child:
+                                                                  CircularProgressIndicator(
+                                                                strokeWidth:
+                                                                    1.5,
+                                                                color: Color(
+                                                                    0xFFFFD600),
+                                                              )),
+                                                        ],
+                                                        IconButton(
+                                                          icon: const Icon(
+                                                              Icons
+                                                                  .copy_rounded,
+                                                              color: Color(
+                                                                  0xFFFFD600),
+                                                              size: 16),
+                                                          onPressed: () {
+                                                            Clipboard.setData(
+                                                                ClipboardData(
+                                                                    text:
+                                                                        msgText));
+                                                            ScaffoldMessenger.of(
+                                                                    context)
+                                                                .showSnackBar(const SnackBar(
+                                                                    content: Text(
+                                                                        "Room UID & Pass Copied!"),
+                                                                    backgroundColor:
+                                                                        Color(
+                                                                            0xFF1877F2),
+                                                                    duration: Duration(
+                                                                        seconds:
+                                                                            2)));
+                                                          },
+                                                        ),
+                                                      ],
+                                                    ),
+                                                    const SizedBox(
+                                                        height: 6),
+                                                    SelectableText(msgText,
+                                                        style: const TextStyle(
+                                                            color: Colors
+                                                                .white,
+                                                            fontWeight:
+                                                                FontWeight
+                                                                    .bold,
+                                                            fontSize: 14,
+                                                            letterSpacing:
+                                                                0.5)),
+                                                    const SizedBox(
+                                                        height: 4),
+                                                    Align(
+                                                      alignment: Alignment
+                                                          .centerRight,
+                                                      child: Text(timeStr,
+                                                          style: const TextStyle(
+                                                              color: Color(
+                                                                  0xFFFFD600),
+                                                              fontSize:
+                                                                  10)),
+                                                    ),
+                                                  ],
+                                                ),
+                                              )
+                                            : isImage
+                                                ? Align(
+                                                    alignment: isMyTeam
+                                                        ? Alignment
+                                                            .centerRight
+                                                        : Alignment
+                                                            .centerLeft,
+                                                    child: Container(
+                                                      margin: const EdgeInsets
+                                                          .only(bottom: 10),
+                                                      constraints: BoxConstraints(
+                                                          maxWidth: MediaQuery.of(
+                                                                      context)
+                                                                  .size
+                                                                  .width *
+                                                              0.72),
+                                                      padding:
+                                                          const EdgeInsets
+                                                              .all(6),
+                                                      decoration:
+                                                          BoxDecoration(
+                                                        color: isMyTeam
+                                                            ? const Color(
+                                                                0xFF1877F2)
+                                                            : const Color(
+                                                                0xFF131A29),
+                                                        borderRadius:
+                                                            BorderRadius
+                                                                .circular(
+                                                                    14),
+                                                        border: Border.all(
+                                                            color: isMyTeam
+                                                                ? Colors
+                                                                    .transparent
+                                                                : const Color(
+                                                                    0xFF2A3447)),
+                                                      ),
+                                                      child: Column(
+                                                        crossAxisAlignment:
+                                                            isMyTeam
+                                                                ? CrossAxisAlignment
+                                                                    .end
+                                                                : CrossAxisAlignment
+                                                                    .start,
+                                                        children: [
+                                                          Padding(
+                                                            padding: const EdgeInsets
+                                                                .only(
+                                                                left: 4,
+                                                                right: 4,
+                                                                bottom: 4),
+                                                            child: Text(
+                                                                senderTeamName,
+                                                                style: TextStyle(
+                                                                    color: isMyTeam
+                                                                        ? Colors
+                                                                            .white70
+                                                                        : const Color(
+                                                                            0xFFFFD600),
+                                                                    fontSize:
+                                                                        10.5,
+                                                                    fontWeight:
+                                                                        FontWeight
+                                                                            .bold)),
+                                                          ),
+                                                          ClipRRect(
+                                                            borderRadius:
+                                                                BorderRadius
+                                                                    .circular(
+                                                                        10),
+                                                            child: InkWell(
+                                                              onTap: () => _showFullScreenImageDialog(
+                                                                  context,
+                                                                  msgText,
+                                                                  localPath: m[
+                                                                          "_local_path"]
+                                                                      ?.toString()),
+                                                              child: Stack(
+                                                                children: [
+                                                                  m["_local_path"] !=
+                                                                              null &&
+                                                                          File(m["_local_path"]
+                                                                                  .toString())
+                                                                              .existsSync()
+                                                                      ? Image
+                                                                          .file(File(m["_local_path"].toString()),
+                                                                              height: 200,
+                                                                              width: double.infinity,
+                                                                              fit: BoxFit.cover)
+                                                                      : CachedNetworkImage(
+                                                                          imageUrl:
+                                                                              msgText,
+                                                                          height:
+                                                                              200,
+                                                                          width:
+                                                                              double.infinity,
+                                                                          fit:
+                                                                              BoxFit.cover,
+                                                                          placeholder:
+                                                                              (_, __) => Container(
+                                                                            height: 200,
+                                                                            color: const Color(0xFF0B0E16),
+                                                                            child: const Center(child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2)),
+                                                                          ),
+                                                                          errorWidget:
+                                                                              (_, __, ___) => Container(
+                                                                            height: 120,
+                                                                            color: const Color(0xFF0B0E16),
+                                                                            child: const Center(child: Icon(Icons.broken_image_rounded, color: Colors.white30, size: 36)),
+                                                                          ),
+                                                                        ),
+                                                                  if (isPending)
+                                                                    Positioned.fill(
+                                                                      child:
+                                                                          Container(
+                                                                        color:
+                                                                            Colors.black45,
+                                                                        child:
+                                                                            const Center(
+                                                                          child:
+                                                                              CircularProgressIndicator(color: Colors.white, strokeWidth: 2.5),
+                                                                        ),
+                                                                      ),
+                                                                    ),
+                                                                ],
+                                                              ),
+                                                            ),
+                                                          ),
+                                                          const SizedBox(
+                                                              height: 4),
+                                                          Row(
+                                                            mainAxisSize:
+                                                                MainAxisSize
+                                                                    .min,
+                                                            children: [
+                                                              Text(timeStr,
+                                                                  style: const TextStyle(
+                                                                      color: Colors
+                                                                          .white70,
+                                                                      fontSize:
+                                                                          9.5)),
+                                                              if (isPending) ...[
+                                                                const SizedBox(
+                                                                    width: 4),
+                                                                const Icon(
+                                                                    Icons
+                                                                        .access_time_rounded,
+                                                                    size:
+                                                                        10,
+                                                                    color: Colors
+                                                                        .white70),
+                                                              ],
+                                                            ],
+                                                          ),
+                                                        ],
+                                                      ),
+                                                    ),
+                                                  )
+                                                : Align(
+                                                    alignment: isMyTeam
+                                                        ? Alignment
+                                                            .centerRight
+                                                        : Alignment
+                                                            .centerLeft,
+                                                    child: Container(
+                                                      margin: const EdgeInsets
+                                                          .only(bottom: 8),
+                                                      constraints: BoxConstraints(
+                                                          maxWidth: MediaQuery.of(
+                                                                      context)
+                                                                  .size
+                                                                  .width *
+                                                              0.75),
+                                                      padding: const EdgeInsets
+                                                          .symmetric(
+                                                          horizontal: 14,
+                                                          vertical: 10),
+                                                      decoration:
+                                                          BoxDecoration(
+                                                        color: isMyTeam
+                                                            ? const Color(
+                                                                0xFF1877F2)
+                                                            : const Color(
+                                                                0xFF131A29),
+                                                        borderRadius:
+                                                            BorderRadius
+                                                                .circular(
+                                                                    12),
+                                                        border: Border.all(
+                                                            color: isMyTeam
+                                                                ? Colors
+                                                                    .transparent
+                                                                : const Color(
+                                                                    0xFF2A3447)),
+                                                      ),
+                                                      child: Column(
+                                                        crossAxisAlignment:
+                                                            isMyTeam
+                                                                ? CrossAxisAlignment
+                                                                    .end
+                                                                : CrossAxisAlignment
+                                                                    .start,
+                                                        children: [
+                                                          Text(senderTeamName,
+                                                              style: TextStyle(
+                                                                  color: isMyTeam
+                                                                      ? Colors
+                                                                          .white70
+                                                                      : const Color(
+                                                                          0xFFFFD600),
+                                                                  fontSize:
+                                                                      10.5,
+                                                                  fontWeight:
+                                                                      FontWeight
+                                                                          .bold)),
+                                                          const SizedBox(
+                                                              height: 3),
+                                                          Text(msgText,
+                                                              style: const TextStyle(
+                                                                  color: Colors
+                                                                      .white,
+                                                                  fontSize:
+                                                                      13.5)),
+                                                          const SizedBox(
+                                                              height: 4),
+                                                          Row(
+                                                            mainAxisSize:
+                                                                MainAxisSize
+                                                                    .min,
+                                                            children: [
+                                                              Text(timeStr,
+                                                                  style: TextStyle(
+                                                                      color: isMyTeam
+                                                                          ? Colors.white60
+                                                                          : const Color(0xFF8B949E),
+                                                                      fontSize: 9.5)),
+                                                              if (isPending) ...[
+                                                                const SizedBox(
+                                                                    width: 4),
+                                                                const Icon(
+                                                                    Icons
+                                                                        .access_time_rounded,
+                                                                    size:
+                                                                        10,
+                                                                    color: Colors
+                                                                        .white60),
+                                                              ],
+                                                            ],
+                                                          ),
+                                                        ],
+                                                      ),
+                                                    ),
+                                                  ),
+                                      ),
+                                    ],
+                                  );
+                                },
+                              ),
+                      ),
+              ),
+
+              // Input
+              Container(
+                padding: const EdgeInsets.fromLTRB(8, 8, 12, 12),
+                color: const Color(0xFF131A29),
+                child: SafeArea(
+                  top: false,
+                  child: Row(
+                    children: [
+                      IconButton(
+                        icon: _isUploadingImage
+                            ? const SizedBox(
+                                width: 20,
+                                height: 20,
+                                child: CircularProgressIndicator(
+                                    strokeWidth: 2,
+                                    color: Color(0xFFFFD600)))
+                            : const Icon(
+                                Icons.add_photo_alternate_rounded,
+                                color: Color(0xFFFFD600),
+                                size: 24),
+                        tooltip: "Screenshot / Photo",
+                        onPressed:
+                            _isUploadingImage ? null : _showImagePickerSheet,
+                      ),
+                      Expanded(
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 14),
+                          decoration: BoxDecoration(
+                              color: const Color(0xFF0B0E16),
+                              borderRadius: BorderRadius.circular(24),
+                              border: Border.all(
+                                  color: const Color(0xFF2A3447))),
+                          child: TextField(
+                            controller: _messageController,
+                            style: const TextStyle(
+                                color: Colors.white, fontSize: 13.5),
+                            decoration: const InputDecoration(
+                                hintText: "Message likho...",
+                                hintStyle: TextStyle(
+                                    color: Color(0xFF8B949E), fontSize: 13),
+                                border: InputBorder.none,
+                                contentPadding: EdgeInsets.symmetric(
+                                    vertical: 10)),
+                            onSubmitted: (val) => _sendMessage(val),
+                          ),
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                      Container(
+                        decoration: const BoxDecoration(
+                            color: Color(0xFF1877F2), shape: BoxShape.circle),
+                        child: IconButton(
+                          icon: _isSending
+                              ? const SizedBox(
+                                  width: 18,
+                                  height: 18,
+                                  child: CircularProgressIndicator(
+                                      color: Colors.white, strokeWidth: 2))
+                              : const Icon(Icons.send_rounded,
+                                  color: Colors.white, size: 18),
+                          onPressed: () =>
+                              _sendMessage(_messageController.text),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ],
+          ),
+          if (_showScrollDownButton)
+            Positioned(
+              bottom: 74,
+              right: 16,
+              child: InkWell(
+                onTap: () {
+                  _scrollToBottom();
+                  setState(() {
+                    _showScrollDownButton = false;
+                    _newMessagesCountWhileScrolled = 0;
+                  });
+                },
+                borderRadius: BorderRadius.circular(20),
+                child: Container(
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFF1877F2),
+                    borderRadius: BorderRadius.circular(20),
+                    boxShadow: [
+                      BoxShadow(
+                          color: Colors.black.withOpacity(0.5),
+                          blurRadius: 8,
+                          offset: const Offset(0, 3)),
+                    ],
+                  ),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      const Icon(Icons.arrow_downward_rounded,
+                          size: 16, color: Colors.white),
+                      const SizedBox(width: 6),
+                      Text(
+                        _newMessagesCountWhileScrolled > 0
+                            ? "Naya Message ($_newMessagesCountWhileScrolled)"
+                            : "Neeche Jao",
+                        style: const TextStyle(
+                            color: Colors.white,
+                            fontWeight: FontWeight.bold,
+                            fontSize: 12),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+        ],
+      ),
+    );
+  }
 }
