@@ -45,9 +45,8 @@ class CoinWalletService extends ChangeNotifier {
   }
 
   /// =========================================================================
-  /// UNIFIED COIN UPDATE FUNCTION (100% Supabase)
-  /// Atomically increments users.gCoins, users.coins, creates transaction
-  /// in both 'transactions' & 'coin_transactions' tables, and syncs wallets.
+  /// UNIFIED COIN UPDATE FUNCTION (100% Supabase) — FIXED
+  /// Updates users table (source of truth) and coin_wallets table.
   /// =========================================================================
   static Future<void> updateCoins({
     required String userId,
@@ -63,7 +62,7 @@ class CoinWalletService extends ChangeNotifier {
     try {
       final now = DateTime.now();
 
-      // 1. Fetch current balances from Supabase
+      // 1. Fetch current balances from users table (PRIMARY SOURCE)
       int currentCoins = 1000;
       int currentEscrow = 0;
       int currentWinnings = 0;
@@ -83,26 +82,18 @@ class CoinWalletService extends ChangeNotifier {
           currentEscrow = (userRow['inEscrow'] as num?)?.toInt() ?? 0;
           currentWinnings = (userRow['totalWinnings'] as num?)?.toInt() ?? 0;
           currentWins = (userRow['wins'] as num?)?.toInt() ?? 0;
-        } else {
-          final walletRow = await SupabaseService.client
-              .from('coin_wallets')
-              .select('coins, escrowCoins')
-              .or('user_id.eq.$userId,userId.eq.$userId')
-              .maybeSingle();
-          if (walletRow != null) {
-            currentCoins = (walletRow['coins'] as num?)?.toInt() ?? 1000;
-            currentEscrow = (walletRow['escrowCoins'] as num?)?.toInt() ?? 0;
-          }
         }
-      } catch (_) {}
+      } catch (e) {
+        debugPrint('updateCoins: fetch error: $e');
+      }
 
       final newCoins = (currentCoins + amount).clamp(0, 9999999);
       final newEscrow = (currentEscrow + (inEscrowChange ?? 0)).clamp(0, 9999999);
 
+      // 2. Update users table (SINGLE SOURCE OF TRUTH)
       final Map<String, dynamic> userUpdate = {
         'coins': newCoins,
         'gCoins': newCoins,
-        'lastUpdated': now.toIso8601String(),
         'updated_at': now.toIso8601String(),
       };
       if (inEscrowChange != null && inEscrowChange != 0) {
@@ -116,33 +107,33 @@ class CoinWalletService extends ChangeNotifier {
         }
       }
 
-      // Update user in Supabase
       try {
         await SupabaseService.client
             .from('users')
             .update(userUpdate)
             .or('id.eq.$userId,uid.eq.$userId');
       } catch (e) {
-        debugPrint('CoinWalletService: Supabase user update error: $e');
+        debugPrint('updateCoins: users update error: $e');
       }
 
-      // 2. Keep coin_wallets synchronized in Supabase
+      // 3. Update coin_wallets table (SAME VALUES, for wallet screen)
       try {
         await SupabaseService.client.from('coin_wallets').upsert({
           'id': userId,
           'user_id': userId,
           'userId': userId,
           'coins': newCoins,
+          'g_coins': newCoins,
           'gCoins': newCoins,
+          'escrow_coins': newEscrow,
           'escrowCoins': newEscrow,
           'updated_at': now.toIso8601String(),
-          'updatedAt': now.toIso8601String(),
         });
       } catch (e) {
-        debugPrint('CoinWalletService: Supabase coin_wallets sync error: $e');
+        debugPrint('updateCoins: coin_wallets upsert error: $e');
       }
 
-      // 3. Create transaction record in Supabase
+      // 4. Transaction log
       final txId = 'tx_${now.millisecondsSinceEpoch}_${userId.hashCode.abs() % 10000}';
       final Map<String, dynamic> txData = {
         'id': txId,
@@ -170,10 +161,10 @@ class CoinWalletService extends ChangeNotifier {
         await SupabaseService.client.from('coin_transactions').upsert(txData);
         await SupabaseService.client.from('transactions').upsert(txData);
       } catch (e) {
-        debugPrint('CoinWalletService: Supabase transaction log error: $e');
+        debugPrint('updateCoins: transaction log error: $e');
       }
 
-      // 4. Update in-memory state
+      // 5. Update in-memory state
       _instance._syncToUserDocAndNotifiers(userId, newCoins);
 
       if (_instance._currentWallet != null &&
@@ -388,7 +379,6 @@ class CoinWalletService extends ChangeNotifier {
         description: '+50 G-Coins collected',
       );
 
-      // FIX: coins aur gCoins bhi update karo
       await SupabaseService.client.from('coin_wallets').upsert({
         'id': userId,
         'user_id': userId,
@@ -431,7 +421,6 @@ class CoinWalletService extends ChangeNotifier {
         description: '+100 G-Coins for watching rewarded video',
       );
 
-      // FIX: coins aur gCoins bhi update karo
       await SupabaseService.client.from('coin_wallets').upsert({
         'id': userId,
         'user_id': userId,
