@@ -430,6 +430,16 @@ class CoinWalletService extends ChangeNotifier {
         title: 'Ad Reward Earned! 📺',
         description: '+100 G-Coins for watching rewarded video',
       );
+
+      // FIX: coins aur gCoins bhi update karo
+      await SupabaseService.client.from('coin_wallets').upsert({
+        'id': userId,
+        'user_id': userId,
+        'userId': userId,
+        'coins': newCoins,
+        'gCoins': newCoins,
+        'updated_at': now.toIso8601String(),
+      });
     } catch (e) {
       debugPrint('CoinWalletService rewardAdCoins error: $e');
     }
