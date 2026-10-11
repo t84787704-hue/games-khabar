@@ -401,11 +401,11 @@ class CoinWalletService extends ChangeNotifier {
     }
   }
 
-  /// Reward 10 G-Coins for watching an Ad
+  /// Reward 100 G-Coins for watching an Ad
   Future<void> rewardAdCoins(String userId) async {
     final wallet = await getOrCreateWallet(userId);
-    final newCoins = wallet.coins + 10;
-    final newLifetime = wallet.lifetimeEarned + 10;
+    final newCoins = wallet.coins + 100;
+    final newLifetime = wallet.lifetimeEarned + 100;
     final now = DateTime.now();
 
     final updated = wallet.copyWith(
@@ -421,10 +421,10 @@ class CoinWalletService extends ChangeNotifier {
     try {
       await updateCoins(
         userId: userId,
-        amount: 10,
+        amount: 100,
         type: 'ad_reward',
         title: 'Ad Reward Earned! 📺',
-        description: '+10 G-Coins for watching rewarded video',
+        description: '+100 G-Coins for watching rewarded video',
       );
     } catch (e) {
       debugPrint('CoinWalletService rewardAdCoins error: $e');
