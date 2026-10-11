@@ -162,18 +162,38 @@ class GamerRoom {
     if (row['created_at'] is String) {
       created = DateTime.tryParse(row['created_at']) ?? created;
     }
-    final joinedUserIds = (row['joined_user_ids'] is List)
-        ? List<String>.from(
-            (row['joined_user_ids'] as List).map((e) => e.toString()))
-        : <String>[];
-    final joinedUsers = <Map<String, dynamic>>[];
-    if (row['joined_users'] is List) {
-      for (final item in (row['joined_users'] as List)) {
-        if (item is Map) {
-          joinedUsers.add(Map<String, dynamic>.from(item));
+
+    List<String> joinedUserIds = <String>[];
+    final rawIds = row['joined_user_ids'];
+    if (rawIds is List) {
+      joinedUserIds = List<String>.from(rawIds.map((e) => e.toString()));
+    } else if (rawIds is String && rawIds.trim().isNotEmpty) {
+      try {
+        final decoded = jsonDecode(rawIds);
+        if (decoded is List) {
+          joinedUserIds =
+              List<String>.from(decoded.map((e) => e.toString()));
         }
+      } catch (_) {}
+    }
+
+    final joinedUsers = <Map<String, dynamic>>[];
+    final rawUsers = row['joined_users'];
+    List<dynamic> usersRawList = <dynamic>[];
+    if (rawUsers is List) {
+      usersRawList = rawUsers;
+    } else if (rawUsers is String && rawUsers.trim().isNotEmpty) {
+      try {
+        final decoded = jsonDecode(rawUsers);
+        if (decoded is List) usersRawList = decoded;
+      } catch (_) {}
+    }
+    for (final item in usersRawList) {
+      if (item is Map) {
+        joinedUsers.add(Map<String, dynamic>.from(item));
       }
     }
+
     DateTime? winProofUploadedAt;
     if (row['win_proof_uploaded_at'] is String) {
       winProofUploadedAt = DateTime.tryParse(row['win_proof_uploaded_at']);
