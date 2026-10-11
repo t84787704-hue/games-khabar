@@ -491,6 +491,11 @@ class _TeamsScreenState extends State<TeamsScreen> {
                           // ✅ FIX: Sirf submitter ko dikhao
                           if (!isSubmitter) return const SizedBox.shrink();
 
+                          // ✅ NAYA: proof_upload_count check
+                          final proofCount =
+                              (match["proof_upload_count"] as num?)?.toInt() ?? 0;
+                          final canAddMore = proofCount < 3;
+
                           return Container(
                             margin: const EdgeInsets.fromLTRB(16, 4, 16, 8),
                             padding: const EdgeInsets.all(12),
@@ -510,19 +515,69 @@ class _TeamsScreenState extends State<TeamsScreen> {
                                     ),
                                   ],
                                 ),
+                                const SizedBox(height: 6),
+                                // ✅ NAYA: Proof count dikhao
+                                Row(
+                                  children: [
+                                    Icon(
+                                      canAddMore
+                                          ? Icons.upload_file_rounded
+                                          : Icons.error_outline_rounded,
+                                      size: 13,
+                                      color: canAddMore
+                                          ? const Color(0xFFFF8F00)
+                                          : const Color(0xFFFF4655),
+                                    ),
+                                    const SizedBox(width: 4),
+                                    Text(
+                                      canAddMore
+                                          ? "Proof attempts: $proofCount/3"
+                                          : "❌ Proof Limit Reached ($proofCount/3)",
+                                      style: TextStyle(
+                                        color: canAddMore
+                                            ? const Color(0xFFFF8F00)
+                                            : const Color(0xFFFF4655),
+                                        fontWeight: FontWeight.bold,
+                                        fontSize: 11,
+                                      ),
+                                    ),
+                                  ],
+                                ),
                                 const SizedBox(height: 8),
                                 Align(
                                   alignment: Alignment.centerRight,
                                   child: ElevatedButton.icon(
-                                    onPressed: () async {
-                                      final ended = await EndMatchBottomSheet.show(context, activeMatchId: matchId.toString(), myTeamId: myTeamId, opponentId: opponentId, myTeamName: myTeamName);
-                                      if (ended == true && mounted) {
-                                        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Naya proof bhej diya gaya! Under Review."), backgroundColor: Color(0xFFFFB800)));
-                                      }
-                                    },
-                                    style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFFFF4655), foregroundColor: Colors.white, padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6), minimumSize: const Size(0, 32), shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8))),
-                                    icon: const Icon(Icons.upload_file_rounded, size: 14),
-                                    label: const Text("Add Proof Again", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 11)),
+                                    onPressed: canAddMore
+                                        ? () async {
+                                            final ended = await EndMatchBottomSheet.show(context, activeMatchId: matchId.toString(), myTeamId: myTeamId, opponentId: opponentId, myTeamName: myTeamName);
+                                            if (ended == true && mounted) {
+                                              ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Naya proof bhej diya gaya! Under Review."), backgroundColor: Color(0xFFFFB800)));
+                                            }
+                                          }
+                                        : null,
+                                    style: ElevatedButton.styleFrom(
+                                      backgroundColor: canAddMore
+                                          ? const Color(0xFFFF4655)
+                                          : const Color(0xFFBDBDBD),
+                                      foregroundColor: Colors.white,
+                                      disabledBackgroundColor: const Color(0xFFBDBDBD),
+                                      disabledForegroundColor: Colors.white70,
+                                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                                      minimumSize: const Size(0, 32),
+                                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                                    ),
+                                    icon: Icon(
+                                      canAddMore
+                                          ? Icons.upload_file_rounded
+                                          : Icons.block_rounded,
+                                      size: 14,
+                                    ),
+                                    label: Text(
+                                      canAddMore
+                                          ? "Add Proof Again (${proofCount}/3)"
+                                          : "❌ Proof Limit Reached (3/3)",
+                                      style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 11),
+                                    ),
                                   ),
                                 ),
                               ],
