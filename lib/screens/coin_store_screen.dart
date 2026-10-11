@@ -48,6 +48,27 @@ class _CoinStoreScreenState extends State<CoinStoreScreen> with SingleTickerProv
       await Future.delayed(const Duration(seconds: 4));
     }
   }
+
+  // ═══════════════════════════════════════════════════════════
+  // NAYA: User ke rooms ka stream (Room Boost ke liye)
+  // ═══════════════════════════════════════════════════════════
+  Stream<List<Map<String, dynamic>>> _authorRoomsStream(String uid) async* {
+    while (true) {
+      List<Map<String, dynamic>> list = [];
+      try {
+        final res = await SupabaseService.client
+            .from('rooms')
+            .select()
+            .eq('host_id', uid)
+            .order('created_at', ascending: false)
+            .limit(20);
+        list = List<Map<String, dynamic>>.from(res);
+      } catch (_) {}
+      yield list;
+      await Future.delayed(const Duration(seconds: 4));
+    }
+  }
+
   final GamerAuthService _authService = GamerAuthService();
 
   late TabController _tabController;
@@ -60,7 +81,10 @@ class _CoinStoreScreenState extends State<CoinStoreScreen> with SingleTickerProv
   @override
   void initState() {
     super.initState();
-    _tabController = TabController(length: 6, vsync: this);
+    // ═══════════════════════════════════════════════════════════
+    // NAYA: 6 se 7 tabs
+    // ═══════════════════════════════════════════════════════════
+    _tabController = TabController(length: 7, vsync: this);
     final uid = _authService.currentUid ?? 'guest';
     _walletService.getOrCreateWallet(uid).then((wallet) {
       if (mounted) {
@@ -474,6 +498,62 @@ class _CoinStoreScreenState extends State<CoinStoreScreen> with SingleTickerProv
     if (confirm != true) return;
 
     setState(() => _isProcessingPurchase = true);
+
+    // ═══════════════════════════════════════════════════════════
+    // NAYA: Room Boost ke liye alag logic
+    // ═══════════════════════════════════════════════════════════
+    if (category == 'room_boost') {
+      final roomId = metadata?['roomId'] as String? ?? '';
+      final hours = (metadata?['durationHours'] as num?)?.toInt() ?? 24;
+      if (roomId.isEmpty) {
+        setState(() => _isProcessingPurchase = false);
+        return;
+      }
+
+      // Coins deduct karo
+      await CoinWalletService.updateCoins(
+        userId: uid,
+        amount: -costCoins,
+        type: 'room_boost',
+        title: '🚀 Room Boost Purchased',
+        description: 'Boosted room for $hours hours',
+        roomId: roomId,
+      );
+
+      // Room update karo
+      try {
+        final until = DateTime.now().add(Duration(hours: hours)).toIso8601String();
+        await SupabaseService.client.from('rooms').update({
+          'boosted_until': until,
+        }).eq('id', roomId);
+      } catch (e) {
+        debugPrint('Room boost update error: $e');
+      }
+
+      if (mounted) {
+        setState(() => _isProcessingPurchase = false);
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            backgroundColor: GamerTheme.neonGreen,
+            content: Row(
+              children: [
+                const Text('🚀', style: TextStyle(fontSize: 20)),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: Text(
+                    'Room boosted for $hours hours!',
+                    style: const TextStyle(color: Colors.black, fontWeight: FontWeight.bold),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        );
+      }
+      return;
+    }
+
+    // Baaki items ke liye regular purchase
     final result = await _walletService.purchaseStoreItem(
       userId: uid,
       itemId: itemId,
@@ -679,6 +759,154 @@ class _CoinStoreScreenState extends State<CoinStoreScreen> with SingleTickerProv
     );
   }
 
+  // ═══════════════════════════════════════════════════════════
+  // NAYA: Room Boost Dialog
+  // ═══════════════════════════════════════════════════════════
+  Future<void> _showRoomBoostDialog(String uid, int costCoins, int hours, bool isFeatured) async {
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: GamerTheme.bgDark,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+      ),
+      builder: (bottomCtx) {
+        return StreamBuilder<List<Map<String, dynamic>>>(
+          stream: _authorRoomsStream(uid),
+          builder: (context, snapshot) {
+            final rooms = snapshot.data ?? [];
+            final activeColor = isFeatured ? GamerTheme.accentOrange : Colors.purpleAccent;
+
+            return Padding(
+              padding: const EdgeInsets.all(20),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      Row(
+                        children: [
+                          Icon(Icons.rocket_launch_rounded, color: activeColor, size: 22),
+                          const SizedBox(width: 8),
+                          Text(
+                            isFeatured ? 'SELECT ROOM TO FEATURE' : 'SELECT ROOM TO BOOST',
+                            style: const TextStyle(
+                              color: Colors.white,
+                              fontWeight: FontWeight.bold,
+                              fontSize: 16,
+                            ),
+                          ),
+                        ],
+                      ),
+                      IconButton(
+                        icon: const Icon(Icons.close, color: GamerTheme.textMuted),
+                        onPressed: () => Navigator.pop(bottomCtx),
+                      ),
+                    ],
+                  ),
+                  Text(
+                    isFeatured
+                        ? 'Your room will get an ORANGE border + 🚀 badge at the very top of the rooms list for $hours hours.'
+                        : 'Your room will get a PURPLE border + 🚀 badge at the top of the rooms list for $hours hours.',
+                    style: const TextStyle(color: GamerTheme.textMuted, fontSize: 12),
+                  ),
+                  const SizedBox(height: 16),
+                  if (rooms.isEmpty)
+                    Container(
+                      padding: const EdgeInsets.all(20),
+                      width: double.infinity,
+                      decoration: BoxDecoration(
+                        color: GamerTheme.cardDark,
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                      child: const Center(
+                        child: Text(
+                          'You haven\'t created any rooms yet.\nHost a room from the Rooms tab first!',
+                          textAlign: TextAlign.center,
+                          style: TextStyle(color: GamerTheme.textMuted, fontSize: 13),
+                        ),
+                      ),
+                    )
+                  else
+                    Flexible(
+                      child: ListView.separated(
+                        shrinkWrap: true,
+                        itemCount: rooms.length,
+                        separatorBuilder: (_, __) => const SizedBox(height: 8),
+                        itemBuilder: (context, index) {
+                          final data = rooms[index];
+                          final roomId = (data['id'] ?? '').toString();
+                          final game = (data['game'] ?? 'BGMI').toString();
+                          final mode = (data['mode'] ?? 'Erangel').toString();
+                          final roomTitle = '$game $mode';
+                          final isAlreadyBoosted = data['boosted_until'] != null;
+
+                          return Container(
+                            decoration: BoxDecoration(
+                              color: GamerTheme.cardDark,
+                              borderRadius: BorderRadius.circular(12),
+                              border: Border.all(
+                                color: isAlreadyBoosted ? activeColor : GamerTheme.borderDark,
+                              ),
+                            ),
+                            child: ListTile(
+                              leading: Container(
+                                padding: const EdgeInsets.all(8),
+                                decoration: BoxDecoration(
+                                  color: activeColor.withOpacity(0.15),
+                                  shape: BoxShape.circle,
+                                ),
+                                child: const Icon(Icons.sports_esports_rounded, color: Colors.white, size: 20),
+                              ),
+                              title: Text(
+                                roomTitle,
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: const TextStyle(color: Colors.white, fontSize: 13, fontWeight: FontWeight.bold),
+                              ),
+                              subtitle: isAlreadyBoosted
+                                  ? const Text('🚀 Currently Boosted', style: TextStyle(color: Colors.white70, fontSize: 11))
+                                  : null,
+                              trailing: ElevatedButton(
+                                style: ElevatedButton.styleFrom(
+                                  backgroundColor: activeColor,
+                                  foregroundColor: Colors.white,
+                                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                                ),
+                                onPressed: () {
+                                  Navigator.pop(bottomCtx);
+                                  _handlePurchaseItem(
+                                    uid: uid,
+                                    itemId: 'room_${hours}h',
+                                    itemName: isFeatured
+                                        ? '$hours-Hour Featured Room'
+                                        : '$hours-Hour Room Boost',
+                                    category: 'room_boost',
+                                    costCoins: costCoins,
+                                    metadata: {
+                                      'roomId': roomId,
+                                      'durationHours': hours,
+                                    },
+                                  );
+                                },
+                                child: Text('$costCoins 🪙'),
+                              ),
+                            ),
+                          );
+                        },
+                      ),
+                    ),
+                  const SizedBox(height: 12),
+                ],
+              ),
+            );
+          },
+        );
+      },
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final uid = _authService.currentUid ?? 'guest';
@@ -712,9 +940,13 @@ class _CoinStoreScreenState extends State<CoinStoreScreen> with SingleTickerProv
           unselectedLabelColor: GamerTheme.textMuted,
           labelStyle: const TextStyle(fontWeight: FontWeight.w900, fontSize: 12),
           unselectedLabelStyle: const TextStyle(fontWeight: FontWeight.normal, fontSize: 12),
+          // ═══════════════════════════════════════════════════════════
+          // NAYA: ROOM BOOST tab add
+          // ═══════════════════════════════════════════════════════════
           tabs: const [
             Tab(text: 'FRAMES & BADGES 👑'),
             Tab(text: 'FEED BOOST 🚀'),
+            Tab(text: 'ROOM BOOST 🎮'),
             Tab(text: 'VIP ROOMS 🌟'),
             Tab(text: 'SPOTLIGHT ⭐'),
             Tab(text: 'CHAT COLORS 🎨'),
@@ -758,6 +990,7 @@ class _CoinStoreScreenState extends State<CoinStoreScreen> with SingleTickerProv
                       children: [
                         _buildFramesAndBadgesTab(uid, wallet, activeFrame, unlockedFrames, activeBadge, unlockedBadges),
                         _buildFeedBoostTab(uid, wallet),
+                        _buildRoomBoostTab(uid, wallet),
                         _buildVipRoomsTab(uid, wallet, vipPassUntil),
                         _buildSpotlightTab(uid, wallet, spotlightUntil),
                         _buildChatColorsTab(uid, wallet, activeChatColor, unlockedChatColors),
@@ -1326,7 +1559,83 @@ class _CoinStoreScreenState extends State<CoinStoreScreen> with SingleTickerProv
     );
   }
 
-  // TAB 3: VIP Tournament Rooms
+  // ═══════════════════════════════════════════════════════════
+  // NAYA: TAB 3 - Room Boost
+  // ═══════════════════════════════════════════════════════════
+  Widget _buildRoomBoostTab(String uid, CoinWallet wallet) {
+    return ListView(
+      padding: const EdgeInsets.all(16),
+      children: [
+        Container(
+          padding: const EdgeInsets.all(20),
+          decoration: BoxDecoration(
+            gradient: const LinearGradient(
+              colors: [Color(0xFF1F1533), Color(0xFF0F0A1F)],
+              begin: Alignment.topLeft,
+              end: Alignment.bottomRight,
+            ),
+            borderRadius: BorderRadius.circular(20),
+            border: Border.all(color: Colors.purpleAccent.withOpacity(0.5)),
+          ),
+          child: const Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                children: [
+                  Icon(Icons.rocket_launch_rounded, color: Colors.purpleAccent, size: 24),
+                  SizedBox(width: 8),
+                  Text(
+                    'CUSTOM ROOM BOOST',
+                    style: TextStyle(
+                      color: Colors.white,
+                      fontSize: 16,
+                      fontWeight: FontWeight.w900,
+                      letterSpacing: 1,
+                    ),
+                  ),
+                ],
+              ),
+              SizedBox(height: 8),
+              Text(
+                'Promote your BGMI custom rooms to the top of the Rooms list. Get more players joining your matches instantly!',
+                style: TextStyle(color: GamerTheme.textMuted, fontSize: 12),
+              ),
+            ],
+          ),
+        ),
+        const SizedBox(height: 16),
+        _buildBoostPackageCard(
+          title: '24-Hour Room Boost',
+          hours: 24,
+          coins: 300,
+          color: Colors.purpleAccent,
+          icon: Icons.bolt_rounded,
+          perks: [
+            'Purple glowing border on room card',
+            '🚀 BOOSTED badge shown',
+            'Pinned to top of Rooms list',
+          ],
+          onTap: () => _showRoomBoostDialog(uid, 300, 24, false),
+        ),
+        const SizedBox(height: 14),
+        _buildBoostPackageCard(
+          title: '72-Hour Featured Room',
+          hours: 72,
+          coins: 1000,
+          color: GamerTheme.accentOrange,
+          icon: Icons.local_fire_department_rounded,
+          perks: [
+            'Golden/Orange featured border',
+            '⭐ FEATURED badge + top pin',
+            'Maximum visibility for 3 full days',
+          ],
+          onTap: () => _showRoomBoostDialog(uid, 1000, 72, true),
+        ),
+      ],
+    );
+  }
+
+  // TAB 4: VIP Tournament Rooms
   Widget _buildVipRoomsTab(String uid, CoinWallet wallet, DateTime? vipUntil) {
     final isVipActive = vipUntil != null && vipUntil.isAfter(DateTime.now());
 
@@ -1507,7 +1816,7 @@ class _CoinStoreScreenState extends State<CoinStoreScreen> with SingleTickerProv
     );
   }
 
-  // TAB 4: Leaderboard Spotlight
+  // TAB 5: Leaderboard Spotlight
   Widget _buildSpotlightTab(String uid, CoinWallet wallet, DateTime? spotlightUntil) {
     final isSpotlightActive = spotlightUntil != null && spotlightUntil.isAfter(DateTime.now());
 
@@ -1688,7 +1997,7 @@ class _CoinStoreScreenState extends State<CoinStoreScreen> with SingleTickerProv
     );
   }
 
-  // TAB 5: Exclusive Chat Colors
+  // TAB 6: Exclusive Chat Colors
   Widget _buildChatColorsTab(String uid, CoinWallet wallet, String activeColor, List<String> unlockedColors) {
     final colors = [
       {'hex': '#00FF66', 'name': 'Neon Toxic Green', 'cost': 200, 'color': const Color(0xFF00FF66)},
@@ -1874,7 +2183,7 @@ class _CoinStoreScreenState extends State<CoinStoreScreen> with SingleTickerProv
     );
   }
 
-  // TAB 6: Earn G-Coins
+  // TAB 7: Earn G-Coins
   Widget _buildEarnCoinsTab(String uid, CoinWallet wallet) {
     final canClaimDaily = _timeUntilNextClaim == Duration.zero;
     final inviteCode = _walletService.getReferralCode(uid);
@@ -1882,7 +2191,6 @@ class _CoinStoreScreenState extends State<CoinStoreScreen> with SingleTickerProv
     return ListView(
       padding: const EdgeInsets.all(16),
       children: [
-        // Daily Login Bonus
         _buildEarnActionCard(
           icon: Icons.calendar_today_rounded,
           iconColor: GamerTheme.neonGreen,
@@ -1898,8 +2206,6 @@ class _CoinStoreScreenState extends State<CoinStoreScreen> with SingleTickerProv
           onTap: canClaimDaily ? () => _handleClaimDaily(uid) : null,
         ),
         const SizedBox(height: 12),
-
-        // Rewarded Video Ad
         _buildEarnActionCard(
           icon: Icons.play_circle_filled_rounded,
           iconColor: GamerTheme.accentOrange,
@@ -1913,8 +2219,6 @@ class _CoinStoreScreenState extends State<CoinStoreScreen> with SingleTickerProv
           onTap: _isWatchingAd ? null : () => _handleWatchAd(uid),
         ),
         const SizedBox(height: 12),
-
-        // Refer Friends
         _buildEarnActionCard(
           icon: Icons.people_alt_rounded,
           iconColor: GamerTheme.accentBlue,
@@ -1932,8 +2236,6 @@ class _CoinStoreScreenState extends State<CoinStoreScreen> with SingleTickerProv
           },
         ),
         const SizedBox(height: 24),
-
-        // Transaction History
         const Text(
           'STORE & REWARD HISTORY',
           style: TextStyle(
