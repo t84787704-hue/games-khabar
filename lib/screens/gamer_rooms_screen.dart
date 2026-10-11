@@ -518,9 +518,6 @@ class _GamerRoomsScreenState extends State<GamerRoomsScreen> {
     });
   }
 
-  // ═══════════════════════════════════════════════════════════
-  // NAYA: Check karo ki user ka already active room hai ya nahi
-  // ═══════════════════════════════════════════════════════════
   Future<bool> _hasActiveRoom(String uid) async {
     if (uid.isEmpty || uid == 'guest') return false;
     try {
@@ -678,9 +675,6 @@ class _GamerRoomsScreenState extends State<GamerRoomsScreen> {
             Navigator.pop(ctx);
             joinRoom(room);
           },
-          // ═══════════════════════════════════════════════════════════
-          // NAYA: Delete room handler
-          // ═══════════════════════════════════════════════════════════
           onDeleteRoom: () async {
             final uid = currentUserId;
             if (room.hostId != uid) return;
@@ -797,9 +791,6 @@ class _GamerRoomsScreenState extends State<GamerRoomsScreen> {
     );
   }
 
-  // ═══════════════════════════════════════════════════════════
-  // NAYA: async banaya + active room check
-  // ═══════════════════════════════════════════════════════════
   void _showCreateRoomDialog() async {
     final uid = currentUserId;
     if (uid.isEmpty || uid == 'guest') {
@@ -813,7 +804,6 @@ class _GamerRoomsScreenState extends State<GamerRoomsScreen> {
       return;
     }
 
-    // Check karo ki already active room hai ya nahi
     final hasActive = await _hasActiveRoom(uid);
     if (hasActive) {
       if (mounted) {
@@ -1098,7 +1088,6 @@ class _GamerRoomsScreenState extends State<GamerRoomsScreen> {
                               final name = currentUserName;
                               if (uid.isEmpty) return;
 
-                              // Double-check active room
                               final hasActive = await _hasActiveRoom(uid);
                               if (hasActive) {
                                 if (mounted) {
@@ -1214,213 +1203,232 @@ class _GamerRoomsScreenState extends State<GamerRoomsScreen> {
         ? 2.0
         : (isJoined ? 1.5 : 1.0);
 
-    return Container(
-      margin: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-      padding: const EdgeInsets.all(14),
-      decoration: BoxDecoration(
-        color: isBoosted
-            ? (isFeatured
-                ? const Color(0xFFFFF7E6)
-                : const Color(0xFFF7F0FF))
-            : Colors.white,
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(
-          color: borderColor,
-          width: borderWidth,
+    return GestureDetector(
+      onTap: () {
+        if (isHost || isJoined) {
+          _showRoomBottomSheet(room);
+          return;
+        }
+        if (room.filled >= room.total) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('Room Full!'),
+              backgroundColor: GamerTheme.redAccent,
+              behavior: SnackBarBehavior.floating,
+            ),
+          );
+          return;
+        }
+        joinRoom(room);
+      },
+      child: Container(
+        margin: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+        padding: const EdgeInsets.all(14),
+        decoration: BoxDecoration(
+          color: isBoosted
+              ? (isFeatured
+                  ? const Color(0xFFFFF7E6)
+                  : const Color(0xFFF7F0FF))
+              : Colors.white,
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(
+            color: borderColor,
+            width: borderWidth,
+          ),
+          boxShadow: isBoosted
+              ? [
+                  BoxShadow(
+                    color: borderColor.withOpacity(0.25),
+                    blurRadius: 12,
+                    spreadRadius: 1,
+                  ),
+                ]
+              : null,
         ),
-        boxShadow: isBoosted
-            ? [
-                BoxShadow(
-                  color: borderColor.withOpacity(0.25),
-                  blurRadius: 12,
-                  spreadRadius: 1,
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            if (isBoosted)
+              Container(
+                margin: const EdgeInsets.only(bottom: 8),
+                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                decoration: BoxDecoration(
+                  gradient: LinearGradient(
+                    colors: isFeatured
+                        ? [GamerTheme.accentOrange, Colors.orange.shade700]
+                        : [Colors.purpleAccent, Colors.deepPurpleAccent],
+                  ),
+                  borderRadius: BorderRadius.circular(8),
                 ),
-              ]
-            : null,
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          if (isBoosted)
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Icon(
+                      isFeatured ? Icons.star_rounded : Icons.rocket_launch_rounded,
+                      color: Colors.white,
+                      size: 13,
+                    ),
+                    const SizedBox(width: 4),
+                    Text(
+                      isFeatured ? '⭐ FEATURED ROOM' : '🚀 BOOSTED',
+                      style: const TextStyle(
+                        color: Colors.white,
+                        fontWeight: FontWeight.w900,
+                        fontSize: 10,
+                        letterSpacing: 0.8,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            Row(
+              children: [
+                CircleAvatar(
+                  radius: 20,
+                  backgroundColor: isJoined
+                      ? const Color(0xFF1877F2)
+                      : const Color(0xFFE4E6EB),
+                  child: Text(initial,
+                      style: TextStyle(
+                          color: isJoined ? Colors.white : const Color(0xFF1C1E21),
+                          fontWeight: FontWeight.bold)),
+                ),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(room.title,
+                          style: const TextStyle(
+                              fontSize: 14.5, fontWeight: FontWeight.bold),
+                          maxLines: 2,
+                          overflow: TextOverflow.ellipsis),
+                      const SizedBox(height: 2),
+                      Text('Host: ${room.hostName} • ${room.map}',
+                          style: const TextStyle(
+                              color: Color(0xFF65676B), fontSize: 12),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis),
+                    ],
+                  ),
+                ),
+                Container(
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFFF0F2F5),
+                    borderRadius: BorderRadius.circular(6),
+                  ),
+                  child: Text(room.game,
+                      style: const TextStyle(
+                          color: Color(0xFF1877F2),
+                          fontSize: 11,
+                          fontWeight: FontWeight.bold)),
+                ),
+              ],
+            ),
+            const SizedBox(height: 12),
             Container(
-              margin: const EdgeInsets.only(bottom: 8),
-              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 10),
               decoration: BoxDecoration(
-                gradient: LinearGradient(
-                  colors: isFeatured
-                      ? [GamerTheme.accentOrange, Colors.orange.shade700]
-                      : [Colors.purpleAccent, Colors.deepPurpleAccent],
-                ),
-                borderRadius: BorderRadius.circular(8),
+                color: const Color(0xFFF0F2F5),
+                borderRadius: BorderRadius.circular(10),
               ),
               child: Row(
-                mainAxisSize: MainAxisSize.min,
                 children: [
-                  Icon(
-                    isFeatured ? Icons.star_rounded : Icons.rocket_launch_rounded,
-                    color: Colors.white,
-                    size: 13,
+                  Expanded(
+                    child: Column(children: [
+                      Text('${room.prize} Coins',
+                          style: const TextStyle(
+                              color: Color(0xFF1877F2),
+                              fontSize: 13,
+                              fontWeight: FontWeight.bold)),
+                      const Text('PRIZE POOL',
+                          style:
+                              TextStyle(fontSize: 10, color: Color(0xFF65676B))),
+                    ]),
                   ),
-                  const SizedBox(width: 4),
-                  Text(
-                    isFeatured ? '⭐ FEATURED ROOM' : '🚀 BOOSTED',
-                    style: const TextStyle(
-                      color: Colors.white,
-                      fontWeight: FontWeight.w900,
-                      fontSize: 10,
-                      letterSpacing: 0.8,
-                    ),
+                  Expanded(
+                    child: Column(children: [
+                      Text(
+                        room.entryFeeCoins == 0
+                            ? 'FREE'
+                            : '${room.entryFeeCoins} Coins',
+                        style: TextStyle(
+                            color: room.entryFeeCoins == 0
+                                ? const Color(0xFF1877F2)
+                                : const Color(0xFFFFA500),
+                            fontSize: 13,
+                            fontWeight: FontWeight.bold),
+                      ),
+                      const Text('ENTRY FEE',
+                          style:
+                              TextStyle(fontSize: 10, color: Color(0xFF65676B))),
+                    ]),
+                  ),
+                  Expanded(
+                    child: Column(children: [
+                      Text('$filled/$total',
+                          style: const TextStyle(
+                              fontSize: 13, fontWeight: FontWeight.bold)),
+                      const Text('SLOTS',
+                          style:
+                              TextStyle(fontSize: 10, color: Color(0xFF65676B))),
+                    ]),
                   ),
                 ],
               ),
             ),
-          Row(
-            children: [
-              CircleAvatar(
-                radius: 20,
-                backgroundColor: isJoined
-                    ? const Color(0xFF1877F2)
-                    : const Color(0xFFE4E6EB),
-                child: Text(initial,
-                    style: TextStyle(
-                        color: isJoined ? Colors.white : const Color(0xFF1C1E21),
-                        fontWeight: FontWeight.bold)),
+            const SizedBox(height: 10),
+            ClipRRect(
+              borderRadius: BorderRadius.circular(4),
+              child: LinearProgressIndicator(
+                value: fillRatio,
+                minHeight: 4,
+                backgroundColor: const Color(0xFFE4E6EB),
+                valueColor: const AlwaysStoppedAnimation<Color>(
+                    Color(0xFF1877F2)),
               ),
-              const SizedBox(width: 10),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(room.title,
-                        style: const TextStyle(
-                            fontSize: 14.5, fontWeight: FontWeight.bold),
-                        maxLines: 2,
-                        overflow: TextOverflow.ellipsis),
-                    const SizedBox(height: 2),
-                    Text('Host: ${room.hostName} • ${room.map}',
-                        style: const TextStyle(
-                            color: Color(0xFF65676B), fontSize: 12),
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis),
-                  ],
-                ),
-              ),
-              Container(
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                decoration: BoxDecoration(
-                  color: const Color(0xFFF0F2F5),
-                  borderRadius: BorderRadius.circular(6),
-                ),
-                child: Text(room.game,
-                    style: const TextStyle(
-                        color: Color(0xFF1877F2),
-                        fontSize: 11,
-                        fontWeight: FontWeight.bold)),
-              ),
-            ],
-          ),
-          const SizedBox(height: 12),
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 10),
-            decoration: BoxDecoration(
-              color: const Color(0xFFF0F2F5),
-              borderRadius: BorderRadius.circular(10),
             ),
-            child: Row(
+            const SizedBox(height: 12),
+            Row(
               children: [
-                Expanded(
-                  child: Column(children: [
-                    Text('${room.prize} Coins',
-                        style: const TextStyle(
-                            color: Color(0xFF1877F2),
-                            fontSize: 13,
-                            fontWeight: FontWeight.bold)),
-                    const Text('PRIZE POOL',
-                        style:
-                            TextStyle(fontSize: 10, color: Color(0xFF65676B))),
-                  ]),
+                Text(
+                  room.isCompleted
+                      ? 'COMPLETED'
+                      : room.isDisputed
+                          ? 'DISPUTED'
+                          : room.isInProgress
+                              ? 'MATCH LIVE'
+                              : 'ACTIVE',
+                  style: const TextStyle(
+                      fontSize: 11.5, fontWeight: FontWeight.bold),
                 ),
-                Expanded(
-                  child: Column(children: [
-                    Text(
-                      room.entryFeeCoins == 0
-                          ? 'FREE'
-                          : '${room.entryFeeCoins} Coins',
-                      style: TextStyle(
-                          color: room.entryFeeCoins == 0
-                              ? const Color(0xFF1877F2)
-                              : const Color(0xFFFFA500),
-                          fontSize: 13,
-                          fontWeight: FontWeight.bold),
-                    ),
-                    const Text('ENTRY FEE',
-                        style:
-                            TextStyle(fontSize: 10, color: Color(0xFF65676B))),
-                  ]),
-                ),
-                Expanded(
-                  child: Column(children: [
-                    Text('$filled/$total',
-                        style: const TextStyle(
-                            fontSize: 13, fontWeight: FontWeight.bold)),
-                    const Text('SLOTS',
-                        style:
-                            TextStyle(fontSize: 10, color: Color(0xFF65676B))),
-                  ]),
-                ),
+                const Spacer(),
+                if (room.isFull && !isJoined && !isHost)
+                  ElevatedButton(
+                    onPressed: null,
+                    child: const Text('FULL'),
+                  )
+                else if (isHost)
+                  OutlinedButton(
+                    onPressed: () => _showRoomBottomSheet(room),
+                    child: const Text('MANAGE ✓'),
+                  )
+                else if (isJoined)
+                  ElevatedButton(
+                    onPressed: () => _showRoomBottomSheet(room),
+                    child: const Text('JOINED ✓'),
+                  )
+                else
+                  ElevatedButton(
+                    onPressed: () => joinRoom(room),
+                    child: const Text('JOIN ROOM'),
+                  ),
               ],
             ),
-          ),
-          const SizedBox(height: 10),
-          ClipRRect(
-            borderRadius: BorderRadius.circular(4),
-            child: LinearProgressIndicator(
-              value: fillRatio,
-              minHeight: 4,
-              backgroundColor: const Color(0xFFE4E6EB),
-              valueColor: const AlwaysStoppedAnimation<Color>(
-                  Color(0xFF1877F2)),
-            ),
-          ),
-          const SizedBox(height: 12),
-          Row(
-            children: [
-              Text(
-                room.isCompleted
-                    ? 'COMPLETED'
-                    : room.isDisputed
-                        ? 'DISPUTED'
-                        : room.isInProgress
-                            ? 'MATCH LIVE'
-                            : 'ACTIVE',
-                style: const TextStyle(
-                    fontSize: 11.5, fontWeight: FontWeight.bold),
-              ),
-              const Spacer(),
-              if (room.isFull && !isJoined && !isHost)
-                ElevatedButton(
-                  onPressed: null,
-                  child: const Text('FULL'),
-                )
-              else if (isHost)
-                OutlinedButton(
-                  onPressed: () => _showRoomBottomSheet(room),
-                  child: const Text('MANAGE ✓'),
-                )
-              else if (isJoined)
-                ElevatedButton(
-                  onPressed: () => _showRoomBottomSheet(room),
-                  child: const Text('JOINED ✓'),
-                )
-              else
-                ElevatedButton(
-                  onPressed: () => joinRoom(room),
-                  child: const Text('JOIN ROOM'),
-                ),
-            ],
-          ),
-        ],
+          ],
+        ),
       ),
     );
   }
@@ -1556,9 +1564,6 @@ class _InRoomBottomSheetContent extends StatefulWidget {
   final String currentUserName;
   final VoidCallback onJoinRoomRequested;
   final VoidCallback onLeaveRoom;
-  // ═══════════════════════════════════════════════════════════
-  // NAYA: Delete room callback
-  // ═══════════════════════════════════════════════════════════
   final VoidCallback onDeleteRoom;
 
   const _InRoomBottomSheetContent({
@@ -1643,6 +1648,208 @@ class _InRoomBottomSheetContentState extends State<_InRoomBottomSheetContent> {
     return 'Starts in: ${minutes}m ${seconds}s';
   }
 
+  void _copyToClipboard(String text, String label) {
+    Clipboard.setData(ClipboardData(text: text));
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text('$label copied!'),
+        backgroundColor: const Color(0xFF1877F2),
+        behavior: SnackBarBehavior.floating,
+        duration: const Duration(seconds: 2),
+      ),
+    );
+  }
+
+  Widget _buildRoomCredentialsCard() {
+    return Container(
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: const Color(0xFFFFF7E6),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: const Color(0xFFFFC107), width: 1.2),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Row(
+            children: [
+              Icon(Icons.vpn_key_rounded,
+                  color: Color(0xFFFF8F00), size: 18),
+              SizedBox(width: 6),
+              Text('ROOM CREDENTIALS',
+                  style: TextStyle(
+                      fontWeight: FontWeight.bold,
+                      fontSize: 11,
+                      color: Color(0xFF6D4C00),
+                      letterSpacing: 0.5)),
+            ],
+          ),
+          const SizedBox(height: 10),
+          Row(
+            children: [
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Text('ROOM ID',
+                        style: TextStyle(
+                            fontSize: 10,
+                            color: Color(0xFF65676B),
+                            fontWeight: FontWeight.bold)),
+                    const SizedBox(height: 2),
+                    Text(
+                      room.roomId.isEmpty ? '-' : room.roomId,
+                      style: const TextStyle(
+                          fontSize: 15,
+                          fontWeight: FontWeight.bold,
+                          color: Color(0xFF050505)),
+                    ),
+                  ],
+                ),
+              ),
+              IconButton(
+                icon: const Icon(Icons.copy_rounded,
+                    size: 18, color: Color(0xFF1877F2)),
+                onPressed: room.roomId.isEmpty
+                    ? null
+                    : () => _copyToClipboard(room.roomId, 'Room ID'),
+                tooltip: 'Copy Room ID',
+              ),
+            ],
+          ),
+          const Divider(height: 12, color: Color(0xFFFFD54F)),
+          Row(
+            children: [
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Text('PASSWORD',
+                        style: TextStyle(
+                            fontSize: 10,
+                            color: Color(0xFF65676B),
+                            fontWeight: FontWeight.bold)),
+                    const SizedBox(height: 2),
+                    Text(
+                      room.roomPassword.isEmpty ? '-' : room.roomPassword,
+                      style: const TextStyle(
+                          fontSize: 15,
+                          fontWeight: FontWeight.bold,
+                          color: Color(0xFF050505)),
+                    ),
+                  ],
+                ),
+              ),
+              IconButton(
+                icon: const Icon(Icons.copy_rounded,
+                    size: 18, color: Color(0xFF1877F2)),
+                onPressed: room.roomPassword.isEmpty
+                    ? null
+                    : () => _copyToClipboard(room.roomPassword, 'Password'),
+                tooltip: 'Copy Password',
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildPlayersList() {
+    final players = room.joinedUsers;
+    if (players.isEmpty) return const SizedBox.shrink();
+    return Container(
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: const Color(0xFFCED0D4)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              const Icon(Icons.people_alt_rounded,
+                  size: 16, color: Color(0xFF1877F2)),
+              const SizedBox(width: 6),
+              Text('PLAYERS (${players.length}/${room.total})',
+                  style: const TextStyle(
+                      fontWeight: FontWeight.bold,
+                      fontSize: 11,
+                      color: Color(0xFF050505),
+                      letterSpacing: 0.4)),
+            ],
+          ),
+          const SizedBox(height: 8),
+          ...players.map((p) {
+            final pId = (p['id'] ?? '').toString();
+            final pName = (p['name'] ?? 'Gamer').toString();
+            final pPhoto = (p['photo'] ?? '').toString();
+            final isThisHost = pId == room.hostId;
+            final initial = pName.isNotEmpty ? pName[0].toUpperCase() : 'G';
+            return Padding(
+              padding: const EdgeInsets.symmetric(vertical: 4),
+              child: Row(
+                children: [
+                  CircleAvatar(
+                    radius: 14,
+                    backgroundColor: const Color(0xFFE4E6EB),
+                    backgroundImage:
+                        pPhoto.isNotEmpty ? NetworkImage(pPhoto) : null,
+                    child: pPhoto.isEmpty
+                        ? Text(initial,
+                            style: const TextStyle(
+                                fontSize: 12,
+                                fontWeight: FontWeight.bold,
+                                color: Color(0xFF050505)))
+                        : null,
+                  ),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: Text(pName,
+                        style: const TextStyle(
+                            fontSize: 12.5, fontWeight: FontWeight.w600),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis),
+                  ),
+                  if (isThisHost)
+                    Container(
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 6, vertical: 2),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFF1877F2),
+                        borderRadius: BorderRadius.circular(4),
+                      ),
+                      child: const Text('HOST',
+                          style: TextStyle(
+                              color: Colors.white,
+                              fontSize: 9,
+                              fontWeight: FontWeight.bold)),
+                    ),
+                  if (pId == widget.currentUserId && !isThisHost)
+                    Container(
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 6, vertical: 2),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFF31A24C),
+                        borderRadius: BorderRadius.circular(4),
+                      ),
+                      child: const Text('YOU',
+                          style: TextStyle(
+                              color: Colors.white,
+                              fontSize: 9,
+                              fontWeight: FontWeight.bold)),
+                    ),
+                ],
+              ),
+            );
+          }),
+        ],
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final currentRoom = room;
@@ -1723,6 +1930,12 @@ class _InRoomBottomSheetContentState extends State<_InRoomBottomSheetContent> {
                       ),
                     ),
                     const SizedBox(height: 14),
+                    if (access) ...[
+                      _buildRoomCredentialsCard(),
+                      const SizedBox(height: 12),
+                      _buildPlayersList(),
+                      const SizedBox(height: 12),
+                    ],
                     Container(
                       height: 200,
                       decoration: BoxDecoration(
@@ -1758,7 +1971,8 @@ class _InRoomBottomSheetContentState extends State<_InRoomBottomSheetContent> {
                               final text =
                                   msg['message']?.toString() ?? '';
                               final isSystem = senderId == 'system' ||
-                                  msg['type'] == 'system';
+                                  msg['type'] == 'system' ||
+                                  msg['type'] == 'system_reward';
                               final isMe =
                                   senderId == widget.currentUserId;
                               if (isSystem) {
@@ -1776,6 +1990,7 @@ class _InRoomBottomSheetContentState extends State<_InRoomBottomSheetContent> {
                                             BorderRadius.circular(12),
                                       ),
                                       child: Text(text,
+                                          textAlign: TextAlign.center,
                                           style: const TextStyle(
                                               color: Color(0xFF1877F2),
                                               fontSize: 11,
@@ -1863,6 +2078,11 @@ class _InRoomBottomSheetContentState extends State<_InRoomBottomSheetContent> {
                     const SizedBox(height: 12),
                     if (isH)
                       ElevatedButton.icon(
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: const Color(0xFF31A24C),
+                          foregroundColor: Colors.white,
+                          minimumSize: const Size(double.infinity, 46),
+                        ),
                         icon: const Icon(Icons.play_arrow_rounded),
                         label: Text(_isStartingMatch
                             ? 'STARTING...'
@@ -1881,6 +2101,20 @@ class _InRoomBottomSheetContentState extends State<_InRoomBottomSheetContent> {
                                       .update({
                                     'status': 'IN_PROGRESS',
                                   }).eq('id', currentRoom.id);
+                                  try {
+                                    await SupabaseService.client
+                                        .from('messages')
+                                        .insert({
+                                      'room_id': currentRoom.id,
+                                      'sender_id': 'system',
+                                      'sender_name': 'ROOM BOT',
+                                      'message':
+                                          '🏁 Match has started! Good luck 🎮',
+                                      'type': 'system',
+                                      'created_at': DateTime.now()
+                                          .toIso8601String(),
+                                    });
+                                  } catch (_) {}
                                 } catch (_) {}
                                 if (mounted) {
                                   setState(
@@ -1888,9 +2122,6 @@ class _InRoomBottomSheetContentState extends State<_InRoomBottomSheetContent> {
                                 }
                               },
                       ),
-                    // ═══════════════════════════════════════════════════════════
-                    // NAYA: Delete room button (host ke liye)
-                    // ═══════════════════════════════════════════════════════════
                     if (isH)
                       Padding(
                         padding: const EdgeInsets.only(top: 8),
@@ -1917,6 +2148,12 @@ class _InRoomBottomSheetContentState extends State<_InRoomBottomSheetContent> {
                       ),
                     if (isJ && !isH)
                       OutlinedButton(
+                        style: OutlinedButton.styleFrom(
+                          minimumSize: const Size(double.infinity, 46),
+                          foregroundColor: GamerTheme.redAccent,
+                          side: const BorderSide(
+                              color: GamerTheme.redAccent, width: 1.2),
+                        ),
                         onPressed: widget.onLeaveRoom,
                         child: const Text('LEAVE ROOM'),
                       ),
