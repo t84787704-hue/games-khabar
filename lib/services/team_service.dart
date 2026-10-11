@@ -128,8 +128,69 @@ class TeamService {
           .from("teams")
           .stream(primaryKey: ["id"])
           .order("points", ascending: false)
-          .map((rows) {
-            var filtered = rows.map((r) => TeamModel.fromSupabase(r)).toList();
+          .asyncMap((rows) async {
+            var teams = rows.map((r) => TeamModel.fromSupabase(r)).toList();
+
+            if (teams.isEmpty) return <TeamModel>[];
+
+            final teamIds = teams.map((t) => t.id).toList();
+            final Map<String, List<String>> membersByTeam = {};
+
+            try {
+              final memberRows = await SupabaseService.client
+                  .from("team_members")
+                  .select("team_id, user_id, role")
+                  .inFilter("team_id", teamIds);
+              for (final m in memberRows) {
+                final tid = (m["team_id"] ?? "").toString();
+                final uid = (m["user_id"] ?? "").toString();
+                if (tid.isEmpty || uid.isEmpty) continue;
+                membersByTeam.putIfAbsent(tid, () => []).add(uid);
+              }
+            } catch (e) {
+              debugPrint("[TeamService] members fetch error: $e");
+            }
+
+            final leaderIds = teams
+                .map((t) => t.leaderId)
+                .where((id) => id.isNotEmpty)
+                .toSet()
+                .toList();
+            final Map<String, String> leaderNameById = {};
+            final Map<String, String> leaderAvatarById = {};
+            if (leaderIds.isNotEmpty) {
+              try {
+                final userRows = await SupabaseService.client
+                    .from("users")
+                    .select("id, display_name, username, avatar_url")
+                    .inFilter("id", leaderIds);
+                for (final u in userRows) {
+                  final id = (u["id"] ?? "").toString();
+                  final name =
+                      (u["display_name"] ?? u["username"] ?? "").toString();
+                  final avatar = (u["avatar_url"] ?? "").toString();
+                  if (id.isNotEmpty) {
+                    leaderNameById[id] = name;
+                    leaderAvatarById[id] = avatar;
+                  }
+                }
+              } catch (e) {
+                debugPrint("[TeamService] leader fetch error: $e");
+              }
+            }
+
+            final enriched = teams.map((t) {
+              final members = membersByTeam[t.id] ?? <String>[];
+              final leaderName = leaderNameById[t.leaderId] ?? '';
+              final leaderAvatar = leaderAvatarById[t.leaderId] ?? '';
+              return t.copyWith(
+                members: members,
+                leaderName: leaderName,
+                leaderAvatar: leaderAvatar,
+              );
+            }).toList();
+
+            var filtered = enriched;
             if (gameFilter != null &&
                 gameFilter.isNotEmpty &&
                 gameFilter != "All") {
@@ -155,8 +216,6 @@ class TeamService {
   }
 
   /// Create a new team
-  /// FIX: Sirf auth.currentUser.id use karo, extra columns hata do,
-  /// aur error ko rethrow karo taake UI ko pata chale.
   Future<String?> createTeam({
     required String name,
     required String tag,
@@ -169,15 +228,12 @@ class TeamService {
     required String leaderAvatar,
   }) async {
     try {
-      // ============ FIX: Sirf Supabase auth.currentUser.id use karo ============
       final authUserId = SupabaseService.client.auth.currentUser?.id;
 
       if (authUserId == null || authUserId.isEmpty) {
-        throw Exception(
-            'User not authenticated. Please log in again.');
+        throw Exception('User not authenticated. Please log in again.');
       }
 
-      // leaderId parameter ignore — sirf auth ID use karo
       final effectiveLeaderId = authUserId;
 
       String logoUrl = "";
@@ -194,7 +250,6 @@ class TeamService {
           DateTime.now().millisecondsSinceEpoch.toString());
       final now = DateTime.now().toIso8601String();
 
-      // ============ FIX: Sirf woh columns jo teams table mein hain ============
       final row = {
         "id": teamUuid,
         "name": name.trim(),
@@ -213,13 +268,11 @@ class TeamService {
 
       await SupabaseService.client.from("teams").insert(row);
 
-      // ============ FIX: team_members mein 'username' column nahi hai ============
-      // team_members columns: id, team_id, user_id, role, joined_at
       try {
         await SupabaseService.client.from("team_members").insert({
           "team_id": teamUuid,
           "user_id": effectiveLeaderId,
-          "role": "Owner",
+          "role": "owner",
           "joined_at": now,
         });
       } catch (e) {
@@ -230,7 +283,6 @@ class TeamService {
       return teamUuid;
     } catch (e) {
       debugPrint("[TeamService] createTeam error: $e");
-      // Error ko rethrow karo — taake UI ko pata chale
       rethrow;
     }
   }
@@ -290,7 +342,6 @@ class TeamService {
       final userUuid = SupabaseService.toUuid(currentUserId);
       final teamUuid = SupabaseService.toUuid(teamId);
 
-      // Verify owner
       final memberRow = await SupabaseService.client
           .from("team_members")
           .select("role")
@@ -305,7 +356,6 @@ class TeamService {
         }
       }
 
-      // Check active matches
       final activeMatches = await SupabaseService.client
           .from("active_matches")
           .select("id")
@@ -363,13 +413,10 @@ class TeamService {
     try {
       final teamUuid = SupabaseService.toUuid(teamId);
       final userUuid = SupabaseService.toUuid(userId);
-      final name = userName ?? "Gamer";
 
       await SupabaseService.client.from("team_join_requests").insert({
         "team_id": teamUuid,
-        "team_name": teamName ?? "",
         "user_id": userUuid,
-        "username": name,
         "status": "pending",
         "created_at": DateTime.now().toIso8601String(),
       });
@@ -393,18 +440,9 @@ class TeamService {
       await SupabaseService.client.from("team_members").insert({
         "team_id": teamUuid,
         "user_id": userUuid,
-        "role": "Member",
+        "role": "member",
         "joined_at": DateTime.now().toIso8601String(),
       });
-
-      final team = await getTeam(teamId);
-      if (team != null) {
-        final updatedMembers = List<String>.from(team.members)..add(userId);
-        await SupabaseService.client.from("teams").update({
-          "members": updatedMembers,
-          "member_count": updatedMembers.length,
-        }).or("id.eq.$teamUuid,id.eq.$teamId");
-      }
 
       await SupabaseService.client
           .from("team_join_requests")
