@@ -1693,6 +1693,9 @@ class _GamerProfileScreenState extends State<GamerProfileScreen>
     );
   }
 
+  // ═══════════════════════════════════════════════════════════════════════════
+  // PROFILE SETTINGS MENU — FIXED: Own vs Other profile separation
+  // ═══════════════════════════════════════════════════════════════════════════
   void _showProfileSettingsMenu(GamerUser user, bool isOwnProfile) {
     showModalBottomSheet(
       context: context,
@@ -1729,14 +1732,21 @@ class _GamerProfileScreenState extends State<GamerProfileScreen>
                             color: Color(0xFFE7F3FF),
                             shape: BoxShape.circle,
                           ),
-                          child: const Icon(Icons.tune_rounded,
-                              color: Color(0xFF1877F2), size: 20),
+                          child: Icon(
+                            isOwnProfile
+                                ? Icons.tune_rounded
+                                : Icons.more_horiz_rounded,
+                            color: const Color(0xFF1877F2),
+                            size: 20,
+                          ),
                         ),
                         const SizedBox(width: 12),
-                        const Expanded(
+                        Expanded(
                           child: Text(
-                            'Profile Menu & Settings',
-                            style: TextStyle(
+                            isOwnProfile
+                                ? 'Profile Menu & Settings'
+                                : 'More Options',
+                            style: const TextStyle(
                               color: Color(0xFF050505),
                               fontSize: 17,
                               fontWeight: FontWeight.bold,
@@ -1753,6 +1763,8 @@ class _GamerProfileScreenState extends State<GamerProfileScreen>
                   ),
                   const SizedBox(height: 8),
                   const Divider(color: Color(0xFFCED0D4), height: 1),
+
+                  // ─────────── Shared: Profile header ───────────
                   ListTile(
                     leading: Container(
                       padding: const EdgeInsets.all(8),
@@ -1760,8 +1772,13 @@ class _GamerProfileScreenState extends State<GamerProfileScreen>
                         color: Color(0xFFE7F3FF),
                         shape: BoxShape.circle,
                       ),
-                      child: const Icon(Icons.person_pin_rounded,
-                          color: Color(0xFF1877F2), size: 20),
+                      child: Icon(
+                        isOwnProfile
+                            ? Icons.person_pin_rounded
+                            : Icons.person_rounded,
+                        color: const Color(0xFF1877F2),
+                        size: 20,
+                      ),
                     ),
                     title: Text(
                       isOwnProfile
@@ -1793,7 +1810,10 @@ class _GamerProfileScreenState extends State<GamerProfileScreen>
                       }
                     },
                   ),
-                  if (isOwnProfile)
+
+                  // ─────────── OWN PROFILE ONLY ───────────
+                  if (isOwnProfile) ...[
+                    // Privacy Settings
                     ListTile(
                       leading: Container(
                         padding: const EdgeInsets.all(8),
@@ -1823,7 +1843,8 @@ class _GamerProfileScreenState extends State<GamerProfileScreen>
                         _showPrivacySettingsSheet(user);
                       },
                     ),
-                  if (isOwnProfile)
+
+                    // Blocked Users
                     ListTile(
                       leading: Container(
                         padding: const EdgeInsets.all(8),
@@ -1856,83 +1877,399 @@ class _GamerProfileScreenState extends State<GamerProfileScreen>
                         );
                       },
                     ),
-                  ListTile(
-                    leading: Container(
-                      padding: const EdgeInsets.all(8),
-                      decoration: const BoxDecoration(
-                        color: Color(0xFFFEF7E0),
-                        shape: BoxShape.circle,
+
+                    // G-Coins Wallet
+                    ListTile(
+                      leading: Container(
+                        padding: const EdgeInsets.all(8),
+                        decoration: const BoxDecoration(
+                          color: Color(0xFFFEF7E0),
+                          shape: BoxShape.circle,
+                        ),
+                        child: const Text('🪙',
+                            style: TextStyle(fontSize: 18)),
                       ),
-                      child: const Text('🪙',
-                          style: TextStyle(fontSize: 18)),
-                    ),
-                    title: const Text(
-                      'G-Coins Wallet',
-                      style: TextStyle(
-                          color: Color(0xFF050505),
-                          fontWeight: FontWeight.bold,
-                          fontSize: 14),
-                    ),
-                    subtitle: Text(
-                      '${user.coins} Coins • Tap to open Wallet',
-                      style: const TextStyle(
-                          color: Color(0xFF65676B), fontSize: 12),
-                    ),
-                    trailing: Container(
-                      padding: const EdgeInsets.symmetric(
-                          horizontal: 10, vertical: 4),
-                      decoration: BoxDecoration(
-                        color: const Color(0xFFE4E6EB),
-                        borderRadius: BorderRadius.circular(12),
+                      title: const Text(
+                        'G-Coins Wallet',
+                        style: TextStyle(
+                            color: Color(0xFF050505),
+                            fontWeight: FontWeight.bold,
+                            fontSize: 14),
                       ),
-                      child: Text(
-                        '${user.coins}',
+                      subtitle: Text(
+                        '${user.coins} Coins • Tap to open Wallet',
                         style: const TextStyle(
-                          color: Color(0xFF050505),
-                          fontWeight: FontWeight.bold,
-                          fontSize: 12,
+                            color: Color(0xFF65676B), fontSize: 12),
+                      ),
+                      trailing: Container(
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 10, vertical: 4),
+                        decoration: BoxDecoration(
+                          color: const Color(0xFFE4E6EB),
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                        child: Text(
+                          '${user.coins}',
+                          style: const TextStyle(
+                            color: Color(0xFF050505),
+                            fontWeight: FontWeight.bold,
+                            fontSize: 12,
+                          ),
                         ),
                       ),
+                      onTap: () {
+                        Navigator.pop(ctx);
+                        Navigator.of(context).push(
+                          MaterialPageRoute(
+                            builder: (_) => const CoinWalletScreen(),
+                          ),
+                        );
+                      },
                     ),
-                    onTap: () {
-                      Navigator.pop(ctx);
-                      Navigator.of(context).push(
-                        MaterialPageRoute(
-                          builder: (_) => const CoinWalletScreen(),
+
+                    // Night Mode
+                    ValueListenableBuilder<ThemeMode>(
+                      valueListenable: ThemeService.themeModeNotifier,
+                      builder: (context, mode, _) {
+                        final isDark = mode == ThemeMode.dark;
+                        return ListTile(
+                          leading: Container(
+                            padding: const EdgeInsets.all(8),
+                            decoration: const BoxDecoration(
+                              color: Color(0xFFFEF7E0),
+                              shape: BoxShape.circle,
+                            ),
+                            child: Icon(
+                              isDark
+                                  ? Icons.light_mode_rounded
+                                  : Icons.dark_mode_rounded,
+                              color: const Color(0xFFF59E0B),
+                              size: 20,
+                            ),
+                          ),
+                          title: Text(
+                            isDark ? 'Day Mode' : 'Night Mode',
+                            style: const TextStyle(
+                                color: Color(0xFF050505),
+                                fontWeight: FontWeight.bold,
+                                fontSize: 14),
+                          ),
+                          subtitle: Text(
+                            isDark
+                                ? 'Switch to bright display theme'
+                                : 'Switch to dark gaming theme',
+                            style: const TextStyle(
+                                color: Color(0xFF65676B), fontSize: 12),
+                          ),
+                          trailing: Switch.adaptive(
+                            value: isDark,
+                            activeColor: const Color(0xFF1877F2),
+                            onChanged: (val) {
+                              ThemeService.toggleTheme();
+                            },
+                          ),
+                          onTap: () {
+                            ThemeService.toggleTheme();
+                          },
+                        );
+                      },
+                    ),
+
+                    // Saved Posts & News
+                    ListTile(
+                      leading: Container(
+                        padding: const EdgeInsets.all(8),
+                        decoration: const BoxDecoration(
+                          color: Color(0xFFE7F3FF),
+                          shape: BoxShape.circle,
                         ),
-                      );
-                    },
-                  ),
-                  ListTile(
-                    leading: Container(
-                      padding: const EdgeInsets.all(8),
-                      decoration: const BoxDecoration(
-                        color: Color(0xFFE7F3FF),
-                        shape: BoxShape.circle,
+                        child: const Icon(Icons.bookmark_rounded,
+                            color: Color(0xFF1877F2), size: 20),
                       ),
-                      child: const Icon(Icons.share_rounded,
-                          color: Color(0xFF1877F2), size: 20),
+                      title: const Text(
+                        'Saved Posts & News',
+                        style: TextStyle(
+                            color: Color(0xFF050505),
+                            fontWeight: FontWeight.bold,
+                            fontSize: 14),
+                      ),
+                      subtitle: const Text(
+                        'View your bookmarked clips & articles',
+                        style: TextStyle(
+                            color: Color(0xFF65676B), fontSize: 12),
+                      ),
+                      trailing: const Icon(Icons.arrow_forward_ios_rounded,
+                          color: Color(0xFF65676B), size: 14),
+                      onTap: () {
+                        Navigator.pop(ctx);
+                        Navigator.of(context).push(
+                          MaterialPageRoute(
+                            builder: (_) => Scaffold(
+                              backgroundColor:
+                                  const Color(0xFFF0F2F5),
+                              appBar: AppBar(
+                                backgroundColor: Colors.white,
+                                elevation: 1,
+                                title: const Text('Saved Posts & News',
+                                    style: TextStyle(
+                                        color: Color(0xFF1877F2),
+                                        fontWeight: FontWeight.bold,
+                                        fontSize: 18)),
+                              ),
+                              body: const SavedNewsTabScreen(),
+                            ),
+                          ),
+                        );
+                      },
                     ),
-                    title: const Text(
-                      'Share Profile',
-                      style: TextStyle(
-                          color: Color(0xFF050505),
-                          fontWeight: FontWeight.bold,
-                          fontSize: 14),
+
+                    // Settings & Preferences
+                    ListTile(
+                      leading: Container(
+                        padding: const EdgeInsets.all(8),
+                        decoration: const BoxDecoration(
+                          color: Color(0xFFE4E6EB),
+                          shape: BoxShape.circle,
+                        ),
+                        child: const Icon(Icons.settings_rounded,
+                            color: Color(0xFF65676B), size: 20),
+                      ),
+                      title: const Text(
+                        'Settings & Preferences',
+                        style: TextStyle(
+                            color: Color(0xFF050505),
+                            fontWeight: FontWeight.bold,
+                            fontSize: 14),
+                      ),
+                      subtitle: const Text(
+                        'Follow Us, sound, notifications & accounts',
+                        style: TextStyle(
+                            color: Color(0xFF65676B), fontSize: 12),
+                      ),
+                      trailing: const Icon(Icons.arrow_forward_ios_rounded,
+                          color: Color(0xFF65676B), size: 14),
+                      onTap: () {
+                        Navigator.pop(ctx);
+                        Navigator.of(context).push(
+                          MaterialPageRoute(
+                            builder: (_) => const ProfileScreen(),
+                          ),
+                        );
+                      },
                     ),
-                    subtitle: const Text(
-                      'Share Gamer ID link with friends & squad',
-                      style: TextStyle(
-                          color: Color(0xFF65676B), fontSize: 12),
+
+                    const Divider(color: Color(0xFFCED0D4), height: 16),
+
+                    // Download Data
+                    ListTile(
+                      leading: Container(
+                        padding: const EdgeInsets.all(8),
+                        decoration: const BoxDecoration(
+                          color: Color(0xFFE7F3FF),
+                          shape: BoxShape.circle,
+                        ),
+                        child: const Icon(Icons.download_rounded,
+                            color: Color(0xFF1877F2), size: 20),
+                      ),
+                      title: const Text(
+                        'Download My Data',
+                        style: TextStyle(
+                            color: Color(0xFF050505),
+                            fontWeight: FontWeight.bold,
+                            fontSize: 14),
+                      ),
+                      subtitle: const Text(
+                        'Get a copy of your Gamers ID data (JSON)',
+                        style: TextStyle(
+                            color: Color(0xFF65676B), fontSize: 12),
+                      ),
+                      trailing: const Icon(Icons.arrow_forward_ios_rounded,
+                          color: Color(0xFF65676B), size: 14),
+                      onTap: () {
+                        Navigator.pop(ctx);
+                        Navigator.of(context).push(
+                          MaterialPageRoute(
+                            builder: (_) =>
+                                const GamerDownloadDataScreen(),
+                          ),
+                        );
+                      },
                     ),
-                    trailing: const Icon(Icons.arrow_forward_ios_rounded,
-                        color: Color(0xFF65676B), size: 14),
-                    onTap: () {
-                      Navigator.pop(ctx);
-                      _shareProfile(user);
-                    },
-                  ),
-                  if (!isOwnProfile)
+
+                    // Privacy Policy
+                    ListTile(
+                      leading: Container(
+                        padding: const EdgeInsets.all(8),
+                        decoration: const BoxDecoration(
+                          color: Color(0xFFE7F3FF),
+                          shape: BoxShape.circle,
+                        ),
+                        child: const Icon(Icons.privacy_tip_rounded,
+                            color: Color(0xFF1877F2), size: 20),
+                      ),
+                      title: const Text(
+                        'Privacy Policy',
+                        style: TextStyle(
+                            color: Color(0xFF050505),
+                            fontWeight: FontWeight.bold,
+                            fontSize: 14),
+                      ),
+                      subtitle: const Text(
+                        'How we collect and protect your data',
+                        style: TextStyle(
+                            color: Color(0xFF65676B), fontSize: 12),
+                      ),
+                      trailing: const Icon(Icons.arrow_forward_ios_rounded,
+                          color: Color(0xFF65676B), size: 14),
+                      onTap: () {
+                        Navigator.pop(ctx);
+                        Navigator.of(context).push(
+                          MaterialPageRoute(
+                            builder: (_) =>
+                                const GamerPrivacyPolicyScreen(),
+                          ),
+                        );
+                      },
+                    ),
+
+                    // Terms of Service
+                    ListTile(
+                      leading: Container(
+                        padding: const EdgeInsets.all(8),
+                        decoration: const BoxDecoration(
+                          color: Color(0xFFE7F3FF),
+                          shape: BoxShape.circle,
+                        ),
+                        child: const Icon(Icons.gavel_rounded,
+                            color: Color(0xFF1877F2), size: 20),
+                      ),
+                      title: const Text(
+                        'Terms of Service',
+                        style: TextStyle(
+                            color: Color(0xFF050505),
+                            fontWeight: FontWeight.bold,
+                            fontSize: 14),
+                      ),
+                      subtitle: const Text(
+                        'Rules for using Gamers ID',
+                        style: TextStyle(
+                            color: Color(0xFF65676B), fontSize: 12),
+                      ),
+                      trailing: const Icon(Icons.arrow_forward_ios_rounded,
+                          color: Color(0xFF65676B), size: 14),
+                      onTap: () {
+                        Navigator.pop(ctx);
+                        Navigator.of(context).push(
+                          MaterialPageRoute(
+                            builder: (_) =>
+                                const GamerTermsOfServiceScreen(),
+                          ),
+                        );
+                      },
+                    ),
+
+                    // Delete Account
+                    ListTile(
+                      leading: Container(
+                        padding: const EdgeInsets.all(8),
+                        decoration: const BoxDecoration(
+                          color: Color(0xFFFFEBEE),
+                          shape: BoxShape.circle,
+                        ),
+                        child: const Icon(Icons.delete_forever_rounded,
+                            color: Color(0xFFDC2626), size: 20),
+                      ),
+                      title: const Text(
+                        'Delete Account',
+                        style: TextStyle(
+                            color: Color(0xFFDC2626),
+                            fontWeight: FontWeight.bold,
+                            fontSize: 14),
+                      ),
+                      subtitle: const Text(
+                        'Permanently delete your Gamer ID (30-day grace)',
+                        style: TextStyle(
+                            color: Color(0xFF65676B), fontSize: 12),
+                      ),
+                      trailing: const Icon(Icons.arrow_forward_ios_rounded,
+                          color: Color(0xFF65676B), size: 14),
+                      onTap: () {
+                        Navigator.pop(ctx);
+                        Navigator.of(context).push(
+                          MaterialPageRoute(
+                            builder: (_) =>
+                                const GamerDeleteAccountScreen(),
+                          ),
+                        );
+                      },
+                    ),
+
+                    const SizedBox(height: 4),
+
+                    // Log Out
+                    ListTile(
+                      leading: Container(
+                        padding: const EdgeInsets.all(8),
+                        decoration: const BoxDecoration(
+                          color: Color(0xFFFEE2E2),
+                          shape: BoxShape.circle,
+                        ),
+                        child: const Icon(Icons.logout_rounded,
+                            color: Color(0xFFDC2626), size: 20),
+                      ),
+                      title: const Text(
+                        'Log Out',
+                        style: TextStyle(
+                            color: Color(0xFFDC2626),
+                            fontWeight: FontWeight.bold,
+                            fontSize: 14),
+                      ),
+                      subtitle: const Text(
+                        'Sign out of Gamers ID Network',
+                        style: TextStyle(
+                            color: Color(0xFF65676B), fontSize: 12),
+                      ),
+                      onTap: () {
+                        Navigator.pop(ctx);
+                        _confirmSignOut();
+                      },
+                    ),
+                  ],
+
+                  // ─────────── OTHER USER PROFILE ONLY ───────────
+                  if (!isOwnProfile) ...[
+                    // Share Profile
+                    ListTile(
+                      leading: Container(
+                        padding: const EdgeInsets.all(8),
+                        decoration: const BoxDecoration(
+                          color: Color(0xFFE7F3FF),
+                          shape: BoxShape.circle,
+                        ),
+                        child: const Icon(Icons.share_rounded,
+                            color: Color(0xFF1877F2), size: 20),
+                      ),
+                      title: const Text(
+                        'Share Profile',
+                        style: TextStyle(
+                            color: Color(0xFF050505),
+                            fontWeight: FontWeight.bold,
+                            fontSize: 14),
+                      ),
+                      subtitle: Text(
+                        'Share @${user.username}\'s Gamer ID with friends',
+                        style: const TextStyle(
+                            color: Color(0xFF65676B), fontSize: 12),
+                      ),
+                      trailing: const Icon(Icons.arrow_forward_ios_rounded,
+                          color: Color(0xFF65676B), size: 14),
+                      onTap: () {
+                        Navigator.pop(ctx);
+                        _shareProfile(user);
+                      },
+                    ),
+
+                    // Block User / Unblock User
                     ListTile(
                       leading: Container(
                         padding: const EdgeInsets.all(8),
@@ -1968,297 +2305,6 @@ class _GamerProfileScreenState extends State<GamerProfileScreen>
                         } else {
                           _confirmBlock(user);
                         }
-                      },
-                    ),
-                  ValueListenableBuilder<ThemeMode>(
-                    valueListenable: ThemeService.themeModeNotifier,
-                    builder: (context, mode, _) {
-                      final isDark = mode == ThemeMode.dark;
-                      return ListTile(
-                        leading: Container(
-                          padding: const EdgeInsets.all(8),
-                          decoration: const BoxDecoration(
-                            color: Color(0xFFFEF7E0),
-                            shape: BoxShape.circle,
-                          ),
-                          child: Icon(
-                            isDark
-                                ? Icons.light_mode_rounded
-                                : Icons.dark_mode_rounded,
-                            color: const Color(0xFFF59E0B),
-                            size: 20,
-                          ),
-                        ),
-                        title: Text(
-                          isDark ? 'Day Mode' : 'Night Mode',
-                          style: const TextStyle(
-                              color: Color(0xFF050505),
-                              fontWeight: FontWeight.bold,
-                              fontSize: 14),
-                        ),
-                        subtitle: Text(
-                          isDark
-                              ? 'Switch to bright display theme'
-                              : 'Switch to dark gaming theme',
-                          style: const TextStyle(
-                              color: Color(0xFF65676B), fontSize: 12),
-                        ),
-                        trailing: Switch.adaptive(
-                          value: isDark,
-                          activeColor: const Color(0xFF1877F2),
-                          onChanged: (val) {
-                            ThemeService.toggleTheme();
-                          },
-                        ),
-                        onTap: () {
-                          ThemeService.toggleTheme();
-                        },
-                      );
-                    },
-                  ),
-                  ListTile(
-                    leading: Container(
-                      padding: const EdgeInsets.all(8),
-                      decoration: const BoxDecoration(
-                        color: Color(0xFFE7F3FF),
-                        shape: BoxShape.circle,
-                      ),
-                      child: const Icon(Icons.bookmark_rounded,
-                          color: Color(0xFF1877F2), size: 20),
-                    ),
-                    title: const Text(
-                      'Saved Posts & News',
-                      style: TextStyle(
-                          color: Color(0xFF050505),
-                          fontWeight: FontWeight.bold,
-                          fontSize: 14),
-                    ),
-                    subtitle: const Text(
-                      'View your bookmarked clips & articles',
-                      style: TextStyle(
-                          color: Color(0xFF65676B), fontSize: 12),
-                    ),
-                    trailing: const Icon(Icons.arrow_forward_ios_rounded,
-                        color: Color(0xFF65676B), size: 14),
-                    onTap: () {
-                      Navigator.pop(ctx);
-                      Navigator.of(context).push(
-                        MaterialPageRoute(
-                          builder: (_) => Scaffold(
-                            backgroundColor:
-                                const Color(0xFFF0F2F5),
-                            appBar: AppBar(
-                              backgroundColor: Colors.white,
-                              elevation: 1,
-                              title: const Text('Saved Posts & News',
-                                  style: TextStyle(
-                                      color: Color(0xFF1877F2),
-                                      fontWeight: FontWeight.bold,
-                                      fontSize: 18)),
-                            ),
-                            body: const SavedNewsTabScreen(),
-                          ),
-                        ),
-                      );
-                    },
-                  ),
-                  ListTile(
-                    leading: Container(
-                      padding: const EdgeInsets.all(8),
-                      decoration: const BoxDecoration(
-                        color: Color(0xFFE4E6EB),
-                        shape: BoxShape.circle,
-                      ),
-                      child: const Icon(Icons.settings_rounded,
-                          color: Color(0xFF65676B), size: 20),
-                    ),
-                    title: const Text(
-                      'Settings & Preferences',
-                      style: TextStyle(
-                          color: Color(0xFF050505),
-                          fontWeight: FontWeight.bold,
-                          fontSize: 14),
-                    ),
-                    subtitle: const Text(
-                      'Follow Us, sound, notifications & accounts',
-                      style: TextStyle(
-                          color: Color(0xFF65676B), fontSize: 12),
-                    ),
-                    trailing: const Icon(Icons.arrow_forward_ios_rounded,
-                        color: Color(0xFF65676B), size: 14),
-                    onTap: () {
-                      Navigator.pop(ctx);
-                      Navigator.of(context).push(
-                        MaterialPageRoute(
-                          builder: (_) => const ProfileScreen(),
-                        ),
-                      );
-                    },
-                  ),
-                  if (isOwnProfile) ...[
-                    const Divider(color: Color(0xFFCED0D4), height: 16),
-                    ListTile(
-                      leading: Container(
-                        padding: const EdgeInsets.all(8),
-                        decoration: const BoxDecoration(
-                          color: Color(0xFFE7F3FF),
-                          shape: BoxShape.circle,
-                        ),
-                        child: const Icon(Icons.download_rounded,
-                            color: Color(0xFF1877F2), size: 20),
-                      ),
-                      title: const Text(
-                        'Download My Data',
-                        style: TextStyle(
-                            color: Color(0xFF050505),
-                            fontWeight: FontWeight.bold,
-                            fontSize: 14),
-                      ),
-                      subtitle: const Text(
-                        'Get a copy of your Gamers ID data (JSON)',
-                        style: TextStyle(
-                            color: Color(0xFF65676B), fontSize: 12),
-                      ),
-                      trailing: const Icon(Icons.arrow_forward_ios_rounded,
-                          color: Color(0xFF65676B), size: 14),
-                      onTap: () {
-                        Navigator.pop(ctx);
-                        Navigator.of(context).push(
-                          MaterialPageRoute(
-                            builder: (_) =>
-                                const GamerDownloadDataScreen(),
-                          ),
-                        );
-                      },
-                    ),
-                    ListTile(
-                      leading: Container(
-                        padding: const EdgeInsets.all(8),
-                        decoration: const BoxDecoration(
-                          color: Color(0xFFE7F3FF),
-                          shape: BoxShape.circle,
-                        ),
-                        child: const Icon(Icons.privacy_tip_rounded,
-                            color: Color(0xFF1877F2), size: 20),
-                      ),
-                      title: const Text(
-                        'Privacy Policy',
-                        style: TextStyle(
-                            color: Color(0xFF050505),
-                            fontWeight: FontWeight.bold,
-                            fontSize: 14),
-                      ),
-                      subtitle: const Text(
-                        'How we collect and protect your data',
-                        style: TextStyle(
-                            color: Color(0xFF65676B), fontSize: 12),
-                      ),
-                      trailing: const Icon(Icons.arrow_forward_ios_rounded,
-                          color: Color(0xFF65676B), size: 14),
-                      onTap: () {
-                        Navigator.pop(ctx);
-                        Navigator.of(context).push(
-                          MaterialPageRoute(
-                            builder: (_) =>
-                                const GamerPrivacyPolicyScreen(),
-                          ),
-                        );
-                      },
-                    ),
-                    ListTile(
-                      leading: Container(
-                        padding: const EdgeInsets.all(8),
-                        decoration: const BoxDecoration(
-                          color: Color(0xFFE7F3FF),
-                          shape: BoxShape.circle,
-                        ),
-                        child: const Icon(Icons.gavel_rounded,
-                            color: Color(0xFF1877F2), size: 20),
-                      ),
-                      title: const Text(
-                        'Terms of Service',
-                        style: TextStyle(
-                            color: Color(0xFF050505),
-                            fontWeight: FontWeight.bold,
-                            fontSize: 14),
-                      ),
-                      subtitle: const Text(
-                        'Rules for using Gamers ID',
-                        style: TextStyle(
-                            color: Color(0xFF65676B), fontSize: 12),
-                      ),
-                      trailing: const Icon(Icons.arrow_forward_ios_rounded,
-                          color: Color(0xFF65676B), size: 14),
-                      onTap: () {
-                        Navigator.pop(ctx);
-                        Navigator.of(context).push(
-                          MaterialPageRoute(
-                            builder: (_) =>
-                                const GamerTermsOfServiceScreen(),
-                          ),
-                        );
-                      },
-                    ),
-                    ListTile(
-                      leading: Container(
-                        padding: const EdgeInsets.all(8),
-                        decoration: const BoxDecoration(
-                          color: Color(0xFFFFEBEE),
-                          shape: BoxShape.circle,
-                        ),
-                        child: const Icon(Icons.delete_forever_rounded,
-                            color: Color(0xFFDC2626), size: 20),
-                      ),
-                      title: const Text(
-                        'Delete Account',
-                        style: TextStyle(
-                            color: Color(0xFFDC2626),
-                            fontWeight: FontWeight.bold,
-                            fontSize: 14),
-                      ),
-                      subtitle: const Text(
-                        'Permanently delete your Gamer ID (30-day grace)',
-                        style: TextStyle(
-                            color: Color(0xFF65676B), fontSize: 12),
-                      ),
-                      trailing: const Icon(Icons.arrow_forward_ios_rounded,
-                          color: Color(0xFF65676B), size: 14),
-                      onTap: () {
-                        Navigator.pop(ctx);
-                        Navigator.of(context).push(
-                          MaterialPageRoute(
-                            builder: (_) =>
-                                const GamerDeleteAccountScreen(),
-                          ),
-                        );
-                      },
-                    ),
-                    const SizedBox(height: 4),
-                    ListTile(
-                      leading: Container(
-                        padding: const EdgeInsets.all(8),
-                        decoration: const BoxDecoration(
-                          color: Color(0xFFFEE2E2),
-                          shape: BoxShape.circle,
-                        ),
-                        child: const Icon(Icons.logout_rounded,
-                            color: Color(0xFFDC2626), size: 20),
-                      ),
-                      title: const Text(
-                        'Log Out',
-                        style: TextStyle(
-                            color: Color(0xFFDC2626),
-                            fontWeight: FontWeight.bold,
-                            fontSize: 14),
-                      ),
-                      subtitle: const Text(
-                        'Sign out of Gamers ID Network',
-                        style: TextStyle(
-                            color: Color(0xFF65676B), fontSize: 12),
-                      ),
-                      onTap: () {
-                        Navigator.pop(ctx);
-                        _confirmSignOut();
                       },
                     ),
                   ],
