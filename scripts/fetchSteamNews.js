@@ -1,4 +1,5 @@
-const admin = require('firebase-admin');
+require('dotenv').config();
+const { createClient } = require('@supabase/supabase-js');
 const axios = require('axios');
 const Parser = require('rss-parser');
 const cheerio = require('cheerio');
@@ -6,15 +7,20 @@ const he = require('he');
 
 const parser = new Parser({ customFields: { item: ['media:content', 'enclosure'] } });
 
-// Firebase
-const serviceAccount = JSON.parse(process.env.FIREBASE_SERVICE_ACCOUNT);
-admin.initializeApp({ credential: admin.credential.cert(serviceAccount) });
-const db = admin.firestore();
+const SUPABASE_URL = process.env.SUPABASE_URL || 'https://dxdkitnroypbblazblja.supabase.co';
+const SUPABASE_SERVICE_KEY = process.env.SUPABASE_SERVICE_KEY || process.env.SUPABASE_KEY;
+
+if (!SUPABASE_SERVICE_KEY) {
+  console.error('SUPABASE_SERVICE_KEY is missing. Please set it in your .env or environment.');
+  process.exit(1);
+}
+
+const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_KEY);
 
 const APP_CATEGORIES = ['Racing Games','Driving Games','Simulator Games','Bike Games','Car Simulator','Truck Simulator','Battle Royale','FPS / Shooting','Action Games','Adventure Games','Survival Games','Sports Games','Strategy Games','Horror Games','Multiplayer Games','Offline Games'];
 let fbIndex = 0;
 
-// RUSSIAN FILTER - ye naya hai
+// RUSSIAN FILTER
 function isRussian(text){
   if(!text) return false;
   return /[а-яА-ЯёЁ]/.test(text);
@@ -87,8 +93,7 @@ function cleanDescription(text) {
   t = t.replace(/<img[^>]*>/gi, '');
   t = t.replace(/\{STEAM_CLAN_IMAGE\}[^\s"'<>]+/gi, '');
 
-  // 3. [url="LINK"]TEXT[/url] and [url]LINK[/url]:
-  // remove completely if contains discord.gg, otherwise keep only LINK
+  // 3. Remove discord links
   t = t.replace(/\[url=["']?(https?:\/\/[^"'\]]+|discord\.gg\/[^"'\]]+)["']?\]([\s\S]*?)\[\/url\]/gi, (match, link, body) => {
     if (link.toLowerCase().includes('discord.gg') || body.toLowerCase().includes('discord.gg')) {
       return '';
@@ -101,11 +106,10 @@ function cleanDescription(text) {
     }
     return body;
   });
-  // Also strip raw discord.gg links or invites
   t = t.replace(/https?:\/\/(?:www\.)?discord\.gg\/[a-zA-Z0-9_-]+/gi, '');
   t = t.replace(/(?:^|\s)discord\.gg\/[a-zA-Z0-9_-]+/gi, '');
 
-  // 4. Remove broken link garbage like https:// https:// www.ea.com or space issues
+  // 4. Remove broken link garbage
   t = t.replace(/(?:https?:\s*\/\/\s*)+https?:\s*\/\/\s*/gi, 'https://');
   t = t.replace(/https?:\/\/\s+/gi, 'https://');
   t = t.replace(/\s+https?:\/\//gi, ' https://');
@@ -202,13 +206,6 @@ async function getRealImage(articleUrl, item, rawTitle = '', category = '', exis
     } catch (_) {}
   }
 
-  // 2. Exact user requested hierarchy:
-  // let image = $('meta[property="og:image"]').attr('content') 
-  //          || $('meta[name="twitter:image"]').attr('content')
-  //          || $('meta[property="og:image:secure_url"]').attr('content')
-  //          || $('article img').first().attr('src')
-  //          || item.enclosure?.url
-  //          || item['media:content']?.$?.url
   let image = "";
   if ($) {
     image = $('meta[property="og:image"]').attr('content')
@@ -226,7 +223,6 @@ async function getRealImage(articleUrl, item, rawTitle = '', category = '', exis
          || item.image?.url;
   }
 
-  // 3. Make absolute URL and validate if found
   if (image) {
     const abs = makeAbsoluteUrl(image, articleUrl);
     if (abs && abs.startsWith('http')) {
@@ -238,18 +234,15 @@ async function getRealImage(articleUrl, item, rawTitle = '', category = '', exis
     }
   }
 
-  // 4. If category fallback exists
   const fallback = getCategoryFallback(rawTitle, category);
   if (fallback && fallback.url) {
     return fallback.url;
   }
 
-  // 5. If after all still no image, do NOT leave null, try to fetch google favicon
   if (articleUrl) {
     try {
       const parsed = new URL(articleUrl);
       const faviconUrl = `https://www.google.com/s2/favicons?domain=${parsed.hostname}&sz=128`;
-      console.log(`[Image Favicon] Fallback to favicon for "${rawTitle.substring(0, 45)}": ${faviconUrl}`);
       return faviconUrl;
     } catch (_) {}
   }
@@ -275,7 +268,6 @@ async function fetchFullArticle(url) {
     if (!res.data || typeof res.data !== 'string') return null;
     const $ = cheerio.load(res.data);
 
-    // Remove unwanted tags, navigation, ads, social, subscribe
     $('script, style, noscript, nav, header, footer, aside, iframe, .advertisement, .ad, .ad-container, [data-ad], .social-share, .comments, .related-posts, .subscribe, .newsletter-signup').remove();
 
     let paragraphs = [];
@@ -304,7 +296,6 @@ async function fetchFullArticle(url) {
       }
     }
 
-    // Try JSON-LD if paragraphs are still empty or too short
     if (paragraphs.length < 2) {
       $('script[type="application/ld+json"]').each((_, el) => {
         try {
@@ -332,6 +323,7 @@ async function fetchFullArticle(url) {
     return null;
   }
 }
+
 function detectCat(title){
   const t=title.toLowerCase();
   if(t.includes('free fire')||t.includes('pubg')||t.includes('fortnite')) return 'Battle Royale';
@@ -348,7 +340,6 @@ function extractGameName(title, fallback = '') {
   if (!title || typeof title !== 'string') return fallback;
   const cleanTitle = title.trim();
 
-  // 1. High-priority known gaming franchises and patterns
   const franchisePatterns = [
     /\bEA Sports\s+[A-Za-z0-9]+(?:\s+[A-Za-z0-9]+){0,3}\b/i,
     /\bCall of Duty(?::\s*[A-Za-z0-9]+|\s+[A-Za-z0-9]+){1,3}\b/i,
@@ -364,14 +355,9 @@ function extractGameName(title, fallback = '') {
     }
   }
 
-  // 2. Cut before common headline separators (comma, colon, dash, pipe)
-  // e.g. "EA Sports College Football 27, The Survivalists..." -> "EA Sports College Football 27"
   let segment = cleanTitle.split(/[:|\-–—,]/)[0].trim();
-
-  // Strip trailing platform or action words: PS5, PS4, Xbox, PC, Switch, Review, Update, etc.
   segment = segment.replace(/\s+(?:PS[45]|PlayStation(?:\s*[45])?|Xbox(?:\s*(?:Series\s*[XS]|One))?|Nintendo\s*Switch|Switch|PC|Steam|iOS|Android|Update|Patch|Review|Trailer|DLC|Free|Release\s*Date).*$/i, '').trim();
 
-  // 3. Extract first 3-4 capitalized English words from start
   const startCapitalized = segment.match(/^([A-Z0-9][a-zA-Z0-9'’\.\-&]*(?:\s+[A-Z0-9][a-zA-Z0-9'’\.\-&]*){0,3})/);
   if (startCapitalized && startCapitalized[1]) {
     const candidate = startCapitalized[1].trim();
@@ -382,7 +368,6 @@ function extractGameName(title, fallback = '') {
     }
   }
 
-  // 4. Regex fallback: match capitalized multi-word sequence anywhere
   const regexMatch = cleanTitle.match(/([A-Z][a-z0-9]+(?:\s+[A-Z0-9][a-z0-9]+)+|\bEA Sports[^\n,:]+|\bGTA\s?VI?\b|\bFIFA\s?\d+|\bCall of Duty[^\n,:]*)/);
   if (regexMatch && regexMatch[1]) {
     return regexMatch[1].trim();
@@ -392,26 +377,29 @@ function extractGameName(title, fallback = '') {
 }
 
 async function run(){
-  console.log('START FETCH - LATEST NEWS');
+  console.log('START FETCH - STEAM NEWS TO SUPABASE');
 
-  // STEP 0 - PURANI RUSSIAN DELETE KARO
-  try{
-    const snap = await db.collection('news').get();
+  // STEP 0 - PURANI RUSSIAN DELETE KARO FROM SUPABASE
+  try {
+    const { data: snap } = await supabase.from('steam_news').select('id, title, titleMap');
     let del = 0;
-    for(const doc of snap.docs){
-      const title = doc.data().title || doc.data().titleMap?.en || "";
-      if(isRussian(title)){
-        await doc.ref.delete();
-        del++;
+    if (snap) {
+      for (const row of snap) {
+        const title = row.title || row.titleMap?.en || "";
+        if (isRussian(title)) {
+          await supabase.from('steam_news').delete().eq('id', row.id);
+          del++;
+        }
       }
     }
-    console.log(`Cleaned ${del} Russian old docs`);
-  }catch(e){ console.log("Clean fail", e.message); }
+    console.log(`Cleaned ${del} Russian old docs from Supabase steam_news`);
+  } catch(e) {
+    console.log("Clean fail", e.message);
+  }
 
   // STEAM - Latest 20 per game
-  for(const [gameName, appId] of Object.entries(allGamesAppIds)){
-    try{
-      // Fetch price overview
+  for (const [gameName, appId] of Object.entries(allGamesAppIds)) {
+    try {
       let currentPrice = 2999;
       let originalPriceVal = 4499;
       let priceHistory = [
@@ -433,91 +421,122 @@ async function run(){
       } catch (_) {}
 
       const res = await axios.get(`https://api.steampowered.com/ISteamNews/GetNewsForApp/v2/?appid=${appId}&count=20&maxlength=0`);
-      for(const item of res.data?.appnews?.newsitems||[]){
-        const rawTitle = he.decode(item.title||"").substring(0,200);
-        if(isRussian(rawTitle)) continue; // RUSSIAN SKIP
+      for (const item of res.data?.appnews?.newsitems || []) {
+        const rawTitle = he.decode(item.title || "").substring(0, 200);
+        if (isRussian(rawTitle)) continue;
 
         const fullText = cleanDescription(item.contents || "");
-        if(!fullText || fullText.length < 500) continue; // Skip if < 500 characters
-        if(isRussian(fullText)) continue;
+        if (!fullText || fullText.length < 500) continue;
+        if (isRussian(fullText)) continue;
 
-        let cat = GAME_CATEGORY_MAP[gameName] || APP_CATEGORIES[fbIndex % APP_CATEGORIES.length]; fbIndex++;
+        let cat = GAME_CATEGORY_MAP[gameName] || APP_CATEGORIES[fbIndex % APP_CATEGORIES.length];
+        fbIndex++;
         const img = `https://cdn.akamai.steamstatic.com/steam/apps/${appId}/header.jpg`;
-        if(!img) continue;
+        if (!img) continue;
 
         const paras = fullText.split('\n\n').filter(p => p.trim().length > 20);
         const shortDesc = paras.slice(0, 2).join('\n\n') || fullText.substring(0, 300);
 
-        await db.collection('news').doc(`${appId}_${item.gid}`).set({
-          id:`${appId}_${item.gid}`,
+        const newsPayload = {
+          id: `${appId}_${item.gid}`,
           title: rawTitle,
           description: fullText,
           content: fullText,
           shortDescription: shortDesc,
-          titleMap:{en: rawTitle, ur: rawTitle, ro: rawTitle},
-          descriptionMap:{en: fullText, ur: fullText, ro: fullText},
+          titleMap: { en: rawTitle, ur: rawTitle, ro: rawTitle },
+          descriptionMap: { en: fullText, ur: fullText, ro: fullText },
           imageUrl: img,
-          appId, appid: appId, url: item.url||"", sourceUrl: item.url||"", gameName, category: cat,
+          appId,
+          appid: appId,
+          url: item.url || "",
+          sourceUrl: item.url || "",
+          gameName,
+          category: cat,
           store: 'Steam',
           currentPrice: currentPrice,
           originalPrice: `Rs. ${originalPriceVal}`,
           originalPriceVal: originalPriceVal,
           priceHistory: priceHistory,
-          timestamp: Math.floor(Date.now()/1000), timeAgo: new Date().toISOString(),
-          views: 0, isFeatured: false, isAuto: true, isFree: false, source: 'Steam'
-        },{merge:true});
+          timestamp: Math.floor(Date.now() / 1000),
+          timeAgo: new Date().toISOString(),
+          views: 0,
+          isFeatured: false,
+          isAuto: true,
+          isFree: false,
+          source: 'Steam'
+        };
+
+        const { error: insErr } = await supabase.from('steam_news').upsert(newsPayload, { onConflict: 'id' });
+        if (insErr) {
+          console.warn(`steam_news upsert warning (${newsPayload.id}): ${insErr.message}`);
+        }
       }
-    }catch(e){}
+    } catch(e) {}
   }
+
   // 50 WEBSITES - Latest 20 per website
-  for(const src of TOP_50_SITES){
-    try{
+  for (const src of TOP_50_SITES) {
+    try {
       const feed = await parser.parseURL(src.url);
-      for(const item of feed.items.slice(0,20)){
+      for (const item of feed.items.slice(0, 20)) {
         const articleUrl = item.link || item.guid || "";
         if (!articleUrl || !articleUrl.startsWith('http')) continue;
 
-        const rawTitle = he.decode(item.title||"").substring(0,200);
-        if(isRussian(rawTitle)) continue; // RUSSIAN SKIP
+        const rawTitle = he.decode(item.title || "").substring(0, 200);
+        if (isRussian(rawTitle)) continue;
 
-        // Fetch full article text (>= 500 chars) from web page
         const fullArticle = await fetchFullArticle(articleUrl);
         if (!fullArticle || !fullArticle.fullText || fullArticle.fullText.length < 500) {
-          continue; // SKIP if article is short or fetch failed
+          continue;
         }
         if (isRussian(fullArticle.fullText)) continue;
 
-        let cat = src.fixedCat || detectCat(rawTitle) || APP_CATEGORIES[fbIndex % APP_CATEGORIES.length]; fbIndex++;
+        let cat = src.fixedCat || detectCat(rawTitle) || APP_CATEGORIES[fbIndex % APP_CATEGORIES.length];
+        fbIndex++;
 
-        // Get genuine article image via og:image with axios + cheerio, or category fallback
         const img = await getImage(articleUrl, item, rawTitle, cat, fullArticle.$);
-        if (!img) {
-          console.log(`[Image Missing] Skipping "${rawTitle.substring(0, 40)}" (no image found)`);
-          continue;
-        }
+        if (!img) continue;
 
         const paras = fullArticle.fullText.split('\n\n').filter(p => p.trim().length > 20);
         const shortDesc = paras.slice(0, 2).join('\n\n') || fullArticle.fullText.substring(0, 300);
 
-        const safeId = Buffer.from(articleUrl).toString('base64').replace(/[/+=]/g,'').substring(0,20);
+        const safeId = Buffer.from(articleUrl).toString('base64').replace(/[/+=]/g, '').substring(0, 20);
         const detectedGame = extractGameName(rawTitle, src.name);
-        await db.collection('news').doc(`${src.name}_${safeId}`).set({
-          id:`${src.name}_${safeId}`,
+
+        const newsPayload = {
+          id: `${src.name}_${safeId}`,
           title: rawTitle,
           description: fullArticle.fullText,
           content: fullArticle.fullText,
           shortDescription: shortDesc,
-          titleMap:{en: rawTitle, ur: rawTitle, ro: rawTitle},
-          descriptionMap:{en: fullArticle.fullText, ur: fullArticle.fullText, ro: fullArticle.fullText},
-          imageUrl: img, url: articleUrl, sourceUrl: articleUrl, gameName: detectedGame, category: cat,
-          timestamp: Math.floor(Date.now()/1000), timeAgo: new Date().toISOString(),
-          views: 0, isFeatured: false, isAuto: true, isFree: false, source: src.name, appId: 0, appid: 0
-        },{merge:true});
+          titleMap: { en: rawTitle, ur: rawTitle, ro: rawTitle },
+          descriptionMap: { en: fullArticle.fullText, ur: fullArticle.fullText, ro: fullArticle.fullText },
+          imageUrl: img,
+          url: articleUrl,
+          sourceUrl: articleUrl,
+          gameName: detectedGame,
+          category: cat,
+          timestamp: Math.floor(Date.now() / 1000),
+          timeAgo: new Date().toISOString(),
+          views: 0,
+          isFeatured: false,
+          isAuto: true,
+          isFree: false,
+          source: src.name,
+          appId: 0,
+          appid: 0
+        };
+
+        const { error: insErr } = await supabase.from('steam_news').upsert(newsPayload, { onConflict: 'id' });
+        if (insErr) {
+          console.warn(`steam_news upsert warning (${newsPayload.id}): ${insErr.message}`);
+        }
       }
-    }catch(e){}
+    } catch(e) {}
   }
-  console.log('DONE - LATEST NEWS FETCHED');
-  await admin.app().delete();
+
+  console.log('DONE - STEAM NEWS FETCHED TO SUPABASE');
   process.exit(0);
 }
+
 run();

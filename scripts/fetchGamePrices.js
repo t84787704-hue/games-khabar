@@ -1,21 +1,16 @@
-const admin = require('firebase-admin');
+require('dotenv').config();
+const { createClient } = require('@supabase/supabase-js');
 const axios = require('axios');
 
-// Initialize Firebase Admin
-if (!admin.apps.length) {
-  if (process.env.FIREBASE_SERVICE_ACCOUNT) {
-    try {
-      const serviceAccount = JSON.parse(process.env.FIREBASE_SERVICE_ACCOUNT);
-      admin.initializeApp({ credential: admin.credential.cert(serviceAccount) });
-    } catch (e) {
-      console.warn("Could not parse FIREBASE_SERVICE_ACCOUNT JSON, using default app credentials:", e.message);
-      admin.initializeApp();
-    }
-  } else {
-    admin.initializeApp();
-  }
+const SUPABASE_URL = process.env.SUPABASE_URL || 'https://dxdkitnroypbblazblja.supabase.co';
+const SUPABASE_SERVICE_KEY = process.env.SUPABASE_SERVICE_KEY || process.env.SUPABASE_KEY;
+
+if (!SUPABASE_SERVICE_KEY) {
+  console.error('SUPABASE_SERVICE_KEY is missing. Please set it in your .env or environment.');
+  process.exit(1);
 }
-const db = admin.firestore();
+
+const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_KEY);
 
 const GAMES = [
   "GTA VI",
@@ -108,12 +103,17 @@ async function fetchGamePrice(game) {
     store = 'Steam';
   }
 
-  // Retrieve existing priceHistory
+  // Retrieve existing priceHistory from Supabase price_alerts table
   let priceHistory = [];
   try {
-    const existingDoc = await db.collection('game_prices').doc(docId).get();
-    if (existingDoc.exists && existingDoc.data().priceHistory) {
-      priceHistory = existingDoc.data().priceHistory;
+    const { data: existingDoc } = await supabase
+      .from('price_alerts')
+      .select('priceHistory')
+      .eq('id', docId)
+      .maybeSingle();
+
+    if (existingDoc && existingDoc.priceHistory) {
+      priceHistory = Array.isArray(existingDoc.priceHistory) ? existingDoc.priceHistory : [];
     }
   } catch (_) {}
 
@@ -126,8 +126,9 @@ async function fetchGamePrice(game) {
     priceHistory = priceHistory.slice(priceHistory.length - 30);
   }
 
-  // Write to game_prices
-  await db.collection('game_prices').doc(docId).set({
+  // Write to Supabase price_alerts table
+  const priceData = {
+    id: docId,
     gameName: game,
     currentPrice: currentPrice,
     originalPrice: originalPrice,
@@ -137,23 +138,34 @@ async function fetchGamePrice(game) {
     dealUrl: dealUrl,
     discountPercent: discountPercent,
     priceHistory: priceHistory,
-    lastChecked: admin.firestore.FieldValue.serverTimestamp(),
-  }, { merge: true });
+    lastChecked: new Date().toISOString(),
+    updatedAt: new Date().toISOString(),
+  };
 
-  console.log(`[Updated] ${game} (${docId}): $${currentPrice} (was $${originalPrice}, lowest $${lowestPrice}, store: ${store})`);
+  const { error: saveError } = await supabase
+    .from('price_alerts')
+    .upsert(priceData, { onConflict: 'id' });
+
+  if (saveError) {
+    console.warn(`Supabase price_alerts upsert error for ${game}: ${saveError.message}`);
+  }
+
+  console.log(`[Updated Supabase] ${game} (${docId}): $${currentPrice} (was $${originalPrice}, lowest $${lowestPrice}, store: ${store})`);
 
   // Query user_price_alerts for triggers
   try {
-    const alertsSnap = await db.collection('user_price_alerts')
-      .where('gameName', '==', game)
-      .where('isActive', '==', true)
-      .get();
+    const { data: alertsSnap } = await supabase
+      .from('user_price_alerts')
+      .select('*')
+      .eq('gameName', game)
+      .eq('isActive', true);
 
-    for (const doc of alertsSnap.docs) {
-      const alert = doc.data();
-      const targetUSD = Number(alert.targetPriceUSD || 0);
-      if (targetUSD > 0 && currentPrice <= targetUSD) {
-        console.log(`ALERT TRIGGER for userId: ${alert.userId} on ${game}! (Current: $${currentPrice} <= Target: $${targetUSD} / Rs. ${alert.targetPricePKR})`);
+    if (alertsSnap && alertsSnap.length > 0) {
+      for (const alert of alertsSnap) {
+        const targetUSD = Number(alert.targetPriceUSD || 0);
+        if (targetUSD > 0 && currentPrice <= targetUSD) {
+          console.log(`ALERT TRIGGER for userId: ${alert.userId} on ${game}! (Current: $${currentPrice} <= Target: $${targetUSD} / Rs. ${alert.targetPricePKR})`);
+        }
       }
     }
   } catch (alertErr) {
@@ -162,7 +174,7 @@ async function fetchGamePrice(game) {
 }
 
 async function run() {
-  console.log(`Starting Price Tracker fetch for ${GAMES.length} games...`);
+  console.log(`Starting Price Tracker fetch for ${GAMES.length} games to Supabase...`);
 
   for (const game of GAMES) {
     await fetchGamePrice(game);
@@ -170,7 +182,7 @@ async function run() {
     await sleep(1500);
   }
 
-  console.log("DONE - PRICES FETCHED");
+  console.log("DONE - PRICES FETCHED & SAVED TO SUPABASE");
   process.exit(0);
 }
 

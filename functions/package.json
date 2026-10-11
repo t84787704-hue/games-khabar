@@ -1,21 +1,16 @@
 {
   "name": "functions",
-  "description": "Cloud Functions for Firebase",
+  "description": "Backend services and automation for Supabase",
   "scripts": {
-    "serve": "firebase emulators:start --only functions",
-    "shell": "firebase functions:shell",
-    "start": "npm run shell",
-    "deploy": "firebase deploy --only functions",
-    "logs": "firebase functions:log"
+    "start": "node index.js"
   },
   "engines": {
-    "node": "20"
+    "node": ">=18"
   },
   "main": "index.js",
   "dependencies": {
-    "@supabase/supabase-js": "^2.116.0",
-    "axios": "^1.7.2",
-    "firebase-admin": "^12.1.0",
-    "firebase-functions": "^5.0.0"
+    "@supabase/supabase-js": "^2.49.1",
+    "axios": "^1.7.9",
+    "dotenv": "^16.4.7"
   }
 }

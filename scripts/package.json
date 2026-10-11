@@ -1,0 +1,14 @@
+{
+  "name": "gamers-backend-scripts",
+  "version": "1.0.0",
+  "description": "Backend scripts powered by Supabase",
+  "main": "fetchSteamNews.js",
+  "dependencies": {
+    "@supabase/supabase-js": "^2.49.1",
+    "dotenv": "^16.4.7",
+    "axios": "^1.7.9",
+    "rss-parser": "^3.13.0",
+    "cheerio": "^1.0.0",
+    "he": "^1.2.0"
+  }
+}
