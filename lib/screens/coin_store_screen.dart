@@ -39,8 +39,8 @@ class _CoinStoreScreenState extends State<CoinStoreScreen> with SingleTickerProv
         final res = await SupabaseService.client
             .from('posts')
             .select()
-            .eq('authorId', uid)
-            .order('createdAt', ascending: false)
+            .eq('user_id', uid)
+            .order('created_at', ascending: false)
             .limit(10);
         list = List<Map<String, dynamic>>.from(res);
       } catch (_) {}
@@ -272,7 +272,7 @@ class _CoinStoreScreenState extends State<CoinStoreScreen> with SingleTickerProv
                         Text('⚡', style: TextStyle(fontSize: 20)),
                         SizedBox(width: 10),
                         Text(
-                          '+50 G-Coins Added! Rewarded Video Ad completed.',
+                          '+100 G-Coins Added! Rewarded Video Ad completed.',
                           style: TextStyle(color: Colors.black, fontWeight: FontWeight.bold),
                         ),
                       ],
@@ -351,7 +351,7 @@ class _CoinStoreScreenState extends State<CoinStoreScreen> with SingleTickerProv
                         ),
                         SizedBox(height: 4),
                         Text(
-                          'Watch 5s to earn +50 G-Coins...',
+                          'Watch 5s to earn +100 G-Coins...',
                           style: TextStyle(color: GamerTheme.textMuted, fontSize: 11),
                         ),
                       ],
@@ -828,7 +828,7 @@ class _CoinStoreScreenState extends State<CoinStoreScreen> with SingleTickerProv
                   Icon(Icons.play_circle_fill_rounded, color: Colors.black, size: 16),
                   SizedBox(width: 6),
                   Text(
-                    'EARN +50 📺',
+                    'EARN +100 📺',
                     style: TextStyle(color: Colors.black, fontWeight: FontWeight.w900, fontSize: 11),
                   ),
                 ],
@@ -1903,11 +1903,11 @@ class _CoinStoreScreenState extends State<CoinStoreScreen> with SingleTickerProv
         _buildEarnActionCard(
           icon: Icons.play_circle_filled_rounded,
           iconColor: GamerTheme.accentOrange,
-          badge: '+50 COINS EACH',
+          badge: '+100 COINS EACH',
           badgeColor: GamerTheme.accentOrange,
           title: 'Watch Sponsored Rewarded Ads',
-          subtitle: 'Support the community and earn 50 G-Coins for each completed 5s sponsor video.',
-          buttonText: _isWatchingAd ? 'STREAMING AD...' : 'WATCH AD (+50 COINS) 📺',
+          subtitle: 'Support the community and earn 100 G-Coins for each completed 5s sponsor video.',
+          buttonText: _isWatchingAd ? 'STREAMING AD...' : 'WATCH AD (+100 COINS) 📺',
           buttonColor: GamerTheme.accentOrange,
           textColor: Colors.white,
           onTap: _isWatchingAd ? null : () => _handleWatchAd(uid),
