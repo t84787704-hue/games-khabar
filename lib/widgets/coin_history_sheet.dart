@@ -2,7 +2,6 @@ import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import '../constants/gamer_theme.dart';
 import '../models/coin_transaction_model.dart';
-import '../models/coin_wallet_model.dart';
 import '../services/coin_wallet_service.dart';
 import '../services/coin_reward_service.dart';
 import '../services/gamer_auth_service.dart';
@@ -62,26 +61,40 @@ class _CoinHistorySheetState extends State<CoinHistorySheet> {
         }
       } catch (_) {}
 
-      // 2. Force update coins in Supabase users table
+      if (total < 0) total = 0;
+
+      // 2. Update coins in Supabase users table (strict snake_case)
       try {
         await SupabaseService.client.from('users').update({
           'coins': total,
+          'g_coins': total,
           'updated_at': DateTime.now().toIso8601String(),
         }).or('id.eq.$currentUserId,uid.eq.$currentUserId');
       } catch (_) {}
 
-      // Update in-memory state if this device is the user
+      // 3. Update coin_wallets table
+      try {
+        await SupabaseService.client.from('coin_wallets').upsert({
+          'id': currentUserId,
+          'user_id': currentUserId,
+          'coins': total,
+          'g_coins': total,
+          'updated_at': DateTime.now().toIso8601String(),
+        });
+      } catch (_) {}
+
+      // Update in-memory state
       final currentGamer = GamerAuthService().currentGamer;
       if (currentGamer != null && (currentGamer.uid == currentUserId || currentUserId.isEmpty)) {
         GamerAuthService().currentGamerNotifier.value = currentGamer.copyWith(coins: total);
         CoinRewardService().coinsNotifier.value = total;
       }
 
-      debugPrint('SYNCED: gCoins set to $total from $txCount transactions');
+      debugPrint('SYNCED: Coins set to $total from $txCount transactions');
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text('Synced! Balance now $total Coins'),
+            content: Text('Synced! Balance verified at $total G-Coins'),
             backgroundColor: GamerTheme.neonGreen,
             behavior: SnackBarBehavior.floating,
           ),
@@ -157,7 +170,7 @@ class _CoinHistorySheetState extends State<CoinHistorySheet> {
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Text(
-                        'Coin History',
+                        'Coin Activity History',
                         style: TextStyle(
                           color: Colors.white,
                           fontSize: 18,
@@ -167,7 +180,7 @@ class _CoinHistorySheetState extends State<CoinHistorySheet> {
                       ),
                       SizedBox(height: 2),
                       Text(
-                        'Kab kitne coin kahan se add/cut huway',
+                        'Detailed earnings, entry fees, prizes & store purchases',
                         style: TextStyle(
                           color: GamerTheme.textGray,
                           fontSize: 12,
@@ -196,9 +209,9 @@ class _CoinHistorySheetState extends State<CoinHistorySheet> {
               int inEscrow = 0;
               if (userSnap.hasData && userSnap.data != null && userSnap.data!.isNotEmpty) {
                 final data = userSnap.data!.first;
-                final rawCoins = data['coins'] ?? data['gCoins'];
+                final rawCoins = data['coins'] ?? data['g_coins'] ?? data['gCoins'];
                 if (rawCoins is num) currentCoins = rawCoins.toInt();
-                final rawEscrow = data['inEscrow'] ?? data['in_escrow'];
+                final rawEscrow = data['in_escrow'] ?? data['inEscrow'];
                 if (rawEscrow is num) inEscrow = rawEscrow.toInt();
               }
 
@@ -207,31 +220,19 @@ class _CoinHistorySheetState extends State<CoinHistorySheet> {
                 builder: (context, txSnap) {
                   final allTxs = txSnap.data ?? [];
 
-                  // Filter out escrow transactions for free entry system
-                  final displayTxs = allTxs.where((tx) =>
-                      tx.type != 'escrow_hold' &&
-                      tx.type != 'escrow_refund' &&
-                      !tx.title.toLowerCase().contains('escrow')
-                  ).toList();
-
                   int totalAdded = 0;
                   int totalDeducted = 0;
-                  bool hasInitialBonus = false;
 
-                  for (final tx in displayTxs) {
+                  for (final tx in allTxs) {
                     if (tx.amount > 0) {
                       totalAdded += tx.amount;
-                      if (tx.type == 'welcome_bonus' || tx.type == 'signup_bonus' || tx.title.toLowerCase().contains('welcome')) {
-                        hasInitialBonus = true;
-                      }
                     } else if (tx.amount < 0) {
                       totalDeducted += tx.amount.abs();
                     }
                   }
 
-                  // Expected balance matches exact sum of transactions
                   final int expectedBalance = (totalAdded - totalDeducted).clamp(0, 9999999);
-                  final bool hasMismatch = displayTxs.isNotEmpty && expectedBalance != currentCoins;
+                  final bool hasMismatch = allTxs.isNotEmpty && expectedBalance != currentCoins;
 
                   return Padding(
                     padding: const EdgeInsets.symmetric(horizontal: 16),
@@ -298,7 +299,7 @@ class _CoinHistorySheetState extends State<CoinHistorySheet> {
                                   ),
                                 ],
                               ),
-                              // IN ESCROW: 0 Coins (Free entry system)
+                              // IN ESCROW badge
                               Container(
                                 padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
                                 decoration: BoxDecoration(
@@ -306,22 +307,22 @@ class _CoinHistorySheetState extends State<CoinHistorySheet> {
                                   borderRadius: BorderRadius.circular(10),
                                   border: Border.all(color: GamerTheme.borderDark),
                                 ),
-                                child: const Column(
+                                child: Column(
                                   crossAxisAlignment: CrossAxisAlignment.end,
                                   children: [
-                                    Text(
-                                      'ENTRY FREE',
+                                    const Text(
+                                      'ESCROW HOLD',
                                       style: TextStyle(
-                                        color: GamerTheme.neonGreen,
+                                        color: GamerTheme.accentOrange,
                                         fontSize: 9.5,
                                         fontWeight: FontWeight.bold,
                                         letterSpacing: 0.5,
                                       ),
                                     ),
-                                    SizedBox(height: 2),
+                                    const SizedBox(height: 2),
                                     Text(
-                                      'IN ESCROW: 0 Coins',
-                                      style: TextStyle(
+                                      '${NumberFormat("#,###").format(inEscrow)} Coins',
+                                      style: const TextStyle(
                                         color: Colors.white70,
                                         fontSize: 11,
                                         fontWeight: FontWeight.bold,
@@ -347,7 +348,7 @@ class _CoinHistorySheetState extends State<CoinHistorySheet> {
                                   const SizedBox(width: 8),
                                   Expanded(
                                     child: Text(
-                                      'Calculated: $expectedBalance Coins (+$totalAdded added, -$totalDeducted deducted), Profile has $currentCoins Coins.',
+                                      'Ledger: $expectedBalance Coins (+$totalAdded earned, -$totalDeducted spent), Balance shows $currentCoins.',
                                       style: const TextStyle(color: Colors.white, fontSize: 11),
                                     ),
                                   ),
@@ -455,15 +456,6 @@ class _CoinHistorySheetState extends State<CoinHistorySheet> {
                               ),
                             ],
                           ),
-                          const SizedBox(height: 8),
-                          Text(
-                            'Formula: Added (+${NumberFormat("#,###").format(totalAdded)}) - Deducted (-${NumberFormat("#,###").format(totalDeducted)}) = ${NumberFormat("#,###").format(expectedBalance)}',
-                            style: TextStyle(
-                              color: hasMismatch ? GamerTheme.accentOrange : GamerTheme.textMuted,
-                              fontSize: 10,
-                              fontWeight: FontWeight.w500,
-                            ),
-                          ),
                           const SizedBox(height: 12),
                           SizedBox(
                             width: double.infinity,
@@ -503,11 +495,11 @@ class _CoinHistorySheetState extends State<CoinHistorySheet> {
             padding: const EdgeInsets.symmetric(horizontal: 16),
             child: Row(
               children: [
-                _buildFilterChip('All History', 0, Icons.list_alt_rounded),
+                _buildFilterChip('All Activity', 0, Icons.list_alt_rounded),
                 const SizedBox(width: 8),
-                _buildFilterChip('Added (+)', 1, Icons.add_circle_outline_rounded, activeColor: GamerTheme.neonGreen),
+                _buildFilterChip('Earned (+)', 1, Icons.add_circle_outline_rounded, activeColor: GamerTheme.neonGreen),
                 const SizedBox(width: 8),
-                _buildFilterChip('Deducted (-)', 2, Icons.remove_circle_outline_rounded, activeColor: GamerTheme.redAccent),
+                _buildFilterChip('Spent (-)', 2, Icons.remove_circle_outline_rounded, activeColor: GamerTheme.redAccent),
               ],
             ),
           ),
@@ -524,13 +516,7 @@ class _CoinHistorySheetState extends State<CoinHistorySheet> {
                   );
                 }
 
-                List<CoinTransaction> rawTxs = snapshot.data ?? [];
-                List<CoinTransaction> transactions = rawTxs
-                    .where((tx) =>
-                        tx.type != 'escrow_hold' &&
-                        tx.type != 'escrow_refund' &&
-                        !tx.title.toLowerCase().contains('escrow'))
-                    .toList();
+                List<CoinTransaction> transactions = List.from(snapshot.data ?? []);
 
                 // Filter items
                 if (_selectedFilter == 1) {
@@ -602,17 +588,18 @@ class _CoinHistorySheetState extends State<CoinHistorySheet> {
 
   Widget _buildTransactionCard(CoinTransaction tx) {
     final isCredit = tx.amount > 0;
+    final isEscrowHold = tx.type == 'escrow_hold' || tx.type == 'room_host_hold' || tx.type == 'tournament_entry';
     final isRelease = tx.type == 'escrow_release' || tx.type == 'escrow_transferred';
-    final isEscrowHold = tx.type == 'escrow_hold';
 
+    // Color code: green for earn, red for spend
     final Color badgeColor = isCredit
         ? GamerTheme.neonGreen
         : (isRelease ? const Color(0xFF00E5FF) : (isEscrowHold ? GamerTheme.accentOrange : GamerTheme.redAccent));
 
     final IconData typeIcon = _getIconForType(tx.type, isCredit);
     final String badgeText = isCredit
-        ? 'ADDED'
-        : (isRelease ? 'RELEASED' : (isEscrowHold ? 'ESCROW' : 'DEDUCTED'));
+        ? 'EARNED'
+        : (isRelease ? 'RELEASED' : (isEscrowHold ? 'ESCROW' : 'SPENT'));
     final String amountText = isCredit ? '+${tx.amount} Coins' : '-${tx.amount.abs()} Coins';
 
     return Container(
@@ -743,9 +730,9 @@ class _CoinHistorySheetState extends State<CoinHistorySheet> {
             const SizedBox(height: 16),
             Text(
               _selectedFilter == 1
-                  ? 'No coins added yet'
+                  ? 'No coins earned yet'
                   : _selectedFilter == 2
-                      ? 'No coins deducted yet'
+                      ? 'No coins spent yet'
                       : 'No coin history yet',
               style: const TextStyle(
                 color: Colors.white,
@@ -755,7 +742,7 @@ class _CoinHistorySheetState extends State<CoinHistorySheet> {
             ),
             const SizedBox(height: 6),
             const Text(
-              'Jab aap rooms join karenge, match jeetenge ya daily bonus claim karenge to unki detail yahan show hogi.',
+              'Join rooms, win matches, watch ads or claim daily bonus to see activity here.',
               textAlign: TextAlign.center,
               style: TextStyle(
                 color: GamerTheme.textMuted,
@@ -771,22 +758,25 @@ class _CoinHistorySheetState extends State<CoinHistorySheet> {
 
   IconData _getIconForType(String type, bool isCredit) {
     switch (type) {
+      case 'tournament_entry':
       case 'entry_fee':
         return Icons.sports_esports_rounded;
       case 'escrow_hold':
       case 'room_host_hold':
         return Icons.lock_clock_rounded;
       case 'escrow_refund':
+      case 'room_host_refund':
       case 'refund':
         return Icons.replay_rounded;
       case 'escrow_release':
       case 'escrow_transferred':
         return Icons.verified_user_rounded;
       case 'win_prize':
+      case 'team_prize':
       case 'win_reward':
         return Icons.emoji_events_rounded;
-      case 'refund':
-        return Icons.replay_rounded;
+      case 'store_purchase':
+        return Icons.shopping_bag_rounded;
       case 'ad_reward':
         return Icons.play_circle_fill_rounded;
       case 'daily_bonus':
@@ -877,12 +867,12 @@ class _CoinHistorySheetState extends State<CoinHistorySheet> {
               const SizedBox(height: 16),
               _detailRow('Reason:', tx.description.isNotEmpty ? tx.description : tx.title),
               const SizedBox(height: 8),
-              _detailRow('Category:', tx.type.replaceAll('_', ' ').toUpperCase()),
+              _detailRow('Type:', tx.type.replaceAll('_', ' ').toUpperCase()),
               const SizedBox(height: 8),
               _detailRow('Date & Time:', DateFormat('dd MMMM yyyy, hh:mm:ss a').format(tx.timestamp)),
               if (tx.roomId != null && tx.roomId!.isNotEmpty) ...[
                 const SizedBox(height: 8),
-                _detailRow('Room / Squad ID:', tx.roomId!),
+                _detailRow('Room ID:', tx.roomId!),
               ],
               const SizedBox(height: 8),
               _detailRow('Status:', tx.status.toUpperCase()),

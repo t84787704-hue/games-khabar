@@ -4,6 +4,7 @@ import 'package:google_mobile_ads/google_mobile_ads.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'supabase_service.dart';
 import 'gamer_auth_service.dart';
+import 'coin_wallet_service.dart';
 
 class CoinRewardService {
   static final CoinRewardService _instance = CoinRewardService._internal();
@@ -96,7 +97,8 @@ class CoinRewardService {
         await SupabaseService.client.from('users').upsert({
           'id': _userId,
           'uid': _userId,
-          'coins': 100,
+          'coins': 1000,
+          'g_coins': 1000,
           'adImpressions': 0,
           'lastAdTime': DateTime.now().toIso8601String(),
           'todayNewsCount': 0,
@@ -111,7 +113,7 @@ class CoinRewardService {
         if (res['coins'] == null) {
           await SupabaseService.client
               .from('users')
-              .update({'coins': 100})
+              .update({'coins': 1000, 'g_coins': 1000})
               .or('id.eq.$_userId,uid.eq.$_userId');
         }
         final lastEarn = res['lastEarnDate'] as String? ?? '';
@@ -142,7 +144,7 @@ class CoinRewardService {
         .listen((list) {
       if (list.isNotEmpty) {
         final data = list.first;
-        final c = (data['coins'] as num?)?.toInt() ?? 0;
+        final c = (data['coins'] as num?)?.toInt() ?? (data['g_coins'] as num?)?.toInt() ?? 0;
         final ads = (data['adImpressions'] as num?)?.toInt() ?? 0;
         final news = (data['todayNewsCount'] as num?)?.toInt() ?? 0;
         final posts = (data['todayPostCount'] as num?)?.toInt() ?? 0;
@@ -267,15 +269,12 @@ class CoinRewardService {
   }
 
   /// Hook called whenever user reads a news article
-  /// a) Automatic Interstitial after user reads 2 news
-  /// Rewards user: 10 coins per news, max 5 per day
   Future<void> onNewsRead(BuildContext? context) async {
     _newsReadSinceLastAd += 1;
     if (_newsReadSinceLastAd >= 2) {
       await _maybeShowInterstitial(reason: 'read_2_news');
     }
 
-    // Try giving coins for reading news (10 coins, max 5 per day)
     await tryGiveCoins(
       context: context,
       activityName: 'News Read',
@@ -284,10 +283,7 @@ class CoinRewardService {
   }
 
   /// Hook called whenever user creates a community post
-  /// b) Automatic Interstitial after user creates a post
-  /// Rewards user: 20 coins per post (if length > 20 chars), max 3 per day
   Future<void> onPostCreated(BuildContext? context, int textLength) async {
-    // Show interstitial automatically
     await _maybeShowInterstitial(reason: 'post_created');
 
     if (textLength > 20) {
@@ -299,9 +295,8 @@ class CoinRewardService {
     }
   }
 
-  /// Hook called for Daily Login (20 coins once per day)
+  /// Hook called for Daily Login
   Future<void> checkDailyLogin(BuildContext? context) async {
-    final today = todayPakistanDate();
     if (isDailyLoginClaimedNotifier.value) return;
 
     await tryGiveCoins(
@@ -311,17 +306,7 @@ class CoinRewardService {
     );
   }
 
-  /// STEP 2 - GIVE COINS FOR APP USE (But consume adImpressions):
-  /// - Check Pakistan date. If lastEarnDate != today, reset todayNewsCount, todayPostCount.
-  /// - If adImpressions <= 0:
-  ///     - Show Interstitial Ad first (if cooldown passed), then adImpressions will become 1.
-  ///     - If still 0, return without giving coins.
-  /// - If adImpressions > 0:
-  ///     - coins += coinsToShow
-  ///     - adImpressions -= 1
-  ///     - Update today counts
-  ///     - Show user ONLY: "+{coinsToShow} Coins for {activityName}! 🪙"
-  ///     - Do NOT show anything about Ads, Revenue, or 50%.
+  /// STEP 2 - GIVE COINS FOR APP USE (And consume adImpressions):
   Future<bool> tryGiveCoins({
     BuildContext? context,
     required String activityName,
@@ -346,11 +331,10 @@ class CoinRewardService {
 
       int adImpressions = (currentDoc?['adImpressions'] as num?)?.toInt() ?? 0;
 
-      // If adImpressions <= 0, try showing an interstitial ad first naturally (if cooldown passed)
+      // If adImpressions <= 0, try showing an interstitial ad first naturally
       if (adImpressions <= 0) {
         final showedAd = await _maybeShowInterstitial(reason: 'ad_impression_refill');
         if (showedAd) {
-          // Fetch updated adImpressions
           final refetched = await SupabaseService.client
               .from('users')
               .select('adImpressions')
@@ -360,7 +344,6 @@ class CoinRewardService {
         }
       }
 
-      // If still <= 0, cannot award coins right now
       if (adImpressions <= 0) {
         debugPrint('[CoinRewardService] Cannot give coins for $activityName: No adImpressions available');
         return false;
@@ -373,7 +356,6 @@ class CoinRewardService {
       int totalAdsToday = (data['totalAdsToday'] as num?)?.toInt() ?? 0;
       int totalAdsYesterday = (data['totalAdsYesterday'] as num?)?.toInt() ?? 0;
       String dailyLogin = data['dailyLoginDate'] as String? ?? '';
-      int currentCoins = (data['coins'] as num?)?.toInt() ?? 0;
       int currentAdImpressions = adImpressions;
 
       // Rotate daily counts if new day in Pakistan
@@ -386,25 +368,23 @@ class CoinRewardService {
 
       // Check Activity Limits
       if (activityName == 'Daily Login') {
-        if (dailyLogin == today) return false; // Already claimed today
+        if (dailyLogin == today) return false;
         dailyLogin = today;
       } else if (activityName == 'News Read') {
-        if (todayNews >= 5) return false; // Max 5 news per day
+        if (todayNews >= 5) return false;
         todayNews += 1;
       } else if (activityName == 'Post Created') {
-        if (todayPosts >= 3) return false; // Max 3 posts per day
+        if (todayPosts >= 3) return false;
         todayPosts += 1;
       }
 
       if (currentAdImpressions <= 0) return false;
 
-      // Award Coins & Consume 1 Impression
-      final newCoins = currentCoins + coinsToShow;
       final newImpressions = currentAdImpressions - 1;
       final nowStr = DateTime.now().toIso8601String();
 
+      // Update counters in users table
       await SupabaseService.client.from('users').update({
-        'coins': newCoins,
         'adImpressions': newImpressions,
         'todayNewsCount': todayNews,
         'todayPostCount': todayPosts,
@@ -415,14 +395,18 @@ class CoinRewardService {
         'lastEarnTime': nowStr,
       }).or('id.eq.$_userId,uid.eq.$_userId');
 
-      // Also synchronize coin_wallets
-      try {
-        await SupabaseService.client.from('coin_wallets').upsert({
-          'userId': _userId,
-          'coins': newCoins,
-          'updatedAt': nowStr,
-        });
-      } catch (_) {}
+      // Use unified CoinWalletService.updateCoins to keep users, coin_wallets and transactions perfectly in sync
+      final txType = activityName == 'Daily Login'
+          ? 'daily_bonus'
+          : (activityName == 'News Read' ? 'news_read' : 'post_created');
+
+      await CoinWalletService.updateCoins(
+        userId: _userId,
+        amount: coinsToShow,
+        type: txType,
+        title: '+$coinsToShow Coins for $activityName! 🪙',
+        description: 'Earned from $activityName in Gamers ID',
+      );
 
       debugPrint('[CoinRewardService] Successfully awarded +$coinsToShow coins for $activityName');
       if (context != null && context.mounted) {
@@ -444,28 +428,13 @@ class CoinRewardService {
     if (postAuthorId.isEmpty || postAuthorId == _userId) return false;
 
     try {
-      final authorData = await SupabaseService.client
-          .from('users')
-          .select('coins')
-          .or('id.eq.$postAuthorId,uid.eq.$postAuthorId')
-          .maybeSingle();
-
-      final currentCoins = (authorData?['coins'] as num?)?.toInt() ?? 0;
-      final newAuthorCoins = currentCoins + 5;
-      final nowStr = DateTime.now().toIso8601String();
-
-      await SupabaseService.client
-          .from('users')
-          .update({'coins': newAuthorCoins})
-          .or('id.eq.$postAuthorId,uid.eq.$postAuthorId');
-
-      try {
-        await SupabaseService.client.from('coin_wallets').upsert({
-          'userId': postAuthorId,
-          'coins': newAuthorCoins,
-          'updatedAt': nowStr,
-        });
-      } catch (_) {}
+      await CoinWalletService.updateCoins(
+        userId: postAuthorId,
+        amount: 5,
+        type: 'helpful_received',
+        title: 'Helpful Upvote 🌟',
+        description: '+5 Coins: Your community post was marked helpful',
+      );
 
       final postData = await SupabaseService.client
           .from('community_posts')
@@ -487,7 +456,6 @@ class CoinRewardService {
   }
 
   /// Shows ONLY: "+{coinsToShow} Coins for {activityName}! 🪙"
-  /// Absolutely NO mention of Ads, Revenue, or 50%
   void _showCoinRewardToast(BuildContext context, String activityName, int coins) {
     try {
       ScaffoldMessenger.of(context).hideCurrentSnackBar();

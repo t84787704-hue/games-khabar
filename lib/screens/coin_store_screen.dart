@@ -499,61 +499,6 @@ class _CoinStoreScreenState extends State<CoinStoreScreen> with SingleTickerProv
 
     setState(() => _isProcessingPurchase = true);
 
-    // ═══════════════════════════════════════════════════════════
-    // NAYA: Room Boost ke liye alag logic
-    // ═══════════════════════════════════════════════════════════
-    if (category == 'room_boost') {
-      final roomId = metadata?['roomId'] as String? ?? '';
-      final hours = (metadata?['durationHours'] as num?)?.toInt() ?? 24;
-      if (roomId.isEmpty) {
-        setState(() => _isProcessingPurchase = false);
-        return;
-      }
-
-      // Coins deduct karo
-      await CoinWalletService.updateCoins(
-        userId: uid,
-        amount: -costCoins,
-        type: 'room_boost',
-        title: '🚀 Room Boost Purchased',
-        description: 'Boosted room for $hours hours',
-        roomId: roomId,
-      );
-
-      // Room update karo
-      try {
-        final until = DateTime.now().add(Duration(hours: hours)).toIso8601String();
-        await SupabaseService.client.from('rooms').update({
-          'boosted_until': until,
-        }).eq('id', roomId);
-      } catch (e) {
-        debugPrint('Room boost update error: $e');
-      }
-
-      if (mounted) {
-        setState(() => _isProcessingPurchase = false);
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            backgroundColor: GamerTheme.neonGreen,
-            content: Row(
-              children: [
-                const Text('🚀', style: TextStyle(fontSize: 20)),
-                const SizedBox(width: 10),
-                Expanded(
-                  child: Text(
-                    'Room boosted for $hours hours!',
-                    style: const TextStyle(color: Colors.black, fontWeight: FontWeight.bold),
-                  ),
-                ),
-              ],
-            ),
-          ),
-        );
-      }
-      return;
-    }
-
-    // Baaki items ke liye regular purchase
     final result = await _walletService.purchaseStoreItem(
       userId: uid,
       itemId: itemId,
@@ -565,6 +510,8 @@ class _CoinStoreScreenState extends State<CoinStoreScreen> with SingleTickerProv
     if (mounted) {
       setState(() => _isProcessingPurchase = false);
       if (result['success'] == true) {
+        await _walletService.getOrCreateWallet(uid);
+        setState(() {});
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             backgroundColor: GamerTheme.neonGreen,
@@ -574,7 +521,9 @@ class _CoinStoreScreenState extends State<CoinStoreScreen> with SingleTickerProv
                 const SizedBox(width: 10),
                 Expanded(
                   child: Text(
-                    '$itemName unlocked & applied to your profile!',
+                    category == 'room_boost'
+                        ? 'Room boost activated for ${metadata?['durationHours'] ?? 24} hours!'
+                        : '$itemName unlocked & applied to your profile!',
                     style: const TextStyle(color: Colors.black, fontWeight: FontWeight.bold),
                   ),
                 ),
@@ -600,9 +549,18 @@ class _CoinStoreScreenState extends State<CoinStoreScreen> with SingleTickerProv
     required String name,
   }) async {
     try {
-      await SupabaseService.client.from('users').update({
+      final Map<String, dynamic> updateMap = {
         field: value,
-      }).eq('id', uid).catchError((_) => null);
+        'updated_at': DateTime.now().toIso8601String(),
+      };
+      if (field == 'activeFrame') updateMap['active_frame'] = value;
+      if (field == 'activeBadge') updateMap['active_badge'] = value;
+      if (field == 'chatColor') updateMap['chat_color'] = value;
+
+      await SupabaseService.client
+          .from('users')
+          .update(updateMap)
+          .or('id.eq.$uid,uid.eq.$uid');
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
@@ -963,18 +921,18 @@ class _CoinStoreScreenState extends State<CoinStoreScreen> with SingleTickerProv
             stream: _userStream(uid),
             builder: (context, userSnap) {
               final userData = userSnap.data ?? {};
-              final activeFrame = userData['activeFrame'] as String? ?? '';
-              final unlockedFrames = List<String>.from(userData['unlockedFrames'] ?? []);
-              final activeBadge = userData['activeBadge'] as String? ?? '';
-              final unlockedBadges = List<String>.from(userData['unlockedBadges'] ?? []);
-              final activeChatColor = userData['chatColor'] as String? ?? '#00FF66';
-              final unlockedChatColors = List<String>.from(userData['unlockedChatColors'] ?? []);
+              final activeFrame = userData['active_frame'] as String? ?? userData['activeFrame'] as String? ?? '';
+              final unlockedFrames = List<String>.from(userData['unlocked_frames'] ?? userData['unlockedFrames'] ?? []);
+              final activeBadge = userData['active_badge'] as String? ?? userData['activeBadge'] as String? ?? '';
+              final unlockedBadges = List<String>.from(userData['unlocked_badges'] ?? userData['unlockedBadges'] ?? []);
+              final activeChatColor = userData['chat_color'] as String? ?? userData['chatColor'] as String? ?? '#00FF66';
+              final unlockedChatColors = List<String>.from(userData['unlocked_chat_colors'] ?? userData['unlockedChatColors'] ?? []);
               DateTime? vipPassUntil;
-              final rawVip = userData['vipTournamentPassUntil'];
+              final rawVip = userData['vip_tournament_pass_until'] ?? userData['vipTournamentPassUntil'];
               if (rawVip is DateTime) vipPassUntil = rawVip;
               else if (rawVip is String) vipPassUntil = DateTime.tryParse(rawVip);
               DateTime? spotlightUntil;
-              final rawSpot = userData['leaderboardSpotlightUntil'];
+              final rawSpot = userData['leaderboard_spotlight_until'] ?? userData['leaderboardSpotlightUntil'];
               if (rawSpot is DateTime) spotlightUntil = rawSpot;
               else if (rawSpot is String) spotlightUntil = DateTime.tryParse(rawSpot);
 
