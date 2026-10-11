@@ -50,6 +50,10 @@ class GamerRoom {
   final String? disputeReason;
   final String? disputeProofUrl;
   final DateTime? disputedAt;
+  // ═══════════════════════════════════════════════════════════
+  // NAYA: Tournament Entry Fee
+  // ═══════════════════════════════════════════════════════════
+  final int entryFeeCoins;
 
   const GamerRoom({
     required this.id,
@@ -84,6 +88,7 @@ class GamerRoom {
     this.disputeReason,
     this.disputeProofUrl,
     this.disputedAt,
+    this.entryFeeCoins = 0,
   }) : startTime = startTime ?? createdAt;
 
   String get title => '$game $mode';
@@ -93,7 +98,7 @@ class GamerRoom {
   int get filled => filledSlots;
   String get roomIdCode => roomId;
   String get password => roomPassword;
-  String get entryFee => 'FREE';
+  String get entryFee => entryFeeCoins == 0 ? 'FREE' : '$entryFeeCoins Coins';
   String get prizeSource => 'application';
 
   bool get isFull => filledSlots >= totalSlots;
@@ -219,6 +224,9 @@ class GamerRoom {
       disputeReason: row['dispute_reason']?.toString(),
       disputeProofUrl: row['dispute_proof_url']?.toString(),
       disputedAt: disputedAt,
+      entryFeeCoins: (row['entry_fee_coins'] is num)
+          ? (row['entry_fee_coins'] as num).toInt()
+          : 0,
     );
   }
 }
@@ -470,7 +478,6 @@ class _GamerRoomsScreenState extends State<GamerRoomsScreen> {
       for (final row in rows) {
         try {
           final room = GamerRoom.fromSupabase(Map<String, dynamic>.from(row));
-          // Auto-delete sirf completed rooms ke liye, jo 5 minute purane hain
           if (room.status.toLowerCase() == 'completed' &&
               room.completedAt != null &&
               DateTime.now().difference(room.completedAt!).inMinutes >= 5) {
@@ -509,9 +516,34 @@ class _GamerRoomsScreenState extends State<GamerRoomsScreen> {
       );
       return;
     }
+
+    // ═══════════════════════════════════════════════════════════
+    // NAYA: Entry fee check (agar > 0 hai to)
+    // ═══════════════════════════════════════════════════════════
+    final entryFee = room.entryFeeCoins;
+    if (entryFee > 0) {
+      final wallet = await _walletService.getOrCreateWallet(uid);
+      if (wallet.coins < entryFee) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text(
+                  '⚠️ Not enough G-Coins! You need $entryFee coins to join. You have ${wallet.coins}.'),
+              backgroundColor: GamerTheme.redAccent,
+              behavior: SnackBarBehavior.floating,
+              duration: const Duration(seconds: 5),
+            ),
+          );
+        }
+        return;
+      }
+    }
+
     await AdFreeService().showRewardedAdForAction(
       context: context,
-      actionTitle: 'Watch 1 Ad to Join Room',
+      actionTitle: entryFee > 0
+          ? 'Watch 1 Ad to Join ($entryFee Coins Entry)'
+          : 'Watch 1 Ad to Join Room',
       onRewardEarned: () async {
         try {
           final row = await SupabaseService.client
@@ -532,6 +564,21 @@ class _GamerRoomsScreenState extends State<GamerRoomsScreen> {
               ? List.from(data['joined_user_ids'])
               : [];
           if (joinedIds.contains(uid)) return;
+
+          // ═══════════════════════════════════════════════════════════
+          // NAYA: Coins deduct karo (agar entry fee > 0)
+          // ═══════════════════════════════════════════════════════════
+          if (entryFee > 0) {
+            await CoinWalletService.updateCoins(
+              userId: uid,
+              amount: -entryFee,
+              type: 'tournament_entry',
+              title: 'Tournament Entry Fee 🎮',
+              description: 'Entry fee for "${room.title}"',
+              roomId: room.id,
+            );
+          }
+
           final newJoinedIds = [...joinedIds, uid];
           final List joinedUsersList = (data['joined_users'] is List)
               ? List.from(data['joined_users'])
@@ -551,8 +598,10 @@ class _GamerRoomsScreenState extends State<GamerRoomsScreen> {
             setState(() => _joinedRoomIds.add(room.id));
             await _walletService.recordTournamentJoinedAndCheckReferral(uid);
             ScaffoldMessenger.of(context).showSnackBar(
-              const SnackBar(
-                content: Text('Joined! Free Entry'),
+              SnackBar(
+                content: Text(entryFee > 0
+                    ? 'Joined! $entryFee Coins deducted.'
+                    : 'Joined! Free Entry'),
                 backgroundColor: _fbBlue,
                 behavior: SnackBarBehavior.floating,
               ),
@@ -648,15 +697,21 @@ class _GamerRoomsScreenState extends State<GamerRoomsScreen> {
     String selectedMap = 'Erangel';
     int maxSlots = 2;
     int prizeCoins = 100;
+    // ═══════════════════════════════════════════════════════════
+    // NAYA: Entry fee variable
+    // ═══════════════════════════════════════════════════════════
+    int entryFeeCoins = 0;
 
-    String generateRoomTitle(String map, int slots, int prize) {
+    String generateRoomTitle(
+        String map, int slots, int prize, int fee) {
       final String slotPart =
           (slots == 2) ? '1v1' : (slots == 4 ? '2v2' : '$slots slots');
-      return '$selectedGame $map $slotPart - $prize Coins';
+      final String feePart = fee == 0 ? 'FREE' : '$fee Coins';
+      return '$selectedGame $map $slotPart - $prize Coins ($feePart Entry)';
     }
 
     final titleController = TextEditingController(
-      text: generateRoomTitle(selectedMap, maxSlots, prizeCoins),
+      text: generateRoomTitle(selectedMap, maxSlots, prizeCoins, entryFeeCoins),
     );
     final roomIdController = TextEditingController();
     final passController = TextEditingController();
@@ -718,7 +773,7 @@ class _GamerRoomsScreenState extends State<GamerRoomsScreen> {
                         setSheetState(() {
                           selectedGame = val;
                           titleController.text = generateRoomTitle(
-                              selectedMap, maxSlots, prizeCoins);
+                              selectedMap, maxSlots, prizeCoins, entryFeeCoins);
                         });
                       }
                     },
@@ -762,7 +817,8 @@ class _GamerRoomsScreenState extends State<GamerRoomsScreen> {
                                   setSheetState(() {
                                     selectedMap = val;
                                     titleController.text = generateRoomTitle(
-                                        selectedMap, maxSlots, prizeCoins);
+                                        selectedMap, maxSlots, prizeCoins,
+                                        entryFeeCoins);
                                   });
                                 }
                               },
@@ -803,7 +859,8 @@ class _GamerRoomsScreenState extends State<GamerRoomsScreen> {
                                   setSheetState(() {
                                     maxSlots = val;
                                     titleController.text = generateRoomTitle(
-                                        selectedMap, maxSlots, prizeCoins);
+                                        selectedMap, maxSlots, prizeCoins,
+                                        entryFeeCoins);
                                   });
                                 }
                               },
@@ -835,7 +892,33 @@ class _GamerRoomsScreenState extends State<GamerRoomsScreen> {
                         setSheetState(() {
                           prizeCoins = val;
                           titleController.text = generateRoomTitle(
-                              selectedMap, maxSlots, prizeCoins);
+                              selectedMap, maxSlots, prizeCoins, entryFeeCoins);
+                        });
+                      }
+                    },
+                  ),
+                  // ═══════════════════════════════════════════════════════════
+                  // NAYA: ENTRY FEE dropdown
+                  // ═══════════════════════════════════════════════════════════
+                  const SizedBox(height: 12),
+                  const Text('ENTRY FEE',
+                      style: TextStyle(
+                          fontSize: 11, fontWeight: FontWeight.bold)),
+                  const SizedBox(height: 6),
+                  DropdownButtonFormField<int>(
+                    value: entryFeeCoins,
+                    items: const [
+                      DropdownMenuItem(value: 0, child: Text('🆓 FREE Entry')),
+                      DropdownMenuItem(value: 50, child: Text('💰 50 Coins')),
+                      DropdownMenuItem(value: 200, child: Text('💰 200 Coins')),
+                      DropdownMenuItem(value: 500, child: Text('💰 500 Coins')),
+                    ],
+                    onChanged: (val) {
+                      if (val != null) {
+                        setSheetState(() {
+                          entryFeeCoins = val;
+                          titleController.text = generateRoomTitle(
+                              selectedMap, maxSlots, prizeCoins, entryFeeCoins);
                         });
                       }
                     },
@@ -884,7 +967,6 @@ class _GamerRoomsScreenState extends State<GamerRoomsScreen> {
                               if (uid.isEmpty) return;
                               final roomId = _generateUuid();
                               final now = DateTime.now().toIso8601String();
-                              // start_time 15 minute future mein
                               final startTime = DateTime.now()
                                   .add(const Duration(minutes: 15))
                                   .toIso8601String();
@@ -912,6 +994,10 @@ class _GamerRoomsScreenState extends State<GamerRoomsScreen> {
                                     }
                                   ]),
                                   'start_time': startTime,
+                                  // ═══════════════════════════════════════════════════════════
+                                  // NAYA: Entry fee insert
+                                  // ═══════════════════════════════════════════════════════════
+                                  'entry_fee_coins': entryFeeCoins,
                                 });
                                 if (mounted) {
                                   setState(() => _joinedRoomIds.add(roomId));
@@ -1051,13 +1137,22 @@ class _GamerRoomsScreenState extends State<GamerRoomsScreen> {
                   ]),
                 ),
                 Expanded(
-                  child: Column(children: const [
-                    Text('FREE',
-                        style: TextStyle(
-                            color: Color(0xFF1877F2),
-                            fontSize: 13,
-                            fontWeight: FontWeight.bold)),
-                    Text('ENTRY FEE',
+                  child: Column(children: [
+                    // ═══════════════════════════════════════════════════════════
+                    // NAYA: Entry fee display
+                    // ═══════════════════════════════════════════════════════════
+                    Text(
+                      room.entryFeeCoins == 0
+                          ? 'FREE'
+                          : '${room.entryFeeCoins} Coins',
+                      style: TextStyle(
+                          color: room.entryFeeCoins == 0
+                              ? const Color(0xFF1877F2)
+                              : const Color(0xFFFFA500),
+                          fontSize: 13,
+                          fontWeight: FontWeight.bold),
+                    ),
+                    const Text('ENTRY FEE',
                         style:
                             TextStyle(fontSize: 10, color: Color(0xFF65676B))),
                   ]),
@@ -1279,9 +1374,6 @@ class _InRoomBottomSheetContentState extends State<_InRoomBottomSheetContent> {
   Duration _remainingTime = Duration.zero;
   bool _isStartingMatch = false;
 
-  // ═══════════════════════════════════════════════════════════
-  // NAYA: Live room stream subscription
-  // ═══════════════════════════════════════════════════════════
   StreamSubscription? _roomSub;
   GamerRoom? _liveRoom;
 
@@ -1300,9 +1392,6 @@ class _InRoomBottomSheetContentState extends State<_InRoomBottomSheetContent> {
       if (mounted) setState(() => _updateRemainingTime());
     });
 
-    // ═══════════════════════════════════════════════════════════
-    // NAYA: Live room stream
-    // ═══════════════════════════════════════════════════════════
     _roomSub = SupabaseService.client
         .from('rooms')
         .stream(primaryKey: ['id'])
@@ -1402,8 +1491,11 @@ class _InRoomBottomSheetContentState extends State<_InRoomBottomSheetContent> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
+                    // ═══════════════════════════════════════════════════════════
+                    // NAYA: Entry fee display
+                    // ═══════════════════════════════════════════════════════════
                     Text(
-                        'Prize: ${currentRoom.prize} Coins • Slots: ${currentRoom.filled}/${currentRoom.total}',
+                        'Prize: ${currentRoom.prize} Coins • Entry: ${currentRoom.entryFeeCoins == 0 ? "FREE" : "${currentRoom.entryFeeCoins} Coins"} • Slots: ${currentRoom.filled}/${currentRoom.total}',
                         style: const TextStyle(
                             fontWeight: FontWeight.bold, fontSize: 13)),
                     const SizedBox(height: 8),
@@ -1560,7 +1652,9 @@ class _InRoomBottomSheetContentState extends State<_InRoomBottomSheetContent> {
                     else
                       ElevatedButton(
                         onPressed: widget.onJoinRoomRequested,
-                        child: const Text('JOIN ROOM - FREE'),
+                        child: Text(currentRoom.entryFeeCoins == 0
+                            ? 'JOIN ROOM - FREE'
+                            : 'JOIN ROOM - ${currentRoom.entryFeeCoins} COINS'),
                       ),
                     const SizedBox(height: 12),
                     if (isH)
