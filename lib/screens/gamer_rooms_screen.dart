@@ -51,9 +51,6 @@ class GamerRoom {
   final String? disputeProofUrl;
   final DateTime? disputedAt;
   final int entryFeeCoins;
-  // ═══════════════════════════════════════════════════════════
-  // NAYA: Room Boost
-  // ═══════════════════════════════════════════════════════════
   final DateTime? boostedUntil;
 
   const GamerRoom({
@@ -103,9 +100,6 @@ class GamerRoom {
   String get entryFee => entryFeeCoins == 0 ? 'FREE' : '$entryFeeCoins Coins';
   String get prizeSource => 'application';
 
-  // ═══════════════════════════════════════════════════════════
-  // NAYA: Boost status
-  // ═══════════════════════════════════════════════════════════
   bool get isBoosted {
     if (boostedUntil == null) return false;
     return DateTime.now().isBefore(boostedUntil!);
@@ -511,14 +505,10 @@ class _GamerRoomsScreenState extends State<GamerRoomsScreen> {
           list.add(room);
         } catch (_) {}
       }
-      // ═══════════════════════════════════════════════════════════
-      // NAYA: Boosted rooms sabse upar
-      // ═══════════════════════════════════════════════════════════
       list.sort((a, b) {
         if (a.isBoosted && !b.isBoosted) return -1;
         if (!a.isBoosted && b.isBoosted) return 1;
         if (a.isBoosted && b.isBoosted) {
-          // Featured (orange) above Boost (purple)
           if (a.isFeatured && !b.isFeatured) return -1;
           if (!a.isFeatured && b.isFeatured) return 1;
         }
@@ -526,6 +516,25 @@ class _GamerRoomsScreenState extends State<GamerRoomsScreen> {
       });
       return list;
     });
+  }
+
+  // ═══════════════════════════════════════════════════════════
+  // NAYA: Check karo ki user ka already active room hai ya nahi
+  // ═══════════════════════════════════════════════════════════
+  Future<bool> _hasActiveRoom(String uid) async {
+    if (uid.isEmpty || uid == 'guest') return false;
+    try {
+      final existing = await SupabaseService.client
+          .from('rooms')
+          .select('id')
+          .eq('host_id', uid)
+          .inFilter('status', ['active', 'IN_PROGRESS', 'reward_waiting'])
+          .limit(1);
+      return existing.isNotEmpty;
+    } catch (e) {
+      debugPrint('Active room check error: $e');
+      return false;
+    }
   }
 
   Future<void> joinRoom(GamerRoom room) async {
@@ -669,6 +678,77 @@ class _GamerRoomsScreenState extends State<GamerRoomsScreen> {
             Navigator.pop(ctx);
             joinRoom(room);
           },
+          // ═══════════════════════════════════════════════════════════
+          // NAYA: Delete room handler
+          // ═══════════════════════════════════════════════════════════
+          onDeleteRoom: () async {
+            final uid = currentUserId;
+            if (room.hostId != uid) return;
+            final confirm = await showDialog<bool>(
+              context: context,
+              builder: (dCtx) => AlertDialog(
+                backgroundColor: Colors.white,
+                shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(16)),
+                title: const Text('Delete Room?',
+                    style: TextStyle(
+                        color: Color(0xFF050505),
+                        fontWeight: FontWeight.bold)),
+                content: const Text(
+                    'Are you sure? This will permanently delete your room.',
+                    style: TextStyle(color: Color(0xFF65676B))),
+                actions: [
+                  TextButton(
+                    onPressed: () => Navigator.pop(dCtx, false),
+                    child: const Text('Cancel',
+                        style: TextStyle(color: Color(0xFF65676B))),
+                  ),
+                  ElevatedButton(
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: GamerTheme.redAccent,
+                      foregroundColor: Colors.white,
+                      elevation: 0,
+                      shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(8)),
+                    ),
+                    onPressed: () => Navigator.pop(dCtx, true),
+                    child: const Text('DELETE',
+                        style: TextStyle(
+                            color: Colors.white,
+                            fontWeight: FontWeight.bold)),
+                  ),
+                ],
+              ),
+            );
+            if (confirm != true) return;
+            try {
+              await SupabaseService.client
+                  .from('rooms')
+                  .delete()
+                  .eq('id', room.id);
+              if (ctx.mounted) Navigator.pop(ctx);
+              if (mounted) {
+                setState(() => _joinedRoomIds.remove(room.id));
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(
+                    content: Text('🗑️ Room deleted.'),
+                    backgroundColor: GamerTheme.redAccent,
+                    behavior: SnackBarBehavior.floating,
+                  ),
+                );
+              }
+            } catch (e) {
+              debugPrint('Delete room error: $e');
+              if (mounted) {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  SnackBar(
+                    content: Text('Failed to delete: $e'),
+                    backgroundColor: GamerTheme.redAccent,
+                  ),
+                );
+              }
+            }
+          },
           onLeaveRoom: () async {
             final uid = currentUserId;
             try {
@@ -717,7 +797,39 @@ class _GamerRoomsScreenState extends State<GamerRoomsScreen> {
     );
   }
 
-  void _showCreateRoomDialog() {
+  // ═══════════════════════════════════════════════════════════
+  // NAYA: async banaya + active room check
+  // ═══════════════════════════════════════════════════════════
+  void _showCreateRoomDialog() async {
+    final uid = currentUserId;
+    if (uid.isEmpty || uid == 'guest') {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Please login to host a room'),
+          backgroundColor: GamerTheme.redAccent,
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
+      return;
+    }
+
+    // Check karo ki already active room hai ya nahi
+    final hasActive = await _hasActiveRoom(uid);
+    if (hasActive) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text(
+                '⚠️ You already have an active room. Complete or delete it before creating a new one.'),
+            backgroundColor: GamerTheme.accentOrange,
+            behavior: SnackBarBehavior.floating,
+            duration: Duration(seconds: 5),
+          ),
+        );
+      }
+      return;
+    }
+
     String selectedGame =
         _selectedCategory == 'All Games' ? 'BGMI' : _selectedCategory;
     String selectedMap = 'Erangel';
@@ -985,6 +1097,23 @@ class _GamerRoomsScreenState extends State<GamerRoomsScreen> {
                               final uid = currentUserId;
                               final name = currentUserName;
                               if (uid.isEmpty) return;
+
+                              // Double-check active room
+                              final hasActive = await _hasActiveRoom(uid);
+                              if (hasActive) {
+                                if (mounted) {
+                                  ScaffoldMessenger.of(context).showSnackBar(
+                                    const SnackBar(
+                                      content: Text(
+                                          '⚠️ You already have an active room!'),
+                                      backgroundColor: GamerTheme.accentOrange,
+                                      behavior: SnackBarBehavior.floating,
+                                    ),
+                                  );
+                                }
+                                return;
+                              }
+
                               final roomId = _generateUuid();
                               final now = DateTime.now().toIso8601String();
                               final startTime = DateTime.now()
@@ -1074,9 +1203,6 @@ class _GamerRoomsScreenState extends State<GamerRoomsScreen> {
             ? room.hostName[0].toUpperCase()
             : 'G');
 
-    // ═══════════════════════════════════════════════════════════
-    // NAYA: Boost visual
-    // ═══════════════════════════════════════════════════════════
     final bool isBoosted = room.isBoosted;
     final bool isFeatured = room.isFeatured;
     final Color borderColor = isFeatured
@@ -1115,9 +1241,6 @@ class _GamerRoomsScreenState extends State<GamerRoomsScreen> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // ═══════════════════════════════════════════════════════════
-          // NAYA: Boosted banner
-          // ═══════════════════════════════════════════════════════════
           if (isBoosted)
             Container(
               margin: const EdgeInsets.only(bottom: 8),
@@ -1433,6 +1556,10 @@ class _InRoomBottomSheetContent extends StatefulWidget {
   final String currentUserName;
   final VoidCallback onJoinRoomRequested;
   final VoidCallback onLeaveRoom;
+  // ═══════════════════════════════════════════════════════════
+  // NAYA: Delete room callback
+  // ═══════════════════════════════════════════════════════════
+  final VoidCallback onDeleteRoom;
 
   const _InRoomBottomSheetContent({
     required this.room,
@@ -1440,6 +1567,7 @@ class _InRoomBottomSheetContent extends StatefulWidget {
     required this.currentUserName,
     required this.onJoinRoomRequested,
     required this.onLeaveRoom,
+    required this.onDeleteRoom,
   });
 
   @override
@@ -1759,6 +1887,33 @@ class _InRoomBottomSheetContentState extends State<_InRoomBottomSheetContent> {
                                       () => _isStartingMatch = false);
                                 }
                               },
+                      ),
+                    // ═══════════════════════════════════════════════════════════
+                    // NAYA: Delete room button (host ke liye)
+                    // ═══════════════════════════════════════════════════════════
+                    if (isH)
+                      Padding(
+                        padding: const EdgeInsets.only(top: 8),
+                        child: OutlinedButton.icon(
+                          style: OutlinedButton.styleFrom(
+                            foregroundColor: GamerTheme.redAccent,
+                            side: const BorderSide(
+                                color: GamerTheme.redAccent, width: 1.2),
+                            padding: const EdgeInsets.symmetric(vertical: 12),
+                            minimumSize: const Size(double.infinity, 0),
+                            shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(10)),
+                          ),
+                          onPressed: widget.onDeleteRoom,
+                          icon: const Icon(Icons.delete_forever_rounded,
+                              size: 18, color: GamerTheme.redAccent),
+                          label: const Text(
+                            'DELETE ROOM',
+                            style: TextStyle(
+                                fontWeight: FontWeight.bold,
+                                color: GamerTheme.redAccent),
+                          ),
+                        ),
                       ),
                     if (isJ && !isH)
                       OutlinedButton(
