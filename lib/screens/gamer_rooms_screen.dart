@@ -50,10 +50,11 @@ class GamerRoom {
   final String? disputeReason;
   final String? disputeProofUrl;
   final DateTime? disputedAt;
-  // ═══════════════════════════════════════════════════════════
-  // NAYA: Tournament Entry Fee
-  // ═══════════════════════════════════════════════════════════
   final int entryFeeCoins;
+  // ═══════════════════════════════════════════════════════════
+  // NAYA: Room Boost
+  // ═══════════════════════════════════════════════════════════
+  final DateTime? boostedUntil;
 
   const GamerRoom({
     required this.id,
@@ -89,6 +90,7 @@ class GamerRoom {
     this.disputeProofUrl,
     this.disputedAt,
     this.entryFeeCoins = 0,
+    this.boostedUntil,
   }) : startTime = startTime ?? createdAt;
 
   String get title => '$game $mode';
@@ -100,6 +102,19 @@ class GamerRoom {
   String get password => roomPassword;
   String get entryFee => entryFeeCoins == 0 ? 'FREE' : '$entryFeeCoins Coins';
   String get prizeSource => 'application';
+
+  // ═══════════════════════════════════════════════════════════
+  // NAYA: Boost status
+  // ═══════════════════════════════════════════════════════════
+  bool get isBoosted {
+    if (boostedUntil == null) return false;
+    return DateTime.now().isBefore(boostedUntil!);
+  }
+
+  bool get isFeatured {
+    if (!isBoosted) return false;
+    return boostedUntil!.difference(DateTime.now()).inHours > 48;
+  }
 
   bool get isFull => filledSlots >= totalSlots;
   bool get isCompleted =>
@@ -185,6 +200,10 @@ class GamerRoom {
     if (row['start_time'] is String) {
       startTime = DateTime.tryParse(row['start_time']);
     }
+    DateTime? boostedUntil;
+    if (row['boosted_until'] is String) {
+      boostedUntil = DateTime.tryParse(row['boosted_until']);
+    }
     return GamerRoom(
       id: (row['id'] ?? '').toString(),
       hostId: (row['host_id'] ?? '').toString(),
@@ -227,6 +246,7 @@ class GamerRoom {
       entryFeeCoins: (row['entry_fee_coins'] is num)
           ? (row['entry_fee_coins'] as num).toInt()
           : 0,
+      boostedUntil: boostedUntil,
     );
   }
 }
@@ -491,7 +511,19 @@ class _GamerRoomsScreenState extends State<GamerRoomsScreen> {
           list.add(room);
         } catch (_) {}
       }
-      list.sort((a, b) => b.createdAt.compareTo(a.createdAt));
+      // ═══════════════════════════════════════════════════════════
+      // NAYA: Boosted rooms sabse upar
+      // ═══════════════════════════════════════════════════════════
+      list.sort((a, b) {
+        if (a.isBoosted && !b.isBoosted) return -1;
+        if (!a.isBoosted && b.isBoosted) return 1;
+        if (a.isBoosted && b.isBoosted) {
+          // Featured (orange) above Boost (purple)
+          if (a.isFeatured && !b.isFeatured) return -1;
+          if (!a.isFeatured && b.isFeatured) return 1;
+        }
+        return b.createdAt.compareTo(a.createdAt);
+      });
       return list;
     });
   }
@@ -517,9 +549,6 @@ class _GamerRoomsScreenState extends State<GamerRoomsScreen> {
       return;
     }
 
-    // ═══════════════════════════════════════════════════════════
-    // NAYA: Entry fee check (agar > 0 hai to)
-    // ═══════════════════════════════════════════════════════════
     final entryFee = room.entryFeeCoins;
     if (entryFee > 0) {
       final wallet = await _walletService.getOrCreateWallet(uid);
@@ -565,9 +594,6 @@ class _GamerRoomsScreenState extends State<GamerRoomsScreen> {
               : [];
           if (joinedIds.contains(uid)) return;
 
-          // ═══════════════════════════════════════════════════════════
-          // NAYA: Coins deduct karo (agar entry fee > 0)
-          // ═══════════════════════════════════════════════════════════
           if (entryFee > 0) {
             await CoinWalletService.updateCoins(
               userId: uid,
@@ -697,9 +723,6 @@ class _GamerRoomsScreenState extends State<GamerRoomsScreen> {
     String selectedMap = 'Erangel';
     int maxSlots = 2;
     int prizeCoins = 100;
-    // ═══════════════════════════════════════════════════════════
-    // NAYA: Entry fee variable
-    // ═══════════════════════════════════════════════════════════
     int entryFeeCoins = 0;
 
     String generateRoomTitle(
@@ -897,9 +920,6 @@ class _GamerRoomsScreenState extends State<GamerRoomsScreen> {
                       }
                     },
                   ),
-                  // ═══════════════════════════════════════════════════════════
-                  // NAYA: ENTRY FEE dropdown
-                  // ═══════════════════════════════════════════════════════════
                   const SizedBox(height: 12),
                   const Text('ENTRY FEE',
                       style: TextStyle(
@@ -994,9 +1014,6 @@ class _GamerRoomsScreenState extends State<GamerRoomsScreen> {
                                     }
                                   ]),
                                   'start_time': startTime,
-                                  // ═══════════════════════════════════════════════════════════
-                                  // NAYA: Entry fee insert
-                                  // ═══════════════════════════════════════════════════════════
                                   'entry_fee_coins': entryFeeCoins,
                                 });
                                 if (mounted) {
@@ -1056,20 +1073,84 @@ class _GamerRoomsScreenState extends State<GamerRoomsScreen> {
         : (room.hostName.isNotEmpty
             ? room.hostName[0].toUpperCase()
             : 'G');
+
+    // ═══════════════════════════════════════════════════════════
+    // NAYA: Boost visual
+    // ═══════════════════════════════════════════════════════════
+    final bool isBoosted = room.isBoosted;
+    final bool isFeatured = room.isFeatured;
+    final Color borderColor = isFeatured
+        ? GamerTheme.accentOrange
+        : isBoosted
+            ? Colors.purpleAccent
+            : (isJoined ? const Color(0xFF1877F2) : const Color(0xFFE4E6EB));
+    final double borderWidth = isBoosted
+        ? 2.0
+        : (isJoined ? 1.5 : 1.0);
+
     return Container(
       margin: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
       padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: isBoosted
+            ? (isFeatured
+                ? const Color(0xFFFFF7E6)
+                : const Color(0xFFF7F0FF))
+            : Colors.white,
         borderRadius: BorderRadius.circular(12),
         border: Border.all(
-          color: isJoined ? const Color(0xFF1877F2) : const Color(0xFFE4E6EB),
-          width: isJoined ? 1.5 : 1.0,
+          color: borderColor,
+          width: borderWidth,
         ),
+        boxShadow: isBoosted
+            ? [
+                BoxShadow(
+                  color: borderColor.withOpacity(0.25),
+                  blurRadius: 12,
+                  spreadRadius: 1,
+                ),
+              ]
+            : null,
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
+          // ═══════════════════════════════════════════════════════════
+          // NAYA: Boosted banner
+          // ═══════════════════════════════════════════════════════════
+          if (isBoosted)
+            Container(
+              margin: const EdgeInsets.only(bottom: 8),
+              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+              decoration: BoxDecoration(
+                gradient: LinearGradient(
+                  colors: isFeatured
+                      ? [GamerTheme.accentOrange, Colors.orange.shade700]
+                      : [Colors.purpleAccent, Colors.deepPurpleAccent],
+                ),
+                borderRadius: BorderRadius.circular(8),
+              ),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Icon(
+                    isFeatured ? Icons.star_rounded : Icons.rocket_launch_rounded,
+                    color: Colors.white,
+                    size: 13,
+                  ),
+                  const SizedBox(width: 4),
+                  Text(
+                    isFeatured ? '⭐ FEATURED ROOM' : '🚀 BOOSTED',
+                    style: const TextStyle(
+                      color: Colors.white,
+                      fontWeight: FontWeight.w900,
+                      fontSize: 10,
+                      letterSpacing: 0.8,
+                    ),
+                  ),
+                ],
+              ),
+            ),
           Row(
             children: [
               CircleAvatar(
@@ -1078,8 +1159,9 @@ class _GamerRoomsScreenState extends State<GamerRoomsScreen> {
                     ? const Color(0xFF1877F2)
                     : const Color(0xFFE4E6EB),
                 child: Text(initial,
-                    style: const TextStyle(
-                        color: Colors.white, fontWeight: FontWeight.bold)),
+                    style: TextStyle(
+                        color: isJoined ? Colors.white : const Color(0xFF1C1E21),
+                        fontWeight: FontWeight.bold)),
               ),
               const SizedBox(width: 10),
               Expanded(
@@ -1138,9 +1220,6 @@ class _GamerRoomsScreenState extends State<GamerRoomsScreen> {
                 ),
                 Expanded(
                   child: Column(children: [
-                    // ═══════════════════════════════════════════════════════════
-                    // NAYA: Entry fee display
-                    // ═══════════════════════════════════════════════════════════
                     Text(
                       room.entryFeeCoins == 0
                           ? 'FREE'
@@ -1491,9 +1570,6 @@ class _InRoomBottomSheetContentState extends State<_InRoomBottomSheetContent> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    // ═══════════════════════════════════════════════════════════
-                    // NAYA: Entry fee display
-                    // ═══════════════════════════════════════════════════════════
                     Text(
                         'Prize: ${currentRoom.prize} Coins • Entry: ${currentRoom.entryFeeCoins == 0 ? "FREE" : "${currentRoom.entryFeeCoins} Coins"} • Slots: ${currentRoom.filled}/${currentRoom.total}',
                         style: const TextStyle(
