@@ -117,6 +117,35 @@ class _EndMatchBottomSheetState extends State<EndMatchBottomSheet> {
     setState(() => _isSubmitting = true);
 
     try {
+      // ✅ NAYA: Proof upload limit check (max 3)
+      int currentProofCount = 0;
+      try {
+        final matchRow = await SupabaseService.client
+            .from('active_matches')
+            .select('proof_upload_count')
+            .eq('id', widget.activeMatchId)
+            .maybeSingle();
+        currentProofCount =
+            (matchRow?['proof_upload_count'] as num?)?.toInt() ?? 0;
+      } catch (e) {
+        debugPrint('[EndMatchDialog] proof_upload_count fetch error: $e');
+      }
+
+      if (currentProofCount >= 3) {
+        if (mounted) {
+          setState(() => _isSubmitting = false);
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text(
+                  '❌ Aap 3 baar proof upload kar chuke ho. Aage upload nahi kar sakte.'),
+              backgroundColor: Color(0xFFFF4655),
+              duration: Duration(seconds: 5),
+            ),
+          );
+        }
+        return;
+      }
+
       // 1. Ensure bucket 'match_proofs' exists if possible
       try {
         await SupabaseService.client.storage.createBucket(
@@ -166,6 +195,7 @@ class _EndMatchBottomSheetState extends State<EndMatchBottomSheet> {
           'status': 'under_review',
           'proof_status': 'pending',
           'submitted_by_team_id': myUuid,
+          'proof_upload_count': currentProofCount + 1,
           if (winnerTeamId != null) 'winner_team_id': winnerTeamId,
           if (proofUrl != null) 'proof_url': proofUrl,
           'result': _selectedResult,
@@ -175,6 +205,7 @@ class _EndMatchBottomSheetState extends State<EndMatchBottomSheet> {
         debugPrint('[EndMatchDialog] Update with proof_status/submitted_by failed: $e, fallback status under_review');
         await SupabaseService.client.from('active_matches').update({
           'status': 'under_review',
+          'proof_upload_count': currentProofCount + 1,
           if (winnerTeamId != null) 'winner_team_id': winnerTeamId,
           if (proofUrl != null) 'proof_url': proofUrl,
           'result': _selectedResult,
