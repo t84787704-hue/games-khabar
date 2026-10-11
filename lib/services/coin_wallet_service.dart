@@ -388,9 +388,13 @@ class CoinWalletService extends ChangeNotifier {
         description: '+50 G-Coins collected',
       );
 
+      // FIX: coins aur gCoins bhi update karo
       await SupabaseService.client.from('coin_wallets').upsert({
         'id': userId,
         'user_id': userId,
+        'userId': userId,
+        'coins': newCoins,
+        'gCoins': newCoins,
         'lastDailyBonusClaim': now.toIso8601String(),
         'updated_at': now.toIso8601String(),
       });
