@@ -1279,9 +1279,17 @@ class _InRoomBottomSheetContentState extends State<_InRoomBottomSheetContent> {
   Duration _remainingTime = Duration.zero;
   bool _isStartingMatch = false;
 
-  bool get isHost => widget.room.hostId == widget.currentUserId;
+  // ═══════════════════════════════════════════════════════════
+  // NAYA: Live room stream subscription
+  // ═══════════════════════════════════════════════════════════
+  StreamSubscription? _roomSub;
+  GamerRoom? _liveRoom;
+
+  GamerRoom get room => _liveRoom ?? widget.room;
+
+  bool get isHost => room.hostId == widget.currentUserId;
   bool get isJoined =>
-      widget.room.joinedUserIds.contains(widget.currentUserId);
+      room.joinedUserIds.contains(widget.currentUserId);
   bool get canAccess => isHost || isJoined;
 
   @override
@@ -1291,17 +1299,40 @@ class _InRoomBottomSheetContentState extends State<_InRoomBottomSheetContent> {
     _countdownTimer = Timer.periodic(const Duration(seconds: 1), (_) {
       if (mounted) setState(() => _updateRemainingTime());
     });
+
+    // ═══════════════════════════════════════════════════════════
+    // NAYA: Live room stream
+    // ═══════════════════════════════════════════════════════════
+    _roomSub = SupabaseService.client
+        .from('rooms')
+        .stream(primaryKey: ['id'])
+        .eq('id', widget.room.id)
+        .listen((rows) {
+      if (rows.isNotEmpty && mounted) {
+        try {
+          final updated = GamerRoom.fromSupabase(
+            Map<String, dynamic>.from(rows.first),
+          );
+          setState(() {
+            _liveRoom = updated;
+            _updateRemainingTime();
+          });
+        } catch (_) {}
+      }
+    });
   }
 
   void _updateRemainingTime() {
     final now = DateTime.now();
-    _remainingTime = widget.room.startTime.isAfter(now)
-        ? widget.room.startTime.difference(now)
+    final rt = room.startTime;
+    _remainingTime = rt.isAfter(now)
+        ? rt.difference(now)
         : Duration.zero;
   }
 
   @override
   void dispose() {
+    _roomSub?.cancel();
     _countdownTimer?.cancel();
     _msgController.dispose();
     super.dispose();
@@ -1318,9 +1349,9 @@ class _InRoomBottomSheetContentState extends State<_InRoomBottomSheetContent> {
 
   @override
   Widget build(BuildContext context) {
-    final room = widget.room;
-    final isH = room.hostId == widget.currentUserId;
-    final isJ = room.joinedUserIds.contains(widget.currentUserId);
+    final currentRoom = room;
+    final isH = currentRoom.hostId == widget.currentUserId;
+    final isJ = currentRoom.joinedUserIds.contains(widget.currentUserId);
     final access = isH || isJ;
     return Container(
       decoration: const BoxDecoration(
@@ -1348,10 +1379,10 @@ class _InRoomBottomSheetContentState extends State<_InRoomBottomSheetContent> {
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        Text(room.title,
+                        Text(currentRoom.title,
                             style: const TextStyle(
                                 fontWeight: FontWeight.bold, fontSize: 16)),
-                        Text('Host: ${room.hostName} • ${room.map}',
+                        Text('Host: ${currentRoom.hostName} • ${currentRoom.map}',
                             style: const TextStyle(
                                 color: Color(0xFF65676B), fontSize: 12)),
                       ],
@@ -1372,7 +1403,7 @@ class _InRoomBottomSheetContentState extends State<_InRoomBottomSheetContent> {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
-                        'Prize: ${room.prize} Coins • Slots: ${room.filled}/${room.total}',
+                        'Prize: ${currentRoom.prize} Coins • Slots: ${currentRoom.filled}/${currentRoom.total}',
                         style: const TextStyle(
                             fontWeight: FontWeight.bold, fontSize: 13)),
                     const SizedBox(height: 8),
@@ -1384,9 +1415,9 @@ class _InRoomBottomSheetContentState extends State<_InRoomBottomSheetContent> {
                         borderRadius: BorderRadius.circular(20),
                       ),
                       child: Text(
-                        room.isCompleted
+                        currentRoom.isCompleted
                             ? 'COMPLETED'
-                            : room.isInProgress
+                            : currentRoom.isInProgress
                                 ? 'MATCH IN PROGRESS'
                                 : _formatDuration(_remainingTime),
                         style: const TextStyle(
@@ -1407,7 +1438,7 @@ class _InRoomBottomSheetContentState extends State<_InRoomBottomSheetContent> {
                         stream: SupabaseService.client
                             .from('messages')
                             .stream(primaryKey: ['id'])
-                            .eq('room_id', room.id)
+                            .eq('room_id', currentRoom.id)
                             .map((rows) => rows
                                 .map((r) => Map<String, dynamic>.from(r))
                                 .toList()),
@@ -1512,7 +1543,7 @@ class _InRoomBottomSheetContentState extends State<_InRoomBottomSheetContent> {
                               await SupabaseService.client
                                   .from('messages')
                                   .insert({
-                                'room_id': room.id,
+                                'room_id': currentRoom.id,
                                 'sender_id': widget.currentUserId,
                                 'sender_name': widget.currentUserName,
                                 'message': text,
@@ -1537,8 +1568,12 @@ class _InRoomBottomSheetContentState extends State<_InRoomBottomSheetContent> {
                         icon: const Icon(Icons.play_arrow_rounded),
                         label: Text(_isStartingMatch
                             ? 'STARTING...'
-                            : 'START MATCH'),
-                        onPressed: _isStartingMatch
+                            : currentRoom.isInProgress
+                                ? 'MATCH IN PROGRESS'
+                                : 'START MATCH'),
+                        onPressed: (_isStartingMatch ||
+                                currentRoom.isInProgress ||
+                                currentRoom.isCompleted)
                             ? null
                             : () async {
                                 setState(() => _isStartingMatch = true);
@@ -1547,7 +1582,7 @@ class _InRoomBottomSheetContentState extends State<_InRoomBottomSheetContent> {
                                       .from('rooms')
                                       .update({
                                     'status': 'IN_PROGRESS',
-                                  }).eq('id', room.id);
+                                  }).eq('id', currentRoom.id);
                                 } catch (_) {}
                                 if (mounted) {
                                   setState(
