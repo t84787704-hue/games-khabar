@@ -17,6 +17,7 @@ import '../services/win_proof_validator.dart';
 import '../services/notification_service.dart';
 import 'coin_store_screen.dart';
 import '../widgets/coin_history_sheet.dart';
+import '../widgets/coin_or_ad_popup.dart';
 
 class GamerRoom {
   final String id;
@@ -692,12 +693,10 @@ class _GamerRoomsScreenState extends State<GamerRoomsScreen> {
       }
     }
 
-    await AdFreeService().showRewardedAdForAction(
+    await CoinOrAdPopup.show(
       context: context,
-      actionTitle: entryFee > 0
-          ? 'Watch 1 Ad to Join ($entryFee Coins Entry)'
-          : 'Watch 1 Ad to Join Room',
-      onRewardEarned: () async {
+      actionName: 'Room Join',
+      onConfirm: () async {
         try {
           final row = await SupabaseService.client
               .from('rooms')
@@ -1221,60 +1220,66 @@ class _GamerRoomsScreenState extends State<GamerRoomsScreen> {
                                 return;
                               }
 
-                              final roomId = _generateUuid();
-                              final now = DateTime.now().toIso8601String();
-                              final startTime = DateTime.now()
-                                  .add(const Duration(minutes: 15))
-                                  .toIso8601String();
-                              try {
-                                await SupabaseService.client.from('rooms').insert({
-                                  'id': roomId,
-                                  'host_id': uid,
-                                  'game': selectedGame,
-                                  'mode': selectedMap,
-                                  'room_id': roomIdController.text.trim(),
-                                  'room_password': passController.text.trim(),
-                                  'prize_pool': prizeCoins,
-                                  'total_slots': maxSlots,
-                                  'filled_slots': 1,
-                                  'status': 'active',
-                                  'created_at': now,
-                                  'host_name': name,
-                                  'joined_user_ids': jsonEncode([uid]),
-                                  'joined_users': jsonEncode([
-                                    {
-                                      'id': uid,
-                                      'name': name,
-                                      'photo': currentUserPhoto,
-                                      'joinedAt': now,
+                              await CoinOrAdPopup.show(
+                                context: context,
+                                actionName: 'Room Create',
+                                onConfirm: () async {
+                                  final roomId = _generateUuid();
+                                  final now = DateTime.now().toIso8601String();
+                                  final startTime = DateTime.now()
+                                      .add(const Duration(minutes: 15))
+                                      .toIso8601String();
+                                  try {
+                                    await SupabaseService.client.from('rooms').insert({
+                                      'id': roomId,
+                                      'host_id': uid,
+                                      'game': selectedGame,
+                                      'mode': selectedMap,
+                                      'room_id': roomIdController.text.trim(),
+                                      'room_password': passController.text.trim(),
+                                      'prize_pool': prizeCoins,
+                                      'total_slots': maxSlots,
+                                      'filled_slots': 1,
+                                      'status': 'active',
+                                      'created_at': now,
+                                      'host_name': name,
+                                      'joined_user_ids': jsonEncode([uid]),
+                                      'joined_users': jsonEncode([
+                                        {
+                                          'id': uid,
+                                          'name': name,
+                                          'photo': currentUserPhoto,
+                                          'joinedAt': now,
+                                        }
+                                      ]),
+                                      'start_time': startTime,
+                                      'entry_fee_coins': entryFeeCoins,
+                                    });
+                                    if (mounted) {
+                                      setState(() => _joinedRoomIds.add(roomId));
+                                      Navigator.pop(ctx);
+                                      ScaffoldMessenger.of(context).showSnackBar(
+                                        const SnackBar(
+                                          content: Text('🎉 Room published!'),
+                                          backgroundColor: _fbBlue,
+                                        ),
+                                      );
                                     }
-                                  ]),
-                                  'start_time': startTime,
-                                  'entry_fee_coins': entryFeeCoins,
-                                });
-                                if (mounted) {
-                                  setState(() => _joinedRoomIds.add(roomId));
-                                  Navigator.pop(ctx);
-                                  ScaffoldMessenger.of(context).showSnackBar(
-                                    const SnackBar(
-                                      content: Text('🎉 Room published!'),
-                                      backgroundColor: _fbBlue,
-                                    ),
-                                  );
-                                }
-                              } catch (e) {
-                                debugPrint('Room insert failed: $e');
-                                if (mounted) {
-                                  ScaffoldMessenger.of(context).showSnackBar(
-                                    SnackBar(
-                                      content: Text('Failed: $e'),
-                                      backgroundColor: GamerTheme.redAccent,
-                                      behavior: SnackBarBehavior.floating,
-                                      duration: const Duration(seconds: 6),
-                                    ),
-                                  );
-                                }
-                              }
+                                  } catch (e) {
+                                    debugPrint('Room insert failed: $e');
+                                    if (mounted) {
+                                      ScaffoldMessenger.of(context).showSnackBar(
+                                        SnackBar(
+                                          content: Text('Failed: $e'),
+                                          backgroundColor: GamerTheme.redAccent,
+                                          behavior: SnackBarBehavior.floating,
+                                          duration: const Duration(seconds: 6),
+                                        ),
+                                      );
+                                    }
+                                  }
+                                },
+                              );
                             }
                           : null,
                       child: const Text('PUBLISH ROOM',
@@ -2271,7 +2276,15 @@ class _InRoomBottomSheetContentState extends State<_InRoomBottomSheetContent> {
                 _isUploadingProof ? 'UPLOADING & ANALYZING OCR...' : 'Upload Winning Screenshot',
                 style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13),
               ),
-              onPressed: _isUploadingProof ? null : () => _handleUploadProof(currentRoom),
+              onPressed: _isUploadingProof
+                  ? null
+                  : () async {
+                      await CoinOrAdPopup.show(
+                        context: context,
+                        actionName: 'Proof Upload',
+                        onConfirm: () => _handleUploadProof(currentRoom),
+                      );
+                    },
             ),
           ),
         ],
@@ -2639,6 +2652,19 @@ class _InRoomBottomSheetContentState extends State<_InRoomBottomSheetContent> {
         }).eq('id', currentRoom.id);
 
         try {
+          await SupabaseService.client.from('reports').insert({
+            'reporter_id': widget.currentUserId.isNotEmpty ? widget.currentUserId : null,
+            'reporter_username': widget.currentUserName.isNotEmpty ? widget.currentUserName : 'Host',
+            'target_type': 'match',
+            'target_id': currentRoom.id,
+            'target_content': 'Proof rejected 3 times by host. Escalated to admin review.',
+            'reason': 'Proof rejected 3 times by host',
+            'status': 'pending',
+            'created_at': DateTime.now().toIso8601String(),
+          });
+        } catch (_) {}
+
+        try {
           await SupabaseService.client.from('messages').insert({
             'room_id': currentRoom.id,
             'sender_id': 'system',
@@ -2839,6 +2865,22 @@ class _InRoomBottomSheetContentState extends State<_InRoomBottomSheetContent> {
                         'dispute_proof_url': disputeProofUrl,
                         'disputed_at': DateTime.now().toIso8601String(),
                       }).eq('id', currentRoom.id);
+
+                      // Also insert into reports table for Admin Panel visibility (Issue #1)
+                      try {
+                        await SupabaseService.client.from('reports').insert({
+                          'reporter_id': widget.currentUserId.isNotEmpty ? widget.currentUserId : null,
+                          'reporter_username': widget.currentUserName.isNotEmpty ? widget.currentUserName : 'Gamer',
+                          'target_type': 'match',
+                          'target_id': currentRoom.id,
+                          'target_content': reason,
+                          'reason': reason,
+                          'status': 'pending',
+                          'created_at': DateTime.now().toIso8601String(),
+                        });
+                      } catch (reportErr) {
+                        debugPrint('[GamerRoomsScreen] reports insert error: $reportErr');
+                      }
 
                       try {
                         await SupabaseService.client.from('messages').insert({

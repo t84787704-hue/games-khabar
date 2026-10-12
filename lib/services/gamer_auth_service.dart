@@ -6,6 +6,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import '../models/gamer_user_model.dart';
 import 'supabase_service.dart';
 import 'notification_service.dart';
+import 'coin_wallet_service.dart';
 
 class GamerAuthService {
   static final GamerAuthService _instance = GamerAuthService._internal();
@@ -82,6 +83,9 @@ class GamerAuthService {
       try {
         NotificationService().saveUserFcmToken(authUserId);
       } catch (_) {}
+
+      // Check and award 1000 coins welcome bonus on first signup
+      checkAndAwardWelcomeBonus(authUserId);
     } catch (e) {
       debugPrint('[GamerAuthService] Error syncing user: $e');
       currentGamerNotifier.value = null;
@@ -279,6 +283,10 @@ class GamerAuthService {
         'bio': user.bio,
         'game': (user.favoriteGame.isNotEmpty && user.favoriteGame != 'All Games') ? user.favoriteGame : null,
         'rank': user.rank.isNotEmpty ? user.rank : null,
+        'selected_rank': user.selectedRank.isNotEmpty ? user.selectedRank : null,
+        'is_rank_verified': user.isRankVerified,
+        'rank_status': user.rankStatus.isNotEmpty ? user.rankStatus : 'none',
+        'rank_proof_url': user.rankScreenshot.isNotEmpty ? user.rankScreenshot : null,
         'coins': user.coins,
         'is_verified': user.isVerified,
         'updated_at': DateTime.now().toIso8601String(),
@@ -307,10 +315,72 @@ class GamerAuthService {
       }
 
       currentGamerNotifier.value = user;
+      await checkAndAwardWelcomeBonus(user.uid);
       return true;
     } catch (e) {
       debugPrint('[GamerAuthService] Error saving gamer profile in Supabase: $e');
       return false;
+    }
+  }
+
+  /// Awards 1000 G-Coins welcome bonus on first signup (Issue #6)
+  Future<void> checkAndAwardWelcomeBonus(String userId) async {
+    if (userId.isEmpty) return;
+    try {
+      final userRow = await _supabase
+          .from('users')
+          .select('welcome_bonus_claimed, id')
+          .or('id.eq.$userId,uid.eq.$userId')
+          .maybeSingle();
+
+      final bool alreadyClaimed =
+          userRow != null && (userRow['welcome_bonus_claimed'] == true);
+      if (alreadyClaimed) return;
+
+      // Duplicate prevention: check coin_transactions table
+      final existingTx = await _supabase
+          .from('coin_transactions')
+          .select('id')
+          .eq('user_id', SupabaseService.toUuid(userId))
+          .eq('type', 'welcome_bonus')
+          .limit(1);
+
+      if (existingTx.isNotEmpty) {
+        try {
+          await _supabase
+              .from('users')
+              .update({'welcome_bonus_claimed': true})
+              .or('id.eq.$userId,uid.eq.$userId');
+        } catch (_) {}
+        return;
+      }
+
+      // Mark welcome_bonus_claimed = true
+      try {
+        await _supabase
+            .from('users')
+            .update({'welcome_bonus_claimed': true})
+            .or('id.eq.$userId,uid.eq.$userId');
+      } catch (_) {}
+
+      // Award 1000 G-Coins via CoinWalletService
+      await CoinWalletService.updateCoins(
+        userId: userId,
+        amount: 1000,
+        type: 'welcome_bonus',
+        title: 'Welcome Bonus',
+        description: 'First time signup bonus',
+      );
+
+      // Send welcome notification
+      await NotificationService().createNotification(
+        userId: userId,
+        title: 'Welcome to Games Khabar!',
+        body: 'Welcome to Games Khabar! Aapko 1000 G-Coins mile hain!',
+        type: 'welcome_bonus',
+      );
+    } catch (e) {
+      debugPrint('[GamerAuthService] checkAndAwardWelcomeBonus error: $e');
     }
   }
 

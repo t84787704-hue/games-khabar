@@ -8,6 +8,7 @@ import '../services/gamer_auth_service.dart';
 import '../screens/team_profile_screen.dart';
 import '../screens/teams_screen.dart';
 import '../screens/private_match_room_screen.dart';
+import 'coin_or_ad_popup.dart';
 
 class TeamCard extends StatefulWidget {
   final TeamModel team;
@@ -102,41 +103,47 @@ class _TeamCardState extends State<TeamCard> {
       return;
     }
 
-    final currentGamer = GamerAuthService().currentGamer;
-    final userName =
-        currentGamer?.displayName ?? currentGamer?.username ?? 'Gamer';
+    await CoinOrAdPopup.show(
+      context: context,
+      actionName: 'Team Join',
+      onConfirm: () async {
+        final currentGamer = GamerAuthService().currentGamer;
+        final userName =
+            currentGamer?.displayName ?? currentGamer?.username ?? 'Gamer';
 
-    setState(() => _isRequesting = true);
-    final success = await _teamService.requestToJoinTeam(
-      teamId: widget.team.id,
-      userId: effectiveUid,
-      userName: userName,
-      teamName: widget.team.name,
+        setState(() => _isRequesting = true);
+        final success = await _teamService.requestToJoinTeam(
+          teamId: widget.team.id,
+          userId: effectiveUid,
+          userName: userName,
+          teamName: widget.team.name,
+        );
+        setState(() {
+          _isRequesting = false;
+          if (success) {
+            _localRequested = true;
+          }
+        });
+
+        if (mounted) {
+          if (success) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(
+                content: Text('✅ شمولیت کی درخواست بھیج دی گئی ہے!'),
+                backgroundColor: Color(0xFF1877F2),
+              ),
+            );
+          } else {
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(
+                content: Text('درخواست بھیجنے میں مسئلہ ہوا، دوبارہ کوشش کریں'),
+                backgroundColor: Color(0xFFFF4655),
+              ),
+            );
+          }
+        }
+      },
     );
-    setState(() {
-      _isRequesting = false;
-      if (success) {
-        _localRequested = true;
-      }
-    });
-
-    if (mounted) {
-      if (success) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('✅ شمولیت کی درخواست بھیج دی گئی ہے!'),
-            backgroundColor: Color(0xFF1877F2),
-          ),
-        );
-      } else {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('درخواست بھیجنے میں مسئلہ ہوا، دوبارہ کوشش کریں'),
-            backgroundColor: Color(0xFFFF4655),
-          ),
-        );
-      }
-    }
   }
 
   Future<void> _handleChallenge(String currentUid) async {
@@ -1266,205 +1273,214 @@ class _TeamCardState extends State<TeamCard> {
                           fontSize: 11.5,
                           fontWeight: FontWeight.w600),
                     ),
-                    const Spacer(),
-
-                    OutlinedButton(
-                      style: OutlinedButton.styleFrom(
-                        foregroundColor: const Color(0xFF050505),
-                        side: const BorderSide(color: Color(0xFFCED0D4)),
-                        padding: const EdgeInsets.symmetric(
-                            horizontal: 10, vertical: 4),
-                        minimumSize: const Size(0, 32),
-                        shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(8)),
-                      ),
-                      onPressed: () {
-                        Navigator.push(
-                          context,
-                          MaterialPageRoute(
-                            builder: (_) =>
-                                TeamProfileScreen(teamId: team.id),
-                          ),
-                        );
-                      },
-                      child: const Text('View Team',
-                          style: TextStyle(
-                              fontSize: 11.5,
-                              fontWeight: FontWeight.bold)),
-                    ),
                     const SizedBox(width: 8),
-
-                    if (isOwnerFinal || isMemberFinal)
-                      _buildOpenTeamButton()
-                    else ...[
-                      StreamBuilder<List<Map<String, dynamic>>>(
-                        stream: widget.myTeamId.isNotEmpty
-                            ? SupabaseService.client
-                                .from('active_matches')
-                                .stream(primaryKey: ['id'])
-                                .eq('status', 'active')
-                            : Stream.value([]),
-                        builder: (context, activeSnap) {
-                          final activeMatches = activeSnap.data ?? [];
-                          final myUuid =
-                              SupabaseService.toUuid(widget.myTeamId)
-                                  .toLowerCase();
-                          final myRawId = widget.myTeamId.toLowerCase();
-                          final targetUuid =
-                              SupabaseService.toUuid(team.id).toLowerCase();
-                          final targetRawId = team.id.toLowerCase();
-
-                          final activeMatchWithOpponent =
-                              activeMatches.firstWhere(
-                            (m) {
-                              if (m['status'] != 'active') return false;
-                              final participants = m['participants'];
-                              final List<String> pList = [];
-                              if (participants is List) {
-                                pList.addAll(participants.map(
-                                    (p) => p.toString().toLowerCase()));
-                              }
-                              pList.add(
-                                  m['team1_id']?.toString().toLowerCase() ??
-                                      '');
-                              pList.add(
-                                  m['team2_id']?.toString().toLowerCase() ??
-                                      '');
-                              final hasMe = pList.contains(myUuid) ||
-                                  pList.contains(myRawId);
-                              final hasTarget =
-                                  pList.contains(targetUuid) ||
-                                      pList.contains(targetRawId);
-                              return hasMe && hasTarget;
-                            },
-                            orElse: () => {},
-                          );
-
-                          if (activeMatchWithOpponent.isNotEmpty) {
-                            return Row(
-                              mainAxisSize: MainAxisSize.min,
-                              children: [
-                                Container(
-                                  padding: const EdgeInsets.symmetric(
-                                      horizontal: 8, vertical: 5),
-                                  decoration: BoxDecoration(
-                                    color: const Color(0xFF00FF88),
-                                    borderRadius:
-                                        BorderRadius.circular(8),
+                    Expanded(
+                      child: SingleChildScrollView(
+                        scrollDirection: Axis.horizontal,
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            OutlinedButton(
+                              style: OutlinedButton.styleFrom(
+                                foregroundColor: const Color(0xFF050505),
+                                side: const BorderSide(color: Color(0xFFCED0D4)),
+                                padding: const EdgeInsets.symmetric(
+                                    horizontal: 10, vertical: 4),
+                                minimumSize: const Size(0, 32),
+                                shape: RoundedRectangleBorder(
+                                    borderRadius: BorderRadius.circular(8)),
+                              ),
+                              onPressed: () {
+                                Navigator.push(
+                                  context,
+                                  MaterialPageRoute(
+                                    builder: (_) =>
+                                        TeamProfileScreen(teamId: team.id),
                                   ),
-                                  child: const Row(
-                                    mainAxisSize: MainAxisSize.min,
-                                    children: [
-                                      Icon(
-                                          Icons
-                                              .local_fire_department_rounded,
-                                          size: 14,
-                                          color: Colors.black),
-                                      SizedBox(width: 4),
-                                      Text(
-                                        'LIVE',
-                                        style: TextStyle(
-                                          color: Colors.black,
-                                          fontWeight: FontWeight.w900,
-                                          fontSize: 11,
-                                        ),
-                                      ),
-                                    ],
-                                  ),
-                                ),
-                                const SizedBox(width: 6),
-                                ElevatedButton.icon(
-                                  style: ElevatedButton.styleFrom(
-                                    backgroundColor:
-                                        const Color(0xFF1877F2),
-                                    foregroundColor: Colors.white,
-                                    padding: const EdgeInsets.symmetric(
-                                        horizontal: 10, vertical: 4),
-                                    minimumSize: const Size(0, 32),
-                                    shape: RoundedRectangleBorder(
-                                        borderRadius:
-                                            BorderRadius.circular(8)),
-                                    elevation: 0,
-                                  ),
-                                  icon: const Icon(
-                                      Icons.chat_bubble_rounded,
-                                      size: 14),
-                                  label: const Text('Team DM 💬',
-                                      style: TextStyle(
-                                          fontSize: 11.5,
-                                          fontWeight: FontWeight.bold)),
-                                  onPressed: () {
-                                    final matchId =
-                                        activeMatchWithOpponent['id']
-                                                ?.toString() ??
-                                            '';
-                                    Navigator.push(
-                                      context,
-                                      MaterialPageRoute(
-                                        builder: (_) =>
-                                            PrivateMatchRoomScreen(
-                                          matchId: matchId,
-                                          myTeamId: widget.myTeamId,
-                                          myTeamName: widget.myTeamName,
-                                          opponentId: team.id,
-                                          opponentName: team.name,
-                                        ),
-                                      ),
-                                    );
-                                  },
-                                ),
-                              ],
-                            );
-                          }
-
-                          return _buildChallengeSection(currentUid);
-                        },
-                      ),
-                      const SizedBox(width: 8),
-
-                      Builder(builder: (context) {
-                        final bool isRequested =
-                            hasRequested || _localRequested;
-                        return ElevatedButton.icon(
-                          style: ElevatedButton.styleFrom(
-                            backgroundColor: isRequested
-                                ? const Color(0xFFE4E6EB)
-                                : const Color(0xFF1877F2),
-                            foregroundColor: isRequested
-                                ? const Color(0xFF65676B)
-                                : Colors.white,
-                            padding: const EdgeInsets.symmetric(
-                                horizontal: 12, vertical: 4),
-                            minimumSize: const Size(0, 32),
-                            elevation: 0,
-                            shape: RoundedRectangleBorder(
-                                borderRadius: BorderRadius.circular(8)),
-                          ),
-                          icon: Icon(
-                            isRequested
-                                ? Icons.hourglass_top_rounded
-                                : Icons.person_add_rounded,
-                            size: 14,
-                            color: isRequested
-                                ? const Color(0xFF65676B)
-                                : Colors.white,
-                          ),
-                          label: Text(
-                            isRequested ? 'Requested ⏳' : 'Join',
-                            style: TextStyle(
-                              fontWeight: FontWeight.bold,
-                              fontSize: 11.5,
-                              color: isRequested
-                                  ? const Color(0xFF65676B)
-                                  : Colors.white,
+                                );
+                              },
+                              child: const Text('View Team',
+                                  style: TextStyle(
+                                      fontSize: 11.5,
+                                      fontWeight: FontWeight.bold)),
                             ),
-                          ),
-                          onPressed: (isRequested || _isRequesting)
-                              ? null
-                              : () => _handleJoin(currentUid),
-                        );
-                      }),
-                    ],
+                            const SizedBox(width: 8),
+
+                            if (isOwnerFinal || isMemberFinal)
+                              _buildOpenTeamButton()
+                            else ...[
+                              StreamBuilder<List<Map<String, dynamic>>>(
+                                stream: widget.myTeamId.isNotEmpty
+                                    ? SupabaseService.client
+                                        .from('active_matches')
+                                        .stream(primaryKey: ['id'])
+                                        .eq('status', 'active')
+                                    : Stream.value([]),
+                                builder: (context, activeSnap) {
+                                  final activeMatches = activeSnap.data ?? [];
+                                  final myUuid =
+                                      SupabaseService.toUuid(widget.myTeamId)
+                                          .toLowerCase();
+                                  final myRawId = widget.myTeamId.toLowerCase();
+                                  final targetUuid =
+                                      SupabaseService.toUuid(team.id).toLowerCase();
+                                  final targetRawId = team.id.toLowerCase();
+
+                                  final activeMatchWithOpponent =
+                                      activeMatches.firstWhere(
+                                    (m) {
+                                      if (m['status'] != 'active') return false;
+                                      final participants = m['participants'];
+                                      final List<String> pList = [];
+                                      if (participants is List) {
+                                        pList.addAll(participants.map(
+                                            (p) => p.toString().toLowerCase()));
+                                      }
+                                      pList.add(
+                                          m['team1_id']?.toString().toLowerCase() ??
+                                              '');
+                                      pList.add(
+                                          m['team2_id']?.toString().toLowerCase() ??
+                                              '');
+                                      final hasMe = pList.contains(myUuid) ||
+                                          pList.contains(myRawId);
+                                      final hasTarget =
+                                          pList.contains(targetUuid) ||
+                                              pList.contains(targetRawId);
+                                      return hasMe && hasTarget;
+                                    },
+                                    orElse: () => {},
+                                  );
+
+                                  if (activeMatchWithOpponent.isNotEmpty) {
+                                    return Row(
+                                      mainAxisSize: MainAxisSize.min,
+                                      children: [
+                                        Container(
+                                          padding: const EdgeInsets.symmetric(
+                                              horizontal: 8, vertical: 5),
+                                          decoration: BoxDecoration(
+                                            color: const Color(0xFF00FF88),
+                                            borderRadius:
+                                                BorderRadius.circular(8),
+                                          ),
+                                          child: const Row(
+                                            mainAxisSize: MainAxisSize.min,
+                                            children: [
+                                              Icon(
+                                                  Icons
+                                                      .local_fire_department_rounded,
+                                                  size: 14,
+                                                  color: Colors.black),
+                                              SizedBox(width: 4),
+                                              Text(
+                                                'LIVE',
+                                                style: TextStyle(
+                                                  color: Colors.black,
+                                                  fontWeight: FontWeight.w900,
+                                                  fontSize: 11,
+                                                ),
+                                              ),
+                                            ],
+                                          ),
+                                        ),
+                                        const SizedBox(width: 6),
+                                        ElevatedButton.icon(
+                                          style: ElevatedButton.styleFrom(
+                                            backgroundColor:
+                                                const Color(0xFF1877F2),
+                                            foregroundColor: Colors.white,
+                                            padding: const EdgeInsets.symmetric(
+                                                horizontal: 10, vertical: 4),
+                                            minimumSize: const Size(0, 32),
+                                            shape: RoundedRectangleBorder(
+                                                borderRadius:
+                                                    BorderRadius.circular(8)),
+                                            elevation: 0,
+                                          ),
+                                          icon: const Icon(
+                                              Icons.chat_bubble_rounded,
+                                              size: 14),
+                                          label: const Text('Team DM 💬',
+                                              style: TextStyle(
+                                                  fontSize: 11.5,
+                                                  fontWeight: FontWeight.bold)),
+                                          onPressed: () {
+                                            final matchId =
+                                                activeMatchWithOpponent['id']
+                                                        ?.toString() ??
+                                                    '';
+                                            Navigator.push(
+                                              context,
+                                              MaterialPageRoute(
+                                                builder: (_) =>
+                                                    PrivateMatchRoomScreen(
+                                                  matchId: matchId,
+                                                  myTeamId: widget.myTeamId,
+                                                  myTeamName: widget.myTeamName,
+                                                  opponentId: team.id,
+                                                  opponentName: team.name,
+                                                ),
+                                              ),
+                                            );
+                                          },
+                                        ),
+                                      ],
+                                    );
+                                  }
+
+                                  return _buildChallengeSection(currentUid);
+                                },
+                              ),
+                              const SizedBox(width: 8),
+
+                              Builder(builder: (context) {
+                                final bool isRequested =
+                                    hasRequested || _localRequested;
+                                return ElevatedButton.icon(
+                                  style: ElevatedButton.styleFrom(
+                                    backgroundColor: isRequested
+                                        ? const Color(0xFFE4E6EB)
+                                        : const Color(0xFF1877F2),
+                                    foregroundColor: isRequested
+                                        ? const Color(0xFF65676B)
+                                        : Colors.white,
+                                    padding: const EdgeInsets.symmetric(
+                                        horizontal: 12, vertical: 4),
+                                    minimumSize: const Size(0, 32),
+                                    elevation: 0,
+                                    shape: RoundedRectangleBorder(
+                                        borderRadius: BorderRadius.circular(8)),
+                                  ),
+                                  icon: Icon(
+                                    isRequested
+                                        ? Icons.hourglass_top_rounded
+                                        : Icons.person_add_rounded,
+                                    size: 14,
+                                    color: isRequested
+                                        ? const Color(0xFF65676B)
+                                        : Colors.white,
+                                  ),
+                                  label: Text(
+                                    isRequested ? 'Requested ⏳' : 'Join',
+                                    style: TextStyle(
+                                      fontWeight: FontWeight.bold,
+                                      fontSize: 11.5,
+                                      color: isRequested
+                                          ? const Color(0xFF65676B)
+                                          : Colors.white,
+                                    ),
+                                  ),
+                                  onPressed: (isRequested || _isRequesting)
+                                      ? null
+                                      : () => _handleJoin(currentUid),
+                                );
+                              }),
+                            ],
+                          ],
+                        ),
+                      ),
+                    ),
                   ],
                 ),
               ],

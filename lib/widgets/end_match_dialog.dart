@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../services/supabase_service.dart';
+import 'coin_or_ad_popup.dart';
 
 class EndMatchBottomSheet extends StatefulWidget {
   final String activeMatchId;
@@ -455,7 +456,15 @@ class _EndMatchBottomSheetState extends State<EndMatchBottomSheet> {
               width: double.infinity,
               height: 48,
               child: ElevatedButton(
-                onPressed: canSubmit ? _handleSubmit : null,
+                onPressed: canSubmit
+                    ? () async {
+                        await CoinOrAdPopup.show(
+                          context: context,
+                          actionName: 'Proof Upload',
+                          onConfirm: _handleSubmit,
+                        );
+                      }
+                    : null,
                 style: ElevatedButton.styleFrom(
                   backgroundColor: const Color(0xFF00FF88),
                   foregroundColor: Colors.black,

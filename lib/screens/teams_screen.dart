@@ -18,6 +18,7 @@ import "leaderboard_screen.dart";
 import "private_match_room_screen.dart";
 import "../services/coin_wallet_service.dart";
 import "../services/notification_service.dart";
+import "../widgets/coin_or_ad_popup.dart";
 
 class TeamsScreen extends StatefulWidget {
   const TeamsScreen({super.key});
@@ -161,13 +162,24 @@ class _TeamsScreenState extends State<TeamsScreen> {
                 .maybeSingle();
           } catch (insertErr) {
             debugPrint("[TeamsScreen] Insert with participants notice: $insertErr");
-            await SupabaseService.client.from("active_matches").insert({
-              "team1_id": t1Uuid,
-              "team2_id": t2Uuid,
-              "status": "active",
-              "start_time": startTime,
-              "created_at": DateTime.now().toUtc().toIso8601String(),
-            }).select().maybeSingle();
+            try {
+              await SupabaseService.client.from("active_matches").insert({
+                "team1_id": t1Uuid,
+                "team2_id": t2Uuid,
+                "status": "active",
+                "start_time": startTime,
+                "created_at": DateTime.now().toUtc().toIso8601String(),
+              }).select().maybeSingle();
+            } catch (fallbackErr) {
+              debugPrint("[TeamsScreen] Fallback with start_time failed: $fallbackErr, inserting without start_time");
+              // Fallback if Supabase active_matches table lacks start_time / participants column
+              await SupabaseService.client.from("active_matches").insert({
+                "team1_id": t1Uuid,
+                "team2_id": t2Uuid,
+                "status": "active",
+                "created_at": DateTime.now().toUtc().toIso8601String(),
+              }).select().maybeSingle();
+            }
           }
         }
       }
@@ -212,8 +224,14 @@ class _TeamsScreenState extends State<TeamsScreen> {
   }
 
   void _openCreateTeamDialog() async {
-    final created = await CreateTeamDialog.show(context);
-    if (created == true && mounted) setState(() {});
+    await CoinOrAdPopup.show(
+      context: context,
+      actionName: "Team Create",
+      onConfirm: () async {
+        final created = await CreateTeamDialog.show(context);
+        if (created == true && mounted) setState(() {});
+      },
+    );
   }
 
   @override
@@ -859,16 +877,18 @@ class _ActiveMatchBothTeamsBannerState
     }
   }
 
-  DateTime? _getStartTime() {
+  DateTime _getStartTime() {
     final raw = widget.match["start_time"] ?? widget.match["startTime"];
     if (raw is String && raw.isNotEmpty) {
-      return DateTime.tryParse(raw)?.toLocal();
+      final dt = DateTime.tryParse(raw)?.toLocal();
+      if (dt != null) return dt;
     }
     final rawCreated = widget.match["created_at"];
     if (rawCreated is String && rawCreated.isNotEmpty) {
-      return DateTime.tryParse(rawCreated)?.toLocal();
+      final dt = DateTime.tryParse(rawCreated)?.toLocal();
+      if (dt != null) return dt;
     }
-    return null;
+    return DateTime.now();
   }
 
   @override
@@ -948,22 +968,14 @@ class _ActiveMatchBothTeamsBannerState
 
     final startTime = _getStartTime();
     final now = DateTime.now();
-    bool isCountingDown = false;
-    String countdownLabel = "";
-    String startedTimeLabel = "Started recently";
-
-    if (startTime != null) {
-      if (now.isBefore(startTime)) {
-        final diff = startTime.difference(now);
-        isCountingDown = true;
-        final mins = diff.inMinutes;
-        final secs = diff.inSeconds % 60;
-        countdownLabel = "Starts in: ${mins}m ${secs}s";
-      } else {
-        final diff = now.difference(startTime);
-        startedTimeLabel = "Started: ${diff.inMinutes} min ago";
-      }
+    final bool isRunning = status == "active" || status == "in_progress";
+    if (!isRunning) {
+      _timer?.cancel();
     }
+    final elapsed = now.isAfter(startTime) ? now.difference(startTime) : Duration.zero;
+    final mins = elapsed.inMinutes;
+    final secs = elapsed.inSeconds % 60;
+    final timerLabel = "Running: ${mins}m ${secs}s";
 
     final myTeamDisplay = _myTeam?.name ?? widget.myTeamName;
     final oppTeamDisplay =
@@ -1031,23 +1043,21 @@ class _ActiveMatchBothTeamsBannerState
               Container(
                 padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
                 decoration: BoxDecoration(
-                  color: isCountingDown
-                      ? const Color(0xFFFF8F00)
-                      : (isRejected
-                          ? const Color(0xFFFF4655)
-                          : isUnderReview
-                              ? const Color(0xFFFFB300)
-                              : const Color(0xFF2E7D32)),
+                  color: isRejected
+                      ? const Color(0xFFFF4655)
+                      : isUnderReview
+                          ? const Color(0xFFFFB300)
+                          : const Color(0xFF2E7D32),
                   borderRadius: BorderRadius.circular(10),
                 ),
                 child: Text(
-                  isCountingDown
-                      ? countdownLabel
-                      : (isRejected
-                          ? "REJECTED"
-                          : isUnderReview
-                              ? "REVIEW"
-                              : "LIVE"),
+                  isRejected
+                      ? "REJECTED"
+                      : isUnderReview
+                          ? "REVIEW"
+                          : isRunning
+                              ? "${mins}m ${secs}s"
+                              : "LIVE",
                   style: const TextStyle(
                     color: Colors.white,
                     fontWeight: FontWeight.w900,

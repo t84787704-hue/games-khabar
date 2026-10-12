@@ -3,6 +3,8 @@
 ALTER TABLE public.active_matches ADD COLUMN IF NOT EXISTS proof_status TEXT DEFAULT 'pending';
 ALTER TABLE public.active_matches ADD COLUMN IF NOT EXISTS submitted_by_team_id UUID;
 ALTER TABLE public.active_matches ADD COLUMN IF NOT EXISTS admin_note TEXT;
+ALTER TABLE public.active_matches ADD COLUMN IF NOT EXISTS start_time TIMESTAMPTZ;
+ALTER TABLE public.active_matches ADD COLUMN IF NOT EXISTS proof_upload_count INT DEFAULT 0;
 ALTER TABLE public.teams ADD COLUMN IF NOT EXISTS total_matches INT DEFAULT 0;
 
 -- Optional columns for challenges table
@@ -42,3 +44,6 @@ ALTER TABLE public.rooms ADD COLUMN IF NOT EXISTS dispute_reason TEXT;
 ALTER TABLE public.rooms ADD COLUMN IF NOT EXISTS dispute_proof_url TEXT;
 ALTER TABLE public.rooms ADD COLUMN IF NOT EXISTS disputed_at TIMESTAMPTZ;
 ALTER TABLE public.rooms ADD COLUMN IF NOT EXISTS start_time TIMESTAMPTZ;
+
+-- Welcome bonus claim tracking (Issue #6)
+ALTER TABLE public.users ADD COLUMN IF NOT EXISTS welcome_bonus_claimed BOOLEAN DEFAULT false;

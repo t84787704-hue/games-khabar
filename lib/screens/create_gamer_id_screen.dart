@@ -53,6 +53,37 @@ class _CreateGamerIdScreenState extends State<CreateGamerIdScreen> {
   List<String> _unlockedFrames = [];
   String _selectedBadge = '';
   List<String> _unlockedBadges = [];
+  Timer? _lockedItemBannerTimer;
+
+  void _showLockedItemBanner(String itemName) {
+    _lockedItemBannerTimer?.cancel();
+    ScaffoldMessenger.of(context).hideCurrentSnackBar();
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text('$itemName is locked! Unlock it in the Coin Store.'),
+        backgroundColor: const Color(0xFF1877F2),
+        behavior: SnackBarBehavior.floating,
+        duration: const Duration(seconds: 3),
+        action: SnackBarAction(
+          label: 'STORE',
+          textColor: Colors.white,
+          onPressed: () async {
+            _lockedItemBannerTimer?.cancel();
+            ScaffoldMessenger.of(context).hideCurrentSnackBar();
+            await Navigator.of(context).push(
+              MaterialPageRoute(builder: (_) => const CoinStoreScreen()),
+            );
+            _loadStorePerks();
+          },
+        ),
+      ),
+    );
+    _lockedItemBannerTimer = Timer(const Duration(seconds: 3), () {
+      if (mounted) {
+        ScaffoldMessenger.of(context).hideCurrentSnackBar();
+      }
+    });
+  }
 
   // Live username availability check state
   Timer? _debounceTimer;
@@ -188,6 +219,7 @@ class _CreateGamerIdScreenState extends State<CreateGamerIdScreen> {
 
   @override
   void dispose() {
+    _lockedItemBannerTimer?.cancel();
     _debounceTimer?.cancel();
     _usernameController.dispose();
     _displayNameController.dispose();
@@ -415,41 +447,37 @@ class _CreateGamerIdScreenState extends State<CreateGamerIdScreen> {
         finalCoverUrl = await GamerAuthService().uploadCoverPhoto(_pickedCoverFile!, uid);
       }
 
-      // Rank & Screenshot verification logic
+      // Rank & Screenshot verification logic (Optional)
       final enteredRank = _rankController.text.trim();
       String finalRank = '';
       String finalRankScreenshot = _rankScreenshotUrl;
-      String finalRankStatus = _rankStatus;
+      String finalRankStatus = 'none';
       String finalRankVerifiedBy = widget.existingUser?.rankVerifiedBy ?? '';
       String finalRankRejectReason = widget.existingUser?.rankRejectReason ?? '';
       bool isRankVerified = widget.existingUser?.isRankVerified ?? false;
 
       if (enteredRank.isNotEmpty && enteredRank.toLowerCase() != 'none' && enteredRank.toLowerCase() != 'skip') {
+        finalRank = enteredRank;
         if (_pickedRankScreenshot != null) {
           // Upload new screenshot proof
           finalRankScreenshot = await GamerAuthService().uploadRankScreenshot(_pickedRankScreenshot!, uid);
-          finalRank = enteredRank;
-          finalRankStatus = 'Pending'; // Mark Pending for Admin
+          finalRankStatus = 'pending'; // Mark pending for Admin review
           finalRankRejectReason = '';
           isRankVerified = false;
         } else if (finalRankScreenshot.isNotEmpty) {
-          finalRank = enteredRank;
-          if (enteredRank != widget.existingUser?.rank) {
-            finalRankStatus = 'Pending';
-            isRankVerified = false;
-          }
+          finalRankStatus = widget.existingUser?.rankStatus.isNotEmpty == true
+              ? widget.existingUser!.rankStatus
+              : 'pending';
         } else {
-          // User chose a rank but didn't upload a screenshot:
-          // Rule 3: Rank is not saved and left Optional
-          finalRank = '';
-          finalRankStatus = 'None';
+          // User chose rank but skipped screenshot (Optional)
+          finalRankStatus = 'none';
           finalRankScreenshot = '';
           isRankVerified = false;
         }
       } else {
         // Skipped
         finalRank = '';
-        finalRankStatus = 'None';
+        finalRankStatus = 'none';
         finalRankScreenshot = '';
         isRankVerified = false;
       }
@@ -492,6 +520,16 @@ class _CreateGamerIdScreenState extends State<CreateGamerIdScreen> {
       );
 
       await GamerAuthService().saveGamerProfile(gamerUser);
+
+      try {
+        await SupabaseService.client.from('users').update({
+          'rank': finalRank.isNotEmpty ? finalRank : null,
+          'selected_rank': finalRank.isNotEmpty ? finalRank : null,
+          'is_rank_verified': isRankVerified,
+          'rank_status': finalRankStatus,
+          'rank_proof_url': finalRankScreenshot.isNotEmpty ? finalRankScreenshot : null,
+        }).eq('id', uid);
+      } catch (_) {}
 
       try {
         final prefs = await SharedPreferences.getInstance();
@@ -926,22 +964,7 @@ class _CreateGamerIdScreenState extends State<CreateGamerIdScreen> {
                                         if (isUnlocked) {
                                           setState(() => _selectedFrame = id);
                                         } else {
-                                          ScaffoldMessenger.of(context).showSnackBar(
-                                            SnackBar(
-                                              content: Text('${f['name']} is locked! Unlock it in the Coin Store.'),
-                                              backgroundColor: GamerTheme.accentOrange,
-                                              action: SnackBarAction(
-                                                label: 'STORE',
-                                                textColor: Colors.white,
-                                                onPressed: () async {
-                                                  await Navigator.of(context).push(
-                                                    MaterialPageRoute(builder: (_) => const CoinStoreScreen()),
-                                                  );
-                                                  _loadStorePerks();
-                                                },
-                                              ),
-                                            ),
-                                          );
+                                          _showLockedItemBanner(f['name'] as String);
                                         }
                                       },
                                       borderRadius: BorderRadius.circular(12),
@@ -1035,22 +1058,7 @@ class _CreateGamerIdScreenState extends State<CreateGamerIdScreen> {
                                         if (isUnlocked) {
                                           setState(() => _selectedBadge = id);
                                         } else {
-                                          ScaffoldMessenger.of(context).showSnackBar(
-                                            SnackBar(
-                                              content: Text('${b['name']} is locked! Unlock it in the Coin Store.'),
-                                              backgroundColor: GamerTheme.accentBlue,
-                                              action: SnackBarAction(
-                                                label: 'STORE',
-                                                textColor: Colors.white,
-                                                onPressed: () async {
-                                                  await Navigator.of(context).push(
-                                                    MaterialPageRoute(builder: (_) => const CoinStoreScreen()),
-                                                  );
-                                                  _loadStorePerks();
-                                                },
-                                              ),
-                                            ),
-                                          );
+                                          _showLockedItemBanner(b['name'] as String);
                                         }
                                       },
                                       borderRadius: BorderRadius.circular(10),
@@ -1237,24 +1245,12 @@ class _CreateGamerIdScreenState extends State<CreateGamerIdScreen> {
                               const Icon(Icons.military_tech_rounded, color: Color(0xFFFF8A00), size: 18),
                               const SizedBox(width: 6),
                               const Text(
-                                'MOBILE GAMES RANK / TIER',
+                                'MY GAME RANK & PROOF (Optional)',
                                 style: TextStyle(
                                   color: GamerTheme.textGray,
                                   fontSize: 12,
                                   fontWeight: FontWeight.w800,
                                   letterSpacing: 0.8,
-                                ),
-                              ),
-                              const SizedBox(width: 8),
-                              Container(
-                                padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                                decoration: const BoxDecoration(
-                                  color: Colors.white10,
-                                  borderRadius: BorderRadius.all(Radius.circular(6)),
-                                ),
-                                child: const Text(
-                                  'Optional / اختیاری',
-                                  style: TextStyle(color: GamerTheme.textMuted, fontSize: 10, fontWeight: FontWeight.bold),
                                 ),
                               ),
                             ],
@@ -1784,87 +1780,6 @@ class _CreateGamerIdScreenState extends State<CreateGamerIdScreen> {
                           helperStyle: TextStyle(color: GamerTheme.textMuted, fontSize: 11),
                         ),
                       ),
-
-                      // NEW SECTION: "My Game Ranks"
-                      if (widget.existingUser != null) ...[
-                        const SizedBox(height: 24),
-                        Container(
-                          padding: const EdgeInsets.all(16),
-                          decoration: BoxDecoration(
-                            color: GamerTheme.cardDark,
-                            borderRadius: BorderRadius.circular(14),
-                            border: Border.all(color: const Color(0xFF00E5FF).withOpacity(0.3)),
-                          ),
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Row(
-                                children: [
-                                  const Icon(Icons.shield_rounded, color: Color(0xFF00E5FF), size: 18),
-                                  const SizedBox(width: 8),
-                                  const Text(
-                                    'MY GAME RANKS',
-                                    style: TextStyle(
-                                      color: Colors.white,
-                                      fontWeight: FontWeight.w900,
-                                      fontSize: 13,
-                                      letterSpacing: 0.5,
-                                    ),
-                                  ),
-                                  const Spacer(),
-                                  OutlinedButton.icon(
-                                    onPressed: () {
-                                      showModalBottomSheet(
-                                        context: context,
-                                        isScrollControlled: true,
-                                        backgroundColor: Colors.transparent,
-                                        builder: (sheetContext) => AddVerifyGamerRankSheet(user: widget.existingUser!),
-                                      );
-                                    },
-                                    style: OutlinedButton.styleFrom(
-                                      side: const BorderSide(color: Color(0xFF00E5FF)),
-                                      backgroundColor: const Color(0xFF00E5FF).withOpacity(0.1),
-                                      foregroundColor: const Color(0xFF00E5FF),
-                                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                                      minimumSize: Size.zero,
-                                      tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-                                    ),
-                                    icon: const Icon(Icons.add_moderator_rounded, size: 14),
-                                    label: const Text('Add / Verify Game Rank', style: TextStyle(fontSize: 11.5, fontWeight: FontWeight.w800)),
-                                  ),
-                                ],
-                              ),
-                              const SizedBox(height: 10),
-                              if (widget.existingUser!.games.isEmpty)
-                                const Text(
-                                  'No game ranks submitted yet. Tap "Add / Verify Game Rank" to submit screenshot proof for BGMI, Free Fire, Valorant & more.',
-                                  style: TextStyle(color: GamerTheme.textMuted, fontSize: 12),
-                                )
-                              else
-                                Wrap(
-                                  spacing: 8,
-                                  runSpacing: 6,
-                                  children: widget.existingUser!.games.map((g) {
-                                    final isApproved = g.isVerified || g.status == 'approved';
-                                    final isPending = g.status == 'pending';
-                                    final color = isApproved
-                                        ? const Color(0xFF00FF88)
-                                        : (isPending ? const Color(0xFFFF8A00) : const Color(0xFFFF4655));
-                                    return Chip(
-                                      backgroundColor: color.withOpacity(0.12),
-                                      side: BorderSide(color: color.withOpacity(0.5)),
-                                      label: Text(
-                                        '${g.gameName}: ${g.verifiedRank.isNotEmpty ? g.verifiedRank : g.claimedRank} (${g.status})',
-                                        style: TextStyle(color: color, fontSize: 11, fontWeight: FontWeight.bold),
-                                      ),
-                                    );
-                                  }).toList(),
-                                ),
-                            ],
-                          ),
-                        ),
-                      ],
 
                       const SizedBox(height: 32),
 
