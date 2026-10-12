@@ -162,31 +162,48 @@ class CoinWalletService extends ChangeNotifier {
       }
 
       // 4. Transaction log (both coin_transactions & transactions tables)
-      final txId = 'tx_${now.millisecondsSinceEpoch}_${userId.hashCode.abs() % 10000}';
-      final Map<String, dynamic> txData = {
-        'id': txId,
-        'user_id': userId,
-        'type': type,
-        'amount': amount,
-        'status': 'completed',
-        'title': title ?? description,
-        'description': description,
-        'balance_after': newCoins,
-        'created_at': now.toIso8601String(),
-      };
-      if (roomId != null && roomId.isNotEmpty) {
-        txData['room_id'] = roomId;
-        txData['reference_id'] = roomId;
-      }
-      if (winProofUrl != null && winProofUrl.isNotEmpty) {
-        txData['win_proof_url'] = winProofUrl;
-      }
+      // FIX: Let Supabase auto-generate `id` — no custom id (avoids duplicate PK)
+      // FIX: Only log if userId is a valid UUID
+      final bool isValidUuid = RegExp(
+        r'^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$',
+      ).hasMatch(userId);
 
-      try {
-        await SupabaseService.client.from('coin_transactions').upsert(txData);
-        await SupabaseService.client.from('transactions').upsert(txData);
-      } catch (e) {
-        debugPrint('updateCoins: transaction log error: $e');
+      if (isValidUuid) {
+        final Map<String, dynamic> txData = {
+          'user_id': userId,
+          'type': type,
+          'amount': amount,
+          'status': 'completed',
+          'title': title ?? description,
+          'description': description,
+          'balance_after': newCoins,
+          'created_at': now.toIso8601String(),
+        };
+        if (roomId != null && roomId.isNotEmpty) {
+          txData['room_id'] = roomId;
+          txData['reference_id'] = roomId;
+        }
+        if (winProofUrl != null && winProofUrl.isNotEmpty) {
+          txData['win_proof_url'] = winProofUrl;
+        }
+
+        try {
+          await SupabaseService.client
+              .from('coin_transactions')
+              .insert(txData);
+        } catch (e) {
+          debugPrint('updateCoins: coin_transactions insert error: $e');
+        }
+
+        try {
+          await SupabaseService.client
+              .from('transactions')
+              .insert(txData);
+        } catch (e) {
+          debugPrint('updateCoins: transactions insert error: $e');
+        }
+      } else {
+        debugPrint('updateCoins: invalid userId ($userId) - skipping tx log');
       }
 
       // 5. Update in-memory state & notifiers
@@ -199,7 +216,9 @@ class CoinWalletService extends ChangeNotifier {
           escrowCoins: newEscrow,
           lifetimeEarned: lifetimeEarned,
           updatedAt: now,
-          lastDailyBonusClaim: type == 'daily_bonus' ? now : _instance._currentWallet!.lastDailyBonusClaim,
+          lastDailyBonusClaim: type == 'daily_bonus'
+              ? now
+              : _instance._currentWallet!.lastDailyBonusClaim,
         );
         _instance.notifyListeners();
         _instance._saveToLocal(_instance._currentWallet!);
@@ -216,7 +235,7 @@ class CoinWalletService extends ChangeNotifier {
       final rows = await SupabaseService.client
           .from('coin_transactions')
           .select('amount')
-          .or('user_id.eq.$userId,userId.eq.$userId');
+          .or('user_id.eq.$userId');
 
       int computed = 1000;
       for (final r in rows) {
@@ -354,7 +373,8 @@ class CoinWalletService extends ChangeNotifier {
 
   Stream<CoinWallet> walletStream(String userId) {
     if (userId.isEmpty) {
-      return Stream.value(_currentWallet ?? const CoinWallet(userId: 'guest', coins: 1000));
+      return Stream.value(_currentWallet ??
+          const CoinWallet(userId: 'guest', coins: 1000));
     }
     try {
       return SupabaseService.client
@@ -443,7 +463,8 @@ class CoinWalletService extends ChangeNotifier {
   }
 
   /// Reward Referral Coins (100 G-Coins)
-  Future<void> rewardReferralCoins(String userId, {String inviteeName = 'Friend'}) async {
+  Future<void> rewardReferralCoins(String userId,
+      {String inviteeName = 'Friend'}) async {
     final wallet = await getOrCreateWallet(userId);
     final newCoins = wallet.coins + 100;
     final newLifetime = wallet.lifetimeEarned + 100;
@@ -482,7 +503,8 @@ class CoinWalletService extends ChangeNotifier {
     if (prizePoolCoins <= 0) return true;
 
     CoinWallet wallet;
-    if (_currentWallet != null && (_currentWallet!.userId == userId || userId.isEmpty)) {
+    if (_currentWallet != null &&
+        (_currentWallet!.userId == userId || userId.isEmpty)) {
       wallet = _currentWallet!;
     } else {
       wallet = await getOrCreateWallet(userId);
@@ -533,7 +555,8 @@ class CoinWalletService extends ChangeNotifier {
     if (entryFeeCoins <= 0) return true;
 
     CoinWallet wallet;
-    if (_currentWallet != null && (_currentWallet!.userId == userId || userId.isEmpty)) {
+    if (_currentWallet != null &&
+        (_currentWallet!.userId == userId || userId.isEmpty)) {
       wallet = _currentWallet!;
     } else {
       wallet = await getOrCreateWallet(userId);
@@ -651,7 +674,8 @@ class CoinWalletService extends ChangeNotifier {
             type: 'escrow_release',
             inEscrowChange: -prizePoolCoins,
             title: 'Escrow Released to Winner(s) 🏆',
-            description: 'Transferred $prizePoolCoins escrow prize to winning team of "$roomTitle"',
+            description:
+                'Transferred $prizePoolCoins escrow prize to winning team of "$roomTitle"',
             roomId: roomId,
           );
         } catch (_) {}
@@ -684,7 +708,9 @@ class CoinWalletService extends ChangeNotifier {
           userId: wId,
           amount: prizePerWinner,
           type: winnerCount > 1 ? 'team_prize' : 'win_prize',
-          title: winnerCount > 1 ? 'Team Victory Prize! 🏆' : 'Tournament Victory Prize! 🏆',
+          title: winnerCount > 1
+              ? 'Team Victory Prize! 🏆'
+              : 'Tournament Victory Prize! 🏆',
           description: winnerCount > 1
               ? 'Won tournament "$roomTitle" with team! Equal share: $prizePerWinner G-Coins'
               : 'Won tournament "$roomTitle" and claimed $prizePerWinner G-Coins from Admin Escrow!',
@@ -728,7 +754,8 @@ class CoinWalletService extends ChangeNotifier {
           type: 'refund',
           inEscrowChange: -prizePoolCoins,
           title: 'Host Prize Refunded ↩️',
-          description: 'Tournament "$roomTitle" expired/cancelled. Escrow refunded.',
+          description:
+              'Tournament "$roomTitle" expired/cancelled. Escrow refunded.',
           roomId: roomId,
         );
       }
@@ -744,7 +771,8 @@ class CoinWalletService extends ChangeNotifier {
                 type: 'refund',
                 inEscrowChange: -entryFeeCoins,
                 title: 'Entry Fee Refunded ↩️',
-                description: 'Tournament "$roomTitle" cancelled. $entryFeeCoins Coins returned.',
+                description:
+                    'Tournament "$roomTitle" cancelled. $entryFeeCoins Coins returned.',
                 roomId: roomId,
               );
             } catch (_) {}
@@ -757,7 +785,8 @@ class CoinWalletService extends ChangeNotifier {
   }
 
   /// Deducts trustScore by penalty points
-  Future<void> penalizeTrustScore(String userId, int penaltyPoints, String reason) async {
+  Future<void> penalizeTrustScore(
+      String userId, int penaltyPoints, String reason) async {
     try {
       final wallet = await getOrCreateWallet(userId);
       final newTrust = (wallet.trustScore - penaltyPoints).clamp(0, 100);
@@ -786,8 +815,8 @@ class CoinWalletService extends ChangeNotifier {
       if (map['userId'] != null && map['user_id'] == null) {
         map['user_id'] = map['userId'];
       }
-      await SupabaseService.client.from('coin_transactions').upsert(map);
-      await SupabaseService.client.from('transactions').upsert(map);
+      await SupabaseService.client.from('coin_transactions').insert(map);
+      await SupabaseService.client.from('transactions').insert(map);
     } catch (e) {
       debugPrint('CoinWalletService recordTransaction error: $e');
     }
@@ -807,16 +836,15 @@ class CoinWalletService extends ChangeNotifier {
                 r['to']?.toString() == userId ||
                 r['from']?.toString() == userId)
             .map((r) {
-              final map = Map<String, dynamic>.from(r);
-              if (map['userId'] == null && map['user_id'] != null) {
-                map['userId'] = map['user_id'];
-              }
-              if (map['roomId'] == null && map['room_id'] != null) {
-                map['roomId'] = map['room_id'];
-              }
-              return CoinTransaction.fromMap(map);
-            })
-            .toList();
+          final map = Map<String, dynamic>.from(r);
+          if (map['userId'] == null && map['user_id'] != null) {
+            map['userId'] = map['user_id'];
+          }
+          if (map['roomId'] == null && map['room_id'] != null) {
+            map['roomId'] = map['room_id'];
+          }
+          return CoinTransaction.fromMap(map);
+        }).toList();
         filtered.sort((a, b) => b.timestamp.compareTo(a.timestamp));
         return filtered;
       });
@@ -838,7 +866,8 @@ class CoinWalletService extends ChangeNotifier {
     if (wallet.coins < costCoins) {
       return {
         'success': false,
-        'error': 'Insufficient G-Coins. You have ${wallet.coins}, but need $costCoins.',
+        'error':
+            'Insufficient G-Coins. You have ${wallet.coins}, but need $costCoins.',
       };
     }
 
@@ -873,10 +902,11 @@ class CoinWalletService extends ChangeNotifier {
         try {
           final uDoc = await SupabaseService.client
               .from('users')
-              .select('unlocked_frames, unlockedFrames')
+              .select('unlocked_frames')
               .or('id.eq.$userId,uid.eq.$userId')
               .maybeSingle();
-          final List<dynamic> current = List.from(uDoc?['unlocked_frames'] ?? uDoc?['unlockedFrames'] ?? []);
+          final List<dynamic> current =
+              List.from(uDoc?['unlocked_frames'] ?? []);
           if (!current.contains(itemId)) current.add(itemId);
           userPerks['unlocked_frames'] = current;
         } catch (_) {}
@@ -885,10 +915,11 @@ class CoinWalletService extends ChangeNotifier {
         try {
           final uDoc = await SupabaseService.client
               .from('users')
-              .select('unlocked_badges, unlockedBadges')
+              .select('unlocked_badges')
               .or('id.eq.$userId,uid.eq.$userId')
               .maybeSingle();
-          final List<dynamic> current = List.from(uDoc?['unlocked_badges'] ?? uDoc?['unlockedBadges'] ?? []);
+          final List<dynamic> current =
+              List.from(uDoc?['unlocked_badges'] ?? []);
           if (!current.contains(itemId)) current.add(itemId);
           userPerks['unlocked_badges'] = current;
         } catch (_) {}
@@ -898,10 +929,11 @@ class CoinWalletService extends ChangeNotifier {
         try {
           final uDoc = await SupabaseService.client
               .from('users')
-              .select('unlocked_chat_colors, unlockedChatColors')
+              .select('unlocked_chat_colors')
               .or('id.eq.$userId,uid.eq.$userId')
               .maybeSingle();
-          final List<dynamic> current = List.from(uDoc?['unlocked_chat_colors'] ?? uDoc?['unlockedChatColors'] ?? []);
+          final List<dynamic> current =
+              List.from(uDoc?['unlocked_chat_colors'] ?? []);
           if (!current.contains(colorHex)) current.add(colorHex);
           userPerks['unlocked_chat_colors'] = current;
         } catch (_) {}
@@ -943,7 +975,8 @@ class CoinWalletService extends ChangeNotifier {
   Future<void> recordTournamentJoinedAndCheckReferral(String userId) async {
     try {
       final prefs = await SharedPreferences.getInstance();
-      final currentPlayed = (prefs.getInt('user_tournaments_played_$userId') ?? 0) + 1;
+      final currentPlayed =
+          (prefs.getInt('user_tournaments_played_$userId') ?? 0) + 1;
       await prefs.setInt('user_tournaments_played_$userId', currentPlayed);
 
       await SupabaseService.client.from('users').update({
@@ -952,12 +985,18 @@ class CoinWalletService extends ChangeNotifier {
       }).or('id.eq.$userId,uid.eq.$userId');
 
       final referrerUid = prefs.getString('user_referrer_uid_$userId');
-      final alreadyRewarded = prefs.getBool('user_referral_rewarded_$userId') ?? false;
+      final alreadyRewarded =
+          prefs.getBool('user_referral_rewarded_$userId') ?? false;
 
-      if (currentPlayed >= 5 && referrerUid != null && referrerUid.isNotEmpty && !alreadyRewarded) {
+      if (currentPlayed >= 5 &&
+          referrerUid != null &&
+          referrerUid.isNotEmpty &&
+          !alreadyRewarded) {
         await prefs.setBool('user_referral_rewarded_$userId', true);
-        await rewardReferralCoins(referrerUid, inviteeName: 'Friend (5 Tournaments Milestone)');
-        await rewardReferralCoins(userId, inviteeName: 'Referral Welcome (5 Tournaments Milestone)');
+        await rewardReferralCoins(referrerUid,
+            inviteeName: 'Friend (5 Tournaments Milestone)');
+        await rewardReferralCoins(userId,
+            inviteeName: 'Referral Welcome (5 Tournaments Milestone)');
       }
     } catch (e) {
       debugPrint('recordTournamentJoinedAndCheckReferral error: $e');
@@ -996,7 +1035,8 @@ class CoinWalletService extends ChangeNotifier {
   Future<void> _saveToLocal(CoinWallet wallet) async {
     try {
       final prefs = await SharedPreferences.getInstance();
-      await prefs.setString('cached_wallet_${wallet.userId}', jsonEncode(wallet.toJson()));
+      await prefs.setString(
+          'cached_wallet_${wallet.userId}', jsonEncode(wallet.toJson()));
     } catch (_) {}
   }
 
