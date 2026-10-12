@@ -285,6 +285,99 @@ class GamerRoom {
 class GamerRoomsScreen extends StatefulWidget {
   const GamerRoomsScreen({super.key});
 
+  /// FEATURE 5: Complete Prize Distribution & Room Close
+  static Future<void> distributePrizeAndComplete({
+    required GamerRoom room,
+    required String winnerId,
+    required String winnerName,
+  }) async {
+    final prize = room.prize;
+
+    // 1. Call CoinWalletService.updateCoins() with type='win_prize'
+    try {
+      await CoinWalletService.updateCoins(
+        userId: winnerId,
+        amount: prize,
+        type: 'win_prize',
+        roomId: room.id,
+        description: 'Tournament room win prize: ${room.title}',
+      );
+    } catch (e) {
+      debugPrint('updateCoins win_prize error: $e');
+    }
+
+    // 2. Winner's wins counter +1, total_winnings increased
+    try {
+      final winnerRow = await SupabaseService.client
+          .from('users')
+          .select('wins, totalWinnings, total_winnings')
+          .or('id.eq.$winnerId,uid.eq.$winnerId')
+          .maybeSingle();
+      if (winnerRow != null) {
+        final wd = Map<String, dynamic>.from(winnerRow);
+        final currentWins = (wd['wins'] as num?)?.toInt() ?? 0;
+        final currentWinnings = (wd['total_winnings'] as num?)?.toInt() ??
+            (wd['totalWinnings'] as num?)?.toInt() ??
+            0;
+        await SupabaseService.client.from('users').update({
+          'wins': currentWins + 1,
+          'total_winnings': currentWinnings + prize,
+          'totalWinnings': currentWinnings + prize,
+        }).or('id.eq.$winnerId,uid.eq.$winnerId');
+      }
+    } catch (_) {}
+
+    // 3. Update room status to 'completed' and completed_at = now()
+    await SupabaseService.client.from('rooms').update({
+      'reward_status': 'sent',
+      'status': 'completed',
+      'winner_id': winnerId,
+      'winner_name': winnerName,
+      'completed_at': DateTime.now().toIso8601String(),
+    }).eq('id', room.id);
+
+    // 4. System chat message: "🏆 [winner name] won! +[prize] coins"
+    try {
+      await SupabaseService.client.from('messages').insert({
+        'room_id': room.id,
+        'sender_id': 'system',
+        'sender_name': 'ROOM BOT',
+        'message': '🏆 $winnerName won! +$prize coins',
+        'type': 'system_reward',
+        'created_at': DateTime.now().toIso8601String(),
+      });
+    } catch (_) {}
+
+    // 5. In-app notification sent to winner: "🏆 You won! +[prize] coins"
+    try {
+      await NotificationService().sendNotification(
+        userId: winnerId,
+        type: 'match_result',
+        title: '🏆 You won! +$prize coins',
+        body: 'Congratulations $winnerName! You won the match in ${room.title} and received $prize coins.',
+        data: {'room_id': room.id, 'prize': prize},
+        priority: 'high',
+      );
+    } catch (e) {
+      debugPrint('Notification to winner error: $e');
+    }
+
+    // 6. In-app notification sent to loser: "Match finished. Better luck next time"
+    for (final uid in room.joinedUserIds) {
+      if (uid.isNotEmpty && uid != winnerId && uid != 'guest') {
+        try {
+          await NotificationService().sendNotification(
+            userId: uid,
+            type: 'match_result',
+            title: 'Match Finished',
+            body: 'Match finished. Better luck next time',
+            data: {'room_id': room.id},
+          );
+        } catch (_) {}
+      }
+    }
+  }
+
   @override
   State<GamerRoomsScreen> createState() => _GamerRoomsScreenState();
 }
@@ -498,106 +591,13 @@ class _GamerRoomsScreenState extends State<GamerRoomsScreen> {
       }
       if (resolvedWinnerName.isEmpty) resolvedWinnerName = 'Winner';
 
-      await distributePrizeAndComplete(
+      await GamerRoomsScreen.distributePrizeAndComplete(
         room: room,
         winnerId: resolvedWinnerId,
         winnerName: resolvedWinnerName,
       );
     } catch (e) {
       debugPrint('Auto-approve error: $e');
-    }
-  }
-
-  /// FEATURE 5: Complete Prize Distribution & Room Close
-  static Future<void> distributePrizeAndComplete({
-    required GamerRoom room,
-    required String winnerId,
-    required String winnerName,
-  }) async {
-    final prize = room.prize;
-
-    // 1. Call CoinWalletService.updateCoins() with type='win_prize'
-    try {
-      await CoinWalletService.updateCoins(
-        userId: winnerId,
-        amount: prize,
-        type: 'win_prize',
-        roomId: room.id,
-        description: 'Tournament room win prize: ${room.title}',
-      );
-    } catch (e) {
-      debugPrint('updateCoins win_prize error: $e');
-    }
-
-    // 2. Winner's wins counter +1, total_winnings increased
-    try {
-      final winnerRow = await SupabaseService.client
-          .from('users')
-          .select('wins, totalWinnings, total_winnings')
-          .or('id.eq.$winnerId,uid.eq.$winnerId')
-          .maybeSingle();
-      if (winnerRow != null) {
-        final wd = Map<String, dynamic>.from(winnerRow);
-        final currentWins = (wd['wins'] as num?)?.toInt() ?? 0;
-        final currentWinnings = (wd['total_winnings'] as num?)?.toInt() ??
-            (wd['totalWinnings'] as num?)?.toInt() ??
-            0;
-        await SupabaseService.client.from('users').update({
-          'wins': currentWins + 1,
-          'total_winnings': currentWinnings + prize,
-          'totalWinnings': currentWinnings + prize,
-        }).or('id.eq.$winnerId,uid.eq.$winnerId');
-      }
-    } catch (_) {}
-
-    // 3. Update room status to 'completed' and completed_at = now()
-    await SupabaseService.client.from('rooms').update({
-      'reward_status': 'sent',
-      'status': 'completed',
-      'winner_id': winnerId,
-      'winner_name': winnerName,
-      'completed_at': DateTime.now().toIso8601String(),
-    }).eq('id', room.id);
-
-    // 4. System chat message: "🏆 [winner name] won! +[prize] coins"
-    try {
-      await SupabaseService.client.from('messages').insert({
-        'room_id': room.id,
-        'sender_id': 'system',
-        'sender_name': 'ROOM BOT',
-        'message': '🏆 $winnerName won! +$prize coins',
-        'type': 'system_reward',
-        'created_at': DateTime.now().toIso8601String(),
-      });
-    } catch (_) {}
-
-    // 5. In-app notification sent to winner: "🏆 You won! +[prize] coins"
-    try {
-      await NotificationService().sendNotification(
-        userId: winnerId,
-        type: 'match_result',
-        title: '🏆 You won! +$prize coins',
-        body: 'Congratulations $winnerName! You won the match in ${room.title} and received $prize coins.',
-        data: {'room_id': room.id, 'prize': prize},
-        priority: 'high',
-      );
-    } catch (e) {
-      debugPrint('Notification to winner error: $e');
-    }
-
-    // 6. In-app notification sent to loser: "Match finished. Better luck next time"
-    for (final uid in room.joinedUserIds) {
-      if (uid.isNotEmpty && uid != winnerId && uid != 'guest') {
-        try {
-          await NotificationService().sendNotification(
-            userId: uid,
-            type: 'match_result',
-            title: 'Match Finished',
-            body: 'Match finished. Better luck next time',
-            data: {'room_id': room.id},
-          );
-        } catch (_) {}
-      }
     }
   }
 
@@ -2304,7 +2304,12 @@ class _InRoomBottomSheetContentState extends State<_InRoomBottomSheetContent> {
       final targetWinner = currentRoom.winnerName ?? widget.currentUserName;
       WinProofValidationResult? ocrResult;
       try {
-        ocrResult = await WinProofValidator.validateScreenshot(file, targetWinner);
+        ocrResult = await WinProofValidator.validate(
+          imageFile: file,
+          userId: currentRoom.winnerId ?? widget.currentUserId,
+          accountIdName: targetWinner,
+          roomId: currentRoom.id,
+        );
       } catch (ocrErr) {
         debugPrint('OCR execution error: $ocrErr');
       }

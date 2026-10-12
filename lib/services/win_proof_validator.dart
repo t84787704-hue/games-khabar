@@ -238,6 +238,21 @@ class WinProofValidator {
   }
 
   /// Run OCR using Google ML Kit on win proof screenshot and validate name match against account ID name.
+  static Future<WinProofValidationResult> validateScreenshot(
+    File imageFile,
+    String accountIdName, {
+    String userId = '',
+    String roomId = '',
+  }) {
+    return validate(
+      imageFile: imageFile,
+      userId: userId,
+      accountIdName: accountIdName,
+      roomId: roomId,
+    );
+  }
+
+  /// Run OCR using Google ML Kit on win proof screenshot and validate name match against account ID name.
   static Future<WinProofValidationResult> validate({
     required File imageFile,
     required String userId,
