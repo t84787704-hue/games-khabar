@@ -248,15 +248,20 @@ CREATE TABLE IF NOT EXISTS public.coin_transactions (
 -- 13. NOTIFICATIONS TABLE
 -- --------------------------------------------------------------------
 CREATE TABLE IF NOT EXISTS public.notifications (
-    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-    notification_id TEXT UNIQUE,
-    user_id TEXT NOT NULL,
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    user_id UUID NOT NULL,
+    sender_id UUID,
+    sender_name TEXT,
+    sender_avatar TEXT,
+    type TEXT NOT NULL,
     title TEXT NOT NULL,
     body TEXT NOT NULL,
-    type TEXT DEFAULT 'general', -- 'match_challenge', 'team_invite', 'reward', 'admin'
     data JSONB DEFAULT '{}'::jsonb,
     is_read BOOLEAN DEFAULT FALSE,
-    created_at TIMESTAMPTZ DEFAULT NOW()
+    is_seen BOOLEAN DEFAULT FALSE,
+    priority TEXT DEFAULT 'normal',
+    created_at TIMESTAMPTZ DEFAULT NOW(),
+    read_at TIMESTAMPTZ
 );
 
 -- --------------------------------------------------------------------

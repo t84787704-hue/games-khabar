@@ -6,6 +6,7 @@ import '../models/coin_wallet_model.dart';
 import '../models/coin_transaction_model.dart';
 import 'gamer_auth_service.dart';
 import 'coin_reward_service.dart';
+import 'notification_service.dart';
 import 'supabase_service.dart';
 
 class CoinWalletService extends ChangeNotifier {
@@ -425,6 +426,14 @@ class CoinWalletService extends ChangeNotifier {
         title: 'Daily Bonus Claimed! 🎁',
         description: '+50 G-Coins collected',
       );
+      try {
+        NotificationService().sendCoinRewardNotification(
+          targetUserId: userId,
+          amount: 50,
+          reason: 'Daily Login Streak Bonus (+50 G-Coins)',
+          type: 'daily_bonus',
+        );
+      } catch (_) {}
       return true;
     } catch (e) {
       debugPrint('CoinWalletService claimDailyBonus error: $e');
@@ -457,6 +466,14 @@ class CoinWalletService extends ChangeNotifier {
         title: 'Ad Reward Earned! 📺',
         description: '+100 G-Coins for watching rewarded video',
       );
+      try {
+        NotificationService().sendCoinRewardNotification(
+          targetUserId: userId,
+          amount: 100,
+          reason: 'Watched Rewarded Video (+100 G-Coins)',
+          type: 'ad_reward',
+        );
+      } catch (_) {}
     } catch (e) {
       debugPrint('CoinWalletService rewardAdCoins error: $e');
     }
@@ -488,6 +505,14 @@ class CoinWalletService extends ChangeNotifier {
         title: 'Referral Bonus! 👥',
         description: '+100 G-Coins for inviting $inviteeName',
       );
+      try {
+        NotificationService().sendCoinRewardNotification(
+          targetUserId: userId,
+          amount: 100,
+          reason: 'Referral Bonus: Invited $inviteeName (+100 G-Coins)',
+          type: 'referral',
+        );
+      } catch (_) {}
     } catch (e) {
       debugPrint('CoinWalletService rewardReferralCoins error: $e');
     }
@@ -963,6 +988,15 @@ class CoinWalletService extends ChangeNotifier {
           .from('users')
           .update(userPerks)
           .or('id.eq.$userId,uid.eq.$userId');
+
+      try {
+        NotificationService().sendStorePurchaseNotification(
+          targetUserId: userId,
+          itemName: itemName,
+          costCoins: costCoins,
+          category: category,
+        );
+      } catch (_) {}
 
       return {'success': true};
     } catch (e) {

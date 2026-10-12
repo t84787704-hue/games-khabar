@@ -1,6 +1,7 @@
 import 'package:flutter/foundation.dart';
 import '../models/challenge_model.dart';
 import 'supabase_service.dart';
+import 'notification_service.dart';
 
 class ChallengeService {
   static final ChallengeService _instance = ChallengeService._internal();
@@ -30,13 +31,14 @@ class ChallengeService {
       }).select().single();
 
       try {
-        await SupabaseService.sendNotification({
-          'userId': challengedUuid,
-          'title': '⚔️ 1v1 Battle Challenge',
-          'message':
-              '${challenge.challengerName} challenged you to a 1v1 (${challenge.mode}, ${challenge.weaponRule})!',
-          'type': 'challenge',
-        });
+        await NotificationService().sendChallengeNotification(
+          targetUserId: challenge.challengedId,
+          challengerId: challenge.challengerId,
+          challengerName: challenge.challengerName,
+          challengeId: inserted['id'].toString(),
+          gameName: challenge.game,
+          challengerAvatar: challenge.challengerAvatar,
+        );
       } catch (e) {
         debugPrint('[ChallengeService] Notification error: $e');
       }

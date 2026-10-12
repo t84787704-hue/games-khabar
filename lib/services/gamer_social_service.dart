@@ -7,6 +7,8 @@ import '../models/gamer_user_model.dart';
 import '../models/gamer_post_model.dart';
 import '../models/post_comment_model.dart';
 import 'supabase_service.dart';
+import 'gamer_auth_service.dart';
+import 'notification_service.dart';
 
 class GamerSocialService {
   static final GamerSocialService _instance = GamerSocialService._internal();
@@ -143,6 +145,16 @@ class GamerSocialService {
         column: 'followers_count',
         delta: 1,
       );
+
+      try {
+        final currentGamer = GamerAuthService().currentGamer;
+        NotificationService().sendFollowNotification(
+          targetUserId: targetUid,
+          followerId: currentUid,
+          followerName: currentGamer?.displayName ?? 'A Gamer',
+          followerAvatar: currentGamer?.photoUrl,
+        );
+      } catch (_) {}
     } catch (e) {
       debugPrint('Error following user: $e');
     }
@@ -556,6 +568,19 @@ class GamerSocialService {
           'post_id': postId,
           'user_id': userId,
         });
+
+        if (postAuthorId != null && postAuthorId.isNotEmpty && postAuthorId != userId) {
+          try {
+            final currentGamer = GamerAuthService().currentGamer;
+            NotificationService().sendLikeNotification(
+              targetUserId: postAuthorId,
+              likerId: userId,
+              likerName: currentGamer?.displayName ?? 'A Gamer',
+              postId: postId,
+              likerAvatar: currentGamer?.photoUrl,
+            );
+          } catch (_) {}
+        }
       }
     } catch (e) {
       debugPrint('[GamerSocialService] toggleLike error: $e');
@@ -599,6 +624,19 @@ class GamerSocialService {
         'user_id': userId,
         'content': text,
       });
+
+      if (postAuthorId != null && postAuthorId.isNotEmpty && postAuthorId != userId) {
+        try {
+          NotificationService().sendCommentNotification(
+            targetUserId: postAuthorId,
+            commenterId: userId,
+            commenterName: displayName ?? username,
+            postId: postId,
+            commentText: text,
+            commenterAvatar: userPhoto,
+          );
+        } catch (_) {}
+      }
     } catch (e) {
       debugPrint('[GamerSocialService] addComment error: $e');
     }

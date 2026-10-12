@@ -3,6 +3,8 @@ import 'package:share_plus/share_plus.dart';
 import '../services/supabase_service.dart';
 import 'gamer_profile_screen.dart';
 import 'user_search_screen.dart';
+import '../services/notification_service.dart';
+import 'notifications_screen.dart';
 
 class GamerFeedScreen extends StatefulWidget {
   const GamerFeedScreen({super.key});
@@ -702,6 +704,38 @@ https://play.google.com/store/apps/details?id=com.gameskhabar.app
                 MaterialPageRoute(
                   builder: (_) => const UserSearchScreen(),
                 ),
+              );
+            },
+          ),
+          ValueListenableBuilder<int>(
+            valueListenable: NotificationService().unreadCountNotifier,
+            builder: (context, unreadCount, _) {
+              return IconButton(
+                tooltip: 'Activity & Notifications',
+                icon: Badge(
+                  isLabelVisible: unreadCount > 0,
+                  label: Text(
+                    '$unreadCount',
+                    style: const TextStyle(
+                      fontSize: 10,
+                      fontWeight: FontWeight.bold,
+                      color: Colors.white,
+                    ),
+                  ),
+                  backgroundColor: const Color(0xFFFF2D55),
+                  child: const Icon(
+                    Icons.notifications_outlined,
+                    color: Color(0xFF050505),
+                    size: 26,
+                  ),
+                ),
+                onPressed: () {
+                  Navigator.of(context).push(
+                    MaterialPageRoute(
+                      builder: (_) => const NotificationsScreen(),
+                    ),
+                  );
+                },
               );
             },
           ),

@@ -25,6 +25,7 @@ import '../services/price_alert_service.dart';
 import '../services/countdown_service.dart';
 import '../services/coin_reward_service.dart';
 import 'earn_screen.dart';
+import 'notifications_screen.dart';
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
@@ -351,6 +352,39 @@ class _HomeScreenState extends State<HomeScreen> {
                           ),
                         ),
                       ),
+                    );
+                  },
+                ),
+                ValueListenableBuilder<int>(
+                  valueListenable: NotificationService().unreadCountNotifier,
+                  builder: (context, unreadCount, _) {
+                    return IconButton(
+                      tooltip: 'Notifications',
+                      icon: Badge(
+                        isLabelVisible: unreadCount > 0,
+                        label: Text(
+                          '$unreadCount',
+                          style: const TextStyle(
+                            fontSize: 10,
+                            fontWeight: FontWeight.bold,
+                            color: Color(0xFF05080D),
+                          ),
+                        ),
+                        backgroundColor: neonGreen,
+                        child: const Icon(
+                          Icons.notifications_outlined,
+                          color: Colors.white,
+                          size: 22,
+                        ),
+                      ),
+                      onPressed: () {
+                        Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                            builder: (_) => const NotificationsScreen(),
+                          ),
+                        );
+                      },
                     );
                   },
                 ),
