@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import '../constants/gamer_theme.dart';
 import '../models/notification_model.dart';
 import '../services/gamer_auth_service.dart';
+import '../services/supabase_service.dart';
 import '../services/notification_service.dart';
 import '../services/challenge_service.dart';
 import '../widgets/gamer_avatar.dart';
