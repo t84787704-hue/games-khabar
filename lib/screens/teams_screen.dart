@@ -1180,7 +1180,7 @@ class _ActiveMatchBothTeamsBannerState
                   size: 13, color: Color(0xFF65676B)),
               const SizedBox(width: 4),
               Text(
-                isCountingDown ? countdownLabel : startedTimeLabel,
+                timerLabel,
                 style: const TextStyle(
                   fontSize: 11,
                   color: Color(0xFF65676B),
