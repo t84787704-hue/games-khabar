@@ -134,18 +134,7 @@ class GamerSocialService {
         'following_id': followingUuid,
       });
 
-      await _incrementCounter(
-        userId: followerUuid,
-        column: 'following_count',
-        delta: 1,
-      );
-
-      await _incrementCounter(
-        userId: followingUuid,
-        column: 'followers_count',
-        delta: 1,
-      );
-
+      // DB trigger handles followers_count & following_count automatically on follows table insert
       try {
         final currentGamer = GamerAuthService().currentGamer;
         NotificationService().sendFollowNotification(
@@ -177,17 +166,7 @@ class GamerSocialService {
           .eq('follower_id', followerUuid)
           .eq('following_id', followingUuid);
 
-      await _incrementCounter(
-        userId: followerUuid,
-        column: 'following_count',
-        delta: -1,
-      );
-
-      await _incrementCounter(
-        userId: followingUuid,
-        column: 'followers_count',
-        delta: -1,
-      );
+      // DB trigger handles followers_count & following_count automatically on follows table delete
     } catch (e) {
       debugPrint('Error unfollowing user: $e');
     }
