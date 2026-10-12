@@ -22,3 +22,23 @@ CREATE TABLE IF NOT EXISTS public.match_messages (
 
 ALTER TABLE public.match_messages ADD COLUMN IF NOT EXISTS sender_team_name TEXT;
 ALTER TABLE public.match_messages DISABLE ROW LEVEL SECURITY;
+
+-- Tournament rooms match lifecycle columns
+ALTER TABLE public.rooms ADD COLUMN IF NOT EXISTS win_proof_url TEXT;
+ALTER TABLE public.rooms ADD COLUMN IF NOT EXISTS proof_url TEXT;
+ALTER TABLE public.rooms ADD COLUMN IF NOT EXISTS win_proof_uploaded_at TIMESTAMPTZ;
+ALTER TABLE public.rooms ADD COLUMN IF NOT EXISTS reward_status TEXT DEFAULT 'idle';
+ALTER TABLE public.rooms ADD COLUMN IF NOT EXISTS winner_id TEXT;
+ALTER TABLE public.rooms ADD COLUMN IF NOT EXISTS ocr_status TEXT DEFAULT 'none';
+ALTER TABLE public.rooms ADD COLUMN IF NOT EXISTS ocr_text TEXT;
+ALTER TABLE public.rooms ADD COLUMN IF NOT EXISTS ocr_score INT DEFAULT 0;
+ALTER TABLE public.rooms ADD COLUMN IF NOT EXISTS proof_reject_count INT DEFAULT 0;
+ALTER TABLE public.rooms ADD COLUMN IF NOT EXISTS auto_approve_at TIMESTAMPTZ;
+ALTER TABLE public.rooms ADD COLUMN IF NOT EXISTS completed_at TIMESTAMPTZ;
+ALTER TABLE public.rooms ADD COLUMN IF NOT EXISTS disputed BOOLEAN DEFAULT false;
+ALTER TABLE public.rooms ADD COLUMN IF NOT EXISTS disputed_by TEXT;
+ALTER TABLE public.rooms ADD COLUMN IF NOT EXISTS disputed_by_name TEXT;
+ALTER TABLE public.rooms ADD COLUMN IF NOT EXISTS dispute_reason TEXT;
+ALTER TABLE public.rooms ADD COLUMN IF NOT EXISTS dispute_proof_url TEXT;
+ALTER TABLE public.rooms ADD COLUMN IF NOT EXISTS disputed_at TIMESTAMPTZ;
+ALTER TABLE public.rooms ADD COLUMN IF NOT EXISTS start_time TIMESTAMPTZ;
