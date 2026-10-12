@@ -51,6 +51,29 @@ class _EndMatchBottomSheetState extends State<EndMatchBottomSheet> {
   File? _pickedImage;
   bool _isSubmitting = false;
   final ImagePicker _picker = ImagePicker();
+  int _proofUploadCount = 0;
+
+  @override
+  void initState() {
+    super.initState();
+    _fetchProofCount();
+  }
+
+  Future<void> _fetchProofCount() async {
+    try {
+      final matchRow = await SupabaseService.client
+          .from('active_matches')
+          .select('proof_upload_count')
+          .eq('id', widget.activeMatchId)
+          .maybeSingle();
+      if (mounted) {
+        setState(() {
+          _proofUploadCount =
+              (matchRow?['proof_upload_count'] as num?)?.toInt() ?? 0;
+        });
+      }
+    } catch (_) {}
+  }
 
   Future<void> _pickImage() async {
     try {
@@ -235,7 +258,11 @@ class _EndMatchBottomSheetState extends State<EndMatchBottomSheet> {
 
   @override
   Widget build(BuildContext context) {
-    final canSubmit = _selectedResult != null && _pickedImage != null && !_isSubmitting;
+    final isLimitReached = _proofUploadCount >= 3;
+    final canSubmit = !isLimitReached &&
+        _selectedResult != null &&
+        _pickedImage != null &&
+        !_isSubmitting;
 
     return Container(
       padding: EdgeInsets.only(
@@ -453,9 +480,12 @@ class _EndMatchBottomSheetState extends State<EndMatchBottomSheet> {
                           Text('Submitting Proof...', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14)),
                         ],
                       )
-                    : const Text(
-                        'Submit Proof',
-                        style: TextStyle(fontWeight: FontWeight.bold, fontSize: 15),
+                    : Text(
+                        isLimitReached
+                            ? '❌ Proof Limit Reached (3/3)'
+                            : 'Submit Proof (Attempts: $_proofUploadCount/3)',
+                        style: const TextStyle(
+                            fontWeight: FontWeight.bold, fontSize: 14),
                       ),
               ),
             ),

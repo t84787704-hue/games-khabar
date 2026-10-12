@@ -21,7 +21,61 @@ class TeamService {
           .or("id.eq.$teamUuid,id.eq.$teamId")
           .maybeSingle();
       if (res != null) {
-        return TeamModel.fromSupabase(res);
+        var team = TeamModel.fromSupabase(res);
+
+        // Fetch members from team_members table
+        final members = <String>[];
+        try {
+          final memberRows = await SupabaseService.client
+              .from("team_members")
+              .select("user_id")
+              .or("team_id.eq.$teamUuid,team_id.eq.$teamId");
+          for (final m in memberRows) {
+            final uid = (m["user_id"] ?? "").toString();
+            if (uid.isNotEmpty && !members.contains(uid)) {
+              members.add(uid);
+            }
+          }
+        } catch (e) {
+          debugPrint("[TeamService] getTeam members fetch error: $e");
+        }
+        if (members.isEmpty && team.leaderId.isNotEmpty) {
+          members.add(team.leaderId);
+        }
+
+        // Fetch leader name & avatar from users table
+        String leaderName = team.leaderName;
+        String leaderAvatar = team.leaderAvatar;
+        if (team.leaderId.isNotEmpty) {
+          try {
+            final userRes = await SupabaseService.client
+                .from("users")
+                .select("id, uid, display_name, username, avatar_url")
+                .or("id.eq.${team.leaderId},uid.eq.${team.leaderId}")
+                .maybeSingle();
+            if (userRes != null) {
+              final d = (userRes["display_name"] ?? "").toString().trim();
+              final un = (userRes["username"] ?? "").toString().trim();
+              if (d.isNotEmpty && d.toLowerCase() != "null") {
+                leaderName = d;
+              } else if (un.isNotEmpty && un.toLowerCase() != "null") {
+                leaderName = un;
+              }
+              final av = (userRes["avatar_url"] ?? "").toString().trim();
+              if (av.isNotEmpty && av.toLowerCase() != "null") {
+                leaderAvatar = av;
+              }
+            }
+          } catch (e) {
+            debugPrint("[TeamService] getTeam leader fetch error: $e");
+          }
+        }
+
+        return team.copyWith(
+          members: members,
+          leaderName: leaderName.isNotEmpty ? leaderName : "Leader",
+          leaderAvatar: leaderAvatar,
+        );
       }
     } catch (e) {
       debugPrint("[TeamService] getTeam error: $e");
@@ -38,8 +92,60 @@ class TeamService {
           .from("teams")
           .stream(primaryKey: ["id"])
           .eq("id", teamUuid)
-          .map((rows) =>
-              rows.isNotEmpty ? TeamModel.fromSupabase(rows.first) : null);
+          .asyncMap((rows) async {
+            if (rows.isEmpty) return null;
+            var t = TeamModel.fromSupabase(rows.first);
+
+            // Fetch members
+            final members = <String>[];
+            try {
+              final mRows = await SupabaseService.client
+                  .from("team_members")
+                  .select("user_id")
+                  .or("team_id.eq.$teamUuid,team_id.eq.$teamId");
+              for (final m in mRows) {
+                final uid = (m["user_id"] ?? "").toString();
+                if (uid.isNotEmpty && !members.contains(uid)) {
+                  members.add(uid);
+                }
+              }
+            } catch (_) {}
+            if (members.isEmpty && t.leaderId.isNotEmpty) {
+              members.add(t.leaderId);
+            }
+
+            // Fetch leader
+            String leaderName = t.leaderName;
+            String leaderAvatar = t.leaderAvatar;
+            if (t.leaderId.isNotEmpty) {
+              try {
+                final userRes = await SupabaseService.client
+                    .from("users")
+                    .select("id, uid, display_name, username, avatar_url")
+                    .or("id.eq.${t.leaderId},uid.eq.${t.leaderId}")
+                    .maybeSingle();
+                if (userRes != null) {
+                  final d = (userRes["display_name"] ?? "").toString().trim();
+                  final un = (userRes["username"] ?? "").toString().trim();
+                  if (d.isNotEmpty && d.toLowerCase() != "null") {
+                    leaderName = d;
+                  } else if (un.isNotEmpty && un.toLowerCase() != "null") {
+                    leaderName = un;
+                  }
+                  final av = (userRes["avatar_url"] ?? "").toString().trim();
+                  if (av.isNotEmpty && av.toLowerCase() != "null") {
+                    leaderAvatar = av;
+                  }
+                }
+              } catch (_) {}
+            }
+
+            return t.copyWith(
+              members: members,
+              leaderName: leaderName.isNotEmpty ? leaderName : "Leader",
+              leaderAvatar: leaderAvatar,
+            );
+          });
     } catch (e) {
       debugPrint("[TeamService] getTeamStream error: $e");
       return Stream.value(null);
@@ -162,16 +268,24 @@ class TeamService {
               try {
                 final userRows = await SupabaseService.client
                     .from("users")
-                    .select("id, display_name, username, avatar_url")
+                    .select("id, uid, display_name, username, avatar_url")
                     .inFilter("id", leaderIds);
                 for (final u in userRows) {
                   final id = (u["id"] ?? "").toString();
-                  final name =
-                      (u["display_name"] ?? u["username"] ?? "").toString();
+                  final uid = (u["uid"] ?? "").toString();
+                  final d = (u["display_name"] ?? "").toString().trim();
+                  final un = (u["username"] ?? "").toString().trim();
+                  final name = (d.isNotEmpty && d.toLowerCase() != "null")
+                      ? d
+                      : ((un.isNotEmpty && un.toLowerCase() != "null") ? un : "Leader");
                   final avatar = (u["avatar_url"] ?? "").toString();
                   if (id.isNotEmpty) {
                     leaderNameById[id] = name;
                     leaderAvatarById[id] = avatar;
+                  }
+                  if (uid.isNotEmpty) {
+                    leaderNameById[uid] = name;
+                    leaderAvatarById[uid] = avatar;
                   }
                 }
               } catch (e) {
@@ -180,9 +294,12 @@ class TeamService {
             }
 
             final enriched = teams.map((t) {
-              final members = membersByTeam[t.id] ?? <String>[];
-              final leaderName = leaderNameById[t.leaderId] ?? '';
-              final leaderAvatar = leaderAvatarById[t.leaderId] ?? '';
+              var members = membersByTeam[t.id] ?? <String>[];
+              if (members.isEmpty && t.leaderId.isNotEmpty) {
+                members = [t.leaderId];
+              }
+              final leaderName = leaderNameById[t.leaderId] ?? (t.leaderName.isNotEmpty ? t.leaderName : 'Leader');
+              final leaderAvatar = leaderAvatarById[t.leaderId] ?? t.leaderAvatar;
               return t.copyWith(
                 members: members,
                 leaderName: leaderName,

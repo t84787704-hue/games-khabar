@@ -364,6 +364,147 @@ class _TeamProfileScreenState extends State<TeamProfileScreen> {
     }
   }
 
+  Future<void> _handleDeleteTeam(TeamModel team, String currentUserId) async {
+    final confirm = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: const Color(0xFF161F2E),
+        title: const Text('Delete Team?',
+            style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+        content: Text(
+            'Are you sure you want to delete ${team.name}? This action cannot be undone.',
+            style: const TextStyle(color: Colors.white70)),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('Cancel', style: TextStyle(color: Colors.white70)),
+          ),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(
+                backgroundColor: const Color(0xFFFF4655)),
+            onPressed: () => Navigator.pop(ctx, true),
+            child: const Text('Delete', style: TextStyle(color: Colors.white)),
+          ),
+        ],
+      ),
+    );
+    if (confirm != true) return;
+
+    final res = await _teamService.deleteTeam(
+        teamId: team.id, currentUserId: currentUserId);
+    if (res == 'ok') {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+              content: Text('Team deleted successfully'),
+              backgroundColor: Color(0xFF2E7D32)),
+        );
+        Navigator.pop(context);
+      }
+    } else if (res == 'active_match') {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+              content: Text('Cannot delete team during an active match!'),
+              backgroundColor: Color(0xFFFF4655)),
+        );
+      }
+    } else {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+              content: Text('Failed to delete team'),
+              backgroundColor: Color(0xFFFF4655)),
+        );
+      }
+    }
+  }
+
+  Future<void> _showEditTeamDialog(TeamModel team) async {
+    final nameCtrl = TextEditingController(text: team.name);
+    final tagCtrl = TextEditingController(text: team.tag);
+    final descCtrl = TextEditingController(text: team.description);
+    final reqCtrl = TextEditingController(text: team.requirements);
+
+    await showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: const Color(0xFF161F2E),
+        title: const Text('Edit Team',
+            style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+        content: SingleChildScrollView(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              TextField(
+                controller: nameCtrl,
+                style: const TextStyle(color: Colors.white),
+                decoration: const InputDecoration(
+                    labelText: 'Team Name',
+                    labelStyle: TextStyle(color: Colors.white70)),
+              ),
+              const SizedBox(height: 8),
+              TextField(
+                controller: tagCtrl,
+                style: const TextStyle(color: Colors.white),
+                decoration: const InputDecoration(
+                    labelText: 'Tag',
+                    labelStyle: TextStyle(color: Colors.white70)),
+              ),
+              const SizedBox(height: 8),
+              TextField(
+                controller: descCtrl,
+                style: const TextStyle(color: Colors.white),
+                maxLines: 2,
+                decoration: const InputDecoration(
+                    labelText: 'Description',
+                    labelStyle: TextStyle(color: Colors.white70)),
+              ),
+              const SizedBox(height: 8),
+              TextField(
+                controller: reqCtrl,
+                style: const TextStyle(color: Colors.white),
+                maxLines: 2,
+                decoration: const InputDecoration(
+                    labelText: 'Requirements',
+                    labelStyle: TextStyle(color: Colors.white70)),
+              ),
+            ],
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text('Cancel', style: TextStyle(color: Colors.white70)),
+          ),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(
+                backgroundColor: const Color(0xFF1877F2)),
+            onPressed: () async {
+              final ok = await _teamService.updateTeam(
+                teamId: team.id,
+                name: nameCtrl.text,
+                tag: tagCtrl.text,
+                game: team.game,
+                description: descCtrl.text,
+                requirements: reqCtrl.text,
+              );
+              if (ctx.mounted) Navigator.pop(ctx);
+              if (ok && mounted) {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(
+                      content: Text('Team updated successfully'),
+                      backgroundColor: Color(0xFF2E7D32)),
+                );
+              }
+            },
+            child: const Text('Save', style: TextStyle(color: Colors.white)),
+          ),
+        ],
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final currentUid = GamerAuthService().currentUid ??
@@ -491,6 +632,21 @@ class _TeamProfileScreenState extends State<TeamProfileScreen> {
                               t2 == tRaw;
                         }));
 
+                final bool isUserInThisTeam = isLeader ||
+                    isMember ||
+                    userTeams.any((t) {
+                      final tUuid =
+                          SupabaseService.toUuid(t.id).toLowerCase();
+                      final tRaw = t.id.toLowerCase();
+                      return tUuid == targetUuid || tRaw == targetRawId;
+                    });
+
+                // LEVEL 1: Team member (user in team_members with team_id)
+                // LEVEL 3: Opponent (active match exists between user's team and this team)
+                // LEVEL 2: Non-member (no team_members entry, no active match)
+                final int privacyLevel =
+                    isUserInThisTeam ? 1 : (hasActiveMatch ? 3 : 2);
+
                 return Scaffold(
                   backgroundColor: const Color(0xFF0B0F17),
                   appBar: AppBar(
@@ -509,63 +665,149 @@ class _TeamProfileScreenState extends State<TeamProfileScreen> {
                           fontSize: 16),
                     ),
                     actions: [
-                      if (hasActiveMatch) ...[
-                        IconButton(
-                          tooltip: 'Team DM 💬',
-                          icon: const Icon(Icons.chat_bubble_rounded,
-                              color: Color(0xFF00FF88), size: 22),
-                          onPressed: () {
-                            final activeMatchId =
-                                activeMatch['id']?.toString() ?? '';
-                            Navigator.push(
-                              context,
-                              MaterialPageRoute(
-                                builder: (_) => PrivateMatchRoomScreen(
-                                  matchId: activeMatchId,
-                                  myTeamId: myTeamIdInMatch,
-                                  myTeamName: isMyOwnTeam
-                                      ? team.name
-                                      : (myLeaderTeams.isNotEmpty
-                                          ? myLeaderTeams.first.name
-                                          : 'My Team'),
-                                  opponentId: opponentTeamId,
-                                  opponentName: isMyOwnTeam
-                                      ? (activeMatch['opponent_name'] ??
-                                          'Opponent')
-                                      : team.name,
+                      if (privacyLevel == 1) ...[
+                        if (hasActiveMatch) ...[
+                          IconButton(
+                            tooltip: 'Team DM 💬',
+                            icon: const Icon(Icons.chat_bubble_rounded,
+                                color: Color(0xFF00FF88), size: 22),
+                            onPressed: () {
+                              final activeMatchId =
+                                  activeMatch['id']?.toString() ?? '';
+                              Navigator.push(
+                                context,
+                                MaterialPageRoute(
+                                  builder: (_) => PrivateMatchRoomScreen(
+                                    matchId: activeMatchId,
+                                    myTeamId: myTeamIdInMatch,
+                                    myTeamName: team.name,
+                                    opponentId: opponentTeamId,
+                                    opponentName:
+                                        activeMatch['opponent_name'] ??
+                                            'Opponent',
+                                  ),
                                 ),
+                              );
+                            },
+                          ),
+                          Padding(
+                            padding: const EdgeInsets.only(right: 8),
+                            child: Center(
+                              child: Container(
+                                padding: const EdgeInsets.symmetric(
+                                    horizontal: 8, vertical: 4),
+                                decoration: BoxDecoration(
+                                  color: const Color(0xFF00FF88)
+                                      .withOpacity(0.2),
+                                  borderRadius: BorderRadius.circular(8),
+                                  border: Border.all(
+                                      color: const Color(0xFF00FF88)),
+                                ),
+                                child: const Text('MATCH LIVE',
+                                    style: TextStyle(
+                                        color: Color(0xFF00FF88),
+                                        fontWeight: FontWeight.bold,
+                                        fontSize: 11)),
                               ),
-                            );
-                          },
-                        ),
-                        Padding(
-                          padding: const EdgeInsets.only(right: 12),
-                          child: Center(
-                            child: Container(
-                              padding: const EdgeInsets.symmetric(
-                                  horizontal: 8, vertical: 4),
-                              decoration: BoxDecoration(
-                                color: const Color(0xFF00FF88)
-                                    .withOpacity(0.2),
-                                borderRadius: BorderRadius.circular(8),
-                                border: Border.all(
-                                    color: const Color(0xFF00FF88)),
-                              ),
-                              child: const Text('MATCH LIVE',
-                                  style: TextStyle(
-                                      color: Color(0xFF00FF88),
-                                      fontWeight: FontWeight.bold,
-                                      fontSize: 11)),
                             ),
                           ),
-                        ),
-                      ] else if (!isMyOwnTeam) ...[
-                        IconButton(
-                          tooltip: 'Challenge Team',
-                          icon: const Icon(Icons.flash_on_rounded,
-                              color: Color(0xFF1877F2)),
-                          onPressed: () => _handleChallenge(team, currentUid),
-                        ),
+                        ],
+                        if (isLeader)
+                          PopupMenuButton<String>(
+                            icon: const Icon(Icons.more_vert_rounded,
+                                color: Colors.white70),
+                            color: const Color(0xFF161F2E),
+                            onSelected: (val) {
+                              if (val == 'edit') {
+                                _showEditTeamDialog(team);
+                              } else if (val == 'delete') {
+                                _handleDeleteTeam(team, currentUid);
+                              }
+                            },
+                            itemBuilder: (ctx) => const [
+                              PopupMenuItem(
+                                value: 'edit',
+                                child: Row(
+                                  children: [
+                                    Icon(Icons.edit_rounded,
+                                        color: Colors.white70, size: 18),
+                                    SizedBox(width: 8),
+                                    Text('Edit Team',
+                                        style: TextStyle(color: Colors.white)),
+                                  ],
+                                ),
+                              ),
+                              PopupMenuItem(
+                                value: 'delete',
+                                child: Row(
+                                  children: [
+                                    Icon(Icons.delete_forever_rounded,
+                                        color: Color(0xFFFF4655), size: 18),
+                                    SizedBox(width: 8),
+                                    Text('Delete Team',
+                                        style:
+                                            TextStyle(color: Color(0xFFFF4655))),
+                                  ],
+                                ),
+                              ),
+                            ],
+                          ),
+                      ] else if (privacyLevel == 3) ...[
+                        if (hasActiveMatch) ...[
+                          IconButton(
+                            tooltip: 'Team DM 💬',
+                            icon: const Icon(Icons.chat_bubble_rounded,
+                                color: Color(0xFF00FF88), size: 22),
+                            onPressed: () {
+                              final activeMatchId =
+                                  activeMatch['id']?.toString() ?? '';
+                              Navigator.push(
+                                context,
+                                MaterialPageRoute(
+                                  builder: (_) => PrivateMatchRoomScreen(
+                                    matchId: activeMatchId,
+                                    myTeamId: myTeamIdInMatch,
+                                    myTeamName: myLeaderTeams.isNotEmpty
+                                        ? myLeaderTeams.first.name
+                                        : 'My Team',
+                                    opponentId: opponentTeamId,
+                                    opponentName: team.name,
+                                  ),
+                                ),
+                              );
+                            },
+                          ),
+                          Padding(
+                            padding: const EdgeInsets.only(right: 12),
+                            child: Center(
+                              child: Container(
+                                padding: const EdgeInsets.symmetric(
+                                    horizontal: 8, vertical: 4),
+                                decoration: BoxDecoration(
+                                  color: const Color(0xFF00FF88)
+                                      .withOpacity(0.2),
+                                  borderRadius: BorderRadius.circular(8),
+                                  border: Border.all(
+                                      color: const Color(0xFF00FF88)),
+                                ),
+                                child: const Text('MATCH LIVE',
+                                    style: TextStyle(
+                                        color: Color(0xFF00FF88),
+                                        fontWeight: FontWeight.bold,
+                                        fontSize: 11)),
+                              ),
+                            ),
+                          ),
+                        ],
+                      ] else ...[
+                        // LEVEL 2: Non-member - NO Team DM, NO Edit/Delete
+                        if (myLeaderTeams.isNotEmpty)
+                          IconButton(
+                            tooltip: 'Challenge Team',
+                            icon: const Icon(Icons.flash_on_rounded,
+                                color: Color(0xFF1877F2)),
+                            onPressed: () => _handleChallenge(team, currentUid),
+                          ),
                       ],
                     ],
                   ),
@@ -668,6 +910,12 @@ class _TeamProfileScreenState extends State<TeamProfileScreen> {
                                 );
                               }
 
+                              final proofCount =
+                                  (activeMatch['proof_upload_count'] as num?)
+                                          ?.toInt() ??
+                                      0;
+                              final canAddMore = proofCount < 3;
+
                               if (matchStatus == 'rejected' ||
                                   (matchStatus == 'under_review' &&
                                       proofStatus == 'rejected')) {
@@ -705,7 +953,7 @@ class _TeamProfileScreenState extends State<TeamProfileScreen> {
                                           const SizedBox(width: 8),
                                           Expanded(
                                             child: Text(
-                                              '❌ Proof Rejected - $adminNote - Dubara Proof Add Karo',
+                                              '❌ Proof Rejected - $adminNote - Dubara Proof Add Karo (Attempts: $proofCount/3)',
                                               style: const TextStyle(
                                                 color: Color(0xFFFF4655),
                                                 fontWeight: FontWeight.bold,
@@ -720,8 +968,9 @@ class _TeamProfileScreenState extends State<TeamProfileScreen> {
                                         alignment: Alignment.centerRight,
                                         child: ElevatedButton.icon(
                                           style: ElevatedButton.styleFrom(
-                                            backgroundColor:
-                                                const Color(0xFFFF4655),
+                                            backgroundColor: canAddMore
+                                                ? const Color(0xFFFF4655)
+                                                : Colors.grey.shade700,
                                             foregroundColor: Colors.white,
                                             padding: const EdgeInsets
                                                 .symmetric(
@@ -730,44 +979,51 @@ class _TeamProfileScreenState extends State<TeamProfileScreen> {
                                                 borderRadius:
                                                     BorderRadius.circular(8)),
                                           ),
-                                          icon: const Icon(
-                                              Icons.upload_file_rounded,
+                                          icon: Icon(
+                                              canAddMore
+                                                  ? Icons.upload_file_rounded
+                                                  : Icons.block_rounded,
                                               size: 16),
-                                          label: const Text('Add Proof Again',
-                                              style: TextStyle(
+                                          label: Text(
+                                              canAddMore
+                                                  ? 'Add Proof Again ($proofCount/3)'
+                                                  : '❌ Proof Limit Reached (3/3)',
+                                              style: const TextStyle(
                                                   fontWeight: FontWeight.bold,
                                                   fontSize: 12)),
-                                          onPressed: () async {
-                                            final ended =
-                                                await EndMatchBottomSheet.show(
-                                              context,
-                                              activeMatchId: activeMatchId,
-                                              myTeamId: myTeamIdInMatch,
-                                              opponentId: opponentTeamId,
-                                              myTeamName: isMyOwnTeam
-                                                  ? team.name
-                                                  : (myLeaderTeams.isNotEmpty
-                                                      ? myLeaderTeams
-                                                          .first.name
-                                                      : 'My Team'),
-                                              opponentName: isMyOwnTeam
-                                                  ? (activeMatch[
-                                                          'opponent_name'] ??
-                                                      'Opponent')
-                                                  : team.name,
-                                            );
-                                            if (ended == true && mounted) {
-                                              ScaffoldMessenger.of(context)
-                                                  .showSnackBar(
-                                                const SnackBar(
-                                                  content: Text(
-                                                      'Naya proof bhej diya gaya! Under Review.'),
-                                                  backgroundColor:
-                                                      Color(0xFFFFB800),
-                                                ),
-                                              );
-                                            }
-                                          },
+                                          onPressed: !canAddMore
+                                              ? null
+                                              : () async {
+                                                  final ended =
+                                                      await EndMatchBottomSheet.show(
+                                                    context,
+                                                    activeMatchId: activeMatchId,
+                                                    myTeamId: myTeamIdInMatch,
+                                                    opponentId: opponentTeamId,
+                                                    myTeamName: isMyOwnTeam
+                                                        ? team.name
+                                                        : (myLeaderTeams.isNotEmpty
+                                                            ? myLeaderTeams
+                                                                .first.name
+                                                            : 'My Team'),
+                                                    opponentName: isMyOwnTeam
+                                                        ? (activeMatch[
+                                                                'opponent_name'] ??
+                                                            'Opponent')
+                                                        : team.name,
+                                                  );
+                                                  if (ended == true && mounted) {
+                                                    ScaffoldMessenger.of(context)
+                                                        .showSnackBar(
+                                                      const SnackBar(
+                                                        content: Text(
+                                                            'Naya proof bhej diya gaya! Under Review.'),
+                                                        backgroundColor:
+                                                            Color(0xFFFFB800),
+                                                      ),
+                                                    );
+                                                  }
+                                                },
                                         ),
                                       ),
                                     ],

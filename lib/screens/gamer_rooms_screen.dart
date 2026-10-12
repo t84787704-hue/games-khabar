@@ -486,7 +486,7 @@ class _GamerRoomsScreenState extends State<GamerRoomsScreen> {
           completedAt = DateTime.tryParse(data['completed_at']);
         }
         if (completedAt != null &&
-            now.difference(completedAt).inMinutes >= 5) {
+            now.difference(completedAt).inSeconds >= 300) {
           final id = data['id'];
           await SupabaseService.client.from('rooms').delete().eq('id', id);
         }
@@ -1722,7 +1722,10 @@ class _InRoomBottomSheetContentState extends State<_InRoomBottomSheetContent> {
     super.initState();
     _updateRemainingTime();
     _countdownTimer = Timer.periodic(const Duration(seconds: 1), (_) {
-      if (mounted) setState(() => _updateRemainingTime());
+      if (mounted) {
+        setState(() => _updateRemainingTime());
+        _checkCompletedAutoDelete();
+      }
     });
 
     _roomSub = SupabaseService.client
@@ -1739,9 +1742,30 @@ class _InRoomBottomSheetContentState extends State<_InRoomBottomSheetContent> {
             _liveRoom = updated;
             _updateRemainingTime();
           });
+          _checkCompletedAutoDelete();
         } catch (_) {}
       }
     });
+  }
+
+  bool _isAutoDeleting = false;
+
+  Future<void> _checkCompletedAutoDelete() async {
+    if (room.status.toLowerCase() != 'completed' || _isAutoDeleting) return;
+    final cAt = room.completedAt;
+    if (cAt == null) return;
+    final deleteAt = cAt.add(const Duration(minutes: 5));
+    final now = DateTime.now();
+    if (now.isAfter(deleteAt) || deleteAt.difference(now).inSeconds <= 0) {
+      _isAutoDeleting = true;
+      _countdownTimer?.cancel();
+      try {
+        await SupabaseService.client.from('rooms').delete().eq('id', room.id);
+      } catch (_) {}
+      if (mounted) {
+        Navigator.of(context).maybePop();
+      }
+    }
   }
 
   void _updateRemainingTime() {
@@ -3257,7 +3281,43 @@ class _InRoomBottomSheetContentState extends State<_InRoomBottomSheetContent> {
                                   fontSize: 12, color: Color(0xFF65676B))),
                         ),
                       ),
-                    if (isH)
+                    if (currentRoom.status.toLowerCase() == 'completed')
+                      Builder(builder: (context) {
+                        final cAt = currentRoom.completedAt ?? DateTime.now();
+                        final deleteAt = cAt.add(const Duration(minutes: 5));
+                        final diff = deleteAt.difference(DateTime.now());
+                        final totalSecs = diff.isNegative ? 0 : diff.inSeconds;
+                        final m = totalSecs ~/ 60;
+                        final s = totalSecs % 60;
+                        return Container(
+                          width: double.infinity,
+                          margin: const EdgeInsets.only(top: 8),
+                          padding: const EdgeInsets.symmetric(
+                              vertical: 12, horizontal: 16),
+                          decoration: BoxDecoration(
+                            color: const Color(0xFFF0F2F5),
+                            borderRadius: BorderRadius.circular(10),
+                            border: Border.all(color: const Color(0xFFCED0D4)),
+                          ),
+                          child: Row(
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            children: [
+                              const Icon(Icons.timer_outlined,
+                                  size: 18, color: Color(0xFF65676B)),
+                              const SizedBox(width: 8),
+                              Text(
+                                '🕐 Room will auto-delete in: ${m}m ${s}s',
+                                style: const TextStyle(
+                                  fontWeight: FontWeight.bold,
+                                  fontSize: 13,
+                                  color: Color(0xFF050505),
+                                ),
+                              ),
+                            ],
+                          ),
+                        );
+                      })
+                    else if (isH)
                       Padding(
                         padding: const EdgeInsets.only(top: 8),
                         child: OutlinedButton.icon(

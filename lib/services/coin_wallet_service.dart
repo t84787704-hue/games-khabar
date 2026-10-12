@@ -163,49 +163,59 @@ class CoinWalletService extends ChangeNotifier {
       }
 
       // 4. Transaction log (both coin_transactions & transactions tables)
-      // FIX: Let Supabase auto-generate `id` — no custom id (avoids duplicate PK)
-      // FIX: Only log if userId is a valid UUID
-      final bool isValidUuid = RegExp(
+      // FIX (Issue 9): Auto-generated id (let Supabase generate), targetUuid guaranteed, snake_case balance_after, created_at
+      final String targetUuid = RegExp(
         r'^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$',
-      ).hasMatch(userId);
+      ).hasMatch(userId)
+          ? userId
+          : SupabaseService.toUuid(userId);
 
-      if (isValidUuid) {
-        final Map<String, dynamic> txData = {
-          'user_id': userId,
-          'type': type,
-          'amount': amount,
-          'status': 'completed',
-          'title': title ?? description,
-          'description': description,
-          'balance_after': newCoins,
-          'created_at': now.toIso8601String(),
-        };
-        if (roomId != null && roomId.isNotEmpty) {
-          txData['room_id'] = roomId;
-          txData['reference_id'] = roomId;
-        }
-        if (winProofUrl != null && winProofUrl.isNotEmpty) {
-          txData['win_proof_url'] = winProofUrl;
-        }
+      final Map<String, dynamic> txData = {
+        'user_id': targetUuid,
+        'type': type,
+        'amount': amount,
+        'status': 'completed',
+        'title': title ?? description,
+        'description': description,
+        'balance_after': newCoins,
+        'created_at': now.toIso8601String(),
+      };
+      if (roomId != null && roomId.isNotEmpty) {
+        txData['room_id'] = roomId;
+        txData['reference_id'] = roomId;
+      }
+      if (winProofUrl != null && winProofUrl.isNotEmpty) {
+        txData['win_proof_url'] = winProofUrl;
+      }
 
+      try {
+        await SupabaseService.client
+            .from('coin_transactions')
+            .insert(txData);
+      } catch (e) {
+        debugPrint('updateCoins: coin_transactions insert error: $e, trying schema-fallback');
         try {
           await SupabaseService.client
               .from('coin_transactions')
-              .insert(txData);
-        } catch (e) {
-          debugPrint('updateCoins: coin_transactions insert error: $e');
+              .insert({
+                'user_id': targetUuid,
+                'amount': amount,
+                'type': type,
+                'description': (title != null && title.isNotEmpty) ? '$title - $description' : description,
+                'balance_after': newCoins,
+                if (roomId != null && roomId.isNotEmpty) 'reference_id': roomId,
+                'created_at': now.toIso8601String(),
+              });
+        } catch (e2) {
+          debugPrint('updateCoins: fallback coin_transactions insert error: $e2');
         }
-
-        try {
-          await SupabaseService.client
-              .from('transactions')
-              .insert(txData);
-        } catch (e) {
-          debugPrint('updateCoins: transactions insert error: $e');
-        }
-      } else {
-        debugPrint('updateCoins: invalid userId ($userId) - skipping tx log');
       }
+
+      try {
+        await SupabaseService.client
+            .from('transactions')
+            .insert(txData);
+      } catch (_) {}
 
       // 5. Update in-memory state & notifiers
       _instance._syncToUserDocAndNotifiers(userId, newCoins);
@@ -850,16 +860,23 @@ class CoinWalletService extends ChangeNotifier {
   Stream<List<CoinTransaction>> transactionsStream(String userId) {
     if (userId.isEmpty) return Stream.value([]);
     try {
+      final userUuid = SupabaseService.toUuid(userId);
       return SupabaseService.client
           .from('coin_transactions')
           .stream(primaryKey: ['id'])
           .map((rows) {
         final filtered = rows
-            .where((r) =>
-                r['user_id']?.toString() == userId ||
-                r['userId']?.toString() == userId ||
-                r['to']?.toString() == userId ||
-                r['from']?.toString() == userId)
+            .where((r) {
+              final uid = r['user_id']?.toString() ?? r['userId']?.toString() ?? '';
+              final toUid = r['to']?.toString() ?? '';
+              final fromUid = r['from']?.toString() ?? '';
+              return uid == userId ||
+                  uid == userUuid ||
+                  toUid == userId ||
+                  toUid == userUuid ||
+                  fromUid == userId ||
+                  fromUid == userUuid;
+            })
             .map((r) {
           final map = Map<String, dynamic>.from(r);
           if (map['userId'] == null && map['user_id'] != null) {
@@ -867,6 +884,9 @@ class CoinWalletService extends ChangeNotifier {
           }
           if (map['roomId'] == null && map['room_id'] != null) {
             map['roomId'] = map['room_id'];
+          }
+          if (map['roomId'] == null && map['reference_id'] != null) {
+            map['roomId'] = map['reference_id'];
           }
           return CoinTransaction.fromMap(map);
         }).toList();

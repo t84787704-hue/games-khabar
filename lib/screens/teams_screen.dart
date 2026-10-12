@@ -15,8 +15,9 @@ import "../widgets/end_match_dialog.dart";
 import "team_matches_screen.dart";
 import "team_match_room_screen.dart";
 import "leaderboard_screen.dart";
-export "private_match_room_screen.dart";
 import "private_match_room_screen.dart";
+import "../services/coin_wallet_service.dart";
+import "../services/notification_service.dart";
 
 class TeamsScreen extends StatefulWidget {
   const TeamsScreen({super.key});
@@ -702,8 +703,159 @@ class _ActiveMatchBothTeamsBannerState
           _isLoading = false;
         });
       }
+      _checkProofLimitCancellation();
     } catch (_) {
       if (mounted) setState(() => _isLoading = false);
+    }
+  }
+
+  bool _hasCancelledDueToProofLimit = false;
+
+  Future<void> _checkProofLimitCancellation() async {
+    final status = (widget.match["status"] ?? "").toString().toLowerCase();
+    final proofStatus =
+        (widget.match["proof_status"] ?? "").toString().toLowerCase();
+    final proofCount =
+        (widget.match["proof_upload_count"] as num?)?.toInt() ?? 0;
+    final isRejected = status == "rejected" ||
+        (status == "under_review" && proofStatus == "rejected");
+
+    if (isRejected &&
+        proofCount >= 3 &&
+        status != 'cancelled' &&
+        !_hasCancelledDueToProofLimit) {
+      _hasCancelledDueToProofLimit = true;
+      final matchId = widget.match["id"]?.toString() ?? "";
+      if (matchId.isEmpty) return;
+
+      try {
+        // 1. Update active_matches table
+        await SupabaseService.client.from('active_matches').update({
+          'status': 'cancelled',
+          'admin_note': 'Proof limit reached - no valid winner',
+        }).eq('id', matchId);
+
+        // 2 & 3. Refund prize pool to host & entry fees to joiners
+        Map<String, dynamic>? roomRow;
+        try {
+          final res = await SupabaseService.client
+              .from('rooms')
+              .select()
+              .or('id.eq.$matchId,room_id.eq.$matchId')
+              .maybeSingle();
+          roomRow = res;
+        } catch (_) {}
+
+        final hostId = roomRow?['host_id']?.toString() ?? '';
+        final prizePool = (roomRow?['prize_pool'] as num?)?.toInt() ?? 0;
+        final entryFee =
+            (roomRow?['entry_fee_coins'] as num?)?.toInt() ?? 0;
+        final joinedUserIds = (roomRow?['joined_user_ids'] as List?)
+                ?.map((e) => e.toString())
+                .toList() ??
+            [];
+
+        if (hostId.isNotEmpty && prizePool > 0) {
+          await CoinWalletService().updateCoins(
+            userId: hostId,
+            amount: prizePool,
+            type: 'refund',
+            description:
+                'Match cancelled - proof limit reached (Prize refunded)',
+            inEscrowChange: -prizePool,
+            roomId: matchId,
+          );
+        }
+
+        for (final joinerId in joinedUserIds) {
+          if (joinerId.isEmpty || joinerId == hostId) continue;
+          if (entryFee > 0) {
+            await CoinWalletService().updateCoins(
+              userId: joinerId,
+              amount: entryFee,
+              type: 'refund',
+              description: 'Match cancelled - entry fee refunded',
+              inEscrowChange: -entryFee,
+              roomId: matchId,
+            );
+          }
+        }
+
+        if (roomRow != null) {
+          final rId = roomRow['id']?.toString() ?? matchId;
+          await SupabaseService.client.from('rooms').update({
+            'status': 'cancelled',
+            'dispute_reason': 'Proof limit reached - no valid winner',
+            'completed_at': DateTime.now().toIso8601String(),
+          }).eq('id', rId);
+
+          // 5. System chat message in room
+          try {
+            await SupabaseService.client.from('messages').insert({
+              'room_id': rId,
+              'sender_id': 'system',
+              'sender_name': 'ROOM BOT',
+              'message':
+                  '❌ Proof limit reached. Match cancelled. Prize refunded to teams.',
+              'type': 'system',
+              'created_at': DateTime.now().toIso8601String(),
+            });
+          } catch (_) {}
+        }
+
+        // 4. Send notification to BOTH teams
+        final t1LeaderId = _myTeam?.leaderId ?? '';
+        final t2LeaderId = _oppTeam?.leaderId ?? '';
+        final submittedBy =
+            widget.match['submitted_by_team_id']?.toString() ?? '';
+        final isMyTeamSubmitter = submittedBy.isNotEmpty &&
+            (submittedBy.toLowerCase() == widget.myTeamUuid.toLowerCase() ||
+                submittedBy.toLowerCase() == widget.myTeamId.toLowerCase());
+
+        final winnerTeamLeader =
+            isMyTeamSubmitter ? t1LeaderId : t2LeaderId;
+        final loserTeamLeader =
+            isMyTeamSubmitter ? t2LeaderId : t1LeaderId;
+
+        if (winnerTeamLeader.isNotEmpty) {
+          await NotificationService().sendNotification(
+            userId: winnerTeamLeader,
+            type: 'match_cancelled',
+            title: 'Match Cancelled',
+            body:
+                '❌ Aapki 3 proof attempts khatam ho gayi hain. Match adhoora reh gaya. Prize refunded.',
+            data: {'match_id': matchId},
+          );
+        }
+        if (loserTeamLeader.isNotEmpty &&
+            loserTeamLeader != winnerTeamLeader) {
+          await NotificationService().sendNotification(
+            userId: loserTeamLeader,
+            type: 'match_cancelled',
+            title: 'Match Cancelled',
+            body:
+                '❌ Match ended without result. Proof limit reached. Prize refunded.',
+            data: {'match_id': matchId},
+          );
+        }
+        if (hostId.isNotEmpty &&
+            hostId != winnerTeamLeader &&
+            hostId != loserTeamLeader) {
+          final shortId =
+              matchId.length > 6 ? matchId.substring(0, 6) : matchId;
+          await NotificationService().sendNotification(
+            userId: hostId,
+            type: 'match_cancelled',
+            title: 'Match Cancelled',
+            body:
+                '❌ Match #$shortId cancelled — proof limit reached. Prize refunded.',
+            data: {'match_id': matchId},
+          );
+        }
+      } catch (e) {
+        debugPrint(
+            '[TeamsScreen] Proof limit cancellation error: $e');
+      }
     }
   }
 
@@ -721,6 +873,7 @@ class _ActiveMatchBothTeamsBannerState
 
   @override
   Widget build(BuildContext context) {
+    _checkProofLimitCancellation();
     final match = widget.match;
     final matchId = match["id"]?.toString() ?? "";
     final t1 = match["team1_id"]?.toString() ?? "";
@@ -1112,7 +1265,7 @@ class _ActiveMatchBothTeamsBannerState
                   label: Text(
                     canAddMore
                         ? "Add Proof ($proofCount/3)"
-                        : "Limit Reached",
+                        : "❌ Proof Limit Reached (3/3)",
                     style: const TextStyle(
                         fontWeight: FontWeight.bold, fontSize: 11),
                   ),
