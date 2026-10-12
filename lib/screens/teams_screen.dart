@@ -756,7 +756,7 @@ class _ActiveMatchBothTeamsBannerState
             [];
 
         if (hostId.isNotEmpty && prizePool > 0) {
-          await CoinWalletService().updateCoins(
+          await CoinWalletService.updateCoins(
             userId: hostId,
             amount: prizePool,
             type: 'refund',
@@ -770,7 +770,7 @@ class _ActiveMatchBothTeamsBannerState
         for (final joinerId in joinedUserIds) {
           if (joinerId.isEmpty || joinerId == hostId) continue;
           if (entryFee > 0) {
-            await CoinWalletService().updateCoins(
+            await CoinWalletService.updateCoins(
               userId: joinerId,
               amount: entryFee,
               type: 'refund',
