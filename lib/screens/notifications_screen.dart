@@ -10,6 +10,7 @@ import 'gamer_profile_screen.dart';
 import 'team_match_room_screen.dart';
 import 'coin_wallet_screen.dart';
 import 'coin_store_screen.dart';
+import 'gamer_rooms_screen.dart';
 
 class NotificationsScreen extends StatefulWidget {
   const NotificationsScreen({super.key});
@@ -69,20 +70,41 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
     final roomId = data['room_id'] ?? data['roomId'];
     final senderId = notif.senderId;
 
-    if (notif.type.contains('coin')) {
+    if (notif.type.contains('coin') ||
+        notif.type.contains('bonus') ||
+        notif.type.contains('reward') ||
+        notif.type == 'welcome_bonus') {
       Navigator.push(context, MaterialPageRoute(builder: (_) => const CoinWalletScreen()));
-    } else if (notif.type == 'store_purchase' || notif.type == 'perk_expiry') {
+      return;
+    }
+
+    if (notif.type == 'store_purchase' || notif.type == 'perk_expiry') {
       Navigator.push(context, MaterialPageRoute(builder: (_) => const CoinStoreScreen()));
-    } else if (matchId != null && matchId.toString().isNotEmpty) {
+      return;
+    }
+
+    if (notif.type.contains('dispute') ||
+        notif.type.contains('room') ||
+        notif.type.contains('proof') ||
+        notif.type.contains('tournament')) {
+      Navigator.push(context, MaterialPageRoute(builder: (_) => const GamerRoomsScreen()));
+      return;
+    }
+
+    if (matchId != null && matchId.toString().isNotEmpty) {
       Navigator.push(
         context,
         MaterialPageRoute(builder: (_) => TeamMatchRoomScreen(matchId: matchId.toString())),
       );
-    } else if (senderId != null && senderId.isNotEmpty && senderId != 'admin' && senderId != _currentUid) {
+      return;
+    }
+
+    if (senderId != null && senderId.isNotEmpty && senderId != 'admin' && senderId != _currentUid) {
       Navigator.push(
         context,
         MaterialPageRoute(builder: (_) => GamerProfileScreen(userId: senderId)),
       );
+      return;
     }
   }
 
@@ -503,6 +525,31 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
               child: const Text('Decline', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 11)),
             ),
           ],
+        ),
+      );
+    }
+
+    // Room / Dispute action button
+    if (notif.type.contains('dispute') ||
+        notif.type.contains('room') ||
+        notif.type.contains('proof') ||
+        notif.type.contains('tournament')) {
+      return Padding(
+        padding: const EdgeInsets.only(top: 8, left: 52),
+        child: OutlinedButton.icon(
+          style: OutlinedButton.styleFrom(
+            side: BorderSide(color: notif.iconColor),
+            foregroundColor: notif.iconColor,
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+            minimumSize: Size.zero,
+          ),
+          icon: const Icon(Icons.meeting_room_rounded, size: 12),
+          label: const Text('Open Rooms', style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold)),
+          onPressed: () {
+            _notificationService.markAsRead(notif.id);
+            Navigator.push(context, MaterialPageRoute(builder: (_) => const GamerRoomsScreen()));
+          },
         ),
       );
     }
