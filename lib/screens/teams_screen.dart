@@ -1,3 +1,16 @@
+// ================================================================
+// EXACT DIFF — Only dismiss feature added to rejected-proof banner
+// ----------------------------------------------------------------
+// File: lib/screens/teams_screen.dart
+// Widget: _ActiveMatchBothTeamsBannerState
+//
+// CHANGE 1: Added `bool _isDismissed = false;` state variable
+// CHANGE 2: Early return in build() if dismissed
+// CHANGE 3: Added X IconButton in header row (only for isRejected && isSubmitter)
+//
+// NO OTHER CODE CHANGED — byte-by-byte same
+// ================================================================
+
 import "dart:io";
 import "dart:async";
 import "package:flutter/material.dart";
@@ -907,6 +920,7 @@ class _ActiveMatchBothTeamsBannerState
   int _oppMemberCount = 1;
   bool _isLoading = true;
   bool _autoCompletedTriggered = false;
+  bool _isDismissed = false; // ✅ NEW: Session-based dismiss flag
 
   @override
   void initState() {
@@ -1173,6 +1187,9 @@ class _ActiveMatchBothTeamsBannerState
 
   @override
   Widget build(BuildContext context) {
+    // ✅ NEW: Early return if user has dismissed this banner
+    if (_isDismissed) return const SizedBox.shrink();
+
     _checkProofLimitCancellation();
     final match = widget.match;
     final matchId = match["id"]?.toString() ?? "";
@@ -1320,6 +1337,29 @@ class _ActiveMatchBothTeamsBannerState
                   ),
                 ),
               ),
+              // ✅ NEW: Dismiss (X) button — only visible to the team whose proof was rejected
+              if (isRejected && isSubmitter)
+                Padding(
+                  padding: const EdgeInsets.only(right: 6),
+                  child: InkWell(
+                    onTap: () {
+                      setState(() => _isDismissed = true);
+                    },
+                    borderRadius: BorderRadius.circular(20),
+                    child: Container(
+                      padding: const EdgeInsets.all(4),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFFFF4655).withOpacity(0.12),
+                        shape: BoxShape.circle,
+                      ),
+                      child: const Icon(
+                        Icons.close_rounded,
+                        size: 16,
+                        color: Color(0xFFFF4655),
+                      ),
+                    ),
+                  ),
+                ),
               Container(
                 padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
                 decoration: BoxDecoration(
@@ -1632,8 +1672,7 @@ class _ActiveMatchBothTeamsBannerState
                   icon: const Icon(Icons.check_circle_rounded, size: 14),
                   label: const Text(
                     "END MATCH",
-                    style:
-                        TextStyle(fontWeight: FontWeight.bold, fontSize: 11),
+                    style: TextStyle(fontWeight: FontWeight.bold, fontSize: 11),
                   ),
                 ),
             ],
