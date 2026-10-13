@@ -71,7 +71,6 @@ class _PrivateMatchRoomScreenState extends State<PrivateMatchRoomScreen> {
 
     _scrollController.addListener(_onScroll);
 
-    // Safety timeout: Never spin infinitely
     Timer(const Duration(seconds: 5), () {
       if (mounted && _isLoading) {
         setState(() => _isLoading = false);
@@ -83,7 +82,6 @@ class _PrivateMatchRoomScreenState extends State<PrivateMatchRoomScreen> {
     });
   }
 
-  // ============ FIXED: Room Info stream — infinite loop fix ============
   void _subscribeToRoomInfo() {
     final cleanId = widget.matchId.trim();
     if (cleanId.isEmpty) {
@@ -100,7 +98,6 @@ class _PrivateMatchRoomScreenState extends State<PrivateMatchRoomScreen> {
           if (!mounted) return;
           final newRoomInfo = (data.isNotEmpty) ? data.first : null;
 
-          // Agar data same hai to setState mat karo — infinite loop se bacho
           final oldId = _roomInfo?['id']?.toString() ?? '';
           final newId = newRoomInfo?['id']?.toString() ?? '';
           final oldUpdated = _roomInfo?['updated_at']?.toString() ?? '';
@@ -110,7 +107,7 @@ class _PrivateMatchRoomScreenState extends State<PrivateMatchRoomScreen> {
               oldUpdated == newUpdated &&
               _roomInfo != null &&
               newRoomInfo != null) {
-            return; // same data
+            return;
           }
 
           if (_roomInfo == null && newRoomInfo == null) {
@@ -817,109 +814,6 @@ class _PrivateMatchRoomScreenState extends State<PrivateMatchRoomScreen> {
     }
   }
 
-  // ============ Room Info — Share Dialog ============
-  void _showRoomInfoDialog() {
-    final isFirstTime = _roomInfo == null;
-    final uidController = TextEditingController(
-        text: isFirstTime ? '' : (_roomInfo!['room_id'] ?? '').toString());
-    final passController = TextEditingController(
-        text: isFirstTime ? '' : (_roomInfo!['room_password'] ?? '').toString());
-
-    showDialog(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        backgroundColor: const Color(0xFF131A29),
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-        title: Row(
-          children: [
-            const Icon(Icons.vpn_key_rounded,
-                color: Color(0xFFFFD600), size: 22),
-            const SizedBox(width: 8),
-            Expanded(
-              child: Text(isFirstTime ? "Share Room Info" : "Update Room Info",
-                  style: const TextStyle(
-                      color: Colors.white,
-                      fontWeight: FontWeight.bold,
-                      fontSize: 16)),
-            ),
-          ],
-        ),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            const Text("Game Room ID aur Password darj karen:",
-                style: TextStyle(color: Color(0xFF8B949E), fontSize: 12)),
-            const SizedBox(height: 12),
-            TextField(
-              controller: uidController,
-              style: const TextStyle(color: Colors.white, fontSize: 14),
-              decoration: InputDecoration(
-                labelText: "Room ID / UID",
-                labelStyle:
-                    const TextStyle(color: Color(0xFFFFD600), fontSize: 12),
-                hintText: "e.g. 5839201",
-                hintStyle:
-                    const TextStyle(color: Colors.white30, fontSize: 12),
-                filled: true,
-                fillColor: const Color(0xFF0B0E16),
-                border: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(8),
-                    borderSide: BorderSide.none),
-              ),
-            ),
-            const SizedBox(height: 10),
-            TextField(
-              controller: passController,
-              style: const TextStyle(color: Colors.white, fontSize: 14),
-              decoration: InputDecoration(
-                labelText: "Password",
-                labelStyle:
-                    const TextStyle(color: Color(0xFFFFD600), fontSize: 12),
-                hintText: "e.g. 1234",
-                hintStyle:
-                    const TextStyle(color: Colors.white30, fontSize: 12),
-                filled: true,
-                fillColor: const Color(0xFF0B0E16),
-                border: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(8),
-                    borderSide: BorderSide.none),
-              ),
-            ),
-          ],
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(ctx),
-            child: const Text("Cancel",
-                style: TextStyle(color: Color(0xFF8B949E))),
-          ),
-          ElevatedButton(
-            onPressed: () async {
-              final uid = uidController.text.trim();
-              final pass = passController.text.trim();
-              if (uid.isEmpty) {
-                ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
-                    content: Text("Room ID zaroori hai"),
-                    backgroundColor: Color(0xFFFF4655)));
-                return;
-              }
-              Navigator.pop(ctx);
-              await _saveRoomInfo(uid, pass);
-            },
-            style: ElevatedButton.styleFrom(
-                backgroundColor: const Color(0xFFFFD600),
-                foregroundColor: Colors.black,
-                shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(8))),
-            child: Text(isFirstTime ? "SHARE KARO" : "UPDATE KARO",
-                style: const TextStyle(fontWeight: FontWeight.bold)),
-          ),
-        ],
-      ),
-    );
-  }
-
   Future<void> _saveRoomInfo(String roomId, String password) async {
     try {
       final cleanId = widget.matchId.trim();
@@ -966,124 +860,6 @@ class _PrivateMatchRoomScreenState extends State<PrivateMatchRoomScreen> {
         );
       }
     }
-  }
-
-  void _copyRoomInfo() {
-    if (_roomInfo == null) return;
-    final uid = _roomInfo!['room_id']?.toString() ?? '';
-    final pass = _roomInfo!['room_password']?.toString() ?? '';
-    final text =
-        pass.isNotEmpty ? 'Room ID: $uid | Password: $pass' : 'Room ID: $uid';
-    Clipboard.setData(ClipboardData(text: text));
-    ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
-        content: Text("Room info copied!"),
-        duration: Duration(seconds: 1),
-        backgroundColor: Color(0xFF1877F2)));
-  }
-
-  Future<void> _confirmDeleteRoomInfo() async {
-    final confirm = await showDialog<bool>(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        backgroundColor: const Color(0xFF131A29),
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-        title: const Row(
-          children: [
-            Icon(Icons.warning_amber_rounded,
-                color: Color(0xFFFF4655), size: 22),
-            SizedBox(width: 8),
-            Text("Delete Room Info?",
-                style: TextStyle(
-                    color: Colors.white,
-                    fontWeight: FontWeight.bold,
-                    fontSize: 15)),
-          ],
-        ),
-        content: const Text(
-          "Aap apni team ki room info delete kar dena chahte hain? Doosri team ko notification nahi jayega.",
-          style: TextStyle(color: Color(0xFF8B949E), fontSize: 12.5),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(ctx, false),
-            child: const Text("Cancel",
-                style: TextStyle(color: Color(0xFF8B949E))),
-          ),
-          ElevatedButton(
-            onPressed: () => Navigator.pop(ctx, true),
-            style: ElevatedButton.styleFrom(
-                backgroundColor: const Color(0xFFFF4655),
-                foregroundColor: Colors.white,
-                shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(8))),
-            child: const Text("DELETE",
-                style: TextStyle(fontWeight: FontWeight.bold)),
-          ),
-        ],
-      ),
-    );
-
-    if (confirm != true) return;
-
-    try {
-      final cleanId = widget.matchId.trim();
-      final myTeamUuid = SupabaseService.toUuid(widget.myTeamId);
-
-      await SupabaseService.client
-          .from('match_room_info')
-          .delete()
-          .eq('match_id', cleanId)
-          .eq('team_id', myTeamUuid);
-
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
-            content: Text("Room info delete ho gayi"),
-            backgroundColor: Color(0xFFFF4655)));
-      }
-    } catch (e) {
-      debugPrint("[PrivateMatchRoom] Delete room info error: $e");
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-            content: Text("Delete nahi hui: $e"),
-            backgroundColor: const Color(0xFFFF4655)));
-      }
-    }
-  }
-
-  Widget _buildRoomInfoRow(
-      {required String label, required String value}) {
-    return Row(
-      children: [
-        SizedBox(
-          width: 80,
-          child: Text("$label:",
-              style: const TextStyle(
-                  color: Color(0xFF8B949E),
-                  fontSize: 12,
-                  fontWeight: FontWeight.w600)),
-        ),
-        Expanded(
-          child: Container(
-            padding:
-                const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-            decoration: BoxDecoration(
-              color: const Color(0xFF0B0E16),
-              borderRadius: BorderRadius.circular(6),
-              border: Border.all(
-                  color: const Color(0xFFFFD600).withOpacity(0.3)),
-            ),
-            child: SelectableText(
-              value,
-              style: const TextStyle(
-                  color: Colors.white,
-                  fontSize: 13,
-                  fontWeight: FontWeight.bold,
-                  letterSpacing: 0.5),
-            ),
-          ),
-        ),
-      ],
-    );
   }
 
   String _timeAgo(String? dateStr) {
@@ -1152,10 +928,6 @@ class _PrivateMatchRoomScreenState extends State<PrivateMatchRoomScreen> {
     final myTeamRaw = widget.myTeamId.toLowerCase();
     final oppUuid = SupabaseService.toUuid(widget.opponentId).toLowerCase();
     final oppRaw = widget.opponentId.toLowerCase();
-
-    final myTeamUuidForRoom = SupabaseService.toUuid(widget.myTeamId);
-    final isMyTeamShared = _roomInfo != null &&
-        (_roomInfo!['team_id']?.toString() == myTeamUuidForRoom);
 
     return Scaffold(
       backgroundColor: const Color(0xFF0B0E16),
@@ -1241,161 +1013,7 @@ class _PrivateMatchRoomScreenState extends State<PrivateMatchRoomScreen> {
         children: [
           Column(
             children: [
-              // ============ Room Info Card ============
-              if (!_isRoomInfoLoading)
-                Container(
-                  margin: const EdgeInsets.fromLTRB(12, 10, 12, 6),
-                  padding: const EdgeInsets.all(12),
-                  decoration: BoxDecoration(
-                    color: const Color(0xFF1A1500),
-                    borderRadius: BorderRadius.circular(12),
-                    border: Border.all(
-                        color: const Color(0xFFFFD600), width: 1.5),
-                    boxShadow: [
-                      BoxShadow(
-                        color: const Color(0xFFFFD600).withOpacity(0.1),
-                        blurRadius: 8,
-                        offset: const Offset(0, 2),
-                      ),
-                    ],
-                  ),
-                  child: _roomInfo == null
-                      ? Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            const Row(
-                              children: [
-                                Icon(Icons.vpn_key_rounded,
-                                    color: Color(0xFFFFD600), size: 18),
-                                SizedBox(width: 8),
-                                Expanded(
-                                  child: Text(
-                                    "🏠 ROOM INFO — Abhi tak share nahi hui",
-                                    style: TextStyle(
-                                        color: Color(0xFFFFD600),
-                                        fontWeight: FontWeight.bold,
-                                        fontSize: 12.5),
-                                  ),
-                                ),
-                              ],
-                            ),
-                            const SizedBox(height: 8),
-                            const Text(
-                              "Game shuru karne ke liye Room ID aur Password share karen.",
-                              style: TextStyle(
-                                  color: Color(0xFF8B949E), fontSize: 11.5),
-                            ),
-                            const SizedBox(height: 10),
-                            SizedBox(
-                              width: double.infinity,
-                              child: ElevatedButton.icon(
-                                onPressed: _showRoomInfoDialog,
-                                style: ElevatedButton.styleFrom(
-                                  backgroundColor:
-                                      const Color(0xFFFFD600),
-                                  foregroundColor: Colors.black,
-                                  padding: const EdgeInsets.symmetric(
-                                      vertical: 10),
-                                  shape: RoundedRectangleBorder(
-                                      borderRadius:
-                                          BorderRadius.circular(8)),
-                                  elevation: 0,
-                                ),
-                                icon: const Icon(Icons.add_rounded,
-                                    size: 18),
-                                label: const Text("Room Info Share Karo",
-                                    style: TextStyle(
-                                        fontWeight: FontWeight.bold,
-                                        fontSize: 13)),
-                              ),
-                            ),
-                          ],
-                        )
-                      : Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Row(
-                              children: [
-                                const Icon(Icons.vpn_key_rounded,
-                                    color: Color(0xFFFFD600), size: 18),
-                                const SizedBox(width: 8),
-                                const Expanded(
-                                  child: Text(
-                                    "🏠 ROOM INFO",
-                                    style: TextStyle(
-                                        color: Color(0xFFFFD600),
-                                        fontWeight: FontWeight.bold,
-                                        fontSize: 12.5,
-                                        letterSpacing: 0.5),
-                                  ),
-                                ),
-                                IconButton(
-                                  icon: const Icon(Icons.copy_rounded,
-                                      color: Color(0xFFFFD600), size: 18),
-                                  tooltip: "Copy",
-                                  onPressed: _copyRoomInfo,
-                                  padding: EdgeInsets.zero,
-                                  constraints: const BoxConstraints(
-                                      minWidth: 30, minHeight: 30),
-                                ),
-                                if (isMyTeamShared)
-                                  IconButton(
-                                    icon: const Icon(Icons.edit_rounded,
-                                        color: Color(0xFFFFD600), size: 18),
-                                    tooltip: "Edit",
-                                    onPressed: _showRoomInfoDialog,
-                                    padding: EdgeInsets.zero,
-                                    constraints: const BoxConstraints(
-                                        minWidth: 30, minHeight: 30),
-                                  ),
-                              ],
-                            ),
-                            const SizedBox(height: 8),
-                            _buildRoomInfoRow(
-                                label: "Room ID",
-                                value:
-                                    (_roomInfo!['room_id'] ?? '').toString()),
-                            const SizedBox(height: 6),
-                            _buildRoomInfoRow(
-                                label: "Password",
-                                value: (_roomInfo!['room_password'] ?? '')
-                                    .toString()),
-                            const SizedBox(height: 8),
-                            Row(
-                              children: [
-                                const Icon(Icons.access_time_rounded,
-                                    color: Color(0xFF8B949E), size: 12),
-                                const SizedBox(width: 4),
-                                Text(
-                                  "Shared ${_timeAgo(_roomInfo!['updated_at']?.toString())}",
-                                  style: const TextStyle(
-                                      color: Color(0xFF8B949E),
-                                      fontSize: 10.5),
-                                ),
-                                const Spacer(),
-                                if (isMyTeamShared)
-                                  TextButton.icon(
-                                    onPressed: _confirmDeleteRoomInfo,
-                                    style: TextButton.styleFrom(
-                                      foregroundColor:
-                                          const Color(0xFFFF4655),
-                                      padding: const EdgeInsets.symmetric(
-                                          horizontal: 8, vertical: 2),
-                                      minimumSize: const Size(0, 28),
-                                    ),
-                                    icon: const Icon(
-                                        Icons.delete_outline_rounded,
-                                        size: 14),
-                                    label: const Text("Delete",
-                                        style: TextStyle(
-                                            fontWeight: FontWeight.bold,
-                                            fontSize: 11)),
-                                  ),
-                              ],
-                            ),
-                          ],
-                        ),
-                ),
+              // ============ Room Info Card REMOVED ============
 
               // Top info banner
               Container(
