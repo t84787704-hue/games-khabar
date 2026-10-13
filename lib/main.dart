@@ -57,6 +57,7 @@ class GamersIdApp extends StatelessWidget {
           top: true,
           bottom: true,
           child: MaterialApp(
+            key: ValueKey(themeMode),
             title: 'Gamers ID',
             debugShowCheckedModeBanner: false,
             themeMode: themeMode,

@@ -45,14 +45,75 @@ class _ProfileScreenState extends State<ProfileScreen> {
   Color get textWhite => ThemeService.textPrimary;
   Color get textGray => ThemeService.textSecondary;
 
+  bool get _isCurrentAdminSafe {
+    try {
+      return isAdminUser();
+    } catch (_) {
+      return false;
+    }
+  }
+
+  String get _currentEmail {
+    try {
+      return SupabaseService.client.auth.currentUser?.email ??
+          GamerAuthService().currentGamer?.email ??
+          'N/A';
+    } catch (_) {
+      return GamerAuthService().currentGamer?.email ?? 'N/A';
+    }
+  }
+
+  String get _currentUid {
+    try {
+      return SupabaseService.client.auth.currentUser?.id ??
+          GamerAuthService().currentUid ??
+          'N/A';
+    } catch (_) {
+      return GamerAuthService().currentUid ?? 'N/A';
+    }
+  }
+
+  Stream<List<Map<String, dynamic>>> _getUserCoinsStream() {
+    try {
+      final uid = GamerAuthService().currentUid;
+      if (uid != null && uid.isNotEmpty) {
+        return SupabaseService.client
+            .from('users')
+            .stream(primaryKey: ['id'])
+            .eq('id', uid)
+            .handleError((e) {
+              debugPrint('[ProfileScreen] user coins stream error: $e');
+            });
+      }
+    } catch (e) {
+      debugPrint('[ProfileScreen] _getUserCoinsStream init error: $e');
+    }
+    return const Stream.empty();
+  }
+
+  /// Safe translation helper with guaranteed fallback to prevent grey screen (Issue #10)
+  String _safeTr(String key, {String? fallback, List<String>? args}) {
+    try {
+      final res = key.tr(args: args);
+      if (res.isNotEmpty && res != key) return res;
+    } catch (_) {}
+    if (fallback != null) return fallback;
+    return key.replaceAll('_', ' ').split(' ').map((w) {
+      if (w.isEmpty) return '';
+      return w[0].toUpperCase() + w.substring(1);
+    }).join(' ');
+  }
+
   @override
   void initState() {
     super.initState();
     // If user is already authenticated as admin, show admin options
-    if (isAdminUser()) {
-      _adminOptionUnlocked = true;
-      _adminCardRevealed = true;
-    }
+    try {
+      if (_isCurrentAdminSafe) {
+        _adminOptionUnlocked = true;
+        _adminCardRevealed = true;
+      }
+    } catch (_) {}
   }
 
   void _onLogoTapped() {
@@ -125,7 +186,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
             const SizedBox(width: 10),
             Expanded(
               child: Text(
-                'secret_admin_unlocked'.tr(),
+                _safeTr('secret_admin_unlocked', fallback: 'Secret Admin Unlocked'),
                 style: TextStyle(color: textWhite, fontWeight: FontWeight.bold, fontSize: 12),
               ),
             ),
@@ -146,82 +207,105 @@ class _ProfileScreenState extends State<ProfileScreen> {
 
   @override
   Widget build(BuildContext context) {
-    return ValueListenableBuilder<ThemeMode>(
-      valueListenable: ThemeService.themeModeNotifier,
-      builder: (context, _, __) {
-        final isCurrentAdmin = isAdminUser();
-        final userEmail = AdminSession.adminEmail;
-        final currentLanguageModel = LanguageService.getLanguageModel(context.locale.languageCode);
+    try {
+      return ValueListenableBuilder<ThemeMode>(
+        valueListenable: ThemeService.themeModeNotifier,
+        builder: (context, _, __) {
+          try {
+            return _buildContent(context);
+          } catch (e, stack) {
+            debugPrint('[ProfileScreen] inner builder exception (Issue #10): $e\n$stack');
+            return _buildFallbackUI(context);
+          }
+        },
+      );
+    } catch (e, stack) {
+      debugPrint('[ProfileScreen] build exception caught (Issue #10): $e\n$stack');
+      return _buildFallbackUI(context);
+    }
+  }
 
-        return Scaffold(
-          backgroundColor: bgDark,
-          appBar: AppBar(
-            backgroundColor: cardDark,
-            elevation: 0,
-            centerTitle: true,
-            title: Text(
-              'profile_settings'.tr(),
-              style: TextStyle(
-                color: textWhite,
-                fontWeight: FontWeight.w900,
-                fontSize: 18,
-              ),
-            ),
-            actions: [
-              StreamBuilder<List<Map<String, dynamic>>>(
-                stream: (GamerAuthService().currentUid != null)
-                    ? SupabaseService.client
-                        .from('users')
-                        .stream(primaryKey: ['id'])
-                        .eq('id', GamerAuthService().currentUid!)
-                    : const Stream.empty(),
-                builder: (context, snapshot) {
-                  int coins = 0;
-                  if (snapshot.hasData && snapshot.data!.isNotEmpty) {
-                    final data = snapshot.data!.first;
-                    final rawCoins = data['gCoins'] ?? data['coins'];
-                    if (rawCoins is num) {
-                      coins = rawCoins.toInt();
-                    }
-                  } else {
-                    coins = GamerAuthService().currentGamer?.coins ?? 0;
-                  }
-                  return GestureDetector(
-                    onTap: () {
-                      final uid = GamerAuthService().currentUid ?? '';
-                      CoinHistorySheet.show(context, userId: uid);
-                    },
-                    child: Container(
-                      margin: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                      decoration: BoxDecoration(
-                        color: const Color(0xFFFFD700).withOpacity(0.15),
-                        borderRadius: BorderRadius.circular(20),
-                        border: Border.all(color: const Color(0xFFFFD700), width: 1.2),
-                      ),
-                      child: Row(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          const Text('🪙', style: TextStyle(fontSize: 13)),
-                          const SizedBox(width: 4),
-                          Text(
-                            'G-Coins: $coins',
-                            style: const TextStyle(
-                              color: Color(0xFFFFD700),
-                              fontWeight: FontWeight.w900,
-                              fontSize: 12.5,
-                            ),
-                          ),
-                          const SizedBox(width: 3),
-                          const Icon(Icons.history_rounded, size: 14, color: Color(0xFFFFD700)),
-                        ],
-                      ),
-                    ),
-                  );
-                },
-              ),
-            ],
+  Widget _buildContent(BuildContext context) {
+    final isCurrentAdmin = _isCurrentAdminSafe;
+    final userEmail = AdminSession.adminEmail;
+
+    String langCode = 'en';
+    try {
+      langCode = LanguageService.currentLanguage.value;
+    } catch (_) {}
+    try {
+      langCode = context.locale.languageCode;
+    } catch (_) {}
+    final currentLanguageModel = LanguageService.getLanguageModel(langCode);
+
+    return Scaffold(
+      backgroundColor: bgDark,
+      appBar: AppBar(
+        backgroundColor: cardDark,
+        elevation: 0,
+        centerTitle: true,
+        title: Text(
+          _safeTr('profile_settings', fallback: 'Settings & Preferences'),
+          style: TextStyle(
+            color: textWhite,
+            fontWeight: FontWeight.w900,
+            fontSize: 18,
           ),
+        ),
+        actions: [
+          StreamBuilder<List<Map<String, dynamic>>>(
+            stream: _getUserCoinsStream(),
+            builder: (context, snapshot) {
+              int coins = 0;
+              try {
+                if (snapshot.hasData && snapshot.data != null && snapshot.data!.isNotEmpty) {
+                  final data = snapshot.data!.first;
+                  final rawCoins = data['gCoins'] ?? data['coins'];
+                  if (rawCoins is num) {
+                    coins = rawCoins.toInt();
+                  }
+                } else {
+                  coins = GamerAuthService().currentGamer?.coins ?? 0;
+                }
+              } catch (_) {
+                coins = GamerAuthService().currentGamer?.coins ?? 0;
+              }
+              return GestureDetector(
+                onTap: () {
+                  final uid = GamerAuthService().currentUid ?? '';
+                  CoinHistorySheet.show(context, userId: uid);
+                },
+                child: Container(
+                  margin: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFFFFD700).withOpacity(0.15),
+                    borderRadius: BorderRadius.circular(20),
+                    border: Border.all(color: const Color(0xFFFFD700), width: 1.2),
+                  ),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      const Text('🪙', style: TextStyle(fontSize: 13)),
+                      const SizedBox(width: 4),
+                      Text(
+                        'G-Coins: $coins',
+                        style: const TextStyle(
+                          color: Color(0xFFFFD700),
+                          fontWeight: FontWeight.w900,
+                          fontSize: 12.5,
+                        ),
+                      ),
+                      const SizedBox(width: 3),
+                      const Icon(Icons.history_rounded, size: 14, color: Color(0xFFFFD700)),
+                    ],
+                  ),
+                ),
+              );
+            },
+          ),
+        ],
+      ),
           body: SingleChildScrollView(
             padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 20),
             child: Column(
@@ -282,7 +366,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                       ),
                       const SizedBox(height: 4),
                       Text(
-                        userEmail ?? 'community_member'.tr(),
+                        userEmail ?? _safeTr('community_member', fallback: 'Community Member'),
                         style: TextStyle(
                           color: isCurrentAdmin ? neonGreen : textGray,
                           fontSize: 13,
@@ -299,7 +383,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                           border: Border.all(color: borderDark),
                         ),
                         child: Text(
-                          "Email: ${SupabaseService.client.auth.currentUser?.email ?? GamerAuthService().currentGamer?.email ?? 'N/A'} | UID: ${SupabaseService.client.auth.currentUser?.id ?? GamerAuthService().currentUid ?? 'N/A'}",
+                          "Email: $_currentEmail | UID: $_currentUid",
                           style: const TextStyle(
                             color: Color(0xFF38BDF8),
                             fontSize: 11,
@@ -319,7 +403,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                             border: Border.all(color: neonGreen, width: 1),
                           ),
                           child: Text(
-                            '🛡️ ${'verified_admin'.tr()}',
+                            '🛡️ ${_safeTr('verified_admin', fallback: 'Verified Admin')}',
                             style: TextStyle(
                               color: neonGreen,
                               fontSize: 10,
@@ -484,7 +568,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                         child: Icon(Icons.admin_panel_settings_rounded, color: neonGreen, size: 24),
                       ),
                       title: Text(
-                        'admin_panel'.tr(),
+                        _safeTr('admin_panel', fallback: 'Admin Panel'),
                         style: TextStyle(
                           color: textWhite,
                           fontWeight: FontWeight.w900,
@@ -492,7 +576,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                         ),
                       ),
                       subtitle: Text(
-                        'admin_panel_desc'.tr(),
+                        _safeTr('admin_panel_desc', fallback: 'Manage matches, proofs & news'),
                         style: TextStyle(color: textGray, fontSize: 12),
                       ),
                       trailing: Icon(Icons.arrow_forward_ios_rounded, color: neonGreen, size: 16),
@@ -521,7 +605,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                           child: Icon(Icons.language_rounded, color: neonGreen, size: 20),
                         ),
                         title: Text(
-                          'app_language'.tr(),
+                          _safeTr('app_language', fallback: 'App Language'),
                           style: TextStyle(color: textWhite, fontSize: 14, fontWeight: FontWeight.bold),
                         ),
                         subtitle: Row(
@@ -638,11 +722,13 @@ class _ProfileScreenState extends State<ProfileScreen> {
                           return ListTile(
                             leading: Icon(Icons.bookmark_rounded, color: neonGreen, size: 22),
                             title: Text(
-                              'saved_articles_menu'.tr(),
+                              _safeTr('saved_articles_menu', fallback: 'Saved Articles'),
                               style: TextStyle(color: textWhite, fontSize: 14, fontWeight: FontWeight.bold),
                             ),
                             subtitle: Text(
-                              ids.isEmpty ? 'no_saved_articles_sub'.tr() : 'saved_articles_sub'.tr(args: ['${ids.length}']),
+                              ids.isEmpty
+                                  ? _safeTr('no_saved_articles_sub', fallback: 'No saved articles yet')
+                                  : _safeTr('saved_articles_sub', fallback: '${ids.length} saved articles', args: ['${ids.length}']),
                               style: TextStyle(color: textGray, fontSize: 12),
                             ),
                             trailing: Icon(Icons.arrow_forward_ios_rounded, color: textGray, size: 14),
@@ -665,12 +751,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
 
                       // GK Coins & Earn Screen Entry
                       StreamBuilder<List<Map<String, dynamic>>>(
-                        stream: (GamerAuthService().currentUid != null)
-                            ? SupabaseService.client
-                                .from('users')
-                                .stream(primaryKey: ['id'])
-                                .eq('id', GamerAuthService().currentUid!)
-                            : const Stream.empty(),
+                        stream: _getUserCoinsStream(),
                         builder: (context, snapshot) {
                           int coins = 0;
                           int inEscrow = 0;
@@ -780,11 +861,11 @@ class _ProfileScreenState extends State<ProfileScreen> {
                       ListTile(
                         leading: Icon(Icons.notifications_active_outlined, color: neonGreen, size: 22),
                         title: Text(
-                          'gaming_news_alerts'.tr(),
+                          _safeTr('gaming_news_alerts', fallback: 'Gaming News Alerts'),
                           style: TextStyle(color: textWhite, fontSize: 14, fontWeight: FontWeight.bold),
                         ),
                         subtitle: Text(
-                          'gaming_alerts_sub'.tr(),
+                          _safeTr('gaming_alerts_sub', fallback: 'Get notified of latest game releases & tournaments'),
                           style: TextStyle(color: textGray, fontSize: 12),
                         ),
                         trailing: Switch(
@@ -795,7 +876,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                       ),
                       Divider(color: borderDark, height: 1),
 
-                      // Day / Night Theme Mode
+                      // Day / Night Theme Mode (Issue #9)
                       ValueListenableBuilder<ThemeMode>(
                         valueListenable: ThemeService.themeModeNotifier,
                         builder: (context, mode, _) {
@@ -807,18 +888,20 @@ class _ProfileScreenState extends State<ProfileScreen> {
                               size: 22,
                             ),
                             title: Text(
-                              'day_night_mode'.tr(),
+                              _safeTr('day_night_mode', fallback: 'Day / Night Mode'),
                               style: TextStyle(color: textWhite, fontSize: 14, fontWeight: FontWeight.bold),
                             ),
                             subtitle: Text(
-                              isDark ? 'dark_theme_sub'.tr() : 'light_theme_sub'.tr(),
+                              isDark
+                                  ? _safeTr('dark_theme_sub', fallback: 'Night mode enabled')
+                                  : _safeTr('light_theme_sub', fallback: 'Day mode enabled'),
                               style: TextStyle(color: textGray, fontSize: 12),
                             ),
                             trailing: Switch(
                               value: isDark,
                               activeColor: neonGreen,
-                              onChanged: (val) {
-                                ThemeService.setTheme(val);
+                              onChanged: (val) async {
+                                await ThemeService.setTheme(val);
                               },
                             ),
                           );
@@ -830,7 +913,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                       ListTile(
                         leading: Icon(Icons.cleaning_services_rounded, color: neonGreen, size: 22),
                         title: Text(
-                          'clear_cache'.tr(),
+                          _safeTr('clear_cache', fallback: 'Clear Cache'),
                           style: TextStyle(color: textWhite, fontSize: 14, fontWeight: FontWeight.bold),
                         ),
                         trailing: Icon(Icons.arrow_forward_ios_rounded, color: textGray, size: 14),
@@ -838,7 +921,10 @@ class _ProfileScreenState extends State<ProfileScreen> {
                           ScaffoldMessenger.of(context).showSnackBar(
                             SnackBar(
                               backgroundColor: cardDark2,
-                              content: Text('cache_cleared'.tr(), style: TextStyle(color: neonGreen)),
+                              content: Text(
+                                _safeTr('cache_cleared', fallback: 'Cache cleared successfully'),
+                                style: TextStyle(color: neonGreen),
+                              ),
                             ),
                           );
                         },
@@ -849,11 +935,11 @@ class _ProfileScreenState extends State<ProfileScreen> {
                       ListTile(
                         leading: Icon(Icons.groups_rounded, color: neonGreen, size: 22),
                         title: Text(
-                          'about_us'.tr(),
+                          _safeTr('about_us', fallback: 'About Us'),
                           style: TextStyle(color: textWhite, fontSize: 14, fontWeight: FontWeight.bold),
                         ),
                         subtitle: Text(
-                          'about_us_sub'.tr(),
+                          _safeTr('about_us_sub', fallback: 'Learn about Games Khabar'),
                           style: TextStyle(color: textGray, fontSize: 12),
                         ),
                         trailing: Icon(Icons.arrow_forward_ios_rounded, color: textGray, size: 14),
@@ -870,11 +956,11 @@ class _ProfileScreenState extends State<ProfileScreen> {
                       ListTile(
                         leading: Icon(Icons.support_agent_rounded, color: neonGreen, size: 22),
                         title: Text(
-                          'contact_us'.tr(),
+                          _safeTr('contact_us', fallback: 'Contact Us'),
                           style: TextStyle(color: textWhite, fontSize: 14, fontWeight: FontWeight.bold),
                         ),
                         subtitle: Text(
-                          'contact_us_sub'.tr(),
+                          _safeTr('contact_us_sub', fallback: 'Reach our gamer support team'),
                           style: TextStyle(color: textGray, fontSize: 12),
                         ),
                         trailing: Icon(Icons.arrow_forward_ios_rounded, color: textGray, size: 14),
@@ -891,11 +977,11 @@ class _ProfileScreenState extends State<ProfileScreen> {
                       ListTile(
                         leading: Icon(Icons.privacy_tip_outlined, color: neonGreen, size: 22),
                         title: Text(
-                          'privacy_policy'.tr(),
+                          _safeTr('privacy_policy', fallback: 'Privacy Policy'),
                           style: TextStyle(color: textWhite, fontSize: 14, fontWeight: FontWeight.bold),
                         ),
                         subtitle: Text(
-                          'privacy_policy_sub'.tr(),
+                          _safeTr('privacy_policy_sub', fallback: 'Read our privacy practices'),
                           style: TextStyle(color: textGray, fontSize: 12),
                         ),
                         trailing: Icon(Icons.arrow_forward_ios_rounded, color: textGray, size: 14),
@@ -912,11 +998,11 @@ class _ProfileScreenState extends State<ProfileScreen> {
                       ListTile(
                         leading: Icon(Icons.share_rounded, color: neonGreen, size: 22),
                         title: Text(
-                          'follow_us'.tr(),
+                          _safeTr('follow_us', fallback: 'Follow Us'),
                           style: TextStyle(color: textWhite, fontSize: 14, fontWeight: FontWeight.bold),
                         ),
                         subtitle: Text(
-                          'follow_us_sub'.tr(),
+                          _safeTr('follow_us_sub', fallback: 'Join our gaming community on social media'),
                           style: TextStyle(color: textGray, fontSize: 12),
                         ),
                         trailing: Icon(Icons.arrow_forward_ios_rounded, color: textGray, size: 14),
@@ -933,16 +1019,16 @@ class _ProfileScreenState extends State<ProfileScreen> {
                       ListTile(
                         leading: Icon(Icons.info_outline_rounded, color: neonGreen, size: 22),
                         title: Text(
-                          'app_version'.tr(),
+                          _safeTr('app_version', fallback: 'App Version'),
                           style: TextStyle(color: textWhite, fontSize: 14, fontWeight: FontWeight.bold),
                         ),
-                        subtitle: Text(
+                        subtitle: const Text(
                           'v1.2.0 (Build 4)',
-                          style: TextStyle(color: textGray, fontSize: 11),
+                          style: TextStyle(color: GamerTheme.textMuted, fontSize: 11),
                         ),
-                        trailing: Text(
+                        trailing: const Text(
                           'v1.2.0',
-                          style: TextStyle(color: textGray, fontSize: 13),
+                          style: TextStyle(color: GamerTheme.textMuted, fontSize: 13),
                         ),
                         onTap: _onVersionTapped,
                       ),
@@ -951,7 +1037,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                 ),
                 const SizedBox(height: 20),
 
-                // User Account Sign Out Section (For switching between test accounts)
+                // User Account Sign Out Section
                 if (GamerAuthService().currentUid != null || SupabaseService.client.auth.currentUser != null) ...[
                   Container(
                     margin: const EdgeInsets.only(bottom: 20),
@@ -1062,7 +1148,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                                     title: Row(
                                       children: [
                                         Text(
-                                          'admin_login'.tr(),
+                                          _safeTr('admin_login', fallback: 'Admin Login'),
                                           style: TextStyle(color: textWhite, fontSize: 14, fontWeight: FontWeight.bold),
                                         ),
                                         const SizedBox(width: 8),
@@ -1085,7 +1171,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                                       ],
                                     ),
                                     subtitle: Text(
-                                      'admin_login_sub'.tr(),
+                                      _safeTr('admin_login_sub', fallback: 'Sign in to access admin console'),
                                       style: TextStyle(color: textGray, fontSize: 12),
                                     ),
                                     trailing: IconButton(
@@ -1122,11 +1208,11 @@ class _ProfileScreenState extends State<ProfileScreen> {
                                   ListTile(
                                     leading: Icon(Icons.logout_rounded, color: alertRed, size: 22),
                                     title: Text(
-                                      'sign_out'.tr(),
+                                      _safeTr('sign_out', fallback: 'Sign Out'),
                                       style: TextStyle(color: alertRed, fontSize: 14, fontWeight: FontWeight.bold),
                                     ),
                                     subtitle: Text(
-                                      'signed_in_as'.tr(args: [userEmail ?? '']),
+                                      _safeTr('signed_in_as', fallback: 'Signed in as $userEmail', args: [userEmail ?? '']),
                                       style: TextStyle(color: textGray, fontSize: 12),
                                     ),
                                     onTap: () async {
@@ -1157,6 +1243,77 @@ class _ProfileScreenState extends State<ProfileScreen> {
           ),
         );
       },
+    );
+  }
+
+  /// Robust Fallback UI that prevents blank grey screen if data load or build throws (Issue #10)
+  Widget _buildFallbackUI(BuildContext context) {
+    return Scaffold(
+      backgroundColor: bgDark,
+      appBar: AppBar(
+        backgroundColor: cardDark,
+        elevation: 0,
+        leading: IconButton(
+          icon: Icon(Icons.arrow_back_rounded, color: textWhite),
+          onPressed: () => Navigator.pop(context),
+        ),
+        title: Text(
+          'Settings & Preferences',
+          style: TextStyle(color: textWhite, fontWeight: FontWeight.bold),
+        ),
+      ),
+      body: ListView(
+        padding: const EdgeInsets.all(16),
+        children: [
+          Container(
+            decoration: BoxDecoration(
+              color: cardDark,
+              borderRadius: BorderRadius.circular(16),
+              border: Border.all(color: borderDark),
+            ),
+            child: Column(
+              children: [
+                ListTile(
+                  leading: Icon(Icons.language_rounded, color: neonGreen),
+                  title: Text('App Language', style: TextStyle(color: textWhite, fontWeight: FontWeight.bold)),
+                  subtitle: Text(LanguageService.selectedLang == 'ur' ? 'اردو' : 'English', style: TextStyle(color: textGray)),
+                  onTap: () {
+                    LanguageService.showLanguageBottomSheet(context);
+                  },
+                ),
+                Divider(color: borderDark, height: 1),
+                ValueListenableBuilder<ThemeMode>(
+                  valueListenable: ThemeService.themeModeNotifier,
+                  builder: (context, mode, _) {
+                    final isDark = mode == ThemeMode.dark;
+                    return ListTile(
+                      leading: Icon(isDark ? Icons.dark_mode_rounded : Icons.light_mode_rounded, color: neonGreen),
+                      title: Text('Day / Night Mode', style: TextStyle(color: textWhite, fontWeight: FontWeight.bold)),
+                      trailing: Switch(
+                        value: isDark,
+                        activeColor: neonGreen,
+                        onChanged: (val) => ThemeService.setTheme(val),
+                      ),
+                    );
+                  },
+                ),
+                Divider(color: borderDark, height: 1),
+                ListTile(
+                  leading: Icon(Icons.privacy_tip_outlined, color: neonGreen),
+                  title: Text('Privacy Policy', style: TextStyle(color: textWhite, fontWeight: FontWeight.bold)),
+                  onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const PrivacyPolicyScreen())),
+                ),
+                Divider(color: borderDark, height: 1),
+                ListTile(
+                  leading: Icon(Icons.groups_rounded, color: neonGreen),
+                  title: Text('About Us', style: TextStyle(color: textWhite, fontWeight: FontWeight.bold)),
+                  onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const AboutUsScreen())),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
     );
   }
 }

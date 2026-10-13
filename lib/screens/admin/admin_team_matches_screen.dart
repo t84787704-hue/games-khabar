@@ -4,6 +4,7 @@ import 'package:cached_network_image/cached_network_image.dart';
 import '../../constants/gamer_theme.dart';
 import '../../models/team_match_model.dart';
 import '../../services/team_match_service.dart';
+import '../../services/supabase_service.dart';
 import '../team_match_room_screen.dart';
 
 class AdminTeamMatchesScreen extends StatefulWidget {
@@ -360,6 +361,277 @@ class _AdminTeamMatchesScreenState extends State<AdminTeamMatchesScreen> {
     );
   }
 
+  Stream<_AdminMatchUnifiedData> _getUnifiedMatchesStream() async* {
+    while (true) {
+      try {
+        final matchesList = await SupabaseService.getTeamMatches(status: _selectedFilter);
+        final matches = matchesList.map((m) => TeamMatch.fromMap(m)).toList();
+
+        List<Map<String, dynamic>> reports = [];
+        try {
+          final reportsRes = await SupabaseService.client
+              .from('reports')
+              .select()
+              .eq('target_type', 'match')
+              .eq('status', 'pending')
+              .order('created_at', ascending: false);
+          if (reportsRes is List) {
+            reports = List<Map<String, dynamic>>.from(reportsRes);
+          }
+        } catch (e) {
+          debugPrint('[AdminTeamMatches] Error loading reports: $e');
+        }
+
+        try {
+          final activeRes = await SupabaseService.client
+              .from('active_matches')
+              .select()
+              .eq('status', 'disputed')
+              .order('created_at', ascending: false);
+          if (activeRes is List) {
+            for (final a in activeRes) {
+              final aId = a['id']?.toString() ?? '';
+              if (!reports.any((r) => (r['target_id']?.toString() ?? '') == aId)) {
+                reports.add({
+                  'id': 'active_dispute_$aId',
+                  'target_id': aId,
+                  'target_type': 'match',
+                  'reporter_username': a['disputed_by']?.toString() ?? 'Gamer',
+                  'reason': a['dispute_reason']?.toString() ?? 'Room match disputed by player',
+                  'proof_url': a['dispute_proof_url']?.toString() ?? a['proof_url']?.toString(),
+                  'created_at': a['disputed_at']?.toString() ?? a['created_at']?.toString(),
+                  'status': 'pending',
+                });
+              }
+            }
+          }
+        } catch (e) {
+          debugPrint('[AdminTeamMatches] Error loading disputed active_matches: $e');
+        }
+
+        yield _AdminMatchUnifiedData(
+          matches: matches,
+          disputeReports: reports,
+        );
+      } catch (_) {
+        yield _AdminMatchUnifiedData(matches: [], disputeReports: []);
+      }
+      await Future.delayed(const Duration(seconds: 4));
+    }
+  }
+
+  Future<void> _resolveDisputeReport(Map<String, dynamic> report) async {
+    final reportId = report['id']?.toString() ?? '';
+    final targetId = report['target_id']?.toString() ?? '';
+
+    try {
+      if (!reportId.startsWith('active_dispute_')) {
+        await SupabaseService.client
+            .from('reports')
+            .update({'status': 'resolved'})
+            .eq('id', reportId);
+      }
+
+      if (targetId.isNotEmpty) {
+        try {
+          await SupabaseService.client
+              .from('active_matches')
+              .update({'status': 'under_review'})
+              .eq('id', targetId);
+        } catch (_) {}
+      }
+
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('✅ Dispute report marked as resolved!'),
+            backgroundColor: Color(0xFF00FF88),
+          ),
+        );
+        setState(() {});
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Error resolving dispute: $e'),
+            backgroundColor: const Color(0xFFFF4655),
+          ),
+        );
+      }
+    }
+  }
+
+  Widget _buildDisputeReportCard(Map<String, dynamic> report) {
+    final targetId = report['target_id']?.toString() ?? '';
+    final reporterName = report['reporter_username']?.toString() ??
+        report['reporter_name']?.toString() ??
+        'Gamer';
+    final reason = report['reason']?.toString() ??
+        report['target_content']?.toString() ??
+        'Match outcome disputed';
+    final proofUrl = report['proof_url']?.toString() ??
+        report['dispute_proof_url']?.toString() ??
+        '';
+    final rawDate = report['created_at']?.toString();
+    DateTime? dt;
+    if (rawDate != null && rawDate.isNotEmpty) {
+      dt = DateTime.tryParse(rawDate)?.toLocal();
+    }
+    final formattedTime = dt != null
+        ? DateFormat('dd MMM yyyy, hh:mm a').format(dt)
+        : 'Recently';
+
+    return Container(
+      margin: const EdgeInsets.only(bottom: 14),
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: const Color(0xFF1F1522),
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: const Color(0xFFFF4655), width: 1.5),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                decoration: BoxDecoration(
+                  color: const Color(0xFFFF4655).withOpacity(0.18),
+                  borderRadius: BorderRadius.circular(6),
+                ),
+                child: const Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Icon(Icons.warning_amber_rounded, size: 14, color: Color(0xFFFF4655)),
+                    SizedBox(width: 4),
+                    Text(
+                      'MATCH DISPUTE REPORT',
+                      style: TextStyle(color: Color(0xFFFF4655), fontWeight: FontWeight.w900, fontSize: 11),
+                    ),
+                  ],
+                ),
+              ),
+              const Spacer(),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                decoration: BoxDecoration(
+                  color: const Color(0xFFFF4655).withOpacity(0.18),
+                  borderRadius: BorderRadius.circular(8),
+                  border: Border.all(color: const Color(0xFFFF4655)),
+                ),
+                child: const Text(
+                  'DISPUTED (PRIORITY)',
+                  style: TextStyle(color: Color(0xFFFF4655), fontWeight: FontWeight.w900, fontSize: 10),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 10),
+          Row(
+            children: [
+              const Icon(Icons.person_rounded, size: 16, color: Color(0xFF8B949E)),
+              const SizedBox(width: 6),
+              Text(
+                'Reporter: $reporterName',
+                style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 13),
+              ),
+              if (targetId.isNotEmpty) ...[
+                const Spacer(),
+                Text(
+                  'Match ID: ${targetId.length > 8 ? targetId.substring(0, 8) : targetId}',
+                  style: const TextStyle(color: Color(0xFF8B949E), fontSize: 11),
+                ),
+              ],
+            ],
+          ),
+          const SizedBox(height: 8),
+          Container(
+            width: double.infinity,
+            padding: const EdgeInsets.all(10),
+            decoration: BoxDecoration(
+              color: const Color(0xFFFF4655).withOpacity(0.12),
+              borderRadius: BorderRadius.circular(8),
+              border: Border.all(color: const Color(0xFFFF4655).withOpacity(0.3)),
+            ),
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Icon(Icons.info_outline, color: Color(0xFFFF4655), size: 16),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Text(
+                    'Reason: $reason',
+                    style: const TextStyle(color: Colors.white, fontSize: 12),
+                  ),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(height: 8),
+          Text(
+            'Reported: $formattedTime',
+            style: const TextStyle(color: Color(0xFF8B949E), fontSize: 11.5),
+          ),
+          const SizedBox(height: 12),
+          const Divider(color: Color(0xFF2A3447), height: 1),
+          const SizedBox(height: 10),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.end,
+            children: [
+              if (proofUrl.isNotEmpty) ...[
+                OutlinedButton.icon(
+                  style: OutlinedButton.styleFrom(
+                    foregroundColor: const Color(0xFF38BDF8),
+                    side: const BorderSide(color: Color(0xFF38BDF8)),
+                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                    minimumSize: const Size(0, 30),
+                  ),
+                  icon: const Icon(Icons.image_outlined, size: 14),
+                  label: const Text('View Proof', style: TextStyle(fontSize: 11)),
+                  onPressed: () => _showImageDialog(context, proofUrl, 'Dispute Proof Screenshot'),
+                ),
+                const SizedBox(width: 8),
+              ],
+              if (targetId.isNotEmpty) ...[
+                TextButton.icon(
+                  style: TextButton.styleFrom(
+                    foregroundColor: Colors.white70,
+                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                    minimumSize: const Size(0, 30),
+                  ),
+                  icon: const Icon(Icons.open_in_new_rounded, size: 14),
+                  label: const Text('Match Room', style: TextStyle(fontSize: 11)),
+                  onPressed: () {
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (_) => TeamMatchRoomScreen(matchId: targetId),
+                      ),
+                    );
+                  },
+                ),
+                const SizedBox(width: 8),
+              ],
+              ElevatedButton(
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: const Color(0xFF00FF88),
+                  foregroundColor: Colors.black,
+                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                  minimumSize: const Size(0, 30),
+                  elevation: 0,
+                ),
+                onPressed: () => _resolveDisputeReport(report),
+                child: const Text('Resolve Dispute', style: TextStyle(fontSize: 11, fontWeight: FontWeight.w900)),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     return Column(
@@ -398,18 +670,24 @@ class _AdminTeamMatchesScreenState extends State<AdminTeamMatchesScreen> {
           ),
         ),
 
-        // Stream List of Matches
+        // Stream List of Matches & Reports
         Expanded(
-          child: StreamBuilder<List<TeamMatch>>(
-            stream: _matchService.getAllMatchesStream(statusFilter: _selectedFilter),
+          child: StreamBuilder<_AdminMatchUnifiedData>(
+            stream: _getUnifiedMatchesStream(),
             builder: (context, snapshot) {
-              if (snapshot.connectionState == ConnectionState.waiting) {
+              if (snapshot.connectionState == ConnectionState.waiting && !snapshot.hasData) {
                 return const Center(child: CircularProgressIndicator(color: Color(0xFFFF6B00)));
               }
 
-              final matches = snapshot.data ?? [];
+              final unifiedData = snapshot.data ?? _AdminMatchUnifiedData(matches: [], disputeReports: []);
+              final allMatches = unifiedData.matches;
+              final showDisputes = _selectedFilter == 'All' || _selectedFilter == 'Disputed';
+              final visibleReports = showDisputes ? unifiedData.disputeReports : <Map<String, dynamic>>[];
+              final visibleMatches = _selectedFilter == 'Disputed'
+                  ? allMatches.where((m) => m.isDisputed).toList()
+                  : allMatches;
 
-              if (matches.isEmpty) {
+              if (visibleReports.isEmpty && visibleMatches.isEmpty) {
                 return Center(
                   child: Column(
                     mainAxisAlignment: MainAxisAlignment.center,
@@ -427,9 +705,13 @@ class _AdminTeamMatchesScreenState extends State<AdminTeamMatchesScreen> {
 
               return ListView.builder(
                 padding: const EdgeInsets.all(14),
-                itemCount: matches.length,
+                itemCount: visibleReports.length + visibleMatches.length,
                 itemBuilder: (context, index) {
-                  final match = matches[index];
+                  if (index < visibleReports.length) {
+                    return _buildDisputeReportCard(visibleReports[index]);
+                  }
+
+                  final match = visibleMatches[index - visibleReports.length];
                   final statusColor = _getStatusColor(match.status);
 
                   return Container(

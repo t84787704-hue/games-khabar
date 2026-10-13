@@ -21,6 +21,8 @@ class NotificationsScreen extends StatefulWidget {
 class _NotificationsScreenState extends State<NotificationsScreen> {
   final NotificationService _notificationService = NotificationService();
   int _selectedFilterIndex = 0; // 0: All, 1: Unread, 2: Social, 3: Matches, 4: Coins
+  List<InAppNotification>? _localNotifications;
+  Key _streamKey = UniqueKey();
 
   String get _currentUid =>
       GamerAuthService().currentUid ?? SupabaseService.client.auth.currentUser?.id ?? '';
@@ -123,8 +125,20 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
     );
 
     if (confirm == true) {
-      await _notificationService.clearAllNotifications(_currentUid);
+      // Immediate local state clear (Issue #7)
+      setState(() {
+        _localNotifications = [];
+        _streamKey = UniqueKey();
+      });
+
+      // Actual DB delete via NotificationService.clearAll (Issue #7)
+      await _notificationService.clearAll(_currentUid);
+
       if (mounted) {
+        setState(() {
+          _localNotifications = [];
+          _streamKey = UniqueKey();
+        });
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
             content: Text('All notifications cleared.'),
@@ -179,13 +193,20 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
           // Notifications List
           Expanded(
             child: StreamBuilder<List<InAppNotification>>(
+              key: _streamKey,
               stream: _notificationService.notificationsStream(_currentUid),
               builder: (context, snapshot) {
-                if (snapshot.connectionState == ConnectionState.waiting && !snapshot.hasData) {
+                if (snapshot.connectionState == ConnectionState.waiting &&
+                    !snapshot.hasData &&
+                    _localNotifications == null) {
                   return const Center(child: CircularProgressIndicator(color: GamerTheme.accentBlue));
                 }
 
-                final allNotifs = snapshot.data ?? [];
+                if (snapshot.hasData) {
+                  _localNotifications = snapshot.data;
+                }
+
+                final allNotifs = _localNotifications ?? snapshot.data ?? [];
                 final filtered = _filterNotifications(allNotifs);
 
                 if (filtered.isEmpty) {
@@ -284,6 +305,9 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
         child: const Icon(Icons.delete_rounded, color: GamerTheme.redAccent, size: 24),
       ),
       onDismissed: (_) {
+        setState(() {
+          _localNotifications?.removeWhere((item) => item.id == notif.id);
+        });
         _notificationService.deleteNotification(notif.id);
       },
       child: Container(

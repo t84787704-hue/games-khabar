@@ -38,7 +38,7 @@ class ThemeService {
     _updateSystemUI(isDarkMode);
   }
 
-  /// Toggle or set theme mode and persist to SharedPreferences
+  /// Toggle or set theme mode and persist to SharedPreferences (Issue #9)
   static Future<void> setTheme(bool isDark) async {
     themeModeNotifier.value = isDark ? ThemeMode.dark : ThemeMode.light;
     _updateSystemUI(isDark);
@@ -53,15 +53,17 @@ class ThemeService {
   }
 
   static void _updateSystemUI(bool isDark) {
-    SystemChrome.setSystemUIOverlayStyle(
-      SystemUiOverlayStyle(
-        statusBarColor: Colors.transparent,
-        statusBarIconBrightness: isDark ? Brightness.light : Brightness.dark,
-        statusBarBrightness: isDark ? Brightness.dark : Brightness.light,
-        systemNavigationBarColor: isDark ? const Color(0xFF10141D) : const Color(0xFFFFFFFF),
-        systemNavigationBarIconBrightness: isDark ? Brightness.light : Brightness.dark,
-      ),
-    );
+    try {
+      SystemChrome.setSystemUIOverlayStyle(
+        SystemUiOverlayStyle(
+          statusBarColor: Colors.transparent,
+          statusBarIconBrightness: isDark ? Brightness.light : Brightness.dark,
+          statusBarBrightness: isDark ? Brightness.dark : Brightness.light,
+          systemNavigationBarColor: isDark ? const Color(0xFF10141D) : const Color(0xFFFFFFFF),
+          systemNavigationBarIconBrightness: isDark ? Brightness.light : Brightness.dark,
+        ),
+      );
+    } catch (_) {}
   }
 
   // --- Theme Definitions ---

@@ -149,11 +149,14 @@ class _TeamProfileScreenState extends State<TeamProfileScreen> {
             .inFilter('status', ['active', 'under_review']);
 
         if (existingMatches.isEmpty) {
+          final nowIso = DateTime.now().toUtc().toIso8601String();
           final matchPayload = <String, dynamic>{
             'team1_id': t1Uuid,
             'team2_id': t2Uuid,
             'participants': [t1Uuid, t2Uuid],
             'status': 'active',
+            'start_time': nowIso,
+            'created_at': nowIso,
           };
           try {
             await SupabaseService.client
@@ -168,6 +171,8 @@ class _TeamProfileScreenState extends State<TeamProfileScreen> {
               'team1_id': t1Uuid,
               'team2_id': t2Uuid,
               'status': 'active',
+              'start_time': nowIso,
+              'created_at': nowIso,
             }).select().maybeSingle();
           }
         }

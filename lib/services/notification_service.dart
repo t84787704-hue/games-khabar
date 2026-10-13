@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'dart:convert';
+import 'dart:typed_data';
 import 'package:flutter/material.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import '../models/news_model.dart';
@@ -17,19 +18,20 @@ class NotificationService {
   final FlutterLocalNotificationsPlugin _localNotifications = FlutterLocalNotificationsPlugin();
 
   static const String topicName = 'all_news';
-  static const String channelId = 'games_khabar_news_channel';
-  static const String channelName = 'Games Khabar News';
-  static const String channelDescription = 'Instant gaming news, updates, and free game alerts';
+  static const String channelId = 'games_khabar_alerts_v2';
+  static const String channelName = 'Games Khabar Notifications';
+  static const String channelDescription = 'Instant gaming alerts, match updates, and in-app alerts';
 
-  final AndroidNotificationChannel _androidChannel = const AndroidNotificationChannel(
+  final AndroidNotificationChannel _androidChannel = AndroidNotificationChannel(
     channelId,
     channelName,
     description: channelDescription,
     importance: Importance.max,
     playSound: true,
     enableVibration: true,
+    vibrationPattern: Int64List.fromList([0, 300, 200, 300]),
     enableLights: true,
-    ledColor: Color(0xFF00FF88),
+    ledColor: const Color(0xFF00FF88),
   );
 
   bool _isInitialized = false;
@@ -43,11 +45,11 @@ class NotificationService {
     if (_isInitialized) return;
     _isInitialized = true;
 
-    // 1. Request Notification Permissions (Android 13+ & iOS)
-    await requestPermissions();
-
-    // 2. Setup Local Notifications (for Foreground notification display)
+    // 1. Setup Local Notifications & Android Notification Channel
     await _setupLocalNotifications();
+
+    // 2. Request Notification Permissions (Android 13+ & iOS)
+    await requestPermissions();
 
     // 3. Listen for newly added news docs in real-time and notify "New: {gameName}"
     _listenForNewNewsDocuments();
@@ -59,18 +61,23 @@ class NotificationService {
     _listenForSquadNotifications();
   }
 
+  final Set<String> _seenNotificationIds = {};
+
   /// Real-time stream of notifications for user
   Stream<List<InAppNotification>> notificationsStream(String userId) {
     if (userId.isEmpty) return Stream.value([]);
     try {
+      final userUuid = SupabaseService.toUuid(userId).toLowerCase();
+      final rawUid = userId.toLowerCase();
+
       return SupabaseService.client
           .from('notifications')
           .stream(primaryKey: ['id'])
           .map((rows) {
-        final filtered = rows.where((r) =>
-            r['user_id']?.toString() == userId ||
-            r['userId']?.toString() == userId ||
-            r['recipientUid']?.toString() == userId);
+        final filtered = rows.where((r) {
+          final target = (r['user_id'] ?? r['userId'] ?? r['recipientUid'] ?? '').toString().toLowerCase();
+          return target == userUuid || target == rawUid;
+        });
 
         final list = filtered.map((r) => InAppNotification.fromMap(r)).toList();
         list.sort((a, b) => b.createdAt.compareTo(a.createdAt));
@@ -85,55 +92,102 @@ class NotificationService {
     }
   }
 
-  /// Real-time unread notifications count
-  Stream<int> unreadCountStream(String userId) {
-    return notificationsStream(userId).map((list) => list.where((n) => !n.isRead).length);
+  /// Real-time unread notifications count using Supabase stream (Issue #5)
+  Stream<int> getUnreadCountStream([String? userId]) {
+    final uid = (userId != null && userId.isNotEmpty)
+        ? userId
+        : (SupabaseService.client.auth.currentUser?.id ?? '');
+    if (uid.isEmpty) return Stream.value(0);
+
+    try {
+      final userUuid = SupabaseService.toUuid(uid).toLowerCase();
+      final rawUid = uid.toLowerCase();
+
+      return SupabaseService.client
+          .from('notifications')
+          .stream(primaryKey: ['id'])
+          .map((rows) {
+        final unread = rows.where((r) {
+          final target = (r['user_id'] ?? r['userId'] ?? r['recipientUid'] ?? '').toString().toLowerCase();
+          final matchesUser = target == userUuid || target == rawUid;
+          final isRead = r['is_read'] == true || r['isRead'] == true || r['read'] == true;
+          return matchesUser && !isRead;
+        }).length;
+
+        unreadCountNotifier.value = unread;
+        return unread;
+      });
+    } catch (_) {
+      return Stream.value(0);
+    }
   }
+
+  Stream<int> unreadCountStream(String userId) => getUnreadCountStream(userId);
 
   /// Listen for new in-app notifications to update unread count & show heads-up
   void _listenForUserInAppNotifications() {
     try {
+      final initialUser = SupabaseService.client.auth.currentUser;
+      if (initialUser != null) {
+        _subscribeToUserNotifications(initialUser.id);
+      }
+
       SupabaseService.client.auth.onAuthStateChange.listen((data) {
         final user = data.session?.user;
         if (user == null) {
           unreadCountNotifier.value = 0;
           _realtimeNotifSub?.cancel();
+          _seenNotificationIds.clear();
+          return;
+        }
+        _subscribeToUserNotifications(user.id);
+      });
+    } catch (_) {}
+  }
+
+  void _subscribeToUserNotifications(String userId) {
+    _refreshUnreadCount(userId);
+    _realtimeNotifSub?.cancel();
+    bool isFirst = true;
+
+    try {
+      _realtimeNotifSub = SupabaseService.client
+          .from('notifications')
+          .stream(primaryKey: ['id'])
+          .listen((rows) {
+        final userUuid = SupabaseService.toUuid(userId).toLowerCase();
+        final rawUid = userId.toLowerCase();
+
+        final userRows = rows.where((r) {
+          final target = (r['user_id'] ?? r['userId'] ?? r['recipientUid'] ?? '').toString().toLowerCase();
+          return target == userUuid || target == rawUid;
+        }).toList();
+
+        final unread = userRows.where((r) =>
+            r['is_read'] != true && r['isRead'] != true && r['read'] != true).length;
+        unreadCountNotifier.value = unread;
+
+        if (isFirst) {
+          isFirst = false;
+          for (final r in userRows) {
+            final id = r['id']?.toString() ?? '';
+            if (id.isNotEmpty) _seenNotificationIds.add(id);
+          }
           return;
         }
 
-        _refreshUnreadCount(user.id);
-
-        _realtimeNotifSub?.cancel();
-        bool isFirst = true;
-        try {
-          _realtimeNotifSub = SupabaseService.client
-              .from('notifications')
-              .stream(primaryKey: ['id'])
-              .listen((rows) {
-            final userRows = rows.where((r) =>
-                r['user_id']?.toString() == user.id ||
-                r['userId']?.toString() == user.id ||
-                r['recipientUid']?.toString() == user.id).toList();
-
-            final unread = userRows.where((r) =>
-                r['is_read'] != true && r['isRead'] != true && r['read'] != true).length;
-            unreadCountNotifier.value = unread;
-
-            if (isFirst) {
-              isFirst = false;
-              return;
+        // Show foreground alert with sound & vibration for newly arrived notifications (Issue #4)
+        for (final r in userRows) {
+          final id = r['id']?.toString() ?? '';
+          if (id.isNotEmpty && !_seenNotificationIds.contains(id)) {
+            _seenNotificationIds.add(id);
+            final notif = InAppNotification.fromMap(r);
+            if (!notif.isRead) {
+              showInAppLocalNotification(notif);
             }
-
-            // Show foreground banner for newly arrived notifications
-            if (userRows.isNotEmpty) {
-              final latest = InAppNotification.fromMap(userRows.first);
-              if (!latest.isRead) {
-                showInAppLocalNotification(latest);
-              }
-            }
-          }, onError: (_) {});
-        } catch (_) {}
-      });
+          }
+        }
+      }, onError: (_) {});
     } catch (_) {}
   }
 
@@ -148,7 +202,7 @@ class NotificationService {
     } catch (_) {}
   }
 
-  /// Show heads-up banner on device for in-app notification
+  /// Show heads-up banner on device with sound & vibration for in-app notification (Issue #4)
   Future<void> showInAppLocalNotification(InAppNotification notif) async {
     try {
       final payloadData = {
@@ -168,6 +222,7 @@ class NotificationService {
         priority: Priority.high,
         playSound: true,
         enableVibration: true,
+        vibrationPattern: Int64List.fromList([0, 300, 200, 300]),
         icon: '@mipmap/ic_launcher',
         color: const Color(0xFF00FF88),
         styleInformation: BigTextStyleInformation(
@@ -183,14 +238,17 @@ class NotificationService {
         presentSound: true,
       );
 
+      final notifId = DateTime.now().millisecondsSinceEpoch.remainder(100000);
       await _localNotifications.show(
-        DateTime.now().millisecondsSinceEpoch ~/ 1000,
+        notifId,
         notif.title,
         notif.body,
         NotificationDetails(android: androidDetails, iOS: iosDetails),
         payload: jsonEncode(payloadData),
       );
-    } catch (_) {}
+    } catch (e) {
+      debugPrint('showInAppLocalNotification error: $e');
+    }
   }
 
   /// Mark single notification as read
@@ -218,12 +276,13 @@ class NotificationService {
     if (userId.isEmpty) return;
     try {
       final now = DateTime.now().toIso8601String();
+      final userUuid = SupabaseService.toUuid(userId);
       await SupabaseService.client.from('notifications').update({
         'is_read': true,
         'is_seen': true,
         'read': true,
         'read_at': now,
-      }).or('user_id.eq.$userId,recipientUid.eq.$userId');
+      }).eq('user_id', userUuid);
 
       unreadCountNotifier.value = 0;
     } catch (e) {
@@ -241,19 +300,62 @@ class NotificationService {
     }
   }
 
-  /// Clear all notifications for user
-  Future<void> clearAllNotifications(String userId) async {
+  /// Clear all notifications for user in DB & reset unread count (Issue #7)
+  Future<void> clearAll(String userId) async {
     if (userId.isEmpty) return;
     try {
-      await SupabaseService.client
-          .from('notifications')
-          .delete()
-          .or('user_id.eq.$userId,recipientUid.eq.$userId');
+      // 1. Delete by exact user_id
+      try {
+        await SupabaseService.client
+            .from('notifications')
+            .delete()
+            .eq('user_id', userId);
+      } catch (e) {
+        debugPrint('clearAll eq user_id error: $e');
+      }
+
+      // 2. Delete by UUID format if different
+      final userUuid = SupabaseService.toUuid(userId);
+      if (userUuid.toLowerCase() != userId.toLowerCase()) {
+        try {
+          await SupabaseService.client
+              .from('notifications')
+              .delete()
+              .eq('user_id', userUuid);
+        } catch (_) {}
+      }
+
+      // 3. Delete by current auth UID if different
+      final authUid = SupabaseService.client.auth.currentUser?.id;
+      if (authUid != null &&
+          authUid.isNotEmpty &&
+          authUid != userId &&
+          authUid != userUuid) {
+        try {
+          await SupabaseService.client
+              .from('notifications')
+              .delete()
+              .eq('user_id', authUid);
+        } catch (_) {}
+      }
+
+      // 4. Delete legacy recipientUid
+      try {
+        await SupabaseService.client
+            .from('notifications')
+            .delete()
+            .eq('recipientUid', userId);
+      } catch (_) {}
 
       unreadCountNotifier.value = 0;
+      _seenNotificationIds.clear();
     } catch (e) {
       debugPrint('Error clearing notifications: $e');
     }
+  }
+
+  Future<void> clearAllNotifications(String userId) async {
+    await clearAll(userId);
   }
 
   /// =========================================================================
@@ -639,8 +741,9 @@ class NotificationService {
         presentSound: true,
       );
 
+      final notifId = DateTime.now().millisecondsSinceEpoch.remainder(100000);
       await _localNotifications.show(
-        DateTime.now().millisecondsSinceEpoch ~/ 1000,
+        notifId,
         title,
         body,
         NotificationDetails(android: androidDetails, iOS: iosDetails),
@@ -732,7 +835,7 @@ class NotificationService {
       iOS: iosDetails,
     );
 
-    final notificationId = DateTime.now().millisecondsSinceEpoch ~/ 1000;
+    final notificationId = DateTime.now().millisecondsSinceEpoch.remainder(100000);
     await _localNotifications.show(
       notificationId,
       title,
@@ -784,6 +887,15 @@ class NotificationService {
         }
       },
     );
+
+    // Ensure the Android Notification Channel with sound & vibration is created
+    try {
+      final androidPlugin = _localNotifications.resolvePlatformSpecificImplementation<
+          AndroidFlutterLocalNotificationsPlugin>();
+      if (androidPlugin != null) {
+        await androidPlugin.createNotificationChannel(_androidChannel);
+      }
+    } catch (_) {}
   }
 
   /// Check if app was opened from a terminated notification
@@ -826,11 +938,11 @@ class NotificationService {
       iOS: iosDetails,
     );
 
-    final notificationId = DateTime.now().millisecondsSinceEpoch ~/ 1000;
+    final notificationId = DateTime.now().millisecondsSinceEpoch.remainder(100000);
     await _localNotifications.show(
       notificationId,
-      title,
-      body,
+      effectiveTitle,
+      effectiveBody,
       notificationDetails,
       payload: jsonEncode(data),
     );
@@ -921,12 +1033,14 @@ class NotificationService {
         channelDescription: _androidChannel.description,
         importance: Importance.max,
         priority: Priority.high,
+        playSound: true,
+        enableVibration: true,
         icon: '@mipmap/ic_launcher',
         color: const Color(0xFF00FF88),
       );
 
       await _localNotifications.show(
-        DateTime.now().millisecondsSinceEpoch ~/ 1000,
+        DateTime.now().millisecondsSinceEpoch.remainder(100000),
         notifTitle,
         notifBody,
         NotificationDetails(android: androidDetails),

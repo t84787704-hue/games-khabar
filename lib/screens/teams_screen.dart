@@ -27,9 +27,11 @@ class TeamsScreen extends StatefulWidget {
   State<TeamsScreen> createState() => _TeamsScreenState();
 }
 
-class _TeamsScreenState extends State<TeamsScreen> {
+class _TeamsScreenState extends State<TeamsScreen>
+    with SingleTickerProviderStateMixin {
   final TeamService _teamService = TeamService();
   final TextEditingController _searchController = TextEditingController();
+  late TabController _tabController;
 
   String _selectedGameFilter = "All";
   String _searchQuery = "";
@@ -45,6 +47,7 @@ class _TeamsScreenState extends State<TeamsScreen> {
   @override
   void initState() {
     super.initState();
+    _tabController = TabController(length: 2, vsync: this);
     _loadLastReadTimes();
   }
 
@@ -75,6 +78,7 @@ class _TeamsScreenState extends State<TeamsScreen> {
 
   @override
   void dispose() {
+    _tabController.dispose();
     _searchController.dispose();
     super.dispose();
   }
@@ -86,7 +90,7 @@ class _TeamsScreenState extends State<TeamsScreen> {
         backgroundColor: const Color(0xFF131A29),
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
         child: Column(
-          mainAxisSize: MainAxisSize.min,
+          mainAxisSize: dynamic,
           children: [
             ListTile(
               title: const Text("Match Proof 📸", style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
@@ -144,15 +148,14 @@ class _TeamsScreenState extends State<TeamsScreen> {
             .inFilter("status", ["active", "under_review"]);
 
         if (existingMatches.isEmpty) {
-          final startTime =
-              DateTime.now().add(const Duration(minutes: 1)).toUtc().toIso8601String();
+          final startTime = DateTime.now().toUtc().toIso8601String();
           final matchPayload = <String, dynamic>{
             "team1_id": t1Uuid,
             "team2_id": t2Uuid,
             "participants": [t1Uuid, t2Uuid],
             "status": "active",
             "start_time": startTime,
-            "created_at": DateTime.now().toUtc().toIso8601String(),
+            "created_at": startTime,
           };
           try {
             await SupabaseService.client
@@ -168,16 +171,15 @@ class _TeamsScreenState extends State<TeamsScreen> {
                 "team2_id": t2Uuid,
                 "status": "active",
                 "start_time": startTime,
-                "created_at": DateTime.now().toUtc().toIso8601String(),
+                "created_at": startTime,
               }).select().maybeSingle();
             } catch (fallbackErr) {
               debugPrint("[TeamsScreen] Fallback with start_time failed: $fallbackErr, inserting without start_time");
-              // Fallback if Supabase active_matches table lacks start_time / participants column
               await SupabaseService.client.from("active_matches").insert({
                 "team1_id": t1Uuid,
                 "team2_id": t2Uuid,
                 "status": "active",
-                "created_at": DateTime.now().toUtc().toIso8601String(),
+                "created_at": startTime,
               }).select().maybeSingle();
             }
           }
@@ -234,370 +236,636 @@ class _TeamsScreenState extends State<TeamsScreen> {
     );
   }
 
+  List<Map<String, dynamic>> _filterMyActiveMatches(
+      List<Map<String, dynamic>> rawList, String myTeamId, String myTeamUuid) {
+    final sortedList = List<Map<String, dynamic>>.from(rawList);
+    sortedList.sort((a, b) =>
+        (b["created_at"] ?? "").toString().compareTo((a["created_at"] ?? "").toString()));
+
+    final Map<String, Map<String, dynamic>> dedupMap = {};
+    for (final m in sortedList) {
+      final id = m["id"]?.toString() ?? "";
+      if (id.isNotEmpty && !dedupMap.containsKey(id)) dedupMap[id] = m;
+    }
+
+    return dedupMap.values.where((m) {
+      final status = (m["status"] ?? "").toString().toLowerCase();
+      if (status != "active" && status != "under_review" && status != "rejected") return false;
+      if (_completedMatchIds.contains(m["id"]?.toString())) return false;
+
+      final List<String> pList = [];
+      final participants = m["participants"];
+      if (participants is List) {
+        for (final p in participants) {
+          if (p != null) pList.add(p.toString().toLowerCase());
+        }
+      }
+      pList.add((m["team1_id"] ?? "").toString().toLowerCase());
+      pList.add((m["team2_id"] ?? "").toString().toLowerCase());
+
+      final myIdLower = myTeamId.toLowerCase();
+      final myUuidLower = myTeamUuid.toLowerCase();
+      return pList.any((p) =>
+          (myIdLower.isNotEmpty && (p == myIdLower || p.contains(myIdLower))) ||
+          (myUuidLower.isNotEmpty && (p == myUuidLower || p.contains(myUuidLower))));
+    }).toList();
+  }
+
   @override
   Widget build(BuildContext context) {
-    // Supabase Auth
     final currentUid = SupabaseService.client.auth.currentUser?.id ?? "";
 
-    return Scaffold(
-      backgroundColor: const Color(0xFFF0F2F5),
-      appBar: AppBar(
-        backgroundColor: Colors.white,
-        elevation: 1,
-        title: const Text("Teams", style: TextStyle(color: Color(0xFF1877F2), fontWeight: FontWeight.bold, fontSize: 22)),
-        actions: [
-          IconButton(
-            tooltip: "TOP 100 TEAMS Leaderboard",
-            icon: const Icon(Icons.emoji_events_rounded, color: Color(0xFF65676B)),
-            onPressed: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const LeaderboardScreen())),
-          ),
-        ],
-      ),
-      body: StreamBuilder<List<TeamModel>>(
-        stream: currentUid.isNotEmpty ? _teamService.getUserTeamsStream(currentUid) : Stream.value([]),
-        builder: (context, userTeamsSnap) {
-          final userTeams = userTeamsSnap.data ?? [];
-          final myLeaderTeams = userTeams.where((t) => t.isLeader(currentUid)).toList();
-          final myTeam = myLeaderTeams.isNotEmpty ? myLeaderTeams.first : null;
-          final String myTeamId = myTeam?.id ?? "";
-          final String myTeamName = myTeam?.name ?? "";
-          final String myTeamUuid = SupabaseService.toUuid(myTeamId);
+    return StreamBuilder<List<TeamModel>>(
+      stream: currentUid.isNotEmpty ? _teamService.getUserTeamsStream(currentUid) : Stream.value([]),
+      builder: (context, userTeamsSnap) {
+        final userTeams = userTeamsSnap.data ?? [];
+        final myLeaderTeams = userTeams.where((t) => t.isLeader(currentUid)).toList();
+        final myTeam = myLeaderTeams.isNotEmpty ? myLeaderTeams.first : null;
+        final String myTeamId = myTeam?.id ?? "";
+        final String myTeamName = myTeam?.name ?? "";
+        final String myTeamUuid = SupabaseService.toUuid(myTeamId);
 
-          return Column(
+        return StreamBuilder<List<Map<String, dynamic>>>(
+          stream: myTeamId.isNotEmpty
+              ? SupabaseService.client.from("active_matches").stream(primaryKey: ["id"])
+              : Stream.value([]),
+          builder: (context, matchSnap) {
+            final rawMatches = matchSnap.data ?? [];
+            final myActiveMatches = _filterMyActiveMatches(rawMatches, myTeamId, myTeamUuid);
+            final liveCount = myActiveMatches.length;
+
+            return Scaffold(
+              backgroundColor: const Color(0xFFF0F2F5),
+              appBar: AppBar(
+                backgroundColor: Colors.white,
+                elevation: 1,
+                title: const Text(
+                  "Teams",
+                  style: TextStyle(color: Color(0xFF1877F2), fontWeight: FontWeight.bold, fontSize: 22),
+                ),
+                actions: [
+                  IconButton(
+                    tooltip: "TOP 100 TEAMS Leaderboard",
+                    icon: const Icon(Icons.emoji_events_rounded, color: Color(0xFF65676B)),
+                    onPressed: () => Navigator.push(
+                      context,
+                      MaterialPageRoute(builder: (_) => const LeaderboardScreen()),
+                    ),
+                  ),
+                ],
+                bottom: TabBar(
+                  controller: _tabController,
+                  indicatorColor: const Color(0xFF1877F2),
+                  indicatorWeight: 3,
+                  labelColor: const Color(0xFF1877F2),
+                  unselectedLabelColor: const Color(0xFF65676B),
+                  labelStyle: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
+                  tabs: [
+                    const Tab(text: "Teams"),
+                    Tab(text: liveCount > 0 ? "Live 🔴 $liveCount" : "Live"),
+                  ],
+                ),
+              ),
+              body: TabBarView(
+                controller: _tabController,
+                children: [
+                  // Tab 1: Teams Tab (Only team cards, NO active match banner) (Issue #6)
+                  _buildTeamsTab(
+                    myTeamId: myTeamId,
+                    myTeamUuid: myTeamUuid,
+                    myTeamName: myTeamName,
+                  ),
+
+                  // Tab 2: Live Tab (Only live matches, latest first with count & empty state) (Issue #6)
+                  _buildLiveMatchesTab(
+                    myActiveMatches: myActiveMatches,
+                    myTeamId: myTeamId,
+                    myTeamUuid: myTeamUuid,
+                    myTeamName: myTeamName,
+                  ),
+                ],
+              ),
+            );
+          },
+        );
+      },
+    );
+  }
+
+  Widget _buildTeamsTab({
+    required String myTeamId,
+    required String myTeamUuid,
+    required String myTeamName,
+  }) {
+    return Column(
+      children: [
+        // Top Bar: Search, Create Team, Game Filter
+        Container(
+          padding: const EdgeInsets.fromLTRB(16, 12, 16, 10),
+          decoration: const BoxDecoration(
+            color: Colors.white,
+            border: Border(bottom: BorderSide(color: Color(0xFFE4E6EB))),
+          ),
+          child: Column(
             children: [
-              // Top Bar: Search, Create Team, Game Filter
-              Container(
-                padding: const EdgeInsets.fromLTRB(16, 12, 16, 10),
-                decoration: const BoxDecoration(color: Colors.white, border: Border(bottom: BorderSide(color: Color(0xFFE4E6EB)))),
+              Row(
+                children: [
+                  Expanded(
+                    child: Container(
+                      height: 40,
+                      decoration: BoxDecoration(
+                        color: const Color(0xFFF0F2F5),
+                        borderRadius: BorderRadius.circular(20),
+                      ),
+                      child: TextField(
+                        controller: _searchController,
+                        style: const TextStyle(color: Color(0xFF050505), fontSize: 14),
+                        decoration: InputDecoration(
+                          hintText: "Search teams by name or tag...",
+                          hintStyle: const TextStyle(color: Color(0xFF65676B), fontSize: 13),
+                          prefixIcon: const Icon(Icons.search, size: 20, color: Color(0xFF65676B)),
+                          suffixIcon: _searchQuery.isNotEmpty
+                              ? IconButton(
+                                  icon: const Icon(Icons.clear, size: 18, color: Color(0xFF65676B)),
+                                  onPressed: () {
+                                    _searchController.clear();
+                                    setState(() => _searchQuery = "");
+                                  },
+                                )
+                              : null,
+                          border: InputBorder.none,
+                          contentPadding: const EdgeInsets.symmetric(vertical: 10),
+                        ),
+                        onChanged: (val) => setState(() => _searchQuery = val.trim()),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 10),
+                  ElevatedButton.icon(
+                    onPressed: _openCreateTeamDialog,
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: const Color(0xFF1877F2),
+                      foregroundColor: Colors.white,
+                      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+                      minimumSize: const Size(0, 40),
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+                      elevation: 0,
+                    ),
+                    icon: const Icon(Icons.add_rounded, size: 18),
+                    label: const Text("Create Team", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 10),
+              SingleChildScrollView(
+                scrollDirection: Axis.horizontal,
+                child: Row(
+                  children: _gameFilterOptions.map((game) {
+                    final isSel = _selectedGameFilter == game;
+                    return Padding(
+                      padding: const EdgeInsets.only(right: 8),
+                      child: ChoiceChip(
+                        label: Text(
+                          game,
+                          style: TextStyle(
+                            color: isSel ? Colors.white : const Color(0xFF050505),
+                            fontWeight: isSel ? FontWeight.bold : FontWeight.w600,
+                            fontSize: 12,
+                          ),
+                        ),
+                        selected: isSel,
+                        selectedColor: const Color(0xFF1877F2),
+                        backgroundColor: const Color(0xFFE4E6EB),
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                        side: BorderSide(color: isSel ? const Color(0xFF1877F2) : const Color(0xFFCED0D4)),
+                        onSelected: (val) {
+                          if (val) setState(() => _selectedGameFilter = game);
+                        },
+                      ),
+                    );
+                  }).toList(),
+                ),
+              ),
+            ],
+          ),
+        ),
+
+        // Incoming Challenges
+        if (myTeamId.isNotEmpty)
+          StreamBuilder<List<Map<String, dynamic>>>(
+            stream: SupabaseService.client
+                .from("challenges")
+                .stream(primaryKey: ["id"])
+                .eq("to_team_id", myTeamUuid),
+            builder: (context, challengesSnap) {
+              if (!challengesSnap.hasData) return const SizedBox.shrink();
+              final docs = challengesSnap.data!
+                  .where((d) => (d["status"] ?? "").toString().toLowerCase() == "pending")
+                  .where((d) => !_acceptedChallengeIds.contains(d["id"]?.toString()))
+                  .toList();
+              if (docs.isEmpty) return const SizedBox.shrink();
+
+              return Container(
+                width: double.infinity,
+                margin: const EdgeInsets.fromLTRB(16, 8, 16, 4),
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  borderRadius: BorderRadius.circular(14),
+                  border: Border.all(color: const Color(0xFF1877F2).withOpacity(0.3), width: 1.5),
+                  boxShadow: [
+                    BoxShadow(
+                      color: const Color(0xFF1877F2).withOpacity(0.08),
+                      blurRadius: 8,
+                      offset: const Offset(0, 2),
+                    ),
+                  ],
+                ),
                 child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Row(
                       children: [
-                        Expanded(
-                          child: Container(
-                            height: 40,
-                            decoration: BoxDecoration(color: const Color(0xFFF0F2F5), borderRadius: BorderRadius.circular(20)),
-                            child: TextField(
-                              controller: _searchController,
-                              style: const TextStyle(color: Color(0xFF050505), fontSize: 14),
-                              decoration: InputDecoration(
-                                hintText: "Search teams by name or tag...",
-                                hintStyle: const TextStyle(color: Color(0xFF65676B), fontSize: 13),
-                                prefixIcon: const Icon(Icons.search, size: 20, color: Color(0xFF65676B)),
-                                suffixIcon: _searchQuery.isNotEmpty
-                                    ? IconButton(
-                                        icon: const Icon(Icons.clear, size: 18, color: Color(0xFF65676B)),
-                                        onPressed: () { _searchController.clear(); setState(() => _searchQuery = ""); },
-                                      )
-                                    : null,
-                                border: InputBorder.none,
-                                contentPadding: const EdgeInsets.symmetric(vertical: 10),
-                              ),
-                              onChanged: (val) => setState(() => _searchQuery = val.trim()),
-                            ),
+                        Container(
+                          padding: const EdgeInsets.all(6),
+                          decoration: BoxDecoration(
+                            color: const Color(0xFFE7F3FF),
+                            borderRadius: BorderRadius.circular(8),
+                          ),
+                          child: const Icon(Icons.flash_on_rounded, color: Color(0xFF1877F2), size: 18),
+                        ),
+                        const SizedBox(width: 8),
+                        const Expanded(
+                          child: Text(
+                            "Incoming Challenges",
+                            style: TextStyle(color: Color(0xFF050505), fontWeight: FontWeight.bold, fontSize: 15),
                           ),
                         ),
-                        const SizedBox(width: 10),
-                        ElevatedButton.icon(
-                          onPressed: _openCreateTeamDialog,
-                          style: ElevatedButton.styleFrom(
-                            backgroundColor: const Color(0xFF1877F2),
-                            foregroundColor: Colors.white,
-                            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
-                            minimumSize: const Size(0, 40),
-                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-                            elevation: 0,
+                        Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                          decoration: BoxDecoration(color: const Color(0xFFFF4655), borderRadius: BorderRadius.circular(12)),
+                          child: Text(
+                            "${docs.length} New",
+                            style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 11),
                           ),
-                          icon: const Icon(Icons.add_rounded, size: 18),
-                          label: const Text("Create Team", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
                         ),
                       ],
                     ),
                     const SizedBox(height: 10),
-                    SingleChildScrollView(
-                      scrollDirection: Axis.horizontal,
-                      child: Row(
-                        children: _gameFilterOptions.map((game) {
-                          final isSel = _selectedGameFilter == game;
-                          return Padding(
-                            padding: const EdgeInsets.only(right: 8),
-                            child: ChoiceChip(
-                              label: Text(game, style: TextStyle(color: isSel ? Colors.white : const Color(0xFF050505), fontWeight: isSel ? FontWeight.bold : FontWeight.w600, fontSize: 12)),
-                              selected: isSel,
-                              selectedColor: const Color(0xFF1877F2),
-                              backgroundColor: const Color(0xFFE4E6EB),
-                              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-                              side: BorderSide(color: isSel ? const Color(0xFF1877F2) : const Color(0xFFCED0D4)),
-                              onSelected: (val) { if (val) setState(() => _selectedGameFilter = game); },
-                            ),
-                          );
-                        }).toList(),
-                      ),
-                    ),
-                  ],
-                ),
-              ),
+                    ...docs.map((doc) {
+                      final challengeId = doc["id"];
+                      final fromTeamName = doc["from_team_name"]?.toString() ?? "Opponent Team";
+                      final fromTeamId = doc["from_team_id"]?.toString() ?? "";
+                      final toTeamId = doc["to_team_id"]?.toString() ?? myTeamId;
+                      final isAccepting = _acceptingChallengeIds.contains(challengeId.toString());
 
-              // 1. INCOMING CHALLENGES
-              if (myTeamId.isNotEmpty)
-                StreamBuilder<List<Map<String, dynamic>>>(
-                  stream: SupabaseService.client.from("challenges").stream(primaryKey: ["id"]).eq("to_team_id", myTeamUuid),
-                  builder: (context, challengesSnap) {
-                    if (!challengesSnap.hasData) return const SizedBox.shrink();
-                    final docs = challengesSnap.data!
-                        .where((d) => (d["status"] ?? "").toString().toLowerCase() == "pending")
-                        .where((d) => !_acceptedChallengeIds.contains(d["id"]?.toString()))
-                        .toList();
-                    if (docs.isEmpty) return const SizedBox.shrink();
-
-                    return Container(
-                      width: double.infinity,
-                      margin: const EdgeInsets.fromLTRB(16, 8, 16, 4),
-                      padding: const EdgeInsets.all(12),
-                      decoration: BoxDecoration(
-                        color: Colors.white,
-                        borderRadius: BorderRadius.circular(14),
-                        border: Border.all(color: const Color(0xFF1877F2).withOpacity(0.3), width: 1.5),
-                        boxShadow: [BoxShadow(color: const Color(0xFF1877F2).withOpacity(0.08), blurRadius: 8, offset: const Offset(0, 2))],
-                      ),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Row(
-                            children: [
-                              Container(
-                                padding: const EdgeInsets.all(6),
-                                decoration: BoxDecoration(color: const Color(0xFFE7F3FF), borderRadius: BorderRadius.circular(8)),
-                                child: const Icon(Icons.flash_on_rounded, color: Color(0xFF1877F2), size: 18),
-                              ),
-                              const SizedBox(width: 8),
-                              const Expanded(child: Text("Incoming Challenges", style: TextStyle(color: Color(0xFF050505), fontWeight: FontWeight.bold, fontSize: 15))),
-                              Container(
-                                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-                                decoration: BoxDecoration(color: const Color(0xFFFF4655), borderRadius: BorderRadius.circular(12)),
-                                child: Text("${docs.length} New", style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 11)),
-                              ),
-                            ],
-                          ),
-                          const SizedBox(height: 10),
-                          ...docs.map((doc) {
-                            final challengeId = doc["id"];
-                            final fromTeamName = doc["from_team_name"]?.toString() ?? "Opponent Team";
-                            final fromTeamId = doc["from_team_id"]?.toString() ?? "";
-                            final toTeamId = doc["to_team_id"]?.toString() ?? myTeamId;
-                            final isAccepting = _acceptingChallengeIds.contains(challengeId.toString());
-
-                            return Container(
-                              margin: const EdgeInsets.only(bottom: 8),
-                              padding: const EdgeInsets.all(12),
-                              decoration: BoxDecoration(color: const Color(0xFFF0F2F5), borderRadius: BorderRadius.circular(10), border: Border.all(color: const Color(0xFFCED0D4))),
-                              child: Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  Row(
-                                    children: [
-                                      const CircleAvatar(radius: 18, backgroundColor: Color(0xFFCED0D4), child: Icon(Icons.shield_rounded, color: Color(0xFF1877F2), size: 20)),
-                                      const SizedBox(width: 10),
-                                      Expanded(child: Text("Challenge from $fromTeamName", style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14, color: Color(0xFF050505)))),
-                                    ],
-                                  ),
-                                  const SizedBox(height: 10),
-                                  Row(
-                                    children: [
-                                      Expanded(
-                                        child: OutlinedButton(
-                                          onPressed: isAccepting ? null : () => _handleRejectChallenge(challengeId.toString()),
-                                          style: OutlinedButton.styleFrom(foregroundColor: const Color(0xFFFF4655), side: const BorderSide(color: Color(0xFFFF4655)), padding: const EdgeInsets.symmetric(vertical: 6), minimumSize: const Size(0, 34), shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8))),
-                                          child: const Text("Reject", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12)),
-                                        ),
-                                      ),
-                                      const SizedBox(width: 10),
-                                      Expanded(
-                                        child: ElevatedButton(
-                                          onPressed: isAccepting ? null : () => _handleAcceptChallenge(challengeId: challengeId.toString(), fromTeamId: fromTeamId, toTeamId: toTeamId, challengeData: doc),
-                                          style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF1877F2), foregroundColor: Colors.white, disabledBackgroundColor: const Color(0xFF1877F2).withOpacity(0.6), disabledForegroundColor: Colors.white70, padding: const EdgeInsets.symmetric(vertical: 6), minimumSize: const Size(0, 34), shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)), elevation: 0),
-                                          child: isAccepting
-                                              ? const SizedBox(width: 14, height: 14, child: CircularProgressIndicator(strokeWidth: 2, valueColor: AlwaysStoppedAnimation<Color>(Colors.white)))
-                                              : const Text("Accept", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12)),
-                                        ),
-                                      ),
-                                    ],
-                                  ),
-                                ],
-                              ),
-                            );
-                          }),
-                        ],
-                      ),
-                    );
-                  },
-                ),
-
-              // 2. ACTIVE MATCH BANNER
-              if (myTeamId.isNotEmpty)
-                StreamBuilder<List<Map<String, dynamic>>>(
-                  stream: SupabaseService.client.from("active_matches").stream(primaryKey: ["id"]),
-                  builder: (context, matchSnap) {
-                    final rawList = matchSnap.data ?? [];
-                    final sortedList = List<Map<String, dynamic>>.from(rawList);
-                    sortedList.sort((a, b) => (b["created_at"] ?? "").toString().compareTo((a["created_at"] ?? "").toString()));
-
-                    final Map<String, Map<String, dynamic>> dedupMap = {};
-                    for (final m in sortedList) {
-                      final id = m["id"]?.toString() ?? "";
-                      if (id.isNotEmpty && !dedupMap.containsKey(id)) dedupMap[id] = m;
-                    }
-
-                    final myActiveMatches = dedupMap.values.where((m) {
-                      final status = (m["status"] ?? "").toString().toLowerCase();
-                      if (status != "active" && status != "under_review" && status != "rejected") return false;
-                      if (_completedMatchIds.contains(m["id"]?.toString())) return false;
-
-                      final List<String> pList = [];
-                      final participants = m["participants"];
-                      if (participants is List) {
-                        for (final p in participants) { if (p != null) pList.add(p.toString().toLowerCase()); }
-                      }
-                      pList.add((m["team1_id"] ?? "").toString().toLowerCase());
-                      pList.add((m["team2_id"] ?? "").toString().toLowerCase());
-
-                      final myIdLower = myTeamId.toLowerCase();
-                      final myUuidLower = myTeamUuid.toLowerCase();
-                      return pList.any((p) => (myIdLower.isNotEmpty && (p == myIdLower || p.contains(myIdLower))) || (myUuidLower.isNotEmpty && (p == myUuidLower || p.contains(myUuidLower))));
-                    }).toList();
-
-                    if (myActiveMatches.isEmpty) return const SizedBox.shrink();
-
-                    return Column(
-                      children: myActiveMatches.map((match) {
-                        return _ActiveMatchBothTeamsBanner(
-                          key: ValueKey(match["id"]?.toString() ?? UniqueKey().toString()),
-                          match: match,
-                          myTeamId: myTeamId,
-                          myTeamUuid: myTeamUuid,
-                          myTeamName: myTeamName,
-                          teamService: _teamService,
-                          onShowProofImage: (url) => _showProofImageDialog(context, url),
-                          onAutoCompleted: (mId) {
-                            if (mounted) setState(() => _completedMatchIds.add(mId));
-                          },
-                        );
-                      }).toList(),
-                    );
-                  },
-                ),
-
-              // 3. SENDER SIDE: Pending challenge banner & All Teams List
-              Expanded(
-                child: StreamBuilder<List<Map<String, dynamic>>>(
-                  stream: myTeamId.isNotEmpty ? SupabaseService.client.from("challenges").stream(primaryKey: ["id"]).eq("from_team_id", myTeamUuid) : Stream.value([]),
-                  builder: (context, sentSnap) {
-                    final sentDocs = sentSnap.data ?? [];
-                    final activePendingList = sentDocs
-                        .where((d) => (d["status"] ?? "").toString().toLowerCase() == "pending")
-                        .where((d) => !_cancelledChallengeIds.contains(d["id"]?.toString()))
-                        .toList();
-
-                    return Column(
-                      children: [
-                        if (activePendingList.isNotEmpty)
-                          ...activePendingList.map((doc) {
-                            final challengeId = doc["id"]?.toString() ?? "";
-                            final toTeamName = doc["to_team_name"]?.toString() ?? "Opponent Team";
-
-                            return Container(
-                              margin: const EdgeInsets.fromLTRB(16, 4, 16, 8),
-                              padding: const EdgeInsets.all(12),
-                              decoration: BoxDecoration(color: const Color(0xFFE8F4FD), borderRadius: BorderRadius.circular(12), border: Border.all(color: const Color(0xFF1877F2), width: 1.2)),
-                              child: Row(
-                                children: [
-                                  const Icon(Icons.check_circle_rounded, color: Color(0xFF1877F2), size: 18),
-                                  const SizedBox(width: 8),
-                                  Expanded(
-                                    child: Text("✅ Aapka challenge bhej diya gaya hai - $toTeamName ko challenge bhej diya gaya hai, jawab ka intezar hai", style: const TextStyle(color: Color(0xFF1877F2), fontWeight: FontWeight.bold, fontSize: 12.5)),
-                                  ),
-                                  const SizedBox(width: 8),
-                                  OutlinedButton(
-                                    onPressed: () => _handleCancelChallenge(challengeId),
-                                    style: OutlinedButton.styleFrom(foregroundColor: const Color(0xFFFF4655), side: const BorderSide(color: Color(0xFFFF4655)), padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4), minimumSize: const Size(0, 30), shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)), backgroundColor: Colors.white),
-                                    child: const Text("CANCEL", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 11)),
-                                  ),
-                                ],
-                              ),
-                            );
-                          }),
-
-                        // All Teams List
-                        Expanded(
-                          child: StreamBuilder<List<TeamModel>>(
-                            stream: _teamService.getTeamsStream(gameFilter: _selectedGameFilter, searchQuery: _searchQuery),
-                            builder: (context, snapshot) {
-                              if (snapshot.connectionState == ConnectionState.waiting) {
-                                return const Center(child: CircularProgressIndicator(color: Color(0xFF1877F2)));
-                              }
-
-                              final teams = snapshot.data ?? [];
-                              if (teams.isEmpty) {
-                                return Center(
-                                  child: Padding(
-                                    padding: const EdgeInsets.all(32),
-                                    child: Column(
-                                      mainAxisAlignment: MainAxisAlignment.center,
-                                      children: [
-                                        const Icon(Icons.shield_rounded, size: 44, color: Color(0xFF65676B)),
-                                        const SizedBox(height: 12),
-                                        Text(_selectedGameFilter != "All" ? "No teams found for $_selectedGameFilter" : "No Teams Registered Yet", style: const TextStyle(color: Color(0xFF050505), fontSize: 16, fontWeight: FontWeight.bold)),
-                                        const SizedBox(height: 6),
-                                        const Text("سب سے پہلے اپنی ٹیم بنائیں اور دوسری ٹیموں کے ساتھ مقابلہ کریں!", textAlign: TextAlign.center, style: TextStyle(color: Color(0xFF65676B), fontSize: 13)),
-                                        const SizedBox(height: 16),
-                                        ElevatedButton.icon(
-                                          onPressed: _openCreateTeamDialog,
-                                          style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF1877F2), foregroundColor: Colors.white, padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10), shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10))),
-                                          icon: const Icon(Icons.add, color: Colors.white),
-                                          label: const Text("Create First Team", style: TextStyle(fontWeight: FontWeight.bold)),
-                                        ),
-                                      ],
+                      return Container(
+                        margin: const EdgeInsets.only(bottom: 8),
+                        padding: const EdgeInsets.all(12),
+                        decoration: BoxDecoration(
+                          color: const Color(0xFFF0F2F5),
+                          borderRadius: BorderRadius.circular(10),
+                          border: Border.all(color: const Color(0xFFCED0D4)),
+                        ),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Row(
+                              children: [
+                                const CircleAvatar(
+                                  radius: 18,
+                                  backgroundColor: Color(0xFFCED0D4),
+                                  child: Icon(Icons.shield_rounded, color: Color(0xFF1877F2), size: 20),
+                                ),
+                                const SizedBox(width: 10),
+                                Expanded(
+                                  child: Text(
+                                    "Challenge from $fromTeamName",
+                                    style: const TextStyle(
+                                      fontWeight: FontWeight.bold,
+                                      fontSize: 14,
+                                      color: Color(0xFF050505),
                                     ),
                                   ),
-                                );
-                              }
-
-                              return ListView.builder(
-                                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-                                itemCount: teams.length,
-                                itemBuilder: (context, index) {
-                                  final team = teams[index];
-                                  final targetUuid = SupabaseService.toUuid(team.id).toLowerCase();
-                                  final rawTeamId = team.id.toLowerCase();
-                                  final matchingPending = activePendingList.firstWhere(
-                                    (d) {
-                                      final toId = d["to_team_id"]?.toString().toLowerCase();
-                                      return toId == targetUuid || toId == rawTeamId;
-                                    },
-                                    orElse: () => {},
-                                  );
-
-                                  return TeamCard(
-                                    team: team,
-                                    myTeamId: myTeamId,
-                                    myTeamName: myTeamName,
-                                    pendingChallenge: matchingPending.isNotEmpty ? matchingPending : null,
-                                    onCancelChallenge: _handleCancelChallenge,
-                                  );
-                                },
-                              );
-                            },
-                          ),
+                                ),
+                              ],
+                            ),
+                            const SizedBox(height: 10),
+                            Row(
+                              children: [
+                                Expanded(
+                                  child: OutlinedButton(
+                                    onPressed: isAccepting
+                                        ? null
+                                        : () => _handleRejectChallenge(challengeId.toString()),
+                                    style: OutlinedButton.styleFrom(
+                                      foregroundColor: const Color(0xFFFF4655),
+                                      side: const BorderSide(color: Color(0xFFFF4655)),
+                                      padding: const EdgeInsets.symmetric(vertical: 6),
+                                      minimumSize: const Size(0, 34),
+                                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                                    ),
+                                    child: const Text("Reject", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12)),
+                                  ),
+                                ),
+                                const SizedBox(width: 10),
+                                Expanded(
+                                  child: ElevatedButton(
+                                    onPressed: isAccepting
+                                        ? null
+                                        : () => _handleAcceptChallenge(
+                                              challengeId: challengeId.toString(),
+                                              fromTeamId: fromTeamId,
+                                              toTeamId: toTeamId,
+                                              challengeData: doc,
+                                            ),
+                                    style: ElevatedButton.styleFrom(
+                                      backgroundColor: const Color(0xFF1877F2),
+                                      foregroundColor: Colors.white,
+                                      disabledBackgroundColor: const Color(0xFF1877F2).withOpacity(0.6),
+                                      disabledForegroundColor: Colors.white70,
+                                      padding: const EdgeInsets.symmetric(vertical: 6),
+                                      minimumSize: const Size(0, 34),
+                                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                                      elevation: 0,
+                                    ),
+                                    child: isAccepting
+                                        ? const SizedBox(
+                                            width: 14,
+                                            height: 14,
+                                            child: CircularProgressIndicator(
+                                              strokeWidth: 2,
+                                              valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
+                                            ),
+                                          )
+                                        : const Text("Accept", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12)),
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ],
                         ),
-                      ],
-                    );
-                  },
+                      );
+                    }),
+                  ],
+                ),
+              );
+            },
+          ),
+
+        // Sender Side: Pending challenge banner & All Teams List
+        Expanded(
+          child: StreamBuilder<List<Map<String, dynamic>>>(
+            stream: myTeamId.isNotEmpty
+                ? SupabaseService.client
+                    .from("challenges")
+                    .stream(primaryKey: ["id"])
+                    .eq("from_team_id", myTeamUuid)
+                : Stream.value([]),
+            builder: (context, sentSnap) {
+              final sentDocs = sentSnap.data ?? [];
+              final activePendingList = sentDocs
+                  .where((d) => (d["status"] ?? "").toString().toLowerCase() == "pending")
+                  .where((d) => !_cancelledChallengeIds.contains(d["id"]?.toString()))
+                  .toList();
+
+              return Column(
+                children: [
+                  if (activePendingList.isNotEmpty)
+                    ...activePendingList.map((doc) {
+                      final challengeId = doc["id"]?.toString() ?? "";
+                      final toTeamName = doc["to_team_name"]?.toString() ?? "Opponent Team";
+
+                      return Container(
+                        margin: const EdgeInsets.fromLTRB(16, 4, 16, 8),
+                        padding: const EdgeInsets.all(12),
+                        decoration: BoxDecoration(
+                          color: const Color(0xFFE8F4FD),
+                          borderRadius: BorderRadius.circular(12),
+                          border: Border.all(color: const Color(0xFF1877F2), width: 1.2),
+                        ),
+                        child: Row(
+                          children: [
+                            const Icon(Icons.check_circle_rounded, color: Color(0xFF1877F2), size: 18),
+                            const SizedBox(width: 8),
+                            Expanded(
+                              child: Text(
+                                "✅ Aapka challenge bhej diya gaya hai - $toTeamName ko challenge bhej diya gaya hai, jawab ka intezar hai",
+                                style: const TextStyle(
+                                  color: Color(0xFF1877F2),
+                                  fontWeight: FontWeight.bold,
+                                  fontSize: 12.5,
+                                ),
+                              ),
+                            ),
+                            const SizedBox(width: 8),
+                            OutlinedButton(
+                              onPressed: () => _handleCancelChallenge(challengeId),
+                              style: OutlinedButton.styleFrom(
+                                foregroundColor: const Color(0xFFFF4655),
+                                side: const BorderSide(color: Color(0xFFFF4655)),
+                                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                                minimumSize: const Size(0, 30),
+                                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                                backgroundColor: Colors.white,
+                              ),
+                              child: const Text("CANCEL", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 11)),
+                            ),
+                          ],
+                        ),
+                      );
+                    }),
+
+                  // All Teams List
+                  Expanded(
+                    child: StreamBuilder<List<TeamModel>>(
+                      stream: _teamService.getTeamsStream(
+                        gameFilter: _selectedGameFilter,
+                        searchQuery: _searchQuery,
+                      ),
+                      builder: (context, snapshot) {
+                        if (snapshot.connectionState == ConnectionState.waiting) {
+                          return const Center(child: CircularProgressIndicator(color: Color(0xFF1877F2)));
+                        }
+
+                        final teams = snapshot.data ?? [];
+                        if (teams.isEmpty) {
+                          return Center(
+                            child: Padding(
+                              padding: const EdgeInsets.all(32),
+                              child: Column(
+                                mainAxisAlignment: MainAxisAlignment.center,
+                                children: [
+                                  const Icon(Icons.shield_rounded, size: 44, color: Color(0xFF65676B)),
+                                  const SizedBox(height: 12),
+                                  Text(
+                                    _selectedGameFilter != "All"
+                                        ? "No teams found for $_selectedGameFilter"
+                                        : "No Teams Registered Yet",
+                                    style: const TextStyle(
+                                      color: Color(0xFF050505),
+                                      fontSize: 16,
+                                      fontWeight: FontWeight.bold,
+                                    ),
+                                  ),
+                                  const SizedBox(height: 6),
+                                  const Text(
+                                    "سب سے پہلے اپنی ٹیم بنائیں اور دوسری ٹیموں کے ساتھ مقابلہ کریں!",
+                                    textAlign: TextAlign.center,
+                                    style: TextStyle(color: Color(0xFF65676B), fontSize: 13),
+                                  ),
+                                  const SizedBox(height: 16),
+                                  ElevatedButton.icon(
+                                    onPressed: _openCreateTeamDialog,
+                                    style: ElevatedButton.styleFrom(
+                                      backgroundColor: const Color(0xFF1877F2),
+                                      foregroundColor: Colors.white,
+                                      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
+                                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                                    ),
+                                    icon: const Icon(Icons.add, color: Colors.white),
+                                    label: const Text("Create First Team", style: TextStyle(fontWeight: FontWeight.bold)),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          );
+                        }
+
+                        return ListView.builder(
+                          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                          itemCount: teams.length,
+                          itemBuilder: (context, index) {
+                            final team = teams[index];
+                            final targetUuid = SupabaseService.toUuid(team.id).toLowerCase();
+                            final rawTeamId = team.id.toLowerCase();
+                            final matchingPending = activePendingList.firstWhere(
+                              (d) {
+                                final toId = d["to_team_id"]?.toString().toLowerCase();
+                                return toId == targetUuid || toId == rawTeamId;
+                              },
+                              orElse: () => {},
+                            );
+
+                            return TeamCard(
+                              team: team,
+                              myTeamId: myTeamId,
+                              myTeamName: myTeamName,
+                              pendingChallenge: matchingPending.isNotEmpty ? matchingPending : null,
+                              onCancelChallenge: _handleCancelChallenge,
+                            );
+                          },
+                        );
+                      },
+                    ),
+                  ),
+                ],
+              );
+            },
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildLiveMatchesTab({
+    required List<Map<String, dynamic>> myActiveMatches,
+    required String myTeamId,
+    required String myTeamUuid,
+    required String myTeamName,
+  }) {
+    if (myActiveMatches.isEmpty) {
+      return Center(
+        child: Padding(
+          padding: const EdgeInsets.all(32),
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Container(
+                padding: const EdgeInsets.all(20),
+                decoration: BoxDecoration(
+                  color: const Color(0xFFE4E6EB),
+                  shape: BoxShape.circle,
+                ),
+                child: const Icon(
+                  Icons.sports_esports_outlined,
+                  size: 48,
+                  color: Color(0xFF65676B),
+                ),
+              ),
+              const SizedBox(height: 16),
+              const Text(
+                "No live matches",
+                style: TextStyle(
+                  color: Color(0xFF050505),
+                  fontSize: 18,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+              const SizedBox(height: 8),
+              const Text(
+                "You don't have any ongoing matches right now.\nChallenge a team to start a live match!",
+                textAlign: TextAlign.center,
+                style: TextStyle(color: Color(0xFF65676B), fontSize: 13, height: 1.4),
+              ),
+              const SizedBox(height: 20),
+              ElevatedButton.icon(
+                onPressed: () {
+                  _tabController.animateTo(0);
+                },
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: const Color(0xFF1877F2),
+                  foregroundColor: Colors.white,
+                  padding: const EdgeInsets.symmetric(horizontal: 22, vertical: 12),
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                  elevation: 0,
+                ),
+                icon: const Icon(Icons.shield_outlined, size: 18),
+                label: const Text(
+                  "View Teams",
+                  style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
                 ),
               ),
             ],
-          );
-        },
-      ),
+          ),
+        ),
+      );
+    }
+
+    return ListView.builder(
+      padding: const EdgeInsets.symmetric(vertical: 8),
+      itemCount: myActiveMatches.length,
+      itemBuilder: (context, index) {
+        final match = myActiveMatches[index];
+        return Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Padding(
+              padding: const EdgeInsets.fromLTRB(16, 8, 16, 2),
+              child: Text(
+                "Match #${index + 1}",
+                style: const TextStyle(
+                  fontWeight: FontWeight.bold,
+                  fontSize: 12,
+                  color: Color(0xFF65676B),
+                ),
+              ),
+            ),
+            _ActiveMatchBothTeamsBanner(
+              key: ValueKey(match["id"]?.toString() ?? UniqueKey().toString()),
+              match: match,
+              myTeamId: myTeamId,
+              myTeamUuid: myTeamUuid,
+              myTeamName: myTeamName,
+              teamService: _teamService,
+              onShowProofImage: (url) => _showProofImageDialog(context, url),
+              onAutoCompleted: (mId) {
+                if (mounted) setState(() => _completedMatchIds.add(mId));
+              },
+            ),
+          ],
+        );
+      },
     );
   }
 }
@@ -630,6 +898,7 @@ class _ActiveMatchBothTeamsBanner extends StatefulWidget {
 class _ActiveMatchBothTeamsBannerState
     extends State<_ActiveMatchBothTeamsBanner> {
   Timer? _timer;
+  DateTime? _bannerMountedTime;
   TeamModel? _myTeam;
   TeamModel? _oppTeam;
   String _myLeaderName = "Leader";
@@ -642,6 +911,7 @@ class _ActiveMatchBothTeamsBannerState
   @override
   void initState() {
     super.initState();
+    _bannerMountedTime = DateTime.now();
     _fetchTeams();
     _timer = Timer.periodic(const Duration(seconds: 1), (_) {
       if (mounted) setState(() {});
@@ -881,14 +1151,24 @@ class _ActiveMatchBothTeamsBannerState
     final raw = widget.match["start_time"] ?? widget.match["startTime"];
     if (raw is String && raw.isNotEmpty) {
       final dt = DateTime.tryParse(raw)?.toLocal();
-      if (dt != null) return dt;
+      if (dt != null) {
+        if (dt.isAfter(DateTime.now())) {
+          return _bannerMountedTime ?? DateTime.now();
+        }
+        return dt;
+      }
     }
     final rawCreated = widget.match["created_at"];
     if (rawCreated is String && rawCreated.isNotEmpty) {
       final dt = DateTime.tryParse(rawCreated)?.toLocal();
-      if (dt != null) return dt;
+      if (dt != null) {
+        if (dt.isAfter(DateTime.now())) {
+          return _bannerMountedTime ?? DateTime.now();
+        }
+        return dt;
+      }
     }
-    return DateTime.now();
+    return _bannerMountedTime ?? DateTime.now();
   }
 
   @override
@@ -1215,11 +1495,25 @@ class _ActiveMatchBothTeamsBannerState
             children: [
               OutlinedButton.icon(
                 onPressed: () {
+                  if (matchId.trim().isEmpty) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(
+                        content: Text("Match not found"),
+                        backgroundColor: Color(0xFFFF4655),
+                      ),
+                    );
+                    return;
+                  }
                   Navigator.push(
                     context,
                     MaterialPageRoute(
-                      builder: (_) =>
-                          TeamMatchRoomScreen(matchId: matchId),
+                      builder: (_) => PrivateMatchRoomScreen(
+                        matchId: matchId,
+                        myTeamId: widget.myTeamId,
+                        myTeamName: myTeamDisplay,
+                        opponentId: opponentId,
+                        opponentName: oppTeamDisplay,
+                      ),
                     ),
                   );
                 },

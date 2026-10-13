@@ -48,12 +48,21 @@ class _PrivateMatchRoomScreenState extends State<PrivateMatchRoomScreen> {
 
   Map<String, dynamic>? _roomInfo;
   bool _isRoomInfoLoading = true;
+  String? _errorMessage;
 
   @override
   void initState() {
     super.initState();
     _myTeamName = widget.myTeamName.isNotEmpty ? widget.myTeamName : 'My Team';
     _opponentName = widget.opponentName.isNotEmpty ? widget.opponentName : 'Opponent';
+
+    if (widget.matchId.trim().isEmpty) {
+      _isLoading = false;
+      _isRoomInfoLoading = false;
+      _errorMessage = 'Match not found';
+      return;
+    }
+
     _resolveTeamNames();
     _markAsRead();
     _fetchMessages(initial: true);
@@ -61,6 +70,13 @@ class _PrivateMatchRoomScreenState extends State<PrivateMatchRoomScreen> {
     _subscribeToRoomInfo();
 
     _scrollController.addListener(_onScroll);
+
+    // Safety timeout: Never spin infinitely
+    Timer(const Duration(seconds: 5), () {
+      if (mounted && _isLoading) {
+        setState(() => _isLoading = false);
+      }
+    });
 
     _pollTimer = Timer.periodic(const Duration(seconds: 2), (_) {
       if (mounted) _fetchMessages(silent: true);
@@ -210,7 +226,15 @@ class _PrivateMatchRoomScreenState extends State<PrivateMatchRoomScreen> {
   Future<void> _fetchMessages(
       {bool silent = false, bool initial = false}) async {
     final cleanId = widget.matchId.trim();
-    if (cleanId.isEmpty) return;
+    if (cleanId.isEmpty) {
+      if (mounted && _isLoading) {
+        setState(() {
+          _isLoading = false;
+          _errorMessage = "Match not found";
+        });
+      }
+      return;
+    }
 
     try {
       final res = await SupabaseService.client
@@ -221,10 +245,16 @@ class _PrivateMatchRoomScreenState extends State<PrivateMatchRoomScreen> {
 
       if (res is List && mounted) {
         final list = List<Map<String, dynamic>>.from(res);
+        _errorMessage = null;
         _mergeMessages(list, shouldScrollToBottom: initial);
       }
     } catch (e) {
       debugPrint("[PrivateMatchRoom] fetch error: $e");
+      if (mounted && _messages.isEmpty) {
+        setState(() {
+          _errorMessage = "Failed to load messages. Please tap refresh.";
+        });
+      }
     } finally {
       if (mounted && _isLoading) {
         setState(() => _isLoading = false);
@@ -1074,6 +1104,49 @@ class _PrivateMatchRoomScreenState extends State<PrivateMatchRoomScreen> {
 
   @override
   Widget build(BuildContext context) {
+    if (widget.matchId.trim().isEmpty) {
+      return Scaffold(
+        backgroundColor: const Color(0xFF0B0E16),
+        appBar: AppBar(
+          backgroundColor: const Color(0xFF131A29),
+          elevation: 0,
+          leading: IconButton(
+            icon: const Icon(Icons.arrow_back_ios_new_rounded, color: Colors.white, size: 20),
+            onPressed: () => Navigator.pop(context),
+          ),
+          title: const Text('Team DM', style: TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.bold)),
+        ),
+        body: Center(
+          child: Padding(
+            padding: const EdgeInsets.all(24.0),
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                const Icon(Icons.error_outline_rounded, size: 48, color: Color(0xFFFF4655)),
+                const SizedBox(height: 12),
+                const Text(
+                  'Match not found',
+                  style: TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.bold),
+                ),
+                const SizedBox(height: 8),
+                const Text(
+                  'Invalid ya missing match ID. Match private room load nahi ho saka.',
+                  textAlign: TextAlign.center,
+                  style: TextStyle(color: Color(0xFF8B949E), fontSize: 13),
+                ),
+                const SizedBox(height: 16),
+                ElevatedButton(
+                  style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF1877F2)),
+                  onPressed: () => Navigator.pop(context),
+                  child: const Text('Go Back', style: TextStyle(color: Colors.white)),
+                ),
+              ],
+            ),
+          ),
+        ),
+      );
+    }
+
     final title = "$_myTeamName VS $_opponentName - Private Room";
     final myTeamUuid = SupabaseService.toUuid(widget.myTeamId).toLowerCase();
     final myTeamRaw = widget.myTeamId.toLowerCase();
@@ -1350,7 +1423,38 @@ class _PrivateMatchRoomScreenState extends State<PrivateMatchRoomScreen> {
                     ? const Center(
                         child: CircularProgressIndicator(
                             color: Color(0xFF1877F2)))
-                    : RefreshIndicator(
+                    : _errorMessage != null && _messages.isEmpty
+                        ? Center(
+                            child: Padding(
+                              padding: const EdgeInsets.all(24),
+                              child: Column(
+                                mainAxisAlignment: MainAxisAlignment.center,
+                                children: [
+                                  const Icon(Icons.cloud_off_rounded, size: 44, color: Color(0xFFFFB020)),
+                                  const SizedBox(height: 12),
+                                  Text(
+                                    _errorMessage!,
+                                    textAlign: TextAlign.center,
+                                    style: const TextStyle(color: Colors.white, fontSize: 14),
+                                  ),
+                                  const SizedBox(height: 16),
+                                  ElevatedButton.icon(
+                                    style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF1877F2)),
+                                    icon: const Icon(Icons.refresh_rounded, size: 16, color: Colors.white),
+                                    label: const Text('Retry', style: TextStyle(color: Colors.white)),
+                                    onPressed: () {
+                                      setState(() {
+                                        _isLoading = true;
+                                        _errorMessage = null;
+                                      });
+                                      _fetchMessages(initial: true);
+                                    },
+                                  ),
+                                ],
+                              ),
+                            ),
+                          )
+                        : RefreshIndicator(
                         onRefresh: () => _fetchMessages(silent: false),
                         color: const Color(0xFF1877F2),
                         backgroundColor: const Color(0xFF131A29),

@@ -358,7 +358,7 @@ class _TeamMatchRoomScreenState extends State<TeamMatchRoomScreen> with SingleTi
     return StreamBuilder<TeamMatch?>(
       stream: _matchService.getMatchStream(widget.matchId),
       builder: (context, snapshot) {
-        if (!snapshot.hasData) {
+        if (snapshot.connectionState == ConnectionState.waiting && !snapshot.hasData) {
           return const Scaffold(
             backgroundColor: Color(0xFF0B0F17),
             body: Center(child: CircularProgressIndicator(color: Color(0xFFFF6B00))),
@@ -367,9 +367,32 @@ class _TeamMatchRoomScreenState extends State<TeamMatchRoomScreen> with SingleTi
 
         final match = snapshot.data;
         if (match == null) {
-          return const Scaffold(
-            backgroundColor: Color(0xFF0B0F17),
-            body: Center(child: Text('میچ نہیں ملا', style: TextStyle(color: Colors.white))),
+          return Scaffold(
+            backgroundColor: const Color(0xFF0B0F17),
+            appBar: AppBar(
+              backgroundColor: const Color(0xFF131A29),
+              leading: IconButton(
+                icon: const Icon(Icons.arrow_back_rounded, color: Colors.white),
+                onPressed: () => Navigator.pop(context),
+              ),
+              title: const Text('Match Room', style: TextStyle(color: Colors.white, fontSize: 16)),
+            ),
+            body: Center(
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  const Icon(Icons.error_outline_rounded, size: 48, color: Color(0xFFFF4655)),
+                  const SizedBox(height: 12),
+                  const Text('میچ نہیں ملا (Match not found)', style: TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.bold)),
+                  const SizedBox(height: 12),
+                  ElevatedButton(
+                    style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF1877F2)),
+                    onPressed: () => Navigator.pop(context),
+                    child: const Text('Back', style: TextStyle(color: Colors.white)),
+                  ),
+                ],
+              ),
+            ),
           );
         }
 

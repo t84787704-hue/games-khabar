@@ -1935,8 +1935,10 @@ class _GamerProfileScreenState extends State<GamerProfileScreen>
                         return ListTile(
                           leading: Container(
                             padding: const EdgeInsets.all(8),
-                            decoration: const BoxDecoration(
-                              color: Color(0xFFFEF7E0),
+                            decoration: BoxDecoration(
+                              color: isDark
+                                  ? const Color(0xFF1E293B)
+                                  : const Color(0xFFFEF7E0),
                               shape: BoxShape.circle,
                             ),
                             child: Icon(
@@ -1949,8 +1951,10 @@ class _GamerProfileScreenState extends State<GamerProfileScreen>
                           ),
                           title: Text(
                             isDark ? 'Day Mode' : 'Night Mode',
-                            style: const TextStyle(
-                                color: Color(0xFF050505),
+                            style: TextStyle(
+                                color: isDark
+                                    ? Colors.white
+                                    : const Color(0xFF050505),
                                 fontWeight: FontWeight.bold,
                                 fontSize: 14),
                           ),
@@ -1958,14 +1962,17 @@ class _GamerProfileScreenState extends State<GamerProfileScreen>
                             isDark
                                 ? 'Switch to bright display theme'
                                 : 'Switch to dark gaming theme',
-                            style: const TextStyle(
-                                color: Color(0xFF65676B), fontSize: 12),
+                            style: TextStyle(
+                                color: isDark
+                                    ? Colors.white70
+                                    : const Color(0xFF65676B),
+                                fontSize: 12),
                           ),
                           trailing: Switch.adaptive(
                             value: isDark,
                             activeColor: const Color(0xFF1877F2),
                             onChanged: (val) {
-                              ThemeService.toggleTheme();
+                              ThemeService.setTheme(val);
                             },
                           ),
                           onTap: () {
@@ -2018,41 +2025,6 @@ class _GamerProfileScreenState extends State<GamerProfileScreen>
                               ),
                               body: const SavedNewsTabScreen(),
                             ),
-                          ),
-                        );
-                      },
-                    ),
-
-                    // Settings & Preferences
-                    ListTile(
-                      leading: Container(
-                        padding: const EdgeInsets.all(8),
-                        decoration: const BoxDecoration(
-                          color: Color(0xFFE4E6EB),
-                          shape: BoxShape.circle,
-                        ),
-                        child: const Icon(Icons.settings_rounded,
-                            color: Color(0xFF65676B), size: 20),
-                      ),
-                      title: const Text(
-                        'Settings & Preferences',
-                        style: TextStyle(
-                            color: Color(0xFF050505),
-                            fontWeight: FontWeight.bold,
-                            fontSize: 14),
-                      ),
-                      subtitle: const Text(
-                        'Follow Us, sound, notifications & accounts',
-                        style: TextStyle(
-                            color: Color(0xFF65676B), fontSize: 12),
-                      ),
-                      trailing: const Icon(Icons.arrow_forward_ios_rounded,
-                          color: Color(0xFF65676B), size: 14),
-                      onTap: () {
-                        Navigator.pop(ctx);
-                        Navigator.of(context).push(
-                          MaterialPageRoute(
-                            builder: (_) => const ProfileScreen(),
                           ),
                         );
                       },
@@ -2168,7 +2140,42 @@ class _GamerProfileScreenState extends State<GamerProfileScreen>
                       },
                     ),
 
-                    // Delete Account
+                    // Settings & Preferences (Third Last - Issues #8, #10, #11)
+                    ListTile(
+                      leading: Container(
+                        padding: const EdgeInsets.all(8),
+                        decoration: const BoxDecoration(
+                          color: Color(0xFFE4E6EB),
+                          shape: BoxShape.circle,
+                        ),
+                        child: const Icon(Icons.settings_rounded,
+                            color: Color(0xFF65676B), size: 20),
+                      ),
+                      title: const Text(
+                        'Settings & Preferences',
+                        style: TextStyle(
+                            color: Color(0xFF050505),
+                            fontWeight: FontWeight.bold,
+                            fontSize: 14),
+                      ),
+                      subtitle: const Text(
+                        'Follow Us, sound, notifications & accounts',
+                        style: TextStyle(
+                            color: Color(0xFF65676B), fontSize: 12),
+                      ),
+                      trailing: const Icon(Icons.arrow_forward_ios_rounded,
+                          color: Color(0xFF65676B), size: 14),
+                      onTap: () {
+                        Navigator.pop(ctx);
+                        Navigator.of(context).push(
+                          MaterialPageRoute(
+                            builder: (_) => const ProfileScreen(),
+                          ),
+                        );
+                      },
+                    ),
+
+                    // Delete Account (Second Last - Issues #8, #11)
                     ListTile(
                       leading: Container(
                         padding: const EdgeInsets.all(8),
@@ -2206,7 +2213,7 @@ class _GamerProfileScreenState extends State<GamerProfileScreen>
 
                     const SizedBox(height: 4),
 
-                    // Log Out
+                    // Log Out (Last - Issues #8, #11)
                     ListTile(
                       leading: Container(
                         padding: const EdgeInsets.all(8),
