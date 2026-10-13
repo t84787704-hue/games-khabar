@@ -4,6 +4,7 @@ import 'package:intl/intl.dart';
 import '../../models/team_model.dart';
 import '../../services/supabase_service.dart';
 import '../../services/team_service.dart';
+import '../../services/notification_service.dart';
 
 // ============================================================
 // TAB 1: UNDER REVIEW
@@ -412,6 +413,27 @@ class _AdminProofCardState extends State<AdminProofCard> {
         winnerTeamId: winnerUuid,
       );
 
+      // ✅ NAYA: Send notification to winner team
+      if (ok) {
+        try {
+          final team = await _teamService.getTeam(winnerUuid);
+          if (team != null && team.leaderId.isNotEmpty) {
+            await NotificationService().createNotification(
+              userId: team.leaderId,
+              type: 'proof_accepted',
+              title: '🏆 Proof Accepted — You Won!',
+              body: 'Aapka match proof accept ho gaya! Aap winner hain.',
+              priority: 'high',
+              data: {
+                'match_id': matchId.toString(),
+              },
+            );
+          }
+        } catch (e) {
+          debugPrint('[AdminProofs] accept notification error: $e');
+        }
+      }
+
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
@@ -453,6 +475,35 @@ class _AdminProofCardState extends State<AdminProofCard> {
         matchId: matchId.toString(),
         reason: finalReason,
       );
+
+      // ✅ NAYA: Send notification to submitter team
+      if (ok) {
+        try {
+          final submittedByRaw = (widget.match['submitted_by_team_id'] ??
+                  widget.match['winner_team_id'])
+              ?.toString();
+          if (submittedByRaw != null && submittedByRaw.isNotEmpty) {
+            final teamUuid = SupabaseService.toUuid(submittedByRaw);
+            final team = await _teamService.getTeam(teamUuid);
+            if (team != null && team.leaderId.isNotEmpty) {
+              await NotificationService().createNotification(
+                userId: team.leaderId,
+                type: 'proof_rejected',
+                title: '❌ Proof Rejected',
+                body:
+                    'Aapka match proof reject ho gaya: $finalReason. Dobara upload karen.',
+                priority: 'high',
+                data: {
+                  'match_id': matchId.toString(),
+                  'reason': finalReason,
+                },
+              );
+            }
+          }
+        } catch (e) {
+          debugPrint('[AdminProofs] reject notification error: $e');
+        }
+      }
 
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -880,7 +931,6 @@ Widget _buildEmptyState({
 
 // ============================================================
 // HELPER: Error State
-// FIX: 'Object? error' aur null-check
 // ============================================================
 Widget _buildErrorState(String title, Object? error) {
   return Center(
