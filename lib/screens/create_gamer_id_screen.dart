@@ -85,6 +85,30 @@ class _CreateGamerIdScreenState extends State<CreateGamerIdScreen> {
     });
   }
 
+  // ✅ NEW: Show "Coming Soon" banner for rank verification
+  void _showRankComingSoonBanner() {
+    ScaffoldMessenger.of(context).hideCurrentSnackBar();
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(
+        content: Row(
+          children: [
+            Text('🚀', style: TextStyle(fontSize: 16)),
+            SizedBox(width: 8),
+            Expanded(
+              child: Text(
+                'Advanced rank verification coming soon! Abhi ke liye skip karein.',
+                style: TextStyle(fontWeight: FontWeight.w600),
+              ),
+            ),
+          ],
+        ),
+        backgroundColor: Color(0xFF1877F2),
+        behavior: SnackBarBehavior.floating,
+        duration: Duration(seconds: 3),
+      ),
+    );
+  }
+
   // Live username availability check state
   Timer? _debounceTimer;
   bool _isCheckingUsername = false;
@@ -1237,6 +1261,7 @@ class _CreateGamerIdScreenState extends State<CreateGamerIdScreen> {
                       const SizedBox(height: 20),
 
                       // 4. MOBILE GAMES RANK / TIER & SCREENSHOT VERIFICATION
+                      // ✅ COMING SOON: Rank verification disabled — user can only Skip
                       Row(
                         mainAxisAlignment: MainAxisAlignment.spaceBetween,
                         children: [
@@ -1245,7 +1270,7 @@ class _CreateGamerIdScreenState extends State<CreateGamerIdScreen> {
                               const Icon(Icons.military_tech_rounded, color: Color(0xFFFF8A00), size: 18),
                               const SizedBox(width: 6),
                               const Text(
-                                'MY GAME RANK & PROOF (Optional)',
+                                'MY GAME RANK & PROOF',
                                 style: TextStyle(
                                   color: GamerTheme.textGray,
                                   fontSize: 12,
@@ -1255,40 +1280,62 @@ class _CreateGamerIdScreenState extends State<CreateGamerIdScreen> {
                               ),
                             ],
                           ),
-                          if (_rankController.text.trim().isNotEmpty)
-                            InkWell(
-                              onTap: () {
-                                setState(() {
-                                  _rankController.clear();
-                                  _pickedRankScreenshot = null;
-                                  _rankScreenshotUrl = '';
-                                  _rankStatus = 'None';
-                                });
-                              },
-                              borderRadius: BorderRadius.circular(8),
-                              child: Container(
-                                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                                decoration: BoxDecoration(
-                                  color: GamerTheme.cardElevated,
-                                  borderRadius: BorderRadius.circular(8),
-                                  border: Border.all(color: GamerTheme.borderLight),
-                                ),
-                                child: const Row(
-                                  mainAxisSize: MainAxisSize.min,
-                                  children: [
-                                    Icon(Icons.close_rounded, size: 12, color: GamerTheme.textMuted),
-                                    SizedBox(width: 4),
-                                    Text(
-                                      'Skip / چھوڑ دیں',
-                                      style: TextStyle(color: GamerTheme.textMuted, fontSize: 11, fontWeight: FontWeight.w700),
-                                    ),
-                                  ],
-                                ),
+                          // ✅ NEW: Coming Soon badge
+                          Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                            decoration: BoxDecoration(
+                              gradient: const LinearGradient(
+                                colors: [Color(0xFF1877F2), Color(0xFF00E5FF)],
                               ),
+                              borderRadius: BorderRadius.circular(8),
                             ),
+                            child: const Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                Text('🚀', style: TextStyle(fontSize: 10)),
+                                SizedBox(width: 4),
+                                Text(
+                                  'COMING SOON',
+                                  style: TextStyle(
+                                    color: Colors.white,
+                                    fontSize: 9.5,
+                                    fontWeight: FontWeight.w900,
+                                    letterSpacing: 0.5,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
                         ],
                       ),
                       const SizedBox(height: 8),
+
+                      // ✅ NEW: Coming soon message banner
+                      Container(
+                        padding: const EdgeInsets.all(12),
+                        decoration: BoxDecoration(
+                          color: const Color(0xFF161B26),
+                          borderRadius: BorderRadius.circular(10),
+                          border: Border.all(color: const Color(0xFF1877F2).withOpacity(0.4)),
+                        ),
+                        child: const Row(
+                          children: [
+                            Icon(Icons.info_outline_rounded, color: Color(0xFF00E5FF), size: 18),
+                            SizedBox(width: 10),
+                            Expanded(
+                              child: Text(
+                                'Advanced rank verification aa raha hai! Abhi ke liye rank skip karein — profile pe sirf game tag dikhega.',
+                                style: TextStyle(
+                                  color: Colors.white70,
+                                  fontSize: 11.5,
+                                  height: 1.35,
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                      const SizedBox(height: 12),
 
                       // 1. GAME SELECTION DROPDOWN (15 Major Mobile Games)
                       Container(
@@ -1375,7 +1422,7 @@ class _CreateGamerIdScreenState extends State<CreateGamerIdScreen> {
                       ),
                       const SizedBox(height: 8),
 
-                      // Top 10 Dynamic Rank Chips & Skip Option
+                      // ✅ COMING SOON: Rank chips disabled — tap shows Snackbar
                       Wrap(
                         spacing: 8,
                         runSpacing: 8,
@@ -1422,16 +1469,12 @@ class _CreateGamerIdScreenState extends State<CreateGamerIdScreen> {
                               ),
                             ),
                           ),
-                          // Top 10 dynamic ranks for selected game
+                          // ✅ COMING SOON: Rank chips show lock icon and disabled state
                           ..._dynamicRanks.map((rank) {
                             final isSelected = _rankController.text.trim() == rank;
                             final gameColor = MobileGamesRankData.getGameColor(_selectedRankGame);
                             return InkWell(
-                              onTap: () {
-                                setState(() {
-                                  _rankController.text = rank;
-                                });
-                              },
+                              onTap: _showRankComingSoonBanner, // ✅ NEW: Show coming soon
                               borderRadius: BorderRadius.circular(12),
                               child: Container(
                                 padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
@@ -1458,6 +1501,9 @@ class _CreateGamerIdScreenState extends State<CreateGamerIdScreen> {
                                         fontWeight: isSelected ? FontWeight.w900 : FontWeight.w700,
                                       ),
                                     ),
+                                    // ✅ NEW: Lock icon to show disabled
+                                    const SizedBox(width: 5),
+                                    const Icon(Icons.lock_rounded, size: 11, color: Colors.amber),
                                   ],
                                 ),
                               ),
@@ -1466,7 +1512,8 @@ class _CreateGamerIdScreenState extends State<CreateGamerIdScreen> {
                         ],
                       ),
 
-                      // SCREENSHOT PROOF UPLOAD (Mandatory when Rank is selected)
+                      // ✅ COMING SOON: Screenshot upload box — tap shows Snackbar
+                      // (Only show if user previously had a rank selected — for existing users)
                       if (_rankController.text.trim().isNotEmpty) ...[
                         const SizedBox(height: 14),
                         Container(
@@ -1475,9 +1522,7 @@ class _CreateGamerIdScreenState extends State<CreateGamerIdScreen> {
                             color: const Color(0xFF10141D),
                             borderRadius: BorderRadius.circular(16),
                             border: Border.all(
-                              color: (_pickedRankScreenshot != null || _rankScreenshotUrl.isNotEmpty)
-                                  ? const Color(0xFF00FF88).withOpacity(0.4)
-                                  : const Color(0xFFFF8A00).withOpacity(0.4),
+                              color: Colors.white24,
                             ),
                           ),
                           child: Column(
@@ -1620,11 +1665,11 @@ class _CreateGamerIdScreenState extends State<CreateGamerIdScreen> {
                                   children: [
                                     Expanded(
                                       child: OutlinedButton.icon(
-                                        onPressed: _showRankScreenshotPickerSheet,
-                                        icon: const Icon(Icons.edit_rounded, size: 14, color: Color(0xFF00FF88)),
-                                        label: const Text('تصویر تبدیل کریں (Change Screenshot)', style: TextStyle(color: Color(0xFF00FF88), fontSize: 11.5)),
+                                        onPressed: _showRankComingSoonBanner, // ✅ NEW
+                                        icon: const Icon(Icons.edit_rounded, size: 14, color: Colors.white38),
+                                        label: const Text('تصویر تبدیل کریں (Coming Soon)', style: TextStyle(color: Colors.white38, fontSize: 11.5)),
                                         style: OutlinedButton.styleFrom(
-                                          side: const BorderSide(color: Color(0xFF00FF88)),
+                                          side: const BorderSide(color: Colors.white24),
                                           padding: const EdgeInsets.symmetric(vertical: 8),
                                         ),
                                       ),
@@ -1656,11 +1701,11 @@ class _CreateGamerIdScreenState extends State<CreateGamerIdScreen> {
                                   children: [
                                     Expanded(
                                       child: OutlinedButton.icon(
-                                        onPressed: _showRankScreenshotPickerSheet,
-                                        icon: const Icon(Icons.refresh_rounded, size: 14, color: Color(0xFF00FF88)),
-                                        label: const Text('نیا اسکرین شاٹ اپلوڈ کریں (Replace)', style: TextStyle(color: Color(0xFF00FF88), fontSize: 11.5)),
+                                        onPressed: _showRankComingSoonBanner, // ✅ NEW
+                                        icon: const Icon(Icons.refresh_rounded, size: 14, color: Colors.white38),
+                                        label: const Text('نیا اسکرین شاٹ (Coming Soon)', style: TextStyle(color: Colors.white38, fontSize: 11.5)),
                                         style: OutlinedButton.styleFrom(
-                                          side: const BorderSide(color: Color(0xFF00FF88)),
+                                          side: const BorderSide(color: Colors.white24),
                                           padding: const EdgeInsets.symmetric(vertical: 8),
                                         ),
                                       ),
@@ -1669,7 +1714,7 @@ class _CreateGamerIdScreenState extends State<CreateGamerIdScreen> {
                                 ),
                               ] else ...[
                                 InkWell(
-                                  onTap: _showRankScreenshotPickerSheet,
+                                  onTap: _showRankComingSoonBanner, // ✅ NEW
                                   borderRadius: BorderRadius.circular(12),
                                   child: Container(
                                     width: double.infinity,
@@ -1678,28 +1723,28 @@ class _CreateGamerIdScreenState extends State<CreateGamerIdScreen> {
                                       color: const Color(0xFF161B26),
                                       borderRadius: BorderRadius.circular(12),
                                       border: Border.all(
-                                        color: const Color(0xFFFF8A00).withOpacity(0.6),
+                                        color: Colors.white24,
                                         style: BorderStyle.solid,
                                         width: 1.5,
                                       ),
                                     ),
                                     child: const Column(
                                       children: [
-                                        Icon(Icons.add_photo_alternate_rounded, color: Color(0xFFFF8A00), size: 36),
+                                        Icon(Icons.lock_clock_rounded, color: Colors.white38, size: 36),
                                         SizedBox(height: 8),
                                         Text(
-                                          'اسکرین شاٹ اپلوڈ کریں (Upload Screenshot)',
+                                          'Rank Screenshot Upload — Coming Soon',
                                           style: TextStyle(
-                                            color: Colors.white,
+                                            color: Colors.white54,
                                             fontWeight: FontWeight.bold,
                                             fontSize: 13,
                                           ),
                                         ),
                                         SizedBox(height: 4),
                                         Text(
-                                          'رینک محفوظ کرنے کے لیے اسکرین شاٹ لازمی ہے',
+                                          'Advanced verification feature aa raha hai',
                                           style: TextStyle(
-                                            color: Color(0xFFFF8A00),
+                                            color: Colors.white38,
                                             fontSize: 11,
                                             fontWeight: FontWeight.w600,
                                           ),
@@ -2120,4 +2165,3 @@ class _AddVerifyGamerRankSheetState extends State<AddVerifyGamerRankSheet> {
     );
   }
 }
-
