@@ -54,6 +54,7 @@ class GamerAvatar extends StatelessWidget {
     } else if (photoUrl.isNotEmpty && (photoUrl.startsWith('http') || photoUrl.startsWith('https'))) {
       avatarContent = CachedNetworkImage(
         imageUrl: photoUrl,
+        cacheKey: photoUrl, // ✅ FIX: naya URL aane pe cache invalidate hoga
         width: radius * 2,
         height: radius * 2,
         fit: BoxFit.cover,
@@ -403,4 +404,3 @@ class GamerBadgeWidget extends StatelessWidget {
     );
   }
 }
-
