@@ -695,7 +695,11 @@ class _GamerProfileScreenState extends State<GamerProfileScreen>
         await SupabaseService.client.from('users').update({
           'cover_url': finalUrl,
           'updated_at': DateTime.now().toIso8601String(),
-        }).eq('id', user.uid);
+        }).eq('id', user.uid);// ✅ FIX: Turant refresh — 5 second wait nahi karna
+final freshUser = await _fetchGamerFromSupabase(user.uid);
+if (freshUser != null && mounted) {
+  setState(() => _cachedUser = freshUser);
+}
 
         // ✅ FIX: Evict old cover from cache so new image loads
         try {
