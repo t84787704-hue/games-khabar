@@ -1242,8 +1242,6 @@ class _ProfileScreenState extends State<ProfileScreen> {
             ),
           ),
         );
-      },
-    );
   }
 
   /// Robust Fallback UI that prevents blank grey screen if data load or build throws (Issue #10)

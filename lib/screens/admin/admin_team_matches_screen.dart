@@ -1083,7 +1083,7 @@ class _AdminMatchUnifiedData {
   final List<Map<String, dynamic>> disputeReports;
 
   const _AdminMatchUnifiedData({
-    required this.matches,
-    required this.disputeReports,
+    this.matches = const [],
+    this.disputeReports = const [],
   });
 }
