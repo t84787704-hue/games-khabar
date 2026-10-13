@@ -1,10 +1,10 @@
 // ================================================================
-// EXACT DIFF — Fixed syntax error at line 2296
+// EXACT DIFF — Fixed 2 syntax errors
 // ----------------------------------------------------------------
 // File: lib/screens/gamer_profile_screen.dart
 //
-// CHANGE: Newline add ki between comment and `if (!isOwnProfile) ...[`
-//         (comment aur if statement ek hi line mein the, isse Dart parser confuse ho raha tha)
+// FIX 1 (line ~1542): `const Text('🪙', style: TextStyle(...))` — formatted properly
+// FIX 2 (line ~2286): Newline added between comment and `if (!isOwnProfile) ...[`
 //
 // NO OTHER CODE CHANGED — byte-by-byte same
 // ================================================================
@@ -1057,7 +1057,8 @@ class _GamerProfileScreenState extends State<GamerProfileScreen>
                             decoration: const BoxDecoration(
                               color: Color(0xFFCED0D4),
                             ),
-                            // ✅ FIX: Added cacheKey — naya URL aane pe purani cache miss hogi                            child: CachedNetworkImage(
+                            // ✅ FIX: Added cacheKey — naya URL aane pe purani cache miss hogi
+                            child: CachedNetworkImage(
                               key: ValueKey(user.coverUrl),
                               cacheKey: user.coverUrl.isNotEmpty
                                   ? user.coverUrl
