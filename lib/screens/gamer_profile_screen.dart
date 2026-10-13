@@ -1,4 +1,4 @@
-// ================================================================
+why// ================================================================
 // EXACT DIFF — Fixed 2 syntax errors
 // ----------------------------------------------------------------
 // File: lib/screens/gamer_profile_screen.dart
@@ -737,7 +737,11 @@ if (freshUser != null && mounted) {
       await SupabaseService.client.from('users').update({
         'cover_url': coverUrl,
         'updated_at': DateTime.now().toIso8601String(),
-      }).eq('id', user.uid);
+      }).eq('id', user.uid);// ✅ FIX: Turant refresh
+final freshUser = await _fetchGamerFromSupabase(user.uid);
+if (freshUser != null && mounted) {
+  setState(() => _cachedUser = freshUser);
+}
 
       // ✅ FIX: Evict old cover from cache so new image loads
       try {
