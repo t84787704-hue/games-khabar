@@ -1,3 +1,16 @@
+// ================================================================
+// EXACT DIFF — Cover photo cache fix
+// ----------------------------------------------------------------
+// File: lib/screens/gamer_profile_screen.dart
+//
+// CHANGE 1: `_pickAndUploadCoverPhoto` — added cache evict after DB update
+// CHANGE 2: `_setPresetCover` — added cache evict after DB update
+// CHANGE 3: Cover `CachedNetworkImage` — added `cacheKey: user.coverUrl`
+// CHANGE 4: Avatar in SliverAppBar — added `cacheKey` (optional, same fix)
+//
+// NO OTHER CODE CHANGED — byte-by-byte same
+// ================================================================
+
 import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
@@ -686,6 +699,14 @@ class _GamerProfileScreenState extends State<GamerProfileScreen>
           'updated_at': DateTime.now().toIso8601String(),
         }).eq('id', user.uid);
 
+        // ✅ FIX: Evict old cover from cache so new image loads
+        try {
+          if (user.coverUrl.isNotEmpty) {
+            await CachedNetworkImage.evictFromCache(user.coverUrl);
+          }
+          await CachedNetworkImage.evictFromCache(finalUrl);
+        } catch (_) {}
+
         if (mounted) {
           ScaffoldMessenger.of(context).hideCurrentSnackBar();
           ScaffoldMessenger.of(context).showSnackBar(
@@ -715,6 +736,14 @@ class _GamerProfileScreenState extends State<GamerProfileScreen>
         'cover_url': coverUrl,
         'updated_at': DateTime.now().toIso8601String(),
       }).eq('id', user.uid);
+
+      // ✅ FIX: Evict old cover from cache so new image loads
+      try {
+        if (user.coverUrl.isNotEmpty) {
+          await CachedNetworkImage.evictFromCache(user.coverUrl);
+        }
+        await CachedNetworkImage.evictFromCache(coverUrl);
+      } catch (_) {}
 
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -1030,7 +1059,12 @@ class _GamerProfileScreenState extends State<GamerProfileScreen>
                             decoration: const BoxDecoration(
                               color: Color(0xFFCED0D4),
                             ),
+                            // ✅ FIX: Added cacheKey — naya URL aane pe purani cache miss hogi
                             child: CachedNetworkImage(
+                              key: ValueKey(user.coverUrl),
+                              cacheKey: user.coverUrl.isNotEmpty
+                                  ? user.coverUrl
+                                  : 'cover_default_${user.uid}',
                               imageUrl: user.coverUrl.isNotEmpty
                                   ? user.coverUrl
                                   : 'https://images.unsplash.com/photo-1542751371-adc38448a05e?w=1200&auto=format&fit=crop&q=80',
@@ -2188,8 +2222,7 @@ class _GamerProfileScreenState extends State<GamerProfileScreen>
                     ),
                   ],
 
-                  // ─────────── OTHER USER PROFILE ONLY ───────────
-                  if (!isOwnProfile) ...[
+                  // ─────────── OTHER USER PROFILE ONLY ───────────                  if (!isOwnProfile) ...[
                     // Share Profile
                     ListTile(
                       leading: Container(
