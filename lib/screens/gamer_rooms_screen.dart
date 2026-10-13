@@ -958,10 +958,51 @@ class _GamerRoomsScreenState extends State<GamerRoomsScreen> {
     final roomIdController = TextEditingController();
     final passController = TextEditingController();
 
+    final bool isDark = GamerTheme.isDarkMode || Theme.of(context).brightness == Brightness.dark;
+    final Color sheetBg = isDark ? GamerTheme.surfaceDark : Colors.white;
+    final Color textColor = isDark ? Colors.white : const Color(0xFF0F172A);
+    final Color labelColor = isDark ? const Color(0xFF94A3B8) : const Color(0xFF475569);
+    final Color inputBg = isDark ? GamerTheme.cardElevated : const Color(0xFFF8FAFC);
+    final Color inputBorder = isDark ? GamerTheme.borderDark : const Color(0xFFCBD5E1);
+    final Color dropdownBg = isDark ? GamerTheme.cardElevated : Colors.white;
+
+    InputDecoration buildFieldDecoration({String? label, String? hint, String? error}) {
+      return InputDecoration(
+        labelText: label,
+        hintText: hint,
+        errorText: error,
+        labelStyle: TextStyle(color: labelColor, fontSize: 12, fontWeight: FontWeight.bold),
+        hintStyle: TextStyle(color: isDark ? Colors.white38 : const Color(0xFF94A3B8), fontSize: 12),
+        filled: true,
+        fillColor: inputBg,
+        contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+        border: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(10),
+          borderSide: BorderSide(color: inputBorder),
+        ),
+        enabledBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(10),
+          borderSide: BorderSide(color: inputBorder),
+        ),
+        focusedBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(10),
+          borderSide: const BorderSide(color: Color(0xFF1877F2), width: 1.5),
+        ),
+        errorBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(10),
+          borderSide: const BorderSide(color: GamerTheme.redAccent),
+        ),
+        focusedErrorBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(10),
+          borderSide: const BorderSide(color: GamerTheme.redAccent, width: 1.5),
+        ),
+      );
+    }
+
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
-      backgroundColor: Colors.white,
+      backgroundColor: sheetBg,
       shape: const RoundedRectangleBorder(
         borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
       ),
@@ -970,326 +1011,464 @@ class _GamerRoomsScreenState extends State<GamerRoomsScreen> {
           final bool isRoomIdEmpty = roomIdController.text.trim().isEmpty;
           final bool isPassEmpty = passController.text.trim().isEmpty;
           final bool isPublishEnabled = !isRoomIdEmpty && !isPassEmpty;
-          return Padding(
-            padding: EdgeInsets.only(
-              left: 16,
-              right: 16,
-              top: 20,
-              bottom: MediaQuery.of(ctx).viewInsets.bottom + 24,
+          return ConstrainedBox(
+            constraints: BoxConstraints(
+              maxHeight: MediaQuery.of(ctx).size.height * 0.9,
             ),
-            child: SingleChildScrollView(
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Row(
-                    children: [
-                      const Icon(Icons.add_moderator_rounded,
-                          color: Color(0xFF1877F2), size: 22),
-                      const SizedBox(width: 8),
-                      const Text('Host Custom Room',
+            child: Padding(
+              padding: EdgeInsets.only(
+                left: 16,
+                right: 16,
+                top: 18,
+                bottom: MediaQuery.of(ctx).viewInsets.bottom + 20,
+              ),
+              child: SingleChildScrollView(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    // Header Row
+                    Row(
+                      children: [
+                        const Icon(Icons.add_moderator_rounded,
+                            color: Color(0xFF1877F2), size: 22),
+                        const SizedBox(width: 8),
+                        Text(
+                          'Host Custom Room',
                           style: TextStyle(
-                              fontWeight: FontWeight.bold, fontSize: 17)),
-                      const Spacer(),
-                      IconButton(
-                        icon: const Icon(Icons.close_rounded,
-                            color: Color(0xFF65676B)),
-                        onPressed: () => Navigator.pop(ctx),
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 14),
-                  const Text('SELECT GAME',
-                      style: TextStyle(
-                          fontSize: 11, fontWeight: FontWeight.bold)),
-                  const SizedBox(height: 6),
-                  DropdownButtonFormField<String>(
-                    value: selectedGame,
-                    items: _gameCategories
-                        .where((g) => g != 'All Games')
-                        .map((g) =>
-                            DropdownMenuItem(value: g, child: Text(g)))
-                        .toList(),
-                    onChanged: (val) {
-                      if (val != null) {
-                        setSheetState(() {
-                          selectedGame = val;
-                          titleController.text = generateRoomTitle(
-                              selectedMap, maxSlots, prizeCoins, entryFeeCoins);
-                        });
-                      }
-                    },
-                  ),
-                  const SizedBox(height: 12),
-                  const Text('ROOM TITLE',
-                      style: TextStyle(
-                          fontSize: 11, fontWeight: FontWeight.bold)),
-                  const SizedBox(height: 6),
-                  TextField(controller: titleController),
-                  const SizedBox(height: 12),
-                  Row(
-                    children: [
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            const Text('MAP',
-                                style: TextStyle(
-                                    fontSize: 11,
-                                    fontWeight: FontWeight.bold)),
-                            const SizedBox(height: 6),
-                            DropdownButtonFormField<String>(
-                              value: selectedMap,
-                              items: const [
-                                DropdownMenuItem(
-                                    value: 'Erangel', child: Text('Erangel')),
-                                DropdownMenuItem(
-                                    value: 'Miramar', child: Text('Miramar')),
-                                DropdownMenuItem(
-                                    value: 'Sanhok', child: Text('Sanhok')),
-                                DropdownMenuItem(
-                                    value: 'Vikendi', child: Text('Vikendi')),
-                                DropdownMenuItem(
-                                    value: 'Livik', child: Text('Livik')),
-                                DropdownMenuItem(
-                                    value: 'Karakin', child: Text('Karakin')),
-                              ],
-                              onChanged: (val) {
-                                if (val != null) {
-                                  setSheetState(() {
-                                    selectedMap = val;
-                                    titleController.text = generateRoomTitle(
-                                        selectedMap, maxSlots, prizeCoins,
-                                        entryFeeCoins);
-                                  });
-                                }
-                              },
-                            ),
-                          ],
-                        ),
-                      ),
-                      const SizedBox(width: 12),
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            const Text('SLOTS',
-                                style: TextStyle(
-                                    fontSize: 11,
-                                    fontWeight: FontWeight.bold)),
-                            const SizedBox(height: 6),
-                            DropdownButtonFormField<int>(
-                              value: maxSlots,
-                              items: const [
-                                DropdownMenuItem(
-                                    value: 2, child: Text('2 (1v1)')),
-                                DropdownMenuItem(
-                                    value: 4, child: Text('4 (2v2)')),
-                                DropdownMenuItem(
-                                    value: 10, child: Text('10 slots')),
-                                DropdownMenuItem(
-                                    value: 12, child: Text('12 slots')),
-                                DropdownMenuItem(
-                                    value: 24, child: Text('24 slots')),
-                                DropdownMenuItem(
-                                    value: 50, child: Text('50 slots')),
-                                DropdownMenuItem(
-                                    value: 100, child: Text('100 slots')),
-                              ],
-                              onChanged: (val) {
-                                if (val != null) {
-                                  setSheetState(() {
-                                    maxSlots = val;
-                                    titleController.text = generateRoomTitle(
-                                        selectedMap, maxSlots, prizeCoins,
-                                        entryFeeCoins);
-                                  });
-                                }
-                              },
-                            ),
-                          ],
-                        ),
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 12),
-                  const Text('PRIZE POOL',
-                      style: TextStyle(
-                          fontSize: 11, fontWeight: FontWeight.bold)),
-                  const SizedBox(height: 6),
-                  DropdownButtonFormField<int>(
-                    value: prizeCoins,
-                    items: const [
-                      DropdownMenuItem(
-                          value: 100, child: Text('💰 100 Coins')),
-                      DropdownMenuItem(
-                          value: 250, child: Text('💰 250 Coins')),
-                      DropdownMenuItem(
-                          value: 500, child: Text('💰 500 Coins')),
-                      DropdownMenuItem(
-                          value: 1000, child: Text('💰 1000 Coins')),
-                    ],
-                    onChanged: (val) {
-                      if (val != null) {
-                        setSheetState(() {
-                          prizeCoins = val;
-                          titleController.text = generateRoomTitle(
-                              selectedMap, maxSlots, prizeCoins, entryFeeCoins);
-                        });
-                      }
-                    },
-                  ),
-                  const SizedBox(height: 12),
-                  const Text('ENTRY FEE',
-                      style: TextStyle(
-                          fontSize: 11, fontWeight: FontWeight.bold)),
-                  const SizedBox(height: 6),
-                  DropdownButtonFormField<int>(
-                    value: entryFeeCoins,
-                    items: const [
-                      DropdownMenuItem(value: 0, child: Text('🆓 FREE Entry')),
-                      DropdownMenuItem(value: 50, child: Text('💰 50 Coins')),
-                      DropdownMenuItem(value: 200, child: Text('💰 200 Coins')),
-                      DropdownMenuItem(value: 500, child: Text('💰 500 Coins')),
-                    ],
-                    onChanged: (val) {
-                      if (val != null) {
-                        setSheetState(() {
-                          entryFeeCoins = val;
-                          titleController.text = generateRoomTitle(
-                              selectedMap, maxSlots, prizeCoins, entryFeeCoins);
-                        });
-                      }
-                    },
-                  ),
-                  const SizedBox(height: 12),
-                  Row(
-                    children: [
-                      Expanded(
-                        child: TextField(
-                          controller: roomIdController,
-                          onChanged: (_) => setSheetState(() {}),
-                          decoration: InputDecoration(
-                            labelText: 'IN-GAME ROOM ID *',
-                            errorText:
-                                isRoomIdEmpty ? 'Required' : null,
+                            color: textColor,
+                            fontWeight: FontWeight.bold,
+                            fontSize: 17,
                           ),
                         ),
-                      ),
-                      const SizedBox(width: 12),
-                      Expanded(
-                        child: TextField(
-                          controller: passController,
-                          onChanged: (_) => setSheetState(() {}),
-                          decoration: InputDecoration(
-                            labelText: 'PASSWORD *',
-                            errorText: isPassEmpty ? 'Required' : null,
-                          ),
+                        const Spacer(),
+                        IconButton(
+                          icon: Icon(Icons.close_rounded,
+                              color: labelColor),
+                          onPressed: () => Navigator.pop(ctx),
                         ),
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 20),
-                  SizedBox(
-                    width: double.infinity,
-                    height: 46,
-                    child: ElevatedButton(
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: isPublishEnabled
-                            ? const Color(0xFF1877F2)
-                            : const Color(0xFFE4E6EB),
-                      ),
-                      onPressed: isPublishEnabled
-                          ? () async {
-                              final uid = currentUserId;
-                              final name = currentUserName;
-                              if (uid.isEmpty) return;
+                      ],
+                    ),
+                    const SizedBox(height: 14),
 
-                              final hasActive = await _hasActiveRoom(uid);
-                              if (hasActive) {
-                                if (mounted) {
-                                  ScaffoldMessenger.of(context).showSnackBar(
-                                    const SnackBar(
-                                      content: Text(
-                                          '⚠️ You already have an active room!'),
-                                      backgroundColor: GamerTheme.accentOrange,
-                                      behavior: SnackBarBehavior.floating,
-                                    ),
-                                  );
-                                }
-                                return;
-                              }
+                    // 1. SELECT GAME
+                    Text(
+                      'SELECT GAME',
+                      style: TextStyle(
+                        color: labelColor,
+                        fontSize: 11,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                    const SizedBox(height: 6),
+                    DropdownButtonFormField<String>(
+                      value: selectedGame,
+                      dropdownColor: dropdownBg,
+                      style: TextStyle(color: textColor, fontSize: 13, fontWeight: FontWeight.w600),
+                      decoration: buildFieldDecoration(),
+                      icon: Icon(Icons.keyboard_arrow_down_rounded, color: labelColor),
+                      items: _gameCategories
+                          .where((g) => g != 'All Games')
+                          .map((g) => DropdownMenuItem(
+                                value: g,
+                                child: Text(
+                                  g,
+                                  style: TextStyle(
+                                    color: textColor,
+                                    fontSize: 13,
+                                    fontWeight: FontWeight.w600,
+                                  ),
+                                ),
+                              ))
+                          .toList(),
+                      onChanged: (val) {
+                        if (val != null) {
+                          setSheetState(() {
+                            selectedGame = val;
+                            titleController.text = generateRoomTitle(
+                                selectedMap, maxSlots, prizeCoins, entryFeeCoins);
+                          });
+                        }
+                      },
+                    ),
+                    const SizedBox(height: 12),
 
-                              await CoinOrAdPopup.show(
-                                context: context,
-                                actionName: 'Room Create',
-                                onConfirm: () async {
-                                  final roomId = _generateUuid();
-                                  final now = DateTime.now().toIso8601String();
-                                  final startTime = DateTime.now()
-                                      .add(const Duration(minutes: 15))
-                                      .toIso8601String();
-                                  try {
-                                    await SupabaseService.client.from('rooms').insert({
-                                      'id': roomId,
-                                      'host_id': uid,
-                                      'game': selectedGame,
-                                      'mode': selectedMap,
-                                      'room_id': roomIdController.text.trim(),
-                                      'room_password': passController.text.trim(),
-                                      'prize_pool': prizeCoins,
-                                      'total_slots': maxSlots,
-                                      'filled_slots': 1,
-                                      'status': 'active',
-                                      'created_at': now,
-                                      'host_name': name,
-                                      'joined_user_ids': jsonEncode([uid]),
-                                      'joined_users': jsonEncode([
-                                        {
-                                          'id': uid,
-                                          'name': name,
-                                          'photo': currentUserPhoto,
-                                          'joinedAt': now,
-                                        }
-                                      ]),
-                                      'start_time': startTime,
-                                      'entry_fee_coins': entryFeeCoins,
+                    // 2. ROOM TITLE
+                    Text(
+                      'ROOM TITLE',
+                      style: TextStyle(
+                        color: labelColor,
+                        fontSize: 11,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                    const SizedBox(height: 6),
+                    TextField(
+                      controller: titleController,
+                      style: TextStyle(color: textColor, fontSize: 13, fontWeight: FontWeight.w500),
+                      decoration: buildFieldDecoration(hint: 'Room Title'),
+                    ),
+                    const SizedBox(height: 12),
+
+                    // 3. MAP & 4. SLOTS
+                    Row(
+                      children: [
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                'MAP',
+                                style: TextStyle(
+                                  color: labelColor,
+                                  fontSize: 11,
+                                  fontWeight: FontWeight.bold,
+                                ),
+                              ),
+                              const SizedBox(height: 6),
+                              DropdownButtonFormField<String>(
+                                value: selectedMap,
+                                dropdownColor: dropdownBg,
+                                style: TextStyle(color: textColor, fontSize: 13, fontWeight: FontWeight.w600),
+                                decoration: buildFieldDecoration(),
+                                icon: Icon(Icons.keyboard_arrow_down_rounded, color: labelColor),
+                                items: const [
+                                  'Erangel',
+                                  'Miramar',
+                                  'Sanhok',
+                                  'Vikendi',
+                                  'Livik',
+                                  'Karakin',
+                                ]
+                                    .map((m) => DropdownMenuItem(
+                                          value: m,
+                                          child: Text(
+                                            m,
+                                            style: TextStyle(
+                                              color: textColor,
+                                              fontSize: 13,
+                                              fontWeight: FontWeight.w600,
+                                            ),
+                                          ),
+                                        ))
+                                    .toList(),
+                                onChanged: (val) {
+                                  if (val != null) {
+                                    setSheetState(() {
+                                      selectedMap = val;
+                                      titleController.text = generateRoomTitle(
+                                          selectedMap,
+                                          maxSlots,
+                                          prizeCoins,
+                                          entryFeeCoins);
                                     });
-                                    if (mounted) {
-                                      setState(() => _joinedRoomIds.add(roomId));
-                                      Navigator.pop(ctx);
-                                      ScaffoldMessenger.of(context).showSnackBar(
-                                        const SnackBar(
-                                          content: Text('🎉 Room published!'),
-                                          backgroundColor: _fbBlue,
-                                        ),
-                                      );
-                                    }
-                                  } catch (e) {
-                                    debugPrint('Room insert failed: $e');
-                                    if (mounted) {
-                                      ScaffoldMessenger.of(context).showSnackBar(
-                                        SnackBar(
-                                          content: Text('Failed: $e'),
-                                          backgroundColor: GamerTheme.redAccent,
-                                          behavior: SnackBarBehavior.floating,
-                                          duration: const Duration(seconds: 6),
-                                        ),
-                                      );
-                                    }
                                   }
                                 },
-                              );
-                            }
-                          : null,
-                      child: const Text('PUBLISH ROOM',
-                          style: TextStyle(
-                              color: Colors.white,
-                              fontWeight: FontWeight.bold,
-                              fontSize: 14)),
+                              ),
+                            ],
+                          ),
+                        ),
+                        const SizedBox(width: 12),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                'SLOTS',
+                                style: TextStyle(
+                                  color: labelColor,
+                                  fontSize: 11,
+                                  fontWeight: FontWeight.bold,
+                                ),
+                              ),
+                              const SizedBox(height: 6),
+                              DropdownButtonFormField<int>(
+                                value: maxSlots,
+                                dropdownColor: dropdownBg,
+                                style: TextStyle(color: textColor, fontSize: 13, fontWeight: FontWeight.w600),
+                                decoration: buildFieldDecoration(),
+                                icon: Icon(Icons.keyboard_arrow_down_rounded, color: labelColor),
+                                items: const [
+                                  MapEntry(2, '2 (1v1)'),
+                                  MapEntry(4, '4 (2v2)'),
+                                  MapEntry(10, '10 slots'),
+                                  MapEntry(12, '12 slots'),
+                                  MapEntry(24, '24 slots'),
+                                  MapEntry(50, '50 slots'),
+                                  MapEntry(100, '100 slots'),
+                                ]
+                                    .map((e) => DropdownMenuItem<int>(
+                                          value: e.key,
+                                          child: Text(
+                                            e.value,
+                                            style: TextStyle(
+                                              color: textColor,
+                                              fontSize: 13,
+                                              fontWeight: FontWeight.w600,
+                                            ),
+                                          ),
+                                        ))
+                                    .toList(),
+                                onChanged: (val) {
+                                  if (val != null) {
+                                    setSheetState(() {
+                                      maxSlots = val;
+                                      titleController.text = generateRoomTitle(
+                                          selectedMap,
+                                          maxSlots,
+                                          prizeCoins,
+                                          entryFeeCoins);
+                                    });
+                                  }
+                                },
+                              ),
+                            ],
+                          ),
+                        ),
+                      ],
                     ),
-                  ),
-                ],
+                    const SizedBox(height: 12),
+
+                    // 5. PRIZE POOL
+                    Text(
+                      'PRIZE POOL',
+                      style: TextStyle(
+                        color: labelColor,
+                        fontSize: 11,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                    const SizedBox(height: 6),
+                    DropdownButtonFormField<int>(
+                      value: prizeCoins,
+                      dropdownColor: dropdownBg,
+                      style: TextStyle(color: textColor, fontSize: 13, fontWeight: FontWeight.w600),
+                      decoration: buildFieldDecoration(),
+                      icon: Icon(Icons.keyboard_arrow_down_rounded, color: labelColor),
+                      items: const [
+                        MapEntry(100, '💰 100 Coins'),
+                        MapEntry(250, '💰 250 Coins'),
+                        MapEntry(500, '💰 500 Coins'),
+                        MapEntry(1000, '💰 1000 Coins'),
+                      ]
+                          .map((e) => DropdownMenuItem<int>(
+                                value: e.key,
+                                child: Text(
+                                  e.value,
+                                  style: TextStyle(
+                                    color: textColor,
+                                    fontSize: 13,
+                                    fontWeight: FontWeight.w600,
+                                  ),
+                                ),
+                              ))
+                          .toList(),
+                      onChanged: (val) {
+                        if (val != null) {
+                          setSheetState(() {
+                            prizeCoins = val;
+                            titleController.text = generateRoomTitle(
+                                selectedMap, maxSlots, prizeCoins, entryFeeCoins);
+                          });
+                        }
+                      },
+                    ),
+                    const SizedBox(height: 12),
+
+                    // 6. ENTRY FEE
+                    Text(
+                      'ENTRY FEE',
+                      style: TextStyle(
+                        color: labelColor,
+                        fontSize: 11,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                    const SizedBox(height: 6),
+                    DropdownButtonFormField<int>(
+                      value: entryFeeCoins,
+                      dropdownColor: dropdownBg,
+                      style: TextStyle(color: textColor, fontSize: 13, fontWeight: FontWeight.w600),
+                      decoration: buildFieldDecoration(),
+                      icon: Icon(Icons.keyboard_arrow_down_rounded, color: labelColor),
+                      items: const [
+                        MapEntry(0, '🆓 FREE Entry'),
+                        MapEntry(50, '💰 50 Coins'),
+                        MapEntry(200, '💰 200 Coins'),
+                        MapEntry(500, '💰 500 Coins'),
+                      ]
+                          .map((e) => DropdownMenuItem<int>(
+                                value: e.key,
+                                child: Text(
+                                  e.value,
+                                  style: TextStyle(
+                                    color: textColor,
+                                    fontSize: 13,
+                                    fontWeight: FontWeight.w600,
+                                  ),
+                                ),
+                              ))
+                          .toList(),
+                      onChanged: (val) {
+                        if (val != null) {
+                          setSheetState(() {
+                            entryFeeCoins = val;
+                            titleController.text = generateRoomTitle(
+                                selectedMap, maxSlots, prizeCoins, entryFeeCoins);
+                          });
+                        }
+                      },
+                    ),
+                    const SizedBox(height: 12),
+
+                    // 7. IN-GAME ROOM ID & 8. PASSWORD
+                    Row(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Expanded(
+                          child: TextField(
+                            controller: roomIdController,
+                            style: TextStyle(color: textColor, fontSize: 13, fontWeight: FontWeight.w600),
+                            onChanged: (_) => setSheetState(() {}),
+                            decoration: buildFieldDecoration(
+                              label: 'IN-GAME ROOM ID *',
+                              hint: 'e.g. 1234567',
+                              error: isRoomIdEmpty ? 'Required' : null,
+                            ),
+                          ),
+                        ),
+                        const SizedBox(width: 12),
+                        Expanded(
+                          child: TextField(
+                            controller: passController,
+                            style: TextStyle(color: textColor, fontSize: 13, fontWeight: FontWeight.w600),
+                            onChanged: (_) => setSheetState(() {}),
+                            decoration: buildFieldDecoration(
+                              label: 'PASSWORD *',
+                              hint: 'e.g. 1234',
+                              error: isPassEmpty ? 'Required' : null,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 20),
+
+                    // 9. PUBLISH ROOM BUTTON
+                    SizedBox(
+                      width: double.infinity,
+                      height: 48,
+                      child: ElevatedButton(
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: isPublishEnabled
+                              ? const Color(0xFF1877F2)
+                              : (isDark ? const Color(0xFF1E293B) : const Color(0xFFE2E8F0)),
+                          foregroundColor: isPublishEnabled
+                              ? Colors.white
+                              : (isDark ? const Color(0xFF64748B) : const Color(0xFF94A3B8)),
+                          elevation: isPublishEnabled ? 2 : 0,
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(10),
+                          ),
+                        ),
+                        onPressed: isPublishEnabled
+                            ? () async {
+                                final uid = currentUserId;
+                                final name = currentUserName;
+                                if (uid.isEmpty) return;
+
+                                final hasActive = await _hasActiveRoom(uid);
+                                if (hasActive) {
+                                  if (mounted) {
+                                    ScaffoldMessenger.of(context).showSnackBar(
+                                      const SnackBar(
+                                        content: Text(
+                                            '⚠️ You already have an active room!'),
+                                        backgroundColor: GamerTheme.accentOrange,
+                                        behavior: SnackBarBehavior.floating,
+                                      ),
+                                    );
+                                  }
+                                  return;
+                                }
+
+                                await CoinOrAdPopup.show(
+                                  context: context,
+                                  actionName: 'Room Create',
+                                  onConfirm: () async {
+                                    final roomId = _generateUuid();
+                                    final now = DateTime.now().toIso8601String();
+                                    final startTime = DateTime.now()
+                                        .add(const Duration(minutes: 15))
+                                        .toIso8601String();
+                                    try {
+                                      await SupabaseService.client.from('rooms').insert({
+                                        'id': roomId,
+                                        'host_id': uid,
+                                        'game': selectedGame,
+                                        'mode': selectedMap,
+                                        'room_id': roomIdController.text.trim(),
+                                        'room_password': passController.text.trim(),
+                                        'prize_pool': prizeCoins,
+                                        'total_slots': maxSlots,
+                                        'filled_slots': 1,
+                                        'status': 'active',
+                                        'created_at': now,
+                                        'host_name': name,
+                                        'joined_user_ids': jsonEncode([uid]),
+                                        'joined_users': jsonEncode([
+                                          {
+                                            'id': uid,
+                                            'name': name,
+                                            'photo': currentUserPhoto,
+                                            'joinedAt': now,
+                                          }
+                                        ]),
+                                        'start_time': startTime,
+                                        'entry_fee_coins': entryFeeCoins,
+                                      });
+                                      if (mounted) {
+                                        setState(() => _joinedRoomIds.add(roomId));
+                                        Navigator.pop(ctx);
+                                        ScaffoldMessenger.of(context).showSnackBar(
+                                          const SnackBar(
+                                            content: Text('🎉 Room published!'),
+                                            backgroundColor: _fbBlue,
+                                          ),
+                                        );
+                                      }
+                                    } catch (e) {
+                                      debugPrint('Room insert failed: $e');
+                                      if (mounted) {
+                                        ScaffoldMessenger.of(context).showSnackBar(
+                                          SnackBar(
+                                            content: Text('Failed: $e'),
+                                            backgroundColor: GamerTheme.redAccent,
+                                            behavior: SnackBarBehavior.floating,
+                                            duration: const Duration(seconds: 6),
+                                          ),
+                                        );
+                                      }
+                                    }
+                                  },
+                                );
+                              }
+                            : null,
+                        child: Text(
+                          'PUBLISH ROOM',
+                          style: TextStyle(
+                            color: isPublishEnabled
+                                ? Colors.white
+                                : (isDark ? const Color(0xFF64748B) : const Color(0xFF94A3B8)),
+                            fontWeight: FontWeight.bold,
+                            fontSize: 14,
+                            letterSpacing: 0.5,
+                          ),
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
               ),
             ),
           );

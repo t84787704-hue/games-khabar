@@ -1927,61 +1927,6 @@ class _GamerProfileScreenState extends State<GamerProfileScreen>
                       },
                     ),
 
-                    // Night Mode
-                    ValueListenableBuilder<ThemeMode>(
-                      valueListenable: ThemeService.themeModeNotifier,
-                      builder: (context, mode, _) {
-                        final isDark = mode == ThemeMode.dark;
-                        return ListTile(
-                          leading: Container(
-                            padding: const EdgeInsets.all(8),
-                            decoration: BoxDecoration(
-                              color: isDark
-                                  ? const Color(0xFF1E293B)
-                                  : const Color(0xFFFEF7E0),
-                              shape: BoxShape.circle,
-                            ),
-                            child: Icon(
-                              isDark
-                                  ? Icons.light_mode_rounded
-                                  : Icons.dark_mode_rounded,
-                              color: const Color(0xFFF59E0B),
-                              size: 20,
-                            ),
-                          ),
-                          title: Text(
-                            isDark ? 'Day Mode' : 'Night Mode',
-                            style: TextStyle(
-                                color: isDark
-                                    ? Colors.white
-                                    : const Color(0xFF050505),
-                                fontWeight: FontWeight.bold,
-                                fontSize: 14),
-                          ),
-                          subtitle: Text(
-                            isDark
-                                ? 'Switch to bright display theme'
-                                : 'Switch to dark gaming theme',
-                            style: TextStyle(
-                                color: isDark
-                                    ? Colors.white70
-                                    : const Color(0xFF65676B),
-                                fontSize: 12),
-                          ),
-                          trailing: Switch.adaptive(
-                            value: isDark,
-                            activeColor: const Color(0xFF1877F2),
-                            onChanged: (val) {
-                              ThemeService.setTheme(val);
-                            },
-                          ),
-                          onTap: () {
-                            ThemeService.toggleTheme();
-                          },
-                        );
-                      },
-                    ),
-
                     // Saved Posts & News
                     ListTile(
                       leading: Container(
