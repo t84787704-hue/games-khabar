@@ -2391,7 +2391,9 @@ class _InRoomBottomSheetContentState extends State<_InRoomBottomSheetContent> {
                 child: Text(
                   isRejected
                       ? 'PROOF REJECTED — RE-UPLOAD SCREENSHOT'
-                      : 'MATCH ENDED — CLAIM YOUR PRIZE',
+                      : (currentRoom.isInProgress
+                          ? 'MATCH IN PROGRESS — SUBMIT WINNING PROOF'
+                          : 'MATCH ENDED — CLAIM YOUR PRIZE'),
                   style: TextStyle(
                     fontWeight: FontWeight.w900,
                     fontSize: 13.5,
@@ -2452,7 +2454,7 @@ class _InRoomBottomSheetContentState extends State<_InRoomBottomSheetContent> {
                     )
                   : const Icon(Icons.upload_file_rounded, size: 20),
               label: Text(
-                _isUploadingProof ? 'UPLOADING & ANALYZING OCR...' : 'Upload Winning Screenshot',
+                _isUploadingProof ? 'UPLOADING & ANALYZING OCR...' : 'Upload Winning Proof',
                 style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13),
               ),
               onPressed: _isUploadingProof
@@ -3233,7 +3235,7 @@ class _InRoomBottomSheetContentState extends State<_InRoomBottomSheetContent> {
                             const SizedBox(width: 8),
                             Expanded(
                               child: Text(
-                                '🏆 MATCH COMPLETED — Winner: ${currentRoom.winnerName ?? "Player"} (+${currentRoom.prize} Coins)',
+                                '🏆 WINNER: ${currentRoom.winnerName ?? "Player"} — Won ${currentRoom.prize} Coins!',
                                 style: const TextStyle(
                                     color: Color(0xFF2E7D32),
                                     fontWeight: FontWeight.bold,
@@ -3281,8 +3283,10 @@ class _InRoomBottomSheetContentState extends State<_InRoomBottomSheetContent> {
                         ),
                       ),
 
-                    if (currentRoom.isRewardWaiting ||
-                        currentRoom.isProofRejected)
+                    if (((currentRoom.isInProgress && isJ) ||
+                            currentRoom.isRewardWaiting ||
+                            currentRoom.isProofRejected) &&
+                        access)
                       _buildWinnerProofUploadCard(currentRoom),
 
                     if (currentRoom.isProofSubmitted)
