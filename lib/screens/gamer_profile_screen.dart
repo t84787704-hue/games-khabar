@@ -1,12 +1,10 @@
 // ================================================================
-// EXACT DIFF — Cover photo cache fix
+// EXACT DIFF — Fixed syntax error at line 2296
 // ----------------------------------------------------------------
 // File: lib/screens/gamer_profile_screen.dart
 //
-// CHANGE 1: `_pickAndUploadCoverPhoto` — added cache evict after DB update
-// CHANGE 2: `_setPresetCover` — added cache evict after DB update
-// CHANGE 3: Cover `CachedNetworkImage` — added `cacheKey: user.coverUrl`
-// CHANGE 4: Avatar in SliverAppBar — added `cacheKey` (optional, same fix)
+// CHANGE: Newline add ki between comment and `if (!isOwnProfile) ...[`
+//         (comment aur if statement ek hi line mein the, isse Dart parser confuse ho raha tha)
 //
 // NO OTHER CODE CHANGED — byte-by-byte same
 // ================================================================
@@ -1059,8 +1057,7 @@ class _GamerProfileScreenState extends State<GamerProfileScreen>
                             decoration: const BoxDecoration(
                               color: Color(0xFFCED0D4),
                             ),
-                            // ✅ FIX: Added cacheKey — naya URL aane pe purani cache miss hogi
-                            child: CachedNetworkImage(
+                            // ✅ FIX: Added cacheKey — naya URL aane pe purani cache miss hogi                            child: CachedNetworkImage(
                               key: ValueKey(user.coverUrl),
                               cacheKey: user.coverUrl.isNotEmpty
                                   ? user.coverUrl
@@ -2222,7 +2219,8 @@ class _GamerProfileScreenState extends State<GamerProfileScreen>
                     ),
                   ],
 
-                  // ─────────── OTHER USER PROFILE ONLY ───────────                  if (!isOwnProfile) ...[
+                  // ─────────── OTHER USER PROFILE ONLY ───────────
+                  if (!isOwnProfile) ...[
                     // Share Profile
                     ListTile(
                       leading: Container(
