@@ -413,20 +413,15 @@ class _AdminProofCardState extends State<AdminProofCard> {
         winnerTeamId: winnerUuid,
       );
 
-      // ✅ NAYA: Send notification to winner team
+      // ✅ NAYA: Send proof-accepted notification to winner team
       if (ok) {
         try {
           final team = await _teamService.getTeam(winnerUuid);
           if (team != null && team.leaderId.isNotEmpty) {
-            await NotificationService().createNotification(
-              userId: team.leaderId,
-              type: 'proof_accepted',
-              title: '🏆 Proof Accepted — You Won!',
-              body: 'Aapka match proof accept ho gaya! Aap winner hain.',
-              priority: 'high',
-              data: {
-                'match_id': matchId.toString(),
-              },
+            await NotificationService().sendProofNotification(
+              targetUserId: team.leaderId,
+              status: 'accepted',
+              roomTitle: 'Team Match',
             );
           }
         } catch (e) {
@@ -476,7 +471,7 @@ class _AdminProofCardState extends State<AdminProofCard> {
         reason: finalReason,
       );
 
-      // ✅ NAYA: Send notification to submitter team
+      // ✅ NAYA: Send proof-rejected notification to submitter team
       if (ok) {
         try {
           final submittedByRaw = (widget.match['submitted_by_team_id'] ??
@@ -486,17 +481,11 @@ class _AdminProofCardState extends State<AdminProofCard> {
             final teamUuid = SupabaseService.toUuid(submittedByRaw);
             final team = await _teamService.getTeam(teamUuid);
             if (team != null && team.leaderId.isNotEmpty) {
-              await NotificationService().createNotification(
-                userId: team.leaderId,
-                type: 'proof_rejected',
-                title: '❌ Proof Rejected',
-                body:
-                    'Aapka match proof reject ho gaya: $finalReason. Dobara upload karen.',
-                priority: 'high',
-                data: {
-                  'match_id': matchId.toString(),
-                  'reason': finalReason,
-                },
+              await NotificationService().sendProofNotification(
+                targetUserId: team.leaderId,
+                status: 'rejected',
+                roomTitle: 'Team Match',
+                reason: finalReason,
               );
             }
           }
