@@ -62,7 +62,7 @@ class GamerAuthService {
       try {
         profile = await _supabase
             .from('users')
-            .select('id, username, display_name, avatar_url, is_banned, banned_reason')
+            .select('id, username, display_name, avatar_url, cover_url, is_banned, banned_reason')
             .eq('id', authUserId)
             .maybeSingle();
       } catch (_) {
@@ -108,7 +108,7 @@ class GamerAuthService {
       try {
         profile = await _supabase
             .from('users')
-            .select('id, username, display_name, avatar_url, is_banned, banned_reason')
+            .select('id, username, display_name, avatar_url, cover_url, is_banned, banned_reason')
             .eq('id', authUser.id)
             .maybeSingle();
       } catch (_) {
