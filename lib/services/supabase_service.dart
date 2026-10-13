@@ -53,59 +53,52 @@ class SupabaseService {
     'Authorization': 'Bearer $supabaseAnonKey',
   };
 
-  // STORAGE
-  static Future<String?> uploadFile({
-    required File file,
-    String? folder,
-    String bucket = bucketUploads,
-    String? customFileName,
-  }) async {
-    try {
-      if (!await file.exists()) return null;
-      final fileBytes = await file.readAsBytes();
-      final extension = file.path.split('.').last.toLowerCase();
-      final mimeType = _getMimeType(extension);
-      final timestamp = DateTime.now().millisecondsSinceEpoch;
-      final fileName = customFileName ?? 'file_${timestamp}_${fileBytes.length}.$extension';
-      final path = folder != null && folder.isNotEmpty ? '$folder/$fileName' : fileName;
-      final uploadUri = Uri.parse('$supabaseUrl/storage/v1/object/$bucket/$path');
-      final response = await http.post(
-        uploadUri,
-        headers: {
-          'apikey': supabaseAnonKey,
-          'Authorization': 'Bearer $supabaseAnonKey',
-          'Content-Type': mimeType,
-          'x-upsert': 'true',
-        },
-        body: fileBytes,
-      ).timeout(const Duration(seconds: 45));
-      if (response.statusCode == 200 || response.statusCode == 201) {
-        final publicUrl = '$supabaseUrl/storage/v1/object/public/$bucket/$path';
-        return publicUrl;
-      } else {
-        if (bucket != bucketUploads) {
-          final fallbackUri = Uri.parse('$supabaseUrl/storage/v1/object/$bucketUploads/$path');
-          final fallbackResp = await http.post(
-            fallbackUri,
-            headers: {
-              'apikey': supabaseAnonKey,
-              'Authorization': 'Bearer $supabaseAnonKey',
-              'Content-Type': mimeType,
-              'x-upsert': 'true',
-            },
-            body: fileBytes,
-          );
-          if (fallbackResp.statusCode == 200 || fallbackResp.statusCode == 201) {
-            final publicUrl = '$supabaseUrl/storage/v1/object/public/$bucketUploads/$path';
-            return publicUrl;
-          }
-        }
-      }
-    } catch (e) {
-      debugPrint('upload error: $e');
+           // STORAGE — Long-term proper solution using Supabase SDK
+static Future<String?> uploadFile({
+  required File file,
+  String? folder,
+  String bucket = bucketUploads,
+  String? customFileName,
+}) async {
+  try {
+    if (!await file.exists()) {
+      debugPrint('❌ [uploadFile] File does not exist: ${file.path}');
+      return null;
     }
+
+    final fileBytes = await file.readAsBytes();
+    final extension = file.path.split('.').last.toLowerCase();
+    final timestamp = DateTime.now().millisecondsSinceEpoch;
+    final fileName = customFileName ??
+        'file_${timestamp}_${fileBytes.length}.$extension';
+    final path =
+        folder != null && folder.isNotEmpty ? '$folder/$fileName' : fileName;
+
+    final mimeType = _getMimeType(extension);
+
+    await _supabase.storage.from(bucket).uploadBinary(
+          path,
+          fileBytes,
+          fileOptions: FileOptions(
+            upsert: true,
+            contentType: mimeType,
+          ),
+        );
+
+    final publicUrl = _supabase.storage.from(bucket).getPublicUrl(path);
+    debugPrint('✅ [uploadFile] Success: $publicUrl');
+    return publicUrl;
+  } on StorageException catch (e) {
+    debugPrint('❌ [uploadFile] StorageException: ${e.message}');
+    debugPrint('❌ [uploadFile] StatusCode: ${e.statusCode}');
+    debugPrint('❌ [uploadFile] Bucket: $bucket');
+    return null;
+  } catch (e) {
+    debugPrint('❌ [uploadFile] Unknown error: $e');
     return null;
   }
+}
+  
 
   static String _getMimeType(String extension) {
     switch (extension) {
