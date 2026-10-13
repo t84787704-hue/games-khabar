@@ -1077,3 +1077,13 @@ class _AdminTeamMatchesScreenState extends State<AdminTeamMatchesScreen> {
     );
   }
 }
+
+class _AdminMatchUnifiedData {
+  final List<TeamMatch> matches;
+  final List<Map<String, dynamic>> disputeReports;
+
+  const _AdminMatchUnifiedData({
+    required this.matches,
+    required this.disputeReports,
+  });
+}

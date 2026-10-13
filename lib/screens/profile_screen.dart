@@ -1248,6 +1248,13 @@ class _ProfileScreenState extends State<ProfileScreen> {
 
   /// Robust Fallback UI that prevents blank grey screen if data load or build throws (Issue #10)
   Widget _buildFallbackUI(BuildContext context) {
+    final bgDark = ThemeService.bg;
+    final cardDark = ThemeService.card;
+    final borderDark = ThemeService.border;
+    final neonGreen = ThemeService.primaryGreen;
+    final textWhite = ThemeService.textPrimary;
+    final textGray = ThemeService.textSecondary;
+
     return Scaffold(
       backgroundColor: bgDark,
       appBar: AppBar(
