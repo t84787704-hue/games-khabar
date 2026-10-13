@@ -90,7 +90,7 @@ class _TeamsScreenState extends State<TeamsScreen>
         backgroundColor: const Color(0xFF131A29),
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
         child: Column(
-          mainAxisSize: dynamic,
+          mainAxisSize: MainAxisSize.min,
           children: [
             ListTile(
               title: const Text("Match Proof 📸", style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
