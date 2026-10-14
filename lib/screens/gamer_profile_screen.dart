@@ -695,11 +695,7 @@ class _GamerProfileScreenState extends State<GamerProfileScreen>
         await SupabaseService.client.from('users').update({
           'cover_url': finalUrl,
           'updated_at': DateTime.now().toIso8601String(),
-        }).eq('id', user.uid);// ✅ FIX: Turant refresh — 5 second wait nahi karna
-final freshUser = await _fetchGamerFromSupabase(user.uid);
-if (freshUser != null && mounted) {
-  setState(() => _cachedUser = freshUser);
-}
+        }).eq('id', user.uid);
 
         // ✅ FIX: Evict old cover from cache so new image loads
         try {
@@ -717,6 +713,15 @@ if (freshUser != null && mounted) {
               backgroundColor: GamerTheme.accentGreen,
             ),
           );
+
+          // ✅ FIX: Turant DB se fresh data fetch karo aur _cachedUser update karo
+          try {
+            final latest = await _fetchGamerFromSupabase(user.uid);
+            if (latest != null) {
+              _cachedUser = latest;
+            }
+          } catch (_) {}
+
           setState(() {});
         }
       }
@@ -737,11 +742,7 @@ if (freshUser != null && mounted) {
       await SupabaseService.client.from('users').update({
         'cover_url': coverUrl,
         'updated_at': DateTime.now().toIso8601String(),
-      }).eq('id', user.uid);// ✅ FIX: Turant refresh
-final freshUser = await _fetchGamerFromSupabase(user.uid);
-if (freshUser != null && mounted) {
-  setState(() => _cachedUser = freshUser);
-}
+      }).eq('id', user.uid);
 
       // ✅ FIX: Evict old cover from cache so new image loads
       try {
@@ -758,6 +759,15 @@ if (freshUser != null && mounted) {
             backgroundColor: GamerTheme.accentGreen,
           ),
         );
+
+        // ✅ FIX: Turant DB se fresh data fetch karo aur _cachedUser update karo
+        try {
+          final latest = await _fetchGamerFromSupabase(user.uid);
+          if (latest != null) {
+            _cachedUser = latest;
+          }
+        } catch (_) {}
+
         setState(() {});
       }
     } catch (e) {
