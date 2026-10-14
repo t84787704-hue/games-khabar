@@ -593,6 +593,17 @@ class _CreateGamerIdScreenState extends State<CreateGamerIdScreen> {
         await prefs.setStringList('user_unlocked_badges_$uid', _unlockedBadges);
       } catch (_) {}
 
+      // ✅ FIX: State variables update karo (naye URLs)
+      if (finalPhotoUrl.isNotEmpty) {
+        _photoUrl = finalPhotoUrl;
+      }
+      if (finalCoverUrl.isNotEmpty) {
+        _coverUrl = finalCoverUrl;
+      }
+
+      // ✅ FIX: currentGamerNotifier update karo
+      GamerAuthService().currentGamerNotifier.value = gamerUser;
+
       saveSucceeded = true;
     } catch (e) {
       if (mounted) {
@@ -609,6 +620,12 @@ class _CreateGamerIdScreenState extends State<CreateGamerIdScreen> {
 
     if (saveSucceeded) {
       if (!mounted) return;
+
+      // ✅ FIX: Picked files reset karo
+      setState(() {
+        _pickedImageFile = null;
+        _pickedCoverFile = null;
+      });
 
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
