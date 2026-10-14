@@ -461,14 +461,44 @@ class _CreateGamerIdScreenState extends State<CreateGamerIdScreen> {
     setState(() => _isSaving = true);
 
     try {
+      // ✅ FIX 1: Profile photo upload — fail hone pe rok do
       String finalPhotoUrl = _photoUrl;
       if (_pickedImageFile != null) {
-        finalPhotoUrl = await GamerAuthService().uploadProfilePhoto(_pickedImageFile!, uid);
+        final uploaded = await GamerAuthService().uploadProfilePhoto(_pickedImageFile!, uid);
+        if (uploaded.isNotEmpty) {
+          finalPhotoUrl = uploaded;
+        } else {
+          if (mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(
+                content: Text('❌ Profile photo upload fail! Try again.'),
+                backgroundColor: GamerTheme.redAccent,
+              ),
+            );
+          }
+          setState(() => _isSaving = false);
+          return;
+        }
       }
 
+      // ✅ FIX 2: Cover photo upload — fail hone pe rok do
       String finalCoverUrl = _coverUrl;
       if (_pickedCoverFile != null) {
-        finalCoverUrl = await GamerAuthService().uploadCoverPhoto(_pickedCoverFile!, uid);
+        final uploaded = await GamerAuthService().uploadCoverPhoto(_pickedCoverFile!, uid);
+        if (uploaded.isNotEmpty) {
+          finalCoverUrl = uploaded;
+        } else {
+          if (mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(
+                content: Text('❌ Cover photo upload fail! Try again.'),
+                backgroundColor: GamerTheme.redAccent,
+              ),
+            );
+          }
+          setState(() => _isSaving = false);
+          return;
+        }
       }
 
       // Rank & Screenshot verification logic (Optional)
@@ -588,6 +618,10 @@ class _CreateGamerIdScreenState extends State<CreateGamerIdScreen> {
       );
 
       if (widget.isEditing) {
+        // ✅ FIX 3: Pop se pehle refreshCurrentGamer call karo
+        try {
+          await GamerAuthService().refreshCurrentGamer();
+        } catch (_) {}
         Navigator.of(context).pop();
       } else {
         // Always navigate to main screen on save success
