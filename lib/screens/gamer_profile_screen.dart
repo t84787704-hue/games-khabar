@@ -915,7 +915,8 @@ class _GamerProfileScreenState extends State<GamerProfileScreen>
     }
 
     return StreamBuilder<GamerUser?>(
-      stream: _gamerStream(targetUid),
+      stream: _gamerStream(targetUid).asBroadcastStream(),
+                              
       builder: (context, snapshot) {
         if (snapshot.connectionState == ConnectionState.waiting &&
             !snapshot.hasData &&
