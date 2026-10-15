@@ -387,7 +387,7 @@ class _GamerRoomsScreenState extends State<GamerRoomsScreen> {
                     selected: isSelected,
                     selectedColor: const Color(0xFF1877F2),
                     labelStyle: TextStyle(
-                      color: isSelected ? Colors.white : Colors.black89,
+                      color: isSelected ? Colors.white : Colors.black87,
                       fontWeight: FontWeight.bold,
                       fontSize: 12,
                     ),
@@ -821,7 +821,7 @@ class _RoomDetailsSheetState extends State<_RoomDetailsSheet> {
                             Text(
                               'WINNER: ${room.winnerName ?? "Champion"}!',
                               style: const TextStyle(
-                                color: Colors.black89,
+                                color: Colors.black87,
                                 fontWeight: FontWeight.w900,
                                 fontSize: 15,
                               ),
