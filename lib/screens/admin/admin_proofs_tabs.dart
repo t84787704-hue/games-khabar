@@ -5,10 +5,11 @@ import '../../models/team_model.dart';
 import '../../services/supabase_service.dart';
 import '../../services/team_service.dart';
 import '../../services/notification_service.dart';
+import '../../services/coin_wallet_service.dart';
 
 // ============================================================
 // TAB 1: UNDER REVIEW
-// Jo proofs abhi review mein hain
+// Jo proofs abhi review mein hain (Team Matches + Custom Rooms)
 // ============================================================
 class AdminUnderReviewTab extends StatelessWidget {
   const AdminUnderReviewTab({super.key});
@@ -19,52 +20,77 @@ class AdminUnderReviewTab extends StatelessWidget {
       stream: SupabaseService.client
           .from('active_matches')
           .stream(primaryKey: ['id']),
-      builder: (context, snapshot) {
-        if (snapshot.hasError) {
-          return _buildErrorState(
-            'Could not load under-review proofs',
-            snapshot.error,
-          );
-        }
+      builder: (context, matchSnap) {
+        return StreamBuilder<List<Map<String, dynamic>>>(
+          stream: SupabaseService.client
+              .from('rooms')
+              .stream(primaryKey: ['id']),
+          builder: (context, roomSnap) {
+            if (matchSnap.hasError && roomSnap.hasError) {
+              return _buildErrorState(
+                'Could not load under-review proofs',
+                matchSnap.error ?? roomSnap.error,
+              );
+            }
 
-        if (snapshot.connectionState == ConnectionState.waiting &&
-            !snapshot.hasData) {
-          return const Center(
-            child: CircularProgressIndicator(color: Color(0xFF00FF88)),
-          );
-        }
+            if (matchSnap.connectionState == ConnectionState.waiting &&
+                !matchSnap.hasData &&
+                roomSnap.connectionState == ConnectionState.waiting &&
+                !roomSnap.hasData) {
+              return const Center(
+                child: CircularProgressIndicator(color: Color(0xFF00FF88)),
+              );
+            }
 
-        final all = snapshot.data ?? [];
-        final underReview = all.where((m) {
-          final st = (m['status'] ?? '').toString().toLowerCase();
-          final pst = (m['proof_status'] ?? '').toString().toLowerCase();
-          return st == 'under_review' && (pst == 'pending' || pst.isEmpty);
-        }).toList();
+            // 1. Team Matches Under Review
+            final matchData = matchSnap.data ?? [];
+            final underReviewMatches = matchData.where((m) {
+              final st = (m['status'] ?? '').toString().toLowerCase();
+              final pst = (m['proof_status'] ?? '').toString().toLowerCase();
+              return st == 'under_review' && (pst == 'pending' || pst.isEmpty);
+            }).map((m) => {...m, 'is_room': false}).toList();
 
-        underReview.sort((a, b) {
-          final aDate = a['ended_at'] ?? a['created_at'] ?? '';
-          final bDate = b['ended_at'] ?? b['created_at'] ?? '';
-          return bDate.toString().compareTo(aDate.toString());
-        });
+            // 2. Custom Game Rooms Under Review
+            final roomData = roomSnap.data ?? [];
+            final underReviewRooms = roomData.where((r) {
+              final st = (r['status'] ?? '').toString().toLowerCase();
+              final rst = (r['reward_status'] ?? '').toString().toLowerCase();
+              final proof = (r['win_proof_url'] ?? '').toString();
+              final isPending = st == 'review_pending' ||
+                  st == 'under_review' ||
+                  st == 'proof_submitted' ||
+                  rst == 'pending_approval';
+              return isPending && proof.isNotEmpty && st != 'completed';
+            }).map((r) => {...r, 'is_room': true}).toList();
 
-        if (underReview.isEmpty) {
-          return _buildEmptyState(
-            icon: Icons.fact_check_rounded,
-            title: 'No Proofs Under Review',
-            subtitle: 'All match proofs have been reviewed.',
-            color: const Color(0xFF00FF88),
-          );
-        }
+            final underReview = [...underReviewMatches, ...underReviewRooms];
 
-        return ListView.separated(
-          padding: const EdgeInsets.fromLTRB(16, 14, 16, 30),
-          itemCount: underReview.length,
-          separatorBuilder: (_, __) => const SizedBox(height: 12),
-          itemBuilder: (context, index) {
-            return AdminProofCard(
-              match: underReview[index],
-              showActions: true,
-              showDelete: false,
+            underReview.sort((a, b) {
+              final aDate = a['win_proof_uploaded_at'] ?? a['ended_at'] ?? a['created_at'] ?? '';
+              final bDate = b['win_proof_uploaded_at'] ?? b['ended_at'] ?? b['created_at'] ?? '';
+              return bDate.toString().compareTo(aDate.toString());
+            });
+
+            if (underReview.isEmpty) {
+              return _buildEmptyState(
+                icon: Icons.fact_check_rounded,
+                title: 'No Proofs Under Review',
+                subtitle: 'All match proofs have been reviewed.',
+                color: const Color(0xFF00FF88),
+              );
+            }
+
+            return ListView.separated(
+              padding: const EdgeInsets.fromLTRB(16, 14, 16, 30),
+              itemCount: underReview.length,
+              separatorBuilder: (_, __) => const SizedBox(height: 12),
+              itemBuilder: (context, index) {
+                return AdminProofCard(
+                  match: underReview[index],
+                  showActions: true,
+                  showDelete: false,
+                );
+              },
             );
           },
         );
@@ -113,74 +139,98 @@ class _AdminProofHistoryTabState extends State<AdminProofHistoryTab> {
             stream: SupabaseService.client
                 .from('active_matches')
                 .stream(primaryKey: ['id']),
-            builder: (context, snapshot) {
-              if (snapshot.hasError) {
-                return _buildErrorState(
-                  'Could not load proof history',
-                  snapshot.error,
-                );
-              }
+            builder: (context, matchSnap) {
+              return StreamBuilder<List<Map<String, dynamic>>>(
+                stream: SupabaseService.client
+                    .from('rooms')
+                    .stream(primaryKey: ['id']),
+                builder: (context, roomSnap) {
+                  if (matchSnap.hasError && roomSnap.hasError) {
+                    return _buildErrorState(
+                      'Could not load proof history',
+                      matchSnap.error ?? roomSnap.error,
+                    );
+                  }
 
-              if (snapshot.connectionState == ConnectionState.waiting &&
-                  !snapshot.hasData) {
-                return const Center(
-                  child: CircularProgressIndicator(color: Color(0xFF00FF88)),
-                );
-              }
+                  if (matchSnap.connectionState == ConnectionState.waiting &&
+                      !matchSnap.hasData &&
+                      roomSnap.connectionState == ConnectionState.waiting &&
+                      !roomSnap.hasData) {
+                    return const Center(
+                      child: CircularProgressIndicator(color: Color(0xFF00FF88)),
+                    );
+                  }
 
-              final all = snapshot.data ?? [];
-              var history = all.where((m) {
-                final st = (m['status'] ?? '').toString().toLowerCase();
-                final pst = (m['proof_status'] ?? '').toString().toLowerCase();
-                final isAccepted = pst == 'accepted' || st == 'completed';
-                final isRejected = pst == 'rejected' || st == 'rejected';
-                return isAccepted || isRejected;
-              }).toList();
+                  // 1. Team Matches History
+                  final matchData = matchSnap.data ?? [];
+                  final matchHistory = matchData.where((m) {
+                    final st = (m['status'] ?? '').toString().toLowerCase();
+                    final pst = (m['proof_status'] ?? '').toString().toLowerCase();
+                    final isAccepted = pst == 'accepted' || st == 'completed';
+                    final isRejected = pst == 'rejected' || st == 'rejected';
+                    return isAccepted || isRejected;
+                  }).map((m) => {...m, 'is_room': false}).toList();
 
-              // Apply filter
-              if (_filter == 'Accepted') {
-                history = history.where((m) {
-                  final st = (m['status'] ?? '').toString().toLowerCase();
-                  final pst = (m['proof_status'] ?? '').toString().toLowerCase();
-                  return pst == 'accepted' || st == 'completed';
-                }).toList();
-              } else if (_filter == 'Rejected') {
-                history = history.where((m) {
-                  final st = (m['status'] ?? '').toString().toLowerCase();
-                  final pst = (m['proof_status'] ?? '').toString().toLowerCase();
-                  return pst == 'rejected' || st == 'rejected';
-                }).toList();
-              }
+                  // 2. Custom Game Rooms History
+                  final roomData = roomSnap.data ?? [];
+                  final roomHistory = roomData.where((r) {
+                    final st = (r['status'] ?? '').toString().toLowerCase();
+                    final rst = (r['reward_status'] ?? '').toString().toLowerCase();
+                    final isAccepted = st == 'completed' || rst == 'sent';
+                    final isRejected = st == 'proof_rejected' || rst == 'rejected';
+                    return isAccepted || isRejected;
+                  }).map((r) => {...r, 'is_room': true}).toList();
 
-              history.sort((a, b) {
-                final aDate = a['ended_at'] ?? a['created_at'] ?? '';
-                final bDate = b['ended_at'] ?? b['created_at'] ?? '';
-                return bDate.toString().compareTo(aDate.toString());
-              });
+                  var history = [...matchHistory, ...roomHistory];
 
-              if (history.isEmpty) {
-                return _buildEmptyState(
-                  icon: Icons.history_rounded,
-                  title: _filter == 'All'
-                      ? 'No Proof History'
-                      : 'No $_filter Proofs',
-                  subtitle: _filter == 'All'
-                      ? 'Accepted and rejected proofs will appear here.'
-                      : 'No proofs match this filter.',
-                  color: const Color(0xFF38BDF8),
-                );
-              }
+                  // Apply filter
+                  if (_filter == 'Accepted') {
+                    history = history.where((m) {
+                      final st = (m['status'] ?? '').toString().toLowerCase();
+                      final pst = (m['proof_status'] ?? '').toString().toLowerCase();
+                      final rst = (m['reward_status'] ?? '').toString().toLowerCase();
+                      return pst == 'accepted' || st == 'completed' || rst == 'sent';
+                    }).toList();
+                  } else if (_filter == 'Rejected') {
+                    history = history.where((m) {
+                      final st = (m['status'] ?? '').toString().toLowerCase();
+                      final pst = (m['proof_status'] ?? '').toString().toLowerCase();
+                      final rst = (m['reward_status'] ?? '').toString().toLowerCase();
+                      return pst == 'rejected' || st == 'rejected' || st == 'proof_rejected' || rst == 'rejected';
+                    }).toList();
+                  }
 
-              return ListView.separated(
-                padding: const EdgeInsets.fromLTRB(16, 8, 16, 30),
-                itemCount: history.length,
-                separatorBuilder: (_, __) => const SizedBox(height: 12),
-                itemBuilder: (context, index) {
-                  return AdminProofCard(
-                    match: history[index],
-                    showActions: false,
-                    showDelete: true,
-                    onDelete: () => _confirmDelete(context, history[index]),
+                  history.sort((a, b) {
+                    final aDate = a['ended_at'] ?? a['completed_at'] ?? a['created_at'] ?? '';
+                    final bDate = b['ended_at'] ?? b['completed_at'] ?? b['created_at'] ?? '';
+                    return bDate.toString().compareTo(aDate.toString());
+                  });
+
+                  if (history.isEmpty) {
+                    return _buildEmptyState(
+                      icon: Icons.history_rounded,
+                      title: _filter == 'All'
+                          ? 'No Proof History'
+                          : 'No $_filter Proofs',
+                      subtitle: _filter == 'All'
+                          ? 'Accepted and rejected proofs will appear here.'
+                          : 'No proofs match this filter.',
+                      color: const Color(0xFF38BDF8),
+                    );
+                  }
+
+                  return ListView.separated(
+                    padding: const EdgeInsets.fromLTRB(16, 8, 16, 30),
+                    itemCount: history.length,
+                    separatorBuilder: (_, __) => const SizedBox(height: 12),
+                    itemBuilder: (context, index) {
+                      return AdminProofCard(
+                        match: history[index],
+                        showActions: false,
+                        showDelete: true,
+                        onDelete: () => _confirmDelete(context, history[index]),
+                      );
+                    },
                   );
                 },
               );
@@ -269,10 +319,18 @@ class _AdminProofHistoryTabState extends State<AdminProofHistoryTab> {
       final matchId = match['id']?.toString() ?? '';
       if (matchId.isEmpty) return;
 
-      await SupabaseService.client
-          .from('active_matches')
-          .delete()
-          .eq('id', matchId);
+      final isRoom = match['is_room'] == true;
+      if (isRoom) {
+        await SupabaseService.client
+            .from('rooms')
+            .delete()
+            .eq('id', matchId);
+      } else {
+        await SupabaseService.client
+            .from('active_matches')
+            .delete()
+            .eq('id', matchId);
+      }
 
       if (context.mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -297,7 +355,7 @@ class _AdminProofHistoryTabState extends State<AdminProofHistoryTab> {
 
 // ============================================================
 // REUSABLE CARD: AdminProofCard
-// Dono tabs mein use hota hai
+// Dono tabs mein use hota hai (Team Matches + Custom Rooms)
 // ============================================================
 class AdminProofCard extends StatefulWidget {
   final Map<String, dynamic> match;
@@ -397,6 +455,98 @@ class _AdminProofCardState extends State<AdminProofCard> {
     setState(() => _isProcessing = true);
 
     try {
+      final isRoom = widget.match['is_room'] == true;
+
+      // ──────────────────────────────────────────────────────────
+      // 1. CUSTOM ROOM ACCEPT LOGIC (Triggers 5-Min Golden Banner)
+      // ──────────────────────────────────────────────────────────
+      if (isRoom) {
+        final roomId = widget.match['id']?.toString() ?? '';
+        final winnerId = widget.match['winner_id']?.toString() ?? '';
+        final winnerName = widget.match['winner_name']?.toString() ?? 'Winner';
+        final prize = (widget.match['prize_pool'] is num)
+            ? (widget.match['prize_pool'] as num).toInt()
+            : int.tryParse(widget.match['prize_pool']?.toString() ?? '0') ?? 0;
+
+        // A. Coins to winner
+        if (winnerId.isNotEmpty && winnerId != 'guest') {
+          try {
+            await CoinWalletService.updateCoins(
+              userId: winnerId,
+              amount: prize,
+              type: 'win_prize',
+              roomId: roomId,
+              description: 'Room win prize: ${widget.match['game']} ${widget.match['mode']}',
+            );
+          } catch (e) {
+            debugPrint('[AdminProofs] Room updateCoins error: $e');
+          }
+
+          try {
+            final winnerRow = await SupabaseService.client
+                .from('users')
+                .select('wins, total_winnings')
+                .or('id.eq.$winnerId,uid.eq.$winnerId')
+                .maybeSingle();
+            if (winnerRow != null) {
+              final currentWins = (winnerRow['wins'] as num?)?.toInt() ?? 0;
+              final currentWinnings = (winnerRow['total_winnings'] as num?)?.toInt() ?? 0;
+              await SupabaseService.client.from('users').update({
+                'wins': currentWins + 1,
+                'total_winnings': currentWinnings + prize,
+              }).or('id.eq.$winnerId,uid.eq.$winnerId');
+            }
+          } catch (_) {}
+        }
+
+        // B. Update room to completed + completed_at = now()
+        // (Yeh line GamerRoomsScreen ke andar 5-Minute Golden Banner activate karti hai)
+        await SupabaseService.client.from('rooms').update({
+          'status': 'completed',
+          'reward_status': 'sent',
+          'completed_at': DateTime.now().toIso8601String(),
+        }).eq('id', roomId);
+
+        // C. Chat bot message
+        try {
+          await SupabaseService.client.from('messages').insert({
+            'room_id': roomId,
+            'sender_id': 'system',
+            'sender_name': 'ADMIN BOT',
+            'message': '🏆 Proof APPROVED by Admin! $winnerName won +$prize coins! Room will close in 5 minutes.',
+            'type': 'system_reward',
+            'created_at': DateTime.now().toIso8601String(),
+          });
+        } catch (_) {}
+
+        // D. Notification
+        try {
+          if (winnerId.isNotEmpty && winnerId != 'guest') {
+            await NotificationService().sendNotification(
+              userId: winnerId,
+              type: 'match_result',
+              title: '🏆 Proof Approved! +$prize coins',
+              body: 'Admin approved your win proof for ${widget.match['game']}! +$prize coins added.',
+              data: {'room_id': roomId, 'prize': prize},
+              priority: 'high',
+            );
+          }
+        } catch (_) {}
+
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('✅ Room Proof accepted! 5-min winner banner started.'),
+              backgroundColor: Color(0xFF00FF88),
+            ),
+          );
+        }
+        return;
+      }
+
+      // ──────────────────────────────────────────────────────────
+      // 2. EXISTING TEAM MATCH ACCEPT LOGIC (Untouched)
+      // ──────────────────────────────────────────────────────────
       final matchId = widget.match['id'];
       final submittedByRaw =
           (widget.match['submitted_by_team_id'] ??
@@ -413,7 +563,7 @@ class _AdminProofCardState extends State<AdminProofCard> {
         winnerTeamId: winnerUuid,
       );
 
-      // ✅ NAYA: Send proof-accepted notification to winner team
+      // Send proof-accepted notification to winner team
       if (ok) {
         try {
           final team = await _teamService.getTeam(winnerUuid);
@@ -460,18 +610,67 @@ class _AdminProofCardState extends State<AdminProofCard> {
     setState(() => _isProcessing = true);
 
     try {
-      final matchId = widget.match['id'];
+      final isRoom = widget.match['is_room'] == true;
       final reason = _reasonController.text.trim();
       final finalReason = reason.isNotEmpty
           ? reason
           : 'Proof screenshot was unclear or invalid';
 
+      // ──────────────────────────────────────────────────────────
+      // 1. CUSTOM ROOM REJECT LOGIC
+      // ──────────────────────────────────────────────────────────
+      if (isRoom) {
+        final roomId = widget.match['id']?.toString() ?? '';
+        await SupabaseService.client.from('rooms').update({
+          'status': 'proof_rejected',
+          'reward_status': 'rejected',
+        }).eq('id', roomId);
+
+        try {
+          await SupabaseService.client.from('messages').insert({
+            'room_id': roomId,
+            'sender_id': 'system',
+            'sender_name': 'ADMIN BOT',
+            'message': '❌ Proof REJECTED by Admin. Reason: $finalReason',
+            'type': 'system',
+            'created_at': DateTime.now().toIso8601String(),
+          });
+        } catch (_) {}
+
+        final winnerId = widget.match['winner_id']?.toString() ?? '';
+        if (winnerId.isNotEmpty && winnerId != 'guest') {
+          try {
+            await NotificationService().sendNotification(
+              userId: winnerId,
+              type: 'match_result',
+              title: '❌ Proof Rejected',
+              body: 'Your win proof was rejected by Admin. Reason: $finalReason',
+              data: {'room_id': roomId},
+            );
+          } catch (_) {}
+        }
+
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('❌ Room Proof rejected. Moved to History.'),
+              backgroundColor: Color(0xFFFF4655),
+            ),
+          );
+        }
+        return;
+      }
+
+      // ──────────────────────────────────────────────────────────
+      // 2. EXISTING TEAM MATCH REJECT LOGIC (Untouched)
+      // ──────────────────────────────────────────────────────────
+      final matchId = widget.match['id'];
       final ok = await SupabaseService.rejectProof(
         matchId: matchId.toString(),
         reason: finalReason,
       );
 
-      // ✅ NAYA: Send proof-rejected notification to submitter team
+      // Send proof-rejected notification to submitter team
       if (ok) {
         try {
           final submittedByRaw = (widget.match['submitted_by_team_id'] ??
@@ -529,7 +728,7 @@ class _AdminProofCardState extends State<AdminProofCard> {
       color = const Color(0xFF00FF88);
       label = 'ACCEPTED';
       icon = Icons.check_circle_rounded;
-    } else if (proofStatus == 'rejected' || status == 'rejected') {
+    } else if (proofStatus == 'rejected' || status == 'rejected' || status == 'proof_rejected') {
       color = const Color(0xFFFF4655);
       label = 'REJECTED';
       icon = Icons.cancel_rounded;
@@ -563,16 +762,17 @@ class _AdminProofCardState extends State<AdminProofCard> {
 
   @override
   Widget build(BuildContext context) {
+    final isRoom = widget.match['is_room'] == true;
     final t1 = (widget.match['team1_id'] ?? '').toString();
     final t2 = (widget.match['team2_id'] ?? '').toString();
     final result = (widget.match['result'] ?? 'WIN').toString().toUpperCase();
-    final proofUrl = widget.match['proof_url']?.toString();
+    final proofUrl = (widget.match['win_proof_url'] ?? widget.match['proof_url'])?.toString();
     final status = (widget.match['status'] ?? '').toString().toLowerCase();
     final proofStatus =
         (widget.match['proof_status'] ?? '').toString().toLowerCase();
     final adminNote = widget.match['admin_note']?.toString() ?? '';
 
-    final dateRaw = widget.match['ended_at'] ?? widget.match['created_at'];
+    final dateRaw = widget.match['ended_at'] ?? widget.match['win_proof_uploaded_at'] ?? widget.match['created_at'];
     String formattedDate = '';
     if (dateRaw != null) {
       try {
@@ -594,41 +794,80 @@ class _AdminProofCardState extends State<AdminProofCard> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // Teams row + Status
+          // Header Row: Teams OR Room Name + Status
           Row(
             children: [
               Expanded(
-                child: FutureBuilder<List<TeamModel?>>(
-                  future: Future.wait([
-                    _teamService.getTeam(t1),
-                    _teamService.getTeam(t2),
-                  ]),
-                  builder: (context, snap) {
-                    final t1Name = snap.data?[0]?.name ??
-                        widget.match['team1_name'] ??
-                        'Team 1';
-                    final t2Name = snap.data?[1]?.name ??
-                        widget.match['team2_name'] ??
-                        'Team 2';
-                    return Text(
-                      '$t1Name  ⚔️  $t2Name',
-                      style: const TextStyle(
-                        color: Colors.white,
-                        fontWeight: FontWeight.bold,
-                        fontSize: 14,
+                child: isRoom
+                    ? Text(
+                        '🎮 ${(widget.match['game'] ?? 'Game')} ${(widget.match['mode'] ?? '')} (Room)',
+                        style: const TextStyle(
+                          color: Colors.white,
+                          fontWeight: FontWeight.bold,
+                          fontSize: 14,
+                        ),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                      )
+                    : FutureBuilder<List<TeamModel?>>(
+                        future: Future.wait([
+                          _teamService.getTeam(t1),
+                          _teamService.getTeam(t2),
+                        ]),
+                        builder: (context, snap) {
+                          final t1Name = snap.data?[0]?.name ??
+                              widget.match['team1_name'] ??
+                              'Team 1';
+                          final t2Name = snap.data?[1]?.name ??
+                              widget.match['team2_name'] ??
+                              'Team 2';
+                          return Text(
+                            '$t1Name  ⚔️  $t2Name',
+                            style: const TextStyle(
+                              color: Colors.white,
+                              fontWeight: FontWeight.bold,
+                              fontSize: 14,
+                            ),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                          );
+                        },
                       ),
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                    );
-                  },
-                ),
               ),
               _buildStatusBadge(status, proofStatus),
             ],
           ),
 
-          // Date + Claim
-          if (formattedDate.isNotEmpty) ...[
+          // Date + Claim / Winner
+          if (isRoom) ...[
+            const SizedBox(height: 4),
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Container(
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                  decoration: BoxDecoration(
+                    color: Colors.amber.withOpacity(0.15),
+                    borderRadius: BorderRadius.circular(4),
+                  ),
+                  child: Text(
+                    'Winner: ${widget.match['winner_name'] ?? "Gamer"} (${widget.match['prize_pool'] ?? 0} Coins)',
+                    style: const TextStyle(
+                        color: Colors.amber,
+                        fontWeight: FontWeight.bold,
+                        fontSize: 10.5),
+                  ),
+                ),
+                if (formattedDate.isNotEmpty)
+                  Text(
+                    'Date: $formattedDate',
+                    style: const TextStyle(
+                        color: Color(0xFF8B949E), fontSize: 11),
+                  ),
+              ],
+            ),
+          ] else if (formattedDate.isNotEmpty) ...[
             const SizedBox(height: 4),
             Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
@@ -658,7 +897,7 @@ class _AdminProofCardState extends State<AdminProofCard> {
           ],
 
           // Reject reason (if rejected)
-          if (adminNote.isNotEmpty && proofStatus == 'rejected') ...[
+          if (adminNote.isNotEmpty && (proofStatus == 'rejected' || status == 'proof_rejected')) ...[
             const SizedBox(height: 8),
             Container(
               padding: const EdgeInsets.all(8),
@@ -786,7 +1025,7 @@ class _AdminProofCardState extends State<AdminProofCard> {
               controller: _reasonController,
               style: const TextStyle(color: Colors.white, fontSize: 12.5),
               decoration: InputDecoration(
-                hintText: 'Reject reason (ضروری اگر Reject کرنا ہو)...',
+                hintText: 'Reject reason (zaruri agar Reject karna ho)...',
                 hintStyle:
                     const TextStyle(color: Colors.white38, fontSize: 12),
                 filled: true,
