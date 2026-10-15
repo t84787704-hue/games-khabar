@@ -1,3 +1,22 @@
+// ===============================================================================
+// EXACT DIFF — Fix Preset Avatars & Grey Circle Issue on Feed Screen
+// -------------------------------------------------------------------------------
+// File: lib/screens/gamer_feed_screen.dart
+//
+// PROBLEM:
+// Feed screen was using standard `CircleAvatar` with `NetworkImage(url)`. When a
+// user selected an in-app preset avatar (e.g. 'preset:helmet'), `NetworkImage`
+// failed to load it as a web URL and fell back to an empty grey circle.
+//
+// CHANGES:
+// 1. Added import: `import '../widgets/gamer_avatar.dart';`
+// 2. Replaced `CircleAvatar` with `GamerAvatar` in `_showCreatePost()` dialog.
+// 3. Replaced `CircleAvatar` with `GamerAvatar` in "What's on your mind?" top card.
+// 4. Replaced `CircleAvatar` with `GamerAvatar` in Post list item leading avatar.
+//
+// NO OTHER CODE, LOGIC, OR VARIABLE CHANGED — byte-by-byte same
+// ===============================================================================
+
 import 'package:flutter/material.dart';
 import 'package:share_plus/share_plus.dart';
 import '../services/supabase_service.dart';
@@ -5,6 +24,7 @@ import 'gamer_profile_screen.dart';
 import 'user_search_screen.dart';
 import '../services/notification_service.dart';
 import 'notifications_screen.dart';
+import '../widgets/gamer_avatar.dart';
 
 class GamerFeedScreen extends StatefulWidget {
   const GamerFeedScreen({super.key});
@@ -539,15 +559,10 @@ https://play.google.com/store/apps/details?id=com.gameskhabar.app
               children: [
                 Row(
                   children: [
-                    CircleAvatar(
+                    GamerAvatar(
+                      photoUrl: currentAvatarUrl,
+                      displayName: currentUsername,
                       radius: 20,
-                      backgroundColor: const Color(0xFFE4E6EB),
-                      backgroundImage: currentAvatarUrl.isNotEmpty
-                          ? NetworkImage(currentAvatarUrl)
-                          : null,
-                      child: currentAvatarUrl.isEmpty
-                          ? const Icon(Icons.person, color: Color(0xFF050505))
-                          : null,
                     ),
                     const SizedBox(width: 10),
                     Expanded(
@@ -764,14 +779,10 @@ https://play.google.com/store/apps/details?id=com.gameskhabar.app
                           padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
                           child: Row(
                             children: [
-                              CircleAvatar(
-                                backgroundColor: const Color(0xFFE4E6EB),
-                                backgroundImage: currentAvatarUrl.isNotEmpty
-                                    ? NetworkImage(currentAvatarUrl)
-                                    : null,
-                                child: currentAvatarUrl.isEmpty
-                                    ? const Icon(Icons.person, color: Color(0xFF050505))
-                                    : null,
+                              GamerAvatar(
+                                photoUrl: currentAvatarUrl,
+                                displayName: currentUsername,
+                                radius: 20,
                               ),
                               const SizedBox(width: 12),
                               Expanded(
@@ -819,14 +830,10 @@ https://play.google.com/store/apps/details?id=com.gameskhabar.app
                           contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
                           leading: GestureDetector(
                             onTap: () => _openUserProfile(postUserId, username.toString()),
-                            child: CircleAvatar(
-                              backgroundColor: const Color(0xFFE4E6EB),
-                              backgroundImage: avatarUrl.isNotEmpty
-                                  ? NetworkImage(avatarUrl)
-                                  : null,
-                              child: avatarUrl.isEmpty
-                                  ? const Icon(Icons.person, color: Color(0xFF050505))
-                                  : null,
+                            child: GamerAvatar(
+                              photoUrl: avatarUrl,
+                              displayName: username.toString(),
+                              radius: 20,
                             ),
                           ),
                           title: GestureDetector(
