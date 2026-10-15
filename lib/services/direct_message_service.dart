@@ -8,6 +8,80 @@ class DirectMessageService {
   DirectMessageService._internal();
 
   final _client = SupabaseService.client;
+  static final Map<String, String> _resolvedUuidCache = {};
+
+  /// Resolves any user identifier (auth.uid or users.uid or users.id)
+  /// to the canonical UUID `id` from the `users` table.
+  Future<String> resolveToTableId(String idOrUid) async {
+    final clean = idOrUid.trim();
+    if (clean.isEmpty) return '';
+    if (_resolvedUuidCache.containsKey(clean)) {
+      return _resolvedUuidCache[clean]!;
+    }
+    try {
+      final row = await _client
+          .from('users')
+          .select('id, uid')
+          .or('id.eq.$clean,uid.eq.$clean')
+          .maybeSingle();
+      if (row != null && row['id'] != null) {
+        final tableId = row['id'].toString();
+        _resolvedUuidCache[clean] = tableId;
+        if (row['uid'] != null) {
+          _resolvedUuidCache[row['uid'].toString()] = tableId;
+        }
+        return tableId;
+      }
+    } catch (e) {
+      debugPrint('[DMS] resolveToTableId error: $e');
+    }
+    final uuidRegex = RegExp(
+        r'^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$');
+    if (uuidRegex.hasMatch(clean)) {
+      final res = clean.toLowerCase();
+      _resolvedUuidCache[clean] = res;
+      return res;
+    }
+    final fallback = SupabaseService.toUuid(clean);
+    _resolvedUuidCache[clean] = fallback;
+    return fallback;
+  }
+
+  /// Collects all valid identifier representations for a user (canonical UUID, auth uid, toUuid).
+  Future<Set<String>> getUserAliases(String idOrUid) async {
+    final clean = idOrUid.trim();
+    if (clean.isEmpty) return {};
+    final aliases = <String>{clean, clean.toLowerCase()};
+    final uuidFallback = SupabaseService.toUuid(clean);
+    if (uuidFallback.isNotEmpty) {
+      aliases.add(uuidFallback);
+      aliases.add(uuidFallback.toLowerCase());
+    }
+    try {
+      final row = await _client
+          .from('users')
+          .select('id, uid')
+          .or('id.eq.$clean,uid.eq.$clean')
+          .maybeSingle();
+      if (row != null) {
+        if (row['id'] != null) {
+          final idStr = row['id'].toString();
+          aliases.add(idStr);
+          aliases.add(idStr.toLowerCase());
+          _resolvedUuidCache[clean] = idStr;
+        }
+        if (row['uid'] != null) {
+          final uidStr = row['uid'].toString();
+          aliases.add(uidStr);
+          aliases.add(uidStr.toLowerCase());
+          final uidUuid = SupabaseService.toUuid(uidStr);
+          aliases.add(uidUuid);
+          aliases.add(uidUuid.toLowerCase());
+        }
+      }
+    } catch (_) {}
+    return aliases;
+  }
 
   /// Send a message
   Future<bool> sendMessage({
@@ -20,8 +94,8 @@ class DirectMessageService {
       return false;
     }
     try {
-      final senderUuid = SupabaseService.toUuid(senderId);
-      final receiverUuid = SupabaseService.toUuid(receiverId);
+      final senderUuid = await resolveToTableId(senderId);
+      final receiverUuid = await resolveToTableId(receiverId);
 
       await _client.from('direct_messages').insert({
         'sender_id': senderUuid,
@@ -47,21 +121,34 @@ class DirectMessageService {
       yield [];
       return;
     }
-    final u1 = SupabaseService.toUuid(userId1);
-    final u2 = SupabaseService.toUuid(userId2);
+    final aliases1 = await getUserAliases(userId1);
+    final aliases2 = await getUserAliases(userId2);
+
+    final pairs = <String>[];
+    for (final a1 in aliases1) {
+      for (final a2 in aliases2) {
+        pairs.add('and(sender_id.eq.$a1,receiver_id.eq.$a2)');
+        pairs.add('and(sender_id.eq.$a2,receiver_id.eq.$a1)');
+      }
+    }
+    final orCondition = pairs.isNotEmpty ? pairs.join(',') : '';
 
     while (true) {
       try {
-        final rows = await _client
-            .from('direct_messages')
-            .select()
-            .or('and(sender_id.eq.$u1,receiver_id.eq.$u2),and(sender_id.eq.$u2,receiver_id.eq.$u1)')
-            .order('created_at', ascending: true);
+        if (orCondition.isNotEmpty) {
+          final rows = await _client
+              .from('direct_messages')
+              .select()
+              .or(orCondition)
+              .order('created_at', ascending: true);
 
-        final messages = (rows as List)
-            .map((r) => ChatMessage.fromMap(Map<String, dynamic>.from(r)))
-            .toList();
-        yield messages;
+          final messages = (rows as List)
+              .map((r) => ChatMessage.fromMap(Map<String, dynamic>.from(r)))
+              .toList();
+          yield messages;
+        } else {
+          yield [];
+        }
       } catch (e) {
         debugPrint('[DMS] getMessagesStream error: $e');
         yield [];
@@ -74,12 +161,19 @@ class DirectMessageService {
   Future<List<ChatConversation>> getConversations(String userId) async {
     if (userId.isEmpty) return [];
     try {
-      final uuid = SupabaseService.toUuid(userId);
+      final myAliases = await getUserAliases(userId);
+
+      final filterList = <String>[];
+      for (final a in myAliases) {
+        filterList.add('sender_id.eq.$a');
+        filterList.add('receiver_id.eq.$a');
+      }
+      final orFilter = filterList.join(',');
 
       final rows = await _client
           .from('direct_messages')
           .select()
-          .or('sender_id.eq.$uuid,receiver_id.eq.$uuid')
+          .or(orFilter)
           .order('created_at', ascending: false)
           .limit(500);
 
@@ -89,8 +183,17 @@ class DirectMessageService {
       for (final row in rows) {
         final sender = (row['sender_id'] ?? '').toString();
         final receiver = (row['receiver_id'] ?? '').toString();
-        final otherId = sender == uuid ? receiver : sender;
+
+        final bool isSenderMe =
+            myAliases.any((a) => a.toLowerCase() == sender.toLowerCase());
+        final otherId = isSenderMe ? receiver : sender;
         if (otherId.isEmpty) continue;
+
+        // Skip self messages
+        if (myAliases.any((a) => a.toLowerCase() == otherId.toLowerCase())) {
+          continue;
+        }
+
         grouped
             .putIfAbsent(otherId, () => [])
             .add(Map<String, dynamic>.from(row));
@@ -99,7 +202,7 @@ class DirectMessageService {
       final List<ChatConversation> conversations = [];
 
       for (final entry in grouped.entries) {
-        final otherUuid = entry.key;
+        final otherRawId = entry.key;
         final msgs = entry.value;
 
         final lastMsg = msgs.first;
@@ -111,19 +214,22 @@ class DirectMessageService {
 
         int unread = 0;
         for (final m in msgs) {
-          final sender = (m['sender_id'] ?? '').toString();
+          final s = (m['sender_id'] ?? '').toString();
           final isRead = m['is_read'] == true;
-          if (sender == otherUuid && !isRead) unread++;
+          if (!myAliases.any((a) => a.toLowerCase() == s.toLowerCase()) && !isRead) {
+            unread++;
+          }
         }
 
         String name = 'Gamer';
         String photo = '';
         bool verified = false;
+        String canonicalOtherId = otherRawId;
         try {
           final userRow = await _client
               .from('users')
-              .select('username, display_name, avatar_url, is_verified')
-              .eq('id', otherUuid)
+              .select('id, uid, username, display_name, avatar_url, is_verified')
+              .or('id.eq.$otherRawId,uid.eq.$otherRawId')
               .maybeSingle();
           if (userRow != null) {
             name = (userRow['display_name'] ??
@@ -132,11 +238,18 @@ class DirectMessageService {
                 .toString();
             photo = (userRow['avatar_url'] ?? '').toString();
             verified = userRow['is_verified'] == true;
+            canonicalOtherId =
+                (userRow['id'] ?? userRow['uid'] ?? otherRawId).toString();
           }
         } catch (_) {}
 
+        // Double check not adding myself
+        if (myAliases.any((a) => a.toLowerCase() == canonicalOtherId.toLowerCase())) {
+          continue;
+        }
+
         conversations.add(ChatConversation(
-          otherUserId: otherUuid,
+          otherUserId: canonicalOtherId,
           otherUserName: name,
           otherUserPhoto: photo,
           lastMessage: lastType == 'image' ? '📷 Photo' : lastText,
@@ -147,7 +260,6 @@ class DirectMessageService {
         ));
       }
 
-      // FIX: Explicit type annotation to avoid 'Object' inference error
       conversations.sort((ChatConversation a, ChatConversation b) {
         return b.lastMessageTime.compareTo(a.lastMessageTime);
       });
@@ -165,15 +277,21 @@ class DirectMessageService {
   }) async {
     if (currentUserId.isEmpty || otherUserId.isEmpty) return;
     try {
-      final currentUuid = SupabaseService.toUuid(currentUserId);
-      final otherUuid = SupabaseService.toUuid(otherUserId);
+      final myAliases = await getUserAliases(currentUserId);
+      final otherAliases = await getUserAliases(otherUserId);
 
-      await _client
-          .from('direct_messages')
-          .update({'is_read': true})
-          .eq('sender_id', otherUuid)
-          .eq('receiver_id', currentUuid)
-          .eq('is_read', false);
+      for (final myId in myAliases) {
+        for (final otherId in otherAliases) {
+          try {
+            await _client
+                .from('direct_messages')
+                .update({'is_read': true})
+                .eq('sender_id', otherId)
+                .eq('receiver_id', myId)
+                .eq('is_read', false);
+          } catch (_) {}
+        }
+      }
     } catch (e) {
       debugPrint('[DMS] markAsRead error: $e');
     }
@@ -183,11 +301,13 @@ class DirectMessageService {
   Future<int> getTotalUnreadCount(String userId) async {
     if (userId.isEmpty) return 0;
     try {
-      final uuid = SupabaseService.toUuid(userId);
+      final myAliases = await getUserAliases(userId);
+      final filterList = myAliases.map((a) => 'receiver_id.eq.$a').join(',');
+
       final rows = await _client
           .from('direct_messages')
           .select('id')
-          .eq('receiver_id', uuid)
+          .or(filterList)
           .eq('is_read', false);
       return (rows as List).length;
     } catch (e) {

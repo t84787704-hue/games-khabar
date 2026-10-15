@@ -1,3 +1,8 @@
+// ═══════════════════════════════════════════════════════════════════════════════
+// EXACT DIFF:
+// - Use live GamerAuthService().currentGamer?.photoUrl when post belongs to current user
+// - Listen to currentGamerNotifier so post avatar refreshes reactively on avatar update
+// ═══════════════════════════════════════════════════════════════════════════════
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:share_plus/share_plus.dart';
@@ -69,11 +74,30 @@ class _PostCardState extends State<PostCard> {
           ? (widget.post['displayName'] ?? widget.post['display_name'] ?? widget.post['users']?['display_name'] ?? username).toString()
           : (widget.post?.displayName ?? username).toString());
 
-  String get userPhoto => (widget.post is GamerPost)
-      ? (widget.post as GamerPost).userPhoto
-      : (widget.post is Map
-          ? (widget.post['userPhoto'] ?? widget.post['user_avatar'] ?? widget.post['avatar_url'] ?? widget.post['users']?['avatar_url'] ?? '').toString()
-          : (widget.post?.userPhoto ?? '').toString());
+  String get userPhoto {
+    final currentGamer = _authService.currentGamer;
+    final currentUid = _authService.currentUid;
+    final isCurrent = currentGamer != null &&
+        (userId == currentGamer.uid ||
+            (currentUid != null && currentUid.isNotEmpty && userId == currentUid) ||
+            (username.isNotEmpty &&
+                username.toLowerCase() == currentGamer.username.toLowerCase()));
+
+    if (isCurrent && currentGamer.photoUrl.isNotEmpty) {
+      return currentGamer.photoUrl;
+    }
+
+    return (widget.post is GamerPost)
+        ? (widget.post as GamerPost).userPhoto
+        : (widget.post is Map
+            ? (widget.post['userPhoto'] ??
+                    widget.post['user_avatar'] ??
+                    widget.post['avatar_url'] ??
+                    widget.post['users']?['avatar_url'] ??
+                    '')
+                .toString()
+            : (widget.post?.userPhoto ?? '').toString());
+  }
 
   String get postText => (widget.post is GamerPost)
       ? (widget.post as GamerPost).text
@@ -313,11 +337,26 @@ class _PostCardState extends State<PostCard> {
             child: Row(
               crossAxisAlignment: CrossAxisAlignment.center,
               children: [
-                GamerAvatar(
-                  photoUrl: userPhoto,
-                  displayName: displayName,
-                  radius: 20,
-                  onTap: _openProfile,
+                ValueListenableBuilder<GamerUser?>(
+                  valueListenable: _authService.currentGamerNotifier,
+                  builder: (context, currentGamer, _) {
+                    final currentUid = _authService.currentUid;
+                    final isCurrent = currentGamer != null &&
+                        (userId == currentGamer.uid ||
+                            (currentUid != null && currentUid.isNotEmpty && userId == currentUid) ||
+                            (username.isNotEmpty &&
+                                username.toLowerCase() == currentGamer.username.toLowerCase()));
+                    final livePhoto = (isCurrent && currentGamer.photoUrl.isNotEmpty)
+                        ? currentGamer.photoUrl
+                        : userPhoto;
+
+                    return GamerAvatar(
+                      photoUrl: livePhoto,
+                      displayName: displayName,
+                      radius: 20,
+                      onTap: _openProfile,
+                    );
+                  },
                 ),
                 const SizedBox(width: 10),
                 Expanded(

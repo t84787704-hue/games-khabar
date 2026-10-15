@@ -697,14 +697,55 @@ class _TeamsScreenState extends State<TeamsScreen>
                         searchQuery: _searchQuery,
                       ),
                       builder: (context, snapshot) {
-                        if (snapshot.connectionState == ConnectionState.waiting) {
+                        if (snapshot.connectionState == ConnectionState.waiting || (!snapshot.hasData && !snapshot.hasError)) {
                           return const Center(child: CircularProgressIndicator(color: Color(0xFF1877F2)));
+                        }
+
+                        if (snapshot.hasError) {
+                          return Center(
+                            child: SingleChildScrollView(
+                              padding: const EdgeInsets.all(32),
+                              child: Column(
+                                mainAxisAlignment: MainAxisAlignment.center,
+                                children: [
+                                  const Icon(Icons.error_outline_rounded, size: 44, color: Color(0xFFFF4655)),
+                                  const SizedBox(height: 12),
+                                  const Text(
+                                    "Error loading teams",
+                                    style: TextStyle(
+                                      color: Color(0xFF050505),
+                                      fontSize: 16,
+                                      fontWeight: FontWeight.bold,
+                                    ),
+                                  ),
+                                  const SizedBox(height: 6),
+                                  Text(
+                                    snapshot.error?.toString() ?? "An unexpected error occurred",
+                                    textAlign: TextAlign.center,
+                                    style: const TextStyle(color: Color(0xFF65676B), fontSize: 13),
+                                  ),
+                                  const SizedBox(height: 16),
+                                  ElevatedButton.icon(
+                                    onPressed: () => setState(() {}),
+                                    style: ElevatedButton.styleFrom(
+                                      backgroundColor: const Color(0xFF1877F2),
+                                      foregroundColor: Colors.white,
+                                      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
+                                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                                    ),
+                                    icon: const Icon(Icons.refresh_rounded, color: Colors.white),
+                                    label: const Text("Retry", style: TextStyle(fontWeight: FontWeight.bold)),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          );
                         }
 
                         final teams = snapshot.data ?? [];
                         if (teams.isEmpty) {
                           return Center(
-                            child: Padding(
+                            child: SingleChildScrollView(
                               padding: const EdgeInsets.all(32),
                               child: Column(
                                 mainAxisAlignment: MainAxisAlignment.center,
@@ -714,7 +755,7 @@ class _TeamsScreenState extends State<TeamsScreen>
                                   Text(
                                     _selectedGameFilter != "All"
                                         ? "No teams found for $_selectedGameFilter"
-                                        : "No Teams Registered Yet",
+                                        : "No Teams Yet",
                                     style: const TextStyle(
                                       color: Color(0xFF050505),
                                       fontSize: 16,
@@ -737,7 +778,7 @@ class _TeamsScreenState extends State<TeamsScreen>
                                       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
                                     ),
                                     icon: const Icon(Icons.add, color: Colors.white),
-                                    label: const Text("Create First Team", style: TextStyle(fontWeight: FontWeight.bold)),
+                                    label: const Text("Create Team", style: TextStyle(fontWeight: FontWeight.bold)),
                                   ),
                                 ],
                               ),

@@ -32,7 +32,8 @@ class _GamerMessagesScreenState extends State<GamerMessagesScreen> {
   Future<void> _loadConversations() async {
     setState(() => _loading = true);
     final uid = _authService.currentUid ?? '';
-    final list = await _dmService.getConversations(uid);
+    final canonicalId = await _dmService.resolveToTableId(uid);
+    final list = await _dmService.getConversations(canonicalId.isNotEmpty ? canonicalId : uid);
     if (!mounted) return;
     setState(() {
       _conversations = list;
@@ -49,11 +50,12 @@ class _GamerMessagesScreenState extends State<GamerMessagesScreen> {
     );
 
     if (selectedUser != null && mounted) {
+      final otherTableId = await _dmService.resolveToTableId(selectedUser.uid);
       await Navigator.push(
         context,
         MaterialPageRoute(
           builder: (_) => GamerChatScreen(
-            otherUserId: selectedUser.uid,
+            otherUserId: otherTableId.isNotEmpty ? otherTableId : selectedUser.uid,
             otherUserName: selectedUser.displayName,
             otherUserPhoto: selectedUser.photoUrl,
             otherUserVerified: selectedUser.isVerified,
@@ -348,8 +350,14 @@ class _UserSearchSheetState extends State<_UserSearchSheet> {
     });
     final results = await _socialService.searchUsers(q);
     if (!mounted) return;
+    final myUid = GamerAuthService().currentUid ?? '';
+    final myAliases = await DirectMessageService().getUserAliases(myUid);
+    final filtered = results.where((u) {
+      final uId = u.uid.toLowerCase();
+      return !myAliases.any((a) => a.toLowerCase() == uId);
+    }).toList();
     setState(() {
-      _results = results;
+      _results = filtered;
       _searching = false;
     });
   }

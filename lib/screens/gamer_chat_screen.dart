@@ -32,11 +32,33 @@ class _GamerChatScreenState extends State<GamerChatScreen> {
 
   bool _isSending = false;
   bool _initialLoad = true;
+  Set<String> _myAliases = {};
+  String _effectiveMyId = '';
+  String _effectiveOtherId = '';
 
   @override
   void initState() {
     super.initState();
+    _effectiveMyId = _authService.currentUid ?? '';
+    _effectiveOtherId = widget.otherUserId;
+    _initIds();
     _markAsRead();
+  }
+
+  Future<void> _initIds() async {
+    final myUid = _authService.currentUid ?? '';
+    if (myUid.isNotEmpty) {
+      final myAliases = await _dmService.getUserAliases(myUid);
+      final myTableId = await _dmService.resolveToTableId(myUid);
+      final otherTableId = await _dmService.resolveToTableId(widget.otherUserId);
+      if (mounted) {
+        setState(() {
+          _myAliases = myAliases;
+          if (myTableId.isNotEmpty) _effectiveMyId = myTableId;
+          if (otherTableId.isNotEmpty) _effectiveOtherId = otherTableId;
+        });
+      }
+    }
   }
 
   @override
@@ -47,11 +69,11 @@ class _GamerChatScreenState extends State<GamerChatScreen> {
   }
 
   Future<void> _markAsRead() async {
-    final myUid = _authService.currentUid ?? '';
+    final myUid = _effectiveMyId.isNotEmpty ? _effectiveMyId : (_authService.currentUid ?? '');
     if (myUid.isEmpty) return;
     await _dmService.markAsRead(
       currentUserId: myUid,
-      otherUserId: widget.otherUserId,
+      otherUserId: _effectiveOtherId.isNotEmpty ? _effectiveOtherId : widget.otherUserId,
     );
   }
 
@@ -75,7 +97,7 @@ class _GamerChatScreenState extends State<GamerChatScreen> {
     final text = _messageController.text.trim();
     if (text.isEmpty || _isSending) return;
 
-    final myUid = _authService.currentUid ?? '';
+    final myUid = _effectiveMyId.isNotEmpty ? _effectiveMyId : (_authService.currentUid ?? '');
     if (myUid.isEmpty) return;
 
     setState(() => _isSending = true);
@@ -83,7 +105,7 @@ class _GamerChatScreenState extends State<GamerChatScreen> {
 
     final ok = await _dmService.sendMessage(
       senderId: myUid,
-      receiverId: widget.otherUserId,
+      receiverId: _effectiveOtherId.isNotEmpty ? _effectiveOtherId : widget.otherUserId,
       message: text,
     );
 
@@ -127,7 +149,7 @@ class _GamerChatScreenState extends State<GamerChatScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final myUid = _authService.currentUid ?? '';
+    final myUid = _effectiveMyId.isNotEmpty ? _effectiveMyId : (_authService.currentUid ?? '');
 
     return Scaffold(
       backgroundColor: const Color(0xFFF0F2F5),
@@ -188,8 +210,8 @@ class _GamerChatScreenState extends State<GamerChatScreen> {
           Expanded(
             child: StreamBuilder<List<ChatMessage>>(
               stream: _dmService.getMessagesStream(
-                userId1: myUid,
-                userId2: widget.otherUserId,
+                userId1: _effectiveMyId.isNotEmpty ? _effectiveMyId : myUid,
+                userId2: _effectiveOtherId.isNotEmpty ? _effectiveOtherId : widget.otherUserId,
               ),
               builder: (context, snapshot) {
                 if (snapshot.connectionState == ConnectionState.waiting &&
@@ -217,9 +239,10 @@ class _GamerChatScreenState extends State<GamerChatScreen> {
                   itemCount: messages.length,
                   itemBuilder: (context, i) {
                     final m = messages[i];
-                    final myUuid = SupabaseService.toUuid(myUid);
-                    final isMyMsg =
-                        m.senderId == myUuid || m.senderId == myUid;
+                    final sLower = m.senderId.toLowerCase();
+                    final isMyMsg = _myAliases.any((a) => a.toLowerCase() == sLower) ||
+                        sLower == myUid.toLowerCase() ||
+                        sLower == SupabaseService.toUuid(myUid).toLowerCase();
 
                     bool showDate = false;
                     if (i == 0) {

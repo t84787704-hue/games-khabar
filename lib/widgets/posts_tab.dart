@@ -1,3 +1,8 @@
+// ═══════════════════════════════════════════════════════════════════════════════
+// EXACT DIFF:
+// - Override post author avatar with live GamerAuthService().currentGamer?.photoUrl
+//   or widget.user.photoUrl so posts always show the latest updated profile picture
+// ═══════════════════════════════════════════════════════════════════════════════
 import 'package:flutter/material.dart';
 import '../constants/gamer_theme.dart';
 import '../models/gamer_post_model.dart';
@@ -119,20 +124,40 @@ class _PostsTabState extends State<PostsTab>
           itemBuilder: (context, index) {
             final item = items[index];
 
-            final post = item.originalPost ??
-                GamerPost(
-                  postId: item.id,
-                  userId: item.userId,
-                  username: item.username,
-                  displayName: item.displayName,
-                  userPhoto: item.userPhoto,
-                  text: item.text,
-                  gameTag: item.gameTag,
-                  likesCount: item.likesCount,
-                  commentsCount: item.commentsCount,
-                  isVerified: item.isVerified,
-                  createdAt: item.createdAt,
-                );
+            final currentGamer = _authService.currentGamer;
+            final isCurrentUserPost = widget.isOwnProfile ||
+                (currentGamer != null &&
+                    (item.userId == currentGamer.uid ||
+                        (item.username.isNotEmpty &&
+                            item.username.toLowerCase() ==
+                                currentGamer.username.toLowerCase())));
+
+            final effectiveAvatar = isCurrentUserPost &&
+                    (currentGamer?.photoUrl.isNotEmpty == true)
+                ? currentGamer!.photoUrl
+                : (widget.user.photoUrl.isNotEmpty &&
+                        (item.userId == widget.user.uid ||
+                            (item.username.isNotEmpty &&
+                                item.username.toLowerCase() ==
+                                    widget.user.username.toLowerCase()))
+                    ? widget.user.photoUrl
+                    : item.userPhoto);
+
+            final post = (item.originalPost != null)
+                ? item.originalPost!.copyWith(userPhoto: effectiveAvatar)
+                : GamerPost(
+                    postId: item.id,
+                    userId: item.userId,
+                    username: item.username,
+                    displayName: item.displayName,
+                    userPhoto: effectiveAvatar,
+                    text: item.text,
+                    gameTag: item.gameTag,
+                    likesCount: item.likesCount,
+                    commentsCount: item.commentsCount,
+                    isVerified: item.isVerified,
+                    createdAt: item.createdAt,
+                  );
 
             return PostCard(post: post);
           },
