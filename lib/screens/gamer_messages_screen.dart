@@ -1,3 +1,7 @@
+// DIFF:
+// - _loadConversations: Resolves effective current user ID through currentGamer.uid and authService.currentUid to canonical users table UUID before querying conversations.
+// - _openUserSearch: Resolves selected user and current user to canonical table UUIDs, guards against self-messaging before opening chat.
+
 import 'package:flutter/material.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:intl/intl.dart';
@@ -31,9 +35,11 @@ class _GamerMessagesScreenState extends State<GamerMessagesScreen> {
 
   Future<void> _loadConversations() async {
     setState(() => _loading = true);
-    final uid = _authService.currentUid ?? '';
-    final canonicalId = await _dmService.resolveToTableId(uid);
-    final list = await _dmService.getConversations(canonicalId.isNotEmpty ? canonicalId : uid);
+    final myAuthUid = _authService.currentUid ?? '';
+    final myGamerUid = _authService.currentGamer?.uid ?? '';
+    final effectiveUid = myGamerUid.isNotEmpty ? myGamerUid : myAuthUid;
+    final canonicalId = await _dmService.resolveToTableId(effectiveUid);
+    final list = await _dmService.getConversations(canonicalId.isNotEmpty ? canonicalId : effectiveUid);
     if (!mounted) return;
     setState(() {
       _conversations = list;
@@ -51,11 +57,27 @@ class _GamerMessagesScreenState extends State<GamerMessagesScreen> {
 
     if (selectedUser != null && mounted) {
       final otherTableId = await _dmService.resolveToTableId(selectedUser.uid);
+      final finalOtherId = otherTableId.isNotEmpty ? otherTableId : selectedUser.uid;
+
+      final myAuthUid = _authService.currentUid ?? '';
+      final myGamerUid = _authService.currentGamer?.uid ?? '';
+      final effectiveUid = myGamerUid.isNotEmpty ? myGamerUid : myAuthUid;
+      final myAliases = await _dmService.getUserAliases(effectiveUid);
+
+      if (myAliases.any((a) => a.toLowerCase() == finalOtherId.toLowerCase())) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('Aap khud ko message nahi bhej sakte.')),
+          );
+        }
+        return;
+      }
+
       await Navigator.push(
         context,
         MaterialPageRoute(
           builder: (_) => GamerChatScreen(
-            otherUserId: otherTableId.isNotEmpty ? otherTableId : selectedUser.uid,
+            otherUserId: finalOtherId,
             otherUserName: selectedUser.displayName,
             otherUserPhoto: selectedUser.photoUrl,
             otherUserVerified: selectedUser.isVerified,
@@ -350,8 +372,10 @@ class _UserSearchSheetState extends State<_UserSearchSheet> {
     });
     final results = await _socialService.searchUsers(q);
     if (!mounted) return;
-    final myUid = GamerAuthService().currentUid ?? '';
-    final myAliases = await DirectMessageService().getUserAliases(myUid);
+    final myAuthUid = GamerAuthService().currentUid ?? '';
+    final myGamerUid = GamerAuthService().currentGamer?.uid ?? '';
+    final effectiveMyUid = myGamerUid.isNotEmpty ? myGamerUid : myAuthUid;
+    final myAliases = await DirectMessageService().getUserAliases(effectiveMyUid);
     final filtered = results.where((u) {
       final uId = u.uid.toLowerCase();
       return !myAliases.any((a) => a.toLowerCase() == uId);

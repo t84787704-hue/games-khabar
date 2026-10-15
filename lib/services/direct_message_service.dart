@@ -1,3 +1,9 @@
+// DIFF:
+// - resolveToTableId: Safely queries users table by UUID id first, then fallback to uid text; prevents PostgreSQL uuid syntax crash; returns canonical users.id UUID.
+// - getUserAliases: Safe non-crashing queries by checking valid UUID format before querying id; returns complete alias set containing table id, auth uid, and fallback uuid.
+// - sendMessage: Resolves both senderId and receiverId to canonical table UUIDs, prevents self-messaging.
+// - getConversations: Robust alias matching including auth.currentUser.id and canonical table id; safe user profile lookup by id then uid; correctly identifies sender/receiver to prevent self-chat.
+
 import 'package:flutter/foundation.dart';
 import '../models/chat_model.dart';
 import 'supabase_service.dart';
@@ -10,6 +16,9 @@ class DirectMessageService {
   final _client = SupabaseService.client;
   static final Map<String, String> _resolvedUuidCache = {};
 
+  static final RegExp _uuidRegex = RegExp(
+      r'^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$');
+
   /// Resolves any user identifier (auth.uid or users.uid or users.id)
   /// to the canonical UUID `id` from the `users` table.
   Future<String> resolveToTableId(String idOrUid) async {
@@ -18,15 +27,38 @@ class DirectMessageService {
     if (_resolvedUuidCache.containsKey(clean)) {
       return _resolvedUuidCache[clean]!;
     }
+
+    final isUuid = _uuidRegex.hasMatch(clean);
+
     try {
-      final row = await _client
-          .from('users')
-          .select('id, uid')
-          .or('id.eq.$clean,uid.eq.$clean')
-          .maybeSingle();
+      Map<String, dynamic>? row;
+      // 1. If clean matches UUID format, check table primary key `id` first
+      if (isUuid) {
+        try {
+          row = await _client
+              .from('users')
+              .select('id, uid')
+              .eq('id', clean)
+              .maybeSingle();
+        } catch (_) {}
+      }
+
+      // 2. If not found by `id`, check by `uid` (text column)
+      if (row == null) {
+        try {
+          row = await _client
+              .from('users')
+              .select('id, uid')
+              .eq('uid', clean)
+              .maybeSingle();
+        } catch (_) {}
+      }
+
+      // 3. Return canonical UUID `id` from table
       if (row != null && row['id'] != null) {
         final tableId = row['id'].toString();
         _resolvedUuidCache[clean] = tableId;
+        _resolvedUuidCache[tableId] = tableId;
         if (row['uid'] != null) {
           _resolvedUuidCache[row['uid'].toString()] = tableId;
         }
@@ -35,9 +67,9 @@ class DirectMessageService {
     } catch (e) {
       debugPrint('[DMS] resolveToTableId error: $e');
     }
-    final uuidRegex = RegExp(
-        r'^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$');
-    if (uuidRegex.hasMatch(clean)) {
+
+    // 4. Fallback: if already a valid UUID format, use it; else convert via toUuid
+    if (isUuid) {
       final res = clean.toLowerCase();
       _resolvedUuidCache[clean] = res;
       return res;
@@ -51,24 +83,44 @@ class DirectMessageService {
   Future<Set<String>> getUserAliases(String idOrUid) async {
     final clean = idOrUid.trim();
     if (clean.isEmpty) return {};
+
     final aliases = <String>{clean, clean.toLowerCase()};
+    final isUuid = _uuidRegex.hasMatch(clean);
+
     final uuidFallback = SupabaseService.toUuid(clean);
     if (uuidFallback.isNotEmpty) {
       aliases.add(uuidFallback);
       aliases.add(uuidFallback.toLowerCase());
     }
+
     try {
-      final row = await _client
-          .from('users')
-          .select('id, uid')
-          .or('id.eq.$clean,uid.eq.$clean')
-          .maybeSingle();
+      Map<String, dynamic>? row;
+      if (isUuid) {
+        try {
+          row = await _client
+              .from('users')
+              .select('id, uid')
+              .eq('id', clean)
+              .maybeSingle();
+        } catch (_) {}
+      }
+      if (row == null) {
+        try {
+          row = await _client
+              .from('users')
+              .select('id, uid')
+              .eq('uid', clean)
+              .maybeSingle();
+        } catch (_) {}
+      }
+
       if (row != null) {
         if (row['id'] != null) {
           final idStr = row['id'].toString();
           aliases.add(idStr);
           aliases.add(idStr.toLowerCase());
           _resolvedUuidCache[clean] = idStr;
+          _resolvedUuidCache[idStr] = idStr;
         }
         if (row['uid'] != null) {
           final uidStr = row['uid'].toString();
@@ -77,9 +129,26 @@ class DirectMessageService {
           final uidUuid = SupabaseService.toUuid(uidStr);
           aliases.add(uidUuid);
           aliases.add(uidUuid.toLowerCase());
+          if (row['id'] != null) {
+            _resolvedUuidCache[uidStr] = row['id'].toString();
+          }
         }
       }
     } catch (_) {}
+
+    // Also include current auth user id if it corresponds to this user
+    try {
+      final currentAuthId = _client.auth.currentUser?.id;
+      if (currentAuthId != null && currentAuthId.isNotEmpty) {
+        if (aliases.contains(currentAuthId) ||
+            aliases.contains(currentAuthId.toLowerCase()) ||
+            clean == currentAuthId) {
+          aliases.add(currentAuthId);
+          aliases.add(currentAuthId.toLowerCase());
+        }
+      }
+    } catch (_) {}
+
     return aliases;
   }
 
@@ -96,6 +165,17 @@ class DirectMessageService {
     try {
       final senderUuid = await resolveToTableId(senderId);
       final receiverUuid = await resolveToTableId(receiverId);
+
+      if (senderUuid.isEmpty || receiverUuid.isEmpty) {
+        debugPrint('[DMS] senderUuid or receiverUuid is empty');
+        return false;
+      }
+
+      // Prevent chatting with self
+      if (senderUuid.toLowerCase() == receiverUuid.toLowerCase()) {
+        debugPrint('[DMS] Cannot send message to self');
+        return false;
+      }
 
       await _client.from('direct_messages').insert({
         'sender_id': senderUuid,
@@ -162,6 +242,16 @@ class DirectMessageService {
     if (userId.isEmpty) return [];
     try {
       final myAliases = await getUserAliases(userId);
+      final myCanonicalId = await resolveToTableId(userId);
+      if (myCanonicalId.isNotEmpty) {
+        myAliases.add(myCanonicalId);
+        myAliases.add(myCanonicalId.toLowerCase());
+      }
+      final currentAuthId = _client.auth.currentUser?.id;
+      if (currentAuthId != null && currentAuthId.isNotEmpty) {
+        myAliases.add(currentAuthId);
+        myAliases.add(currentAuthId.toLowerCase());
+      }
 
       final filterList = <String>[];
       for (final a in myAliases) {
@@ -205,6 +295,11 @@ class DirectMessageService {
         final otherRawId = entry.key;
         final msgs = entry.value;
 
+        // Ensure otherRawId is not current user
+        if (myAliases.any((a) => a.toLowerCase() == otherRawId.toLowerCase())) {
+          continue;
+        }
+
         final lastMsg = msgs.first;
         final lastText = (lastMsg['message'] ?? '').toString();
         final lastType = (lastMsg['message_type'] ?? 'text').toString();
@@ -225,12 +320,30 @@ class DirectMessageService {
         String photo = '';
         bool verified = false;
         String canonicalOtherId = otherRawId;
+
+        // Safe profile lookup without crashing on non-UUID
         try {
-          final userRow = await _client
-              .from('users')
-              .select('id, uid, username, display_name, avatar_url, is_verified')
-              .or('id.eq.$otherRawId,uid.eq.$otherRawId')
-              .maybeSingle();
+          Map<String, dynamic>? userRow;
+          final isUuid = _uuidRegex.hasMatch(otherRawId);
+          if (isUuid) {
+            try {
+              userRow = await _client
+                  .from('users')
+                  .select('id, uid, username, display_name, avatar_url, is_verified')
+                  .eq('id', otherRawId)
+                  .maybeSingle();
+            } catch (_) {}
+          }
+          if (userRow == null) {
+            try {
+              userRow = await _client
+                  .from('users')
+                  .select('id, uid, username, display_name, avatar_url, is_verified')
+                  .eq('uid', otherRawId)
+                  .maybeSingle();
+            } catch (_) {}
+          }
+
           if (userRow != null) {
             name = (userRow['display_name'] ??
                     userRow['username'] ??

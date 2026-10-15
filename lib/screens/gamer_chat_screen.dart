@@ -1,3 +1,8 @@
+// DIFF:
+// - initState & _initIds: Correctly resolves both auth UID and currentGamer UID to canonical table UUID and loads full alias set.
+// - _sendMessage: Resolves sender and recipient to canonical table UUIDs, checks against self-messaging.
+// - build & StreamBuilder: Streams messages between canonical table IDs and compares senderId against full alias set to correctly distinguish incoming vs outgoing messages.
+
 import 'package:flutter/material.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:intl/intl.dart';
@@ -39,22 +44,31 @@ class _GamerChatScreenState extends State<GamerChatScreen> {
   @override
   void initState() {
     super.initState();
-    _effectiveMyId = _authService.currentUid ?? '';
+    final myAuthUid = _authService.currentUid ?? '';
+    final myGamerUid = _authService.currentGamer?.uid ?? '';
+    _effectiveMyId = myGamerUid.isNotEmpty ? myGamerUid : myAuthUid;
     _effectiveOtherId = widget.otherUserId;
     _initIds();
     _markAsRead();
   }
 
   Future<void> _initIds() async {
-    final myUid = _authService.currentUid ?? '';
-    if (myUid.isNotEmpty) {
-      final myAliases = await _dmService.getUserAliases(myUid);
-      final myTableId = await _dmService.resolveToTableId(myUid);
+    final myAuthUid = _authService.currentUid ?? '';
+    final myGamerUid = _authService.currentGamer?.uid ?? '';
+    final sourceUid = myGamerUid.isNotEmpty ? myGamerUid : myAuthUid;
+
+    if (sourceUid.isNotEmpty) {
+      final myAliases = await _dmService.getUserAliases(sourceUid);
+      final myTableId = await _dmService.resolveToTableId(sourceUid);
       final otherTableId = await _dmService.resolveToTableId(widget.otherUserId);
       if (mounted) {
         setState(() {
           _myAliases = myAliases;
-          if (myTableId.isNotEmpty) _effectiveMyId = myTableId;
+          if (myTableId.isNotEmpty) {
+            _effectiveMyId = myTableId;
+            _myAliases.add(myTableId);
+            _myAliases.add(myTableId.toLowerCase());
+          }
           if (otherTableId.isNotEmpty) _effectiveOtherId = otherTableId;
         });
       }
@@ -69,7 +83,9 @@ class _GamerChatScreenState extends State<GamerChatScreen> {
   }
 
   Future<void> _markAsRead() async {
-    final myUid = _effectiveMyId.isNotEmpty ? _effectiveMyId : (_authService.currentUid ?? '');
+    final myAuthUid = _authService.currentUid ?? '';
+    final myGamerUid = _authService.currentGamer?.uid ?? '';
+    final myUid = _effectiveMyId.isNotEmpty ? _effectiveMyId : (myGamerUid.isNotEmpty ? myGamerUid : myAuthUid);
     if (myUid.isEmpty) return;
     await _dmService.markAsRead(
       currentUserId: myUid,
@@ -97,15 +113,31 @@ class _GamerChatScreenState extends State<GamerChatScreen> {
     final text = _messageController.text.trim();
     if (text.isEmpty || _isSending) return;
 
-    final myUid = _effectiveMyId.isNotEmpty ? _effectiveMyId : (_authService.currentUid ?? '');
+    final myAuthUid = _authService.currentUid ?? '';
+    final myGamerUid = _authService.currentGamer?.uid ?? '';
+    final sourceUid = myGamerUid.isNotEmpty ? myGamerUid : myAuthUid;
+    final myUid = _effectiveMyId.isNotEmpty ? _effectiveMyId : sourceUid;
     if (myUid.isEmpty) return;
+
+    final targetOtherId = _effectiveOtherId.isNotEmpty ? _effectiveOtherId : widget.otherUserId;
+
+    if (_myAliases.any((a) => a.toLowerCase() == targetOtherId.toLowerCase()) ||
+        myUid.toLowerCase() == targetOtherId.toLowerCase()) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Aap khud ko message nahi bhej sakte.'),
+          backgroundColor: Color(0xFFFF4655),
+        ),
+      );
+      return;
+    }
 
     setState(() => _isSending = true);
     _messageController.clear();
 
     final ok = await _dmService.sendMessage(
       senderId: myUid,
-      receiverId: _effectiveOtherId.isNotEmpty ? _effectiveOtherId : widget.otherUserId,
+      receiverId: targetOtherId,
       message: text,
     );
 
@@ -149,7 +181,10 @@ class _GamerChatScreenState extends State<GamerChatScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final myUid = _effectiveMyId.isNotEmpty ? _effectiveMyId : (_authService.currentUid ?? '');
+    final myAuthUid = _authService.currentUid ?? '';
+    final myGamerUid = _authService.currentGamer?.uid ?? '';
+    final sourceUid = myGamerUid.isNotEmpty ? myGamerUid : myAuthUid;
+    final myUid = _effectiveMyId.isNotEmpty ? _effectiveMyId : sourceUid;
 
     return Scaffold(
       backgroundColor: const Color(0xFFF0F2F5),
@@ -241,6 +276,7 @@ class _GamerChatScreenState extends State<GamerChatScreen> {
                     final m = messages[i];
                     final sLower = m.senderId.toLowerCase();
                     final isMyMsg = _myAliases.any((a) => a.toLowerCase() == sLower) ||
+                        sLower == _effectiveMyId.toLowerCase() ||
                         sLower == myUid.toLowerCase() ||
                         sLower == SupabaseService.toUuid(myUid).toLowerCase();
 
