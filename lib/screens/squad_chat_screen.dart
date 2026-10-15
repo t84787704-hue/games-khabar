@@ -1,3 +1,7 @@
+// ═══════════════════════════════════════════════════════════════════════════════
+// EXACT DIFF:
+// - Replaced .eq('id', currentUid) with .or('id.eq.$currentUid,uid.eq.$currentUid') on users table
+// ═══════════════════════════════════════════════════════════════════════════════
 import 'dart:convert';
 import 'dart:io';
 import 'package:flutter/material.dart';
@@ -756,7 +760,7 @@ class _SquadChatScreenState extends State<SquadChatScreen> {
 
                                 await SupabaseService.client.from('users').update({
                                   'lastWinProofAt': nowIso,
-                                }).eq('id', currentUid).catchError((_) => null);
+                                }).or('id.eq.$currentUid,uid.eq.$currentUid').catchError((_) => null);
 
                                 await SupabaseService.client.from('messages').insert({
                                   'id': proofId,

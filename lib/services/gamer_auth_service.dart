@@ -1,3 +1,8 @@
+// ═══════════════════════════════════════════════════════════════════════════════
+// EXACT DIFF:
+// - Replaced .eq('id', user.uid) with .or('id.eq.${user.uid},uid.eq.${user.uid}')
+// - Replaced .eq('id', uid) with .or('id.eq.$uid,uid.eq.$uid') in updateUserProfile
+// ═══════════════════════════════════════════════════════════════════════════════
 import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
@@ -322,16 +327,13 @@ class GamerAuthService {
         debugPrint('[GamerAuthService] upsert failed, trying update: $upsertError');
 
         try {
-          await _supabase.from('users').update(payload).eq('id', user.uid);
-          debugPrint('[GamerAuthService] ✅ update by id successful for ${user.uid}');
+          await _supabase
+              .from('users')
+              .update(payload)
+              .or('id.eq.${user.uid},uid.eq.${user.uid}');
+          debugPrint('[GamerAuthService] ✅ update successful for ${user.uid}');
           saved = true;
-        } catch (updateError) {
-          try {
-            await _supabase.from('users').update(payload).eq('uid', user.uid);
-            debugPrint('[GamerAuthService] ✅ update by uid successful for ${user.uid}');
-            saved = true;
-          } catch (_) {}
-        }
+        } catch (_) {}
       }
 
       // Safe fallback: Always ensure core avatar, cover, and display name are updated in DB
@@ -343,14 +345,12 @@ class GamerAuthService {
         'updated_at': DateTime.now().toIso8601String(),
       };
       try {
-        await _supabase.from('users').update(corePayload).eq('id', user.uid);
+        await _supabase
+            .from('users')
+            .update(corePayload)
+            .or('id.eq.${user.uid},uid.eq.${user.uid}');
         saved = true;
-      } catch (_) {
-        try {
-          await _supabase.from('users').update(corePayload).eq('uid', user.uid);
-          saved = true;
-        } catch (_) {}
-      }
+      } catch (_) {}
 
       currentGamerNotifier.value = user;
       await checkAndAwardWelcomeBonus(user.uid);
@@ -483,7 +483,10 @@ class GamerAuthService {
     if (updates.isNotEmpty) {
       updates['updated_at'] = DateTime.now().toIso8601String();
       try {
-        await _supabase.from('users').update(updates).eq('id', uid);
+        await _supabase
+            .from('users')
+            .update(updates)
+            .or('id.eq.$uid,uid.eq.$uid');
         await refreshCurrentGamer();
       } catch (e) {
         debugPrint('[GamerAuthService] Error updating profile: $e');

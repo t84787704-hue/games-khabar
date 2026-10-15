@@ -1,3 +1,7 @@
+// ═══════════════════════════════════════════════════════════════════════════════
+// EXACT DIFF:
+// - Replaced .eq('id', uuid) with .or('id.eq.$userId,uid.eq.$userId') on users table
+// ═══════════════════════════════════════════════════════════════════════════════
 import 'dart:math';
 import 'package:flutter/material.dart';
 import '../models/gamer_user_model.dart';
@@ -710,7 +714,7 @@ class VerificationService {
       await SupabaseService.client
           .from('users')
           .update(updates)
-          .eq('id', uuid);
+          .or('id.eq.$userId,uid.eq.$userId');
       return true;
     } catch (e) {
       debugPrint('Error linking game ID: $e');

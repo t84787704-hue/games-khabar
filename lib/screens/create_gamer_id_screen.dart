@@ -1,3 +1,7 @@
+// ═══════════════════════════════════════════════════════════════════════════════
+// EXACT DIFF:
+// - Replaced .eq('id', uid) with .or('id.eq.$uid,uid.eq.$uid') on users table
+// ═══════════════════════════════════════════════════════════════════════════════
 import 'dart:async';
 import 'dart:io';
 import 'package:flutter/material.dart';
@@ -586,10 +590,10 @@ class _CreateGamerIdScreenState extends State<CreateGamerIdScreen> {
         'updated_at': DateTime.now().toIso8601String(),
       };
       try {
-        await SupabaseService.client.from('users').update(directUpdates).eq('id', uid);
-      } catch (_) {}
-      try {
-        await SupabaseService.client.from('users').update(directUpdates).eq('uid', uid);
+        await SupabaseService.client
+            .from('users')
+            .update(directUpdates)
+            .or('id.eq.$uid,uid.eq.$uid');
       } catch (_) {}
 
       // Evict old and new image caches so the profile screen updates immediately

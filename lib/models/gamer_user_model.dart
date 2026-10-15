@@ -544,10 +544,13 @@ class GamerUser {
         data['tier']?.toString() ?? data['rank']?.toString() ?? '';
     final String resolvedRank = rawRank.isNotEmpty ? rawRank : 'Bronze';
 
-    final DateTime? vipPassExpires = parseDate(data['vipTournamentPassUntil']);
-    final DateTime? spotlightExpires = parseDate(data['leaderboardSpotlightUntil']);
+    final DateTime? vipPassExpires = parseDate(
+        data['vipTournamentPassUntil'] ?? data['vip_tournament_pass_until']);
+    final DateTime? spotlightExpires = parseDate(
+        data['leaderboardSpotlightUntil'] ?? data['leaderboard_spotlight_until']);
 
     final bool isVip = data['isVipMember'] == true ||
+        data['is_vip_member'] == true ||
         (vipPassExpires != null && vipPassExpires.isAfter(DateTime.now()));
 
     return GamerUser(
@@ -621,13 +624,21 @@ class GamerUser {
           ? Map<String, dynamic>.from(data['verificationProgress'])
           : null,
       createdAt: created,
-      activeFrame: data['activeFrame']?.toString() ?? '',
-      unlockedFrames: List<String>.from(data['unlockedFrames'] ?? []),
-      activeBadge: data['activeBadge']?.toString() ?? '',
-      unlockedBadges: List<String>.from(data['unlockedBadges'] ?? []),
-      chatColor: data['chatColor']?.toString() ?? '#00FF66',
-      unlockedChatColors:
-          List<String>.from(data['unlockedChatColors'] ?? []),
+      activeFrame: data['activeFrame']?.toString() ??
+          data['active_frame']?.toString() ??
+          '',
+      unlockedFrames: List<String>.from(
+          data['unlockedFrames'] ?? data['unlocked_frames'] ?? []),
+      activeBadge: data['activeBadge']?.toString() ??
+          data['active_badge']?.toString() ??
+          '',
+      unlockedBadges: List<String>.from(
+          data['unlockedBadges'] ?? data['unlocked_badges'] ?? []),
+      chatColor: data['chatColor']?.toString() ??
+          data['chat_color']?.toString() ??
+          '#00FF66',
+      unlockedChatColors: List<String>.from(
+          data['unlockedChatColors'] ?? data['unlocked_chat_colors'] ?? []),
       isVipMember: isVip,
       vipTournamentPassUntil: vipPassExpires,
       leaderboardSpotlightUntil: spotlightExpires,

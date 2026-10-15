@@ -1,11 +1,12 @@
 // ================================================================
-// EXACT DIFF — Fixed 2 issues
+// EXACT DIFF — Fixed issues
 // ----------------------------------------------------------------
 // File: lib/screens/gamer_profile_screen.dart
 //
 // FIX 1: Removed StreamBuilder → direct _cachedUser use (reload band)
 // FIX 2: Added Timer for 10-second background refresh (naya data)
 // FIX 3: Cover/avatar change ke baad setState _cachedUser ko turant update karega
+// FIX 4: Replaced users table .eq('id', X) with .or('id.eq.X,uid.eq.X')
 //
 // NO OTHER CODE CHANGED — byte-by-byte same
 // ================================================================
@@ -171,7 +172,7 @@ class _GamerProfileScreenState extends State<GamerProfileScreen>
       final rowById = await SupabaseService.client
           .from('users')
           .select()
-          .eq('id', userId)
+          .or('id.eq.$userId,uid.eq.$userId')
           .maybeSingle();
 
       if (rowById != null) {
@@ -247,7 +248,7 @@ class _GamerProfileScreenState extends State<GamerProfileScreen>
       await SupabaseService.client
           .from('users')
           .update(updates)
-          .eq('id', uid)
+          .or('id.eq.$uid,uid.eq.$uid')
           .select();
 
       if (mounted) {
@@ -722,13 +723,7 @@ class _GamerProfileScreenState extends State<GamerProfileScreen>
           await SupabaseService.client.from('users').update({
             'cover_url': finalUrl,
             'updated_at': DateTime.now().toIso8601String(),
-          }).eq('id', user.uid);
-        } catch (_) {}
-        try {
-          await SupabaseService.client.from('users').update({
-            'cover_url': finalUrl,
-            'updated_at': DateTime.now().toIso8601String(),
-          }).eq('uid', user.uid);
+          }).or('id.eq.${user.uid},uid.eq.${user.uid}');
         } catch (_) {}
 
         // ✅ FIX: Evict old cover from cache so new image loads
@@ -778,13 +773,7 @@ class _GamerProfileScreenState extends State<GamerProfileScreen>
         await SupabaseService.client.from('users').update({
           'cover_url': coverUrl,
           'updated_at': DateTime.now().toIso8601String(),
-        }).eq('id', user.uid);
-      } catch (_) {}
-      try {
-        await SupabaseService.client.from('users').update({
-          'cover_url': coverUrl,
-          'updated_at': DateTime.now().toIso8601String(),
-        }).eq('uid', user.uid);
+        }).or('id.eq.${user.uid},uid.eq.${user.uid}');
       } catch (_) {}
 
       // ✅ FIX: Evict old cover from cache so new image loads

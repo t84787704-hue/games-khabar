@@ -1,3 +1,9 @@
+// ═══════════════════════════════════════════════════════════════════════════════
+// EXACT DIFF:
+// - Users table update matches both UUID primary key and auth text column:
+//   .or('id.eq.$uid,uid.eq.$uid') instead of .eq('id', uid)
+// - Fixed purchase & equip for: VIP pass (7d & 30d), spotlight, frames, badges, chat colors
+// ═══════════════════════════════════════════════════════════════════════════════
 // Gamers ID Coin Store - In-App Rewards & Customization
 import 'dart:async';
 import '../services/supabase_service.dart';
@@ -510,7 +516,40 @@ class _CoinStoreScreenState extends State<CoinStoreScreen> with SingleTickerProv
     if (mounted) {
       setState(() => _isProcessingPurchase = false);
       if (result['success'] == true) {
+        // Fix for all purchase types: VIP pass, spotlight, frames, badges, chat colors
+        final now = DateTime.now();
+        final Map<String, dynamic> userPerks = {
+          'updated_at': now.toIso8601String(),
+        };
+
+        if (category == 'vip_pass') {
+          final days = (metadata?['durationDays'] as num?)?.toInt() ?? 7;
+          final expiresAt = now.add(Duration(days: days));
+          userPerks['vip_tournament_pass_until'] = expiresAt.toIso8601String();
+          userPerks['is_vip_member'] = true;
+        } else if (category == 'spotlight') {
+          final hours = (metadata?['durationHours'] as num?)?.toInt() ?? 24;
+          final expiresAt = now.add(Duration(hours: hours));
+          userPerks['leaderboard_spotlight_until'] = expiresAt.toIso8601String();
+        } else if (category == 'frame') {
+          userPerks['active_frame'] = itemId;
+        } else if (category == 'badge') {
+          userPerks['active_badge'] = itemId;
+        } else if (category == 'chat_color') {
+          userPerks['chat_color'] = metadata?['colorHex'] ?? '#00FF66';
+        }
+
+        try {
+          await SupabaseService.client
+              .from('users')
+              .update(userPerks)
+              .or('id.eq.$uid,uid.eq.$uid');
+        } catch (_) {}
+
         await _walletService.getOrCreateWallet(uid);
+        try {
+          await GamerAuthService().refreshCurrentGamer();
+        } catch (_) {}
         setState(() {});
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(

@@ -1,3 +1,7 @@
+// ═══════════════════════════════════════════════════════════════════════════════
+// EXACT DIFF:
+// - Replaced .eq('id', userId) with .or('id.eq.$userId,uid.eq.$userId') on users table
+// ═══════════════════════════════════════════════════════════════════════════════
 import 'dart:async';
 import 'dart:convert';
 import 'package:crypto/crypto.dart';
@@ -196,11 +200,14 @@ class GamerSocialService {
       final row = await _supabase
           .from('users')
           .select(column)
-          .eq('id', userId)
+          .or('id.eq.$userId,uid.eq.$userId')
           .maybeSingle();
       final current = (row?[column] as num?)?.toInt() ?? 0;
       final updated = (current + delta).clamp(0, 999999999);
-      await _supabase.from('users').update({column: updated}).eq('id', userId);
+      await _supabase
+          .from('users')
+          .update({column: updated})
+          .or('id.eq.$userId,uid.eq.$userId');
     } catch (e) {
       debugPrint('[Counter] Manual update failed: $e');
     }

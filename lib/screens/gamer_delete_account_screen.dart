@@ -1,3 +1,7 @@
+// ═══════════════════════════════════════════════════════════════════════════════
+// EXACT DIFF:
+// - Replaced .eq('id', uuid) with .or('id.eq.$uid,uid.eq.$uid') on users table
+// ═══════════════════════════════════════════════════════════════════════════════
 import 'dart:async';
 import 'package:flutter/material.dart';
 import '../services/gamer_auth_service.dart';
@@ -56,7 +60,7 @@ class _GamerDeleteAccountScreenState extends State<GamerDeleteAccountScreen> {
           .update({
         'deleted_at': DateTime.now().toIso8601String(),
         'updated_at': DateTime.now().toIso8601String(),
-      }).eq('id', uuid);
+      }).or('id.eq.$uid,uid.eq.$uid');
 
       // 2. Sign out user
       await authService.signOut();

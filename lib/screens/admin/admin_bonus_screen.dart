@@ -1,3 +1,7 @@
+// ═══════════════════════════════════════════════════════════════════════════════
+// EXACT DIFF:
+// - Replaced .eq('id', docId) with .or('id.eq.$docId,uid.eq.$docId') on users table
+// ═══════════════════════════════════════════════════════════════════════════════
 import 'package:flutter/material.dart';
 import '../../services/supabase_service.dart';
 import '../../services/theme_service.dart';
@@ -135,7 +139,7 @@ class _AdminBonusScreenState extends State<AdminBonusScreen> {
             // Update coins in user doc
             await SupabaseService.client.from('users').update({
               'coins': currentCoins + totalBonus,
-            }).eq('id', docId);
+            }).or('id.eq.$docId,uid.eq.$docId');
 
             // Send in-app notification without mentioning Ad or 50%
             await SupabaseService.client.from('notifications').insert({
