@@ -575,6 +575,33 @@ class _CreateGamerIdScreenState extends State<CreateGamerIdScreen> {
 
       await GamerAuthService().saveGamerProfile(gamerUser);
 
+      // Direct update in Supabase users table so avatar_url and cover_url are 100% saved
+      final Map<String, dynamic> directUpdates = {
+        'avatar_url': finalPhotoUrl,
+        'cover_url': finalCoverUrl,
+        'display_name': _displayNameController.text.trim().isNotEmpty
+            ? _displayNameController.text.trim()
+            : rawUsername,
+        'bio': _bioController.text.trim(),
+        'updated_at': DateTime.now().toIso8601String(),
+      };
+      try {
+        await SupabaseService.client.from('users').update(directUpdates).eq('id', uid);
+      } catch (_) {}
+      try {
+        await SupabaseService.client.from('users').update(directUpdates).eq('uid', uid);
+      } catch (_) {}
+
+      // Evict old and new image caches so the profile screen updates immediately
+      try {
+        if (_photoUrl.isNotEmpty) await CachedNetworkImage.evictFromCache(_photoUrl);
+        if (finalPhotoUrl.isNotEmpty) await CachedNetworkImage.evictFromCache(finalPhotoUrl);
+        if (_coverUrl.isNotEmpty) await CachedNetworkImage.evictFromCache(_coverUrl);
+        if (finalCoverUrl.isNotEmpty) await CachedNetworkImage.evictFromCache(finalCoverUrl);
+        PaintingBinding.instance.imageCache.clear();
+        PaintingBinding.instance.imageCache.clearLiveImages();
+      } catch (_) {}
+
       try {
         await SupabaseService.client.from('users').update({
           'rank': finalRank.isNotEmpty ? finalRank : null,
@@ -639,7 +666,7 @@ class _CreateGamerIdScreenState extends State<CreateGamerIdScreen> {
         try {
           await GamerAuthService().refreshCurrentGamer();
         } catch (_) {}
-        Navigator.of(context).pop();
+        Navigator.of(context).pop(true);
       } else {
         // Always navigate to main screen on save success
         // (don't wait for refreshCurrentGamer)

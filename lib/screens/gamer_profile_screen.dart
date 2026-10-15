@@ -718,10 +718,18 @@ class _GamerProfileScreenState extends State<GamerProfileScreen>
       final finalUrl = uploadedUrl.isNotEmpty ? uploadedUrl : '';
 
       if (finalUrl.isNotEmpty) {
-        await SupabaseService.client.from('users').update({
-          'cover_url': finalUrl,
-          'updated_at': DateTime.now().toIso8601String(),
-        }).eq('id', user.uid);
+        try {
+          await SupabaseService.client.from('users').update({
+            'cover_url': finalUrl,
+            'updated_at': DateTime.now().toIso8601String(),
+          }).eq('id', user.uid);
+        } catch (_) {}
+        try {
+          await SupabaseService.client.from('users').update({
+            'cover_url': finalUrl,
+            'updated_at': DateTime.now().toIso8601String(),
+          }).eq('uid', user.uid);
+        } catch (_) {}
 
         // ✅ FIX: Evict old cover from cache so new image loads
         try {
@@ -729,6 +737,8 @@ class _GamerProfileScreenState extends State<GamerProfileScreen>
             await CachedNetworkImage.evictFromCache(user.coverUrl);
           }
           await CachedNetworkImage.evictFromCache(finalUrl);
+          PaintingBinding.instance.imageCache.clear();
+          PaintingBinding.instance.imageCache.clearLiveImages();
         } catch (_) {}
 
         // ✅ FIX: Fresh data fetch karo aur _cachedUser update karo
@@ -764,10 +774,18 @@ class _GamerProfileScreenState extends State<GamerProfileScreen>
 
   Future<void> _setPresetCover(GamerUser user, String coverUrl) async {
     try {
-      await SupabaseService.client.from('users').update({
-        'cover_url': coverUrl,
-        'updated_at': DateTime.now().toIso8601String(),
-      }).eq('id', user.uid);
+      try {
+        await SupabaseService.client.from('users').update({
+          'cover_url': coverUrl,
+          'updated_at': DateTime.now().toIso8601String(),
+        }).eq('id', user.uid);
+      } catch (_) {}
+      try {
+        await SupabaseService.client.from('users').update({
+          'cover_url': coverUrl,
+          'updated_at': DateTime.now().toIso8601String(),
+        }).eq('uid', user.uid);
+      } catch (_) {}
 
       // ✅ FIX: Evict old cover from cache so new image loads
       try {
@@ -775,6 +793,8 @@ class _GamerProfileScreenState extends State<GamerProfileScreen>
           await CachedNetworkImage.evictFromCache(user.coverUrl);
         }
         await CachedNetworkImage.evictFromCache(coverUrl);
+        PaintingBinding.instance.imageCache.clear();
+        PaintingBinding.instance.imageCache.clearLiveImages();
       } catch (_) {}
 
       // ✅ FIX: Fresh data fetch karo aur _cachedUser update karo
@@ -1144,6 +1164,7 @@ class _GamerProfileScreenState extends State<GamerProfileScreen>
                             ],
                           ),
                           child: GamerAvatar(
+                            key: ValueKey('avatar_${user.uid}_${user.photoUrl}'),
                             photoUrl: user.photoUrl,
                             displayName: user.displayName,
                             radius: 46,
@@ -1353,8 +1374,8 @@ class _GamerProfileScreenState extends State<GamerProfileScreen>
                                   style: TextStyle(
                                       fontWeight: FontWeight.bold,
                                       fontSize: 13)),
-                              onPressed: () {
-                                Navigator.of(context).push(
+                              onPressed: () async {
+                                await Navigator.of(context).push(
                                   MaterialPageRoute(
                                     builder: (_) =>
                                         CreateGamerIdScreen(
@@ -1363,6 +1384,19 @@ class _GamerProfileScreenState extends State<GamerProfileScreen>
                                     ),
                                   ),
                                 );
+                                if (mounted) {
+                                  try {
+                                    PaintingBinding.instance.imageCache.clear();
+                                    PaintingBinding.instance.imageCache.clearLiveImages();
+                                  } catch (_) {}
+                                  await _refreshSilently();
+                                  final fresh = GamerAuthService().currentGamer;
+                                  if (fresh != null) {
+                                    setState(() {
+                                      _cachedUser = fresh;
+                                    });
+                                  }
+                                }
                               },
                             ),
                           ),
@@ -1856,10 +1890,10 @@ class _GamerProfileScreenState extends State<GamerProfileScreen>
                     ),
                     trailing: const Icon(Icons.arrow_forward_ios_rounded,
                         color: Color(0xFF65676B), size: 14),
-                    onTap: () {
+                    onTap: () async {
                       Navigator.pop(ctx);
                       if (isOwnProfile) {
-                        Navigator.of(context).push(
+                        await Navigator.of(context).push(
                           MaterialPageRoute(
                             builder: (_) => CreateGamerIdScreen(
                               isEditing: true,
@@ -1867,6 +1901,19 @@ class _GamerProfileScreenState extends State<GamerProfileScreen>
                             ),
                           ),
                         );
+                        if (mounted) {
+                          try {
+                            PaintingBinding.instance.imageCache.clear();
+                            PaintingBinding.instance.imageCache.clearLiveImages();
+                          } catch (_) {}
+                          await _refreshSilently();
+                          final fresh = GamerAuthService().currentGamer;
+                          if (fresh != null) {
+                            setState(() {
+                              _cachedUser = fresh;
+                            });
+                          }
+                        }
                       }
                     },
                   ),

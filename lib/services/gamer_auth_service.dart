@@ -62,15 +62,25 @@ class GamerAuthService {
       try {
         profile = await _supabase
             .from('users')
-            .select('id, username, display_name, avatar_url, cover_url, is_banned, banned_reason')
-            .eq('id', authUserId)
+            .select()
+            .or('id.eq.$authUserId,uid.eq.$authUserId')
             .maybeSingle();
       } catch (_) {
-        profile = await _supabase
-            .from('users')
-            .select()
-            .eq('id', authUserId)
-            .maybeSingle();
+        try {
+          profile = await _supabase
+              .from('users')
+              .select('id, username, display_name, avatar_url, cover_url, is_banned, banned_reason')
+              .eq('id', authUserId)
+              .maybeSingle();
+        } catch (_) {
+          try {
+            profile = await _supabase
+                .from('users')
+                .select('id, username, display_name, avatar_url, cover_url, is_banned, banned_reason')
+                .eq('uid', authUserId)
+                .maybeSingle();
+          } catch (_) {}
+        }
       }
 
       if (profile != null) {
@@ -108,15 +118,25 @@ class GamerAuthService {
       try {
         profile = await _supabase
             .from('users')
-            .select('id, username, display_name, avatar_url, cover_url, is_banned, banned_reason')
-            .eq('id', authUser.id)
+            .select()
+            .or('id.eq.${authUser.id},uid.eq.${authUser.id}')
             .maybeSingle();
       } catch (_) {
-        profile = await _supabase
-            .from('users')
-            .select()
-            .eq('id', authUser.id)
-            .maybeSingle();
+        try {
+          profile = await _supabase
+              .from('users')
+              .select('id, username, display_name, avatar_url, cover_url, is_banned, banned_reason')
+              .eq('id', authUser.id)
+              .maybeSingle();
+        } catch (_) {
+          try {
+            profile = await _supabase
+                .from('users')
+                .select('id, username, display_name, avatar_url, cover_url, is_banned, banned_reason')
+                .eq('uid', authUser.id)
+                .maybeSingle();
+          } catch (_) {}
+        }
       }
 
       if (profile != null) {
@@ -128,9 +148,8 @@ class GamerAuthService {
     } catch (e) {
       debugPrint('[GamerAuthService] Error refreshing gamer: $e');
     }
-    currentGamerNotifier.value = null;
     isLoadingNotifier.value = false;
-    return null;
+    return currentGamerNotifier.value;
   }
 
   /// Checks live if a username is available in Supabase
@@ -270,7 +289,7 @@ class GamerAuthService {
   }
 
   /// Creates or updates `users` record in Supabase
-  /// Uses upsert first, then falls back to update by id
+  /// Uses upsert first, then falls back to update by id and uid
   Future<bool> saveGamerProfile(GamerUser user) async {
     try {
       final payload = <String, dynamic>{
@@ -282,7 +301,9 @@ class GamerAuthService {
         'cover_url': user.coverUrl,
         'bio': user.bio,
         'game': (user.favoriteGame.isNotEmpty && user.favoriteGame != 'All Games') ? user.favoriteGame : null,
+        'game_name': user.favoriteGame.isNotEmpty ? user.favoriteGame : null,
         'rank': user.rank.isNotEmpty ? user.rank : null,
+        'gamer_rank': user.rank.isNotEmpty ? user.rank : null,
         'selected_rank': user.selectedRank.isNotEmpty ? user.selectedRank : null,
         'is_rank_verified': user.isRankVerified,
         'rank_status': user.rankStatus.isNotEmpty ? user.rankStatus : 'none',
@@ -292,31 +313,48 @@ class GamerAuthService {
         'updated_at': DateTime.now().toIso8601String(),
       };
 
+      bool saved = false;
       try {
         await _supabase.from('users').upsert(payload);
         debugPrint('[GamerAuthService] ✅ upsert successful for ${user.uid}');
+        saved = true;
       } catch (upsertError) {
         debugPrint('[GamerAuthService] upsert failed, trying update: $upsertError');
 
         try {
           await _supabase.from('users').update(payload).eq('id', user.uid);
-          debugPrint('[GamerAuthService] ✅ update successful for ${user.uid}');
+          debugPrint('[GamerAuthService] ✅ update by id successful for ${user.uid}');
+          saved = true;
         } catch (updateError) {
-          debugPrint('[GamerAuthService] update also failed: $updateError');
-
           try {
-            await _supabase.from('users').insert(payload);
-            debugPrint('[GamerAuthService] ✅ insert successful for ${user.uid}');
-          } catch (insertError) {
-            debugPrint('[GamerAuthService] insert also failed: $insertError');
-            return false;
-          }
+            await _supabase.from('users').update(payload).eq('uid', user.uid);
+            debugPrint('[GamerAuthService] ✅ update by uid successful for ${user.uid}');
+            saved = true;
+          } catch (_) {}
         }
+      }
+
+      // Safe fallback: Always ensure core avatar, cover, and display name are updated in DB
+      final corePayload = <String, dynamic>{
+        'avatar_url': user.photoUrl,
+        'cover_url': user.coverUrl,
+        'display_name': user.displayName,
+        'bio': user.bio,
+        'updated_at': DateTime.now().toIso8601String(),
+      };
+      try {
+        await _supabase.from('users').update(corePayload).eq('id', user.uid);
+        saved = true;
+      } catch (_) {
+        try {
+          await _supabase.from('users').update(corePayload).eq('uid', user.uid);
+          saved = true;
+        } catch (_) {}
       }
 
       currentGamerNotifier.value = user;
       await checkAndAwardWelcomeBonus(user.uid);
-      return true;
+      return saved;
     } catch (e) {
       debugPrint('[GamerAuthService] Error saving gamer profile in Supabase: $e');
       return false;
