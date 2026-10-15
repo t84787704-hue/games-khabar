@@ -18,6 +18,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:intl/intl.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 import '../constants/gamer_theme.dart';
 import '../services/gamer_auth_service.dart';
 import '../services/tournament_service.dart';
@@ -264,7 +265,8 @@ class GamerRoomsScreen extends StatefulWidget {
     required BuildContext context,
     required String gameName,
   }) async {
-    final meta = SupabaseService.client.auth.currentUser?.userMetadata ?? {};
+    final currentUser = SupabaseService.client.auth.currentUser;
+    final meta = currentUser?.userMetadata ?? {};
     final gameProfiles = (meta['game_profiles'] is Map)
         ? Map<String, dynamic>.from(meta['game_profiles'])
         : <String, dynamic>{};
@@ -281,7 +283,7 @@ class GamerRoomsScreen extends StatefulWidget {
       }
     }
 
-    // Also check root meta for legacy fallback
+    // Check root metadata fallback
     final rootIgn = meta['ign']?.toString() ?? meta['in_game_name']?.toString() ?? '';
     final rootUid = meta['game_uid']?.toString() ?? meta['character_id']?.toString() ?? '';
     if (rootIgn.isNotEmpty && rootUid.isNotEmpty) {
@@ -383,6 +385,17 @@ class GamerRoomsScreen extends StatefulWidget {
               } catch (e) {
                 debugPrint('Error saving game profile: $e');
               }
+
+              // Update users table in database as well
+              try {
+                final currentUid = currentUser?.id;
+                if (currentUid != null && currentUid.isNotEmpty) {
+                  await SupabaseService.client.from('users').update({
+                    'ign': ign,
+                    'game_uid': uid,
+                  }).or('id.eq.$currentUid,uid.eq.$currentUid');
+                }
+              } catch (_) {}
 
               Navigator.pop(ctx, {'ign': ign, 'game_uid': uid});
             },
@@ -674,7 +687,7 @@ class _GamerRoomsScreenState extends State<GamerRoomsScreen> {
                   context: context,
                   gameName: gameName,
                 );
-                if (profile == null) return; // User cancelled
+                if (profile == null) return;
 
                 final myIgn = profile['ign'] ?? currentUserName;
                 final myUid = profile['game_uid'] ?? '';
@@ -836,7 +849,6 @@ class _RoomDetailsSheetState extends State<_RoomDetailsSheet> {
     setState(() => _isJoining = true);
 
     try {
-      // 1. Get or prompt for IGN and Game UID
       final profile = await GamerRoomsScreen.getOrPromptGameProfile(
         context: context,
         gameName: room.game,
@@ -850,7 +862,6 @@ class _RoomDetailsSheetState extends State<_RoomDetailsSheet> {
       final myIgn = profile['ign'] ?? widget.currentUserName;
       final myUid = profile['game_uid'] ?? '';
 
-      // 2. Add user to joined lists
       final updatedIds = [...room.joinedUserIds, widget.currentUserId];
       final updatedUsers = [
         ...room.joinedUsers,
@@ -870,7 +881,6 @@ class _RoomDetailsSheetState extends State<_RoomDetailsSheet> {
         'filled_slots': updatedUsers.length,
       }).eq('id', widget.roomId);
 
-      // 3. System chat notification
       await SupabaseService.client.from('messages').insert({
         'room_id': widget.roomId,
         'sender_id': 'system',
@@ -1067,7 +1077,7 @@ class _RoomDetailsSheetState extends State<_RoomDetailsSheet> {
               Padding(
                 padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
                 child: Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  mainAxisAlignment: ChangeHorizontal(16, 8),
                   children: [
                     Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
@@ -1296,7 +1306,7 @@ class _RoomDetailsSheetState extends State<_RoomDetailsSheet> {
                 ),
               ),
 
-              // FEATURE 1: PLAYERS LIST (Shows all joined players with avatars, IGN & Game UID)
+              // FEATURE 1: PLAYERS LIST
               Container(
                 margin: const EdgeInsets.symmetric(horizontal: 14, vertical: 4),
                 padding: const EdgeInsets.all(10),
@@ -1639,6 +1649,8 @@ class _RoomDetailsSheetState extends State<_RoomDetailsSheet> {
       ),
     );
   }
+
+  MainAxisAlignment ChangeHorizontal(double left, double right) => MainAxisAlignment.spaceBetween;
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════
