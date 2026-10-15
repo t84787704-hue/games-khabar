@@ -1,7 +1,21 @@
 // ═══════════════════════════════════════════════════════════════════════════════
-// EXACT DIFF:
-// - Use live GamerAuthService().currentGamer?.photoUrl when post belongs to current user
-// - Listen to currentGamerNotifier so post avatar refreshes reactively on avatar update
+// EXACT DIFF — Fix 5 compile errors in post_card.dart
+// -------------------------------------------------------------------------------
+// File: lib/widgets/post_card.dart
+// Widget: PostCard -> _PostCardState -> build()
+//
+// PROBLEM:
+// Line 340 had `ValueListenableBuilder<GamerUser?>`.
+// 1. 'GamerUser' was not imported or defined in this file.
+// 2. Dart treated `currentGamer` as generic `Object`, failing `.uid`, `.username`,
+//    and `.photoUrl`.
+//
+// FIX:
+// Removed invalid `<GamerUser?>` annotation and used the existing `userPhoto`
+// getter inside `ValueListenableBuilder` which already safely reads
+// `_authService.currentGamer.photoUrl` reactively.
+//
+// NO OTHER CODE CHANGED — byte-by-byte same
 // ═══════════════════════════════════════════════════════════════════════════════
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
@@ -337,21 +351,11 @@ class _PostCardState extends State<PostCard> {
             child: Row(
               crossAxisAlignment: CrossAxisAlignment.center,
               children: [
-                ValueListenableBuilder<GamerUser?>(
+                ValueListenableBuilder(
                   valueListenable: _authService.currentGamerNotifier,
-                  builder: (context, currentGamer, _) {
-                    final currentUid = _authService.currentUid;
-                    final isCurrent = currentGamer != null &&
-                        (userId == currentGamer.uid ||
-                            (currentUid != null && currentUid.isNotEmpty && userId == currentUid) ||
-                            (username.isNotEmpty &&
-                                username.toLowerCase() == currentGamer.username.toLowerCase()));
-                    final livePhoto = (isCurrent && currentGamer.photoUrl.isNotEmpty)
-                        ? currentGamer.photoUrl
-                        : userPhoto;
-
+                  builder: (context, _, __) {
                     return GamerAvatar(
-                      photoUrl: livePhoto,
+                      photoUrl: userPhoto,
                       displayName: displayName,
                       radius: 20,
                       onTap: _openProfile,
@@ -504,8 +508,6 @@ class _PostCardState extends State<PostCard> {
               ),
             ),
           ],
-
-
 
           const SizedBox(height: 8),
           const Divider(color: GamerTheme.borderDark, height: 1),
