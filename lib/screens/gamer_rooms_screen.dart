@@ -1,6 +1,8 @@
 // ═══════════════════════════════════════════════════════════════════════════════
 // COMPLETE GAMER ROOMS SCREEN
-// - Realtime Joined Players List with Avatars & Names
+// - Realtime Joined Players List with Avatars, Names, IGN & Game UID
+// - Esports Match Rules & Guidelines Dialog
+// - Flexible Match Formats (1v1, 2v2, 4v4 TDM)
 // - "End Match / Claim Win" Screenshot Proof Upload to Supabase Storage
 // - 5-Minute Golden Winner Banner with Live Countdown Timer
 // - Auto-delete room after 5 minutes of completion
@@ -473,62 +475,97 @@ class _GamerRoomsScreenState extends State<GamerRoomsScreen> {
     final passCtrl = TextEditingController();
     final prizeCtrl = TextEditingController(text: '100');
 
+    // Esports Flexible Match Formats
+    int selectedSlots = 2;
+    String selectedFormat = '1 vs 1 (2 Slots)';
+    final Map<String, int> formatOptions = {
+      '1 vs 1 (2 Slots)': 2,
+      '2 vs 2 (4 Slots)': 4,
+      '4 vs 4 TDM (8 Slots)': 8,
+    };
+
     showDialog(
       context: context,
-      builder: (ctx) => AlertDialog(
-        title: const Text('Create Game Room', style: TextStyle(fontWeight: FontWeight.bold)),
-        content: SingleChildScrollView(
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              TextField(controller: gameCtrl, decoration: const InputDecoration(labelText: 'Game')),
-              TextField(controller: modeCtrl, decoration: const InputDecoration(labelText: 'Map / Mode')),
-              TextField(controller: roomIdCtrl, decoration: const InputDecoration(labelText: 'Room ID')),
-              TextField(controller: passCtrl, decoration: const InputDecoration(labelText: 'Password')),
-              TextField(
-                controller: prizeCtrl,
-                keyboardType: TextInputType.number,
-                decoration: const InputDecoration(labelText: 'Prize Pool (Coins)'),
-              ),
-            ],
+      builder: (ctx) => StatefulBuilder(
+        builder: (context, setDialogState) => AlertDialog(
+          title: const Text('Create Game Room', style: TextStyle(fontWeight: FontWeight.bold)),
+          content: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                TextField(controller: gameCtrl, decoration: const InputDecoration(labelText: 'Game')),
+                TextField(controller: modeCtrl, decoration: const InputDecoration(labelText: 'Map / Mode')),
+                DropdownButtonFormField<String>(
+                  value: selectedFormat,
+                  decoration: const InputDecoration(labelText: 'Match Format / Slots'),
+                  items: formatOptions.keys.map((format) {
+                    return DropdownMenuItem(
+                      value: format,
+                      child: Text(format, style: const TextStyle(fontSize: 13)),
+                    );
+                  }).toList(),
+                  onChanged: (val) {
+                    if (val != null) {
+                      setDialogState(() {
+                        selectedFormat = val;
+                        selectedSlots = formatOptions[val]!;
+                      });
+                    }
+                  },
+                ),
+                TextField(controller: roomIdCtrl, decoration: const InputDecoration(labelText: 'Room ID')),
+                TextField(controller: passCtrl, decoration: const InputDecoration(labelText: 'Password')),
+                TextField(
+                  controller: prizeCtrl,
+                  keyboardType: TextInputType.number,
+                  decoration: const InputDecoration(labelText: 'Prize Pool (Coins)'),
+                ),
+              ],
+            ),
           ),
+          actions: [
+            TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Cancel')),
+            ElevatedButton(
+              style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF1877F2)),
+              onPressed: () async {
+                if (roomIdCtrl.text.trim().isEmpty || passCtrl.text.trim().isEmpty) return;
+
+                final meta = SupabaseService.client.auth.currentUser?.userMetadata ?? {};
+                final myIgn = meta['ign']?.toString() ?? meta['in_game_name']?.toString() ?? '';
+                final myUid = meta['game_uid']?.toString() ?? meta['character_id']?.toString() ?? '';
+
+                final roomData = {
+                  'game': gameCtrl.text.trim(),
+                  'mode': modeCtrl.text.trim(),
+                  'room_id': roomIdCtrl.text.trim(),
+                  'room_password': passCtrl.text.trim(),
+                  'prize_pool': int.tryParse(prizeCtrl.text) ?? 100,
+                  'total_slots': selectedSlots,
+                  'filled_slots': 1,
+                  'status': 'active',
+                  'host_id': currentUserId,
+                  'host_name': currentUserName,
+                  'joined_user_ids': [currentUserId],
+                  'joined_users': [
+                    {
+                      'id': currentUserId,
+                      'name': currentUserName,
+                      'avatar': currentUserPhoto,
+                      'is_host': true,
+                      'ign': myIgn,
+                      'game_uid': myUid,
+                    }
+                  ],
+                  'created_at': DateTime.now().toIso8601String(),
+                };
+
+                Navigator.pop(ctx);
+                await SupabaseService.client.from('rooms').insert(roomData);
+              },
+              child: const Text('Create', style: TextStyle(color: Colors.white)),
+            ),
+          ],
         ),
-        actions: [
-          TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Cancel')),
-          ElevatedButton(
-            style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF1877F2)),
-            onPressed: () async {
-              if (roomIdCtrl.text.trim().isEmpty || passCtrl.text.trim().isEmpty) return;
-
-              final roomData = {
-                'game': gameCtrl.text.trim(),
-                'mode': modeCtrl.text.trim(),
-                'room_id': roomIdCtrl.text.trim(),
-                'room_password': passCtrl.text.trim(),
-                'prize_pool': int.tryParse(prizeCtrl.text) ?? 100,
-                'total_slots': 2,
-                'filled_slots': 1,
-                'status': 'active',
-                'host_id': currentUserId,
-                'host_name': currentUserName,
-                'joined_user_ids': [currentUserId],
-                'joined_users': [
-                  {
-                    'id': currentUserId,
-                    'name': currentUserName,
-                    'avatar': currentUserPhoto,
-                    'is_host': true,
-                  }
-                ],
-                'created_at': DateTime.now().toIso8601String(),
-              };
-
-              Navigator.pop(ctx);
-              await SupabaseService.client.from('rooms').insert(roomData);
-            },
-            child: const Text('Create', style: TextStyle(color: Colors.white)),
-          ),
-        ],
       ),
     );
   }
@@ -566,6 +603,49 @@ class _RoomDetailsSheetState extends State<_RoomDetailsSheet> {
     _countdownTimer?.cancel();
     _msgController.dispose();
     super.dispose();
+  }
+
+  void _showRulesDialog() {
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: Colors.white,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        title: const Row(
+          children: [
+            Text('📜 ', style: TextStyle(fontSize: 20)),
+            Text('Tournament Rules', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18, color: Color(0xFF1E293B))),
+          ],
+        ),
+        content: const SingleChildScrollView(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              _RuleItem(icon: Icons.phone_android, title: 'Mobile Only', desc: 'Emulators, PC, and iPad view modifications are strictly prohibited.'),
+              SizedBox(height: 10),
+              _RuleItem(icon: Icons.security, title: 'Fair Play', desc: 'Hacks, scripts, and third-party GFX tools will lead to permanent account ban.'),
+              SizedBox(height: 10),
+              _RuleItem(icon: Icons.camera_alt, title: 'Mandatory Proof', desc: 'End-game screenshot showing kills & rank is mandatory to claim prize.'),
+              SizedBox(height: 10),
+              _RuleItem(icon: Icons.group_off, title: 'No Teaming', desc: 'Teaming with opponents or griefing will forfeit match and coins.'),
+              SizedBox(height: 10),
+              _RuleItem(icon: Icons.gavel, title: 'Admin Authority', desc: 'In case of dispute, Admin verification based on submitted proof is final.'),
+            ],
+          ),
+        ),
+        actions: [
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(
+              backgroundColor: const Color(0xFF1877F2),
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+            ),
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text('I Understand', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+          ),
+        ],
+      ),
+    );
   }
 
   void _start5MinCountdown(DateTime completedAt) {
@@ -899,7 +979,7 @@ class _RoomDetailsSheetState extends State<_RoomDetailsSheet> {
                 ),
               ],
 
-              // ROOM CREDENTIALS (Matches screenshot)
+              // ROOM CREDENTIALS (Matches screenshot) + RULES BUTTON
               Container(
                 margin: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
                 padding: const EdgeInsets.all(12),
@@ -911,16 +991,46 @@ class _RoomDetailsSheetState extends State<_RoomDetailsSheet> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    const Row(
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
                       children: [
-                        Icon(Icons.key, color: Colors.amber, size: 16),
-                        SizedBox(width: 6),
-                        Text(
-                          'ROOM CREDENTIALS',
-                          style: TextStyle(
-                            color: Color(0xFF92400E),
-                            fontWeight: FontWeight.bold,
-                            fontSize: 12,
+                        const Row(
+                          children: [
+                            Icon(Icons.key, color: Colors.amber, size: 16),
+                            SizedBox(width: 6),
+                            Text(
+                              'ROOM CREDENTIALS',
+                              style: TextStyle(
+                                color: Color(0xFF92400E),
+                                fontWeight: FontWeight.bold,
+                                fontSize: 12,
+                              ),
+                            ),
+                          ],
+                        ),
+                        // 📜 RULES MODAL BUTTON
+                        InkWell(
+                          onTap: _showRulesDialog,
+                          borderRadius: BorderRadius.circular(6),
+                          child: Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                            decoration: BoxDecoration(
+                              color: Colors.amber.withOpacity(0.25),
+                              borderRadius: BorderRadius.circular(6),
+                            ),
+                            child: const Row(
+                              children: [
+                                Text('📜 ', style: TextStyle(fontSize: 11)),
+                                Text(
+                                  'Rules',
+                                  style: TextStyle(
+                                    color: Color(0xFF92400E),
+                                    fontWeight: FontWeight.bold,
+                                    fontSize: 11,
+                                  ),
+                                ),
+                              ],
+                            ),
                           ),
                         ),
                       ],
@@ -963,7 +1073,7 @@ class _RoomDetailsSheetState extends State<_RoomDetailsSheet> {
                 ),
               ),
 
-              // FEATURE 1: PLAYERS LIST (Shows all joined players with avatars)
+              // FEATURE 1: PLAYERS LIST (Shows all joined players with avatars, IGN & Game UID)
               Container(
                 margin: const EdgeInsets.symmetric(horizontal: 14, vertical: 4),
                 padding: const EdgeInsets.all(10),
@@ -994,55 +1104,112 @@ class _RoomDetailsSheetState extends State<_RoomDetailsSheet> {
                       final uId = (user['id'] ?? '').toString();
                       final uName = (user['name'] ?? 'Player').toString();
                       final uAvatar = (user['avatar'] ?? '').toString();
+                      final ign = user['ign']?.toString() ?? user['in_game_name']?.toString();
+                      final gameUid = user['game_uid']?.toString() ?? user['character_id']?.toString();
                       final isHost = uId == room.hostId;
                       final isMe = uId == widget.currentUserId;
 
                       return Padding(
                         padding: const EdgeInsets.symmetric(vertical: 4),
                         child: Row(
+                          crossAxisAlignment: CrossAxisAlignment.center,
                           children: [
                             GamerAvatar(
                               photoUrl: uAvatar,
                               displayName: uName,
-                              radius: 14,
+                              radius: 16,
                             ),
-                            const SizedBox(width: 8),
+                            const SizedBox(width: 10),
                             Expanded(
-                              child: Text(
-                                uName,
-                                style: const TextStyle(
-                                  fontWeight: FontWeight.bold,
-                                  fontSize: 13,
-                                ),
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Row(
+                                    children: [
+                                      Flexible(
+                                        child: Text(
+                                          uName,
+                                          style: const TextStyle(
+                                            fontWeight: FontWeight.bold,
+                                            fontSize: 13,
+                                          ),
+                                          overflow: TextOverflow.ellipsis,
+                                        ),
+                                      ),
+                                      if (isHost) ...[
+                                        const SizedBox(width: 6),
+                                        Container(
+                                          padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 1.5),
+                                          decoration: BoxDecoration(
+                                            color: Colors.blue.withOpacity(0.15),
+                                            borderRadius: BorderRadius.circular(4),
+                                          ),
+                                          child: const Text('HOST',
+                                              style: TextStyle(
+                                                  color: Colors.blue,
+                                                  fontSize: 9,
+                                                  fontWeight: FontWeight.bold)),
+                                        ),
+                                      ],
+                                      if (isMe) ...[
+                                        const SizedBox(width: 6),
+                                        Container(
+                                          padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 1.5),
+                                          decoration: BoxDecoration(
+                                            color: Colors.green,
+                                            borderRadius: BorderRadius.circular(4),
+                                          ),
+                                          child: const Text('YOU',
+                                              style: TextStyle(
+                                                  color: Colors.white,
+                                                  fontSize: 9,
+                                                  fontWeight: FontWeight.bold)),
+                                        ),
+                                      ],
+                                    ],
+                                  ),
+                                  const SizedBox(height: 2),
+                                  // In-Game Name & Character ID with copy button
+                                  Row(
+                                    children: [
+                                      Text(
+                                        (ign != null && ign.isNotEmpty) ? 'IGN: $ign' : 'IGN: Not Set',
+                                        style: TextStyle(
+                                          fontSize: 11,
+                                          color: Colors.grey[600],
+                                          fontWeight: FontWeight.w500,
+                                        ),
+                                      ),
+                                      if (gameUid != null && gameUid.isNotEmpty) ...[
+                                        Text(
+                                          ' • ID: $gameUid',
+                                          style: TextStyle(
+                                            fontSize: 11,
+                                            color: Colors.grey[600],
+                                            fontWeight: FontWeight.w500,
+                                          ),
+                                        ),
+                                        InkWell(
+                                          onTap: () {
+                                            Clipboard.setData(ClipboardData(text: gameUid));
+                                            ScaffoldMessenger.of(context).showSnackBar(
+                                              SnackBar(
+                                                content: Text('Copied Game UID: $gameUid'),
+                                                duration: const Duration(seconds: 1),
+                                              ),
+                                            );
+                                          },
+                                          child: const Padding(
+                                            padding: EdgeInsets.only(left: 4),
+                                            child: Icon(Icons.copy, size: 12, color: Color(0xFF1877F2)),
+                                          ),
+                                        ),
+                                      ],
+                                    ],
+                                  ),
+                                ],
                               ),
                             ),
-                            if (isHost)
-                              Container(
-                                margin: const EdgeInsets.only(right: 4),
-                                padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                                decoration: BoxDecoration(
-                                  color: Colors.blue.withOpacity(0.2),
-                                  borderRadius: BorderRadius.circular(4),
-                                ),
-                                child: const Text('HOST',
-                                    style: TextStyle(
-                                        color: Colors.blue,
-                                        fontSize: 9,
-                                        fontWeight: FontWeight.bold)),
-                              ),
-                            if (isMe)
-                              Container(
-                                padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                                decoration: BoxDecoration(
-                                  color: Colors.green,
-                                  borderRadius: BorderRadius.circular(4),
-                                ),
-                                child: const Text('YOU',
-                                    style: TextStyle(
-                                        color: Colors.white,
-                                        fontSize: 9,
-                                        fontWeight: FontWeight.bold)),
-                              ),
                           ],
                         ),
                       );
@@ -1216,6 +1383,42 @@ class _RoomDetailsSheetState extends State<_RoomDetailsSheet> {
           );
         },
       ),
+    );
+  }
+}
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// HELPER: RULES MODAL ITEM
+// ═══════════════════════════════════════════════════════════════════════════════
+class _RuleItem extends StatelessWidget {
+  final IconData icon;
+  final String title;
+  final String desc;
+
+  const _RuleItem({
+    required this.icon,
+    required this.title,
+    required this.desc,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Icon(icon, color: const Color(0xFF1877F2), size: 18),
+        const SizedBox(width: 10),
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(title, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: Color(0xFF1E293B))),
+              const SizedBox(height: 2),
+              Text(desc, style: TextStyle(fontSize: 11.5, color: Colors.grey[700])),
+            ],
+          ),
+        ),
+      ],
     );
   }
 }
