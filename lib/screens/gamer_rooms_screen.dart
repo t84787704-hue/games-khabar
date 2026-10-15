@@ -1,6 +1,8 @@
 // ═══════════════════════════════════════════════════════════════════════════════
 // COMPLETE GAMER ROOMS SCREEN
 // - Realtime Joined Players List with Avatars, Names, IGN & Game UID
+// - 1-Time Game ID & IGN Auto-Save Popup (Multi-Game Ready)
+// - Join Match Button for non-host players with slot reservation
 // - Esports Match Rules & Guidelines Dialog
 // - Flexible Match Formats (1v1, 2v2, 4v4 TDM)
 // - "End Match / Claim Win" Screenshot Proof Upload to Supabase Storage
@@ -255,6 +257,142 @@ class GamerRoomsScreen extends StatefulWidget {
         priority: 'high',
       );
     } catch (_) {}
+  }
+
+  /// HELPER: 1-Time Game Profile Prompt & Auto-Save
+  static Future<Map<String, String>?> getOrPromptGameProfile({
+    required BuildContext context,
+    required String gameName,
+  }) async {
+    final meta = SupabaseService.client.auth.currentUser?.userMetadata ?? {};
+    final gameProfiles = (meta['game_profiles'] is Map)
+        ? Map<String, dynamic>.from(meta['game_profiles'])
+        : <String, dynamic>{};
+
+    final safeKey = gameName.trim().toLowerCase().replaceAll(' ', '_');
+
+    // Check if profile already exists
+    if (gameProfiles[safeKey] is Map) {
+      final existing = Map<String, dynamic>.from(gameProfiles[safeKey]);
+      final ign = existing['ign']?.toString() ?? '';
+      final uid = existing['game_uid']?.toString() ?? '';
+      if (ign.isNotEmpty && uid.isNotEmpty) {
+        return {'ign': ign, 'game_uid': uid};
+      }
+    }
+
+    // Also check root meta for legacy fallback
+    final rootIgn = meta['ign']?.toString() ?? meta['in_game_name']?.toString() ?? '';
+    final rootUid = meta['game_uid']?.toString() ?? meta['character_id']?.toString() ?? '';
+    if (rootIgn.isNotEmpty && rootUid.isNotEmpty) {
+      return {'ign': rootIgn, 'game_uid': rootUid};
+    }
+
+    // Prompt user via clean esports dialog
+    final ignController = TextEditingController(text: rootIgn);
+    final uidController = TextEditingController(text: rootUid);
+
+    final result = await showDialog<Map<String, String>>(
+      context: context,
+      barrierDismissible: false,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: Colors.white,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        title: Row(
+          children: [
+            const Icon(Icons.sports_esports_rounded, color: Color(0xFF1877F2), size: 24),
+            const SizedBox(width: 8),
+            Expanded(
+              child: Text(
+                '$gameName ID Details',
+                style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 17, color: Color(0xFF1E293B)),
+              ),
+            ),
+          ],
+        ),
+        content: SingleChildScrollView(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                'Enter your official $gameName details. This will be automatically saved for all future $gameName matches.',
+                style: TextStyle(fontSize: 12, color: Colors.grey[700]),
+              ),
+              const SizedBox(height: 14),
+              TextField(
+                controller: ignController,
+                decoration: InputDecoration(
+                  labelText: 'In-Game Name (IGN)',
+                  hintText: 'e.g. Sniper_King',
+                  prefixIcon: const Icon(Icons.badge_outlined, size: 20),
+                  filled: true,
+                  fillColor: const Color(0xFFF8FAFC),
+                  border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
+                ),
+              ),
+              const SizedBox(height: 12),
+              TextField(
+                controller: uidController,
+                keyboardType: TextInputType.text,
+                decoration: InputDecoration(
+                  labelText: 'Character ID / Game UID',
+                  hintText: 'e.g. 5123456789',
+                  prefixIcon: const Icon(Icons.tag, size: 20),
+                  filled: true,
+                  fillColor: const Color(0xFFF8FAFC),
+                  border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
+                ),
+              ),
+            ],
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, null),
+            child: const Text('Cancel', style: TextStyle(color: Colors.grey)),
+          ),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(
+              backgroundColor: const Color(0xFF1877F2),
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+            ),
+            onPressed: () async {
+              final ign = ignController.text.trim();
+              final uid = uidController.text.trim();
+              if (ign.isEmpty || uid.isEmpty) {
+                ScaffoldMessenger.of(ctx).showSnackBar(
+                  const SnackBar(content: Text('Please fill both In-Game Name & UID')),
+                );
+                return;
+              }
+
+              // Auto-Save to Supabase User Metadata permanently
+              gameProfiles[safeKey] = {'ign': ign, 'game_uid': uid};
+              try {
+                await SupabaseService.client.auth.updateUser(
+                  UserAttributes(
+                    data: {
+                      ...meta,
+                      'ign': ign,
+                      'game_uid': uid,
+                      'game_profiles': gameProfiles,
+                    },
+                  ),
+                );
+              } catch (e) {
+                debugPrint('Error saving game profile: $e');
+              }
+
+              Navigator.pop(ctx, {'ign': ign, 'game_uid': uid});
+            },
+            child: const Text('Save & Continue', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+          ),
+        ],
+      ),
+    );
+
+    return result;
   }
 
   @override
@@ -529,13 +667,20 @@ class _GamerRoomsScreenState extends State<GamerRoomsScreen> {
               style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF1877F2)),
               onPressed: () async {
                 if (roomIdCtrl.text.trim().isEmpty || passCtrl.text.trim().isEmpty) return;
+                final gameName = gameCtrl.text.trim();
 
-                final meta = SupabaseService.client.auth.currentUser?.userMetadata ?? {};
-                final myIgn = meta['ign']?.toString() ?? meta['in_game_name']?.toString() ?? '';
-                final myUid = meta['game_uid']?.toString() ?? meta['character_id']?.toString() ?? '';
+                // 1-Time check / prompt for host game profile
+                final profile = await GamerRoomsScreen.getOrPromptGameProfile(
+                  context: context,
+                  gameName: gameName,
+                );
+                if (profile == null) return; // User cancelled
+
+                final myIgn = profile['ign'] ?? currentUserName;
+                final myUid = profile['game_uid'] ?? '';
 
                 final roomData = {
-                  'game': gameCtrl.text.trim(),
+                  'game': gameName,
                   'mode': modeCtrl.text.trim(),
                   'room_id': roomIdCtrl.text.trim(),
                   'room_password': passCtrl.text.trim(),
@@ -559,7 +704,7 @@ class _GamerRoomsScreenState extends State<GamerRoomsScreen> {
                   'created_at': DateTime.now().toIso8601String(),
                 };
 
-                Navigator.pop(ctx);
+                if (mounted) Navigator.pop(ctx);
                 await SupabaseService.client.from('rooms').insert(roomData);
               },
               child: const Text('Create', style: TextStyle(color: Colors.white)),
@@ -597,6 +742,7 @@ class _RoomDetailsSheetState extends State<_RoomDetailsSheet> {
   Timer? _countdownTimer;
   int _secondsRemaining = 300;
   bool _isUploadingProof = false;
+  bool _isJoining = false;
 
   @override
   void dispose() {
@@ -675,6 +821,82 @@ class _RoomDetailsSheetState extends State<_RoomDetailsSheet> {
         setState(() => _secondsRemaining--);
       }
     });
+  }
+
+  /// FEATURE: Join Match with 1-Time Game Profile Check
+  Future<void> _joinMatch(GamerRoom room) async {
+    if (_isJoining) return;
+    if (room.isFull) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Room is already full!')),
+      );
+      return;
+    }
+
+    setState(() => _isJoining = true);
+
+    try {
+      // 1. Get or prompt for IGN and Game UID
+      final profile = await GamerRoomsScreen.getOrPromptGameProfile(
+        context: context,
+        gameName: room.game,
+      );
+
+      if (profile == null) {
+        setState(() => _isJoining = false);
+        return;
+      }
+
+      final myIgn = profile['ign'] ?? widget.currentUserName;
+      final myUid = profile['game_uid'] ?? '';
+
+      // 2. Add user to joined lists
+      final updatedIds = [...room.joinedUserIds, widget.currentUserId];
+      final updatedUsers = [
+        ...room.joinedUsers,
+        {
+          'id': widget.currentUserId,
+          'name': widget.currentUserName,
+          'avatar': widget.currentUserPhoto,
+          'is_host': false,
+          'ign': myIgn,
+          'game_uid': myUid,
+        }
+      ];
+
+      await SupabaseService.client.from('rooms').update({
+        'joined_user_ids': updatedIds,
+        'joined_users': updatedUsers,
+        'filled_slots': updatedUsers.length,
+      }).eq('id', widget.roomId);
+
+      // 3. System chat notification
+      await SupabaseService.client.from('messages').insert({
+        'room_id': widget.roomId,
+        'sender_id': 'system',
+        'sender_name': 'ROOM BOT',
+        'message': '👋 ${widget.currentUserName} ($myIgn) joined the match!',
+        'type': 'system',
+        'created_at': DateTime.now().toIso8601String(),
+      });
+
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('✅ Successfully joined room!'),
+            backgroundColor: Colors.green,
+          ),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Error joining room: $e'), backgroundColor: Colors.red),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _isJoining = false);
+    }
   }
 
   /// FEATURE 2: Upload Winning Screenshot
@@ -819,6 +1041,7 @@ class _RoomDetailsSheetState extends State<_RoomDetailsSheet> {
           }
 
           final room = GamerRoom.fromSupabase(snapshot.data!.first);
+          final bool isJoined = room.joinedUserIds.contains(widget.currentUserId);
 
           if (room.isCompleted && room.completedAt != null && _countdownTimer == null) {
             _start5MinCountdown(room.completedAt!);
@@ -979,7 +1202,7 @@ class _RoomDetailsSheetState extends State<_RoomDetailsSheet> {
                 ),
               ],
 
-              // ROOM CREDENTIALS (Matches screenshot) + RULES BUTTON
+              // ROOM CREDENTIALS + RULES BUTTON
               Container(
                 margin: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
                 padding: const EdgeInsets.all(12),
@@ -1173,11 +1396,11 @@ class _RoomDetailsSheetState extends State<_RoomDetailsSheet> {
                                   Row(
                                     children: [
                                       Text(
-                                        (ign != null && ign.isNotEmpty) ? 'IGN: $ign' : 'IGN: Not Set',
+                                        (ign != null && ign.isNotEmpty) ? 'IGN: $ign' : 'IGN: $uName',
                                         style: TextStyle(
                                           fontSize: 11,
-                                          color: Colors.grey[600],
-                                          fontWeight: FontWeight.w500,
+                                          color: Colors.grey[700],
+                                          fontWeight: FontWeight.w600,
                                         ),
                                       ),
                                       if (gameUid != null && gameUid.isNotEmpty) ...[
@@ -1314,51 +1537,82 @@ class _RoomDetailsSheetState extends State<_RoomDetailsSheet> {
                 ),
               ),
 
-              // ACTION BUTTONS: Match End Proof & Dispute
+              // ACTION BUTTONS: Join Match OR End Match & Dispute
               if (!room.isCompleted) ...[
-                Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 4),
-                  child: Row(
-                    children: [
-                      // FEATURE 2: End Match & Upload Win Proof Button
-                      Expanded(
-                        child: ElevatedButton.icon(
-                          style: ElevatedButton.styleFrom(
-                            backgroundColor: Colors.amber[700],
-                            foregroundColor: Colors.white,
-                            padding: const EdgeInsets.symmetric(vertical: 10),
-                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-                          ),
-                          icon: _isUploadingProof
-                              ? const SizedBox(
-                                  width: 16,
-                                  height: 16,
-                                  child: CircularProgressIndicator(
-                                      strokeWidth: 2, color: Colors.white))
-                              : const Icon(Icons.emoji_events, size: 18),
-                          label: Text(
-                            _isUploadingProof
-                                ? 'Uploading...'
-                                : (room.isProofSubmitted
-                                    ? 'Re-upload Proof'
-                                    : 'End Match (I Won)'),
-                            style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13),
-                          ),
-                          onPressed: _isUploadingProof ? null : _uploadWinScreenshot,
+                if (!isJoined) ...[
+                  // JOIN MATCH BUTTON (For new players)
+                  Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
+                    child: SizedBox(
+                      width: double.infinity,
+                      child: ElevatedButton.icon(
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: const Color(0xFF00C853),
+                          foregroundColor: Colors.white,
+                          padding: const EdgeInsets.symmetric(vertical: 12),
+                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                          elevation: 2,
                         ),
+                        icon: _isJoining
+                            ? const SizedBox(
+                                width: 16,
+                                height: 16,
+                                child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
+                              )
+                            : const Icon(Icons.login, size: 20),
+                        label: Text(
+                          _isJoining ? 'Joining Match...' : 'JOIN MATCH (${room.filledSlots}/${room.totalSlots})',
+                          style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
+                        ),
+                        onPressed: _isJoining ? null : () => _joinMatch(room),
                       ),
-                    ],
+                    ),
                   ),
-                ),
+                ] else ...[
+                  // FEATURE 2: End Match & Upload Win Proof Button
+                  Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 4),
+                    child: Row(
+                      children: [
+                        Expanded(
+                          child: ElevatedButton.icon(
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor: Colors.amber[700],
+                              foregroundColor: Colors.white,
+                              padding: const EdgeInsets.symmetric(vertical: 10),
+                              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                            ),
+                            icon: _isUploadingProof
+                                ? const SizedBox(
+                                    width: 16,
+                                    height: 16,
+                                    child: CircularProgressIndicator(
+                                        strokeWidth: 2, color: Colors.white))
+                                : const Icon(Icons.emoji_events, size: 18),
+                            label: Text(
+                              _isUploadingProof
+                                  ? 'Uploading...'
+                                  : (room.isProofSubmitted
+                                      ? 'Re-upload Proof'
+                                      : 'End Match (I Won)'),
+                              style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13),
+                            ),
+                            onPressed: _isUploadingProof ? null : _uploadWinScreenshot,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
 
-                // Dispute Button (Hides when already disputed)
-                if (!room.isDisputed)
-                  TextButton.icon(
-                    icon: const Icon(Icons.warning_amber_rounded, size: 16, color: Colors.grey),
-                    label: const Text('Raise Dispute / Report Issue',
-                        style: TextStyle(color: Colors.grey, fontSize: 12)),
-                    onPressed: _raiseDisputeDialog,
-                  ),
+                  // Dispute Button
+                  if (!room.isDisputed)
+                    TextButton.icon(
+                      icon: const Icon(Icons.warning_amber_rounded, size: 16, color: Colors.grey),
+                      label: const Text('Raise Dispute / Report Issue',
+                          style: TextStyle(color: Colors.grey, fontSize: 12)),
+                      onPressed: _raiseDisputeDialog,
+                    ),
+                ],
               ],
 
               // LEAVE ROOM BUTTON
