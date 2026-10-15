@@ -33,86 +33,49 @@ class CoinHistorySheet extends StatefulWidget {
 class _CoinHistorySheetState extends State<CoinHistorySheet> {
   final CoinWalletService _walletService = CoinWalletService();
   int _selectedFilter = 0; // 0: All, 1: Added (+), 2: Deducted (-)
-  bool _isSyncing = false;
+  int _lastSyncedBalance = -1;
+  bool _isBackgroundSyncing = false;
 
-  Future<void> _syncCoins() async {
-    setState(() => _isSyncing = true);
+  /// Background Safe Auto-Sync: Kabhi bhi balance 0 overwrite nahi karega
+  Future<void> _safeBackgroundSync(int targetCoins) async {
+    if (targetCoins <= 0 || _isBackgroundSyncing) return;
+    _isBackgroundSyncing = true;
     try {
       final currentUserId = widget.userId.isNotEmpty
           ? widget.userId
           : (GamerAuthService().currentUid ?? '');
-      if (currentUserId.isEmpty) throw 'User not logged in';
+      if (currentUserId.isEmpty) return;
 
-      // 1. Sum all transactions from Supabase
-      int total = 0;
-      int txCount = 0;
-      try {
-        final txRows = await SupabaseService.client
-            .from('coin_transactions')
-            .select('amount')
-            .or('user_id.eq.$currentUserId,userId.eq.$currentUserId');
+      // 1. Update coins in Supabase users table
+      await SupabaseService.client.from('users').update({
+        'coins': targetCoins,
+        'g_coins': targetCoins,
+        'updated_at': DateTime.now().toIso8601String(),
+      }).or('id.eq.$currentUserId,uid.eq.$currentUserId');
 
-        txCount = txRows.length;
-        for (var row in txRows) {
-          final dynamic rawAmount = row['amount'];
-          if (rawAmount is num) {
-            total += rawAmount.toInt();
-          }
-        }
-      } catch (_) {}
-
-      if (total < 0) total = 0;
-
-      // 2. Update coins in Supabase users table (strict snake_case)
-      try {
-        await SupabaseService.client.from('users').update({
-          'coins': total,
-          'g_coins': total,
-          'updated_at': DateTime.now().toIso8601String(),
-        }).or('id.eq.$currentUserId,uid.eq.$currentUserId');
-      } catch (_) {}
-
-      // 3. Update coin_wallets table
+      // 2. Update coin_wallets table
       try {
         await SupabaseService.client.from('coin_wallets').upsert({
           'id': currentUserId,
           'user_id': currentUserId,
-          'coins': total,
-          'g_coins': total,
+          'coins': targetCoins,
+          'g_coins': targetCoins,
           'updated_at': DateTime.now().toIso8601String(),
         });
       } catch (_) {}
 
-      // Update in-memory state
+      // 3. Update in-memory state
       final currentGamer = GamerAuthService().currentGamer;
       if (currentGamer != null && (currentGamer.uid == currentUserId || currentUserId.isEmpty)) {
-        GamerAuthService().currentGamerNotifier.value = currentGamer.copyWith(coins: total);
-        CoinRewardService().coinsNotifier.value = total;
+        GamerAuthService().currentGamerNotifier.value = currentGamer.copyWith(coins: targetCoins);
+        CoinRewardService().coinsNotifier.value = targetCoins;
       }
 
-      debugPrint('SYNCED: Coins set to $total from $txCount transactions');
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Synced! Balance verified at $total G-Coins'),
-            backgroundColor: GamerTheme.neonGreen,
-            behavior: SnackBarBehavior.floating,
-          ),
-        );
-      }
+      debugPrint('AUTO-SYNCED: Balance safely locked at $targetCoins G-Coins');
     } catch (e) {
-      debugPrint('SYNC FAILED: $e');
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Failed: $e'),
-            backgroundColor: GamerTheme.redAccent,
-            behavior: SnackBarBehavior.floating,
-          ),
-        );
-      }
+      debugPrint('AUTO-SYNC ERROR: $e');
     } finally {
-      if (mounted) setState(() => _isSyncing = false);
+      _isBackgroundSyncing = false;
     }
   }
 
@@ -198,7 +161,7 @@ class _CoinHistorySheetState extends State<CoinHistorySheet> {
           ),
           const SizedBox(height: 14),
 
-          // Wallet Stats & Balance Banner (Single Source of Truth: Supabase users table)
+          // Wallet Stats & Balance Banner
           StreamBuilder<List<Map<String, dynamic>>>(
             stream: SupabaseService.client
                 .from('users')
@@ -232,7 +195,19 @@ class _CoinHistorySheetState extends State<CoinHistorySheet> {
                   }
 
                   final int expectedBalance = (totalAdded - totalDeducted).clamp(0, 9999999);
-                  final bool hasMismatch = allTxs.isNotEmpty && expectedBalance != currentCoins;
+
+                  // Self-Healing Balance: Agar table mein 0 dikh raha ho to calculated ledger balance dikhao
+                  final int displayCoins = (currentCoins > 0 && currentCoins == expectedBalance)
+                      ? currentCoins
+                      : (expectedBalance > 0 ? expectedBalance : currentCoins);
+
+                  // Agar mismatch ho to background mein Supabase table ko khud ba khud lock kar do
+                  if (expectedBalance > 0 && currentCoins != expectedBalance && _lastSyncedBalance != expectedBalance) {
+                    _lastSyncedBalance = expectedBalance;
+                    WidgetsBinding.instance.addPostFrameCallback((_) {
+                      _safeBackgroundSync(expectedBalance);
+                    });
+                  }
 
                   return Padding(
                     padding: const EdgeInsets.symmetric(horizontal: 16),
@@ -255,32 +230,14 @@ class _CoinHistorySheetState extends State<CoinHistorySheet> {
                               Column(
                                 crossAxisAlignment: CrossAxisAlignment.start,
                                 children: [
-                                  Row(
-                                    children: [
-                                      const Text(
-                                        'CURRENT BALANCE',
-                                        style: TextStyle(
-                                          color: GamerTheme.textMuted,
-                                          fontSize: 11,
-                                          fontWeight: FontWeight.bold,
-                                          letterSpacing: 1,
-                                        ),
-                                      ),
-                                      const SizedBox(width: 6),
-                                      InkWell(
-                                        onTap: _isSyncing ? null : _syncCoins,
-                                        child: Padding(
-                                          padding: const EdgeInsets.all(2),
-                                          child: _isSyncing
-                                              ? const SizedBox(
-                                                  width: 12,
-                                                  height: 12,
-                                                  child: CircularProgressIndicator(strokeWidth: 1.5, color: GamerTheme.neonGreen),
-                                                )
-                                              : const Icon(Icons.sync_rounded, size: 14, color: GamerTheme.textMuted),
-                                        ),
-                                      ),
-                                    ],
+                                  const Text(
+                                    'CURRENT BALANCE',
+                                    style: TextStyle(
+                                      color: GamerTheme.textMuted,
+                                      fontSize: 11,
+                                      fontWeight: FontWeight.bold,
+                                      letterSpacing: 1,
+                                    ),
                                   ),
                                   const SizedBox(height: 4),
                                   Row(
@@ -288,7 +245,7 @@ class _CoinHistorySheetState extends State<CoinHistorySheet> {
                                       const Text('🪙', style: TextStyle(fontSize: 18)),
                                       const SizedBox(width: 6),
                                       Text(
-                                        '${NumberFormat("#,###").format(currentCoins)} Coins',
+                                        '${NumberFormat("#,###").format(displayCoins)} Coins',
                                         style: const TextStyle(
                                           color: Color(0xFFFFD700),
                                           fontSize: 22,
@@ -333,47 +290,6 @@ class _CoinHistorySheetState extends State<CoinHistorySheet> {
                               ),
                             ],
                           ),
-                          if (hasMismatch) ...[
-                            const SizedBox(height: 10),
-                            Container(
-                              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
-                              decoration: BoxDecoration(
-                                color: GamerTheme.accentOrange.withOpacity(0.15),
-                                borderRadius: BorderRadius.circular(10),
-                                border: Border.all(color: GamerTheme.accentOrange.withOpacity(0.4)),
-                              ),
-                              child: Row(
-                                children: [
-                                  const Icon(Icons.sync_problem_rounded, color: GamerTheme.accentOrange, size: 18),
-                                  const SizedBox(width: 8),
-                                  Expanded(
-                                    child: Text(
-                                      'Ledger: $expectedBalance Coins (+$totalAdded earned, -$totalDeducted spent), Balance shows $currentCoins.',
-                                      style: const TextStyle(color: Colors.white, fontSize: 11),
-                                    ),
-                                  ),
-                                  const SizedBox(width: 8),
-                                  ElevatedButton(
-                                    style: ElevatedButton.styleFrom(
-                                      backgroundColor: GamerTheme.accentOrange,
-                                      foregroundColor: Colors.black,
-                                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                                      minimumSize: const Size(54, 26),
-                                      tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                                    ),
-                                    onPressed: _isSyncing ? null : _syncCoins,
-                                    child: _isSyncing
-                                        ? const SizedBox(
-                                            width: 12,
-                                            height: 12,
-                                            child: CircularProgressIndicator(strokeWidth: 2, color: Colors.black),
-                                          )
-                                        : const Text('Sync', style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold)),
-                                  ),
-                                ],
-                              ),
-                            ),
-                          ],
                           const SizedBox(height: 12),
                           const Divider(color: GamerTheme.borderDark, height: 1),
                           const SizedBox(height: 12),
@@ -518,7 +434,6 @@ class _CoinHistorySheetState extends State<CoinHistorySheet> {
 
                 List<CoinTransaction> transactions = List.from(snapshot.data ?? []);
 
-                // Filter items
                 if (_selectedFilter == 1) {
                   transactions = transactions.where((tx) => tx.amount > 0).toList();
                 } else if (_selectedFilter == 2) {
@@ -591,7 +506,6 @@ class _CoinHistorySheetState extends State<CoinHistorySheet> {
     final isEscrowHold = tx.type == 'escrow_hold' || tx.type == 'room_host_hold' || tx.type == 'tournament_entry';
     final isRelease = tx.type == 'escrow_release' || tx.type == 'escrow_transferred';
 
-    // Color code: green for earn, red for spend
     final Color badgeColor = isCredit
         ? GamerTheme.neonGreen
         : (isRelease ? const Color(0xFF00E5FF) : (isEscrowHold ? GamerTheme.accentOrange : GamerTheme.redAccent));
@@ -619,7 +533,6 @@ class _CoinHistorySheetState extends State<CoinHistorySheet> {
             child: Row(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                // Icon Box
                 Container(
                   padding: const EdgeInsets.all(10),
                   decoration: BoxDecoration(
@@ -630,8 +543,6 @@ class _CoinHistorySheetState extends State<CoinHistorySheet> {
                   child: Icon(typeIcon, color: badgeColor, size: 20),
                 ),
                 const SizedBox(width: 12),
-
-                // Title & Description
                 Expanded(
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
