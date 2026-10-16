@@ -152,8 +152,15 @@ class LanguageService {
       isDismissible: !isFirstLaunch,
       enableDrag: !isFirstLaunch,
       builder: (modalContext) {
-        final currentLocaleCode = context.locale.languageCode;
-        final isDark = Theme.of(context).brightness == Brightness.dark;
+        String currentLocaleCode = 'en';
+        try {
+          currentLocaleCode = LanguageService.currentLanguage.value;
+        } catch (_) {}
+        try {
+          currentLocaleCode = context.locale.languageCode;
+        } catch (_) {}
+
+        final isDark = ThemeService.isDarkMode;
         final bg = isDark ? const Color(0xFF161B22) : const Color(0xFFFFFFFF);
         final card = isDark ? const Color(0xFF1E242C) : const Color(0xFFF3F4F6);
         final border = isDark ? const Color(0xFF2D3748) : const Color(0xFFE5E7EB);
@@ -161,174 +168,196 @@ class LanguageService {
         final textSecondary = isDark ? const Color(0xFF9CA3AF) : const Color(0xFF6B7280);
         final neonGreen = ThemeService.primaryGreen;
 
+        String selectedCode = currentLocaleCode;
+
+        String titleText = 'Select Language';
+        try {
+          final t = 'select_language_title'.tr();
+          if (t.isNotEmpty && t != 'select_language_title') titleText = t;
+        } catch (_) {}
+
+        String subtitleText = 'Choose your preferred language';
+        try {
+          final s = 'select_language_subtitle'.tr();
+          if (s.isNotEmpty && s != 'select_language_subtitle') subtitleText = s;
+        } catch (_) {}
+
         return StatefulBuilder(
           builder: (context, setSheetState) {
-            String selectedCode = currentLocaleCode;
-
             return PopScope(
               canPop: !isFirstLaunch,
-              child: Container(
-                padding: const EdgeInsets.fromLTRB(20, 16, 20, 28),
-                decoration: BoxDecoration(
-                  color: bg,
-                  borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
-                  border: Border.all(color: border, width: 1.5),
-                  boxShadow: [
-                    BoxShadow(
-                      color: Colors.black.withOpacity(0.4),
-                      blurRadius: 20,
-                      offset: const Offset(0, -4),
-                    ),
-                  ],
-                ),
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  crossAxisAlignment: CrossAxisAlignment.stretch,
-                  children: [
-                    // Handle bar
-                    Center(
-                      child: Container(
-                        width: 44,
-                        height: 5,
-                        margin: const EdgeInsets.only(bottom: 16),
-                        decoration: BoxDecoration(
-                          color: border,
-                          borderRadius: BorderRadius.circular(3),
+              child: SafeArea(
+                top: false,
+                child: Container(
+                  padding: const EdgeInsets.fromLTRB(20, 16, 20, 28),
+                  decoration: BoxDecoration(
+                    color: bg,
+                    borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
+                    border: Border.all(color: border, width: 1.5),
+                    boxShadow: [
+                      BoxShadow(
+                        color: Colors.black.withOpacity(0.4),
+                        blurRadius: 20,
+                        offset: const Offset(0, -4),
+                      ),
+                    ],
+                  ),
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      // Handle bar
+                      Center(
+                        child: Container(
+                          width: 44,
+                          height: 5,
+                          margin: const EdgeInsets.only(bottom: 16),
+                          decoration: BoxDecoration(
+                            color: border,
+                            borderRadius: BorderRadius.circular(3),
+                          ),
                         ),
                       ),
-                    ),
 
-                    // Header
-                    Row(
-                      children: [
-                        Container(
-                          padding: const EdgeInsets.all(10),
-                          decoration: BoxDecoration(
-                            color: neonGreen.withOpacity(0.15),
-                            borderRadius: BorderRadius.circular(12),
-                          ),
-                          child: Icon(Icons.language_rounded, color: neonGreen, size: 24),
-                        ),
-                        const SizedBox(width: 14),
-                        Expanded(
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Text(
-                                'select_language_title'.tr(),
-                                style: TextStyle(
-                                  color: textPrimary,
-                                  fontSize: 17,
-                                  fontWeight: FontWeight.w900,
-                                ),
-                              ),
-                              const SizedBox(height: 2),
-                              Text(
-                                'select_language_subtitle'.tr(),
-                                style: TextStyle(
-                                  color: textSecondary,
-                                  fontSize: 12,
-                                ),
-                              ),
-                            ],
-                          ),
-                        ),
-                        if (!isFirstLaunch)
-                          IconButton(
-                            icon: Icon(Icons.close_rounded, color: textSecondary),
-                            onPressed: () => Navigator.pop(modalContext),
-                          ),
-                      ],
-                    ),
-                    const SizedBox(height: 20),
-
-                    // 7 Language Options Grid / List
-                    Wrap(
-                      spacing: 10,
-                      runSpacing: 10,
-                      children: languages.map((lang) {
-                        final isSelected = selectedCode == lang.code;
-
-                        return InkWell(
-                          onTap: () async {
-                            setSheetState(() {
-                              selectedCode = lang.code;
-                            });
-
-                            await saveLanguagePreference(lang.code);
-                            if (modalContext.mounted) {
-                              await modalContext.setLocale(Locale(lang.code));
-                            }
-                            if (onLanguageChanged != null) {
-                              onLanguageChanged();
-                            }
-                            if (modalContext.mounted) {
-                              Navigator.pop(modalContext);
-                            }
-                          },
-                          borderRadius: BorderRadius.circular(14),
-                          child: AnimatedContainer(
-                            duration: const Duration(milliseconds: 200),
-                            width: (MediaQuery.of(context).size.width - 60) / 2,
-                            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
+                      // Header
+                      Row(
+                        children: [
+                          Container(
+                            padding: const EdgeInsets.all(10),
                             decoration: BoxDecoration(
-                              color: isSelected ? neonGreen.withOpacity(0.15) : card,
-                              borderRadius: BorderRadius.circular(14),
-                              border: Border.all(
-                                color: isSelected ? neonGreen : border,
-                                width: isSelected ? 2 : 1,
-                              ),
-                              boxShadow: [
-                                if (isSelected)
-                                  BoxShadow(
-                                    color: neonGreen.withOpacity(0.2),
-                                    blurRadius: 10,
-                                    spreadRadius: 1,
-                                  ),
-                              ],
+                              color: neonGreen.withOpacity(0.15),
+                              borderRadius: BorderRadius.circular(12),
                             ),
-                            child: Row(
+                            child: Icon(Icons.language_rounded, color: neonGreen, size: 24),
+                          ),
+                          const SizedBox(width: 14),
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
                               children: [
                                 Text(
-                                  lang.flag,
-                                  style: const TextStyle(fontSize: 22),
-                                ),
-                                const SizedBox(width: 10),
-                                Expanded(
-                                  child: Column(
-                                    crossAxisAlignment: CrossAxisAlignment.start,
-                                    mainAxisSize: MainAxisSize.min,
-                                    children: [
-                                      Text(
-                                        lang.nativeName,
-                                        style: TextStyle(
-                                          color: isSelected ? neonGreen : textPrimary,
-                                          fontWeight: FontWeight.w800,
-                                          fontSize: 14,
-                                        ),
-                                        overflow: TextOverflow.ellipsis,
-                                      ),
-                                      if (lang.code != 'en' && lang.code != 'ro')
-                                        Text(
-                                          lang.englishName,
-                                          style: TextStyle(
-                                            color: textSecondary,
-                                            fontSize: 10,
-                                          ),
-                                        ),
-                                    ],
+                                  titleText,
+                                  style: TextStyle(
+                                    color: textPrimary,
+                                    fontSize: 17,
+                                    fontWeight: FontWeight.w900,
                                   ),
                                 ),
-                                if (isSelected)
-                                  Icon(Icons.check_circle_rounded, color: neonGreen, size: 18),
+                                const SizedBox(height: 2),
+                                Text(
+                                  subtitleText,
+                                  style: TextStyle(
+                                    color: textSecondary,
+                                    fontSize: 12,
+                                  ),
+                                ),
                               ],
                             ),
                           ),
-                        );
-                      }).toList(),
-                    ),
-                    const SizedBox(height: 16),
-                  ],
+                          if (!isFirstLaunch)
+                            IconButton(
+                              icon: Icon(Icons.close_rounded, color: textSecondary),
+                              onPressed: () => Navigator.pop(modalContext),
+                            ),
+                        ],
+                      ),
+                      const SizedBox(height: 20),
+
+                      // 7 Language Options Grid / List
+                      Wrap(
+                        spacing: 10,
+                        runSpacing: 10,
+                        children: languages.map((lang) {
+                          final isSelected = selectedCode == lang.code;
+
+                          return InkWell(
+                            onTap: () async {
+                              setSheetState(() {
+                                selectedCode = lang.code;
+                              });
+
+                              await saveLanguagePreference(lang.code);
+                              try {
+                                if (modalContext.mounted) {
+                                  await modalContext.setLocale(Locale(lang.code));
+                                }
+                              } catch (_) {}
+                              try {
+                                if (context.mounted) {
+                                  await context.setLocale(Locale(lang.code));
+                                }
+                              } catch (_) {}
+                              if (onLanguageChanged != null) {
+                                onLanguageChanged();
+                              }
+                              if (modalContext.mounted) {
+                                Navigator.pop(modalContext);
+                              }
+                            },
+                            borderRadius: BorderRadius.circular(14),
+                            child: AnimatedContainer(
+                              duration: const Duration(milliseconds: 200),
+                              width: (MediaQuery.of(context).size.width - 60) / 2,
+                              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
+                              decoration: BoxDecoration(
+                                color: isSelected ? neonGreen.withOpacity(0.15) : card,
+                                borderRadius: BorderRadius.circular(14),
+                                border: Border.all(
+                                  color: isSelected ? neonGreen : border,
+                                  width: isSelected ? 2 : 1,
+                                ),
+                                boxShadow: [
+                                  if (isSelected)
+                                    BoxShadow(
+                                      color: neonGreen.withOpacity(0.2),
+                                      blurRadius: 10,
+                                      spreadRadius: 1,
+                                    ),
+                                ],
+                              ),
+                              child: Row(
+                                children: [
+                                  Text(
+                                    lang.flag,
+                                    style: const TextStyle(fontSize: 22),
+                                  ),
+                                  const SizedBox(width: 10),
+                                  Expanded(
+                                    child: Column(
+                                      crossAxisAlignment: CrossAxisAlignment.start,
+                                      mainAxisSize: MainAxisSize.min,
+                                      children: [
+                                        Text(
+                                          lang.nativeName,
+                                          style: TextStyle(
+                                            color: isSelected ? neonGreen : textPrimary,
+                                            fontWeight: FontWeight.w800,
+                                            fontSize: 14,
+                                          ),
+                                          overflow: TextOverflow.ellipsis,
+                                        ),
+                                        if (lang.code != 'en' && lang.code != 'ro')
+                                          Text(
+                                            lang.englishName,
+                                            style: TextStyle(
+                                              color: textSecondary,
+                                              fontSize: 10,
+                                            ),
+                                          ),
+                                      ],
+                                    ),
+                                  ),
+                                  if (isSelected)
+                                    Icon(Icons.check_circle_rounded, color: neonGreen, size: 18),
+                                ],
+                              ),
+                            ),
+                          );
+                        }).toList(),
+                      ),
+                      const SizedBox(height: 16),
+                    ],
+                  ),
                 ),
               ),
             );
