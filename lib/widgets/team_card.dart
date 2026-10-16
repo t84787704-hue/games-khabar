@@ -3,10 +3,11 @@
 // -------------------------------------------------------------------------------
 // File: lib/widgets/team_card.dart
 //
-// 1. Linked with ThemeService.themeModeNotifier for live day/night toggle.
-// 2. Dynamic cardBgColor: Dark slate card in Night Mode (with dark gold/blue tints).
-// 3. Dynamic text & border colors linked with ThemeService.textPrimary & border.
-// 4. View Team & Action buttons adapt seamlessly to dark mode.
+// 1. FIXED: Removed invalid `const` keyword before Text(team.tag) causing build failure.
+// 2. Linked with ThemeService.themeModeNotifier for live day/night toggle.
+// 3. Dynamic cardBgColor: Dark slate card in Night Mode (with dark gold/blue tints).
+// 4. Dynamic text & border colors linked with ThemeService.textPrimary & border.
+// 5. View Team & Action buttons adapt seamlessly to dark mode.
 //
 // NO OTHER LOGIC, SERVICE OR DATABASE CODE CHANGED — byte-by-byte safe
 // ===============================================================================
@@ -1103,9 +1104,9 @@ class _TeamCardState extends State<TeamCard> {
                                           color: const Color(0xFF1877F2)
                                               .withOpacity(0.3)),
                                     ),
-                                    child: const Text(
+                                    child: Text(
                                       team.tag,
-                                      style: TextStyle(
+                                      style: const TextStyle(
                                         color: Color(0xFF1877F2),
                                         fontWeight: FontWeight.bold,
                                         fontSize: 10,
