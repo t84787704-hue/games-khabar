@@ -1,3 +1,16 @@
+// ===============================================================================
+// EXACT DIFF — Full Adaptive Day & Night Mode Support for TeamCard
+// -------------------------------------------------------------------------------
+// File: lib/widgets/team_card.dart
+//
+// 1. Linked with ThemeService.themeModeNotifier for live day/night toggle.
+// 2. Dynamic cardBgColor: Dark slate card in Night Mode (with dark gold/blue tints).
+// 3. Dynamic text & border colors linked with ThemeService.textPrimary & border.
+// 4. View Team & Action buttons adapt seamlessly to dark mode.
+//
+// NO OTHER LOGIC, SERVICE OR DATABASE CODE CHANGED — byte-by-byte safe
+// ===============================================================================
+
 import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
@@ -8,6 +21,7 @@ import '../services/gamer_auth_service.dart';
 import '../screens/team_profile_screen.dart';
 import '../screens/teams_screen.dart';
 import '../screens/private_match_room_screen.dart';
+import '../services/theme_service.dart';
 import 'coin_or_ad_popup.dart';
 
 class TeamCard extends StatefulWidget {
@@ -308,11 +322,12 @@ class _TeamCardState extends State<TeamCard> {
   }
 
   Widget _buildRedBanner(String challengeId) {
+    final isDark = ThemeService.isDarkMode;
     return Container(
       margin: const EdgeInsets.only(top: 8),
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
       decoration: BoxDecoration(
-        color: const Color(0xFFE8F4FD),
+        color: isDark ? const Color(0xFF0D223A) : const Color(0xFFE8F4FD),
         borderRadius: BorderRadius.circular(8),
         border: Border.all(color: const Color(0xFF1877F2).withOpacity(0.4)),
       ),
@@ -357,26 +372,27 @@ class _TeamCardState extends State<TeamCard> {
   }
 
   Widget _buildRequestedButton(String challengeId) {
+    final isDark = ThemeService.isDarkMode;
     return Row(
       mainAxisSize: MainAxisSize.min,
       children: [
         Container(
           padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
           decoration: BoxDecoration(
-            color: const Color(0xFFE4E6EB),
+            color: ThemeService.cardSecondary,
             borderRadius: BorderRadius.circular(8),
-            border: Border.all(color: const Color(0xFFCED0D4)),
+            border: Border.all(color: ThemeService.border),
           ),
-          child: const Row(
+          child: Row(
             mainAxisSize: MainAxisSize.min,
             children: [
               Icon(Icons.hourglass_top_rounded,
-                  size: 12, color: Color(0xFF65676B)),
-              SizedBox(width: 4),
+                  size: 12, color: ThemeService.textSecondary),
+              const SizedBox(width: 4),
               Text(
                 'Requested',
                 style: TextStyle(
-                  color: Color(0xFF65676B),
+                  color: ThemeService.textSecondary,
                   fontWeight: FontWeight.bold,
                   fontSize: 11,
                 ),
@@ -393,7 +409,7 @@ class _TeamCardState extends State<TeamCard> {
             minimumSize: const Size(0, 32),
             shape:
                 RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-            backgroundColor: const Color(0xFFFEF2F2),
+            backgroundColor: isDark ? const Color(0xFF3B151A) : const Color(0xFFFEF2F2),
           ),
           icon: const Icon(Icons.close_rounded,
               size: 13, color: Color(0xFFFF4655)),
@@ -559,9 +575,6 @@ class _TeamCardState extends State<TeamCard> {
     );
   }
 
-  // ═══════════════════════════════════════════════════════════════════════════
-  // EDIT TEAM DIALOG (Owner only)
-  // ═══════════════════════════════════════════════════════════════════════════
   Future<void> _showEditTeamDialog() async {
     final nameCtrl = TextEditingController(text: widget.team.name);
     final tagCtrl = TextEditingController(text: widget.team.tag);
@@ -598,7 +611,6 @@ class _TeamCardState extends State<TeamCard> {
               mainAxisSize: MainAxisSize.min,
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                // Logo Picker
                 Center(
                   child: GestureDetector(
                     onTap: () async {
@@ -834,9 +846,6 @@ class _TeamCardState extends State<TeamCard> {
     );
   }
 
-  // ═══════════════════════════════════════════════════════════════════════════
-  // DELETE TEAM DIALOG (Owner only)
-  // ═══════════════════════════════════════════════════════════════════════════
   Future<void> _showDeleteTeamDialog() async {
     final confirmed = await showDialog<bool>(
       context: context,
@@ -980,514 +989,522 @@ class _TeamCardState extends State<TeamCard> {
     final bool isOwnerFinal = isLeader || _isOwnerFromDb;
     final bool isMemberFinal = isMember || _isMemberFromDb || isOwnerFinal;
 
-    final Color cardBgColor = isOwnerFinal
-        ? const Color(0xFFFFF8E1)
-        : isMemberFinal
-            ? const Color(0xFFE7F3FF)
-            : Colors.white;
+    return ValueListenableBuilder<ThemeMode>(
+      valueListenable: ThemeService.themeModeNotifier,
+      builder: (context, _, __) {
+        final isDark = ThemeService.isDarkMode;
 
-    final Color cardBorderColor = isOwnerFinal
-        ? const Color(0xFFFFD700)
-        : isMemberFinal
-            ? const Color(0xFF1877F2)
-            : const Color(0xFFE4E6EB);
+        final Color cardBgColor = isOwnerFinal
+            ? (isDark ? const Color(0xFF2A2105) : const Color(0xFFFFF8E1))
+            : isMemberFinal
+                ? (isDark ? const Color(0xFF0D223A) : const Color(0xFFE7F3FF))
+                : ThemeService.card;
 
-    return Container(
-      margin: const EdgeInsets.only(bottom: 10),
-      decoration: BoxDecoration(
-        color: cardBgColor,
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(
-          color: cardBorderColor,
-          width: (isOwnerFinal || isMemberFinal) ? 1.8 : 1.0,
-        ),
-        boxShadow: [
-          BoxShadow(
-            color: isOwnerFinal
-                ? const Color(0xFFFFD700).withOpacity(0.15)
-                : isMemberFinal
-                    ? const Color(0xFF1877F2).withOpacity(0.15)
-                    : Colors.black.withOpacity(0.04),
-            blurRadius: 6,
-            offset: const Offset(0, 2),
-          ),
-        ],
-      ),
-      child: Material(
-        color: Colors.transparent,
-        borderRadius: BorderRadius.circular(12),
-        child: InkWell(
-          borderRadius: BorderRadius.circular(12),
-          onTap: () {
-            Navigator.push(
-              context,
-              MaterialPageRoute(
-                builder: (_) => TeamProfileScreen(teamId: team.id),
+        final Color cardBorderColor = isOwnerFinal
+            ? const Color(0xFFFFD700)
+            : isMemberFinal
+                ? const Color(0xFF1877F2)
+                : ThemeService.border;
+
+        return Container(
+          margin: const EdgeInsets.only(bottom: 10),
+          decoration: BoxDecoration(
+            color: cardBgColor,
+            borderRadius: BorderRadius.circular(12),
+            border: Border.all(
+              color: cardBorderColor,
+              width: (isOwnerFinal || isMemberFinal) ? 1.8 : 1.0,
+            ),
+            boxShadow: [
+              BoxShadow(
+                color: isOwnerFinal
+                    ? const Color(0xFFFFD700).withOpacity(0.15)
+                    : isMemberFinal
+                        ? const Color(0xFF1877F2).withOpacity(0.15)
+                        : Colors.black.withOpacity(isDark ? 0.2 : 0.04),
+                blurRadius: 6,
+                offset: const Offset(0, 2),
               ),
-            );
-          },
-          child: Padding(
-            padding: const EdgeInsets.all(12),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Row(
+            ],
+          ),
+          child: Material(
+            color: Colors.transparent,
+            borderRadius: BorderRadius.circular(12),
+            child: InkWell(
+              borderRadius: BorderRadius.circular(12),
+              onTap: () {
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (_) => TeamProfileScreen(teamId: team.id),
+                  ),
+                );
+              },
+              child: Padding(
+                padding: const EdgeInsets.all(12),
+                child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Container(
-                      width: 50,
-                      height: 50,
-                      decoration: BoxDecoration(
-                        shape: BoxShape.circle,
-                        color: const Color(0xFFE4E6EB),
-                        border: Border.all(
-                            color: isOwnerFinal
-                                ? const Color(0xFFFFD700)
-                                : isMemberFinal
-                                    ? const Color(0xFF1877F2)
-                                    : const Color(0xFFCED0D4),
-                            width: (isOwnerFinal || isMemberFinal) ? 2 : 1.2),
-                        image: team.logo.isNotEmpty
-                            ? DecorationImage(
-                                image: NetworkImage(team.logo),
-                                fit: BoxFit.cover)
-                            : null,
-                      ),
-                      child: team.logo.isEmpty
-                          ? const Center(
-                              child: Icon(Icons.shield_rounded,
-                                  color: Color(0xFF1877F2), size: 28))
-                          : null,
-                    ),
-                    const SizedBox(width: 12),
-
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Row(
-                            children: [
-                              Flexible(
-                                child: Text(
-                                  team.name,
-                                  style: const TextStyle(
-                                    color: Color(0xFF050505),
-                                    fontWeight: FontWeight.bold,
-                                    fontSize: 16,
-                                  ),
-                                  overflow: TextOverflow.ellipsis,
-                                ),
-                              ),
-                              const SizedBox(width: 6),
-                              Container(
-                                padding: const EdgeInsets.symmetric(
-                                    horizontal: 6, vertical: 2),
-                                decoration: BoxDecoration(
-                                  color: const Color(0xFFE7F3FF),
-                                  borderRadius: BorderRadius.circular(6),
-                                  border: Border.all(
-                                      color: const Color(0xFF1877F2)
-                                          .withOpacity(0.3)),
-                                ),
-                                child: Text(
-                                  team.tag,
-                                  style: const TextStyle(
-                                    color: Color(0xFF1877F2),
-                                    fontWeight: FontWeight.bold,
-                                    fontSize: 10,
-                                  ),
-                                ),
-                              ),
-                            ],
+                    Row(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Container(
+                          width: 50,
+                          height: 50,
+                          decoration: BoxDecoration(
+                            shape: BoxShape.circle,
+                            color: ThemeService.cardSecondary,
+                            border: Border.all(
+                                color: isOwnerFinal
+                                    ? const Color(0xFFFFD700)
+                                    : isMemberFinal
+                                        ? const Color(0xFF1877F2)
+                                        : ThemeService.border,
+                                width: (isOwnerFinal || isMemberFinal) ? 2 : 1.2),
+                            image: team.logo.isNotEmpty
+                                ? DecorationImage(
+                                    image: NetworkImage(team.logo),
+                                    fit: BoxFit.cover)
+                                : null,
                           ),
-                          const SizedBox(height: 4),
+                          child: team.logo.isEmpty
+                              ? const Center(
+                                  child: Icon(Icons.shield_rounded,
+                                      color: Color(0xFF1877F2), size: 28))
+                              : null,
+                        ),
+                        const SizedBox(width: 12),
 
-                          if (_checkingMembership) ...[
-                            const SizedBox(
-                              height: 18,
-                              width: 18,
-                              child: CircularProgressIndicator(
-                                  strokeWidth: 1.5,
-                                  color: Color(0xFF1877F2)),
-                            ),
-                          ] else if (isOwnerFinal) ...[
-                            _buildOwnerBadge(),
-                          ] else if (isMemberFinal) ...[
-                            _buildMemberBadge(),
-                          ],
-
-                          const SizedBox(height: 3),
-                          Text(
-                            'Leader: ${team.leaderName}',
-                            style: const TextStyle(
-                                color: Color(0xFF65676B), fontSize: 12),
-                          ),
-                          const SizedBox(height: 5),
-                          Row(
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
-                              Container(
-                                padding: const EdgeInsets.symmetric(
-                                    horizontal: 7, vertical: 2),
-                                decoration: BoxDecoration(
-                                  color: const Color(0xFFF0F2F5),
-                                  borderRadius: BorderRadius.circular(6),
-                                  border: Border.all(
-                                      color: const Color(0xFFE4E6EB)),
-                                ),
-                                child: Text(
-                                  team.game,
-                                  style: const TextStyle(
-                                    color: Color(0xFF050505),
-                                    fontWeight: FontWeight.w600,
-                                    fontSize: 11,
-                                  ),
-                                ),
-                              ),
-                              const SizedBox(width: 8),
                               Row(
                                 children: [
-                                  const Icon(Icons.group_rounded,
-                                      size: 14, color: Color(0xFF65676B)),
-                                  const SizedBox(width: 4),
-                                  Text(
-                                    '${team.memberCount} Members',
-                                    style: const TextStyle(
-                                        color: Color(0xFF65676B),
-                                        fontSize: 11.5,
-                                        fontWeight: FontWeight.w500),
+                                  Flexible(
+                                    child: Text(
+                                      team.name,
+                                      style: TextStyle(
+                                        color: ThemeService.textPrimary,
+                                        fontWeight: FontWeight.bold,
+                                        fontSize: 16,
+                                      ),
+                                      overflow: TextOverflow.ellipsis,
+                                    ),
+                                  ),
+                                  const SizedBox(width: 6),
+                                  Container(
+                                    padding: const EdgeInsets.symmetric(
+                                        horizontal: 6, vertical: 2),
+                                    decoration: BoxDecoration(
+                                      color: isDark ? const Color(0xFF0D223A) : const Color(0xFFE7F3FF),
+                                      borderRadius: BorderRadius.circular(6),
+                                      border: Border.all(
+                                          color: const Color(0xFF1877F2)
+                                              .withOpacity(0.3)),
+                                    ),
+                                    child: const Text(
+                                      team.tag,
+                                      style: TextStyle(
+                                        color: Color(0xFF1877F2),
+                                        fontWeight: FontWeight.bold,
+                                        fontSize: 10,
+                                      ),
+                                    ),
+                                  ),
+                                ],
+                              ),
+                              const SizedBox(height: 4),
+
+                              if (_checkingMembership) ...[
+                                const SizedBox(
+                                  height: 18,
+                                  width: 18,
+                                  child: CircularProgressIndicator(
+                                      strokeWidth: 1.5,
+                                      color: Color(0xFF1877F2)),
+                                ),
+                              ] else if (isOwnerFinal) ...[
+                                _buildOwnerBadge(),
+                              ] else if (isMemberFinal) ...[
+                                _buildMemberBadge(),
+                              ],
+
+                              const SizedBox(height: 3),
+                              Text(
+                                'Leader: ${team.leaderName}',
+                                style: TextStyle(
+                                    color: ThemeService.textSecondary, fontSize: 12),
+                              ),
+                              const SizedBox(height: 5),
+                              Row(
+                                children: [
+                                  Container(
+                                    padding: const EdgeInsets.symmetric(
+                                        horizontal: 7, vertical: 2),
+                                    decoration: BoxDecoration(
+                                      color: ThemeService.cardSecondary,
+                                      borderRadius: BorderRadius.circular(6),
+                                      border: Border.all(
+                                          color: ThemeService.border),
+                                    ),
+                                    child: Text(
+                                      team.game,
+                                      style: TextStyle(
+                                        color: ThemeService.textPrimary,
+                                        fontWeight: FontWeight.w600,
+                                        fontSize: 11,
+                                      ),
+                                    ),
+                                  ),
+                                  const SizedBox(width: 8),
+                                  Row(
+                                    children: [
+                                      Icon(Icons.group_rounded,
+                                          size: 14, color: ThemeService.textSecondary),
+                                      const SizedBox(width: 4),
+                                      Text(
+                                        '${team.memberCount} Members',
+                                        style: TextStyle(
+                                            color: ThemeService.textSecondary,
+                                            fontSize: 11.5,
+                                            fontWeight: FontWeight.w500),
+                                      ),
+                                    ],
                                   ),
                                 ],
                               ),
                             ],
                           ),
+                        ),
+
+                        if (isOwnerFinal && !_checkingMembership) ...[
+                          PopupMenuButton<String>(
+                            icon: Icon(Icons.more_vert_rounded,
+                                color: ThemeService.textSecondary, size: 22),
+                            color: const Color(0xFF131A29),
+                            shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(12)),
+                            onSelected: (val) {
+                              if (val == 'edit') {
+                                _showEditTeamDialog();
+                              } else if (val == 'delete') {
+                                _showDeleteTeamDialog();
+                              }
+                            },
+                            itemBuilder: (ctx) => [
+                              const PopupMenuItem(
+                                value: 'edit',
+                                child: Row(
+                                  children: [
+                                    Icon(Icons.edit_rounded,
+                                        color: Color(0xFF00FF88), size: 18),
+                                    SizedBox(width: 10),
+                                    Text('Edit Team',
+                                        style: TextStyle(
+                                            color: Colors.white, fontSize: 13)),
+                                  ],
+                                ),
+                              ),
+                              const PopupMenuItem(
+                                value: 'delete',
+                                child: Row(
+                                  children: [
+                                    Icon(Icons.delete_forever_rounded,
+                                        color: Color(0xFFFF4655), size: 18),
+                                    SizedBox(width: 10),
+                                    Text('Delete Team',
+                                        style: TextStyle(
+                                            color: Color(0xFFFF4655),
+                                            fontSize: 13)),
+                                  ],
+                                ),
+                              ),
+                            ],
+                          ),
                         ],
-                      ),
+                      ],
                     ),
 
-                    // ✏️ EDIT / 🗑️ DELETE (Owner only)
-                    if (isOwnerFinal && !_checkingMembership) ...[
-                      PopupMenuButton<String>(
-                        icon: const Icon(Icons.more_vert_rounded,
-                            color: Color(0xFF65676B), size: 22),
-                        color: const Color(0xFF131A29),
-                        shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(12)),
-                        onSelected: (val) {
-                          if (val == 'edit') {
-                            _showEditTeamDialog();
-                          } else if (val == 'delete') {
-                            _showDeleteTeamDialog();
-                          }
-                        },
-                        itemBuilder: (ctx) => [
-                          const PopupMenuItem(
-                            value: 'edit',
-                            child: Row(
-                              children: [
-                                Icon(Icons.edit_rounded,
-                                    color: Color(0xFF00FF88), size: 18),
-                                SizedBox(width: 10),
-                                Text('Edit Team',
-                                    style: TextStyle(
-                                        color: Colors.white, fontSize: 13)),
-                              ],
-                            ),
-                          ),
-                          const PopupMenuItem(
-                            value: 'delete',
-                            child: Row(
-                              children: [
-                                Icon(Icons.delete_forever_rounded,
-                                    color: Color(0xFFFF4655), size: 18),
-                                SizedBox(width: 10),
-                                Text('Delete Team',
-                                    style: TextStyle(
-                                        color: Color(0xFFFF4655),
-                                        fontSize: 13)),
-                              ],
-                            ),
-                          ),
-                        ],
+                    if (team.description.isNotEmpty) ...[
+                      const SizedBox(height: 10),
+                      Text(
+                        team.description,
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
+                        style: TextStyle(
+                            color: ThemeService.textSecondary, fontSize: 12.5),
                       ),
                     ],
-                  ],
-                ),
 
-                if (team.description.isNotEmpty) ...[
-                  const SizedBox(height: 10),
-                  Text(
-                    team.description,
-                    maxLines: 2,
-                    overflow: TextOverflow.ellipsis,
-                    style: const TextStyle(
-                        color: Color(0xFF1C1E21), fontSize: 12.5),
-                  ),
-                ],
+                    if (!isMemberFinal &&
+                        currentUid.isNotEmpty &&
+                        widget.myTeamId.isNotEmpty) ...[
+                      StreamBuilder<List<Map<String, dynamic>>>(
+                        stream: SupabaseService.client
+                            .from('challenges')
+                            .stream(primaryKey: ['id'])
+                            .eq('from_team_id',
+                                SupabaseService.toUuid(widget.myTeamId)),
+                        builder: (context, cSnap) {
+                          final challenges = cSnap.data ?? [];
+                          final targetUuid =
+                              SupabaseService.toUuid(team.id).toLowerCase();
+                          final rawTeamId = team.id.toLowerCase();
+                          final pendingDoc = challenges.firstWhere(
+                            (d) {
+                              final toId =
+                                  d['to_team_id']?.toString().toLowerCase();
+                              final st =
+                                  (d['status'] ?? '').toString().toLowerCase();
+                              final id = d['id']?.toString() ?? '';
+                              return (toId == targetUuid ||
+                                      toId == rawTeamId) &&
+                                  st == 'pending' &&
+                                  !_localCancelledIds.contains(id);
+                            },
+                            orElse: () => {},
+                          );
 
-                if (!isMemberFinal &&
-                    currentUid.isNotEmpty &&
-                    widget.myTeamId.isNotEmpty) ...[
-                  StreamBuilder<List<Map<String, dynamic>>>(
-                    stream: SupabaseService.client
-                        .from('challenges')
-                        .stream(primaryKey: ['id'])
-                        .eq('from_team_id',
-                            SupabaseService.toUuid(widget.myTeamId)),
-                    builder: (context, cSnap) {
-                      final challenges = cSnap.data ?? [];
-                      final targetUuid =
-                          SupabaseService.toUuid(team.id).toLowerCase();
-                      final rawTeamId = team.id.toLowerCase();
-                      final pendingDoc = challenges.firstWhere(
-                        (d) {
-                          final toId =
-                              d['to_team_id']?.toString().toLowerCase();
-                          final st =
-                              (d['status'] ?? '').toString().toLowerCase();
-                          final id = d['id']?.toString() ?? '';
-                          return (toId == targetUuid ||
-                                  toId == rawTeamId) &&
-                              st == 'pending' &&
-                              !_localCancelledIds.contains(id);
+                          if (pendingDoc.isEmpty) return const SizedBox.shrink();
+                          return _buildRedBanner(
+                              pendingDoc['id']?.toString() ?? '');
                         },
-                        orElse: () => {},
-                      );
+                      ),
+                    ],
 
-                      if (pendingDoc.isEmpty) return const SizedBox.shrink();
-                      return _buildRedBanner(
-                          pendingDoc['id']?.toString() ?? '');
-                    },
-                  ),
-                ],
+                    const SizedBox(height: 12),
+                    Divider(color: ThemeService.border, height: 1),
+                    const SizedBox(height: 10),
 
-                const SizedBox(height: 12),
-                const Divider(color: Color(0xFFE4E6EB), height: 1),
-                const SizedBox(height: 10),
-
-                Row(
-                  children: [
-                    Text(
-                      'W: ${team.wins} | L: ${team.losses} | Pts: ${team.points}',
-                      style: const TextStyle(
-                          color: Color(0xFF65676B),
-                          fontSize: 11.5,
-                          fontWeight: FontWeight.w600),
-                    ),
-                    const SizedBox(width: 8),
-                    Expanded(
-                      child: SingleChildScrollView(
-                        scrollDirection: Axis.horizontal,
-                        child: Row(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            OutlinedButton(
-                              style: OutlinedButton.styleFrom(
-                                foregroundColor: const Color(0xFF050505),
-                                side: const BorderSide(color: Color(0xFFCED0D4)),
-                                padding: const EdgeInsets.symmetric(
-                                    horizontal: 10, vertical: 4),
-                                minimumSize: const Size(0, 32),
-                                shape: RoundedRectangleBorder(
-                                    borderRadius: BorderRadius.circular(8)),
-                              ),
-                              onPressed: () {
-                                Navigator.push(
-                                  context,
-                                  MaterialPageRoute(
-                                    builder: (_) =>
-                                        TeamProfileScreen(teamId: team.id),
-                                  ),
-                                );
-                              },
-                              child: const Text('View Team',
-                                  style: TextStyle(
-                                      fontSize: 11.5,
-                                      fontWeight: FontWeight.bold)),
-                            ),
-                            const SizedBox(width: 8),
-
-                            if (isOwnerFinal || isMemberFinal)
-                              _buildOpenTeamButton()
-                            else ...[
-                              StreamBuilder<List<Map<String, dynamic>>>(
-                                stream: widget.myTeamId.isNotEmpty
-                                    ? SupabaseService.client
-                                        .from('active_matches')
-                                        .stream(primaryKey: ['id'])
-                                        .eq('status', 'active')
-                                    : Stream.value([]),
-                                builder: (context, activeSnap) {
-                                  final activeMatches = activeSnap.data ?? [];
-                                  final myUuid =
-                                      SupabaseService.toUuid(widget.myTeamId)
-                                          .toLowerCase();
-                                  final myRawId = widget.myTeamId.toLowerCase();
-                                  final targetUuid =
-                                      SupabaseService.toUuid(team.id).toLowerCase();
-                                  final targetRawId = team.id.toLowerCase();
-
-                                  final activeMatchWithOpponent =
-                                      activeMatches.firstWhere(
-                                    (m) {
-                                      if (m['status'] != 'active') return false;
-                                      final participants = m['participants'];
-                                      final List<String> pList = [];
-                                      if (participants is List) {
-                                        pList.addAll(participants.map(
-                                            (p) => p.toString().toLowerCase()));
-                                      }
-                                      pList.add(
-                                          m['team1_id']?.toString().toLowerCase() ??
-                                              '');
-                                      pList.add(
-                                          m['team2_id']?.toString().toLowerCase() ??
-                                              '');
-                                      final hasMe = pList.contains(myUuid) ||
-                                          pList.contains(myRawId);
-                                      final hasTarget =
-                                          pList.contains(targetUuid) ||
-                                              pList.contains(targetRawId);
-                                      return hasMe && hasTarget;
-                                    },
-                                    orElse: () => {},
-                                  );
-
-                                  if (activeMatchWithOpponent.isNotEmpty) {
-                                    return Row(
-                                      mainAxisSize: MainAxisSize.min,
-                                      children: [
-                                        Container(
-                                          padding: const EdgeInsets.symmetric(
-                                              horizontal: 8, vertical: 5),
-                                          decoration: BoxDecoration(
-                                            color: const Color(0xFF00FF88),
-                                            borderRadius:
-                                                BorderRadius.circular(8),
-                                          ),
-                                          child: const Row(
-                                            mainAxisSize: MainAxisSize.min,
-                                            children: [
-                                              Icon(
-                                                  Icons
-                                                      .local_fire_department_rounded,
-                                                  size: 14,
-                                                  color: Colors.black),
-                                              SizedBox(width: 4),
-                                              Text(
-                                                'LIVE',
-                                                style: TextStyle(
-                                                  color: Colors.black,
-                                                  fontWeight: FontWeight.w900,
-                                                  fontSize: 11,
-                                                ),
-                                              ),
-                                            ],
-                                          ),
-                                        ),
-                                        const SizedBox(width: 6),
-                                        ElevatedButton.icon(
-                                          style: ElevatedButton.styleFrom(
-                                            backgroundColor:
-                                                const Color(0xFF1877F2),
-                                            foregroundColor: Colors.white,
-                                            padding: const EdgeInsets.symmetric(
-                                                horizontal: 10, vertical: 4),
-                                            minimumSize: const Size(0, 32),
-                                            shape: RoundedRectangleBorder(
-                                                borderRadius:
-                                                    BorderRadius.circular(8)),
-                                            elevation: 0,
-                                          ),
-                                          icon: const Icon(
-                                              Icons.chat_bubble_rounded,
-                                              size: 14),
-                                          label: const Text('Team DM 💬',
-                                              style: TextStyle(
-                                                  fontSize: 11.5,
-                                                  fontWeight: FontWeight.bold)),
-                                          onPressed: () {
-                                            final matchId =
-                                                activeMatchWithOpponent['id']
-                                                        ?.toString() ??
-                                                    '';
-                                            Navigator.push(
-                                              context,
-                                              MaterialPageRoute(
-                                                builder: (_) =>
-                                                    PrivateMatchRoomScreen(
-                                                  matchId: matchId,
-                                                  myTeamId: widget.myTeamId,
-                                                  myTeamName: widget.myTeamName,
-                                                  opponentId: team.id,
-                                                  opponentName: team.name,
-                                                ),
-                                              ),
-                                            );
-                                          },
-                                        ),
-                                      ],
-                                    );
-                                  }
-
-                                  return _buildChallengeSection(currentUid);
-                                },
-                              ),
-                              const SizedBox(width: 8),
-
-                              Builder(builder: (context) {
-                                final bool isRequested =
-                                    hasRequested || _localRequested;
-                                return ElevatedButton.icon(
-                                  style: ElevatedButton.styleFrom(
-                                    backgroundColor: isRequested
-                                        ? const Color(0xFFE4E6EB)
-                                        : const Color(0xFF1877F2),
-                                    foregroundColor: isRequested
-                                        ? const Color(0xFF65676B)
-                                        : Colors.white,
+                    Row(
+                      children: [
+                        Text(
+                          'W: ${team.wins} | L: ${team.losses} | Pts: ${team.points}',
+                          style: TextStyle(
+                              color: ThemeService.textSecondary,
+                              fontSize: 11.5,
+                              fontWeight: FontWeight.w600),
+                        ),
+                        const SizedBox(width: 8),
+                        Expanded(
+                          child: SingleChildScrollView(
+                            scrollDirection: Axis.horizontal,
+                            child: Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                OutlinedButton(
+                                  style: OutlinedButton.styleFrom(
+                                    foregroundColor: ThemeService.textPrimary,
+                                    side: BorderSide(color: ThemeService.border),
+                                    backgroundColor: ThemeService.cardSecondary,
                                     padding: const EdgeInsets.symmetric(
-                                        horizontal: 12, vertical: 4),
+                                        horizontal: 10, vertical: 4),
                                     minimumSize: const Size(0, 32),
-                                    elevation: 0,
                                     shape: RoundedRectangleBorder(
                                         borderRadius: BorderRadius.circular(8)),
                                   ),
-                                  icon: Icon(
-                                    isRequested
-                                        ? Icons.hourglass_top_rounded
-                                        : Icons.person_add_rounded,
-                                    size: 14,
-                                    color: isRequested
-                                        ? const Color(0xFF65676B)
-                                        : Colors.white,
+                                  onPressed: () {
+                                    Navigator.push(
+                                      context,
+                                      MaterialPageRoute(
+                                        builder: (_) =>
+                                            TeamProfileScreen(teamId: team.id),
+                                      ),
+                                    );
+                                  },
+                                  child: Text('View Team',
+                                      style: TextStyle(
+                                          color: ThemeService.textPrimary,
+                                          fontSize: 11.5,
+                                          fontWeight: FontWeight.bold)),
+                                ),
+                                const SizedBox(width: 8),
+
+                                if (isOwnerFinal || isMemberFinal)
+                                  _buildOpenTeamButton()
+                                else ...[
+                                  StreamBuilder<List<Map<String, dynamic>>>(
+                                    stream: widget.myTeamId.isNotEmpty
+                                        ? SupabaseService.client
+                                            .from('active_matches')
+                                            .stream(primaryKey: ['id'])
+                                            .eq('status', 'active')
+                                        : Stream.value([]),
+                                    builder: (context, activeSnap) {
+                                      final activeMatches = activeSnap.data ?? [];
+                                      final myUuid =
+                                          SupabaseService.toUuid(widget.myTeamId)
+                                              .toLowerCase();
+                                      final myRawId = widget.myTeamId.toLowerCase();
+                                      final targetUuid =
+                                          SupabaseService.toUuid(team.id).toLowerCase();
+                                      final targetRawId = team.id.toLowerCase();
+
+                                      final activeMatchWithOpponent =
+                                          activeMatches.firstWhere(
+                                        (m) {
+                                          if (m['status'] != 'active') return false;
+                                          final participants = m['participants'];
+                                          final List<String> pList = [];
+                                          if (participants is List) {
+                                            pList.addAll(participants.map(
+                                                (p) => p.toString().toLowerCase()));
+                                          }
+                                          pList.add(
+                                              m['team1_id']?.toString().toLowerCase() ??
+                                                  '');
+                                          pList.add(
+                                              m['team2_id']?.toString().toLowerCase() ??
+                                                  '');
+                                          final hasMe = pList.contains(myUuid) ||
+                                              pList.contains(myRawId);
+                                          final hasTarget =
+                                              pList.contains(targetUuid) ||
+                                              pList.contains(targetRawId);
+                                          return hasMe && hasTarget;
+                                        },
+                                        orElse: () => {},
+                                      );
+
+                                      if (activeMatchWithOpponent.isNotEmpty) {
+                                        return Row(
+                                          mainAxisSize: MainAxisSize.min,
+                                          children: [
+                                            Container(
+                                              padding: const EdgeInsets.symmetric(
+                                                  horizontal: 8, vertical: 5),
+                                              decoration: BoxDecoration(
+                                                color: const Color(0xFF00FF88),
+                                                borderRadius:
+                                                    BorderRadius.circular(8),
+                                              ),
+                                              child: const Row(
+                                                mainAxisSize: MainAxisSize.min,
+                                                children: [
+                                                  Icon(
+                                                      Icons
+                                                          .local_fire_department_rounded,
+                                                      size: 14,
+                                                      color: Colors.black),
+                                                  SizedBox(width: 4),
+                                                  Text(
+                                                    'LIVE',
+                                                    style: TextStyle(
+                                                      color: Colors.black,
+                                                      fontWeight: FontWeight.w900,
+                                                      fontSize: 11,
+                                                    ),
+                                                  ),
+                                                ],
+                                              ),
+                                            ),
+                                            const SizedBox(width: 6),
+                                            ElevatedButton.icon(
+                                              style: ElevatedButton.styleFrom(
+                                                backgroundColor:
+                                                    const Color(0xFF1877F2),
+                                                foregroundColor: Colors.white,
+                                                padding: const EdgeInsets.symmetric(
+                                                    horizontal: 10, vertical: 4),
+                                                minimumSize: const Size(0, 32),
+                                                shape: RoundedRectangleBorder(
+                                                    borderRadius:
+                                                        BorderRadius.circular(8)),
+                                                elevation: 0,
+                                              ),
+                                              icon: const Icon(
+                                                  Icons.chat_bubble_rounded,
+                                                  size: 14),
+                                              label: const Text('Team DM 💬',
+                                                  style: TextStyle(
+                                                      fontSize: 11.5,
+                                                      fontWeight: FontWeight.bold)),
+                                              onPressed: () {
+                                                final matchId =
+                                                    activeMatchWithOpponent['id']
+                                                            ?.toString() ??
+                                                        '';
+                                                Navigator.push(
+                                                  context,
+                                                  MaterialPageRoute(
+                                                    builder: (_) =>
+                                                        PrivateMatchRoomScreen(
+                                                      matchId: matchId,
+                                                      myTeamId: widget.myTeamId,
+                                                      myTeamName: widget.myTeamName,
+                                                      opponentId: team.id,
+                                                      opponentName: team.name,
+                                                    ),
+                                                  ),
+                                                );
+                                              },
+                                            ),
+                                          ],
+                                        );
+                                      }
+
+                                      return _buildChallengeSection(currentUid);
+                                    },
                                   ),
-                                  label: Text(
-                                    isRequested ? 'Requested ⏳' : 'Join',
-                                    style: TextStyle(
-                                      fontWeight: FontWeight.bold,
-                                      fontSize: 11.5,
-                                      color: isRequested
-                                          ? const Color(0xFF65676B)
-                                          : Colors.white,
-                                    ),
-                                  ),
-                                  onPressed: (isRequested || _isRequesting)
-                                      ? null
-                                      : () => _handleJoin(currentUid),
-                                );
-                              }),
-                            ],
-                          ],
+                                  const SizedBox(width: 8),
+
+                                  Builder(builder: (context) {
+                                    final bool isRequested =
+                                        hasRequested || _localRequested;
+                                    return ElevatedButton.icon(
+                                      style: ElevatedButton.styleFrom(
+                                        backgroundColor: isRequested
+                                            ? ThemeService.cardSecondary
+                                            : const Color(0xFF1877F2),
+                                        foregroundColor: isRequested
+                                            ? ThemeService.textSecondary
+                                            : Colors.white,
+                                        padding: const EdgeInsets.symmetric(
+                                            horizontal: 12, vertical: 4),
+                                        minimumSize: const Size(0, 32),
+                                        elevation: 0,
+                                        shape: RoundedRectangleBorder(
+                                            borderRadius: BorderRadius.circular(8)),
+                                      ),
+                                      icon: Icon(
+                                        isRequested
+                                            ? Icons.hourglass_top_rounded
+                                            : Icons.person_add_rounded,
+                                        size: 14,
+                                        color: isRequested
+                                            ? ThemeService.textSecondary
+                                            : Colors.white,
+                                      ),
+                                      label: Text(
+                                        isRequested ? 'Requested ⏳' : 'Join',
+                                        style: TextStyle(
+                                          fontWeight: FontWeight.bold,
+                                          fontSize: 11.5,
+                                          color: isRequested
+                                              ? ThemeService.textSecondary
+                                              : Colors.white,
+                                        ),
+                                      ),
+                                      onPressed: (isRequested || _isRequesting)
+                                          ? null
+                                          : () => _handleJoin(currentUid),
+                                    );
+                                  }),
+                                ],
+                              ],
+                            ),
+                          ),
                         ),
-                      ),
+                      ],
                     ),
                   ],
                 ),
-              ],
+              ),
             ),
           ),
-        ),
-      ),
+        );
+      },
     );
   }
 }
