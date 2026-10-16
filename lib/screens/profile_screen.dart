@@ -3,7 +3,7 @@
 // -------------------------------------------------------------------------------
 // File: lib/screens/profile_screen.dart
 //
-// 1. FIXED SYNTAX ERROR: Color(0xFFFEE2E2) properly closed with bracket and comma.
+// 1. FIXED: Added 'package:supabase_flutter/supabase_flutter.dart' import for UserAttributes.
 // 2. RESTORED: "Privacy Settings" (Control what others can see on your profile)
 //    placed directly above Blocked Users with complete toggle sheet.
 // 3. REORDERED: Log Out placed right after App Version.
@@ -14,6 +14,7 @@
 
 import 'package:flutter/material.dart';
 import 'package:easy_localization/easy_localization.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 import '../services/supabase_service.dart';
 import 'package:url_launcher/url_launcher.dart';
 import '../utils/admin_security.dart';
@@ -1350,96 +1351,3 @@ class _ProfileScreenState extends State<ProfileScreen> {
                               setState(() {
                                 if (isAdminUser()) {
                                   _adminOptionUnlocked = true;
-                                  _adminCardRevealed = true;
-                                }
-                              });
-                            });
-                          },
-                        ),
-                      )
-                    : const SizedBox.shrink(),
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _buildFallbackUI(BuildContext context) {
-    final bgDark = ThemeService.bg;
-    final cardDark = ThemeService.card;
-    final borderDark = ThemeService.border;
-    final neonGreen = ThemeService.primaryGreen;
-    final textWhite = ThemeService.textPrimary;
-    final textGray = ThemeService.textSecondary;
-
-    return Scaffold(
-      backgroundColor: bgDark,
-      appBar: AppBar(
-        backgroundColor: cardDark,
-        elevation: 0,
-        leading: IconButton(
-          icon: Icon(Icons.arrow_back_rounded, color: textWhite),
-          onPressed: () => Navigator.pop(context),
-        ),
-        title: Text(
-          'Settings & Preferences',
-          style: TextStyle(color: textWhite, fontWeight: FontWeight.bold),
-        ),
-      ),
-      body: ListView(
-        padding: const EdgeInsets.all(16),
-        children: [
-          Container(
-            decoration: BoxDecoration(
-              color: cardDark,
-              borderRadius: BorderRadius.circular(16),
-              border: Border.all(color: borderDark),
-            ),
-            child: Column(
-              children: [
-                ListTile(
-                  leading: Icon(Icons.language_rounded, color: neonGreen),
-                  title: Text('App Language', style: TextStyle(color: textWhite, fontWeight: FontWeight.bold)),
-                  subtitle: Text(LanguageService.selectedLang == 'ur' ? 'اردو' : 'English', style: TextStyle(color: textGray)),
-                  onTap: () {
-                    LanguageService.showLanguageBottomSheet(context);
-                  },
-                ),
-                Divider(color: borderDark, height: 1),
-                ValueListenableBuilder<ThemeMode>(
-                  valueListenable: ThemeService.themeModeNotifier,
-                  builder: (context, mode, _) {
-                    final isDark = mode == ThemeMode.dark;
-                    return ListTile(
-                      leading: Icon(isDark ? Icons.dark_mode_rounded : Icons.light_mode_rounded, color: neonGreen),
-                      title: Text('Day / Night Mode', style: TextStyle(color: textWhite, fontWeight: FontWeight.bold)),
-                      trailing: Switch(
-                        value: isDark,
-                        activeColor: neonGreen,
-                        onChanged: (val) => ThemeService.setTheme(val),
-                      ),
-                    );
-                  },
-                ),
-                Divider(color: borderDark, height: 1),
-                ListTile(
-                  leading: Icon(Icons.privacy_tip_outlined, color: neonGreen),
-                  title: Text('Privacy Policy', style: TextStyle(color: textWhite, fontWeight: FontWeight.bold)),
-                  onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const PrivacyPolicyScreen())),
-                ),
-                Divider(color: borderDark, height: 1),
-                ListTile(
-                  leading: Icon(Icons.groups_rounded, color: neonGreen),
-                  title: Text('About Us', style: TextStyle(color: textWhite, fontWeight: FontWeight.bold)),
-                  onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const AboutUsScreen())),
-                ),
-              ],
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
