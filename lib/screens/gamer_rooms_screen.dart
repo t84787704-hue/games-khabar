@@ -3,7 +3,8 @@
 // - Realtime Joined Players List with Avatars, Names, IGN & Game UID
 // - 1-Time Game ID & IGN Auto-Save Popup (Multi-Game Ready)
 // - Join Match Button for non-host players with slot reservation
-// - Fully Functional LEAVE ROOM Button (Database sync & slot adjustment)
+// - LEAVE ROOM REMOVED: Players stay recorded until 5-min auto-delete
+// - WINNER vs OPPONENT DISPLAY: Banner & player list show who defeated whom
 // - Full Adaptive Day/Night Theme Sync with ThemeService
 // - Esports Match Rules & Guidelines Dialog
 // - Flexible Match Formats (1v1, 2v2, 4v4 TDM)
@@ -565,7 +566,6 @@ class _GamerRoomsScreenState extends State<GamerRoomsScreen> {
           ),
           body: Column(
             children: [
-              // Category Bar
               Container(
                 height: 48,
                 color: ThemeService.card,
@@ -921,67 +921,12 @@ class _RoomDetailsSheetState extends State<_RoomDetailsSheet> {
   int _secondsRemaining = 300;
   bool _isUploadingProof = false;
   bool _isJoining = false;
-  bool _isLeaving = false;
 
   @override
   void dispose() {
     _countdownTimer?.cancel();
     _msgController.dispose();
     super.dispose();
-  }
-
-  /// Leave Room Function with Real Database Removal
-  Future<void> _leaveRoom(GamerRoom room) async {
-    if (_isLeaving) return;
-    setState(() => _isLeaving = true);
-
-    try {
-      final isHost = widget.currentUserId == room.hostId;
-
-      if (isHost) {
-        await SupabaseService.client.from('rooms').delete().eq('id', widget.roomId);
-        await SupabaseService.client.from('messages').delete().eq('room_id', widget.roomId);
-      } else {
-        final updatedIds = room.joinedUserIds.where((id) => id != widget.currentUserId).toList();
-        final updatedUsers = room.joinedUsers.where((u) => (u['id'] ?? '').toString() != widget.currentUserId).toList();
-
-        await SupabaseService.client.from('rooms').update({
-          'joined_user_ids': updatedIds,
-          'joined_users': updatedUsers,
-          'filled_slots': updatedUsers.length,
-        }).eq('id', widget.roomId);
-
-        try {
-          await SupabaseService.client.from('messages').insert({
-            'room_id': widget.roomId,
-            'sender_id': 'system',
-            'sender_name': 'ROOM BOT',
-            'message': '🚪 ${widget.currentUserName} left the room.',
-            'type': 'system',
-            'created_at': DateTime.now().toUtc().toIso8601String(),
-          });
-        } catch (_) {}
-      }
-
-      if (mounted) {
-        Navigator.pop(context);
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(isHost ? 'Room delete ho gaya!' : 'Aap room se leave ho gaye.'),
-            backgroundColor: const Color(0xFF00FF88),
-          ),
-        );
-      }
-    } catch (e) {
-      debugPrint('[RoomDetails] Error leaving room: $e');
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Error leaving room: $e'), backgroundColor: Colors.red),
-        );
-      }
-    } finally {
-      if (mounted) setState(() => _isLeaving = false);
-    }
   }
 
   void _showRulesDialog() {
@@ -1362,58 +1307,81 @@ class _RoomDetailsSheetState extends State<_RoomDetailsSheet> {
               ),
               Divider(height: 1, color: ThemeService.border),
 
-              // Banners
+              // 5-MINUTE GOLDEN WINNER BANNER (WITH OPPONENT NAME)
               if (room.isCompleted) ...[
-                Container(
-                  width: double.infinity,
-                  padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 16),
-                  margin: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
-                  decoration: BoxDecoration(
-                    gradient: const LinearGradient(
-                      colors: [Color(0xFFFFD700), Color(0xFFFFA000)],
-                      begin: Alignment.topLeft,
-                      end: Alignment.bottomRight,
-                    ),
-                    borderRadius: BorderRadius.circular(12),
-                    boxShadow: [
-                      BoxShadow(
-                        color: Colors.amber.withOpacity(0.4),
-                        blurRadius: 8,
-                        offset: const Offset(0, 3),
+                Builder(builder: (context) {
+                  final opponents = room.joinedUsers
+                      .where((u) => (u['id'] ?? '').toString() != (room.winnerId ?? ''))
+                      .map((u) {
+                        final ign = u['ign']?.toString() ?? '';
+                        final name = u['name']?.toString() ?? 'Player';
+                        return ign.isNotEmpty ? '$name ($ign)' : name;
+                      })
+                      .toList();
+                  final vsText = opponents.isNotEmpty ? opponents.join(', ') : 'Opponent';
+
+                  return Container(
+                    width: double.infinity,
+                    padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 16),
+                    margin: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+                    decoration: BoxDecoration(
+                      gradient: const LinearGradient(
+                        colors: [Color(0xFFFFD700), Color(0xFFFFA000)],
+                        begin: Alignment.topLeft,
+                        end: Alignment.bottomRight,
                       ),
-                    ],
-                  ),
-                  child: Row(
-                    children: [
-                      const Text('🏆', style: TextStyle(fontSize: 32)),
-                      const SizedBox(width: 12),
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(
-                              'WINNER: ${room.winnerName ?? "Champion"}!',
-                              style: const TextStyle(
-                                color: Colors.black87,
-                                fontWeight: FontWeight.w900,
-                                fontSize: 15,
-                              ),
-                            ),
-                            const SizedBox(height: 2),
-                            Text(
-                              'Prize: ${room.prizePool} Coins • Room closes in: $timeStr',
-                              style: const TextStyle(
-                                color: Colors.black87,
-                                fontWeight: FontWeight.bold,
-                                fontSize: 12,
-                              ),
-                            ),
-                          ],
+                      borderRadius: BorderRadius.circular(12),
+                      boxShadow: [
+                        BoxShadow(
+                          color: Colors.amber.withOpacity(0.4),
+                          blurRadius: 8,
+                          offset: const Offset(0, 3),
                         ),
-                      ),
-                    ],
-                  ),
-                ),
+                      ],
+                    ),
+                    child: Row(
+                      children: [
+                        const Text('🏆', style: TextStyle(fontSize: 34)),
+                        const SizedBox(width: 12),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                'WINNER: ${room.winnerName ?? "Champion"}!',
+                                style: const TextStyle(
+                                  color: Colors.black87,
+                                  fontWeight: FontWeight.w900,
+                                  fontSize: 15.5,
+                                ),
+                              ),
+                              const SizedBox(height: 3),
+                              Text(
+                                '⚔️ Won against: $vsText',
+                                style: const TextStyle(
+                                  color: Colors.black87,
+                                  fontWeight: FontWeight.bold,
+                                  fontSize: 12,
+                                ),
+                                maxLines: 2,
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                              const SizedBox(height: 3),
+                              Text(
+                                'Prize: ${room.prizePool} Coins • Room closes in: $timeStr',
+                                style: TextStyle(
+                                  color: Colors.black.withOpacity(0.75),
+                                  fontWeight: FontWeight.w600,
+                                  fontSize: 11.5,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ],
+                    ),
+                  );
+                }),
               ] else if (room.isDisputed) ...[
                 Container(
                   width: double.infinity,
@@ -1577,7 +1545,7 @@ class _RoomDetailsSheetState extends State<_RoomDetailsSheet> {
                 ),
               ),
 
-              // PLAYERS LIST
+              // PLAYERS LIST (WITH WINNER & DEFEATED BADGES)
               Container(
                 margin: const EdgeInsets.symmetric(horizontal: 14, vertical: 4),
                 padding: const EdgeInsets.all(10),
@@ -1613,6 +1581,10 @@ class _RoomDetailsSheetState extends State<_RoomDetailsSheet> {
                       final isHost = uId == room.hostId;
                       final isMe = uId == widget.currentUserId;
 
+                      final isWinner = room.isCompleted &&
+                          (uId == room.winnerId || (room.winnerName != null && uName == room.winnerName));
+                      final isLoser = room.isCompleted && !isWinner;
+
                       return Padding(
                         padding: const EdgeInsets.symmetric(vertical: 4),
                         child: Row(
@@ -1641,7 +1613,36 @@ class _RoomDetailsSheetState extends State<_RoomDetailsSheet> {
                                           overflow: TextOverflow.ellipsis,
                                         ),
                                       ),
-                                      if (isHost) ...[
+                                      if (isWinner) ...[
+                                        const SizedBox(width: 6),
+                                        Container(
+                                          padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 1.5),
+                                          decoration: BoxDecoration(
+                                            color: const Color(0xFFFFB300),
+                                            borderRadius: BorderRadius.circular(4),
+                                          ),
+                                          child: const Text('🏆 WINNER',
+                                              style: TextStyle(
+                                                  color: Colors.black87,
+                                                  fontSize: 9,
+                                                  fontWeight: FontWeight.bold)),
+                                        ),
+                                      ] else if (isLoser) ...[
+                                        const SizedBox(width: 6),
+                                        Container(
+                                          padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 1.5),
+                                          decoration: BoxDecoration(
+                                            color: Colors.red.withOpacity(0.18),
+                                            borderRadius: BorderRadius.circular(4),
+                                            border: Border.all(color: Colors.red, width: 0.8),
+                                          ),
+                                          child: const Text('DEFEATED',
+                                              style: TextStyle(
+                                                  color: Colors.red,
+                                                  fontSize: 9,
+                                                  fontWeight: FontWeight.bold)),
+                                        ),
+                                      ] else if (isHost) ...[
                                         const SizedBox(width: 6),
                                         Container(
                                           padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 1.5),
@@ -1834,7 +1835,7 @@ class _RoomDetailsSheetState extends State<_RoomDetailsSheet> {
               if (!room.isCompleted) ...[
                 if (!isJoined) ...[
                   Padding(
-                    padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
+                    padding: const EdgeInsets.fromLTRB(14, 6, 14, 12),
                     child: SizedBox(
                       width: double.infinity,
                       child: ElevatedButton.icon(
@@ -1896,39 +1897,17 @@ class _RoomDetailsSheetState extends State<_RoomDetailsSheet> {
                   ),
 
                   if (!room.isDisputed)
-                    TextButton.icon(
-                      icon: const Icon(Icons.warning_amber_rounded, size: 16, color: Colors.grey),
-                      label: const Text('Raise Dispute / Report Issue',
-                          style: TextStyle(color: Colors.grey, fontSize: 12)),
-                      onPressed: _raiseDisputeDialog,
+                    Padding(
+                      padding: const EdgeInsets.only(bottom: 8),
+                      child: TextButton.icon(
+                        icon: const Icon(Icons.warning_amber_rounded, size: 16, color: Colors.grey),
+                        label: const Text('Raise Dispute / Report Issue',
+                            style: TextStyle(color: Colors.grey, fontSize: 12)),
+                        onPressed: _raiseDisputeDialog,
+                      ),
                     ),
                 ],
               ],
-
-              // LEAVE ROOM BUTTON
-              Padding(
-                padding: const EdgeInsets.fromLTRB(14, 4, 14, 12),
-                child: SizedBox(
-                  width: double.infinity,
-                  child: OutlinedButton(
-                    style: OutlinedButton.styleFrom(
-                      foregroundColor: Colors.red,
-                      side: const BorderSide(color: Colors.red),
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(25)),
-                      padding: const EdgeInsets.symmetric(vertical: 12),
-                    ),
-                    onPressed: _isLeaving ? null : () => _leaveRoom(room),
-                    child: _isLeaving
-                        ? const SizedBox(
-                            width: 18,
-                            height: 18,
-                            child: CircularProgressIndicator(strokeWidth: 2, color: Colors.red),
-                          )
-                        : const Text('LEAVE ROOM',
-                            style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14)),
-                  ),
-                ),
-              ),
             ],
           );
         },
