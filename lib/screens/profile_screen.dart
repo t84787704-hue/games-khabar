@@ -1,3 +1,15 @@
+// ===============================================================================
+// EXACT DIFF — Profile / Settings & Preferences Screen
+// -------------------------------------------------------------------------------
+// File: lib/screens/profile_screen.dart
+//
+// 1. REMOVED: Redundant bottom "Sign Out" box (Signed in as email).
+// 2. REORDERED: Log Out placed right after App Version.
+// 3. REORDERED: Delete Account placed at the very last position.
+// 4. Session cleanup: _confirmSignOut clears AdminSession & GamerAuth.
+// 5. Full Adaptive Day & Night Mode synchronization via ThemeService.
+// ===============================================================================
+
 import 'package:flutter/material.dart';
 import 'package:easy_localization/easy_localization.dart';
 import '../services/supabase_service.dart';
@@ -216,6 +228,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
             ),
             onPressed: () async {
               Navigator.pop(ctx);
+              AdminSession.logout();
               await GamerAuthService().signOut();
               if (mounted) {
                 Navigator.of(context).pushAndRemoveUntil(
@@ -336,7 +349,6 @@ class _ProfileScreenState extends State<ProfileScreen> {
         padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 20),
         child: Column(
           children: [
-            // Secret Tap App Logo Area
             Center(
               child: Column(
                 children: [
@@ -424,7 +436,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
             ),
             const SizedBox(height: 20),
 
-            // Official Blue Tick Verification Card & Apply Button
+            // Official Blue Tick Verification Card
             ValueListenableBuilder<GamerUser?>(
               valueListenable: GamerAuthService().currentGamerNotifier,
               builder: (context, gamer, _) {
@@ -591,7 +603,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
               ),
             ],
 
-            // Consolidated Settings Card (Pic 2 + Pic 3/4 Features in ONE Place)
+            // Consolidated Settings Card
             Container(
               decoration: BoxDecoration(
                 color: cardDark,
@@ -676,7 +688,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                   ),
                   Divider(color: borderDark, height: 1),
 
-                  // Blocked Users (From Pic 2)
+                  // Blocked Users
                   ListTile(
                     leading: Container(
                       padding: const EdgeInsets.all(6),
@@ -703,7 +715,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                   ),
                   Divider(color: borderDark, height: 1),
 
-                  // Saved Posts & News (From Pic 2)
+                  // Saved Posts & News
                   ListTile(
                     leading: Container(
                       padding: const EdgeInsets.all(6),
@@ -804,7 +816,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                   ),
                   Divider(color: borderDark, height: 1),
 
-                  // Download My Data (From Pic 2)
+                  // Download My Data
                   ListTile(
                     leading: Container(
                       padding: const EdgeInsets.all(6),
@@ -922,7 +934,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                   ),
                   Divider(color: borderDark, height: 1),
 
-                  // Terms of Service (From Pic 2)
+                  // Terms of Service
                   ListTile(
                     leading: Container(
                       padding: const EdgeInsets.all(6),
@@ -969,7 +981,29 @@ class _ProfileScreenState extends State<ProfileScreen> {
                   ),
                   Divider(color: borderDark, height: 1),
 
-                  // Delete Account (From Pic 2)
+                  // Log Out (Ab App Version ke foran baad)
+                  ListTile(
+                    leading: Container(
+                      padding: const EdgeInsets.all(6),
+                      decoration: const BoxDecoration(
+                        color: Color(0xFFFEE2E2),
+                        borderRadius: BorderRadius.all(Radius.circular(8)),
+                      ),
+                      child: const Icon(Icons.logout_rounded, color: Color(0xFFDC2626), size: 20),
+                    ),
+                    title: const Text(
+                      'Log Out',
+                      style: TextStyle(color: Color(0xFFDC2626), fontWeight: FontWeight.bold, fontSize: 14),
+                    ),
+                    subtitle: Text(
+                      'Sign out of Gamers ID Network',
+                      style: TextStyle(color: textGray, fontSize: 12),
+                    ),
+                    onTap: _confirmSignOut,
+                  ),
+                  Divider(color: borderDark, height: 1),
+
+                  // Delete Account (Ab bilkul aakhri position par)
                   ListTile(
                     leading: Container(
                       padding: const EdgeInsets.all(6),
@@ -995,48 +1029,26 @@ class _ProfileScreenState extends State<ProfileScreen> {
                       );
                     },
                   ),
-                  Divider(color: borderDark, height: 1),
-
-                  // Log Out (From Pic 2)
-                  ListTile(
-                    leading: Container(
-                      padding: const EdgeInsets.all(6),
-                      decoration: const BoxDecoration(
-                        color: Color(0xFFFEE2E2),
-                        borderRadius: BorderRadius.all(Radius.circular(8)),
-                      ),
-                      child: const Icon(Icons.logout_rounded, color: Color(0xFFDC2626), size: 20),
-                    ),
-                    title: const Text(
-                      'Log Out',
-                      style: TextStyle(color: Color(0xFFDC2626), fontWeight: FontWeight.bold, fontSize: 14),
-                    ),
-                    subtitle: Text(
-                      'Sign out of Gamers ID Network',
-                      style: TextStyle(color: textGray, fontSize: 12),
-                    ),
-                    onTap: _confirmSignOut,
-                  ),
                 ],
               ),
             ),
             const SizedBox(height: 20),
 
-            // Secret Admin Login / Logout Section
+            // Secret Admin Login Section (Sirf non-admin par unlock hone par dikhega)
             AnimatedSize(
               duration: const Duration(milliseconds: 350),
               curve: Curves.easeInOut,
               child: AnimatedOpacity(
-                opacity: (_adminCardRevealed || isCurrentAdmin) ? 1.0 : 0.0,
+                opacity: (_adminCardRevealed && !isCurrentAdmin) ? 1.0 : 0.0,
                 duration: const Duration(milliseconds: 350),
-                child: (_adminCardRevealed || isCurrentAdmin)
+                child: (_adminCardRevealed && !isCurrentAdmin)
                     ? Container(
                         margin: const EdgeInsets.only(bottom: 20),
                         decoration: BoxDecoration(
                           color: cardDark,
                           borderRadius: BorderRadius.circular(16),
                           border: Border.all(
-                            color: isCurrentAdmin ? neonGreen : neonGreen.withOpacity(0.6),
+                            color: neonGreen.withOpacity(0.6),
                             width: 1.2,
                           ),
                           boxShadow: [
@@ -1047,106 +1059,73 @@ class _ProfileScreenState extends State<ProfileScreen> {
                             ),
                           ],
                         ),
-                        child: Column(
-                          children: [
-                            if (!isCurrentAdmin) ...[
-                              ListTile(
-                                leading: Container(
-                                  padding: const EdgeInsets.all(8),
-                                  decoration: BoxDecoration(
-                                    color: neonGreen.withOpacity(0.15),
-                                    borderRadius: BorderRadius.circular(8),
-                                  ),
-                                  child: Icon(Icons.lock_open_rounded, color: neonGreen, size: 20),
-                                ),
-                                title: Row(
-                                  children: [
-                                    Text(
-                                      _safeTr('admin_login', fallback: 'Admin Login'),
-                                      style: TextStyle(color: textWhite, fontSize: 14, fontWeight: FontWeight.bold),
-                                    ),
-                                    const SizedBox(width: 8),
-                                    Container(
-                                      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                                      decoration: BoxDecoration(
-                                        color: neonGreen.withOpacity(0.15),
-                                        borderRadius: BorderRadius.circular(4),
-                                      ),
-                                      child: Text(
-                                        'UNLOCKED',
-                                        style: TextStyle(
-                                          color: neonGreen,
-                                          fontSize: 9,
-                                          fontWeight: FontWeight.w900,
-                                          letterSpacing: 0.5,
-                                        ),
-                                      ),
-                                    ),
-                                  ],
-                                ),
-                                subtitle: Text(
-                                  _safeTr('admin_login_sub', fallback: 'Sign in to access admin console'),
-                                  style: TextStyle(color: textGray, fontSize: 12),
-                                ),
-                                trailing: IconButton(
-                                  icon: Icon(Icons.lock_outline_rounded, color: textGray, size: 18),
-                                  tooltip: 'Hide Admin Login',
-                                  onPressed: () {
-                                    setState(() {
-                                      _adminCardRevealed = false;
-                                    });
-                                    ScaffoldMessenger.of(context).showSnackBar(
-                                      SnackBar(
-                                        backgroundColor: cardDark2,
-                                        duration: const Duration(seconds: 1),
-                                        content: Text('Admin Login hidden', style: TextStyle(color: textGray)),
-                                      ),
-                                    );
-                                  },
-                                ),
-                                onTap: () {
-                                  Navigator.push(
-                                    context,
-                                    MaterialPageRoute(builder: (_) => const AdminLoginScreen()),
-                                  ).then((_) {
-                                    setState(() {
-                                      if (isAdminUser()) {
-                                        _adminOptionUnlocked = true;
-                                        _adminCardRevealed = true;
-                                      }
-                                    });
-                                  });
-                                },
+                        child: ListTile(
+                          leading: Container(
+                            padding: const EdgeInsets.all(8),
+                            decoration: BoxDecoration(
+                              color: neonGreen.withOpacity(0.15),
+                              borderRadius: BorderRadius.circular(8),
+                            ),
+                            child: Icon(Icons.lock_open_rounded, color: neonGreen, size: 20),
+                          ),
+                          title: Row(
+                            children: [
+                              Text(
+                                _safeTr('admin_login', fallback: 'Admin Login'),
+                                style: TextStyle(color: textWhite, fontSize: 14, fontWeight: FontWeight.bold),
                               ),
-                            ] else ...[
-                              ListTile(
-                                leading: Icon(Icons.logout_rounded, color: alertRed, size: 22),
-                                title: Text(
-                                  _safeTr('sign_out', fallback: 'Sign Out'),
-                                  style: TextStyle(color: alertRed, fontSize: 14, fontWeight: FontWeight.bold),
+                              const SizedBox(width: 8),
+                              Container(
+                                padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                                decoration: BoxDecoration(
+                                  color: neonGreen.withOpacity(0.15),
+                                  borderRadius: BorderRadius.circular(4),
                                 ),
-                                subtitle: Text(
-                                  _safeTr('signed_in_as', fallback: 'Signed in as $userEmail', args: [userEmail ?? '']),
-                                  style: TextStyle(color: textGray, fontSize: 12),
+                                child: Text(
+                                  'UNLOCKED',
+                                  style: TextStyle(
+                                    color: neonGreen,
+                                    fontSize: 9,
+                                    fontWeight: FontWeight.w900,
+                                    letterSpacing: 0.5,
+                                  ),
                                 ),
-                                onTap: () async {
-                                  AdminSession.logout();
-                                  setState(() {
-                                    _adminOptionUnlocked = false;
-                                    _adminCardRevealed = false;
-                                  });
-                                  if (mounted) {
-                                    ScaffoldMessenger.of(context).showSnackBar(
-                                      SnackBar(
-                                        backgroundColor: cardDark2,
-                                        content: Text('Signed out successfully', style: TextStyle(color: textWhite)),
-                                      ),
-                                    );
-                                  }
-                                },
                               ),
                             ],
-                          ],
+                          ),
+                          subtitle: Text(
+                            _safeTr('admin_login_sub', fallback: 'Sign in to access admin console'),
+                            style: TextStyle(color: textGray, fontSize: 12),
+                          ),
+                          trailing: IconButton(
+                            icon: Icon(Icons.lock_outline_rounded, color: textGray, size: 18),
+                            tooltip: 'Hide Admin Login',
+                            onPressed: () {
+                              setState(() {
+                                _adminCardRevealed = false;
+                              });
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                SnackBar(
+                                  backgroundColor: cardDark2,
+                                  duration: const Duration(seconds: 1),
+                                  content: Text('Admin Login hidden', style: TextStyle(color: textGray)),
+                                ),
+                              );
+                            },
+                          ),
+                          onTap: () {
+                            Navigator.push(
+                              context,
+                              MaterialPageRoute(builder: (_) => const AdminLoginScreen()),
+                            ).then((_) {
+                              setState(() {
+                                if (isAdminUser()) {
+                                  _adminOptionUnlocked = true;
+                                  _adminCardRevealed = true;
+                                }
+                              });
+                            });
+                          },
                         ),
                       )
                     : const SizedBox.shrink(),
