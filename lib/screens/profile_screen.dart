@@ -3,10 +3,11 @@
 // -------------------------------------------------------------------------------
 // File: lib/screens/profile_screen.dart
 //
-// 1. REMOVED: Redundant bottom "Sign Out" box (Signed in as email).
+// 1. RESTORED: "Privacy Settings" (Control what others can see on your profile)
+//    placed directly above Blocked Users with complete toggle sheet.
 // 2. REORDERED: Log Out placed right after App Version.
 // 3. REORDERED: Delete Account placed at the very last position.
-// 4. Session cleanup: _confirmSignOut clears AdminSession & GamerAuth.
+// 4. REMOVED: Redundant bottom "Sign Out" container.
 // 5. Full Adaptive Day & Night Mode synchronization via ThemeService.
 // ===============================================================================
 
@@ -240,6 +241,210 @@ class _ProfileScreenState extends State<ProfileScreen> {
             child: const Text('Log Out', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
           ),
         ],
+      ),
+    );
+  }
+
+  void _showPrivacySettingsSheet() {
+    final user = SupabaseService.client.auth.currentUser;
+    final meta = user?.userMetadata ?? {};
+    final privacy = (meta['privacy_settings'] is Map)
+        ? Map<String, dynamic>.from(meta['privacy_settings'])
+        : <String, dynamic>{};
+
+    bool isPrivate = privacy['is_private'] == true;
+    bool showUid = privacy['show_game_uid'] ?? true;
+    bool showStats = privacy['show_match_stats'] ?? true;
+    bool allowChallenges = privacy['allow_challenges'] ?? true;
+
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (ctx) => StatefulBuilder(
+        builder: (sheetCtx, setSheetState) {
+          return Container(
+            padding: const EdgeInsets.fromLTRB(20, 12, 20, 24),
+            decoration: BoxDecoration(
+              color: ThemeService.card,
+              borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
+              border: Border.all(color: ThemeService.border),
+            ),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Center(
+                  child: Container(
+                    width: 40,
+                    height: 4,
+                    decoration: BoxDecoration(
+                      color: ThemeService.border,
+                      borderRadius: BorderRadius.circular(2),
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 14),
+                Row(
+                  children: [
+                    Container(
+                      padding: const EdgeInsets.all(8),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFF1877F2).withOpacity(0.15),
+                        borderRadius: BorderRadius.circular(10),
+                      ),
+                      child: const Icon(Icons.lock_rounded, color: Color(0xFF1877F2), size: 22),
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            'Privacy Settings',
+                            style: TextStyle(
+                              color: ThemeService.textPrimary,
+                              fontWeight: FontWeight.bold,
+                              fontSize: 16,
+                            ),
+                          ),
+                          Text(
+                            'Control what others can see on your profile',
+                            style: TextStyle(color: ThemeService.textSecondary, fontSize: 12),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 16),
+                Divider(color: ThemeService.border, height: 1),
+
+                SwitchListTile(
+                  contentPadding: EdgeInsets.zero,
+                  activeColor: const Color(0xFF1877F2),
+                  title: Text(
+                    'Private Profile',
+                    style: TextStyle(color: ThemeService.textPrimary, fontWeight: FontWeight.bold, fontSize: 14),
+                  ),
+                  subtitle: Text(
+                    'Only your followers/team members can view your full profile',
+                    style: TextStyle(color: ThemeService.textSecondary, fontSize: 11.5),
+                  ),
+                  value: isPrivate,
+                  onChanged: (val) {
+                    setSheetState(() => isPrivate = val);
+                  },
+                ),
+                Divider(color: ThemeService.border, height: 1),
+
+                SwitchListTile(
+                  contentPadding: EdgeInsets.zero,
+                  activeColor: const Color(0xFF1877F2),
+                  title: Text(
+                    'Show In-Game Name & Game UID',
+                    style: TextStyle(color: ThemeService.textPrimary, fontWeight: FontWeight.bold, fontSize: 14),
+                  ),
+                  subtitle: Text(
+                    'Allow other players to copy your official game character ID',
+                    style: TextStyle(color: ThemeService.textSecondary, fontSize: 11.5),
+                  ),
+                  value: showUid,
+                  onChanged: (val) {
+                    setSheetState(() => showUid = val);
+                  },
+                ),
+                Divider(color: ThemeService.border, height: 1),
+
+                SwitchListTile(
+                  contentPadding: EdgeInsets.zero,
+                  activeColor: const Color(0xFF1877F2),
+                  title: Text(
+                    'Show Match Stats & Wins',
+                    style: TextStyle(color: ThemeService.textPrimary, fontWeight: FontWeight.bold, fontSize: 14),
+                  ),
+                  subtitle: Text(
+                    'Display your tournament wins, win rate, and room history',
+                    style: TextStyle(color: ThemeService.textSecondary, fontSize: 11.5),
+                  ),
+                  value: showStats,
+                  onChanged: (val) {
+                    setSheetState(() => showStats = val);
+                  },
+                ),
+                Divider(color: ThemeService.border, height: 1),
+
+                SwitchListTile(
+                  contentPadding: EdgeInsets.zero,
+                  activeColor: const Color(0xFF1877F2),
+                  title: Text(
+                    'Allow Direct Challenges',
+                    style: TextStyle(color: ThemeService.textPrimary, fontWeight: FontWeight.bold, fontSize: 14),
+                  ),
+                  subtitle: Text(
+                    'Allow other gamers and teams to challenge you in 1v1 matches',
+                    style: TextStyle(color: ThemeService.textSecondary, fontSize: 11.5),
+                  ),
+                  value: allowChallenges,
+                  onChanged: (val) {
+                    setSheetState(() => allowChallenges = val);
+                  },
+                ),
+                const SizedBox(height: 18),
+
+                SizedBox(
+                  width: double.infinity,
+                  child: ElevatedButton(
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: const Color(0xFF1877F2),
+                      foregroundColor: Colors.white,
+                      padding: const EdgeInsets.symmetric(vertical: 12),
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                    ),
+                    onPressed: () async {
+                      Navigator.pop(ctx);
+                      final updated = {
+                        'is_private': isPrivate,
+                        'show_game_uid': showUid,
+                        'show_match_stats': showStats,
+                        'allow_challenges': allowChallenges,
+                      };
+                      try {
+                        await SupabaseService.client.auth.updateUser(
+                          UserAttributes(
+                            data: {
+                              ...meta,
+                              'privacy_settings': updated,
+                            },
+                          ),
+                        );
+                        final curUid = user?.id;
+                        if (curUid != null) {
+                          await SupabaseService.client.from('users').update({
+                            'is_private': isPrivate,
+                          }).or('id.eq.$curUid,uid.eq.$curUid');
+                        }
+                      } catch (e) {
+                        debugPrint('Error updating privacy settings: $e');
+                      }
+
+                      if (mounted) {
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          const SnackBar(
+                            content: Text('✅ Privacy Settings updated successfully!'),
+                            backgroundColor: Color(0xFF00FF88),
+                            behavior: SnackBarBehavior.floating,
+                          ),
+                        );
+                      }
+                    },
+                    child: const Text('Save Settings', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14)),
+                  ),
+                ),
+              ],
+            ),
+          );
+        },
       ),
     );
   }
@@ -688,6 +893,29 @@ class _ProfileScreenState extends State<ProfileScreen> {
                   ),
                   Divider(color: borderDark, height: 1),
 
+                  // Privacy Settings (Restored above Blocked Users)
+                  ListTile(
+                    leading: Container(
+                      padding: const EdgeInsets.all(6),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFFE7F3FF),
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                      child: const Icon(Icons.lock_rounded, color: Color(0xFF1877F2), size: 20),
+                    ),
+                    title: Text(
+                      'Privacy Settings',
+                      style: TextStyle(color: textWhite, fontSize: 14, fontWeight: FontWeight.bold),
+                    ),
+                    subtitle: Text(
+                      'Control what others can see on your profile',
+                      style: TextStyle(color: textGray, fontSize: 12),
+                    ),
+                    trailing: Icon(Icons.arrow_forward_ios_rounded, color: textGray, size: 14),
+                    onTap: _showPrivacySettingsSheet,
+                  ),
+                  Divider(color: borderDark, height: 1),
+
                   // Blocked Users
                   ListTile(
                     leading: Container(
@@ -981,236 +1209,9 @@ class _ProfileScreenState extends State<ProfileScreen> {
                   ),
                   Divider(color: borderDark, height: 1),
 
-                  // Log Out (Ab App Version ke foran baad)
+                  // Log Out (App Version ke foran baad)
                   ListTile(
                     leading: Container(
                       padding: const EdgeInsets.all(6),
                       decoration: const BoxDecoration(
-                        color: Color(0xFFFEE2E2),
-                        borderRadius: BorderRadius.all(Radius.circular(8)),
-                      ),
-                      child: const Icon(Icons.logout_rounded, color: Color(0xFFDC2626), size: 20),
-                    ),
-                    title: const Text(
-                      'Log Out',
-                      style: TextStyle(color: Color(0xFFDC2626), fontWeight: FontWeight.bold, fontSize: 14),
-                    ),
-                    subtitle: Text(
-                      'Sign out of Gamers ID Network',
-                      style: TextStyle(color: textGray, fontSize: 12),
-                    ),
-                    onTap: _confirmSignOut,
-                  ),
-                  Divider(color: borderDark, height: 1),
-
-                  // Delete Account (Ab bilkul aakhri position par)
-                  ListTile(
-                    leading: Container(
-                      padding: const EdgeInsets.all(6),
-                      decoration: const BoxDecoration(
-                        color: Color(0xFFFFEBEE),
-                        borderRadius: BorderRadius.all(Radius.circular(8)),
-                      ),
-                      child: const Icon(Icons.delete_forever_rounded, color: Color(0xFFDC2626), size: 20),
-                    ),
-                    title: const Text(
-                      'Delete Account',
-                      style: TextStyle(color: Color(0xFFDC2626), fontWeight: FontWeight.bold, fontSize: 14),
-                    ),
-                    subtitle: Text(
-                      'Permanently delete your Gamer ID (30-day grace)',
-                      style: TextStyle(color: textGray, fontSize: 12),
-                    ),
-                    trailing: Icon(Icons.arrow_forward_ios_rounded, color: textGray, size: 14),
-                    onTap: () {
-                      Navigator.push(
-                        context,
-                        MaterialPageRoute(builder: (_) => const GamerDeleteAccountScreen()),
-                      );
-                    },
-                  ),
-                ],
-              ),
-            ),
-            const SizedBox(height: 20),
-
-            // Secret Admin Login Section (Sirf non-admin par unlock hone par dikhega)
-            AnimatedSize(
-              duration: const Duration(milliseconds: 350),
-              curve: Curves.easeInOut,
-              child: AnimatedOpacity(
-                opacity: (_adminCardRevealed && !isCurrentAdmin) ? 1.0 : 0.0,
-                duration: const Duration(milliseconds: 350),
-                child: (_adminCardRevealed && !isCurrentAdmin)
-                    ? Container(
-                        margin: const EdgeInsets.only(bottom: 20),
-                        decoration: BoxDecoration(
-                          color: cardDark,
-                          borderRadius: BorderRadius.circular(16),
-                          border: Border.all(
-                            color: neonGreen.withOpacity(0.6),
-                            width: 1.2,
-                          ),
-                          boxShadow: [
-                            BoxShadow(
-                              color: neonGreen.withOpacity(0.08),
-                              blurRadius: 12,
-                              spreadRadius: 1,
-                            ),
-                          ],
-                        ),
-                        child: ListTile(
-                          leading: Container(
-                            padding: const EdgeInsets.all(8),
-                            decoration: BoxDecoration(
-                              color: neonGreen.withOpacity(0.15),
-                              borderRadius: BorderRadius.circular(8),
-                            ),
-                            child: Icon(Icons.lock_open_rounded, color: neonGreen, size: 20),
-                          ),
-                          title: Row(
-                            children: [
-                              Text(
-                                _safeTr('admin_login', fallback: 'Admin Login'),
-                                style: TextStyle(color: textWhite, fontSize: 14, fontWeight: FontWeight.bold),
-                              ),
-                              const SizedBox(width: 8),
-                              Container(
-                                padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                                decoration: BoxDecoration(
-                                  color: neonGreen.withOpacity(0.15),
-                                  borderRadius: BorderRadius.circular(4),
-                                ),
-                                child: Text(
-                                  'UNLOCKED',
-                                  style: TextStyle(
-                                    color: neonGreen,
-                                    fontSize: 9,
-                                    fontWeight: FontWeight.w900,
-                                    letterSpacing: 0.5,
-                                  ),
-                                ),
-                              ),
-                            ],
-                          ),
-                          subtitle: Text(
-                            _safeTr('admin_login_sub', fallback: 'Sign in to access admin console'),
-                            style: TextStyle(color: textGray, fontSize: 12),
-                          ),
-                          trailing: IconButton(
-                            icon: Icon(Icons.lock_outline_rounded, color: textGray, size: 18),
-                            tooltip: 'Hide Admin Login',
-                            onPressed: () {
-                              setState(() {
-                                _adminCardRevealed = false;
-                              });
-                              ScaffoldMessenger.of(context).showSnackBar(
-                                SnackBar(
-                                  backgroundColor: cardDark2,
-                                  duration: const Duration(seconds: 1),
-                                  content: Text('Admin Login hidden', style: TextStyle(color: textGray)),
-                                ),
-                              );
-                            },
-                          ),
-                          onTap: () {
-                            Navigator.push(
-                              context,
-                              MaterialPageRoute(builder: (_) => const AdminLoginScreen()),
-                            ).then((_) {
-                              setState(() {
-                                if (isAdminUser()) {
-                                  _adminOptionUnlocked = true;
-                                  _adminCardRevealed = true;
-                                }
-                              });
-                            });
-                          },
-                        ),
-                      )
-                    : const SizedBox.shrink(),
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _buildFallbackUI(BuildContext context) {
-    final bgDark = ThemeService.bg;
-    final cardDark = ThemeService.card;
-    final borderDark = ThemeService.border;
-    final neonGreen = ThemeService.primaryGreen;
-    final textWhite = ThemeService.textPrimary;
-    final textGray = ThemeService.textSecondary;
-
-    return Scaffold(
-      backgroundColor: bgDark,
-      appBar: AppBar(
-        backgroundColor: cardDark,
-        elevation: 0,
-        leading: IconButton(
-          icon: Icon(Icons.arrow_back_rounded, color: textWhite),
-          onPressed: () => Navigator.pop(context),
-        ),
-        title: Text(
-          'Settings & Preferences',
-          style: TextStyle(color: textWhite, fontWeight: FontWeight.bold),
-        ),
-      ),
-      body: ListView(
-        padding: const EdgeInsets.all(16),
-        children: [
-          Container(
-            decoration: BoxDecoration(
-              color: cardDark,
-              borderRadius: BorderRadius.circular(16),
-              border: Border.all(color: borderDark),
-            ),
-            child: Column(
-              children: [
-                ListTile(
-                  leading: Icon(Icons.language_rounded, color: neonGreen),
-                  title: Text('App Language', style: TextStyle(color: textWhite, fontWeight: FontWeight.bold)),
-                  subtitle: Text(LanguageService.selectedLang == 'ur' ? 'اردو' : 'English', style: TextStyle(color: textGray)),
-                  onTap: () {
-                    LanguageService.showLanguageBottomSheet(context);
-                  },
-                ),
-                Divider(color: borderDark, height: 1),
-                ValueListenableBuilder<ThemeMode>(
-                  valueListenable: ThemeService.themeModeNotifier,
-                  builder: (context, mode, _) {
-                    final isDark = mode == ThemeMode.dark;
-                    return ListTile(
-                      leading: Icon(isDark ? Icons.dark_mode_rounded : Icons.light_mode_rounded, color: neonGreen),
-                      title: Text('Day / Night Mode', style: TextStyle(color: textWhite, fontWeight: FontWeight.bold)),
-                      trailing: Switch(
-                        value: isDark,
-                        activeColor: neonGreen,
-                        onChanged: (val) => ThemeService.setTheme(val),
-                      ),
-                    );
-                  },
-                ),
-                Divider(color: borderDark, height: 1),
-                ListTile(
-                  leading: Icon(Icons.privacy_tip_outlined, color: neonGreen),
-                  title: Text('Privacy Policy', style: TextStyle(color: textWhite, fontWeight: FontWeight.bold)),
-                  onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const PrivacyPolicyScreen())),
-                ),
-                Divider(color: borderDark, height: 1),
-                ListTile(
-                  leading: Icon(Icons.groups_rounded, color: neonGreen),
-                  title: Text('About Us', style: TextStyle(color: textWhite, fontWeight: FontWeight.bold)),
-                  onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const AboutUsScreen())),
-                ),
-              ],
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
+                        color: Color(0xFFFEE2E
