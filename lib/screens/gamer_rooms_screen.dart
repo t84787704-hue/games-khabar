@@ -1,9 +1,10 @@
 // ═══════════════════════════════════════════════════════════════════════════════
-// COMPLETE GAMER ROOMS SCREEN
+// COMPLETE GAMER ROOMS SCREEN (WITH DYNAMIC DAY & NIGHT MODE SUPPORT)
 // - Realtime Joined Players List with Avatars, Names, IGN & Game UID
 // - 1-Time Game ID & IGN Auto-Save Popup (Multi-Game Ready)
 // - Join Match Button for non-host players with slot reservation
 // - Fully Functional LEAVE ROOM Button (Database sync & slot adjustment)
+// - Full Adaptive Day/Night Theme Sync with ThemeService
 // - Esports Match Rules & Guidelines Dialog
 // - Flexible Match Formats (1v1, 2v2, 4v4 TDM)
 // - "End Match / Claim Win" Screenshot Proof Upload to Supabase Storage
@@ -26,6 +27,7 @@ import '../services/tournament_service.dart';
 import '../services/coin_wallet_service.dart';
 import '../services/supabase_service.dart';
 import '../services/notification_service.dart';
+import '../services/theme_service.dart';
 import '../widgets/gamer_avatar.dart';
 
 class GamerRoom {
@@ -287,6 +289,7 @@ class GamerRoomsScreen extends StatefulWidget {
       return {'ign': rootIgn, 'game_uid': rootUid};
     }
 
+    final isDark = ThemeService.isDarkMode;
     final ignController = TextEditingController(text: rootIgn);
     final uidController = TextEditingController(text: rootUid);
 
@@ -294,7 +297,7 @@ class GamerRoomsScreen extends StatefulWidget {
       context: context,
       barrierDismissible: true,
       builder: (ctx) => AlertDialog(
-        backgroundColor: Colors.white,
+        backgroundColor: ThemeService.card,
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
         title: Row(
           children: [
@@ -303,7 +306,7 @@ class GamerRoomsScreen extends StatefulWidget {
             Expanded(
               child: Text(
                 '$gameName ID Details',
-                style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 17, color: Color(0xFF1E293B)),
+                style: TextStyle(fontWeight: FontWeight.bold, fontSize: 17, color: ThemeService.textPrimary),
               ),
             ),
           ],
@@ -315,31 +318,45 @@ class GamerRoomsScreen extends StatefulWidget {
             children: [
               Text(
                 'Enter your official $gameName details. This will be automatically saved for all future $gameName matches.',
-                style: TextStyle(fontSize: 12, color: Colors.grey[700]),
+                style: TextStyle(fontSize: 12, color: ThemeService.textSecondary),
               ),
               const SizedBox(height: 14),
               TextField(
                 controller: ignController,
+                style: TextStyle(color: ThemeService.textPrimary),
                 decoration: InputDecoration(
                   labelText: 'In-Game Name (IGN)',
+                  labelStyle: TextStyle(color: ThemeService.textSecondary),
                   hintText: 'e.g. Sniper_King',
-                  prefixIcon: const Icon(Icons.badge_outlined, size: 20),
+                  hintStyle: TextStyle(color: ThemeService.textSecondary.withOpacity(0.6)),
+                  prefixIcon: Icon(Icons.badge_outlined, size: 20, color: ThemeService.textSecondary),
                   filled: true,
-                  fillColor: const Color(0xFFF8FAFC),
+                  fillColor: ThemeService.cardSecondary,
                   border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
+                  enabledBorder: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(10),
+                    borderSide: BorderSide(color: ThemeService.border),
+                  ),
                 ),
               ),
               const SizedBox(height: 12),
               TextField(
                 controller: uidController,
                 keyboardType: TextInputType.text,
+                style: TextStyle(color: ThemeService.textPrimary),
                 decoration: InputDecoration(
                   labelText: 'Character ID / Game UID',
+                  labelStyle: TextStyle(color: ThemeService.textSecondary),
                   hintText: 'e.g. 5123456789',
-                  prefixIcon: const Icon(Icons.tag, size: 20),
+                  hintStyle: TextStyle(color: ThemeService.textSecondary.withOpacity(0.6)),
+                  prefixIcon: Icon(Icons.tag, size: 20, color: ThemeService.textSecondary),
                   filled: true,
-                  fillColor: const Color(0xFFF8FAFC),
+                  fillColor: ThemeService.cardSecondary,
                   border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
+                  enabledBorder: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(10),
+                    borderSide: BorderSide(color: ThemeService.border),
+                  ),
                 ),
               ),
             ],
@@ -494,124 +511,155 @@ class _GamerRoomsScreenState extends State<GamerRoomsScreen> {
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: const Color(0xFFF0F2F5),
-      appBar: AppBar(
-        backgroundColor: Colors.white,
-        elevation: 1,
-        title: const Text(
-          'Rooms',
-          style: TextStyle(
-            color: Color(0xFF050505),
-            fontWeight: FontWeight.bold,
-            fontSize: 22,
-          ),
-        ),
-        actions: [
-          IconButton(
-            icon: const Icon(Icons.add_circle_outline, color: Color(0xFF1877F2), size: 28),
-            onPressed: () => _showCreateRoomDialog(),
-          ),
-          const SizedBox(width: 8),
-        ],
-      ),
-      body: Column(
-        children: [
-          Container(
-            height: 48,
-            color: Colors.white,
-            child: ListView.builder(
-              scrollDirection: Axis.horizontal,
-              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
-              itemCount: _gameCategories.length,
-              itemBuilder: (context, index) {
-                final cat = _gameCategories[index];
-                final isSelected = cat == _selectedCategory;
-                return Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 4),
-                  child: ChoiceChip(
-                    label: Text(cat),
-                    selected: isSelected,
-                    selectedColor: const Color(0xFF1877F2),
-                    labelStyle: TextStyle(
-                      color: isSelected ? Colors.white : Colors.black87,
-                      fontWeight: FontWeight.bold,
-                      fontSize: 12,
-                    ),
-                    backgroundColor: const Color(0xFFF0F2F5),
-                    onSelected: (val) {
-                      if (val) setState(() => _selectedCategory = cat);
-                    },
-                  ),
-                );
-              },
+    return ValueListenableBuilder<ThemeMode>(
+      valueListenable: ThemeService.themeModeNotifier,
+      builder: (context, themeMode, _) {
+        final isDark = themeMode == ThemeMode.dark;
+
+        return Scaffold(
+          backgroundColor: ThemeService.bg,
+          appBar: AppBar(
+            backgroundColor: ThemeService.appBarBg,
+            elevation: 0.5,
+            title: Text(
+              'Rooms',
+              style: TextStyle(
+                color: ThemeService.textPrimary,
+                fontWeight: FontWeight.bold,
+                fontSize: 22,
+              ),
             ),
+            actions: [
+              IconButton(
+                icon: const Icon(Icons.add_circle_outline, color: Color(0xFF1877F2), size: 28),
+                onPressed: () => _showCreateRoomDialog(),
+              ),
+              const SizedBox(width: 8),
+            ],
           ),
-          Expanded(
-            child: StreamBuilder<List<Map<String, dynamic>>>(
-              stream: SupabaseService.client
-                  .from('rooms')
-                  .stream(primaryKey: ['id'])
-                  .order('created_at', ascending: false),
-              builder: (context, snapshot) {
-                if (snapshot.connectionState == ConnectionState.waiting) {
-                  return const Center(child: CircularProgressIndicator());
-                }
-                final list = snapshot.data ?? [];
-                final filtered = list.where((r) {
-                  if (_selectedCategory == 'All Games') return true;
-                  return (r['game'] ?? '').toString().toLowerCase() ==
-                      _selectedCategory.toLowerCase();
-                }).toList();
-
-                if (filtered.isEmpty) {
-                  return const Center(
-                    child: Text('No active rooms found. Tap + to create one!',
-                        style: TextStyle(color: Colors.grey)),
-                  );
-                }
-
-                return ListView.builder(
-                  padding: const EdgeInsets.all(10),
-                  itemCount: filtered.length,
+          body: Column(
+            children: [
+              // Category Bar
+              Container(
+                height: 48,
+                color: ThemeService.card,
+                child: ListView.builder(
+                  scrollDirection: Axis.horizontal,
+                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
+                  itemCount: _gameCategories.length,
                   itemBuilder: (context, index) {
-                    final room = GamerRoom.fromSupabase(filtered[index]);
-                    return Card(
-                      margin: const EdgeInsets.only(bottom: 10),
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                      child: ListTile(
-                        onTap: () => _openRoomModal(room),
-                        leading: CircleAvatar(
-                          backgroundColor: const Color(0xFF1877F2).withOpacity(0.1),
-                          child: const Icon(Icons.sports_esports, color: Color(0xFF1877F2)),
+                    final cat = _gameCategories[index];
+                    final isSelected = cat == _selectedCategory;
+                    return Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 4),
+                      child: ChoiceChip(
+                        label: Text(cat),
+                        selected: isSelected,
+                        selectedColor: const Color(0xFF1877F2),
+                        labelStyle: TextStyle(
+                          color: isSelected ? Colors.white : ThemeService.textPrimary,
+                          fontWeight: FontWeight.bold,
+                          fontSize: 12,
                         ),
-                        title: Text(room.title, style: const TextStyle(fontWeight: FontWeight.bold)),
-                        subtitle: Text('Host: ${room.hostName} • ${room.mode}'),
-                        trailing: Column(
-                          mainAxisAlignment: MainAxisAlignment.center,
-                          crossAxisAlignment: CrossAxisAlignment.end,
-                          children: [
-                            Text('🏆 ${room.prizePool} Coins',
-                                style: const TextStyle(
-                                    fontWeight: FontWeight.bold, color: Colors.orange)),
-                            const SizedBox(height: 4),
-                            Text('${room.filledSlots}/${room.totalSlots} Players',
-                                style: const TextStyle(fontSize: 11, color: Colors.grey)),
-                          ],
-                        ),
+                        backgroundColor: ThemeService.cardSecondary,
+                        onSelected: (val) {
+                          if (val) setState(() => _selectedCategory = cat);
+                        },
                       ),
                     );
                   },
-                );
-              },
-            ),
+                ),
+              ),
+              Expanded(
+                child: StreamBuilder<List<Map<String, dynamic>>>(
+                  stream: SupabaseService.client
+                      .from('rooms')
+                      .stream(primaryKey: ['id'])
+                      .order('created_at', ascending: false),
+                  builder: (context, snapshot) {
+                    if (snapshot.connectionState == ConnectionState.waiting) {
+                      return const Center(child: CircularProgressIndicator());
+                    }
+                    final list = snapshot.data ?? [];
+                    final filtered = list.where((r) {
+                      if (_selectedCategory == 'All Games') return true;
+                      return (r['game'] ?? '').toString().toLowerCase() ==
+                          _selectedCategory.toLowerCase();
+                    }).toList();
+
+                    if (filtered.isEmpty) {
+                      return Center(
+                        child: Text(
+                          'No active rooms found. Tap + to create one!',
+                          style: TextStyle(color: ThemeService.textSecondary),
+                        ),
+                      );
+                    }
+
+                    return ListView.builder(
+                      padding: const EdgeInsets.all(10),
+                      itemCount: filtered.length,
+                      itemBuilder: (context, index) {
+                        final room = GamerRoom.fromSupabase(filtered[index]);
+                        return Card(
+                          color: ThemeService.card,
+                          elevation: isDark ? 2 : 1,
+                          margin: const EdgeInsets.only(bottom: 10),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(12),
+                            side: BorderSide(color: ThemeService.border),
+                          ),
+                          child: ListTile(
+                            onTap: () => _openRoomModal(room),
+                            leading: CircleAvatar(
+                              backgroundColor: const Color(0xFF1877F2).withOpacity(0.15),
+                              child: const Icon(Icons.sports_esports, color: Color(0xFF1877F2)),
+                            ),
+                            title: Text(
+                              room.title,
+                              style: TextStyle(
+                                fontWeight: FontWeight.bold,
+                                color: ThemeService.textPrimary,
+                              ),
+                            ),
+                            subtitle: Text(
+                              'Host: ${room.hostName} • ${room.mode}',
+                              style: TextStyle(color: ThemeService.textSecondary, fontSize: 12),
+                            ),
+                            trailing: Column(
+                              mainAxisAlignment: MainAxisAlignment.center,
+                              crossAxisAlignment: CrossAxisAlignment.end,
+                              children: [
+                                Text(
+                                  '🏆 ${room.prizePool} Coins',
+                                  style: const TextStyle(
+                                    fontWeight: FontWeight.bold,
+                                    color: Colors.orange,
+                                  ),
+                                ),
+                                const SizedBox(height: 4),
+                                Text(
+                                  '${room.filledSlots}/${room.totalSlots} Players',
+                                  style: TextStyle(fontSize: 11, color: ThemeService.textSecondary),
+                                ),
+                              ],
+                            ),
+                          ),
+                        );
+                      },
+                    );
+                  },
+                ),
+              ),
+            ],
           ),
-        ],
-      ),
+        );
+      },
     );
   }
 
   void _showCreateRoomDialog() {
+    final isDark = ThemeService.isDarkMode;
     final gameCtrl = TextEditingController(text: 'BGMI');
     final modeCtrl = TextEditingController(text: 'Erangel');
     final roomIdCtrl = TextEditingController();
@@ -631,22 +679,44 @@ class _GamerRoomsScreenState extends State<GamerRoomsScreen> {
       context: context,
       builder: (ctx) => StatefulBuilder(
         builder: (dialogCtx, setDialogState) => AlertDialog(
-          backgroundColor: Colors.white,
+          backgroundColor: ThemeService.card,
           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-          title: const Text('Create Game Room', style: TextStyle(fontWeight: FontWeight.bold, color: Color(0xFF1E293B))),
+          title: Text(
+            'Create Game Room',
+            style: TextStyle(fontWeight: FontWeight.bold, color: ThemeService.textPrimary),
+          ),
           content: SingleChildScrollView(
             child: Column(
               mainAxisSize: MainAxisSize.min,
               children: [
-                TextField(controller: gameCtrl, decoration: const InputDecoration(labelText: 'Game')),
-                TextField(controller: modeCtrl, decoration: const InputDecoration(labelText: 'Map / Mode')),
+                TextField(
+                  controller: gameCtrl,
+                  style: TextStyle(color: ThemeService.textPrimary),
+                  decoration: InputDecoration(
+                    labelText: 'Game',
+                    labelStyle: TextStyle(color: ThemeService.textSecondary),
+                  ),
+                ),
+                TextField(
+                  controller: modeCtrl,
+                  style: TextStyle(color: ThemeService.textPrimary),
+                  decoration: InputDecoration(
+                    labelText: 'Map / Mode',
+                    labelStyle: TextStyle(color: ThemeService.textSecondary),
+                  ),
+                ),
                 DropdownButtonFormField<String>(
                   value: selectedFormat,
-                  decoration: const InputDecoration(labelText: 'Match Format / Slots'),
+                  dropdownColor: ThemeService.card,
+                  style: TextStyle(color: ThemeService.textPrimary),
+                  decoration: InputDecoration(
+                    labelText: 'Match Format / Slots',
+                    labelStyle: TextStyle(color: ThemeService.textSecondary),
+                  ),
                   items: formatOptions.keys.map((format) {
                     return DropdownMenuItem(
                       value: format,
-                      child: Text(format, style: const TextStyle(fontSize: 13)),
+                      child: Text(format, style: TextStyle(fontSize: 13, color: ThemeService.textPrimary)),
                     );
                   }).toList(),
                   onChanged: (val) {
@@ -658,12 +728,30 @@ class _GamerRoomsScreenState extends State<GamerRoomsScreen> {
                     }
                   },
                 ),
-                TextField(controller: roomIdCtrl, decoration: const InputDecoration(labelText: 'Room ID')),
-                TextField(controller: passCtrl, decoration: const InputDecoration(labelText: 'Password')),
+                TextField(
+                  controller: roomIdCtrl,
+                  style: TextStyle(color: ThemeService.textPrimary),
+                  decoration: InputDecoration(
+                    labelText: 'Room ID',
+                    labelStyle: TextStyle(color: ThemeService.textSecondary),
+                  ),
+                ),
+                TextField(
+                  controller: passCtrl,
+                  style: TextStyle(color: ThemeService.textPrimary),
+                  decoration: InputDecoration(
+                    labelText: 'Password',
+                    labelStyle: TextStyle(color: ThemeService.textSecondary),
+                  ),
+                ),
                 TextField(
                   controller: prizeCtrl,
                   keyboardType: TextInputType.number,
-                  decoration: const InputDecoration(labelText: 'Prize Pool (Coins)'),
+                  style: TextStyle(color: ThemeService.textPrimary),
+                  decoration: InputDecoration(
+                    labelText: 'Prize Pool (Coins)',
+                    labelStyle: TextStyle(color: ThemeService.textSecondary),
+                  ),
                 ),
               ],
             ),
@@ -817,7 +905,7 @@ class _RoomDetailsSheetState extends State<_RoomDetailsSheet> {
     super.dispose();
   }
 
-  /// FEATURE: Leave Room & Remove Player from Database
+  /// Leave Room Function with Real Database Removal
   Future<void> _leaveRoom(GamerRoom room) async {
     if (_isLeaving) return;
     setState(() => _isLeaving = true);
@@ -826,11 +914,9 @@ class _RoomDetailsSheetState extends State<_RoomDetailsSheet> {
       final isHost = widget.currentUserId == room.hostId;
 
       if (isHost) {
-        // Agar HOST leave kare to room hi delete ho jaye
         await SupabaseService.client.from('rooms').delete().eq('id', widget.roomId);
         await SupabaseService.client.from('messages').delete().eq('room_id', widget.roomId);
       } else {
-        // Agar PLAYER leave kare to usay list aur slots se minus karein
         final updatedIds = room.joinedUserIds.where((id) => id != widget.currentUserId).toList();
         final updatedUsers = room.joinedUsers.where((u) => (u['id'] ?? '').toString() != widget.currentUserId).toList();
 
@@ -877,12 +963,15 @@ class _RoomDetailsSheetState extends State<_RoomDetailsSheet> {
     showDialog(
       context: context,
       builder: (ctx) => AlertDialog(
-        backgroundColor: Colors.white,
+        backgroundColor: ThemeService.card,
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-        title: const Row(
+        title: Row(
           children: [
-            Text('📜 ', style: TextStyle(fontSize: 20)),
-            Text('Tournament Rules', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18, color: Color(0xFF1E293B))),
+            const Text('📜 ', style: TextStyle(fontSize: 20)),
+            Text(
+              'Tournament Rules',
+              style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18, color: ThemeService.textPrimary),
+            ),
           ],
         ),
         content: const SingleChildScrollView(
@@ -1080,10 +1169,15 @@ class _RoomDetailsSheetState extends State<_RoomDetailsSheet> {
     showDialog(
       context: context,
       builder: (ctx) => AlertDialog(
-        title: const Text('Raise Dispute / Report Issue'),
+        backgroundColor: ThemeService.card,
+        title: Text('Raise Dispute / Report Issue', style: TextStyle(color: ThemeService.textPrimary)),
         content: TextField(
           controller: reasonCtrl,
-          decoration: const InputDecoration(hintText: 'Enter reason for dispute...'),
+          style: TextStyle(color: ThemeService.textPrimary),
+          decoration: InputDecoration(
+            hintText: 'Enter reason for dispute...',
+            hintStyle: TextStyle(color: ThemeService.textSecondary),
+          ),
         ),
         actions: [
           TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Cancel')),
@@ -1136,11 +1230,13 @@ class _RoomDetailsSheetState extends State<_RoomDetailsSheet> {
 
   @override
   Widget build(BuildContext context) {
+    final isDark = ThemeService.isDarkMode;
+
     return Container(
       height: MediaQuery.of(context).size.height * 0.90,
-      decoration: const BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      decoration: BoxDecoration(
+        color: ThemeService.card,
+        borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
       ),
       child: StreamBuilder<List<Map<String, dynamic>>>(
         stream: SupabaseService.client
@@ -1170,7 +1266,7 @@ class _RoomDetailsSheetState extends State<_RoomDetailsSheet> {
                 width: 40,
                 height: 4,
                 decoration: BoxDecoration(
-                  color: Colors.grey[300],
+                  color: ThemeService.border,
                   borderRadius: BorderRadius.circular(2),
                 ),
               ),
@@ -1186,22 +1282,26 @@ class _RoomDetailsSheetState extends State<_RoomDetailsSheet> {
                       children: [
                         Text(
                           room.title,
-                          style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 18),
+                          style: TextStyle(
+                            fontWeight: FontWeight.bold,
+                            fontSize: 18,
+                            color: ThemeService.textPrimary,
+                          ),
                         ),
                         Text(
                           'Host: ${room.hostName} • ${room.mode}',
-                          style: const TextStyle(color: Colors.grey, fontSize: 12),
+                          style: TextStyle(color: ThemeService.textSecondary, fontSize: 12),
                         ),
                       ],
                     ),
                     IconButton(
-                      icon: const Icon(Icons.close),
+                      icon: Icon(Icons.close, color: ThemeService.textPrimary),
                       onPressed: () => Navigator.pop(context),
                     ),
                   ],
                 ),
               ),
-              const Divider(height: 1),
+              Divider(height: 1, color: ThemeService.border),
 
               // Banners
               if (room.isCompleted) ...[
@@ -1279,7 +1379,7 @@ class _RoomDetailsSheetState extends State<_RoomDetailsSheet> {
                       if (room.disputeReason != null)
                         Text(
                           'Reason: ${room.disputeReason}',
-                          style: const TextStyle(color: Colors.black87, fontSize: 12),
+                          style: TextStyle(color: ThemeService.textPrimary, fontSize: 12),
                         ),
                     ],
                   ),
@@ -1318,9 +1418,9 @@ class _RoomDetailsSheetState extends State<_RoomDetailsSheet> {
                 margin: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
                 padding: const EdgeInsets.all(12),
                 decoration: BoxDecoration(
-                  color: const Color(0xFFFFFBEB),
+                  color: isDark ? const Color(0xFF1C1917) : const Color(0xFFFFFBEB),
                   borderRadius: BorderRadius.circular(12),
-                  border: Border.all(color: const Color(0xFFFDE68A)),
+                  border: Border.all(color: isDark ? const Color(0xFF78350F) : const Color(0xFFFDE68A)),
                 ),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
@@ -1328,14 +1428,14 @@ class _RoomDetailsSheetState extends State<_RoomDetailsSheet> {
                     Row(
                       mainAxisAlignment: MainAxisAlignment.spaceBetween,
                       children: [
-                        const Row(
+                        Row(
                           children: [
-                            Icon(Icons.key, color: Colors.amber, size: 16),
-                            SizedBox(width: 6),
+                            const Icon(Icons.key, color: Colors.amber, size: 16),
+                            const SizedBox(width: 6),
                             Text(
                               'ROOM CREDENTIALS',
                               style: TextStyle(
-                                color: Color(0xFF92400E),
+                                color: isDark ? const Color(0xFFFDE68A) : const Color(0xFF92400E),
                                 fontWeight: FontWeight.bold,
                                 fontSize: 12,
                               ),
@@ -1351,13 +1451,13 @@ class _RoomDetailsSheetState extends State<_RoomDetailsSheet> {
                               color: Colors.amber.withOpacity(0.25),
                               borderRadius: BorderRadius.circular(6),
                             ),
-                            child: const Row(
+                            child: Row(
                               children: [
-                                Text('📜 ', style: TextStyle(fontSize: 11)),
+                                const Text('📜 ', style: TextStyle(fontSize: 11)),
                                 Text(
                                   'Rules',
                                   style: TextStyle(
-                                    color: Color(0xFF92400E),
+                                    color: isDark ? const Color(0xFFFDE68A) : const Color(0xFF92400E),
                                     fontWeight: FontWeight.bold,
                                     fontSize: 11,
                                   ),
@@ -1372,8 +1472,14 @@ class _RoomDetailsSheetState extends State<_RoomDetailsSheet> {
                     Row(
                       mainAxisAlignment: MainAxisAlignment.spaceBetween,
                       children: [
-                        Text('ROOM ID\n${room.roomId}',
-                            style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14)),
+                        Text(
+                          'ROOM ID\n${room.roomId}',
+                          style: TextStyle(
+                            fontWeight: FontWeight.bold,
+                            fontSize: 14,
+                            color: ThemeService.textPrimary,
+                          ),
+                        ),
                         IconButton(
                           icon: const Icon(Icons.copy, size: 18, color: Color(0xFF1877F2)),
                           onPressed: () {
@@ -1385,12 +1491,18 @@ class _RoomDetailsSheetState extends State<_RoomDetailsSheet> {
                         ),
                       ],
                     ),
-                    const Divider(height: 8),
+                    Divider(height: 8, color: isDark ? const Color(0xFF442A0D) : const Color(0xFFFDE68A)),
                     Row(
                       mainAxisAlignment: MainAxisAlignment.spaceBetween,
                       children: [
-                        Text('PASSWORD\n${room.roomPassword}',
-                            style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14)),
+                        Text(
+                          'PASSWORD\n${room.roomPassword}',
+                          style: TextStyle(
+                            fontWeight: FontWeight.bold,
+                            fontSize: 14,
+                            color: ThemeService.textPrimary,
+                          ),
+                        ),
                         IconButton(
                           icon: const Icon(Icons.copy, size: 18, color: Color(0xFF1877F2)),
                           onPressed: () {
@@ -1411,9 +1523,9 @@ class _RoomDetailsSheetState extends State<_RoomDetailsSheet> {
                 margin: const EdgeInsets.symmetric(horizontal: 14, vertical: 4),
                 padding: const EdgeInsets.all(10),
                 decoration: BoxDecoration(
-                  color: const Color(0xFFF8FAFC),
+                  color: ThemeService.cardSecondary,
                   borderRadius: BorderRadius.circular(10),
-                  border: Border.all(color: const Color(0xFFE2E8F0)),
+                  border: Border.all(color: ThemeService.border),
                 ),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
@@ -1424,10 +1536,10 @@ class _RoomDetailsSheetState extends State<_RoomDetailsSheet> {
                         const SizedBox(width: 6),
                         Text(
                           'PLAYERS (${room.joinedUsers.length}/${room.totalSlots})',
-                          style: const TextStyle(
+                          style: TextStyle(
                             fontWeight: FontWeight.bold,
                             fontSize: 12,
-                            color: Color(0xFF1E293B),
+                            color: ThemeService.textPrimary,
                           ),
                         ),
                       ],
@@ -1462,9 +1574,10 @@ class _RoomDetailsSheetState extends State<_RoomDetailsSheet> {
                                       Flexible(
                                         child: Text(
                                           uName,
-                                          style: const TextStyle(
+                                          style: TextStyle(
                                             fontWeight: FontWeight.bold,
                                             fontSize: 13,
+                                            color: ThemeService.textPrimary,
                                           ),
                                           overflow: TextOverflow.ellipsis,
                                         ),
@@ -1508,7 +1621,7 @@ class _RoomDetailsSheetState extends State<_RoomDetailsSheet> {
                                         (ign != null && ign.isNotEmpty) ? 'IGN: $ign' : 'IGN: $uName',
                                         style: TextStyle(
                                           fontSize: 11,
-                                          color: Colors.grey[700],
+                                          color: ThemeService.textSecondary,
                                           fontWeight: FontWeight.w600,
                                         ),
                                       ),
@@ -1517,7 +1630,7 @@ class _RoomDetailsSheetState extends State<_RoomDetailsSheet> {
                                           ' • ID: $gameUid',
                                           style: TextStyle(
                                             fontSize: 11,
-                                            color: Colors.grey[600],
+                                            color: ThemeService.textSecondary.withOpacity(0.8),
                                             fontWeight: FontWeight.w500,
                                           ),
                                         ),
@@ -1574,14 +1687,17 @@ class _RoomDetailsSheetState extends State<_RoomDetailsSheet> {
                             margin: const EdgeInsets.symmetric(vertical: 4),
                             padding: const EdgeInsets.all(8),
                             decoration: BoxDecoration(
-                              color: const Color(0xFFF1F5F9),
+                              color: ThemeService.cardSecondary,
                               borderRadius: BorderRadius.circular(8),
                             ),
-                            child: Text(txt,
-                                style: const TextStyle(
-                                    fontSize: 11.5,
-                                    color: Colors.blueGrey,
-                                    fontWeight: FontWeight.bold)),
+                            child: Text(
+                              txt,
+                              style: const TextStyle(
+                                fontSize: 11.5,
+                                color: Colors.blueGrey,
+                                fontWeight: FontWeight.bold,
+                              ),
+                            ),
                           );
                         }
 
@@ -1592,7 +1708,7 @@ class _RoomDetailsSheetState extends State<_RoomDetailsSheet> {
                             margin: const EdgeInsets.symmetric(vertical: 2),
                             padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
                             decoration: BoxDecoration(
-                              color: isMe ? const Color(0xFF1877F2) : const Color(0xFFE4E6EB),
+                              color: isMe ? const Color(0xFF1877F2) : (isDark ? const Color(0xFF1E293B) : const Color(0xFFE4E6EB)),
                               borderRadius: BorderRadius.circular(12),
                             ),
                             child: Column(
@@ -1600,14 +1716,21 @@ class _RoomDetailsSheetState extends State<_RoomDetailsSheet> {
                                   isMe ? CrossAxisAlignment.end : CrossAxisAlignment.start,
                               children: [
                                 if (!isMe)
-                                  Text(sender,
-                                      style: const TextStyle(
-                                          fontWeight: FontWeight.bold,
-                                          fontSize: 10,
-                                          color: Colors.black54)),
-                                Text(txt,
+                                  Text(
+                                    sender,
                                     style: TextStyle(
-                                        color: isMe ? Colors.white : Colors.black87, fontSize: 13)),
+                                      fontWeight: FontWeight.bold,
+                                      fontSize: 10,
+                                      color: isDark ? const Color(0xFF94A3B8) : Colors.black54,
+                                    ),
+                                  ),
+                                Text(
+                                  txt,
+                                  style: TextStyle(
+                                    color: isMe ? Colors.white : (isDark ? Colors.white : Colors.black87),
+                                    fontSize: 13,
+                                  ),
+                                ),
                               ],
                             ),
                           ),
@@ -1626,11 +1749,13 @@ class _RoomDetailsSheetState extends State<_RoomDetailsSheet> {
                     Expanded(
                       child: TextField(
                         controller: _msgController,
+                        style: TextStyle(color: ThemeService.textPrimary),
                         decoration: InputDecoration(
                           hintText: 'Type a message...',
+                          hintStyle: TextStyle(color: ThemeService.textSecondary),
                           contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
                           filled: true,
-                          fillColor: const Color(0xFFF0F2F5),
+                          fillColor: ThemeService.cardSecondary,
                           border: OutlineInputBorder(
                             borderRadius: BorderRadius.circular(20),
                             borderSide: BorderSide.none,
@@ -1721,7 +1846,7 @@ class _RoomDetailsSheetState extends State<_RoomDetailsSheet> {
                 ],
               ],
 
-              // LEAVE ROOM BUTTON (Updated with functional DB logic)
+              // LEAVE ROOM BUTTON
               Padding(
                 padding: const EdgeInsets.fromLTRB(14, 4, 14, 12),
                 child: SizedBox(
@@ -1775,9 +1900,12 @@ class _RuleItem extends StatelessWidget {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Text(title, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: Color(0xFF1E293B))),
+              Text(
+                title,
+                style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: ThemeService.textPrimary),
+              ),
               const SizedBox(height: 2),
-              Text(desc, style: TextStyle(fontSize: 11.5, color: Colors.grey[700])),
+              Text(desc, style: TextStyle(fontSize: 11.5, color: ThemeService.textSecondary)),
             ],
           ),
         ),
