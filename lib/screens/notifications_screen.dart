@@ -1,13 +1,14 @@
 // ===============================================================================
-// EXACT DIFF — Real-time Unread Count Synchronization & Dynamic Theme Support
+// EXACT DIFF — Dynamic Thematic Avatars, Real-time Unread Count & Theme Support
 // -------------------------------------------------------------------------------
 // File: lib/screens/notifications_screen.dart
 //
-// 1. Instant read marking: _locallyReadIds immediately decrements badge & removes
-//    notification from unread filter on tap.
-// 2. Reliable DB update for `is_read = true` without schema mismatch.
-// 3. Mark-all-read clears badge count immediately to 0.
-// 4. Full Adaptive Day & Night Mode support with ThemeService.
+// 1. FIXED "S" AVATAR BUG: System & reward notifications now display professional,
+//    distinctive category icons (Trophy, Coin, Shopping Bag, Alert) instead of "S".
+// 2. Real gamer avatars (Followers, Comments, Challenges) preserved for user events.
+// 3. Instant read marking: _locallyReadIds immediately decrements badge & updates UI.
+// 4. Reliable DB update for `is_read = true` without schema mismatch.
+// 5. Full Adaptive Day & Night Mode support with ThemeService.
 // ===============================================================================
 
 import 'package:flutter/material.dart';
@@ -349,6 +350,98 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
     );
   }
 
+  Widget _buildNotificationAvatar(InAppNotification notif, String senderPhoto, String senderName, String senderId) {
+    final bool isUserEvent = senderId.isNotEmpty &&
+        senderId != 'admin' &&
+        senderId != 'system' &&
+        senderId != _currentUid &&
+        !senderName.toLowerCase().contains('system') &&
+        (notif.type == 'follow' ||
+            notif.type.contains('like') ||
+            notif.type.contains('comment') ||
+            notif.type.contains('challenge') ||
+            notif.type.contains('team'));
+
+    // Real Gamer Avatar
+    if (isUserEvent) {
+      return Stack(
+        children: [
+          GamerAvatar(
+            photoUrl: senderPhoto,
+            displayName: senderName,
+            radius: 20,
+            onTap: () {
+              Navigator.push(
+                context,
+                MaterialPageRoute(builder: (_) => GamerProfileScreen(userId: senderId)),
+              );
+            },
+          ),
+          Positioned(
+            right: 0,
+            bottom: 0,
+            child: Container(
+              padding: const EdgeInsets.all(3),
+              decoration: BoxDecoration(
+                color: ThemeService.card,
+                shape: BoxShape.circle,
+              ),
+              child: Icon(notif.iconData, color: notif.iconColor, size: 12),
+            ),
+          ),
+        ],
+      );
+    }
+
+    // System / Event Avatar: Distinctive thematic styling
+    Color bgColor;
+    Color iconColor;
+    IconData icon;
+
+    if (notif.type == 'proof_rejected' || notif.type.contains('reject')) {
+      bgColor = const Color(0xFFFF4655).withOpacity(0.16);
+      iconColor = const Color(0xFFFF4655);
+      icon = Icons.cancel_rounded;
+    } else if (notif.type == 'proof_accepted' || notif.type.contains('accept') || notif.type.contains('win')) {
+      bgColor = const Color(0xFFFFD700).withOpacity(0.20);
+      iconColor = const Color(0xFFFFA000);
+      icon = Icons.emoji_events_rounded;
+    } else if (notif.type.contains('coin') || notif.type.contains('bonus') || notif.type.contains('reward')) {
+      bgColor = const Color(0xFFFFD700).withOpacity(0.20);
+      iconColor = const Color(0xFFFFA000);
+      icon = Icons.monetization_on_rounded;
+    } else if (notif.type.contains('store') || notif.type.contains('perk')) {
+      bgColor = const Color(0xFF00E5FF).withOpacity(0.18);
+      iconColor = const Color(0xFF0091EA);
+      icon = Icons.shopping_bag_rounded;
+    } else if (notif.type.contains('dispute') || notif.type.contains('report')) {
+      bgColor = Colors.deepOrange.withOpacity(0.16);
+      iconColor = Colors.deepOrange;
+      icon = Icons.gavel_rounded;
+    } else if (notif.type.contains('match') || notif.type.contains('tournament') || notif.type.contains('room')) {
+      bgColor = const Color(0xFF1877F2).withOpacity(0.16);
+      iconColor = const Color(0xFF1877F2);
+      icon = Icons.sports_esports_rounded;
+    } else {
+      bgColor = notif.iconColor.withOpacity(0.16);
+      iconColor = notif.iconColor;
+      icon = notif.iconData;
+    }
+
+    return Container(
+      width: 40,
+      height: 40,
+      decoration: BoxDecoration(
+        color: bgColor,
+        shape: BoxShape.circle,
+        border: Border.all(color: iconColor.withOpacity(0.35), width: 1.5),
+      ),
+      child: Center(
+        child: Icon(icon, color: iconColor, size: 21),
+      ),
+    );
+  }
+
   Widget _buildNotificationCard(InAppNotification notif) {
     final isRead = notif.isRead || _locallyReadIds.contains(notif.id);
     final senderName = notif.senderName ?? 'System Notification';
@@ -400,35 +493,7 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
                   Row(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Stack(
-                        children: [
-                          GamerAvatar(
-                            photoUrl: senderPhoto,
-                            displayName: senderName,
-                            radius: 20,
-                            onTap: () {
-                              if (senderId.isNotEmpty && senderId != 'admin' && senderId != _currentUid) {
-                                Navigator.push(
-                                  context,
-                                  MaterialPageRoute(builder: (_) => GamerProfileScreen(userId: senderId)),
-                                );
-                              }
-                            },
-                          ),
-                          Positioned(
-                            right: 0,
-                            bottom: 0,
-                            child: Container(
-                              padding: const EdgeInsets.all(3),
-                              decoration: BoxDecoration(
-                                color: ThemeService.card,
-                                shape: BoxShape.circle,
-                              ),
-                              child: Icon(notif.iconData, color: notif.iconColor, size: 12),
-                            ),
-                          ),
-                        ],
-                      ),
+                      _buildNotificationAvatar(notif, senderPhoto, senderName, senderId),
                       const SizedBox(width: 12),
 
                       Expanded(
