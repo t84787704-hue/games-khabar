@@ -3,12 +3,13 @@
 // -------------------------------------------------------------------------------
 // File: lib/screens/profile_screen.dart
 //
-// 1. RESTORED: "Privacy Settings" (Control what others can see on your profile)
+// 1. FIXED SYNTAX ERROR: Color(0xFFFEE2E2) properly closed with bracket and comma.
+// 2. RESTORED: "Privacy Settings" (Control what others can see on your profile)
 //    placed directly above Blocked Users with complete toggle sheet.
-// 2. REORDERED: Log Out placed right after App Version.
-// 3. REORDERED: Delete Account placed at the very last position.
-// 4. REMOVED: Redundant bottom "Sign Out" container.
-// 5. Full Adaptive Day & Night Mode synchronization via ThemeService.
+// 3. REORDERED: Log Out placed right after App Version.
+// 4. REORDERED: Delete Account placed at the very last position.
+// 5. REMOVED: Redundant bottom "Sign Out" container.
+// 6. Full Adaptive Day & Night Mode synchronization via ThemeService.
 // ===============================================================================
 
 import 'package:flutter/material.dart';
@@ -893,7 +894,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                   ),
                   Divider(color: borderDark, height: 1),
 
-                  // Privacy Settings (Restored above Blocked Users)
+                  // Privacy Settings (Directly above Blocked Users)
                   ListTile(
                     leading: Container(
                       padding: const EdgeInsets.all(6),
@@ -1214,4 +1215,231 @@ class _ProfileScreenState extends State<ProfileScreen> {
                     leading: Container(
                       padding: const EdgeInsets.all(6),
                       decoration: const BoxDecoration(
-                        color: Color(0xFFFEE2E
+                        color: Color(0xFFFEE2E2),
+                        borderRadius: BorderRadius.all(Radius.circular(8)),
+                      ),
+                      child: const Icon(Icons.logout_rounded, color: Color(0xFFDC2626), size: 20),
+                    ),
+                    title: const Text(
+                      'Log Out',
+                      style: TextStyle(color: Color(0xFFDC2626), fontWeight: FontWeight.bold, fontSize: 14),
+                    ),
+                    subtitle: Text(
+                      'Sign out of Gamers ID Network',
+                      style: TextStyle(color: textGray, fontSize: 12),
+                    ),
+                    onTap: _confirmSignOut,
+                  ),
+                  Divider(color: borderDark, height: 1),
+
+                  // Delete Account (Bilkul aakhri position par)
+                  ListTile(
+                    leading: Container(
+                      padding: const EdgeInsets.all(6),
+                      decoration: const BoxDecoration(
+                        color: Color(0xFFFFEBEE),
+                        borderRadius: BorderRadius.all(Radius.circular(8)),
+                      ),
+                      child: const Icon(Icons.delete_forever_rounded, color: Color(0xFFDC2626), size: 20),
+                    ),
+                    title: const Text(
+                      'Delete Account',
+                      style: TextStyle(color: Color(0xFFDC2626), fontWeight: FontWeight.bold, fontSize: 14),
+                    ),
+                    subtitle: Text(
+                      'Permanently delete your Gamer ID (30-day grace)',
+                      style: TextStyle(color: textGray, fontSize: 12),
+                    ),
+                    trailing: Icon(Icons.arrow_forward_ios_rounded, color: textGray, size: 14),
+                    onTap: () {
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(builder: (_) => const GamerDeleteAccountScreen()),
+                      );
+                    },
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(height: 20),
+
+            // Secret Admin Login Section
+            AnimatedSize(
+              duration: const Duration(milliseconds: 350),
+              curve: Curves.easeInOut,
+              child: AnimatedOpacity(
+                opacity: (_adminCardRevealed && !isCurrentAdmin) ? 1.0 : 0.0,
+                duration: const Duration(milliseconds: 350),
+                child: (_adminCardRevealed && !isCurrentAdmin)
+                    ? Container(
+                        margin: const EdgeInsets.only(bottom: 20),
+                        decoration: BoxDecoration(
+                          color: cardDark,
+                          borderRadius: BorderRadius.circular(16),
+                          border: Border.all(
+                            color: neonGreen.withOpacity(0.6),
+                            width: 1.2,
+                          ),
+                          boxShadow: [
+                            BoxShadow(
+                              color: neonGreen.withOpacity(0.08),
+                              blurRadius: 12,
+                              spreadRadius: 1,
+                            ),
+                          ],
+                        ),
+                        child: ListTile(
+                          leading: Container(
+                            padding: const EdgeInsets.all(8),
+                            decoration: BoxDecoration(
+                              color: neonGreen.withOpacity(0.15),
+                              borderRadius: BorderRadius.circular(8),
+                            ),
+                            child: Icon(Icons.lock_open_rounded, color: neonGreen, size: 20),
+                          ),
+                          title: Row(
+                            children: [
+                              Text(
+                                _safeTr('admin_login', fallback: 'Admin Login'),
+                                style: TextStyle(color: textWhite, fontSize: 14, fontWeight: FontWeight.bold),
+                              ),
+                              const SizedBox(width: 8),
+                              Container(
+                                padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                                decoration: BoxDecoration(
+                                  color: neonGreen.withOpacity(0.15),
+                                  borderRadius: BorderRadius.circular(4),
+                                ),
+                                child: Text(
+                                  'UNLOCKED',
+                                  style: TextStyle(
+                                    color: neonGreen,
+                                    fontSize: 9,
+                                    fontWeight: FontWeight.w900,
+                                    letterSpacing: 0.5,
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ),
+                          subtitle: Text(
+                            _safeTr('admin_login_sub', fallback: 'Sign in to access admin console'),
+                            style: TextStyle(color: textGray, fontSize: 12),
+                          ),
+                          trailing: IconButton(
+                            icon: Icon(Icons.lock_outline_rounded, color: textGray, size: 18),
+                            tooltip: 'Hide Admin Login',
+                            onPressed: () {
+                              setState(() {
+                                _adminCardRevealed = false;
+                              });
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                SnackBar(
+                                  backgroundColor: cardDark2,
+                                  duration: const Duration(seconds: 1),
+                                  content: Text('Admin Login hidden', style: TextStyle(color: textGray)),
+                                ),
+                              );
+                            },
+                          ),
+                          onTap: () {
+                            Navigator.push(
+                              context,
+                              MaterialPageRoute(builder: (_) => const AdminLoginScreen()),
+                            ).then((_) {
+                              setState(() {
+                                if (isAdminUser()) {
+                                  _adminOptionUnlocked = true;
+                                  _adminCardRevealed = true;
+                                }
+                              });
+                            });
+                          },
+                        ),
+                      )
+                    : const SizedBox.shrink(),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildFallbackUI(BuildContext context) {
+    final bgDark = ThemeService.bg;
+    final cardDark = ThemeService.card;
+    final borderDark = ThemeService.border;
+    final neonGreen = ThemeService.primaryGreen;
+    final textWhite = ThemeService.textPrimary;
+    final textGray = ThemeService.textSecondary;
+
+    return Scaffold(
+      backgroundColor: bgDark,
+      appBar: AppBar(
+        backgroundColor: cardDark,
+        elevation: 0,
+        leading: IconButton(
+          icon: Icon(Icons.arrow_back_rounded, color: textWhite),
+          onPressed: () => Navigator.pop(context),
+        ),
+        title: Text(
+          'Settings & Preferences',
+          style: TextStyle(color: textWhite, fontWeight: FontWeight.bold),
+        ),
+      ),
+      body: ListView(
+        padding: const EdgeInsets.all(16),
+        children: [
+          Container(
+            decoration: BoxDecoration(
+              color: cardDark,
+              borderRadius: BorderRadius.circular(16),
+              border: Border.all(color: borderDark),
+            ),
+            child: Column(
+              children: [
+                ListTile(
+                  leading: Icon(Icons.language_rounded, color: neonGreen),
+                  title: Text('App Language', style: TextStyle(color: textWhite, fontWeight: FontWeight.bold)),
+                  subtitle: Text(LanguageService.selectedLang == 'ur' ? 'اردو' : 'English', style: TextStyle(color: textGray)),
+                  onTap: () {
+                    LanguageService.showLanguageBottomSheet(context);
+                  },
+                ),
+                Divider(color: borderDark, height: 1),
+                ValueListenableBuilder<ThemeMode>(
+                  valueListenable: ThemeService.themeModeNotifier,
+                  builder: (context, mode, _) {
+                    final isDark = mode == ThemeMode.dark;
+                    return ListTile(
+                      leading: Icon(isDark ? Icons.dark_mode_rounded : Icons.light_mode_rounded, color: neonGreen),
+                      title: Text('Day / Night Mode', style: TextStyle(color: textWhite, fontWeight: FontWeight.bold)),
+                      trailing: Switch(
+                        value: isDark,
+                        activeColor: neonGreen,
+                        onChanged: (val) => ThemeService.setTheme(val),
+                      ),
+                    );
+                  },
+                ),
+                Divider(color: borderDark, height: 1),
+                ListTile(
+                  leading: Icon(Icons.privacy_tip_outlined, color: neonGreen),
+                  title: Text('Privacy Policy', style: TextStyle(color: textWhite, fontWeight: FontWeight.bold)),
+                  onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const PrivacyPolicyScreen())),
+                ),
+                Divider(color: borderDark, height: 1),
+                ListTile(
+                  leading: Icon(Icons.groups_rounded, color: neonGreen),
+                  title: Text('About Us', style: TextStyle(color: textWhite, fontWeight: FontWeight.bold)),
+                  onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const AboutUsScreen())),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
