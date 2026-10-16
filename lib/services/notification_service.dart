@@ -11,7 +11,13 @@ import 'supabase_service.dart';
 class NotificationService {
   static final NotificationService _instance = NotificationService._internal();
   factory NotificationService() => _instance;
-  NotificationService._internal();
+
+  NotificationService._internal() {
+    final curUser = SupabaseService.client.auth.currentUser;
+    if (curUser != null) {
+      refreshUnreadCount(curUser.id);
+    }
+  }
 
   static final GlobalKey<NavigatorState> navigatorKey = GlobalKey<NavigatorState>();
 
@@ -36,32 +42,26 @@ class NotificationService {
 
   bool _isInitialized = false;
 
-  // Reactive unread count notifier for badge in AppBars/Navigation
   final ValueNotifier<int> unreadCountNotifier = ValueNotifier<int>(0);
   StreamSubscription? _realtimeNotifSub;
+  final Set<String> _seenNotificationIds = {};
 
-  /// Initialize Push & Local Notifications on App Launch
   Future<void> initialize() async {
     if (_isInitialized) return;
     _isInitialized = true;
 
-    // 1. Setup Local Notifications & Android Notification Channel
     await _setupLocalNotifications();
-
-    // 2. Request Notification Permissions (Android 13+ & iOS)
     await requestPermissions();
 
-    // 3. Listen for newly added news docs in real-time and notify "New: {gameName}"
+    final curUser = SupabaseService.client.auth.currentUser;
+    if (curUser != null) {
+      await refreshUnreadCount(curUser.id);
+    }
+
     _listenForNewNewsDocuments();
-
-    // 4. Listen for in-app notifications in real-time for current user
     _listenForUserInAppNotifications();
-
-    // 5. Listen for squad request / acceptance notifications for current user
     _listenForSquadNotifications();
   }
-
-  final Set<String> _seenNotificationIds = {};
 
   /// Real-time stream of notifications for user
   Stream<List<InAppNotification>> notificationsStream(String userId) {
@@ -92,7 +92,7 @@ class NotificationService {
     }
   }
 
-  /// Real-time unread notifications count using Supabase stream (Issue #5)
+  /// Real-time unread notifications count using Supabase stream
   Stream<int> getUnreadCountStream([String? userId]) {
     final uid = (userId != null && userId.isNotEmpty)
         ? userId
@@ -124,7 +124,6 @@ class NotificationService {
 
   Stream<int> unreadCountStream(String userId) => getUnreadCountStream(userId);
 
-  /// Listen for new in-app notifications to update unread count & show heads-up
   void _listenForUserInAppNotifications() {
     try {
       final initialUser = SupabaseService.client.auth.currentUser;
@@ -146,7 +145,7 @@ class NotificationService {
   }
 
   void _subscribeToUserNotifications(String userId) {
-    _refreshUnreadCount(userId);
+    refreshUnreadCount(userId);
     _realtimeNotifSub?.cancel();
     bool isFirst = true;
 
@@ -176,7 +175,6 @@ class NotificationService {
           return;
         }
 
-        // Show foreground alert with sound & vibration for newly arrived notifications (Issue #4)
         for (final r in userRows) {
           final id = r['id']?.toString() ?? '';
           if (id.isNotEmpty && !_seenNotificationIds.contains(id)) {
@@ -191,18 +189,44 @@ class NotificationService {
     } catch (_) {}
   }
 
-  Future<void> _refreshUnreadCount(String userId) async {
+  /// Fresh exact unread count directly from database
+  Future<int> refreshUnreadCount([String? userId]) async {
+    final uid = (userId != null && userId.isNotEmpty)
+        ? userId
+        : (SupabaseService.client.auth.currentUser?.id ?? '');
+    if (uid.isEmpty) {
+      unreadCountNotifier.value = 0;
+      return 0;
+    }
+
     try {
-      final res = await SupabaseService.client
-          .from('notifications')
-          .select('id')
-          .or('user_id.eq.$userId,recipientUid.eq.$userId')
-          .eq('is_read', false);
-      unreadCountNotifier.value = res.length;
-    } catch (_) {}
+      final userUuid = SupabaseService.toUuid(uid);
+      dynamic res;
+      try {
+        res = await SupabaseService.client
+            .from('notifications')
+            .select('id')
+            .eq('user_id', userUuid)
+            .eq('is_read', false);
+      } catch (_) {
+        res = await SupabaseService.client
+            .from('notifications')
+            .select('id')
+            .eq('user_id', uid)
+            .eq('is_read', false);
+      }
+
+      if (res is List) {
+        unreadCountNotifier.value = res.length;
+        return res.length;
+      }
+      return unreadCountNotifier.value;
+    } catch (e) {
+      debugPrint('[NotificationService] refreshUnreadCount error: $e');
+      return unreadCountNotifier.value;
+    }
   }
 
-  /// Show heads-up banner on device with sound & vibration for in-app notification (Issue #4)
   Future<void> showInAppLocalNotification(InAppNotification notif) async {
     try {
       final payloadData = {
@@ -251,38 +275,51 @@ class NotificationService {
     }
   }
 
-  /// Mark single notification as read
+  /// Mark single notification as read & decrement count immediately
   Future<void> markAsRead(String notificationId) async {
     if (notificationId.isEmpty) return;
     try {
-      final now = DateTime.now().toIso8601String();
-      await SupabaseService.client.from('notifications').update({
-        'is_read': true,
-        'is_seen': true,
-        'read': true,
-        'read_at': now,
-      }).eq('id', notificationId);
+      try {
+        await SupabaseService.client.from('notifications').update({
+          'is_read': true,
+        }).eq('id', notificationId);
+      } catch (e) {
+        try {
+          await SupabaseService.client.from('notifications').update({
+            'is_read': true,
+          }).eq('id', SupabaseService.toUuid(notificationId));
+        } catch (_) {}
+      }
 
       if (unreadCountNotifier.value > 0) {
         unreadCountNotifier.value--;
       }
+
+      await refreshUnreadCount();
     } catch (e) {
       debugPrint('Error marking notification read: $e');
     }
   }
 
   /// Mark all notifications as read for user
-  Future<void> markAllAsRead(String userId) async {
-    if (userId.isEmpty) return;
+  Future<void> markAllAsRead([String? userId]) async {
+    final uid = (userId != null && userId.isNotEmpty)
+        ? userId
+        : (SupabaseService.client.auth.currentUser?.id ?? '');
+    if (uid.isEmpty) return;
     try {
-      final now = DateTime.now().toIso8601String();
-      final userUuid = SupabaseService.toUuid(userId);
-      await SupabaseService.client.from('notifications').update({
-        'is_read': true,
-        'is_seen': true,
-        'read': true,
-        'read_at': now,
-      }).eq('user_id', userUuid);
+      final userUuid = SupabaseService.toUuid(uid);
+      try {
+        await SupabaseService.client.from('notifications').update({
+          'is_read': true,
+        }).eq('user_id', userUuid);
+      } catch (_) {
+        try {
+          await SupabaseService.client.from('notifications').update({
+            'is_read': true,
+          }).eq('user_id', uid);
+        } catch (_) {}
+      }
 
       unreadCountNotifier.value = 0;
     } catch (e) {
@@ -290,31 +327,26 @@ class NotificationService {
     }
   }
 
-  /// Delete notification
   Future<void> deleteNotification(String notificationId) async {
     if (notificationId.isEmpty) return;
     try {
       await SupabaseService.client.from('notifications').delete().eq('id', notificationId);
+      await refreshUnreadCount();
     } catch (e) {
       debugPrint('Error deleting notification: $e');
     }
   }
 
-  /// Clear all notifications for user in DB & reset unread count (Issue #7)
   Future<void> clearAll(String userId) async {
     if (userId.isEmpty) return;
     try {
-      // 1. Delete by exact user_id
       try {
         await SupabaseService.client
             .from('notifications')
             .delete()
             .eq('user_id', userId);
-      } catch (e) {
-        debugPrint('clearAll eq user_id error: $e');
-      }
+      } catch (_) {}
 
-      // 2. Delete by UUID format if different
       final userUuid = SupabaseService.toUuid(userId);
       if (userUuid.toLowerCase() != userId.toLowerCase()) {
         try {
@@ -324,28 +356,6 @@ class NotificationService {
               .eq('user_id', userUuid);
         } catch (_) {}
       }
-
-      // 3. Delete by current auth UID if different
-      final authUid = SupabaseService.client.auth.currentUser?.id;
-      if (authUid != null &&
-          authUid.isNotEmpty &&
-          authUid != userId &&
-          authUid != userUuid) {
-        try {
-          await SupabaseService.client
-              .from('notifications')
-              .delete()
-              .eq('user_id', authUid);
-        } catch (_) {}
-      }
-
-      // 4. Delete legacy recipientUid
-      try {
-        await SupabaseService.client
-            .from('notifications')
-            .delete()
-            .eq('recipientUid', userId);
-      } catch (_) {}
 
       unreadCountNotifier.value = 0;
       _seenNotificationIds.clear();
@@ -358,9 +368,6 @@ class NotificationService {
     await clearAll(userId);
   }
 
-  /// =========================================================================
-  /// CORE NOTIFICATION SENDER (100% snake_case table: notifications)
-  /// =========================================================================
   Future<void> sendNotification({
     required String userId,
     String? senderId,
@@ -383,7 +390,6 @@ class NotificationService {
         'title': title,
         'body': body,
         'is_read': false,
-        'is_seen': false,
         'priority': priority,
         'created_at': now,
       };
@@ -407,7 +413,6 @@ class NotificationService {
     }
   }
 
-  /// Domain Helper: Someone followed user
   Future<void> sendFollowNotification({
     required String targetUserId,
     required String followerId,
@@ -426,7 +431,6 @@ class NotificationService {
     );
   }
 
-  /// Domain Helper: Someone liked user's post
   Future<void> sendLikeNotification({
     required String targetUserId,
     required String likerId,
@@ -447,7 +451,6 @@ class NotificationService {
     );
   }
 
-  /// Domain Helper: Someone commented on user's post
   Future<void> sendCommentNotification({
     required String targetUserId,
     required String commenterId,
@@ -469,10 +472,9 @@ class NotificationService {
     );
   }
 
-  /// Domain Helper: Proof uploaded, accepted or rejected
   Future<void> sendProofNotification({
     required String targetUserId,
-    required String status, // 'uploaded', 'accepted', 'rejected'
+    required String status,
     required String roomTitle,
     String? reason,
   }) async {
@@ -502,14 +504,13 @@ class NotificationService {
     );
   }
 
-  /// Domain Helper: 1v1 Challenge notifications
   Future<void> sendChallengeNotification({
     required String targetUserId,
     required String challengerId,
     required String challengerName,
     required String challengeId,
     String? gameName,
-    String? status, // 'received', 'accepted', 'rejected'
+    String? status,
     String? challengerAvatar,
   }) async {
     String title;
@@ -542,12 +543,11 @@ class NotificationService {
     );
   }
 
-  /// Domain Helper: Team join requests & approvals
   Future<void> sendTeamNotification({
     required String targetUserId,
     required String teamId,
     required String teamName,
-    required String type, // 'team_join_request', 'team_join_approved'
+    required String type,
     String? senderId,
     String? senderName,
   }) async {
@@ -565,7 +565,6 @@ class NotificationService {
     );
   }
 
-  /// Domain Helper: Coin reward notification
   Future<void> sendCoinRewardNotification({
     required String targetUserId,
     required int amount,
@@ -581,7 +580,6 @@ class NotificationService {
     );
   }
 
-  /// Domain Helper: Store purchase notification
   Future<void> sendStorePurchaseNotification({
     required String targetUserId,
     required String itemName,
@@ -597,7 +595,6 @@ class NotificationService {
     );
   }
 
-  /// Domain Helper: Perk expiry reminder
   Future<void> sendPerkExpiryReminderNotification({
     required String targetUserId,
     required String perkName,
@@ -612,7 +609,6 @@ class NotificationService {
     );
   }
 
-  /// Domain Helper: Tournament / Room updates
   Future<void> sendTournamentNotification({
     required String targetUserId,
     required String roomId,
@@ -628,7 +624,6 @@ class NotificationService {
     );
   }
 
-  /// Domain Helper: Admin announcement
   Future<void> sendAdminAnnouncement({
     required String title,
     required String body,
@@ -652,10 +647,8 @@ class NotificationService {
     } catch (_) {}
   }
 
-  /// Saves FCM device token to Supabase users table (stub)
   Future<void> saveUserFcmToken([String? explicitUid]) async {}
 
-  /// Real-time listener for current user's squad notifications (e.g. requests, accepts)
   void _listenForSquadNotifications() {
     bool isFirstSnapshot = true;
     try {
@@ -697,7 +690,6 @@ class NotificationService {
     } catch (_) {}
   }
 
-  /// Show heads-up banner notification for squad events
   Future<void> showSquadNotification({
     required String title,
     required String body,
@@ -752,7 +744,6 @@ class NotificationService {
     } catch (_) {}
   }
 
-  /// Real-time news listener
   void _listenForNewNewsDocuments() {
     bool isFirstSnapshot = true;
     try {
@@ -790,7 +781,6 @@ class NotificationService {
     } catch (_) {}
   }
 
-  /// Show direct local notification for new article
   Future<void> _showLocalNotification({
     required String title,
     required String body,
@@ -845,7 +835,6 @@ class NotificationService {
     );
   }
 
-  /// Request permissions for iOS and Android 13+ (POST_NOTIFICATIONS)
   Future<void> requestPermissions() async {
     try {
       final androidPlugin = _localNotifications.resolvePlatformSpecificImplementation<
@@ -857,10 +846,8 @@ class NotificationService {
     } catch (_) {}
   }
 
-  /// Subscribe to topic 'all_news'
   Future<void> subscribeToAllNewsTopic() async {}
 
-  /// Configure flutter_local_notifications plugin
   Future<void> _setupLocalNotifications() async {
     const androidSettings = AndroidInitializationSettings('@mipmap/ic_launcher');
     const iosSettings = DarwinInitializationSettings(
@@ -888,7 +875,6 @@ class NotificationService {
       },
     );
 
-    // Ensure the Android Notification Channel with sound & vibration is created
     try {
       final androidPlugin = _localNotifications.resolvePlatformSpecificImplementation<
           AndroidFlutterLocalNotificationsPlugin>();
@@ -898,57 +884,6 @@ class NotificationService {
     } catch (_) {}
   }
 
-  /// Check if app was opened from a terminated notification
-  Future<void> _checkInitialMessage() async {}
-
-  /// Show Foreground Heads-Up Banner Notification with Sound & Vibration
-  Future<void> _showForegroundNotification({
-    required Map<String, dynamic> data,
-    String? title,
-    String? body,
-  }) async {
-    final effectiveTitle = title ?? data['title'] ?? 'Games Khabar 🎮';
-    final effectiveBody = body ?? data['body'] ?? data['description'] ?? 'Check out the latest gaming update!';
-
-    final androidDetails = AndroidNotificationDetails(
-      _androidChannel.id,
-      _androidChannel.name,
-      channelDescription: _androidChannel.description,
-      importance: Importance.max,
-      priority: Priority.high,
-      playSound: true,
-      enableVibration: true,
-      icon: '@mipmap/ic_launcher',
-      color: const Color(0xFF00FF88),
-      styleInformation: BigTextStyleInformation(
-        effectiveBody,
-        contentTitle: effectiveTitle,
-        summaryText: data['category'] ?? 'Gaming News',
-      ),
-    );
-
-    const iosDetails = DarwinNotificationDetails(
-      presentAlert: true,
-      presentBadge: true,
-      presentSound: true,
-    );
-
-    final notificationDetails = NotificationDetails(
-      android: androidDetails,
-      iOS: iosDetails,
-    );
-
-    final notificationId = DateTime.now().millisecondsSinceEpoch.remainder(100000);
-    await _localNotifications.show(
-      notificationId,
-      effectiveTitle,
-      effectiveBody,
-      notificationDetails,
-      payload: jsonEncode(data),
-    );
-  }
-
-  /// Handle Notification Click & Route to NewsDetailScreen
   void _handleMessageTap(Map<String, dynamic> data) {
     final newsId = data['newsId'] ?? data['id'];
     if (newsId != null && newsId.toString().isNotEmpty) {
@@ -962,7 +897,6 @@ class NotificationService {
     }
   }
 
-  /// Fetch article and navigate to NewsDetailScreen
   Future<void> _navigateToNewsDetail(
     String newsId, {
     String? fallbackTitle,
@@ -988,7 +922,6 @@ class NotificationService {
     debugPrint('Notification tapped for news: $newsId');
   }
 
-  /// Admin Action: Send Push Notification to Topic 'all_news' when new news is published
   Future<void> sendNewsNotification({
     required String newsId,
     required String title,
@@ -1049,7 +982,6 @@ class NotificationService {
     } catch (_) {}
   }
 
-  /// Create and store an in-app notification in Supabase
   Future<void> createNotification({
     required String userId,
     required String title,
