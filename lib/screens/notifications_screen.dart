@@ -1,3 +1,15 @@
+// ===============================================================================
+// EXACT DIFF — Real-time Unread Count Synchronization & Dynamic Theme Support
+// -------------------------------------------------------------------------------
+// File: lib/screens/notifications_screen.dart
+//
+// 1. Instant read marking: _locallyReadIds immediately decrements badge & removes
+//    notification from unread filter on tap.
+// 2. Reliable DB update for `is_read = true` without schema mismatch.
+// 3. Mark-all-read clears badge count immediately to 0.
+// 4. Full Adaptive Day & Night Mode support with ThemeService.
+// ===============================================================================
+
 import 'package:flutter/material.dart';
 import '../constants/gamer_theme.dart';
 import '../models/notification_model.dart';
@@ -5,6 +17,7 @@ import '../services/gamer_auth_service.dart';
 import '../services/supabase_service.dart';
 import '../services/notification_service.dart';
 import '../services/challenge_service.dart';
+import '../services/theme_service.dart';
 import '../widgets/gamer_avatar.dart';
 import 'gamer_profile_screen.dart';
 import 'team_match_room_screen.dart';
@@ -24,14 +37,21 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
   int _selectedFilterIndex = 0; // 0: All, 1: Unread, 2: Social, 3: Matches, 4: Coins
   List<InAppNotification>? _localNotifications;
   Key _streamKey = UniqueKey();
+  final Set<String> _locallyReadIds = {};
 
   String get _currentUid =>
       GamerAuthService().currentUid ?? SupabaseService.client.auth.currentUser?.id ?? '';
 
+  @override
+  void initState() {
+    super.initState();
+    _notificationService.refreshUnreadCount(_currentUid);
+  }
+
   List<InAppNotification> _filterNotifications(List<InAppNotification> list) {
     switch (_selectedFilterIndex) {
       case 1:
-        return list.where((n) => !n.isRead).toList();
+        return list.where((n) => !n.isRead && !_locallyReadIds.contains(n.id)).toList();
       case 2:
         return list.where((n) =>
             n.type == 'follow' ||
@@ -60,15 +80,21 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
     }
   }
 
-  void _handleNotificationTap(InAppNotification notif) {
-    if (!notif.isRead) {
-      _notificationService.markAsRead(notif.id);
+  void _handleNotificationTap(InAppNotification notif) async {
+    final notifId = notif.id;
+    if (!notif.isRead && !_locallyReadIds.contains(notifId)) {
+      setState(() {
+        _locallyReadIds.add(notifId);
+      });
+      await _notificationService.markAsRead(notifId);
     }
 
     final data = notif.data ?? {};
     final matchId = data['match_id'] ?? data['matchId'];
     final roomId = data['room_id'] ?? data['roomId'];
     final senderId = notif.senderId;
+
+    if (!mounted) return;
 
     if (notif.type.contains('coin') ||
         notif.type.contains('bonus') ||
@@ -112,59 +138,59 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
     final confirm = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
-        backgroundColor: const Color(0xFF101726),
+        backgroundColor: ThemeService.card,
         shape: RoundedRectangleBorder(
           borderRadius: BorderRadius.circular(16),
-          side: const BorderSide(color: GamerTheme.borderDark),
+          side: BorderSide(color: ThemeService.border),
         ),
         title: const Row(
           children: [
-            Icon(Icons.delete_sweep_rounded, color: GamerTheme.redAccent, size: 22),
+            Icon(Icons.delete_sweep_rounded, color: Color(0xFFFF4655), size: 22),
             SizedBox(width: 8),
-            Text('Clear All Activity?', style: TextStyle(color: Colors.white, fontSize: 16)),
+            Text('Clear All Activity?', style: TextStyle(color: Color(0xFFFF4655), fontSize: 16, fontWeight: FontWeight.bold)),
           ],
         ),
-        content: const Text(
+        content: Text(
           'This will permanently delete all your notifications.',
-          style: TextStyle(color: GamerTheme.textMuted, fontSize: 13),
+          style: TextStyle(color: ThemeService.textSecondary, fontSize: 13),
         ),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(ctx, false),
-            child: const Text('CANCEL', style: TextStyle(color: GamerTheme.textMuted)),
+            child: Text('CANCEL', style: TextStyle(color: ThemeService.textSecondary)),
           ),
           ElevatedButton(
             style: ElevatedButton.styleFrom(
-              backgroundColor: GamerTheme.redAccent,
+              backgroundColor: const Color(0xFFFF4655),
               foregroundColor: Colors.white,
               shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
             ),
             onPressed: () => Navigator.pop(ctx, true),
-            child: const Text('CLEAR ALL'),
+            child: const Text('CLEAR ALL', style: TextStyle(fontWeight: FontWeight.bold)),
           ),
         ],
       ),
     );
 
     if (confirm == true) {
-      // Immediate local state clear (Issue #7)
       setState(() {
         _localNotifications = [];
+        _locallyReadIds.clear();
         _streamKey = UniqueKey();
       });
 
-      // Actual DB delete via NotificationService.clearAll (Issue #7)
       await _notificationService.clearAll(_currentUid);
 
       if (mounted) {
         setState(() {
           _localNotifications = [];
+          _locallyReadIds.clear();
           _streamKey = UniqueKey();
         });
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
             content: Text('All notifications cleared.'),
-            backgroundColor: GamerTheme.accentBlue,
+            backgroundColor: Color(0xFF1877F2),
             behavior: SnackBarBehavior.floating,
           ),
         );
@@ -174,81 +200,93 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: const Color(0xFF0B101B),
-      appBar: AppBar(
-        backgroundColor: const Color(0xFF0B101B),
-        elevation: 0,
-        title: const Text(
-          'Gamer Activity',
-          style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
-        ),
-        actions: [
-          IconButton(
-            tooltip: 'Mark all read',
-            icon: const Icon(Icons.done_all_rounded, color: GamerTheme.accentBlue, size: 22),
-            onPressed: () async {
-              await _notificationService.markAllAsRead(_currentUid);
-              if (mounted) {
-                ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(
-                    content: Text('All notifications marked as read.'),
-                    backgroundColor: GamerTheme.neonGreen,
-                    behavior: SnackBarBehavior.floating,
-                  ),
-                );
-              }
-            },
-          ),
-          IconButton(
-            tooltip: 'Clear all',
-            icon: const Icon(Icons.delete_outline_rounded, color: GamerTheme.textMuted, size: 22),
-            onPressed: _confirmClearAll,
-          ),
-        ],
-      ),
-      body: Column(
-        children: [
-          // Filter Tabs
-          _buildFilterTabs(),
-
-          // Notifications List
-          Expanded(
-            child: StreamBuilder<List<InAppNotification>>(
-              key: _streamKey,
-              stream: _notificationService.notificationsStream(_currentUid),
-              builder: (context, snapshot) {
-                if (snapshot.connectionState == ConnectionState.waiting &&
-                    !snapshot.hasData &&
-                    _localNotifications == null) {
-                  return const Center(child: CircularProgressIndicator(color: GamerTheme.accentBlue));
-                }
-
-                if (snapshot.hasData) {
-                  _localNotifications = snapshot.data;
-                }
-
-                final allNotifs = _localNotifications ?? snapshot.data ?? [];
-                final filtered = _filterNotifications(allNotifs);
-
-                if (filtered.isEmpty) {
-                  return _buildEmptyState();
-                }
-
-                return ListView.separated(
-                  padding: const EdgeInsets.fromLTRB(14, 8, 14, 24),
-                  itemCount: filtered.length,
-                  separatorBuilder: (_, __) => const SizedBox(height: 8),
-                  itemBuilder: (context, index) {
-                    final notif = filtered[index];
-                    return _buildNotificationCard(notif);
-                  },
-                );
-              },
+    return ValueListenableBuilder<ThemeMode>(
+      valueListenable: ThemeService.themeModeNotifier,
+      builder: (context, _, __) {
+        return Scaffold(
+          backgroundColor: ThemeService.bg,
+          appBar: AppBar(
+            backgroundColor: ThemeService.appBarBg,
+            elevation: ThemeService.isDarkMode ? 0 : 1,
+            title: Text(
+              'Gamer Activity',
+              style: TextStyle(
+                color: ThemeService.textPrimary,
+                fontWeight: FontWeight.bold,
+              ),
             ),
+            actions: [
+              IconButton(
+                tooltip: 'Mark all read',
+                icon: const Icon(Icons.done_all_rounded, color: Color(0xFF1877F2), size: 22),
+                onPressed: () async {
+                  setState(() {
+                    if (_localNotifications != null) {
+                      for (final n in _localNotifications!) {
+                        _locallyReadIds.add(n.id);
+                      }
+                    }
+                  });
+                  await _notificationService.markAllAsRead(_currentUid);
+                  if (mounted) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(
+                        content: Text('All notifications marked as read.'),
+                        backgroundColor: Color(0xFF00FF88),
+                        behavior: SnackBarBehavior.floating,
+                      ),
+                    );
+                  }
+                },
+              ),
+              IconButton(
+                tooltip: 'Clear all',
+                icon: Icon(Icons.delete_outline_rounded, color: ThemeService.textSecondary, size: 22),
+                onPressed: _confirmClearAll,
+              ),
+            ],
           ),
-        ],
-      ),
+          body: Column(
+            children: [
+              _buildFilterTabs(),
+              Expanded(
+                child: StreamBuilder<List<InAppNotification>>(
+                  key: _streamKey,
+                  stream: _notificationService.notificationsStream(_currentUid),
+                  builder: (context, snapshot) {
+                    if (snapshot.connectionState == ConnectionState.waiting &&
+                        !snapshot.hasData &&
+                        _localNotifications == null) {
+                      return const Center(child: CircularProgressIndicator(color: Color(0xFF1877F2)));
+                    }
+
+                    if (snapshot.hasData) {
+                      _localNotifications = snapshot.data;
+                    }
+
+                    final allNotifs = _localNotifications ?? snapshot.data ?? [];
+                    final filtered = _filterNotifications(allNotifs);
+
+                    if (filtered.isEmpty) {
+                      return _buildEmptyState();
+                    }
+
+                    return ListView.separated(
+                      padding: const EdgeInsets.fromLTRB(14, 8, 14, 24),
+                      itemCount: filtered.length,
+                      separatorBuilder: (_, __) => const SizedBox(height: 8),
+                      itemBuilder: (context, index) {
+                        final notif = filtered[index];
+                        return _buildNotificationCard(notif);
+                      },
+                    );
+                  },
+                ),
+              ),
+            ],
+          ),
+        );
+      },
     );
   }
 
@@ -277,10 +315,12 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
             child: Container(
               padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
               decoration: BoxDecoration(
-                color: isSelected ? GamerTheme.accentBlue.withOpacity(0.18) : GamerTheme.cardDark,
+                color: isSelected
+                    ? const Color(0xFF1877F2).withOpacity(0.18)
+                    : ThemeService.cardSecondary,
                 borderRadius: BorderRadius.circular(10),
                 border: Border.all(
-                  color: isSelected ? GamerTheme.accentBlue : GamerTheme.borderDark,
+                  color: isSelected ? const Color(0xFF1877F2) : ThemeService.border,
                   width: isSelected ? 1.5 : 1.0,
                 ),
               ),
@@ -289,13 +329,13 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
                   Icon(
                     tab['icon'] as IconData,
                     size: 14,
-                    color: isSelected ? GamerTheme.accentBlue : GamerTheme.textMuted,
+                    color: isSelected ? const Color(0xFF1877F2) : ThemeService.textSecondary,
                   ),
                   const SizedBox(width: 6),
                   Text(
                     tab['label'] as String,
                     style: TextStyle(
-                      color: isSelected ? Colors.white : GamerTheme.textMuted,
+                      color: isSelected ? const Color(0xFF1877F2) : ThemeService.textSecondary,
                       fontSize: 12,
                       fontWeight: isSelected ? FontWeight.bold : FontWeight.w500,
                     ),
@@ -310,6 +350,7 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
   }
 
   Widget _buildNotificationCard(InAppNotification notif) {
+    final isRead = notif.isRead || _locallyReadIds.contains(notif.id);
     final senderName = notif.senderName ?? 'System Notification';
     final senderPhoto = notif.senderAvatar ?? '';
     final senderId = notif.senderId ?? '';
@@ -321,10 +362,10 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
         alignment: Alignment.centerRight,
         padding: const EdgeInsets.only(right: 20),
         decoration: BoxDecoration(
-          color: GamerTheme.redAccent.withOpacity(0.2),
+          color: const Color(0xFFFF4655).withOpacity(0.2),
           borderRadius: BorderRadius.circular(14),
         ),
-        child: const Icon(Icons.delete_rounded, color: GamerTheme.redAccent, size: 24),
+        child: const Icon(Icons.delete_rounded, color: Color(0xFFFF4655), size: 24),
       ),
       onDismissed: (_) {
         setState(() {
@@ -334,11 +375,15 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
       },
       child: Container(
         decoration: BoxDecoration(
-          color: notif.isRead ? const Color(0xFF101726) : const Color(0xFF141F33),
+          color: isRead
+              ? (ThemeService.isDarkMode ? const Color(0xFF101726) : ThemeService.card)
+              : (ThemeService.isDarkMode ? const Color(0xFF141F33) : const Color(0xFFE7F3FF)),
           borderRadius: BorderRadius.circular(14),
           border: Border.all(
-            color: notif.isRead ? GamerTheme.borderDark : GamerTheme.accentBlue.withOpacity(0.35),
-            width: notif.isRead ? 1.0 : 1.4,
+            color: isRead
+                ? ThemeService.border
+                : const Color(0xFF1877F2).withOpacity(0.35),
+            width: isRead ? 1.0 : 1.4,
           ),
         ),
         child: Material(
@@ -355,7 +400,6 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
                   Row(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      // Avatar with overlay badge
                       Stack(
                         children: [
                           GamerAvatar(
@@ -376,8 +420,8 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
                             bottom: 0,
                             child: Container(
                               padding: const EdgeInsets.all(3),
-                              decoration: const BoxDecoration(
-                                color: Color(0xFF0B101B),
+                              decoration: BoxDecoration(
+                                color: ThemeService.card,
                                 shape: BoxShape.circle,
                               ),
                               child: Icon(notif.iconData, color: notif.iconColor, size: 12),
@@ -387,7 +431,6 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
                       ),
                       const SizedBox(width: 12),
 
-                      // Title & Body
                       Expanded(
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
@@ -398,9 +441,11 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
                                   child: Text(
                                     notif.title,
                                     style: TextStyle(
-                                      color: notif.isRead ? Colors.white70 : Colors.white,
+                                      color: isRead
+                                          ? ThemeService.textSecondary
+                                          : ThemeService.textPrimary,
                                       fontSize: 13.5,
-                                      fontWeight: notif.isRead ? FontWeight.w600 : FontWeight.bold,
+                                      fontWeight: isRead ? FontWeight.w600 : FontWeight.bold,
                                     ),
                                     maxLines: 1,
                                     overflow: TextOverflow.ellipsis,
@@ -427,7 +472,7 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
                             Text(
                               notif.body,
                               style: TextStyle(
-                                color: notif.isRead ? GamerTheme.textMuted : GamerTheme.textWhite,
+                                color: isRead ? ThemeService.textSecondary : ThemeService.textPrimary,
                                 fontSize: 12.5,
                                 height: 1.3,
                               ),
@@ -435,8 +480,8 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
                             const SizedBox(height: 6),
                             Text(
                               notif.timeAgo,
-                              style: const TextStyle(
-                                color: GamerTheme.textMuted,
+                              style: TextStyle(
+                                color: ThemeService.textSecondary,
                                 fontSize: 10.5,
                               ),
                             ),
@@ -444,15 +489,14 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
                         ),
                       ),
 
-                      // Unread blue indicator
-                      if (!notif.isRead)
+                      if (!isRead)
                         Padding(
                           padding: const EdgeInsets.only(left: 6, top: 4),
                           child: Container(
                             width: 8,
                             height: 8,
                             decoration: const BoxDecoration(
-                              color: GamerTheme.accentBlue,
+                              color: Color(0xFF1877F2),
                               shape: BoxShape.circle,
                             ),
                           ),
@@ -460,7 +504,6 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
                     ],
                   ),
 
-                  // Action buttons if interactive notification
                   _buildInteractiveActions(notif),
                 ],
               ),
@@ -476,7 +519,6 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
     final challengeId = data['challenge_id'] ?? data['challengeId'];
     final matchId = data['match_id'] ?? data['matchId'];
 
-    // 1v1 Challenge
     if (notif.type == 'challenge_received' && challengeId != null) {
       return Padding(
         padding: const EdgeInsets.only(top: 10, left: 52),
@@ -491,6 +533,9 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
                 minimumSize: Size.zero,
               ),
               onPressed: () async {
+                setState(() {
+                  _locallyReadIds.add(notif.id);
+                });
                 await ChallengeService().acceptChallenge(
                   challengeId.toString(),
                   challengerUid: notif.senderId ?? '',
@@ -501,7 +546,7 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
                   ScaffoldMessenger.of(context).showSnackBar(
                     const SnackBar(
                       content: Text('⚔️ 1v1 Challenge Accepted! Match room is ready.'),
-                      backgroundColor: GamerTheme.neonGreen,
+                      backgroundColor: Color(0xFF00FF88),
                       behavior: SnackBarBehavior.floating,
                     ),
                   );
@@ -512,13 +557,16 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
             const SizedBox(width: 8),
             OutlinedButton(
               style: OutlinedButton.styleFrom(
-                side: const BorderSide(color: GamerTheme.borderLight),
-                foregroundColor: GamerTheme.textMuted,
+                side: BorderSide(color: ThemeService.border),
+                foregroundColor: ThemeService.textSecondary,
                 shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
                 padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
                 minimumSize: Size.zero,
               ),
               onPressed: () async {
+                setState(() {
+                  _locallyReadIds.add(notif.id);
+                });
                 await ChallengeService().declineChallenge(challengeId.toString());
                 await _notificationService.markAsRead(notif.id);
               },
@@ -529,7 +577,6 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
       );
     }
 
-    // Room / Dispute action button
     if (notif.type.contains('dispute') ||
         notif.type.contains('room') ||
         notif.type.contains('proof') ||
@@ -547,6 +594,9 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
           icon: const Icon(Icons.meeting_room_rounded, size: 12),
           label: const Text('Open Rooms', style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold)),
           onPressed: () {
+            setState(() {
+              _locallyReadIds.add(notif.id);
+            });
             _notificationService.markAsRead(notif.id);
             Navigator.push(context, MaterialPageRoute(builder: (_) => const GamerRoomsScreen()));
           },
@@ -554,7 +604,6 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
       );
     }
 
-    // Match Room action
     if (matchId != null && matchId.toString().isNotEmpty) {
       return Padding(
         padding: const EdgeInsets.only(top: 8, left: 52),
@@ -569,6 +618,9 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
           icon: const Icon(Icons.open_in_new_rounded, size: 12),
           label: const Text('Open Match Room', style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold)),
           onPressed: () {
+            setState(() {
+              _locallyReadIds.add(notif.id);
+            });
             _notificationService.markAsRead(notif.id);
             Navigator.push(
               context,
@@ -579,7 +631,6 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
       );
     }
 
-    // Coin Wallet action
     if (notif.type.contains('coin') || notif.type.contains('proof_accepted')) {
       return Padding(
         padding: const EdgeInsets.only(top: 8, left: 52),
@@ -594,6 +645,9 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
           icon: const Text('🪙', style: TextStyle(fontSize: 12)),
           label: const Text('View Wallet', style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold)),
           onPressed: () {
+            setState(() {
+              _locallyReadIds.add(notif.id);
+            });
             _notificationService.markAsRead(notif.id);
             Navigator.push(context, MaterialPageRoute(builder: (_) => const CoinWalletScreen()));
           },
@@ -601,7 +655,6 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
       );
     }
 
-    // Coin Store action
     if (notif.type == 'store_purchase' || notif.type == 'perk_expiry') {
       return Padding(
         padding: const EdgeInsets.only(top: 8, left: 52),
@@ -616,6 +669,9 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
           icon: const Icon(Icons.storefront_rounded, size: 12),
           label: const Text('Open Coin Store', style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold)),
           onPressed: () {
+            setState(() {
+              _locallyReadIds.add(notif.id);
+            });
             _notificationService.markAsRead(notif.id);
             Navigator.push(context, MaterialPageRoute(builder: (_) => const CoinStoreScreen()));
           },
@@ -636,24 +692,24 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
             Container(
               padding: const EdgeInsets.all(20),
               decoration: BoxDecoration(
-                color: GamerTheme.cardDark,
+                color: ThemeService.cardSecondary,
                 shape: BoxShape.circle,
-                border: Border.all(color: GamerTheme.borderDark),
+                border: Border.all(color: ThemeService.border),
               ),
-              child: const Icon(Icons.notifications_none_rounded, color: GamerTheme.textMuted, size: 48),
+              child: Icon(Icons.notifications_none_rounded, color: ThemeService.textSecondary, size: 48),
             ),
             const SizedBox(height: 16),
             Text(
               _selectedFilterIndex == 1
                   ? 'No unread notifications'
                   : 'No notifications yet',
-              style: const TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.bold),
+              style: TextStyle(color: ThemeService.textPrimary, fontSize: 16, fontWeight: FontWeight.bold),
             ),
             const SizedBox(height: 6),
-            const Text(
+            Text(
               'When gamers follow you, challenge your team, or your match proofs are approved, updates appear here!',
               textAlign: TextAlign.center,
-              style: TextStyle(color: GamerTheme.textMuted, fontSize: 12, height: 1.4),
+              style: TextStyle(color: ThemeService.textSecondary, fontSize: 12, height: 1.4),
             ),
           ],
         ),
