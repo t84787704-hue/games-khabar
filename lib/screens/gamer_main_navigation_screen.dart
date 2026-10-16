@@ -89,8 +89,6 @@ class _GamerMainNavigationScreenState extends State<GamerMainNavigationScreen> {
 
   @override
   Widget build(BuildContext context) {
-    // 5 Core tabs: Feed, Teams, Messages, Rooms, Profile
-    // Admin tab: visible ONLY to admin
     final screens = <Widget>[
       const GamerFeedScreen(),
       const TeamsScreen(),
@@ -119,13 +117,13 @@ class _GamerMainNavigationScreenState extends State<GamerMainNavigationScreen> {
           ),
           bottomNavigationBar: Container(
             decoration: BoxDecoration(
-              color: Colors.white,
-              border: const Border(
-                top: BorderSide(color: Color(0xFFE4E6EB), width: 1),
+              color: ThemeService.bottomNavBg,
+              border: Border(
+                top: BorderSide(color: ThemeService.bottomNavBorder, width: 1),
               ),
               boxShadow: [
                 BoxShadow(
-                  color: Colors.black.withOpacity(0.06),
+                  color: isDark ? Colors.black.withOpacity(0.35) : Colors.black.withOpacity(0.06),
                   blurRadius: 8,
                   offset: const Offset(0, -2),
                 ),
@@ -139,47 +137,41 @@ class _GamerMainNavigationScreenState extends State<GamerMainNavigationScreen> {
                 child: Row(
                   mainAxisAlignment: MainAxisAlignment.spaceAround,
                   children: [
-                    // Tab 0: Feed
                     _buildNavItem(
                       index: 0,
                       icon: Icons.home_rounded,
                       label: 'Feed',
                       isSelected: _currentIndex == 0,
+                      isDark: isDark,
                     ),
-
-                    // Tab 1: Teams
                     _buildNavItem(
                       index: 1,
                       icon: Icons.shield_rounded,
                       label: 'Teams',
                       isSelected: _currentIndex == 1,
+                      isDark: isDark,
                     ),
-
-                    // Tab 2: Messages (NEW)
                     _buildNavItem(
                       index: 2,
                       icon: Icons.chat_bubble_rounded,
                       label: 'Messages',
                       isSelected: _currentIndex == 2,
+                      isDark: isDark,
                     ),
-
-                    // Tab 3: Rooms
                     _buildNavItem(
                       index: 3,
                       icon: Icons.military_tech_rounded,
                       label: 'Rooms',
                       isSelected: _currentIndex == 3,
+                      isDark: isDark,
                     ),
-
-                    // Tab 4: Profile
                     _buildNavItem(
                       index: 4,
                       icon: Icons.person_rounded,
                       label: 'Profile',
                       isSelected: _currentIndex == 4,
+                      isDark: isDark,
                     ),
-
-                    // Tab 5: Admin (only for admin)
                     if (_isAdmin)
                       _buildNavItem(
                         index: 5,
@@ -187,6 +179,7 @@ class _GamerMainNavigationScreenState extends State<GamerMainNavigationScreen> {
                         label: 'Admin',
                         isSelected: _currentIndex == 5,
                         activeColor: const Color(0xFF1877F2),
+                        isDark: isDark,
                       ),
                   ],
                 ),
@@ -209,9 +202,10 @@ class _GamerMainNavigationScreenState extends State<GamerMainNavigationScreen> {
     required IconData icon,
     required String label,
     required bool isSelected,
+    required bool isDark,
     Color activeColor = const Color(0xFF1877F2),
   }) {
-    const unselectedColor = Color(0xFF65676B);
+    final unselectedColor = isDark ? const Color(0xFF94A3B8) : const Color(0xFF65676B);
 
     return InkWell(
       onTap: () => _onTabTapped(index),
