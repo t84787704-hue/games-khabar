@@ -1,14 +1,8 @@
 // ================================================================
 // EXACT DIFF — Only dismiss feature added to rejected-proof banner
+// + Realtime timeout fallback & clean retry key
 // ----------------------------------------------------------------
 // File: lib/screens/teams_screen.dart
-// Widget: _ActiveMatchBothTeamsBannerState
-//
-// CHANGE 1: Added `bool _isDismissed = false;` state variable
-// CHANGE 2: Early return in build() if dismissed
-// CHANGE 3: Added X IconButton in header row (only for isRejected && isSubmitter)
-//
-// NO OTHER CODE CHANGED — byte-by-byte same
 // ================================================================
 
 import "dart:io";
@@ -56,6 +50,8 @@ class _TeamsScreenState extends State<TeamsScreen>
   final Set<String> _completedMatchIds = {};
   final Set<String> _autoCompletingMatchIds = {};
   Map<String, String> _lastReadMatchTimes = {};
+  int _teamsRetryKey = 0;
+  List<TeamModel>? _cachedTeams;
 
   @override
   void initState() {
@@ -342,14 +338,11 @@ class _TeamsScreenState extends State<TeamsScreen>
               body: TabBarView(
                 controller: _tabController,
                 children: [
-                  // Tab 1: Teams Tab (Only team cards, NO active match banner) (Issue #6)
                   _buildTeamsTab(
                     myTeamId: myTeamId,
                     myTeamUuid: myTeamUuid,
                     myTeamName: myTeamName,
                   ),
-
-                  // Tab 2: Live Tab (Only live matches, latest first with count & empty state) (Issue #6)
                   _buildLiveMatchesTab(
                     myActiveMatches: myActiveMatches,
                     myTeamId: myTeamId,
@@ -689,29 +682,36 @@ class _TeamsScreenState extends State<TeamsScreen>
                       );
                     }),
 
-                  // All Teams List
+                  // All Teams List (With timeout fallback & clean retry)
                   Expanded(
                     child: StreamBuilder<List<TeamModel>>(
+                      key: ValueKey("teams_stream_${_selectedGameFilter}_${_searchQuery}_$_teamsRetryKey"),
                       stream: _teamService.getTeamsStream(
                         gameFilter: _selectedGameFilter,
                         searchQuery: _searchQuery,
                       ),
                       builder: (context, snapshot) {
-                        if (snapshot.connectionState == ConnectionState.waiting || (!snapshot.hasData && !snapshot.hasError)) {
+                        if (snapshot.hasData && snapshot.data != null) {
+                          _cachedTeams = snapshot.data;
+                        }
+
+                        final teams = snapshot.data ?? _cachedTeams;
+
+                        if (teams == null && (snapshot.connectionState == ConnectionState.waiting || (!snapshot.hasData && !snapshot.hasError))) {
                           return const Center(child: CircularProgressIndicator(color: Color(0xFF1877F2)));
                         }
 
-                        if (snapshot.hasError) {
+                        if (teams == null && snapshot.hasError) {
                           return Center(
                             child: SingleChildScrollView(
                               padding: const EdgeInsets.all(32),
                               child: Column(
                                 mainAxisAlignment: MainAxisAlignment.center,
                                 children: [
-                                  const Icon(Icons.error_outline_rounded, size: 44, color: Color(0xFFFF4655)),
+                                  const Icon(Icons.wifi_off_rounded, size: 44, color: Color(0xFFFF4655)),
                                   const SizedBox(height: 12),
                                   const Text(
-                                    "Error loading teams",
+                                    "Connection Timeout",
                                     style: TextStyle(
                                       color: Color(0xFF050505),
                                       fontSize: 16,
@@ -719,14 +719,14 @@ class _TeamsScreenState extends State<TeamsScreen>
                                     ),
                                   ),
                                   const SizedBox(height: 6),
-                                  Text(
-                                    snapshot.error?.toString() ?? "An unexpected error occurred",
+                                  const Text(
+                                    "Database server se connect hone mein waqt lag raha hai. Barah-e-karam dobara koshish karein.",
                                     textAlign: TextAlign.center,
-                                    style: const TextStyle(color: Color(0xFF65676B), fontSize: 13),
+                                    style: TextStyle(color: Color(0xFF65676B), fontSize: 13),
                                   ),
                                   const SizedBox(height: 16),
                                   ElevatedButton.icon(
-                                    onPressed: () => setState(() {}),
+                                    onPressed: () => setState(() => _teamsRetryKey++),
                                     style: ElevatedButton.styleFrom(
                                       backgroundColor: const Color(0xFF1877F2),
                                       foregroundColor: Colors.white,
@@ -742,8 +742,8 @@ class _TeamsScreenState extends State<TeamsScreen>
                           );
                         }
 
-                        final teams = snapshot.data ?? [];
-                        if (teams.isEmpty) {
+                        final displayTeams = teams ?? [];
+                        if (displayTeams.isEmpty) {
                           return Center(
                             child: SingleChildScrollView(
                               padding: const EdgeInsets.all(32),
@@ -788,9 +788,9 @@ class _TeamsScreenState extends State<TeamsScreen>
 
                         return ListView.builder(
                           padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-                          itemCount: teams.length,
+                          itemCount: displayTeams.length,
                           itemBuilder: (context, index) {
-                            final team = teams[index];
+                            final team = displayTeams[index];
                             final targetUuid = SupabaseService.toUuid(team.id).toLowerCase();
                             final rawTeamId = team.id.toLowerCase();
                             final matchingPending = activePendingList.firstWhere(
@@ -837,8 +837,8 @@ class _TeamsScreenState extends State<TeamsScreen>
             children: [
               Container(
                 padding: const EdgeInsets.all(20),
-                decoration: BoxDecoration(
-                  color: const Color(0xFFE4E6EB),
+                decoration: const BoxDecoration(
+                  color: Color(0xFFE4E6EB),
                   shape: BoxShape.circle,
                 ),
                 child: const Icon(
@@ -961,7 +961,7 @@ class _ActiveMatchBothTeamsBannerState
   int _oppMemberCount = 1;
   bool _isLoading = true;
   bool _autoCompletedTriggered = false;
-  bool _isDismissed = false; // ✅ NEW: Session-based dismiss flag
+  bool _isDismissed = false;
 
   @override
   void initState() {
@@ -1072,13 +1072,11 @@ class _ActiveMatchBothTeamsBannerState
       if (matchId.isEmpty) return;
 
       try {
-        // 1. Update active_matches table
         await SupabaseService.client.from('active_matches').update({
           'status': 'cancelled',
           'admin_note': 'Proof limit reached - no valid winner',
         }).eq('id', matchId);
 
-        // 2 & 3. Refund prize pool to host & entry fees to joiners
         Map<String, dynamic>? roomRow;
         try {
           final res = await SupabaseService.client
@@ -1132,7 +1130,6 @@ class _ActiveMatchBothTeamsBannerState
             'completed_at': DateTime.now().toIso8601String(),
           }).eq('id', rId);
 
-          // 5. System chat message in room
           try {
             await SupabaseService.client.from('messages').insert({
               'room_id': rId,
@@ -1146,7 +1143,6 @@ class _ActiveMatchBothTeamsBannerState
           } catch (_) {}
         }
 
-        // 4. Send notification to BOTH teams
         final t1LeaderId = _myTeam?.leaderId ?? '';
         final t2LeaderId = _oppTeam?.leaderId ?? '';
         final submittedBy =
@@ -1228,7 +1224,6 @@ class _ActiveMatchBothTeamsBannerState
 
   @override
   Widget build(BuildContext context) {
-    // ✅ NEW: Early return if user has dismissed this banner
     if (_isDismissed) return const SizedBox.shrink();
 
     _checkProofLimitCancellation();
@@ -1378,7 +1373,6 @@ class _ActiveMatchBothTeamsBannerState
                   ),
                 ),
               ),
-              // ✅ NEW: Dismiss (X) button — only visible to the team whose proof was rejected
               if (isRejected && isSubmitter)
                 Padding(
                   padding: const EdgeInsets.only(right: 6),
