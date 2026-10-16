@@ -1045,8 +1045,17 @@ class _GamerProfileScreenState extends State<GamerProfileScreen>
                       shape: const CircleBorder(),
                       clipBehavior: Clip.antiAlias,
                       child: InkWell(
-                        onTap: () => _showProfileSettingsMenu(
-                            user, isOwnProfile),
+                        onTap: () {
+                          if (isOwnProfile) {
+                            Navigator.of(context).push(
+                              MaterialPageRoute(
+                                builder: (_) => const ProfileScreen(),
+                              ),
+                            );
+                          } else {
+                            _showProfileSettingsMenu(user, isOwnProfile);
+                          }
+                        },
                         child: Container(
                           width: 38,
                           height: 38,
