@@ -3,6 +3,7 @@
 // - Realtime Joined Players List with Avatars, Names, IGN & Game UID
 // - 1-Time Game ID & IGN Auto-Save Popup (Multi-Game Ready)
 // - Join Match Button for non-host players with slot reservation
+// - Fully Functional LEAVE ROOM Button (Database sync & slot adjustment)
 // - Esports Match Rules & Guidelines Dialog
 // - Flexible Match Formats (1v1, 2v2, 4v4 TDM)
 // - "End Match / Claim Win" Screenshot Proof Upload to Supabase Storage
@@ -193,7 +194,6 @@ class GamerRoom {
 class GamerRoomsScreen extends StatefulWidget {
   const GamerRoomsScreen({super.key});
 
-  /// Prize Distribution & Room Completion Trigger
   static Future<void> distributePrizeAndComplete({
     required GamerRoom room,
     required String winnerId,
@@ -260,7 +260,6 @@ class GamerRoomsScreen extends StatefulWidget {
     } catch (_) {}
   }
 
-  /// HELPER: 1-Time Game Profile Prompt & Auto-Save
   static Future<Map<String, String>?> getOrPromptGameProfile({
     required BuildContext context,
     required String gameName,
@@ -273,7 +272,6 @@ class GamerRoomsScreen extends StatefulWidget {
 
     final safeKey = gameName.trim().toLowerCase().replaceAll(' ', '_');
 
-    // 1. Check game profiles map
     if (gameProfiles[safeKey] is Map) {
       final existing = Map<String, dynamic>.from(gameProfiles[safeKey]);
       final ign = existing['ign']?.toString() ?? '';
@@ -283,14 +281,12 @@ class GamerRoomsScreen extends StatefulWidget {
       }
     }
 
-    // 2. Check root metadata fallback
     final rootIgn = meta['ign']?.toString() ?? meta['in_game_name']?.toString() ?? '';
     final rootUid = meta['game_uid']?.toString() ?? meta['character_id']?.toString() ?? '';
     if (rootIgn.isNotEmpty && rootUid.isNotEmpty) {
       return {'ign': rootIgn, 'game_uid': rootUid};
     }
 
-    // 3. Prompt user via clean esports dialog
     final ignController = TextEditingController(text: rootIgn);
     final uidController = TextEditingController(text: rootUid);
 
@@ -369,7 +365,6 @@ class GamerRoomsScreen extends StatefulWidget {
                 return;
               }
 
-              // Auto-Save to Supabase User Metadata permanently
               gameProfiles[safeKey] = {'ign': ign, 'game_uid': uid};
               try {
                 await SupabaseService.client.auth.updateUser(
@@ -386,7 +381,6 @@ class GamerRoomsScreen extends StatefulWidget {
                 debugPrint('Error saving game profile: $e');
               }
 
-              // Update users table in database as well
               try {
                 final currentUid = currentUser?.id;
                 if (currentUid != null && currentUid.isNotEmpty) {
@@ -523,7 +517,6 @@ class _GamerRoomsScreenState extends State<GamerRoomsScreen> {
       ),
       body: Column(
         children: [
-          // Game Categories
           Container(
             height: 48,
             color: Colors.white,
@@ -554,8 +547,6 @@ class _GamerRoomsScreenState extends State<GamerRoomsScreen> {
               },
             ),
           ),
-
-          // Realtime Rooms List
           Expanded(
             child: StreamBuilder<List<Map<String, dynamic>>>(
               stream: SupabaseService.client
@@ -707,7 +698,6 @@ class _GamerRoomsScreenState extends State<GamerRoomsScreen> {
                       try {
                         final gameName = gameCtrl.text.trim().isEmpty ? 'BGMI' : gameCtrl.text.trim();
 
-                        // Fallback Ready IGN & UID
                         String myIgn = currentUserName;
                         String myUid = currentUserId;
 
@@ -818,12 +808,69 @@ class _RoomDetailsSheetState extends State<_RoomDetailsSheet> {
   int _secondsRemaining = 300;
   bool _isUploadingProof = false;
   bool _isJoining = false;
+  bool _isLeaving = false;
 
   @override
   void dispose() {
     _countdownTimer?.cancel();
     _msgController.dispose();
     super.dispose();
+  }
+
+  /// FEATURE: Leave Room & Remove Player from Database
+  Future<void> _leaveRoom(GamerRoom room) async {
+    if (_isLeaving) return;
+    setState(() => _isLeaving = true);
+
+    try {
+      final isHost = widget.currentUserId == room.hostId;
+
+      if (isHost) {
+        // Agar HOST leave kare to room hi delete ho jaye
+        await SupabaseService.client.from('rooms').delete().eq('id', widget.roomId);
+        await SupabaseService.client.from('messages').delete().eq('room_id', widget.roomId);
+      } else {
+        // Agar PLAYER leave kare to usay list aur slots se minus karein
+        final updatedIds = room.joinedUserIds.where((id) => id != widget.currentUserId).toList();
+        final updatedUsers = room.joinedUsers.where((u) => (u['id'] ?? '').toString() != widget.currentUserId).toList();
+
+        await SupabaseService.client.from('rooms').update({
+          'joined_user_ids': updatedIds,
+          'joined_users': updatedUsers,
+          'filled_slots': updatedUsers.length,
+        }).eq('id', widget.roomId);
+
+        try {
+          await SupabaseService.client.from('messages').insert({
+            'room_id': widget.roomId,
+            'sender_id': 'system',
+            'sender_name': 'ROOM BOT',
+            'message': '🚪 ${widget.currentUserName} left the room.',
+            'type': 'system',
+            'created_at': DateTime.now().toIso8601String(),
+          });
+        } catch (_) {}
+      }
+
+      if (mounted) {
+        Navigator.pop(context);
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(isHost ? 'Room delete ho gaya!' : 'Aap room se leave ho gaye.'),
+            backgroundColor: const Color(0xFF00FF88),
+          ),
+        );
+      }
+    } catch (e) {
+      debugPrint('[RoomDetails] Error leaving room: $e');
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Error leaving room: $e'), backgroundColor: Colors.red),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _isLeaving = false);
+    }
   }
 
   void _showRulesDialog() {
@@ -1156,7 +1203,7 @@ class _RoomDetailsSheetState extends State<_RoomDetailsSheet> {
               ),
               const Divider(height: 1),
 
-              // BANNERS: Winner / Disputed / Under Review
+              // Banners
               if (room.isCompleted) ...[
                 Container(
                   width: double.infinity,
@@ -1674,7 +1721,7 @@ class _RoomDetailsSheetState extends State<_RoomDetailsSheet> {
                 ],
               ],
 
-              // LEAVE ROOM BUTTON
+              // LEAVE ROOM BUTTON (Updated with functional DB logic)
               Padding(
                 padding: const EdgeInsets.fromLTRB(14, 4, 14, 12),
                 child: SizedBox(
@@ -1686,9 +1733,15 @@ class _RoomDetailsSheetState extends State<_RoomDetailsSheet> {
                       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(25)),
                       padding: const EdgeInsets.symmetric(vertical: 12),
                     ),
-                    onPressed: () => Navigator.pop(context),
-                    child: const Text('LEAVE ROOM',
-                        style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14)),
+                    onPressed: _isLeaving ? null : () => _leaveRoom(room),
+                    child: _isLeaving
+                        ? const SizedBox(
+                            width: 18,
+                            height: 18,
+                            child: CircularProgressIndicator(strokeWidth: 2, color: Colors.red),
+                          )
+                        : const Text('LEAVE ROOM',
+                            style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14)),
                   ),
                 ),
               ),
