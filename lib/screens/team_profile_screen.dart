@@ -838,15 +838,21 @@ class _TeamProfileScreenState extends State<TeamProfileScreen> {
                               final submittedBy = (activeMatch[
                                           'submitted_by_team_id'] ??
                                       activeMatch['winner_team_id'] ??
+                                      activeMatch['submitted_by'] ??
                                       '')
                                   .toString()
+                                  .trim()
                                   .toLowerCase();
                               final myIdLower = myTeamIdInMatch.toLowerCase();
                               final myUuidLower = SupabaseService.toUuid(
                                       myTeamIdInMatch)
                                   .toLowerCase();
-                              final isSubmitter = submittedBy == myIdLower ||
-                                  submittedBy == myUuidLower;
+                              final isSubmitter = isMyOwnTeam &&
+                                  submittedBy.isNotEmpty &&
+                                  (submittedBy == targetUuid ||
+                                      submittedBy == targetRawId ||
+                                      submittedBy == myIdLower ||
+                                      submittedBy == myUuidLower);
 
                               if (matchStatus == 'under_review' &&
                                   proofStatus == 'accepted') {
