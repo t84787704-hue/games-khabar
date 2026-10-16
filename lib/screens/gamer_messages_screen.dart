@@ -1,6 +1,15 @@
-// DIFF:
-// - _loadConversations: Resolves effective current user ID through currentGamer.uid and authService.currentUid to canonical users table UUID before querying conversations.
-// - _openUserSearch: Resolves selected user and current user to canonical table UUIDs, guards against self-messaging before opening chat.
+// ===============================================================================
+// EXACT DIFF — Full Adaptive Day & Night Mode Support for GamerMessagesScreen
+// -------------------------------------------------------------------------------
+// File: lib/screens/gamer_messages_screen.dart
+//
+// 1. Linked with ThemeService.themeModeNotifier for realtime live theme switching.
+// 2. Replaced hardcoded white/grey backgrounds with ThemeService.bg and card.
+// 3. Replaced fixed black text with ThemeService.textPrimary & textSecondary.
+// 4. Conversation list items, empty state & search bottom sheet synced with active theme.
+//
+// NO OTHER LOGIC, SERVICE OR DATABASE CODE CHANGED — byte-by-byte safe
+// ===============================================================================
 
 import 'package:flutter/material.dart';
 import 'package:cached_network_image/cached_network_image.dart';
@@ -11,6 +20,7 @@ import '../models/gamer_user_model.dart';
 import '../services/direct_message_service.dart';
 import '../services/gamer_auth_service.dart';
 import '../services/gamer_social_service.dart';
+import '../services/theme_service.dart';
 import 'gamer_chat_screen.dart';
 
 class GamerMessagesScreen extends StatefulWidget {
@@ -100,50 +110,56 @@ class _GamerMessagesScreenState extends State<GamerMessagesScreen> {
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: const Color(0xFFF0F2F5),
-      appBar: AppBar(
-        backgroundColor: Colors.white,
-        elevation: 1,
-        title: const Text(
-          'Messages',
-          style: TextStyle(
-            color: Color(0xFF1877F2),
-            fontWeight: FontWeight.bold,
-            fontSize: 22,
+    return ValueListenableBuilder<ThemeMode>(
+      valueListenable: ThemeService.themeModeNotifier,
+      builder: (context, _, __) {
+        return Scaffold(
+          backgroundColor: ThemeService.bg,
+          appBar: AppBar(
+            backgroundColor: ThemeService.appBarBg,
+            elevation: ThemeService.isDarkMode ? 0 : 1,
+            title: const Text(
+              'Messages',
+              style: TextStyle(
+                color: Color(0xFF1877F2),
+                fontWeight: FontWeight.bold,
+                fontSize: 22,
+              ),
+            ),
+            actions: [
+              IconButton(
+                icon: const Icon(Icons.edit_square, color: Color(0xFF1877F2)),
+                tooltip: 'New Message',
+                onPressed: _openUserSearch,
+              ),
+            ],
           ),
-        ),
-        actions: [
-          IconButton(
-            icon: const Icon(Icons.edit_square, color: Color(0xFF1877F2)),
-            tooltip: 'New Message',
-            onPressed: _openUserSearch,
-          ),
-        ],
-      ),
-      body: _loading
-          ? const Center(
-              child: CircularProgressIndicator(color: Color(0xFF1877F2)))
-          : _conversations.isEmpty
-              ? _buildEmptyState()
-              : RefreshIndicator(
-                  color: const Color(0xFF1877F2),
-                  onRefresh: _loadConversations,
-                  child: ListView.separated(
-                    padding: const EdgeInsets.symmetric(vertical: 8),
-                    itemCount: _conversations.length,
-                    separatorBuilder: (_, __) =>
-                        const Divider(height: 1, color: Color(0xFFE4E6EB)),
-                    itemBuilder: (context, i) {
-                      final c = _conversations[i];
-                      return _buildConversationTile(c);
-                    },
-                  ),
-                ),
+          body: _loading
+              ? const Center(
+                  child: CircularProgressIndicator(color: Color(0xFF1877F2)))
+              : _conversations.isEmpty
+                  ? _buildEmptyState()
+                  : RefreshIndicator(
+                      color: const Color(0xFF1877F2),
+                      onRefresh: _loadConversations,
+                      child: ListView.separated(
+                        padding: const EdgeInsets.symmetric(vertical: 8),
+                        itemCount: _conversations.length,
+                        separatorBuilder: (_, __) =>
+                            Divider(height: 1, color: ThemeService.border),
+                        itemBuilder: (context, i) {
+                          final c = _conversations[i];
+                          return _buildConversationTile(c);
+                        },
+                      ),
+                    ),
+        );
+      },
     );
   }
 
   Widget _buildEmptyState() {
+    final isDark = ThemeService.isDarkMode;
     return Center(
       child: Padding(
         padding: const EdgeInsets.all(32),
@@ -152,8 +168,10 @@ class _GamerMessagesScreenState extends State<GamerMessagesScreen> {
           children: [
             Container(
               padding: const EdgeInsets.all(24),
-              decoration: const BoxDecoration(
-                color: Color(0xFFE7F3FF),
+              decoration: BoxDecoration(
+                color: isDark
+                    ? const Color(0xFF1877F2).withOpacity(0.15)
+                    : const Color(0xFFE7F3FF),
                 shape: BoxShape.circle,
               ),
               child: const Icon(
@@ -163,19 +181,19 @@ class _GamerMessagesScreenState extends State<GamerMessagesScreen> {
               ),
             ),
             const SizedBox(height: 20),
-            const Text(
+            Text(
               'No Messages Yet',
               style: TextStyle(
-                color: Color(0xFF050505),
+                color: ThemeService.textPrimary,
                 fontSize: 18,
                 fontWeight: FontWeight.bold,
               ),
             ),
             const SizedBox(height: 8),
-            const Text(
+            Text(
               'Start a conversation with other gamers!',
               textAlign: TextAlign.center,
-              style: TextStyle(color: Color(0xFF65676B), fontSize: 13),
+              style: TextStyle(color: ThemeService.textSecondary, fontSize: 13),
             ),
             const SizedBox(height: 20),
             ElevatedButton.icon(
@@ -221,9 +239,9 @@ class _GamerMessagesScreenState extends State<GamerMessagesScreen> {
       leading: Container(
         width: 52,
         height: 52,
-        decoration: const BoxDecoration(
+        decoration: BoxDecoration(
           shape: BoxShape.circle,
-          color: Color(0xFFE4E6EB),
+          color: ThemeService.cardSecondary,
         ),
         child: ClipOval(
           child: c.otherUserPhoto.isNotEmpty
@@ -250,7 +268,7 @@ class _GamerMessagesScreenState extends State<GamerMessagesScreen> {
             child: Text(
               c.otherUserName,
               style: TextStyle(
-                color: const Color(0xFF050505),
+                color: ThemeService.textPrimary,
                 fontSize: 15,
                 fontWeight:
                     c.unreadCount > 0 ? FontWeight.w900 : FontWeight.bold,
@@ -272,8 +290,8 @@ class _GamerMessagesScreenState extends State<GamerMessagesScreen> {
           overflow: TextOverflow.ellipsis,
           style: TextStyle(
             color: c.unreadCount > 0
-                ? const Color(0xFF050505)
-                : const Color(0xFF65676B),
+                ? ThemeService.textPrimary
+                : ThemeService.textSecondary,
             fontSize: 13,
             fontWeight:
                 c.unreadCount > 0 ? FontWeight.w600 : FontWeight.normal,
@@ -289,7 +307,7 @@ class _GamerMessagesScreenState extends State<GamerMessagesScreen> {
             style: TextStyle(
               color: c.unreadCount > 0
                   ? const Color(0xFF1877F2)
-                  : const Color(0xFF65676B),
+                  : ThemeService.textSecondary,
               fontSize: 11.5,
               fontWeight:
                   c.unreadCount > 0 ? FontWeight.bold : FontWeight.normal,
@@ -394,144 +412,149 @@ class _UserSearchSheetState extends State<_UserSearchSheet> {
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      height: MediaQuery.of(context).size.height * 0.85,
-      decoration: const BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.vertical(top: Radius.circular(22)),
-      ),
-      child: Column(
-        children: [
-          Container(
-            width: 44,
-            height: 4.5,
-            margin: const EdgeInsets.only(top: 12),
-            decoration: BoxDecoration(
-              color: const Color(0xFFCED0D4),
-              borderRadius: BorderRadius.circular(2),
-            ),
+    return ValueListenableBuilder<ThemeMode>(
+      valueListenable: ThemeService.themeModeNotifier,
+      builder: (context, _, __) {
+        return Container(
+          height: MediaQuery.of(context).size.height * 0.85,
+          decoration: BoxDecoration(
+            color: ThemeService.card,
+            borderRadius: const BorderRadius.vertical(top: Radius.circular(22)),
           ),
-          Padding(
-            padding: const EdgeInsets.fromLTRB(20, 16, 12, 8),
-            child: Row(
-              children: [
-                const Icon(Icons.person_search,
-                    color: Color(0xFF1877F2), size: 22),
-                const SizedBox(width: 10),
-                const Expanded(
-                  child: Text(
-                    'New Message',
-                    style: TextStyle(
-                      color: Color(0xFF050505),
-                      fontSize: 18,
-                      fontWeight: FontWeight.bold,
+          child: Column(
+            children: [
+              Container(
+                width: 44,
+                height: 4.5,
+                margin: const EdgeInsets.only(top: 12),
+                decoration: BoxDecoration(
+                  color: ThemeService.border,
+                  borderRadius: BorderRadius.circular(2),
+                ),
+              ),
+              Padding(
+                padding: const EdgeInsets.fromLTRB(20, 16, 12, 8),
+                child: Row(
+                  children: [
+                    const Icon(Icons.person_search,
+                        color: Color(0xFF1877F2), size: 22),
+                    const SizedBox(width: 10),
+                    Expanded(
+                      child: Text(
+                        'New Message',
+                        style: TextStyle(
+                          color: ThemeService.textPrimary,
+                          fontSize: 18,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
                     ),
+                    IconButton(
+                      icon: Icon(Icons.close,
+                          color: ThemeService.textSecondary, size: 22),
+                      onPressed: () => Navigator.pop(context),
+                    ),
+                  ],
+                ),
+              ),
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 16),
+                child: Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 14),
+                  decoration: BoxDecoration(
+                    color: ThemeService.cardSecondary,
+                    borderRadius: BorderRadius.circular(24),
+                  ),
+                  child: TextField(
+                    controller: _controller,
+                    autofocus: true,
+                    style: TextStyle(color: ThemeService.textPrimary, fontSize: 14),
+                    decoration: InputDecoration(
+                      hintText: 'Search users by name or @username...',
+                      hintStyle:
+                          TextStyle(color: ThemeService.textSecondary, fontSize: 13),
+                      prefixIcon: Icon(Icons.search,
+                          color: ThemeService.textSecondary, size: 20),
+                      border: InputBorder.none,
+                      contentPadding: const EdgeInsets.symmetric(vertical: 12),
+                    ),
+                    onChanged: _search,
                   ),
                 ),
-                IconButton(
-                  icon: const Icon(Icons.close,
-                      color: Color(0xFF65676B), size: 22),
-                  onPressed: () => Navigator.pop(context),
-                ),
-              ],
-            ),
-          ),
-          Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 16),
-            child: Container(
-              padding: const EdgeInsets.symmetric(horizontal: 14),
-              decoration: BoxDecoration(
-                color: const Color(0xFFF0F2F5),
-                borderRadius: BorderRadius.circular(24),
               ),
-              child: TextField(
-                controller: _controller,
-                autofocus: true,
-                style: const TextStyle(fontSize: 14),
-                decoration: const InputDecoration(
-                  hintText: 'Search users by name or @username...',
-                  hintStyle:
-                      TextStyle(color: Color(0xFF65676B), fontSize: 13),
-                  prefixIcon: Icon(Icons.search,
-                      color: Color(0xFF65676B), size: 20),
-                  border: InputBorder.none,
-                  contentPadding: EdgeInsets.symmetric(vertical: 12),
-                ),
-                onChanged: _search,
-              ),
-            ),
-          ),
-          const SizedBox(height: 12),
-          Expanded(
-            child: _searching
-                ? const Center(
-                    child: CircularProgressIndicator(
-                        color: Color(0xFF1877F2)))
-                : _results.isEmpty
-                    ? Center(
-                        child: Padding(
-                          padding: const EdgeInsets.all(32),
-                          child: Text(
-                            _query.isEmpty
-                                ? 'Type to search users'
-                                : 'No users found',
-                            style: const TextStyle(
-                                color: Color(0xFF65676B), fontSize: 14),
-                          ),
-                        ),
-                      )
-                    : ListView.builder(
-                        itemCount: _results.length,
-                        itemBuilder: (context, i) {
-                          final u = _results[i];
-                          return ListTile(
-                            onTap: () => Navigator.pop(context, u),
-                            leading: CircleAvatar(
-                              radius: 22,
-                              backgroundColor: const Color(0xFFE4E6EB),
-                              backgroundImage: u.photoUrl.isNotEmpty
-                                  ? CachedNetworkImageProvider(u.photoUrl)
-                                  : null,
-                              child: u.photoUrl.isEmpty
-                                  ? Text(
-                                      u.displayName.isNotEmpty
-                                          ? u.displayName[0].toUpperCase()
-                                          : '?',
-                                      style: const TextStyle(
-                                          fontWeight: FontWeight.bold),
-                                    )
-                                  : null,
+              const SizedBox(height: 12),
+              Expanded(
+                child: _searching
+                    ? const Center(
+                        child: CircularProgressIndicator(
+                            color: Color(0xFF1877F2)))
+                    : _results.isEmpty
+                        ? Center(
+                            child: Padding(
+                              padding: const EdgeInsets.all(32),
+                              child: Text(
+                                _query.isEmpty
+                                    ? 'Type to search users'
+                                    : 'No users found',
+                                style: TextStyle(
+                                    color: ThemeService.textSecondary, fontSize: 14),
+                              ),
                             ),
-                            title: Row(
-                              children: [
-                                Flexible(
-                                  child: Text(
-                                    u.displayName,
-                                    style: const TextStyle(
-                                        fontWeight: FontWeight.bold,
-                                        fontSize: 14,
-                                        color: Color(0xFF050505)),
-                                    overflow: TextOverflow.ellipsis,
-                                  ),
+                          )
+                        : ListView.builder(
+                            itemCount: _results.length,
+                            itemBuilder: (context, i) {
+                              final u = _results[i];
+                              return ListTile(
+                                onTap: () => Navigator.pop(context, u),
+                                leading: CircleAvatar(
+                                  radius: 22,
+                                  backgroundColor: ThemeService.cardSecondary,
+                                  backgroundImage: u.photoUrl.isNotEmpty
+                                      ? CachedNetworkImageProvider(u.photoUrl)
+                                      : null,
+                                  child: u.photoUrl.isEmpty
+                                      ? Text(
+                                          u.displayName.isNotEmpty
+                                              ? u.displayName[0].toUpperCase()
+                                              : '?',
+                                          style: const TextStyle(
+                                              fontWeight: FontWeight.bold),
+                                        )
+                                      : null,
                                 ),
-                                if (u.isVerified) ...[
-                                  const SizedBox(width: 4),
-                                  const Icon(Icons.verified,
-                                      color: Color(0xFF1877F2), size: 14),
-                                ],
-                              ],
-                            ),
-                            subtitle: Text(
-                              '@${u.username}',
-                              style: const TextStyle(
-                                  color: Color(0xFF65676B), fontSize: 12),
-                            ),
-                          );
-                        },
-                      ),
+                                title: Row(
+                                  children: [
+                                    Flexible(
+                                      child: Text(
+                                        u.displayName,
+                                        style: TextStyle(
+                                            fontWeight: FontWeight.bold,
+                                            fontSize: 14,
+                                            color: ThemeService.textPrimary),
+                                        overflow: TextOverflow.ellipsis,
+                                      ),
+                                    ),
+                                    if (u.isVerified) ...[
+                                      const SizedBox(width: 4),
+                                      const Icon(Icons.verified,
+                                          color: Color(0xFF1877F2), size: 14),
+                                    ],
+                                  ],
+                                ),
+                                subtitle: Text(
+                                  '@${u.username}',
+                                  style: TextStyle(
+                                      color: ThemeService.textSecondary, fontSize: 12),
+                                ),
+                              );
+                            },
+                          ),
+              ),
+            ],
           ),
-        ],
-      ),
+        );
+      },
     );
   }
 }
