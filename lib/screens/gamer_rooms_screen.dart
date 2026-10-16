@@ -8,7 +8,7 @@
 // - Esports Match Rules & Guidelines Dialog
 // - Flexible Match Formats (1v1, 2v2, 4v4 TDM)
 // - "End Match / Claim Win" Screenshot Proof Upload to Supabase Storage
-// - 5-Minute Golden Winner Banner with Live Countdown Timer
+// - 5-Minute Golden Winner Banner with Live Countdown Timer (Timezone Fixed)
 // - Auto-delete room after 5 minutes of completion
 // - Dispute management & Admin approval flow
 // ═══════════════════════════════════════════════════════════════════════════════
@@ -143,10 +143,20 @@ class GamerRoom {
     if (row['win_proof_uploaded_at'] is String) {
       winProofUploadedAt = DateTime.tryParse(row['win_proof_uploaded_at']);
     }
+
     DateTime? completedAt;
     if (row['completed_at'] is String) {
-      completedAt = DateTime.tryParse(row['completed_at']);
+      final parsed = DateTime.tryParse(row['completed_at']);
+      if (parsed != null) {
+        final nowUtc = DateTime.now().toUtc();
+        if (parsed.isAfter(nowUtc)) {
+          completedAt = DateTime(parsed.year, parsed.month, parsed.day, parsed.hour, parsed.minute, parsed.second);
+        } else {
+          completedAt = parsed.toLocal();
+        }
+      }
     }
+
     DateTime? autoApproveAt;
     if (row['auto_approve_at'] is String) {
       autoApproveAt = DateTime.tryParse(row['auto_approve_at']);
@@ -236,7 +246,7 @@ class GamerRoomsScreen extends StatefulWidget {
       'status': 'completed',
       'winner_id': winnerId,
       'winner_name': winnerName,
-      'completed_at': DateTime.now().toIso8601String(),
+      'completed_at': DateTime.now().toUtc().toIso8601String(),
     }).eq('id', room.id);
 
     try {
@@ -246,7 +256,7 @@ class GamerRoomsScreen extends StatefulWidget {
         'sender_name': 'ROOM BOT',
         'message': '🏆 $winnerName won! +$prize coins',
         'type': 'system_reward',
-        'created_at': DateTime.now().toIso8601String(),
+        'created_at': DateTime.now().toUtc().toIso8601String(),
       });
     } catch (_) {}
 
@@ -289,7 +299,6 @@ class GamerRoomsScreen extends StatefulWidget {
       return {'ign': rootIgn, 'game_uid': rootUid};
     }
 
-    final isDark = ThemeService.isDarkMode;
     final ignController = TextEditingController(text: rootIgn);
     final uidController = TextEditingController(text: rootUid);
 
@@ -479,16 +488,33 @@ class _GamerRoomsScreenState extends State<GamerRoomsScreen> {
       final now = DateTime.now();
       final rows = await SupabaseService.client
           .from('rooms')
-          .select('id, completed_at')
+          .select('id, completed_at, win_proof_uploaded_at, created_at')
           .eq('status', 'completed');
 
       for (final row in (rows as List)) {
-        if (row['completed_at'] != null) {
-          final completedAt = DateTime.tryParse(row['completed_at'].toString());
-          if (completedAt != null && now.difference(completedAt).inSeconds >= 300) {
-            final roomId = row['id'];
-            await SupabaseService.client.from('rooms').delete().eq('id', roomId);
-            await SupabaseService.client.from('messages').delete().eq('room_id', roomId);
+        final rawComp = row['completed_at'] ?? row['win_proof_uploaded_at'] ?? row['created_at'];
+        if (rawComp != null) {
+          DateTime? completedAt = DateTime.tryParse(rawComp.toString());
+          if (completedAt != null) {
+            final localCompleted = completedAt.isUtc ? completedAt.toLocal() : completedAt;
+            int elapsed = now.difference(localCompleted).inSeconds;
+            if (elapsed < 0) {
+              final reinterpreted = DateTime(
+                completedAt.year,
+                completedAt.month,
+                completedAt.day,
+                completedAt.hour,
+                completedAt.minute,
+                completedAt.second,
+              );
+              elapsed = now.difference(reinterpreted).inSeconds;
+            }
+
+            if (elapsed >= 300) {
+              final roomId = row['id'];
+              await SupabaseService.client.from('rooms').delete().eq('id', roomId);
+              await SupabaseService.client.from('messages').delete().eq('room_id', roomId);
+            }
           }
         }
       }
@@ -659,7 +685,6 @@ class _GamerRoomsScreenState extends State<GamerRoomsScreen> {
   }
 
   void _showCreateRoomDialog() {
-    final isDark = ThemeService.isDarkMode;
     final gameCtrl = TextEditingController(text: 'BGMI');
     final modeCtrl = TextEditingController(text: 'Erangel');
     final roomIdCtrl = TextEditingController();
@@ -824,7 +849,7 @@ class _GamerRoomsScreenState extends State<GamerRoomsScreen> {
                               'game_uid': myUid,
                             }
                           ],
-                          'created_at': DateTime.now().toIso8601String(),
+                          'created_at': DateTime.now().toUtc().toIso8601String(),
                         };
 
                         await SupabaseService.client.from('rooms').insert(roomData);
@@ -933,7 +958,7 @@ class _RoomDetailsSheetState extends State<_RoomDetailsSheet> {
             'sender_name': 'ROOM BOT',
             'message': '🚪 ${widget.currentUserName} left the room.',
             'type': 'system',
-            'created_at': DateTime.now().toIso8601String(),
+            'created_at': DateTime.now().toUtc().toIso8601String(),
           });
         } catch (_) {}
       }
@@ -1007,8 +1032,41 @@ class _RoomDetailsSheetState extends State<_RoomDetailsSheet> {
 
   void _start5MinCountdown(DateTime completedAt) {
     _countdownTimer?.cancel();
-    final elapsed = DateTime.now().difference(completedAt).inSeconds;
+
+    final now = DateTime.now();
+    final localCompleted = completedAt.isUtc ? completedAt.toLocal() : completedAt;
+
+    int elapsed = now.difference(localCompleted).inSeconds;
+    if (elapsed < 0) {
+      final reinterpreted = DateTime(
+        completedAt.year,
+        completedAt.month,
+        completedAt.day,
+        completedAt.hour,
+        completedAt.minute,
+        completedAt.second,
+      );
+      elapsed = now.difference(reinterpreted).inSeconds;
+    }
+    if (elapsed < 0) elapsed = 0;
+
     _secondsRemaining = (300 - elapsed).clamp(0, 300);
+
+    if (_secondsRemaining <= 0) {
+      Future.microtask(() async {
+        try {
+          await SupabaseService.client.from('rooms').delete().eq('id', widget.roomId);
+          await SupabaseService.client.from('messages').delete().eq('room_id', widget.roomId);
+        } catch (_) {}
+        if (mounted) {
+          Navigator.of(context).pop();
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('Match finished. Room auto-deleted.')),
+          );
+        }
+      });
+      return;
+    }
 
     _countdownTimer = Timer.periodic(const Duration(seconds: 1), (timer) async {
       if (!mounted) {
@@ -1083,7 +1141,7 @@ class _RoomDetailsSheetState extends State<_RoomDetailsSheet> {
         'sender_name': 'ROOM BOT',
         'message': '👋 ${widget.currentUserName} ($myIgn) joined the match!',
         'type': 'system',
-        'created_at': DateTime.now().toIso8601String(),
+        'created_at': DateTime.now().toUtc().toIso8601String(),
       });
 
       if (mounted) {
@@ -1133,7 +1191,7 @@ class _RoomDetailsSheetState extends State<_RoomDetailsSheet> {
         'winner_id': widget.currentUserId,
         'winner_name': widget.currentUserName,
         'win_proof_url': proofUrl,
-        'win_proof_uploaded_at': DateTime.now().toIso8601String(),
+        'win_proof_uploaded_at': DateTime.now().toUtc().toIso8601String(),
       }).eq('id', widget.roomId);
 
       await SupabaseService.client.from('messages').insert({
@@ -1142,7 +1200,7 @@ class _RoomDetailsSheetState extends State<_RoomDetailsSheet> {
         'sender_name': 'ROOM BOT',
         'message': '📸 ${widget.currentUserName} uploaded win proof! Waiting for admin approval.',
         'type': 'system',
-        'created_at': DateTime.now().toIso8601String(),
+        'created_at': DateTime.now().toUtc().toIso8601String(),
       });
 
       if (mounted) {
@@ -1194,7 +1252,7 @@ class _RoomDetailsSheetState extends State<_RoomDetailsSheet> {
                 'disputed_by': widget.currentUserId,
                 'disputed_by_name': widget.currentUserName,
                 'dispute_reason': reason,
-                'disputed_at': DateTime.now().toIso8601String(),
+                'disputed_at': DateTime.now().toUtc().toIso8601String(),
               }).eq('id', widget.roomId);
 
               await SupabaseService.client.from('messages').insert({
@@ -1203,7 +1261,7 @@ class _RoomDetailsSheetState extends State<_RoomDetailsSheet> {
                 'sender_name': 'DISPUTE BOT',
                 'message': '⚠️ Dispute raised by ${widget.currentUserName}: "$reason". Admin will review.',
                 'type': 'system_dispute',
-                'created_at': DateTime.now().toIso8601String(),
+                'created_at': DateTime.now().toUtc().toIso8601String(),
               });
             },
             child: const Text('Submit Dispute', style: TextStyle(color: Colors.white)),
@@ -1224,7 +1282,7 @@ class _RoomDetailsSheetState extends State<_RoomDetailsSheet> {
       'sender_name': widget.currentUserName,
       'message': txt,
       'type': 'chat',
-      'created_at': DateTime.now().toIso8601String(),
+      'created_at': DateTime.now().toUtc().toIso8601String(),
     });
   }
 
@@ -1251,8 +1309,9 @@ class _RoomDetailsSheetState extends State<_RoomDetailsSheet> {
           final room = GamerRoom.fromSupabase(snapshot.data!.first);
           final bool isJoined = room.joinedUserIds.contains(widget.currentUserId);
 
-          if (room.isCompleted && room.completedAt != null && _countdownTimer == null) {
-            _start5MinCountdown(room.completedAt!);
+          if (room.isCompleted && _countdownTimer == null) {
+            final compTime = room.completedAt ?? room.winProofUploadedAt ?? room.createdAt;
+            _start5MinCountdown(compTime);
           }
 
           final mins = _secondsRemaining ~/ 60;
