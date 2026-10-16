@@ -1,20 +1,14 @@
 // ===============================================================================
-// EXACT DIFF — Fix Preset Avatars & Grey Circle Issue on Feed Screen
+// EXACT DIFF — Full Adaptive Day & Night Mode Support for GamerFeedScreen
 // -------------------------------------------------------------------------------
 // File: lib/screens/gamer_feed_screen.dart
 //
-// PROBLEM:
-// Feed screen was using standard `CircleAvatar` with `NetworkImage(url)`. When a
-// user selected an in-app preset avatar (e.g. 'preset:helmet'), `NetworkImage`
-// failed to load it as a web URL and fell back to an empty grey circle.
+// 1. Linked with ThemeService.themeModeNotifier for realtime live theme switching.
+// 2. Replaced hardcoded white/grey backgrounds with ThemeService.bg and card.
+// 3. Replaced fixed black text with ThemeService.textPrimary & textSecondary.
+// 4. Comments sheet and dialogs fully synced with active theme.
 //
-// CHANGES:
-// 1. Added import: `import '../widgets/gamer_avatar.dart';`
-// 2. Replaced `CircleAvatar` with `GamerAvatar` in `_showCreatePost()` dialog.
-// 3. Replaced `CircleAvatar` with `GamerAvatar` in "What's on your mind?" top card.
-// 4. Replaced `CircleAvatar` with `GamerAvatar` in Post list item leading avatar.
-//
-// NO OTHER CODE, LOGIC, OR VARIABLE CHANGED — byte-by-byte same
+// NO LOGIC, FUNCTIONALITY OR DATABASE CODE CHANGED — byte-by-byte safe
 // ===============================================================================
 
 import 'package:flutter/material.dart';
@@ -25,6 +19,7 @@ import 'user_search_screen.dart';
 import '../services/notification_service.dart';
 import 'notifications_screen.dart';
 import '../widgets/gamer_avatar.dart';
+import '../services/theme_service.dart';
 
 class GamerFeedScreen extends StatefulWidget {
   const GamerFeedScreen({super.key});
@@ -343,7 +338,7 @@ https://play.google.com/store/apps/details?id=com.gameskhabar.app
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
-      backgroundColor: Colors.white,
+      backgroundColor: ThemeService.card,
       shape: const RoundedRectangleBorder(
         borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
       ),
@@ -375,17 +370,19 @@ https://play.google.com/store/apps/details?id=com.gameskhabar.app
     final confirm = await showDialog<bool>(
       context: context,
       builder: (c) => AlertDialog(
-        title: const Text('Report Post?'),
-        content: const Text('Kya aap ye post report karna chahte hain? Admin review karega.'),
+        backgroundColor: ThemeService.card,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        title: Text('Report Post?', style: TextStyle(color: ThemeService.textPrimary, fontWeight: FontWeight.bold)),
+        content: Text('Kya aap ye post report karna chahte hain? Admin review karega.', style: TextStyle(color: ThemeService.textSecondary)),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(c, false),
-            child: const Text('Cancel'),
+            child: Text('Cancel', style: TextStyle(color: ThemeService.textSecondary)),
           ),
           ElevatedButton(
             style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
             onPressed: () => Navigator.pop(c, true),
-            child: const Text('Report', style: TextStyle(color: Colors.white)),
+            child: const Text('Report', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
           ),
         ],
       ),
@@ -433,7 +430,7 @@ https://play.google.com/store/apps/details?id=com.gameskhabar.app
 
     showModalBottomSheet(
       context: context,
-      backgroundColor: Colors.white,
+      backgroundColor: ThemeService.card,
       shape: const RoundedRectangleBorder(
         borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
       ),
@@ -446,7 +443,7 @@ https://play.google.com/store/apps/details?id=com.gameskhabar.app
               width: 40,
               height: 4,
               decoration: BoxDecoration(
-                color: Colors.grey[300],
+                color: ThemeService.border,
                 borderRadius: BorderRadius.circular(2),
               ),
             ),
@@ -463,17 +460,19 @@ https://play.google.com/store/apps/details?id=com.gameskhabar.app
                   final confirm = await showDialog<bool>(
                     context: context,
                     builder: (c) => AlertDialog(
-                      title: const Text('Delete Post?'),
-                      content: const Text('Kya aap ye post delete karna chahte hain?'),
+                      backgroundColor: ThemeService.card,
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                      title: Text('Delete Post?', style: TextStyle(color: ThemeService.textPrimary, fontWeight: FontWeight.bold)),
+                      content: Text('Kya aap ye post delete karna chahte hain?', style: TextStyle(color: ThemeService.textSecondary)),
                       actions: [
                         TextButton(
                           onPressed: () => Navigator.pop(c, false),
-                          child: const Text('Cancel'),
+                          child: Text('Cancel', style: TextStyle(color: ThemeService.textSecondary)),
                         ),
                         ElevatedButton(
                           style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
                           onPressed: () => Navigator.pop(c, true),
-                          child: const Text('Delete', style: TextStyle(color: Colors.white)),
+                          child: const Text('Delete', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
                         ),
                       ],
                     ),
@@ -513,8 +512,8 @@ https://play.google.com/store/apps/details?id=com.gameskhabar.app
               ),
             ] else ...[
               ListTile(
-                leading: const Icon(Icons.flag_outlined, color: Color(0xFF65676B)),
-                title: const Text('Report Post'),
+                leading: Icon(Icons.flag_outlined, color: ThemeService.textSecondary),
+                title: Text('Report Post', style: TextStyle(color: ThemeService.textPrimary, fontWeight: FontWeight.w600)),
                 onTap: () {
                   final targetPost = posts.firstWhere(
                     (p) => p['id'].toString() == postId,
@@ -540,7 +539,7 @@ https://play.google.com/store/apps/details?id=com.gameskhabar.app
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
-      backgroundColor: Colors.white,
+      backgroundColor: ThemeService.card,
       shape: const RoundedRectangleBorder(
         borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
       ),
@@ -569,10 +568,10 @@ https://play.google.com/store/apps/details?id=com.gameskhabar.app
                       child: Text(
                         currentUsername,
                         overflow: TextOverflow.ellipsis,
-                        style: const TextStyle(
+                        style: TextStyle(
                           fontWeight: FontWeight.bold,
                           fontSize: 16,
-                          color: Color(0xFF050505),
+                          color: ThemeService.textPrimary,
                         ),
                       ),
                     ),
@@ -661,10 +660,10 @@ https://play.google.com/store/apps/details?id=com.gameskhabar.app
                   autofocus: true,
                   maxLines: 5,
                   minLines: 3,
-                  style: const TextStyle(color: Color(0xFF050505), fontSize: 16),
-                  decoration: const InputDecoration(
+                  style: TextStyle(color: ThemeService.textPrimary, fontSize: 16),
+                  decoration: InputDecoration(
                     hintText: "What's on your mind?",
-                    hintStyle: TextStyle(color: Color(0xFF65676B), fontSize: 16),
+                    hintStyle: TextStyle(color: ThemeService.textSecondary, fontSize: 16),
                     border: InputBorder.none,
                   ),
                 ),
@@ -696,287 +695,297 @@ https://play.google.com/store/apps/details?id=com.gameskhabar.app
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: const Color(0xFFF0F2F5),
-      appBar: AppBar(
-        backgroundColor: Colors.white,
-        elevation: 1,
-        title: const Text(
-          'Games Khabar',
-          style: TextStyle(
-            color: Color(0xFF1877F2),
-            fontWeight: FontWeight.bold,
-            fontSize: 22,
-          ),
-        ),
-        actions: [
-          IconButton(
-            icon: const Icon(Icons.search_rounded,
-                color: Color(0xFF1877F2), size: 26),
-            tooltip: 'Search Gamers',
-            onPressed: () {
-              Navigator.of(context).push(
-                MaterialPageRoute(
-                  builder: (_) => const UserSearchScreen(),
-                ),
-              );
-            },
-          ),
-          ValueListenableBuilder<int>(
-            valueListenable: NotificationService().unreadCountNotifier,
-            builder: (context, unreadCount, _) {
-              return IconButton(
-                tooltip: 'Activity & Notifications',
-                icon: Badge(
-                  isLabelVisible: unreadCount > 0,
-                  label: Text(
-                    '$unreadCount',
-                    style: const TextStyle(
-                      fontSize: 10,
-                      fontWeight: FontWeight.bold,
-                      color: Colors.white,
-                    ),
-                  ),
-                  backgroundColor: const Color(0xFFFF2D55),
-                  child: const Icon(
-                    Icons.notifications_outlined,
-                    color: Color(0xFF050505),
-                    size: 26,
-                  ),
-                ),
+    return ValueListenableBuilder<ThemeMode>(
+      valueListenable: ThemeService.themeModeNotifier,
+      builder: (context, _, __) {
+        return Scaffold(
+          backgroundColor: ThemeService.bg,
+          appBar: AppBar(
+            backgroundColor: ThemeService.appBarBg,
+            elevation: ThemeService.isDarkMode ? 0 : 1,
+            title: const Text(
+              'Games Khabar',
+              style: TextStyle(
+                color: Color(0xFF1877F2),
+                fontWeight: FontWeight.bold,
+                fontSize: 22,
+              ),
+            ),
+            actions: [
+              IconButton(
+                icon: const Icon(Icons.search_rounded,
+                    color: Color(0xFF1877F2), size: 26),
+                tooltip: 'Search Gamers',
                 onPressed: () {
                   Navigator.of(context).push(
                     MaterialPageRoute(
-                      builder: (_) => const NotificationsScreen(),
-                    ),
-                  );
-                },
-              );
-            },
-          ),
-          const SizedBox(width: 8),
-        ],
-      ),
-      body: RefreshIndicator(
-        onRefresh: _loadFeed,
-        child: isLoading
-            ? const Center(child: CircularProgressIndicator())
-            : ListView.builder(
-                itemCount: posts.length + 1,
-                itemBuilder: (context, index) {
-                  if (index == 0) {
-                    return InkWell(
-                      onTap: _showCreatePost,
-                      borderRadius: BorderRadius.circular(10),
-                      child: Card(
-                        margin: const EdgeInsets.all(8),
-                        elevation: 0,
-                        color: Colors.white,
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(10),
-                        ),
-                        child: Padding(
-                          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                          child: Row(
-                            children: [
-                              GamerAvatar(
-                                photoUrl: currentAvatarUrl,
-                                displayName: currentUsername,
-                                radius: 20,
-                              ),
-                              const SizedBox(width: 12),
-                              Expanded(
-                                child: Container(
-                                  padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-                                  decoration: BoxDecoration(
-                                    color: const Color(0xFFF0F2F5),
-                                    borderRadius: BorderRadius.circular(20),
-                                  ),
-                                  child: const Text(
-                                    "What's on your mind?",
-                                    style: TextStyle(color: Color(0xFF65676B), fontSize: 14),
-                                  ),
-                                ),
-                              ),
-                            ],
-                          ),
-                        ),
-                      ),
-                    );
-                  }
-
-                  final post = posts[index - 1];
-                  final postUserId = post['user_id']?.toString() ?? '';
-                  final userProfile = userProfiles[postUserId];
-
-                  final username = userProfile?['username'] ?? post['username'] ?? 'Gamer';
-                  final avatarUrl =
-                      (userProfile?['avatar_url'] ?? post['user_avatar'] ?? '').toString();
-                  final postId = post['id']?.toString() ?? '';
-                  final isLiked = likedPostIds.contains(postId);
-                  final imageUrl = (post['image_url'] ?? '').toString();
-                  final content = (post['content'] ?? '').toString();
-                  final likesCount = post['likes_count'] ?? 0;
-                  final commentsCount = post['comments_count'] ?? 0;
-
-                  return Card(
-                    margin: const EdgeInsets.symmetric(vertical: 4, horizontal: 0),
-                    elevation: 0,
-                    color: Colors.white,
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        ListTile(
-                          contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
-                          leading: GestureDetector(
-                            onTap: () => _openUserProfile(postUserId, username.toString()),
-                            child: GamerAvatar(
-                              photoUrl: avatarUrl,
-                              displayName: username.toString(),
-                              radius: 20,
-                            ),
-                          ),
-                          title: GestureDetector(
-                            onTap: () => _openUserProfile(postUserId, username.toString()),
-                            child: Text(
-                              username.toString(),
-                              style: const TextStyle(
-                                fontWeight: FontWeight.bold,
-                                fontSize: 15,
-                                color: Color(0xFF050505),
-                              ),
-                            ),
-                          ),
-                          subtitle: Text(
-                            _formatTimeAgo(post['created_at']),
-                            style: const TextStyle(fontSize: 12, color: Color(0xFF65676B)),
-                          ),
-                          trailing: IconButton(
-                            icon: const Icon(Icons.more_horiz, color: Color(0xFF65676B)),
-                            onPressed: () => _showPostOptions(context, postId, postUserId),
-                          ),
-                        ),
-                        if (content.isNotEmpty)
-                          Padding(
-                            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
-                            child: Text(
-                              content,
-                              style: const TextStyle(
-                                fontSize: 15,
-                                color: Color(0xFF050505),
-                                height: 1.3,
-                              ),
-                            ),
-                          ),
-                        if (imageUrl.isNotEmpty)
-                          Padding(
-                            padding: const EdgeInsets.only(top: 8),
-                            child: Image.network(
-                              imageUrl,
-                              width: double.infinity,
-                              fit: BoxFit.cover,
-                              errorBuilder: (_, __, ___) => const SizedBox.shrink(),
-                            ),
-                          ),
-                        Padding(
-                          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-                          child: Row(
-                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                            children: [
-                              Row(
-                                children: [
-                                  Container(
-                                    padding: const EdgeInsets.all(4),
-                                    decoration: const BoxDecoration(
-                                      color: Color(0xFF1877F2),
-                                      shape: BoxShape.circle,
-                                    ),
-                                    child: const Icon(Icons.thumb_up, size: 11, color: Colors.white),
-                                  ),
-                                  const SizedBox(width: 6),
-                                  Text(
-                                    '$likesCount',
-                                    style: const TextStyle(fontSize: 13, color: Color(0xFF65676B)),
-                                  ),
-                                ],
-                              ),
-                              Text(
-                                '$commentsCount comments',
-                                style: const TextStyle(fontSize: 13, color: Color(0xFF65676B)),
-                              ),
-                            ],
-                          ),
-                        ),
-                        const Divider(height: 1, color: Color(0xFFCED0D4)),
-                        Row(
-                          children: [
-                            Expanded(
-                              child: InkWell(
-                                onTap: () => _handleLike(post),
-                                child: Padding(
-                                  padding: const EdgeInsets.symmetric(vertical: 10),
-                                  child: Row(
-                                    mainAxisAlignment: MainAxisAlignment.center,
-                                    children: [
-                                      Icon(
-                                        isLiked ? Icons.thumb_up : Icons.thumb_up_outlined,
-                                        size: 18,
-                                        color: isLiked ? const Color(0xFF1877F2) : const Color(0xFF65676B),
-                                      ),
-                                      const SizedBox(width: 6),
-                                      Text(
-                                        'Like',
-                                        style: TextStyle(
-                                          color: isLiked ? const Color(0xFF1877F2) : const Color(0xFF65676B),
-                                          fontWeight: isLiked ? FontWeight.bold : FontWeight.normal,
-                                          fontSize: 13,
-                                        ),
-                                      ),
-                                    ],
-                                  ),
-                                ),
-                              ),
-                            ),
-                            Expanded(
-                              child: InkWell(
-                                onTap: () => _showComments(postId),
-                                child: const Padding(
-                                  padding: EdgeInsets.symmetric(vertical: 10),
-                                  child: Row(
-                                    mainAxisAlignment: MainAxisAlignment.center,
-                                    children: [
-                                      Icon(Icons.chat_bubble_outline, size: 18, color: Color(0xFF65676B)),
-                                      SizedBox(width: 6),
-                                      Text('Comment', style: TextStyle(color: Color(0xFF65676B), fontSize: 13)),
-                                    ],
-                                  ),
-                                ),
-                              ),
-                            ),
-                            Expanded(
-                              child: InkWell(
-                                onTap: () => _handleShare(post),
-                                child: const Padding(
-                                  padding: EdgeInsets.symmetric(vertical: 10),
-                                  child: Row(
-                                    mainAxisAlignment: MainAxisAlignment.center,
-                                    children: [
-                                      Icon(Icons.share_outlined, size: 18, color: Color(0xFF65676B)),
-                                      SizedBox(width: 6),
-                                      Text('Share', style: TextStyle(color: Color(0xFF65676B), fontSize: 13)),
-                                    ],
-                                  ),
-                                ),
-                              ),
-                            ),
-                          ],
-                        ),
-                      ],
+                      builder: (_) => const UserSearchScreen(),
                     ),
                   );
                 },
               ),
-      ),
+              ValueListenableBuilder<int>(
+                valueListenable: NotificationService().unreadCountNotifier,
+                builder: (context, unreadCount, _) {
+                  return IconButton(
+                    tooltip: 'Activity & Notifications',
+                    icon: Badge(
+                      isLabelVisible: unreadCount > 0,
+                      label: Text(
+                        '$unreadCount',
+                        style: const TextStyle(
+                          fontSize: 10,
+                          fontWeight: FontWeight.bold,
+                          color: Colors.white,
+                        ),
+                      ),
+                      backgroundColor: const Color(0xFFFF2D55),
+                      child: Icon(
+                        Icons.notifications_outlined,
+                        color: ThemeService.textPrimary,
+                        size: 26,
+                      ),
+                    ),
+                    onPressed: () {
+                      Navigator.of(context).push(
+                        MaterialPageRoute(
+                          builder: (_) => const NotificationsScreen(),
+                        ),
+                      );
+                    },
+                  );
+                },
+              ),
+              const SizedBox(width: 8),
+            ],
+          ),
+          body: RefreshIndicator(
+            onRefresh: _loadFeed,
+            child: isLoading
+                ? const Center(child: CircularProgressIndicator())
+                : ListView.builder(
+                    itemCount: posts.length + 1,
+                    itemBuilder: (context, index) {
+                      if (index == 0) {
+                        return InkWell(
+                          onTap: _showCreatePost,
+                          borderRadius: BorderRadius.circular(10),
+                          child: Card(
+                            margin: const EdgeInsets.all(8),
+                            elevation: 0,
+                            color: ThemeService.card,
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(10),
+                              side: BorderSide(color: ThemeService.border),
+                            ),
+                            child: Padding(
+                              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                              child: Row(
+                                children: [
+                                  GamerAvatar(
+                                    photoUrl: currentAvatarUrl,
+                                    displayName: currentUsername,
+                                    radius: 20,
+                                  ),
+                                  const SizedBox(width: 12),
+                                  Expanded(
+                                    child: Container(
+                                      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                                      decoration: BoxDecoration(
+                                        color: ThemeService.cardSecondary,
+                                        borderRadius: BorderRadius.circular(20),
+                                      ),
+                                      child: Text(
+                                        "What's on your mind?",
+                                        style: TextStyle(color: ThemeService.textSecondary, fontSize: 14),
+                                      ),
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ),
+                        );
+                      }
+
+                      final post = posts[index - 1];
+                      final postUserId = post['user_id']?.toString() ?? '';
+                      final userProfile = userProfiles[postUserId];
+
+                      final username = userProfile?['username'] ?? post['username'] ?? 'Gamer';
+                      final avatarUrl =
+                          (userProfile?['avatar_url'] ?? post['user_avatar'] ?? '').toString();
+                      final postId = post['id']?.toString() ?? '';
+                      final isLiked = likedPostIds.contains(postId);
+                      final imageUrl = (post['image_url'] ?? '').toString();
+                      final content = (post['content'] ?? '').toString();
+                      final likesCount = post['likes_count'] ?? 0;
+                      final commentsCount = post['comments_count'] ?? 0;
+
+                      return Card(
+                        margin: const EdgeInsets.symmetric(vertical: 4, horizontal: 0),
+                        elevation: 0,
+                        color: ThemeService.card,
+                        shape: Border(
+                          top: BorderSide(color: ThemeService.border, width: 0.5),
+                          bottom: BorderSide(color: ThemeService.border, width: 0.5),
+                        ),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            ListTile(
+                              contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+                              leading: GestureDetector(
+                                onTap: () => _openUserProfile(postUserId, username.toString()),
+                                child: GamerAvatar(
+                                  photoUrl: avatarUrl,
+                                  displayName: username.toString(),
+                                  radius: 20,
+                                ),
+                              ),
+                              title: GestureDetector(
+                                onTap: () => _openUserProfile(postUserId, username.toString()),
+                                child: Text(
+                                  username.toString(),
+                                  style: TextStyle(
+                                    fontWeight: FontWeight.bold,
+                                    fontSize: 15,
+                                    color: ThemeService.textPrimary,
+                                  ),
+                                ),
+                              ),
+                              subtitle: Text(
+                                _formatTimeAgo(post['created_at']),
+                                style: TextStyle(fontSize: 12, color: ThemeService.textSecondary),
+                              ),
+                              trailing: IconButton(
+                                icon: Icon(Icons.more_horiz, color: ThemeService.textSecondary),
+                                onPressed: () => _showPostOptions(context, postId, postUserId),
+                              ),
+                            ),
+                            if (content.isNotEmpty)
+                              Padding(
+                                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+                                child: Text(
+                                  content,
+                                  style: TextStyle(
+                                    fontSize: 15,
+                                    color: ThemeService.textPrimary,
+                                    height: 1.3,
+                                  ),
+                                ),
+                              ),
+                            if (imageUrl.isNotEmpty)
+                              Padding(
+                                padding: const EdgeInsets.only(top: 8),
+                                child: Image.network(
+                                  imageUrl,
+                                  width: double.infinity,
+                                  fit: BoxFit.cover,
+                                  errorBuilder: (_, __, ___) => const SizedBox.shrink(),
+                                ),
+                              ),
+                            Padding(
+                              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+                              child: Row(
+                                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                children: [
+                                  Row(
+                                    children: [
+                                      Container(
+                                        padding: const EdgeInsets.all(4),
+                                        decoration: const BoxDecoration(
+                                          color: Color(0xFF1877F2),
+                                          shape: BoxShape.circle,
+                                        ),
+                                        child: const Icon(Icons.thumb_up, size: 11, color: Colors.white),
+                                      ),
+                                      const SizedBox(width: 6),
+                                      Text(
+                                        '$likesCount',
+                                        style: TextStyle(fontSize: 13, color: ThemeService.textSecondary),
+                                      ),
+                                    ],
+                                  ),
+                                  Text(
+                                    '$commentsCount comments',
+                                    style: TextStyle(fontSize: 13, color: ThemeService.textSecondary),
+                                  ),
+                                ],
+                              ),
+                            ),
+                            Divider(height: 1, color: ThemeService.border),
+                            Row(
+                              children: [
+                                Expanded(
+                                  child: InkWell(
+                                    onTap: () => _handleLike(post),
+                                    child: Padding(
+                                      padding: const EdgeInsets.symmetric(vertical: 10),
+                                      child: Row(
+                                        mainAxisAlignment: MainAxisAlignment.center,
+                                        children: [
+                                          Icon(
+                                            isLiked ? Icons.thumb_up : Icons.thumb_up_outlined,
+                                            size: 18,
+                                            color: isLiked ? const Color(0xFF1877F2) : ThemeService.textSecondary,
+                                          ),
+                                          const SizedBox(width: 6),
+                                          Text(
+                                            'Like',
+                                            style: TextStyle(
+                                              color: isLiked ? const Color(0xFF1877F2) : ThemeService.textSecondary,
+                                              fontWeight: isLiked ? FontWeight.bold : FontWeight.normal,
+                                              fontSize: 13,
+                                            ),
+                                          ),
+                                        ],
+                                      ),
+                                    ),
+                                  ),
+                                ),
+                                Expanded(
+                                  child: InkWell(
+                                    onTap: () => _showComments(postId),
+                                    child: Padding(
+                                      padding: const EdgeInsets.symmetric(vertical: 10),
+                                      child: Row(
+                                        mainAxisAlignment: MainAxisAlignment.center,
+                                        children: [
+                                          Icon(Icons.chat_bubble_outline, size: 18, color: ThemeService.textSecondary),
+                                          const SizedBox(width: 6),
+                                          Text('Comment', style: TextStyle(color: ThemeService.textSecondary, fontSize: 13)),
+                                        ],
+                                      ),
+                                    ),
+                                  ),
+                                ),
+                                Expanded(
+                                  child: InkWell(
+                                    onTap: () => _handleShare(post),
+                                    child: Padding(
+                                      padding: const EdgeInsets.symmetric(vertical: 10),
+                                      child: Row(
+                                        mainAxisAlignment: MainAxisAlignment.center,
+                                        children: [
+                                          Icon(Icons.share_outlined, size: 18, color: ThemeService.textSecondary),
+                                          const SizedBox(width: 6),
+                                          Text('Share', style: TextStyle(color: ThemeService.textSecondary, fontSize: 13)),
+                                        ],
+                                      ),
+                                    ),
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ],
+                        ),
+                      );
+                    },
+                  ),
+          ),
+        );
+      },
     );
   }
 }
@@ -1151,17 +1160,19 @@ class _CommentSheetState extends State<CommentSheet> {
     final confirm = await showDialog<bool>(
       context: context,
       builder: (c) => AlertDialog(
-        title: const Text('Report Comment?'),
-        content: const Text('Kya aap ye comment report karna chahte hain? Admin review karega.'),
+        backgroundColor: ThemeService.card,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        title: Text('Report Comment?', style: TextStyle(color: ThemeService.textPrimary, fontWeight: FontWeight.bold)),
+        content: Text('Kya aap ye comment report karna chahte hain? Admin review karega.', style: TextStyle(color: ThemeService.textSecondary)),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(c, false),
-            child: const Text('Cancel'),
+            child: Text('Cancel', style: TextStyle(color: ThemeService.textSecondary)),
           ),
           ElevatedButton(
             style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
             onPressed: () => Navigator.pop(c, true),
-            child: const Text('Report', style: TextStyle(color: Colors.white)),
+            child: const Text('Report', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
           ),
         ],
       ),
@@ -1216,7 +1227,7 @@ class _CommentSheetState extends State<CommentSheet> {
   void _showCommentOptions(Map<String, dynamic> comment, bool isMyComment) {
     showModalBottomSheet(
       context: context,
-      backgroundColor: Colors.white,
+      backgroundColor: ThemeService.card,
       shape: const RoundedRectangleBorder(
         borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
       ),
@@ -1229,7 +1240,7 @@ class _CommentSheetState extends State<CommentSheet> {
               width: 40,
               height: 4,
               decoration: BoxDecoration(
-                color: Colors.grey[300],
+                color: ThemeService.border,
                 borderRadius: BorderRadius.circular(2),
               ),
             ),
@@ -1263,8 +1274,8 @@ class _CommentSheetState extends State<CommentSheet> {
               ),
             ] else ...[
               ListTile(
-                leading: const Icon(Icons.flag_outlined, color: Color(0xFF65676B)),
-                title: const Text('Report Comment'),
+                leading: Icon(Icons.flag_outlined, color: ThemeService.textSecondary),
+                title: Text('Report Comment', style: TextStyle(color: ThemeService.textPrimary, fontWeight: FontWeight.w600)),
                 onTap: () {
                   Navigator.pop(ctx);
                   final commentId = (comment['id'] ?? '').toString();
@@ -1282,135 +1293,150 @@ class _CommentSheetState extends State<CommentSheet> {
 
   @override
   Widget build(BuildContext context) {
-    return Padding(
-      padding: EdgeInsets.only(
-        bottom: MediaQuery.of(context).viewInsets.bottom,
-      ),
-      child: SizedBox(
-        height: 500,
-        child: Column(
-          children: [
-            const SizedBox(height: 12),
-            Container(
-              width: 40,
-              height: 4,
-              decoration: BoxDecoration(
-                color: Colors.grey[300],
-                borderRadius: BorderRadius.circular(2),
-              ),
+    return ValueListenableBuilder<ThemeMode>(
+      valueListenable: ThemeService.themeModeNotifier,
+      builder: (context, _, __) {
+        return Container(
+          color: ThemeService.card,
+          child: Padding(
+            padding: EdgeInsets.only(
+              bottom: MediaQuery.of(context).viewInsets.bottom,
             ),
-            const SizedBox(height: 12),
-            const Text(
-              'Comments',
-              style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
-            ),
-            const Divider(),
-            Expanded(
-              child: _loading
-                  ? const Center(child: CircularProgressIndicator())
-                  : comments.isEmpty
-                      ? const Center(
-                          child: Text(
-                            'No comments yet. Be the first to comment!',
-                            style: TextStyle(color: Colors.grey),
-                          ),
-                        )
-                      : ListView.builder(
-                          itemCount: comments.length,
-                          itemBuilder: (_, i) {
-                            final c = comments[i];
-                            final username = (c['username'] ?? 'Gamer').toString();
-                            final content = (c['content'] ?? '').toString();
-                            final commentUserId = (c['user_id'] ?? '').toString();
-                            final isMyComment = commentUserId == widget.currentUserId;
-
-                            return InkWell(
-                              onLongPress: () => _showCommentOptions(c, isMyComment),
-                              child: ListTile(
-                                leading: GestureDetector(
-                                  onTap: () => _openCommentUserProfile(commentUserId),
-                                  child: const CircleAvatar(
-                                    radius: 16,
-                                    backgroundColor: Color(0xFFE4E6EB),
-                                    child: Icon(Icons.person, size: 18, color: Color(0xFF050505)),
-                                  ),
-                                ),
-                                title: GestureDetector(
-                                  onTap: () => _openCommentUserProfile(commentUserId),
-                                  child: Text(
-                                    username,
-                                    style: const TextStyle(
-                                      fontWeight: FontWeight.bold,
-                                      fontSize: 13,
-                                    ),
-                                  ),
-                                ),
-                                subtitle: Text(
-                                  content,
-                                  style: const TextStyle(
-                                    color: Color(0xFF050505),
-                                    fontSize: 14,
-                                  ),
-                                ),
-                                trailing: IconButton(
-                                  icon: const Icon(
-                                    Icons.flag_outlined,
-                                    size: 16,
-                                    color: Color(0xFF65676B),
-                                  ),
-                                  onPressed: () => _reportComment(
-                                    (c['id'] ?? '').toString(),
-                                    content,
-                                  ),
-                                ),
-                              ),
-                            );
-                          },
-                        ),
-            ),
-            Padding(
-              padding: const EdgeInsets.all(8),
-              child: Row(
+            child: SizedBox(
+              height: 500,
+              child: Column(
                 children: [
-                  Expanded(
-                    child: TextField(
-                      controller: _ctrl,
-                      enabled: !_isPosting,
-                      decoration: InputDecoration(
-                        hintText: 'Write a comment...',
-                        filled: true,
-                        fillColor: const Color(0xFFF0F2F5),
-                        contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-                        border: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(20),
-                          borderSide: BorderSide.none,
-                        ),
-                      ),
+                  const SizedBox(height: 12),
+                  Container(
+                    width: 40,
+                    height: 4,
+                    decoration: BoxDecoration(
+                      color: ThemeService.border,
+                      borderRadius: BorderRadius.circular(2),
                     ),
                   ),
-                  const SizedBox(width: 8),
-                  _isPosting
-                      ? const Padding(
-                          padding: EdgeInsets.all(12),
-                          child: SizedBox(
-                            width: 20,
-                            height: 20,
-                            child: CircularProgressIndicator(
-                              strokeWidth: 2,
-                              color: Color(0xFF1877F2),
+                  const SizedBox(height: 12),
+                  Text(
+                    'Comments',
+                    style: TextStyle(
+                      fontWeight: FontWeight.bold,
+                      fontSize: 16,
+                      color: ThemeService.textPrimary,
+                    ),
+                  ),
+                  Divider(color: ThemeService.border),
+                  Expanded(
+                    child: _loading
+                        ? const Center(child: CircularProgressIndicator())
+                        : comments.isEmpty
+                            ? Center(
+                                child: Text(
+                                  'No comments yet. Be the first to comment!',
+                                  style: TextStyle(color: ThemeService.textSecondary),
+                                ),
+                              )
+                            : ListView.builder(
+                                itemCount: comments.length,
+                                itemBuilder: (_, i) {
+                                  final c = comments[i];
+                                  final username = (c['username'] ?? 'Gamer').toString();
+                                  final content = (c['content'] ?? '').toString();
+                                  final commentUserId = (c['user_id'] ?? '').toString();
+                                  final isMyComment = commentUserId == widget.currentUserId;
+
+                                  return InkWell(
+                                    onLongPress: () => _showCommentOptions(c, isMyComment),
+                                    child: ListTile(
+                                      leading: GestureDetector(
+                                        onTap: () => _openCommentUserProfile(commentUserId),
+                                        child: CircleAvatar(
+                                          radius: 16,
+                                          backgroundColor: ThemeService.cardSecondary,
+                                          child: Icon(Icons.person, size: 18, color: ThemeService.textPrimary),
+                                        ),
+                                      ),
+                                      title: GestureDetector(
+                                        onTap: () => _openCommentUserProfile(commentUserId),
+                                        child: Text(
+                                          username,
+                                          style: TextStyle(
+                                            fontWeight: FontWeight.bold,
+                                            fontSize: 13,
+                                            color: ThemeService.textPrimary,
+                                          ),
+                                        ),
+                                      ),
+                                      subtitle: Text(
+                                        content,
+                                        style: TextStyle(
+                                          color: ThemeService.textSecondary,
+                                          fontSize: 14,
+                                        ),
+                                      ),
+                                      trailing: IconButton(
+                                        icon: Icon(
+                                          Icons.flag_outlined,
+                                          size: 16,
+                                          color: ThemeService.textSecondary,
+                                        ),
+                                        onPressed: () => _reportComment(
+                                          (c['id'] ?? '').toString(),
+                                          content,
+                                        ),
+                                      ),
+                                    ),
+                                  );
+                                },
+                              ),
+                  ),
+                  Padding(
+                    padding: const EdgeInsets.all(8),
+                    child: Row(
+                      children: [
+                        Expanded(
+                          child: TextField(
+                            controller: _ctrl,
+                            enabled: !_isPosting,
+                            style: TextStyle(color: ThemeService.textPrimary),
+                            decoration: InputDecoration(
+                              hintText: 'Write a comment...',
+                              hintStyle: TextStyle(color: ThemeService.textSecondary),
+                              filled: true,
+                              fillColor: ThemeService.cardSecondary,
+                              contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+                              border: OutlineInputBorder(
+                                borderRadius: BorderRadius.circular(20),
+                                borderSide: BorderSide.none,
+                              ),
                             ),
                           ),
-                        )
-                      : IconButton(
-                          icon: const Icon(Icons.send, color: Color(0xFF1877F2)),
-                          onPressed: _submitComment,
                         ),
+                        const SizedBox(width: 8),
+                        _isPosting
+                            ? const Padding(
+                                padding: EdgeInsets.all(12),
+                                child: SizedBox(
+                                  width: 20,
+                                  height: 20,
+                                  child: CircularProgressIndicator(
+                                    strokeWidth: 2,
+                                    color: Color(0xFF1877F2),
+                                  ),
+                                ),
+                              )
+                            : IconButton(
+                                icon: const Icon(Icons.send, color: Color(0xFF1877F2)),
+                                onPressed: _submitComment,
+                              ),
+                      ],
+                    ),
+                  ),
                 ],
               ),
             ),
-          ],
-        ),
-      ),
+          ),
+        );
+      },
     );
   }
 }
