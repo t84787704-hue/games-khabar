@@ -22,6 +22,11 @@ import '../services/gamer_auth_service.dart';
 import '../models/gamer_user_model.dart';
 import 'verification_screen.dart';
 import '../widgets/coin_history_sheet.dart';
+import 'blocked_users_screen.dart';
+import 'gamer_download_data_screen.dart';
+import 'gamer_terms_of_service_screen.dart';
+import 'gamer_delete_account_screen.dart';
+import 'gamer_auth_screen.dart';
 
 class ProfileScreen extends StatefulWidget {
   const ProfileScreen({super.key});
@@ -71,7 +76,6 @@ class _ProfileScreenState extends State<ProfileScreen> {
     return const Stream.empty();
   }
 
-  /// Safe translation helper with guaranteed fallback to prevent grey screen
   String _safeTr(String key, {String? fallback, List<String>? args}) {
     try {
       final res = key.tr(args: args);
@@ -182,6 +186,49 @@ class _ProfileScreenState extends State<ProfileScreen> {
     if (!mounted) return;
 
     Navigator.pushNamed(context, '/admin-dashboard');
+  }
+
+  void _confirmSignOut() {
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: cardDark,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        title: Text(
+          'Log Out',
+          style: TextStyle(color: textWhite, fontWeight: FontWeight.bold),
+        ),
+        content: Text(
+          'Are you sure you want to log out of Gamers ID?',
+          style: TextStyle(color: textGray),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: Text('Cancel', style: TextStyle(color: textGray)),
+          ),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(
+              backgroundColor: alertRed,
+              foregroundColor: Colors.white,
+              elevation: 0,
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+            ),
+            onPressed: () async {
+              Navigator.pop(ctx);
+              await GamerAuthService().signOut();
+              if (mounted) {
+                Navigator.of(context).pushAndRemoveUntil(
+                  MaterialPageRoute(builder: (_) => const GamerAuthScreen()),
+                  (route) => false,
+                );
+              }
+            },
+            child: const Text('Log Out', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+          ),
+        ],
+      ),
+    );
   }
 
   @override
@@ -544,7 +591,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
               ),
             ],
 
-            // General Settings Cards
+            // Consolidated Settings Card (Pic 2 + Pic 3/4 Features in ONE Place)
             Container(
               decoration: BoxDecoration(
                 color: cardDark,
@@ -553,7 +600,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
               ),
               child: Column(
                 children: [
-                  // 7 Language Selector Option
+                  // App Language
                   ListTile(
                     leading: Container(
                       padding: const EdgeInsets.all(6),
@@ -603,7 +650,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                   ),
                   Divider(color: borderDark, height: 1),
 
-                  // Coin History & Passbook Entry
+                  // Coin History & Passbook
                   ListTile(
                     leading: Container(
                       padding: const EdgeInsets.all(6),
@@ -625,6 +672,60 @@ class _ProfileScreenState extends State<ProfileScreen> {
                     onTap: () {
                       final uid = GamerAuthService().currentUid ?? '';
                       CoinHistorySheet.show(context, userId: uid);
+                    },
+                  ),
+                  Divider(color: borderDark, height: 1),
+
+                  // Blocked Users (From Pic 2)
+                  ListTile(
+                    leading: Container(
+                      padding: const EdgeInsets.all(6),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFFFEE2E2),
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                      child: const Icon(Icons.block_rounded, color: Color(0xFFDC2626), size: 20),
+                    ),
+                    title: Text(
+                      'Blocked Users',
+                      style: TextStyle(color: textWhite, fontSize: 14, fontWeight: FontWeight.bold),
+                    ),
+                    subtitle: Text(
+                      'Manage users you have blocked',
+                      style: TextStyle(color: textGray, fontSize: 12),
+                    ),
+                    trailing: Icon(Icons.arrow_forward_ios_rounded, color: textGray, size: 14),
+                    onTap: () {
+                      Navigator.of(context).push(
+                        MaterialPageRoute(builder: (_) => const BlockedUsersScreen()),
+                      );
+                    },
+                  ),
+                  Divider(color: borderDark, height: 1),
+
+                  // Saved Posts & News (From Pic 2)
+                  ListTile(
+                    leading: Container(
+                      padding: const EdgeInsets.all(6),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFFE7F3FF),
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                      child: const Icon(Icons.bookmark_rounded, color: Color(0xFF1877F2), size: 20),
+                    ),
+                    title: Text(
+                      'Saved Posts & News',
+                      style: TextStyle(color: textWhite, fontSize: 14, fontWeight: FontWeight.bold),
+                    ),
+                    subtitle: Text(
+                      'View your bookmarked clips & articles',
+                      style: TextStyle(color: textGray, fontSize: 12),
+                    ),
+                    trailing: Icon(Icons.arrow_forward_ios_rounded, color: textGray, size: 14),
+                    onTap: () {
+                      Navigator.of(context).push(
+                        MaterialPageRoute(builder: (_) => const SavedNewsScreen()),
+                      );
                     },
                   ),
                   Divider(color: borderDark, height: 1),
@@ -703,6 +804,33 @@ class _ProfileScreenState extends State<ProfileScreen> {
                   ),
                   Divider(color: borderDark, height: 1),
 
+                  // Download My Data (From Pic 2)
+                  ListTile(
+                    leading: Container(
+                      padding: const EdgeInsets.all(6),
+                      decoration: BoxDecoration(
+                        color: neonGreen.withOpacity(0.12),
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                      child: Icon(Icons.download_rounded, color: neonGreen, size: 20),
+                    ),
+                    title: Text(
+                      'Download My Data',
+                      style: TextStyle(color: textWhite, fontSize: 14, fontWeight: FontWeight.bold),
+                    ),
+                    subtitle: Text(
+                      'Get a copy of your Gamers ID data (JSON)',
+                      style: TextStyle(color: textGray, fontSize: 12),
+                    ),
+                    trailing: Icon(Icons.arrow_forward_ios_rounded, color: textGray, size: 14),
+                    onTap: () {
+                      Navigator.of(context).push(
+                        MaterialPageRoute(builder: (_) => const GamerDownloadDataScreen()),
+                      );
+                    },
+                  ),
+                  Divider(color: borderDark, height: 1),
+
                   // About Us
                   ListTile(
                     leading: Icon(Icons.groups_rounded, color: neonGreen, size: 22),
@@ -766,6 +894,62 @@ class _ProfileScreenState extends State<ProfileScreen> {
                   ),
                   Divider(color: borderDark, height: 1),
 
+                  // Privacy Policy
+                  ListTile(
+                    leading: Container(
+                      padding: const EdgeInsets.all(6),
+                      decoration: BoxDecoration(
+                        color: neonGreen.withOpacity(0.12),
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                      child: Icon(Icons.privacy_tip_rounded, color: neonGreen, size: 20),
+                    ),
+                    title: Text(
+                      'Privacy Policy',
+                      style: TextStyle(color: textWhite, fontSize: 14, fontWeight: FontWeight.bold),
+                    ),
+                    subtitle: Text(
+                      'How we collect and protect your data',
+                      style: TextStyle(color: textGray, fontSize: 12),
+                    ),
+                    trailing: Icon(Icons.arrow_forward_ios_rounded, color: textGray, size: 14),
+                    onTap: () {
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(builder: (_) => const PrivacyPolicyScreen()),
+                      );
+                    },
+                  ),
+                  Divider(color: borderDark, height: 1),
+
+                  // Terms of Service (From Pic 2)
+                  ListTile(
+                    leading: Container(
+                      padding: const EdgeInsets.all(6),
+                      decoration: BoxDecoration(
+                        color: neonGreen.withOpacity(0.12),
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                      child: Icon(Icons.gavel_rounded, color: neonGreen, size: 20),
+                    ),
+                    title: Text(
+                      'Terms of Service',
+                      style: TextStyle(color: textWhite, fontSize: 14, fontWeight: FontWeight.bold),
+                    ),
+                    subtitle: Text(
+                      'Rules for using Gamers ID',
+                      style: TextStyle(color: textGray, fontSize: 12),
+                    ),
+                    trailing: Icon(Icons.arrow_forward_ios_rounded, color: textGray, size: 14),
+                    onTap: () {
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(builder: (_) => const GamerTermsOfServiceScreen()),
+                      );
+                    },
+                  ),
+                  Divider(color: borderDark, height: 1),
+
                   // App Version
                   ListTile(
                     leading: Icon(Icons.info_outline_rounded, color: neonGreen, size: 22),
@@ -782,6 +966,56 @@ class _ProfileScreenState extends State<ProfileScreen> {
                       style: TextStyle(color: GamerTheme.textMuted, fontSize: 13),
                     ),
                     onTap: _onVersionTapped,
+                  ),
+                  Divider(color: borderDark, height: 1),
+
+                  // Delete Account (From Pic 2)
+                  ListTile(
+                    leading: Container(
+                      padding: const EdgeInsets.all(6),
+                      decoration: const BoxDecoration(
+                        color: Color(0xFFFFEBEE),
+                        borderRadius: BorderRadius.all(Radius.circular(8)),
+                      ),
+                      child: const Icon(Icons.delete_forever_rounded, color: Color(0xFFDC2626), size: 20),
+                    ),
+                    title: const Text(
+                      'Delete Account',
+                      style: TextStyle(color: Color(0xFFDC2626), fontWeight: FontWeight.bold, fontSize: 14),
+                    ),
+                    subtitle: Text(
+                      'Permanently delete your Gamer ID (30-day grace)',
+                      style: TextStyle(color: textGray, fontSize: 12),
+                    ),
+                    trailing: Icon(Icons.arrow_forward_ios_rounded, color: textGray, size: 14),
+                    onTap: () {
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(builder: (_) => const GamerDeleteAccountScreen()),
+                      );
+                    },
+                  ),
+                  Divider(color: borderDark, height: 1),
+
+                  // Log Out (From Pic 2)
+                  ListTile(
+                    leading: Container(
+                      padding: const EdgeInsets.all(6),
+                      decoration: const BoxDecoration(
+                        color: Color(0xFFFEE2E2),
+                        borderRadius: BorderRadius.all(Radius.circular(8)),
+                      ),
+                      child: const Icon(Icons.logout_rounded, color: Color(0xFFDC2626), size: 20),
+                    ),
+                    title: const Text(
+                      'Log Out',
+                      style: TextStyle(color: Color(0xFFDC2626), fontWeight: FontWeight.bold, fontSize: 14),
+                    ),
+                    subtitle: Text(
+                      'Sign out of Gamers ID Network',
+                      style: TextStyle(color: textGray, fontSize: 12),
+                    ),
+                    onTap: _confirmSignOut,
                   ),
                 ],
               ),
@@ -924,7 +1158,6 @@ class _ProfileScreenState extends State<ProfileScreen> {
     );
   }
 
-  /// Robust Fallback UI that prevents blank grey screen if data load or build throws
   Widget _buildFallbackUI(BuildContext context) {
     final bgDark = ThemeService.bg;
     final cardDark = ThemeService.card;
