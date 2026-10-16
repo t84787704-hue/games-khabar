@@ -273,7 +273,7 @@ class GamerRoomsScreen extends StatefulWidget {
 
     final safeKey = gameName.trim().toLowerCase().replaceAll(' ', '_');
 
-    // Check if profile already exists
+    // 1. Check game profiles map
     if (gameProfiles[safeKey] is Map) {
       final existing = Map<String, dynamic>.from(gameProfiles[safeKey]);
       final ign = existing['ign']?.toString() ?? '';
@@ -283,20 +283,20 @@ class GamerRoomsScreen extends StatefulWidget {
       }
     }
 
-    // Check root metadata fallback
+    // 2. Check root metadata fallback
     final rootIgn = meta['ign']?.toString() ?? meta['in_game_name']?.toString() ?? '';
     final rootUid = meta['game_uid']?.toString() ?? meta['character_id']?.toString() ?? '';
     if (rootIgn.isNotEmpty && rootUid.isNotEmpty) {
       return {'ign': rootIgn, 'game_uid': rootUid};
     }
 
-    // Prompt user via clean esports dialog
+    // 3. Prompt user via clean esports dialog
     final ignController = TextEditingController(text: rootIgn);
     final uidController = TextEditingController(text: rootUid);
 
     final result = await showDialog<Map<String, String>>(
       context: context,
-      barrierDismissible: false,
+      barrierDismissible: true,
       builder: (ctx) => AlertDialog(
         backgroundColor: Colors.white,
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
@@ -397,7 +397,9 @@ class GamerRoomsScreen extends StatefulWidget {
                 }
               } catch (_) {}
 
-              Navigator.pop(ctx, {'ign': ign, 'game_uid': uid});
+              if (ctx.mounted) {
+                Navigator.pop(ctx, {'ign': ign, 'game_uid': uid});
+              }
             },
             child: const Text('Save & Continue', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
           ),
@@ -461,7 +463,6 @@ class _GamerRoomsScreenState extends State<GamerRoomsScreen> {
     super.dispose();
   }
 
-  /// FEATURE 4: 5 Minutes baad Completed Room ko Supabase se Auto Delete karna
   Future<void> _purgeExpiredCompletedRooms() async {
     try {
       final now = DateTime.now();
@@ -625,8 +626,8 @@ class _GamerRoomsScreenState extends State<GamerRoomsScreen> {
     final roomIdCtrl = TextEditingController();
     final passCtrl = TextEditingController();
     final prizeCtrl = TextEditingController(text: '100');
+    bool isCreating = false;
 
-    // Esports Flexible Match Formats
     int selectedSlots = 2;
     String selectedFormat = '1 vs 1 (2 Slots)';
     final Map<String, int> formatOptions = {
@@ -638,8 +639,10 @@ class _GamerRoomsScreenState extends State<GamerRoomsScreen> {
     showDialog(
       context: context,
       builder: (ctx) => StatefulBuilder(
-        builder: (context, setDialogState) => AlertDialog(
-          title: const Text('Create Game Room', style: TextStyle(fontWeight: FontWeight.bold)),
+        builder: (dialogCtx, setDialogState) => AlertDialog(
+          backgroundColor: Colors.white,
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+          title: const Text('Create Game Room', style: TextStyle(fontWeight: FontWeight.bold, color: Color(0xFF1E293B))),
           content: SingleChildScrollView(
             child: Column(
               mainAxisSize: MainAxisSize.min,
@@ -675,52 +678,111 @@ class _GamerRoomsScreenState extends State<GamerRoomsScreen> {
             ),
           ),
           actions: [
-            TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Cancel')),
+            TextButton(
+              onPressed: isCreating ? null : () => Navigator.pop(ctx),
+              child: const Text('Cancel', style: TextStyle(color: Colors.grey)),
+            ),
             ElevatedButton(
-              style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF1877F2)),
-              onPressed: () async {
-                if (roomIdCtrl.text.trim().isEmpty || passCtrl.text.trim().isEmpty) return;
-                final gameName = gameCtrl.text.trim();
+              style: ElevatedButton.styleFrom(
+                backgroundColor: const Color(0xFF1877F2),
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+              ),
+              onPressed: isCreating
+                  ? null
+                  : () async {
+                      final rId = roomIdCtrl.text.trim();
+                      final pass = passCtrl.text.trim();
+                      if (rId.isEmpty || pass.isEmpty) {
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          const SnackBar(
+                            content: Text('⚠️ Room ID aur Password dono enter karein!'),
+                            backgroundColor: Colors.red,
+                          ),
+                        );
+                        return;
+                      }
 
-                // 1-Time check / prompt for host game profile
-                final profile = await GamerRoomsScreen.getOrPromptGameProfile(
-                  context: context,
-                  gameName: gameName,
-                );
-                if (profile == null) return;
+                      setDialogState(() => isCreating = true);
 
-                final myIgn = profile['ign'] ?? currentUserName;
-                final myUid = profile['game_uid'] ?? '';
+                      try {
+                        final gameName = gameCtrl.text.trim().isEmpty ? 'BGMI' : gameCtrl.text.trim();
 
-                final roomData = {
-                  'game': gameName,
-                  'mode': modeCtrl.text.trim(),
-                  'room_id': roomIdCtrl.text.trim(),
-                  'room_password': passCtrl.text.trim(),
-                  'prize_pool': int.tryParse(prizeCtrl.text) ?? 100,
-                  'total_slots': selectedSlots,
-                  'filled_slots': 1,
-                  'status': 'active',
-                  'host_id': currentUserId,
-                  'host_name': currentUserName,
-                  'joined_user_ids': [currentUserId],
-                  'joined_users': [
-                    {
-                      'id': currentUserId,
-                      'name': currentUserName,
-                      'avatar': currentUserPhoto,
-                      'is_host': true,
-                      'ign': myIgn,
-                      'game_uid': myUid,
-                    }
-                  ],
-                  'created_at': DateTime.now().toIso8601String(),
-                };
+                        // Fallback Ready IGN & UID
+                        String myIgn = currentUserName;
+                        String myUid = currentUserId;
 
-                if (mounted) Navigator.pop(ctx);
-                await SupabaseService.client.from('rooms').insert(roomData);
-              },
-              child: const Text('Create', style: TextStyle(color: Colors.white)),
+                        try {
+                          final profile = await GamerRoomsScreen.getOrPromptGameProfile(
+                            context: context,
+                            gameName: gameName,
+                          );
+                          if (profile != null) {
+                            if (profile['ign']?.isNotEmpty == true) myIgn = profile['ign']!;
+                            if (profile['game_uid']?.isNotEmpty == true) myUid = profile['game_uid']!;
+                          }
+                        } catch (promptErr) {
+                          debugPrint('[Rooms] Profile prompt notice: $promptErr');
+                        }
+
+                        final roomData = {
+                          'game': gameName,
+                          'mode': modeCtrl.text.trim().isEmpty ? 'Erangel' : modeCtrl.text.trim(),
+                          'room_id': rId,
+                          'room_password': pass,
+                          'prize_pool': int.tryParse(prizeCtrl.text) ?? 100,
+                          'total_slots': selectedSlots,
+                          'filled_slots': 1,
+                          'status': 'active',
+                          'host_id': currentUserId,
+                          'host_name': currentUserName,
+                          'joined_user_ids': [currentUserId],
+                          'joined_users': [
+                            {
+                              'id': currentUserId,
+                              'name': currentUserName,
+                              'avatar': currentUserPhoto,
+                              'is_host': true,
+                              'ign': myIgn,
+                              'game_uid': myUid,
+                            }
+                          ],
+                          'created_at': DateTime.now().toIso8601String(),
+                        };
+
+                        await SupabaseService.client.from('rooms').insert(roomData);
+
+                        if (ctx.mounted) {
+                          Navigator.pop(ctx);
+                        }
+
+                        if (mounted) {
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            const SnackBar(
+                              content: Text('✅ Game Room successfully create ho gaya!'),
+                              backgroundColor: Color(0xFF00FF88),
+                            ),
+                          );
+                        }
+                      } catch (e) {
+                        debugPrint('[Rooms] Error creating room: $e');
+                        setDialogState(() => isCreating = false);
+                        if (mounted) {
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            SnackBar(
+                              content: Text('Error creating room: $e'),
+                              backgroundColor: Colors.red,
+                            ),
+                          );
+                        }
+                      }
+                    },
+              child: isCreating
+                  ? const SizedBox(
+                      width: 18,
+                      height: 18,
+                      child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
+                    )
+                  : const Text('Create', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
             ),
           ],
         ),
@@ -730,7 +792,7 @@ class _GamerRoomsScreenState extends State<GamerRoomsScreen> {
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════
-// IN-ROOM DETAILS & MANAGEMENT MODAL (Matches 1000064588.png)
+// IN-ROOM DETAILS & MANAGEMENT MODAL
 // ═══════════════════════════════════════════════════════════════════════════════
 class _RoomDetailsSheet extends StatefulWidget {
   final String roomId;
@@ -819,7 +881,6 @@ class _RoomDetailsSheetState extends State<_RoomDetailsSheet> {
       }
       if (_secondsRemaining <= 1) {
         timer.cancel();
-        // 5 Minutes finish -> Auto Delete Room & pop
         try {
           await SupabaseService.client.from('rooms').delete().eq('id', widget.roomId);
           await SupabaseService.client.from('messages').delete().eq('room_id', widget.roomId);
@@ -836,7 +897,6 @@ class _RoomDetailsSheetState extends State<_RoomDetailsSheet> {
     });
   }
 
-  /// FEATURE: Join Match with 1-Time Game Profile Check
   Future<void> _joinMatch(GamerRoom room) async {
     if (_isJoining) return;
     if (room.isFull) {
@@ -909,7 +969,6 @@ class _RoomDetailsSheetState extends State<_RoomDetailsSheet> {
     }
   }
 
-  /// FEATURE 2: Upload Winning Screenshot
   Future<void> _uploadWinScreenshot() async {
     final XFile? file = await _picker.pickImage(
       source: ImageSource.gallery,
@@ -924,7 +983,6 @@ class _RoomDetailsSheetState extends State<_RoomDetailsSheet> {
       final ext = file.path.split('.').last;
       final fileName = 'proof_${widget.roomId}_${DateTime.now().millisecondsSinceEpoch}.$ext';
 
-      // 1. Upload to Supabase Storage Bucket 'match_proofs'
       await SupabaseService.client.storage
           .from('match_proofs')
           .uploadBinary(fileName, bytes);
@@ -933,7 +991,6 @@ class _RoomDetailsSheetState extends State<_RoomDetailsSheet> {
           .from('match_proofs')
           .getPublicUrl(fileName);
 
-      // 2. Update Room Status to 'review_pending'
       await SupabaseService.client.from('rooms').update({
         'status': 'review_pending',
         'reward_status': 'pending_approval',
@@ -943,7 +1000,6 @@ class _RoomDetailsSheetState extends State<_RoomDetailsSheet> {
         'win_proof_uploaded_at': DateTime.now().toIso8601String(),
       }).eq('id', widget.roomId);
 
-      // 3. System chat notification
       await SupabaseService.client.from('messages').insert({
         'room_id': widget.roomId,
         'sender_id': 'system',
@@ -972,7 +1028,6 @@ class _RoomDetailsSheetState extends State<_RoomDetailsSheet> {
     }
   }
 
-  /// Raise Dispute Dialog
   Future<void> _raiseDisputeDialog() async {
     final reasonCtrl = TextEditingController();
     showDialog(
@@ -1077,7 +1132,7 @@ class _RoomDetailsSheetState extends State<_RoomDetailsSheet> {
               Padding(
                 padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
                 child: Row(
-                  mainAxisAlignment: ChangeHorizontal(16, 8),
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
                     Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
@@ -1103,7 +1158,6 @@ class _RoomDetailsSheetState extends State<_RoomDetailsSheet> {
 
               // BANNERS: Winner / Disputed / Under Review
               if (room.isCompleted) ...[
-                // FEATURE 3 & 4: 5-Minute Golden Winner Banner
                 Container(
                   width: double.infinity,
                   padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 16),
@@ -1241,7 +1295,6 @@ class _RoomDetailsSheetState extends State<_RoomDetailsSheet> {
                             ),
                           ],
                         ),
-                        // 📜 RULES MODAL BUTTON
                         InkWell(
                           onTap: _showRulesDialog,
                           borderRadius: BorderRadius.circular(6),
@@ -1306,7 +1359,7 @@ class _RoomDetailsSheetState extends State<_RoomDetailsSheet> {
                 ),
               ),
 
-              // FEATURE 1: PLAYERS LIST
+              // PLAYERS LIST
               Container(
                 margin: const EdgeInsets.symmetric(horizontal: 14, vertical: 4),
                 padding: const EdgeInsets.all(10),
@@ -1402,7 +1455,6 @@ class _RoomDetailsSheetState extends State<_RoomDetailsSheet> {
                                     ],
                                   ),
                                   const SizedBox(height: 2),
-                                  // In-Game Name & Character ID with copy button
                                   Row(
                                     children: [
                                       Text(
@@ -1550,7 +1602,6 @@ class _RoomDetailsSheetState extends State<_RoomDetailsSheet> {
               // ACTION BUTTONS: Join Match OR End Match & Dispute
               if (!room.isCompleted) ...[
                 if (!isJoined) ...[
-                  // JOIN MATCH BUTTON (For new players)
                   Padding(
                     padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
                     child: SizedBox(
@@ -1579,7 +1630,6 @@ class _RoomDetailsSheetState extends State<_RoomDetailsSheet> {
                     ),
                   ),
                 ] else ...[
-                  // FEATURE 2: End Match & Upload Win Proof Button
                   Padding(
                     padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 4),
                     child: Row(
@@ -1614,7 +1664,6 @@ class _RoomDetailsSheetState extends State<_RoomDetailsSheet> {
                     ),
                   ),
 
-                  // Dispute Button
                   if (!room.isDisputed)
                     TextButton.icon(
                       icon: const Icon(Icons.warning_amber_rounded, size: 16, color: Colors.grey),
@@ -1649,13 +1698,8 @@ class _RoomDetailsSheetState extends State<_RoomDetailsSheet> {
       ),
     );
   }
-
-  MainAxisAlignment ChangeHorizontal(double left, double right) => MainAxisAlignment.spaceBetween;
 }
 
-// ═══════════════════════════════════════════════════════════════════════════════
-// HELPER: RULES MODAL ITEM
-// ═══════════════════════════════════════════════════════════════════════════════
 class _RuleItem extends StatelessWidget {
   final IconData icon;
   final String title;
