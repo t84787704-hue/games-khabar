@@ -1,6 +1,7 @@
 // ================================================================
-// EXACT DIFF — Only dismiss feature added to rejected-proof banner
+// EXACT DIFF — Full Adaptive Day & Night Mode Support for TeamsScreen
 // + Realtime timeout fallback & clean retry key
+// + Dismiss feature for rejected-proof banner preserved
 // ----------------------------------------------------------------
 // File: lib/screens/teams_screen.dart
 // ================================================================
@@ -26,6 +27,7 @@ import "private_match_room_screen.dart";
 import "../services/coin_wallet_service.dart";
 import "../services/notification_service.dart";
 import "../widgets/coin_or_ad_popup.dart";
+import "../services/theme_service.dart";
 
 class TeamsScreen extends StatefulWidget {
   const TeamsScreen({super.key});
@@ -284,73 +286,78 @@ class _TeamsScreenState extends State<TeamsScreen>
   Widget build(BuildContext context) {
     final currentUid = SupabaseService.client.auth.currentUser?.id ?? "";
 
-    return StreamBuilder<List<TeamModel>>(
-      stream: currentUid.isNotEmpty ? _teamService.getUserTeamsStream(currentUid) : Stream.value([]),
-      builder: (context, userTeamsSnap) {
-        final userTeams = userTeamsSnap.data ?? [];
-        final myLeaderTeams = userTeams.where((t) => t.isLeader(currentUid)).toList();
-        final myTeam = myLeaderTeams.isNotEmpty ? myLeaderTeams.first : null;
-        final String myTeamId = myTeam?.id ?? "";
-        final String myTeamName = myTeam?.name ?? "";
-        final String myTeamUuid = SupabaseService.toUuid(myTeamId);
+    return ValueListenableBuilder<ThemeMode>(
+      valueListenable: ThemeService.themeModeNotifier,
+      builder: (context, _, __) {
+        return StreamBuilder<List<TeamModel>>(
+          stream: currentUid.isNotEmpty ? _teamService.getUserTeamsStream(currentUid) : Stream.value([]),
+          builder: (context, userTeamsSnap) {
+            final userTeams = userTeamsSnap.data ?? [];
+            final myLeaderTeams = userTeams.where((t) => t.isLeader(currentUid)).toList();
+            final myTeam = myLeaderTeams.isNotEmpty ? myLeaderTeams.first : null;
+            final String myTeamId = myTeam?.id ?? "";
+            final String myTeamName = myTeam?.name ?? "";
+            final String myTeamUuid = SupabaseService.toUuid(myTeamId);
 
-        return StreamBuilder<List<Map<String, dynamic>>>(
-          stream: myTeamId.isNotEmpty
-              ? SupabaseService.client.from("active_matches").stream(primaryKey: ["id"])
-              : Stream.value([]),
-          builder: (context, matchSnap) {
-            final rawMatches = matchSnap.data ?? [];
-            final myActiveMatches = _filterMyActiveMatches(rawMatches, myTeamId, myTeamUuid);
-            final liveCount = myActiveMatches.length;
+            return StreamBuilder<List<Map<String, dynamic>>>(
+              stream: myTeamId.isNotEmpty
+                  ? SupabaseService.client.from("active_matches").stream(primaryKey: ["id"])
+                  : Stream.value([]),
+              builder: (context, matchSnap) {
+                final rawMatches = matchSnap.data ?? [];
+                final myActiveMatches = _filterMyActiveMatches(rawMatches, myTeamId, myTeamUuid);
+                final liveCount = myActiveMatches.length;
 
-            return Scaffold(
-              backgroundColor: const Color(0xFFF0F2F5),
-              appBar: AppBar(
-                backgroundColor: Colors.white,
-                elevation: 1,
-                title: const Text(
-                  "Teams",
-                  style: TextStyle(color: Color(0xFF1877F2), fontWeight: FontWeight.bold, fontSize: 22),
-                ),
-                actions: [
-                  IconButton(
-                    tooltip: "TOP 100 TEAMS Leaderboard",
-                    icon: const Icon(Icons.emoji_events_rounded, color: Color(0xFF65676B)),
-                    onPressed: () => Navigator.push(
-                      context,
-                      MaterialPageRoute(builder: (_) => const LeaderboardScreen()),
+                return Scaffold(
+                  backgroundColor: ThemeService.bg,
+                  appBar: AppBar(
+                    backgroundColor: ThemeService.appBarBg,
+                    elevation: ThemeService.isDarkMode ? 0 : 1,
+                    title: const Text(
+                      "Teams",
+                      style: TextStyle(color: Color(0xFF1877F2), fontWeight: FontWeight.bold, fontSize: 22),
+                    ),
+                    actions: [
+                      IconButton(
+                        tooltip: "TOP 100 TEAMS Leaderboard",
+                        icon: Icon(Icons.emoji_events_rounded, color: ThemeService.textSecondary),
+                        onPressed: () => Navigator.push(
+                          context,
+                          MaterialPageRoute(builder: (_) => const LeaderboardScreen()),
+                        ),
+                      ),
+                    ],
+                    bottom: TabBar(
+                      controller: _tabController,
+                      indicatorColor: const Color(0xFF1877F2),
+                      indicatorWeight: 3,
+                      labelColor: const Color(0xFF1877F2),
+                      unselectedLabelColor: ThemeService.textSecondary,
+                      labelStyle: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
+                      tabs: [
+                        const Tab(text: "Teams"),
+                        Tab(text: liveCount > 0 ? "Live 🔴 $liveCount" : "Live"),
+                      ],
                     ),
                   ),
-                ],
-                bottom: TabBar(
-                  controller: _tabController,
-                  indicatorColor: const Color(0xFF1877F2),
-                  indicatorWeight: 3,
-                  labelColor: const Color(0xFF1877F2),
-                  unselectedLabelColor: const Color(0xFF65676B),
-                  labelStyle: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
-                  tabs: [
-                    const Tab(text: "Teams"),
-                    Tab(text: liveCount > 0 ? "Live 🔴 $liveCount" : "Live"),
-                  ],
-                ),
-              ),
-              body: TabBarView(
-                controller: _tabController,
-                children: [
-                  _buildTeamsTab(
-                    myTeamId: myTeamId,
-                    myTeamUuid: myTeamUuid,
-                    myTeamName: myTeamName,
+                  body: TabBarView(
+                    controller: _tabController,
+                    children: [
+                      _buildTeamsTab(
+                        myTeamId: myTeamId,
+                        myTeamUuid: myTeamUuid,
+                        myTeamName: myTeamName,
+                      ),
+                      _buildLiveMatchesTab(
+                        myActiveMatches: myActiveMatches,
+                        myTeamId: myTeamId,
+                        myTeamUuid: myTeamUuid,
+                        myTeamName: myTeamName,
+                      ),
+                    ],
                   ),
-                  _buildLiveMatchesTab(
-                    myActiveMatches: myActiveMatches,
-                    myTeamId: myTeamId,
-                    myTeamUuid: myTeamUuid,
-                    myTeamName: myTeamName,
-                  ),
-                ],
-              ),
+                );
+              },
             );
           },
         );
@@ -368,9 +375,9 @@ class _TeamsScreenState extends State<TeamsScreen>
         // Top Bar: Search, Create Team, Game Filter
         Container(
           padding: const EdgeInsets.fromLTRB(16, 12, 16, 10),
-          decoration: const BoxDecoration(
-            color: Colors.white,
-            border: Border(bottom: BorderSide(color: Color(0xFFE4E6EB))),
+          decoration: BoxDecoration(
+            color: ThemeService.card,
+            border: Border(bottom: BorderSide(color: ThemeService.border)),
           ),
           child: Column(
             children: [
@@ -380,19 +387,19 @@ class _TeamsScreenState extends State<TeamsScreen>
                     child: Container(
                       height: 40,
                       decoration: BoxDecoration(
-                        color: const Color(0xFFF0F2F5),
+                        color: ThemeService.cardSecondary,
                         borderRadius: BorderRadius.circular(20),
                       ),
                       child: TextField(
                         controller: _searchController,
-                        style: const TextStyle(color: Color(0xFF050505), fontSize: 14),
+                        style: TextStyle(color: ThemeService.textPrimary, fontSize: 14),
                         decoration: InputDecoration(
                           hintText: "Search teams by name or tag...",
-                          hintStyle: const TextStyle(color: Color(0xFF65676B), fontSize: 13),
-                          prefixIcon: const Icon(Icons.search, size: 20, color: Color(0xFF65676B)),
+                          hintStyle: TextStyle(color: ThemeService.textSecondary, fontSize: 13),
+                          prefixIcon: Icon(Icons.search, size: 20, color: ThemeService.textSecondary),
                           suffixIcon: _searchQuery.isNotEmpty
                               ? IconButton(
-                                  icon: const Icon(Icons.clear, size: 18, color: Color(0xFF65676B)),
+                                  icon: Icon(Icons.clear, size: 18, color: ThemeService.textSecondary),
                                   onPressed: () {
                                     _searchController.clear();
                                     setState(() => _searchQuery = "");
@@ -434,16 +441,16 @@ class _TeamsScreenState extends State<TeamsScreen>
                         label: Text(
                           game,
                           style: TextStyle(
-                            color: isSel ? Colors.white : const Color(0xFF050505),
+                            color: isSel ? Colors.white : ThemeService.textPrimary,
                             fontWeight: isSel ? FontWeight.bold : FontWeight.w600,
                             fontSize: 12,
                           ),
                         ),
                         selected: isSel,
                         selectedColor: const Color(0xFF1877F2),
-                        backgroundColor: const Color(0xFFE4E6EB),
+                        backgroundColor: ThemeService.cardSecondary,
                         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-                        side: BorderSide(color: isSel ? const Color(0xFF1877F2) : const Color(0xFFCED0D4)),
+                        side: BorderSide(color: isSel ? const Color(0xFF1877F2) : ThemeService.border),
                         onSelected: (val) {
                           if (val) setState(() => _selectedGameFilter = game);
                         },
@@ -476,7 +483,7 @@ class _TeamsScreenState extends State<TeamsScreen>
                 margin: const EdgeInsets.fromLTRB(16, 8, 16, 4),
                 padding: const EdgeInsets.all(12),
                 decoration: BoxDecoration(
-                  color: Colors.white,
+                  color: ThemeService.card,
                   borderRadius: BorderRadius.circular(14),
                   border: Border.all(color: const Color(0xFF1877F2).withOpacity(0.3), width: 1.5),
                   boxShadow: [
@@ -501,10 +508,10 @@ class _TeamsScreenState extends State<TeamsScreen>
                           child: const Icon(Icons.flash_on_rounded, color: Color(0xFF1877F2), size: 18),
                         ),
                         const SizedBox(width: 8),
-                        const Expanded(
+                        Expanded(
                           child: Text(
                             "Incoming Challenges",
-                            style: TextStyle(color: Color(0xFF050505), fontWeight: FontWeight.bold, fontSize: 15),
+                            style: TextStyle(color: ThemeService.textPrimary, fontWeight: FontWeight.bold, fontSize: 15),
                           ),
                         ),
                         Container(
@@ -529,28 +536,28 @@ class _TeamsScreenState extends State<TeamsScreen>
                         margin: const EdgeInsets.only(bottom: 8),
                         padding: const EdgeInsets.all(12),
                         decoration: BoxDecoration(
-                          color: const Color(0xFFF0F2F5),
+                          color: ThemeService.cardSecondary,
                           borderRadius: BorderRadius.circular(10),
-                          border: Border.all(color: const Color(0xFFCED0D4)),
+                          border: Border.all(color: ThemeService.border),
                         ),
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
                             Row(
                               children: [
-                                const CircleAvatar(
+                                CircleAvatar(
                                   radius: 18,
-                                  backgroundColor: Color(0xFFCED0D4),
-                                  child: Icon(Icons.shield_rounded, color: Color(0xFF1877F2), size: 20),
+                                  backgroundColor: ThemeService.border,
+                                  child: const Icon(Icons.shield_rounded, color: Color(0xFF1877F2), size: 20),
                                 ),
                                 const SizedBox(width: 10),
                                 Expanded(
                                   child: Text(
                                     "Challenge from $fromTeamName",
-                                    style: const TextStyle(
+                                    style: TextStyle(
                                       fontWeight: FontWeight.bold,
                                       fontSize: 14,
-                                      color: Color(0xFF050505),
+                                      color: ThemeService.textPrimary,
                                     ),
                                   ),
                                 ),
@@ -646,7 +653,7 @@ class _TeamsScreenState extends State<TeamsScreen>
                         margin: const EdgeInsets.fromLTRB(16, 4, 16, 8),
                         padding: const EdgeInsets.all(12),
                         decoration: BoxDecoration(
-                          color: const Color(0xFFE8F4FD),
+                          color: ThemeService.isDarkMode ? const Color(0xFF131A29) : const Color(0xFFE8F4FD),
                           borderRadius: BorderRadius.circular(12),
                           border: Border.all(color: const Color(0xFF1877F2), width: 1.2),
                         ),
@@ -673,7 +680,7 @@ class _TeamsScreenState extends State<TeamsScreen>
                                 padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
                                 minimumSize: const Size(0, 30),
                                 shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-                                backgroundColor: Colors.white,
+                                backgroundColor: ThemeService.card,
                               ),
                               child: const Text("CANCEL", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 11)),
                             ),
@@ -710,19 +717,19 @@ class _TeamsScreenState extends State<TeamsScreen>
                                 children: [
                                   const Icon(Icons.wifi_off_rounded, size: 44, color: Color(0xFFFF4655)),
                                   const SizedBox(height: 12),
-                                  const Text(
+                                  Text(
                                     "Connection Timeout",
                                     style: TextStyle(
-                                      color: Color(0xFF050505),
+                                      color: ThemeService.textPrimary,
                                       fontSize: 16,
                                       fontWeight: FontWeight.bold,
                                     ),
                                   ),
                                   const SizedBox(height: 6),
-                                  const Text(
+                                  Text(
                                     "Database server se connect hone mein waqt lag raha hai. Barah-e-karam dobara koshish karein.",
                                     textAlign: TextAlign.center,
-                                    style: TextStyle(color: Color(0xFF65676B), fontSize: 13),
+                                    style: TextStyle(color: ThemeService.textSecondary, fontSize: 13),
                                   ),
                                   const SizedBox(height: 16),
                                   ElevatedButton.icon(
@@ -750,23 +757,23 @@ class _TeamsScreenState extends State<TeamsScreen>
                               child: Column(
                                 mainAxisAlignment: MainAxisAlignment.center,
                                 children: [
-                                  const Icon(Icons.shield_rounded, size: 44, color: Color(0xFF65676B)),
+                                  Icon(Icons.shield_rounded, size: 44, color: ThemeService.textSecondary),
                                   const SizedBox(height: 12),
                                   Text(
                                     _selectedGameFilter != "All"
                                         ? "No teams found for $_selectedGameFilter"
                                         : "No Teams Yet",
-                                    style: const TextStyle(
-                                      color: Color(0xFF050505),
+                                    style: TextStyle(
+                                      color: ThemeService.textPrimary,
                                       fontSize: 16,
                                       fontWeight: FontWeight.bold,
                                     ),
                                   ),
                                   const SizedBox(height: 6),
-                                  const Text(
+                                  Text(
                                     "سب سے پہلے اپنی ٹیم بنائیں اور دوسری ٹیموں کے ساتھ مقابلہ کریں!",
                                     textAlign: TextAlign.center,
-                                    style: TextStyle(color: Color(0xFF65676B), fontSize: 13),
+                                    style: TextStyle(color: ThemeService.textSecondary, fontSize: 13),
                                   ),
                                   const SizedBox(height: 16),
                                   ElevatedButton.icon(
@@ -837,30 +844,30 @@ class _TeamsScreenState extends State<TeamsScreen>
             children: [
               Container(
                 padding: const EdgeInsets.all(20),
-                decoration: const BoxDecoration(
-                  color: Color(0xFFE4E6EB),
+                decoration: BoxDecoration(
+                  color: ThemeService.cardSecondary,
                   shape: BoxShape.circle,
                 ),
-                child: const Icon(
+                child: Icon(
                   Icons.sports_esports_outlined,
                   size: 48,
-                  color: Color(0xFF65676B),
+                  color: ThemeService.textSecondary,
                 ),
               ),
               const SizedBox(height: 16),
-              const Text(
+              Text(
                 "No live matches",
                 style: TextStyle(
-                  color: Color(0xFF050505),
+                  color: ThemeService.textPrimary,
                   fontSize: 18,
                   fontWeight: FontWeight.bold,
                 ),
               ),
               const SizedBox(height: 8),
-              const Text(
+              Text(
                 "You don't have any ongoing matches right now.\nChallenge a team to start a live match!",
                 textAlign: TextAlign.center,
-                style: TextStyle(color: Color(0xFF65676B), fontSize: 13, height: 1.4),
+                style: TextStyle(color: ThemeService.textSecondary, fontSize: 13, height: 1.4),
               ),
               const SizedBox(height: 20),
               ElevatedButton.icon(
@@ -898,10 +905,10 @@ class _TeamsScreenState extends State<TeamsScreen>
               padding: const EdgeInsets.fromLTRB(16, 8, 16, 2),
               child: Text(
                 "Match #${index + 1}",
-                style: const TextStyle(
+                style: TextStyle(
                   fontWeight: FontWeight.bold,
                   fontSize: 12,
-                  color: Color(0xFF65676B),
+                  color: ThemeService.textSecondary,
                 ),
               ),
             ),
@@ -1227,6 +1234,7 @@ class _ActiveMatchBothTeamsBannerState
     if (_isDismissed) return const SizedBox.shrink();
 
     _checkProofLimitCancellation();
+    final isDark = ThemeService.isDarkMode;
     final match = widget.match;
     final matchId = match["id"]?.toString() ?? "";
     final t1 = match["team1_id"]?.toString() ?? "";
@@ -1267,7 +1275,7 @@ class _ActiveMatchBothTeamsBannerState
         margin: const EdgeInsets.fromLTRB(16, 4, 16, 8),
         padding: const EdgeInsets.all(12),
         decoration: BoxDecoration(
-          color: const Color(0xFFE8F5E9),
+          color: isDark ? const Color(0xFF1B5E20).withOpacity(0.35) : const Color(0xFFE8F5E9),
           borderRadius: BorderRadius.circular(12),
           border: Border.all(color: const Color(0xFF2E7D32), width: 1.5),
         ),
@@ -1321,15 +1329,17 @@ class _ActiveMatchBothTeamsBannerState
         status == "rejected" || (status == "under_review" && proofStatus == "rejected");
     final isUnderReview = status == "under_review" && !isRejected;
 
+    final bannerBg = isRejected
+        ? (isDark ? const Color(0xFF3B151A) : const Color(0xFFFFEBEE))
+        : isUnderReview
+            ? (isDark ? const Color(0xFF332A00) : const Color(0xFFFFF8E1))
+            : (isDark ? const Color(0xFF1B5E20).withOpacity(0.35) : const Color(0xFFE8F5E9));
+
     return Container(
       margin: const EdgeInsets.fromLTRB(16, 4, 16, 8),
       padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
-        color: isRejected
-            ? const Color(0xFFFFEBEE)
-            : isUnderReview
-                ? const Color(0xFFFFF8E1)
-                : const Color(0xFFE8F5E9),
+        color: bannerBg,
         borderRadius: BorderRadius.circular(14),
         border: Border.all(
           color: isRejected
@@ -1428,7 +1438,7 @@ class _ActiveMatchBothTeamsBannerState
           Container(
             padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
             decoration: BoxDecoration(
-              color: Colors.white.withOpacity(0.85),
+              color: isDark ? ThemeService.cardSecondary : Colors.white.withOpacity(0.85),
               borderRadius: BorderRadius.circular(10),
             ),
             child: Row(
@@ -1441,10 +1451,10 @@ class _ActiveMatchBothTeamsBannerState
                         myTeamDisplay,
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
-                        style: const TextStyle(
+                        style: TextStyle(
                           fontWeight: FontWeight.w900,
                           fontSize: 13,
-                          color: Color(0xFF050505),
+                          color: ThemeService.textPrimary,
                         ),
                       ),
                       const SizedBox(height: 2),
@@ -1452,9 +1462,9 @@ class _ActiveMatchBothTeamsBannerState
                         "Leader: $_myLeaderName",
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
-                        style: const TextStyle(
+                        style: TextStyle(
                           fontSize: 11,
-                          color: Color(0xFF65676B),
+                          color: ThemeService.textSecondary,
                         ),
                       ),
                       Text(
@@ -1494,10 +1504,10 @@ class _ActiveMatchBothTeamsBannerState
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
                         textAlign: TextAlign.right,
-                        style: const TextStyle(
+                        style: TextStyle(
                           fontWeight: FontWeight.w900,
                           fontSize: 13,
-                          color: Color(0xFF050505),
+                          color: ThemeService.textPrimary,
                         ),
                       ),
                       const SizedBox(height: 2),
@@ -1506,9 +1516,9 @@ class _ActiveMatchBothTeamsBannerState
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
                         textAlign: TextAlign.right,
-                        style: const TextStyle(
+                        style: TextStyle(
                           fontSize: 11,
-                          color: Color(0xFF65676B),
+                          color: ThemeService.textSecondary,
                         ),
                       ),
                       Text(
@@ -1531,14 +1541,14 @@ class _ActiveMatchBothTeamsBannerState
 
           Row(
             children: [
-              const Icon(Icons.timer_outlined,
-                  size: 13, color: Color(0xFF65676B)),
+              Icon(Icons.timer_outlined,
+                  size: 13, color: ThemeService.textSecondary),
               const SizedBox(width: 4),
               Text(
                 timerLabel,
-                style: const TextStyle(
+                style: TextStyle(
                   fontSize: 11,
-                  color: Color(0xFF65676B),
+                  color: ThemeService.textSecondary,
                   fontWeight: FontWeight.w500,
                 ),
               ),
