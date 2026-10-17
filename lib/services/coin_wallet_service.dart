@@ -1,3 +1,9 @@
+// ===============================================================================
+// COIN WALLET SERVICE — With Automatic 500/1000 Coins Team Moderation & Alerts
+// -------------------------------------------------------------------------------
+// File: lib/services/coin_wallet_service.dart
+// ===============================================================================
+
 import 'dart:async';
 import 'dart:convert';
 import 'package:flutter/foundation.dart';
@@ -46,14 +52,165 @@ class CoinWalletService extends ChangeNotifier {
   }
 
   /// =========================================================================
+  /// AUTO TEAM MODERATION & DETAILED NOTIFICATIONS LOGIC
+  /// 1. Leader < 1,000 Coins: Freeze Team + Detailed Notification
+  /// 2. Leader >= 1,000 Coins: Unfreeze Team + Reactivation Notification
+  /// 3. Member < 500 Coins: Auto-Remove from Team + Detailed Notification
+  /// =========================================================================
+  static Future<void> _checkTeamEligibility(String userId, int newCoins) async {
+    if (userId.isEmpty) return;
+    try {
+      final nowStr = DateTime.now().toIso8601String();
+
+      // ───────────────────────────────────────────────────────────────────────
+      // 1. CHECK IF USER IS A TEAM LEADER (Rule: 1,000 Coins)
+      // ───────────────────────────────────────────────────────────────────────
+      final leaderTeams = await SupabaseService.client
+          .from('teams')
+          .select('id, name, status')
+          .or('leader_id.eq.$userId,leaderId.eq.$userId');
+
+      if (leaderTeams != null && leaderTeams is List && leaderTeams.isNotEmpty) {
+        for (final team in leaderTeams) {
+          final teamId = team['id']?.toString() ?? '';
+          final teamName = team['name']?.toString() ?? 'Team';
+          final currentStatus = (team['status'] ?? 'active').toString().toLowerCase();
+
+          // A: Leader balance drops below 1000 -> FREEZE
+          if (newCoins < 1000 && currentStatus != 'frozen') {
+            await SupabaseService.client.from('teams').update({
+              'status': 'frozen',
+              'frozen_reason': 'Leader balance fell below 1000 coins ($newCoins coins)',
+              'updated_at': nowStr,
+            }).or('id.eq.$teamId,team_id.eq.$teamId');
+
+            // 📩 Detailed Freeze Notification to Leader
+            await _sendDetailedNotification(
+              userId: userId,
+              type: 'team_frozen',
+              title: '⚠️ Team Frozen: Low Balance Alert!',
+              message:
+                  'Aapka wallet balance 1,000 coins se kam ho kar ($newCoins coins) reh gaya hai. Rules ke mutabiq aapki team "$teamName" ko temporarily Freeze kar diya gaya hai. Team ko dobara active karne ke liye wallet mein kam az kam 1,000 coins ka balance poora karein.',
+            );
+          }
+          // B: Leader balance restored to 1000+ -> UNFREEZE / REACTIVATE
+          else if (newCoins >= 1000 && currentStatus == 'frozen') {
+            await SupabaseService.client.from('teams').update({
+              'status': 'active',
+              'frozen_reason': null,
+              'updated_at': nowStr,
+            }).or('id.eq.$teamId,team_id.eq.$teamId');
+
+            // 📩 Reactivation Notification to Leader
+            await _sendDetailedNotification(
+              userId: userId,
+              type: 'team_reactivated',
+              title: '🎉 Team Reactivated!',
+              message:
+                  'Mubarak ho! Aapka balance dobara 1,000+ coins ($newCoins coins) ho gaya hai. Aapki team "$teamName" ab dobara Active ho chuki hai aur matches ke liye tayar hai.',
+            );
+          }
+        }
+      }
+
+      // ───────────────────────────────────────────────────────────────────────
+      // 2. CHECK IF USER IS A TEAM MEMBER (Rule: 500 Coins Auto-Remove)
+      // ───────────────────────────────────────────────────────────────────────
+      if (newCoins < 500) {
+        final memberRows = await SupabaseService.client
+            .from('team_members')
+            .select('id, team_id, teams(name, leader_id, leaderId)')
+            .or('user_id.eq.$userId,userId.eq.$userId');
+
+        if (memberRows != null && memberRows is List && memberRows.isNotEmpty) {
+          for (final row in memberRows) {
+            final rowId = row['id'];
+            final teamId = row['team_id']?.toString() ?? '';
+            final teamMap = row['teams'] as Map<String, dynamic>?;
+            final leaderId = teamMap?['leader_id'] ?? teamMap?['leaderId'];
+            final teamName = teamMap?['name']?.toString() ?? 'Team';
+
+            // Agar user leader nahi hai (sirf member hai), to remove karein
+            if (leaderId != userId) {
+              await SupabaseService.client
+                  .from('team_members')
+                  .delete()
+                  .eq('id', rowId);
+
+              // Update team members count
+              try {
+                final tDoc = await SupabaseService.client
+                    .from('teams')
+                    .select('members_count')
+                    .or('id.eq.$teamId,team_id.eq.$teamId')
+                    .maybeSingle();
+                if (tDoc != null) {
+                  int count = (tDoc['members_count'] as num?)?.toInt() ?? 1;
+                  await SupabaseService.client.from('teams').update({
+                    'members_count': count > 1 ? count - 1 : 1,
+                  }).or('id.eq.$teamId,team_id.eq.$teamId');
+                }
+              } catch (_) {}
+
+              // 📩 Detailed Removal Notification to Member
+              await _sendDetailedNotification(
+                userId: userId,
+                type: 'team_removed',
+                title: '🚨 Removed from Team: Low Balance',
+                message:
+                    'Aapka wallet balance 500 coins se kam ho kar ($newCoins coins) ho gaya hai. eSports rules ke mutabiq kisi bhi team ka hissa rehne ke liye kam az kam 500 coins hona zaroori hain. Is wajah se aapko team "$teamName" se remove kar diya gaya hai. Dobara join karne ke liye pehle apna balance 500 coins karein.',
+              );
+            }
+          }
+        }
+      }
+    } catch (e) {
+      debugPrint('[CoinWalletService] _checkTeamEligibility error: $e');
+    }
+  }
+
+  /// Helper to send persistent notification & push alert
+  static Future<void> _sendDetailedNotification({
+    required String userId,
+    required String type,
+    required String title,
+    required String message,
+  }) async {
+    try {
+      final nowStr = DateTime.now().toIso8601String();
+      await SupabaseService.client.from('notifications').insert({
+        'user_id': userId,
+        'recipientUid': userId,
+        'type': type,
+        'title': title,
+        'message': message,
+        'body': message,
+        'read': false,
+        'created_at': nowStr,
+        'createdAt': nowStr,
+      });
+
+      try {
+        await NotificationService().sendNotification(
+          userId: userId,
+          type: type,
+          title: title,
+          body: message,
+          priority: 'high',
+        );
+      } catch (_) {}
+    } catch (e) {
+      debugPrint('[CoinWalletService] _sendDetailedNotification error: $e');
+    }
+  }
+
+  /// =========================================================================
   /// UNIFIED COIN UPDATE FUNCTION (100% Supabase & 100% snake_case)
-  /// Updates users table (source of truth) and coin_wallets table.
-  /// Logs to coin_transactions and transactions mirror tables.
   /// =========================================================================
   static Future<void> updateCoins({
     required String userId,
     required int amount,
-    required String type, // 'ad_reward', 'daily_bonus', 'referral', 'store_purchase', 'tournament_entry', 'win_prize', 'escrow_hold', 'escrow_refund', 'refund', 'room_host_hold', 'room_host_refund'
+    required String type,
     required String description,
     String? title,
     String? roomId,
@@ -163,7 +320,6 @@ class CoinWalletService extends ChangeNotifier {
       }
 
       // 4. Transaction log (both coin_transactions & transactions tables)
-      // FIX (Issue 9): Auto-generated id (let Supabase generate), targetUuid guaranteed, snake_case balance_after, created_at
       final String targetUuid = RegExp(
         r'^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$',
       ).hasMatch(userId)
@@ -234,6 +390,10 @@ class CoinWalletService extends ChangeNotifier {
         _instance.notifyListeners();
         _instance._saveToLocal(_instance._currentWallet!);
       }
+
+      // ✅ 6. AUTOMATIC TEAM MODERATION CHECK (Runs in background)
+      _checkTeamEligibility(userId, newCoins);
+
     } catch (e) {
       debugPrint('CoinWalletService updateCoins error: $e');
     }
@@ -269,6 +429,10 @@ class CoinWalletService extends ChangeNotifier {
       });
 
       _instance._syncToUserDocAndNotifiers(userId, computed);
+
+      // Check eligibility after recalculation
+      _checkTeamEligibility(userId, computed);
+
       return computed;
     } catch (e) {
       debugPrint('CoinWalletService recalculateCoins error: $e');
