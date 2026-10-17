@@ -15,10 +15,13 @@ class FollowUsScreen extends StatelessWidget {
   Color get textWhite => ThemeService.textPrimary;
   Color get textGray => ThemeService.textSecondary;
 
-  static const String youtubeUrl = 'https://youtube.com/@GamersIDNetwork';
-  static const String instagramUrl = 'https://instagram.com/gamersidnetwork';
-  static const String tiktokUrl = 'https://tiktok.com/@gamersidnetwork';
-  static const String facebookUrl = 'https://facebook.com/gamersidnetwork';
+  // Official Handles Update
+  static const String youtubeUrl = 'https://youtube.com/@GamersIDOfficial';
+  static const String instagramUrl = 'https://instagram.com/gamersidofficial';
+  static const String tiktokUrl = 'https://tiktok.com/@gamersidofficial';
+  
+  // Facebook Page ka jo link aapne 3 dots se copy kiya tha, wo yahan paste karein:
+  static const String facebookUrl = 'https://facebook.com/GamersIDOfficial'; 
 
   Future<void> _launchSocialUrl(BuildContext context, String urlStr, String title) async {
     final Uri uri = Uri.parse(urlStr);
@@ -214,7 +217,7 @@ class FollowUsScreen extends StatelessWidget {
                     child: const Icon(Icons.music_note_rounded, color: Color(0xFF00F2FE), size: 24),
                   ),
                   title: 'TikTok',
-                  subtitle: 'Watch short BGMI clips & viral gameplay',
+                  subtitle: 'Watch short clips & viral gameplay',
                   badgeText: 'WATCH',
                   badgeColor: const Color(0xFF00F2FE),
                   onTap: () => _launchSocialUrl(context, tiktokUrl, 'TikTok'),
