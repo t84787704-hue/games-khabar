@@ -32,6 +32,9 @@ class _VerificationScreenState extends State<VerificationScreen> {
   VerificationStats? _liveStats;
   GamerUser? _currentUser;
 
+  bool get _isUrdu => LanguageService.isUrdu;
+  bool get _isHindi => LanguageService.currentLanguage.value == 'hi';
+
   @override
   void initState() {
     super.initState();
@@ -77,18 +80,18 @@ class _VerificationScreenState extends State<VerificationScreen> {
               const SizedBox(width: 8),
               Expanded(
                 child: Text(
-                  LanguageService.isUrdu
+                  _isUrdu
                       ? 'کوائنز کم ہیں!'
-                      : (LanguageService.isHindi ? 'कॉइन्स कम हैं!' : 'Insufficient Coins!'),
+                      : (_isHindi ? 'कॉइन्स कम हैं!' : 'Insufficient Coins!'),
                   style: TextStyle(color: ThemeService.textPrimary, fontSize: 17, fontWeight: FontWeight.bold),
                 ),
               ),
             ],
           ),
           content: Text(
-            LanguageService.isUrdu
+            _isUrdu
                 ? 'وی آئی پی بلیو ٹک کے لیے 2,000 کوائنز درکار ہیں۔ آپ کے والٹ میں اس وقت ${wallet.coins} کوائنز ہیں۔'
-                : (LanguageService.isHindi
+                : (_isHindi
                     ? 'वीआईपी ब्लू टिक के लिए 2,000 कॉइन्स चाहिए। आपके वॉलेट में अभी ${wallet.coins} कॉइन्स हैं।'
                     : 'Instant VIP Blue Tick requires 2,000 coins. You currently have ${wallet.coins} coins.'),
             style: TextStyle(color: ThemeService.textSecondary, fontSize: 13, height: 1.4),
@@ -97,7 +100,7 @@ class _VerificationScreenState extends State<VerificationScreen> {
             TextButton(
               onPressed: () => Navigator.pop(ctx),
               child: Text(
-                LanguageService.isUrdu ? 'ٹھیک ہے' : (LanguageService.isHindi ? 'ठीक है' : 'OK'),
+                _isUrdu ? 'ٹھیک ہے' : (_isHindi ? 'ठीक है' : 'OK'),
                 style: const TextStyle(color: Color(0xFF1877F2), fontWeight: FontWeight.bold),
               ),
             ),
@@ -118,18 +121,18 @@ class _VerificationScreenState extends State<VerificationScreen> {
             const SizedBox(width: 8),
             Expanded(
               child: Text(
-                LanguageService.isUrdu
+                _isUrdu
                     ? 'وی آئی پی بلیو ٹک حاصل کریں؟'
-                    : (LanguageService.isHindi ? 'वीआईपी ब्लू टिक अनलॉक?' : 'Unlock VIP Blue Tick?'),
+                    : (_isHindi ? 'वीआईपी ब्लू टिक अनलॉक?' : 'Unlock VIP Blue Tick?'),
                 style: TextStyle(color: ThemeService.textPrimary, fontSize: 17, fontWeight: FontWeight.bold),
               ),
             ),
           ],
         ),
         content: Text(
-          LanguageService.isUrdu
+          _isUrdu
               ? 'کیا آپ 2,000 کوائنز ادا کر کے فوراً بلیو ٹک حاصل کرنا چاہتے ہیں؟ کسی بھی ٹاسک کی ضرورت نہیں ہوگی۔'
-              : (LanguageService.isHindi
+              : (_isHindi
                   ? 'क्या आप 2,000 कॉइन्स देकर तुरंत ब्लू टिक अनलॉक करना चाहते हैं?'
                   : 'Do you want to unlock official Blue Tick instantly for 2,000 coins? No tasks required.'),
           style: TextStyle(color: ThemeService.textSecondary, fontSize: 13, height: 1.4),
@@ -138,7 +141,7 @@ class _VerificationScreenState extends State<VerificationScreen> {
           TextButton(
             onPressed: () => Navigator.pop(ctx, false),
             child: Text(
-              LanguageService.isUrdu ? 'منسوخ' : (LanguageService.isHindi ? 'रद्द करें' : 'Cancel'),
+              _isUrdu ? 'منسوخ' : (_isHindi ? 'रद्द करें' : 'Cancel'),
               style: TextStyle(color: ThemeService.textSecondary),
             ),
           ),
@@ -150,7 +153,7 @@ class _VerificationScreenState extends State<VerificationScreen> {
             ),
             onPressed: () => Navigator.pop(ctx, true),
             child: Text(
-              LanguageService.isUrdu ? '2,000 کوائنز پے کریں' : (LanguageService.isHindi ? '2,000 कॉइन्स दें' : 'Pay 2,000 Coins'),
+              _isUrdu ? '2,000 کوائنز پے کریں' : (_isHindi ? '2,000 कॉइन्स दें' : 'Pay 2,000 Coins'),
               style: const TextStyle(fontWeight: FontWeight.bold),
             ),
           ),
@@ -225,7 +228,7 @@ class _VerificationScreenState extends State<VerificationScreen> {
         SnackBar(
           backgroundColor: const Color(0xFFFF4655),
           content: Text(
-            LanguageService.isUrdu
+            _isUrdu
                 ? 'درخواست نہیں بھیجی جا سکتی: ${unmet.length} شرائط باقی ہیں۔'
                 : 'Cannot apply: ${unmet.length} requirement(s) missing.',
           ),
@@ -285,13 +288,13 @@ class _VerificationScreenState extends State<VerificationScreen> {
             const Icon(Icons.verified_rounded, color: Color(0xFF1877F2), size: 64),
             const SizedBox(height: 16),
             Text(
-              LanguageService.isUrdu ? 'مبارک ہو! بلیو ٹک تصدیق شدہ' : 'Official Blue Tick Verified!',
+              _isUrdu ? 'مبارک ہو! بلیو ٹک تصدیق شدہ' : 'Official Blue Tick Verified!',
               style: TextStyle(color: ThemeService.textPrimary, fontSize: 20, fontWeight: FontWeight.w900),
               textAlign: TextAlign.center,
             ),
             const SizedBox(height: 8),
             Text(
-              LanguageService.isUrdu
+              _isUrdu
                   ? 'آپ کا بلیو ٹک فعال ہو چکا ہے۔ یہ بیج آپ کی پروفائل اور تمام پوسٹس پر نظر آئے گا۔'
                   : 'Your official Blue Tick is now live across your profile and posts!',
               style: TextStyle(color: ThemeService.textSecondary, fontSize: 13),
@@ -309,7 +312,7 @@ class _VerificationScreenState extends State<VerificationScreen> {
                 ),
                 onPressed: () => Navigator.pop(ctx),
                 child: Text(
-                  LanguageService.isUrdu ? 'بہترین! آگے بڑھیں' : 'LET\'S FLEX 🎮',
+                  _isUrdu ? 'بہترین! آگے بڑھیں' : 'LET\'S FLEX 🎮',
                   style: const TextStyle(fontWeight: FontWeight.bold),
                 ),
               ),
@@ -333,7 +336,7 @@ class _VerificationScreenState extends State<VerificationScreen> {
           backgroundColor: ThemeService.card,
           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
           title: Text(
-            LanguageService.isUrdu ? 'گیم یو آئی ڈی لنک کریں' : 'Link Game UID',
+            _isUrdu ? 'گیم یو آئی ڈی لنک کریں' : 'Link Game UID',
             style: TextStyle(color: ThemeService.textPrimary, fontSize: 18, fontWeight: FontWeight.bold),
           ),
           content: Column(
@@ -344,7 +347,7 @@ class _VerificationScreenState extends State<VerificationScreen> {
                 dropdownColor: ThemeService.card,
                 style: TextStyle(color: ThemeService.textPrimary),
                 decoration: InputDecoration(
-                  labelText: LanguageService.isUrdu ? 'گیم منتخب کریں' : 'Game',
+                  labelText: _isUrdu ? 'گیم منتخب کریں' : 'Game',
                   labelStyle: TextStyle(color: ThemeService.textSecondary),
                 ),
                 items: supportedGames.map((g) => DropdownMenuItem(value: g, child: Text(g, style: TextStyle(color: ThemeService.textPrimary)))).toList(),
@@ -357,7 +360,7 @@ class _VerificationScreenState extends State<VerificationScreen> {
                 controller: controller,
                 style: TextStyle(color: ThemeService.textPrimary),
                 decoration: InputDecoration(
-                  labelText: LanguageService.isUrdu ? 'کریکٹر یو آئی ڈی' : 'Character UID',
+                  labelText: _isUrdu ? 'کریکٹر یو آئی ڈی' : 'Character UID',
                   labelStyle: TextStyle(color: ThemeService.textSecondary),
                   hintText: 'e.g. 5129384729',
                   hintStyle: TextStyle(color: ThemeService.textSecondary.withOpacity(0.5)),
@@ -369,7 +372,7 @@ class _VerificationScreenState extends State<VerificationScreen> {
             TextButton(
               onPressed: () => Navigator.pop(ctx),
               child: Text(
-                LanguageService.isUrdu ? 'منسوخ' : LanguageService.t('Cancel'),
+                _isUrdu ? 'منسوخ' : LanguageService.t('Cancel'),
                 style: TextStyle(color: ThemeService.textSecondary),
               ),
             ),
@@ -384,7 +387,7 @@ class _VerificationScreenState extends State<VerificationScreen> {
                 }
               },
               child: Text(
-                LanguageService.isUrdu ? 'محفوظ کریں' : 'Save',
+                _isUrdu ? 'محفوظ کریں' : 'Save',
                 style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
               ),
             ),
@@ -406,7 +409,7 @@ class _VerificationScreenState extends State<VerificationScreen> {
           backgroundColor: ThemeService.card,
           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
           title: Text(
-            LanguageService.isUrdu ? '$selectedGame میں رینک منتخب کریں' : 'Rank in $selectedGame',
+            _isUrdu ? '$selectedGame میں رینک منتخب کریں' : 'Rank in $selectedGame',
             style: TextStyle(color: ThemeService.textPrimary, fontSize: 18, fontWeight: FontWeight.bold),
           ),
           content: DropdownButtonFormField<String>(
@@ -421,7 +424,7 @@ class _VerificationScreenState extends State<VerificationScreen> {
             TextButton(
               onPressed: () => Navigator.pop(ctx),
               child: Text(
-                LanguageService.isUrdu ? 'منسوخ' : LanguageService.t('Cancel'),
+                _isUrdu ? 'منسوخ' : LanguageService.t('Cancel'),
                 style: TextStyle(color: ThemeService.textSecondary),
               ),
             ),
@@ -433,7 +436,7 @@ class _VerificationScreenState extends State<VerificationScreen> {
                 _refreshData();
               },
               child: Text(
-                LanguageService.isUrdu ? 'اپ ڈیٹ کریں' : 'Update',
+                _isUrdu ? 'اپ ڈیٹ کریں' : 'Update',
                 style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
               ),
             ),
@@ -471,7 +474,7 @@ class _VerificationScreenState extends State<VerificationScreen> {
                         const SizedBox(width: 8),
                         Expanded(
                           child: Text(
-                            LanguageService.isUrdu ? 'بلیو ٹک تصدیق' : 'Blue Tick Verification',
+                            _isUrdu ? 'بلیو ٹک تصدیق' : 'Blue Tick Verification',
                             style: TextStyle(fontWeight: FontWeight.w900, fontSize: 17, color: ThemeService.textPrimary),
                             overflow: TextOverflow.ellipsis,
                           ),
@@ -537,7 +540,7 @@ class _VerificationScreenState extends State<VerificationScreen> {
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
                 Text(
-                  LanguageService.isUrdu ? 'لازمی شرائط' : 'MANDATORY REQUIREMENTS',
+                  _isUrdu ? 'لازمی شرائط' : 'MANDATORY REQUIREMENTS',
                   style: TextStyle(color: ThemeService.textSecondary, fontSize: 12, fontWeight: FontWeight.w900),
                 ),
                 Container(
@@ -609,7 +612,7 @@ class _VerificationScreenState extends State<VerificationScreen> {
               const SizedBox(width: 8),
               Expanded(
                 child: Text(
-                  LanguageService.isUrdu ? 'فوری وی آئی پی بلیو ٹک ⚡' : 'INSTANT VIP BLUE TICK ⚡',
+                  _isUrdu ? 'فوری وی آئی پی بلیو ٹک ⚡' : 'INSTANT VIP BLUE TICK ⚡',
                   style: const TextStyle(color: Color(0xFF1877F2), fontWeight: FontWeight.w900, fontSize: 15),
                 ),
               ),
@@ -617,7 +620,7 @@ class _VerificationScreenState extends State<VerificationScreen> {
           ),
           const SizedBox(height: 8),
           Text(
-            LanguageService.isUrdu
+            _isUrdu
                 ? 'ٹاسک مکمل کرنے کا انتظار نہیں کرنا چاہتے؟ آپ براہ راست 2,000 کوائنز ادا کر کے فوراً بلیو ٹک حاصل کر سکتے ہیں!'
                 : 'Skip the wait and requirements! Unlock your official Blue Tick immediately with 2,000 coins.',
             style: TextStyle(color: ThemeService.textPrimary, fontSize: 12.5, height: 1.35),
@@ -639,7 +642,7 @@ class _VerificationScreenState extends State<VerificationScreen> {
               label: Text(
                 _isPurchasingVip
                     ? 'Processing...'
-                    : (LanguageService.isUrdu ? 'فوراً حاصل کریں (2,000 کوائنز)' : 'Unlock Instantly (2,000 Coins)'),
+                    : (_isUrdu ? 'فوراً حاصل کریں (2,000 کوائنز)' : 'Unlock Instantly (2,000 Coins)'),
                 style: const TextStyle(fontWeight: FontWeight.bold),
               ),
               onPressed: _isPurchasingVip ? null : () => _handleInstantVipBuy(user),
@@ -686,7 +689,7 @@ class _VerificationScreenState extends State<VerificationScreen> {
             const Icon(Icons.verified_rounded, color: Color(0xFF1877F2), size: 44),
             const SizedBox(height: 8),
             Text(
-              LanguageService.isUrdu ? 'تصدیق شدہ بلیو ٹک ✓' : 'Official Blue Tick Verified ✓',
+              _isUrdu ? 'تصدیق شدہ بلیو ٹک ✓' : 'Official Blue Tick Verified ✓',
               style: TextStyle(color: ThemeService.textPrimary, fontSize: 18, fontWeight: FontWeight.w900),
             ),
             const SizedBox(height: 4),
@@ -714,12 +717,12 @@ class _VerificationScreenState extends State<VerificationScreen> {
             const Icon(Icons.hourglass_top_rounded, color: Color(0xFFFF8A00), size: 40),
             const SizedBox(height: 8),
             Text(
-              LanguageService.isUrdu ? '24 گھنٹے کے ریویو میں ہے' : 'Under Review 24h',
+              _isUrdu ? '24 گھنٹے کے ریویو میں ہے' : 'Under Review 24h',
               style: TextStyle(color: ThemeService.textPrimary, fontSize: 18, fontWeight: FontWeight.w900),
             ),
             const SizedBox(height: 4),
             Text(
-              LanguageService.isUrdu ? 'آپ کی درخواست 24 گھنٹے کے ریویو میں ہے۔' : 'Your application is currently under 24-hour review.',
+              _isUrdu ? 'آپ کی درخواست 24 گھنٹے کے ریویو میں ہے۔' : 'Your application is currently under 24-hour review.',
               style: TextStyle(color: ThemeService.textSecondary, fontSize: 12),
               textAlign: TextAlign.center,
             ),
@@ -748,11 +751,11 @@ class _VerificationScreenState extends State<VerificationScreen> {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
-                      LanguageService.isUrdu ? 'بلیو ٹک حاصل کریں' : 'Get The Official Blue Tick',
+                      _isUrdu ? 'بلیو ٹک حاصل کریں' : 'Get The Official Blue Tick',
                       style: TextStyle(color: ThemeService.textPrimary, fontSize: 16, fontWeight: FontWeight.w900),
                     ),
                     Text(
-                      LanguageService.isUrdu ? 'اپلائی کرنے کے لیے تمام شرائط پوری کریں' : 'User must meet ALL requirements to apply',
+                      _isUrdu ? 'اپلائی کرنے کے لیے تمام شرائط پوری کریں' : 'User must meet ALL requirements to apply',
                       style: TextStyle(color: ThemeService.textSecondary, fontSize: 11),
                     ),
                   ],
@@ -884,7 +887,7 @@ class _VerificationScreenState extends State<VerificationScreen> {
               const Icon(Icons.verified_rounded, color: Color(0xFF1877F2), size: 20),
               const SizedBox(width: 8),
               Text(
-                LanguageService.isUrdu ? 'تصدیق شدہ بلیو ٹک ✓' : 'Official Blue Tick Verified ✓',
+                _isUrdu ? 'تصدیق شدہ بلیو ٹک ✓' : 'Official Blue Tick Verified ✓',
                 style: const TextStyle(color: Color(0xFF1877F2), fontWeight: FontWeight.w900, fontSize: 14),
               ),
             ],
@@ -903,11 +906,9 @@ class _VerificationScreenState extends State<VerificationScreen> {
             foregroundColor: Colors.white,
             shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
           ),
-          icon: _isSubmitting
-              ? const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2))
-              : const Icon(Icons.hourglass_bottom_rounded, size: 18),
+          icon: _isSubmitting ? const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2)) : const Icon(Icons.hourglass_bottom_rounded, size: 18),
           label: Text(
-            LanguageService.isUrdu ? 'زیر التوا (24 گھنٹے) ⏳' : 'Under Review 24h ⏳',
+            _isUrdu ? 'زیر التوا (24 گھنٹے) ⏳' : 'Under Review 24h ⏳',
             style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
           ),
           onPressed: _isSubmitting ? null : () => _handleApply(user),
@@ -928,13 +929,11 @@ class _VerificationScreenState extends State<VerificationScreen> {
           ),
           elevation: 0,
         ),
-        icon: _isSubmitting
-            ? const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2))
-            : Icon(allMet ? Icons.verified_rounded : Icons.lock_outline_rounded, size: 18),
+        icon: _isSubmitting ? const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2)) : Icon(allMet ? Icons.verified_rounded : Icons.lock_outline_rounded, size: 18),
         label: Text(
           allMet
-              ? (LanguageService.isUrdu ? 'درخواست جمع کروائیں' : 'APPLY FOR VERIFICATION')
-              : (LanguageService.isUrdu ? 'درخواست بند ہے (شرائط باقی ہیں)' : 'Apply for Verification (Locked)'),
+              ? (_isUrdu ? 'درخواست جمع کروائیں' : 'APPLY FOR VERIFICATION')
+              : (_isUrdu ? 'درخواست بند ہے (شرائط باقی ہیں)' : 'Apply for Verification (Locked)'),
           style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13.5),
         ),
         onPressed: _isSubmitting ? null : () => _handleApply(user),
@@ -954,7 +953,7 @@ class _VerificationScreenState extends State<VerificationScreen> {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Text(
-            LanguageService.isUrdu ? 'شرائط پوری کرنے کے لیے فوری راستے' : 'QUICK SHORTCUTS TO COMPLETE REQUIREMENTS',
+            _isUrdu ? 'شرائط پوری کرنے کے لیے فوری راستے' : 'QUICK SHORTCUTS TO COMPLETE REQUIREMENTS',
             style: TextStyle(color: ThemeService.textSecondary, fontSize: 10.5, fontWeight: FontWeight.w900),
           ),
           const SizedBox(height: 10),
@@ -968,7 +967,7 @@ class _VerificationScreenState extends State<VerificationScreen> {
                   ),
                   icon: const Icon(Icons.sports_esports_rounded, color: Color(0xFF1877F2), size: 15),
                   label: Text(
-                    LanguageService.isUrdu ? 'گیم یو آئی ڈی' : 'Link Game UID',
+                    _isUrdu ? 'گیم یو آئی ڈی' : 'Link Game UID',
                     style: const TextStyle(color: Color(0xFF1877F2), fontSize: 11, fontWeight: FontWeight.bold),
                   ),
                   onPressed: () => _showLinkGameUidDialog(user),
@@ -983,7 +982,7 @@ class _VerificationScreenState extends State<VerificationScreen> {
                   ),
                   icon: const Icon(Icons.military_tech_rounded, color: Color(0xFFFF6B00), size: 15),
                   label: Text(
-                    LanguageService.isUrdu ? 'گیم رینک' : 'Set Game Rank',
+                    _isUrdu ? 'گیم رینک' : 'Set Game Rank',
                     style: const TextStyle(color: Color(0xFFFF6B00), fontSize: 11, fontWeight: FontWeight.bold),
                   ),
                   onPressed: () => _showQuickRankKdDialog(user),
@@ -1002,7 +1001,7 @@ class _VerificationScreenState extends State<VerificationScreen> {
                   ),
                   icon: Icon(Icons.edit_note_rounded, color: ThemeService.textPrimary, size: 15),
                   label: Text(
-                    LanguageService.isUrdu ? 'بائیو اور اواتار' : 'Edit Bio & Avatar',
+                    _isUrdu ? 'بائیو اور اواتار' : 'Edit Bio & Avatar',
                     style: TextStyle(color: ThemeService.textPrimary, fontSize: 11, fontWeight: FontWeight.bold),
                   ),
                   onPressed: () {
@@ -1019,7 +1018,7 @@ class _VerificationScreenState extends State<VerificationScreen> {
                   ),
                   icon: Icon(Icons.movie_creation_rounded, color: ThemeService.textPrimary, size: 15),
                   label: Text(
-                    LanguageService.isUrdu ? 'پوسٹ کلپ' : 'Post Clip/Room',
+                    _isUrdu ? 'پوسٹ کلپ' : 'Post Clip/Room',
                     style: TextStyle(color: ThemeService.textPrimary, fontSize: 11, fontWeight: FontWeight.bold),
                   ),
                   onPressed: () {
