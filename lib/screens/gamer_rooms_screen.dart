@@ -1,16 +1,17 @@
 // ═══════════════════════════════════════════════════════════════════════════════
 // COMPLETE GAMER ROOMS SCREEN (WITH DYNAMIC DAY & NIGHT MODE SUPPORT)
+// - Max 2 Active Rooms per user limit (auto-enforced on '+' click & save)
+// - 5-Minute Golden Winner Banner with Live Countdown Timer
+// - Auto-delete room from database after 5 minutes of completion
+// - Once auto-deleted, user can immediately create a new room
 // - Realtime Joined Players List with Avatars, Names, IGN & Game UID
 // - 1-Time Game ID & IGN Auto-Save Popup (Multi-Game Ready)
 // - Join Match Button for non-host players with slot reservation
-// - LEAVE ROOM REMOVED: Players stay recorded until 5-min auto-delete
 // - WINNER vs OPPONENT DISPLAY: Banner & player list show who defeated whom
 // - Full Adaptive Day/Night Theme Sync with ThemeService
 // - Esports Match Rules & Guidelines Dialog
 // - Flexible Match Formats (1v1, 2v2, 4v4 TDM)
 // - "End Match / Claim Win" Screenshot Proof Upload to Supabase Storage
-// - 5-Minute Golden Winner Banner with Live Countdown Timer (Timezone Fixed)
-// - Auto-delete room after 5 minutes of completion
 // - Dispute management & Admin approval flow
 // ═══════════════════════════════════════════════════════════════════════════════
 import 'dart:async';
@@ -511,6 +512,7 @@ class _GamerRoomsScreenState extends State<GamerRoomsScreen> {
               elapsed = now.difference(reinterpreted).inSeconds;
             }
 
+            // 5 minutes (300 seconds) pass hote hi auto delete
             if (elapsed >= 300) {
               final roomId = row['id'];
               await SupabaseService.client.from('rooms').delete().eq('id', roomId);
@@ -520,6 +522,111 @@ class _GamerRoomsScreenState extends State<GamerRoomsScreen> {
         }
       }
     } catch (_) {}
+  }
+
+  /// ✅ Check limit before opening Create Room dialog (Max 2 rooms per user)
+  Future<void> _handleCreateRoomTap() async {
+    if (currentUserId == 'guest') {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Please log in to create a room')),
+      );
+      return;
+    }
+
+    // Pehle expired rooms ko saaf karein taake actual count mile
+    await _purgeExpiredCompletedRooms();
+
+    try {
+      final response = await SupabaseService.client
+          .from('rooms')
+          .select('id, status, completed_at, win_proof_uploaded_at, created_at')
+          .eq('host_id', currentUserId);
+
+      int activeHostedRooms = 0;
+      final now = DateTime.now();
+
+      for (final r in (response as List)) {
+        if (r['status'] == 'completed') {
+          final rawComp = r['completed_at'] ?? r['win_proof_uploaded_at'] ?? r['created_at'];
+          if (rawComp != null) {
+            DateTime? comp = DateTime.tryParse(rawComp.toString());
+            if (comp != null) {
+              final localComp = comp.isUtc ? comp.toLocal() : comp;
+              int elapsed = now.difference(localComp).inSeconds;
+              if (elapsed < 0) {
+                final reinterpreted = DateTime(comp.year, comp.month, comp.day, comp.hour, comp.minute, comp.second);
+                elapsed = now.difference(reinterpreted).inSeconds;
+              }
+              // Agar 300 seconds (5 min) guzar chuke hain to abhi delete karein aur count na karein
+              if (elapsed >= 300) {
+                try {
+                  await SupabaseService.client.from('rooms').delete().eq('id', r['id']);
+                  await SupabaseService.client.from('messages').delete().eq('room_id', r['id']);
+                } catch (_) {}
+                continue;
+              }
+            }
+          }
+        }
+        activeHostedRooms++;
+      }
+
+      // 🛑 Max 2 Rooms Limit Alert
+      if (activeHostedRooms >= 2) {
+        if (!mounted) return;
+        showDialog(
+          context: context,
+          builder: (ctx) => AlertDialog(
+            backgroundColor: ThemeService.card,
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(16),
+              side: const BorderSide(color: Color(0xFFFF4655), width: 1.5),
+            ),
+            title: Row(
+              children: [
+                const Icon(Icons.warning_amber_rounded, color: Color(0xFFFF4655), size: 26),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Text(
+                    'Room Limit Reached (Max 2)',
+                    style: TextStyle(
+                      color: ThemeService.textPrimary,
+                      fontWeight: FontWeight.bold,
+                      fontSize: 16,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+            content: Text(
+              'Aap ek waqt mein sirf 2 rooms bana sakte hain.\n\nJab aapke rooms ka result proof verify hone ke baad winner banner show hoga aur 5 minutes baad room auto-delete hoga, tabhi aap naya room bana sakein ge.',
+              style: TextStyle(color: ThemeService.textSecondary, fontSize: 13, height: 1.4),
+            ),
+            actions: [
+              ElevatedButton(
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: const Color(0xFF1877F2),
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                ),
+                onPressed: () => Navigator.pop(ctx),
+                child: const Text('Theek Hai', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+              ),
+            ],
+          ),
+        );
+        return;
+      }
+
+      // Agar limit ke andar hai to create dialog open karein
+      if (mounted) {
+        _showCreateRoomDialog();
+      }
+    } catch (e) {
+      debugPrint('Error checking active room limit: $e');
+      if (mounted) {
+        _showCreateRoomDialog();
+      }
+    }
   }
 
   void _openRoomModal(GamerRoom room) {
@@ -559,7 +666,7 @@ class _GamerRoomsScreenState extends State<GamerRoomsScreen> {
             actions: [
               IconButton(
                 icon: const Icon(Icons.add_circle_outline, color: Color(0xFF1877F2), size: 28),
-                onPressed: () => _showCreateRoomDialog(),
+                onPressed: _handleCreateRoomTap, // ✅ Intercepted with Max 2 check
               ),
               const SizedBox(width: 8),
             ],
@@ -627,49 +734,94 @@ class _GamerRoomsScreenState extends State<GamerRoomsScreen> {
                       itemCount: filtered.length,
                       itemBuilder: (context, index) {
                         final room = GamerRoom.fromSupabase(filtered[index]);
+
                         return Card(
                           color: ThemeService.card,
                           elevation: isDark ? 2 : 1,
                           margin: const EdgeInsets.only(bottom: 10),
                           shape: RoundedRectangleBorder(
                             borderRadius: BorderRadius.circular(12),
-                            side: BorderSide(color: ThemeService.border),
+                            side: BorderSide(
+                              color: room.isCompleted ? const Color(0xFFFFD700) : ThemeService.border,
+                              width: room.isCompleted ? 1.5 : 1,
+                            ),
                           ),
-                          child: ListTile(
-                            onTap: () => _openRoomModal(room),
-                            leading: CircleAvatar(
-                              backgroundColor: const Color(0xFF1877F2).withOpacity(0.15),
-                              child: const Icon(Icons.sports_esports, color: Color(0xFF1877F2)),
-                            ),
-                            title: Text(
-                              room.title,
-                              style: TextStyle(
-                                fontWeight: FontWeight.bold,
-                                color: ThemeService.textPrimary,
-                              ),
-                            ),
-                            subtitle: Text(
-                              'Host: ${room.hostName} • ${room.mode}',
-                              style: TextStyle(color: ThemeService.textSecondary, fontSize: 12),
-                            ),
-                            trailing: Column(
-                              mainAxisAlignment: MainAxisAlignment.center,
-                              crossAxisAlignment: CrossAxisAlignment.end,
-                              children: [
-                                Text(
-                                  '🏆 ${room.prizePool} Coins',
-                                  style: const TextStyle(
-                                    fontWeight: FontWeight.bold,
-                                    color: Colors.orange,
+                          child: Column(
+                            children: [
+                              // 🏆 Room Card Golden Winner Strip (If Completed)
+                              if (room.isCompleted) ...[
+                                Container(
+                                  width: double.infinity,
+                                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                                  decoration: const BoxDecoration(
+                                    gradient: LinearGradient(
+                                      colors: [Color(0xFFFFD700), Color(0xFFFFA000)],
+                                      begin: Alignment.topLeft,
+                                      end: Alignment.bottomRight,
+                                    ),
+                                    borderRadius: BorderRadius.vertical(top: Radius.circular(11)),
+                                  ),
+                                  child: Row(
+                                    children: [
+                                      const Text('🏆', style: TextStyle(fontSize: 14)),
+                                      const SizedBox(width: 6),
+                                      Expanded(
+                                        child: Text(
+                                          'WINNER: ${room.winnerName ?? "Champion"} (Closes in 5m)',
+                                          style: const TextStyle(
+                                            color: Colors.black87,
+                                            fontWeight: FontWeight.w900,
+                                            fontSize: 11.5,
+                                          ),
+                                          overflow: TextOverflow.ellipsis,
+                                        ),
+                                      ),
+                                    ],
                                   ),
                                 ),
-                                const SizedBox(height: 4),
-                                Text(
-                                  '${room.filledSlots}/${room.totalSlots} Players',
-                                  style: TextStyle(fontSize: 11, color: ThemeService.textSecondary),
-                                ),
                               ],
-                            ),
+                              ListTile(
+                                onTap: () => _openRoomModal(room),
+                                leading: CircleAvatar(
+                                  backgroundColor: room.isCompleted
+                                      ? const Color(0xFFFFD700).withOpacity(0.2)
+                                      : const Color(0xFF1877F2).withOpacity(0.15),
+                                  child: Icon(
+                                    room.isCompleted ? Icons.emoji_events_rounded : Icons.sports_esports,
+                                    color: room.isCompleted ? const Color(0xFFFF8A00) : const Color(0xFF1877F2),
+                                  ),
+                                ),
+                                title: Text(
+                                  room.title,
+                                  style: TextStyle(
+                                    fontWeight: FontWeight.bold,
+                                    color: ThemeService.textPrimary,
+                                  ),
+                                ),
+                                subtitle: Text(
+                                  'Host: ${room.hostName} • ${room.mode}',
+                                  style: TextStyle(color: ThemeService.textSecondary, fontSize: 12),
+                                ),
+                                trailing: Column(
+                                  mainAxisAlignment: MainAxisAlignment.center,
+                                  crossAxisAlignment: CrossAxisAlignment.end,
+                                  children: [
+                                    Text(
+                                      '🏆 ${room.prizePool} Coins',
+                                      style: const TextStyle(
+                                        fontWeight: FontWeight.bold,
+                                        color: Colors.orange,
+                                      ),
+                                    ),
+                                    const SizedBox(height: 4),
+                                    Text(
+                                      '${room.filledSlots}/${room.totalSlots} Players',
+                                      style: TextStyle(fontSize: 11, color: ThemeService.textSecondary),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            ],
                           ),
                         );
                       },
@@ -809,6 +961,25 @@ class _GamerRoomsScreenState extends State<GamerRoomsScreen> {
                       setDialogState(() => isCreating = true);
 
                       try {
+                        // Double check limit before actual DB insert
+                        final currentRooms = await SupabaseService.client
+                            .from('rooms')
+                            .select('id')
+                            .eq('host_id', currentUserId);
+                        if ((currentRooms as List).length >= 2) {
+                          setDialogState(() => isCreating = false);
+                          if (ctx.mounted) Navigator.pop(ctx);
+                          if (mounted) {
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              const SnackBar(
+                                content: Text('⚠️ Maximum 2 rooms allowed! Purane room delete hone ka intezar karein.'),
+                                backgroundColor: Colors.red,
+                              ),
+                            );
+                          }
+                          return;
+                        }
+
                         final gameName = gameCtrl.text.trim().isEmpty ? 'BGMI' : gameCtrl.text.trim();
 
                         String myIgn = currentUserName;
@@ -1307,7 +1478,7 @@ class _RoomDetailsSheetState extends State<_RoomDetailsSheet> {
               ),
               Divider(height: 1, color: ThemeService.border),
 
-              // 5-MINUTE GOLDEN WINNER BANNER (WITH OPPONENT NAME)
+              // 5-MINUTE GOLDEN WINNER BANNER (WITH LIVE TIMER & OPPONENT DETAILS)
               if (room.isCompleted) ...[
                 Builder(builder: (context) {
                   final opponents = room.joinedUsers
