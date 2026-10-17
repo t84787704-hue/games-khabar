@@ -2,6 +2,7 @@
 // EXACT DIFF — Full Adaptive Day & Night Mode Support for TeamsScreen
 // + Realtime timeout fallback & clean retry key
 // + Dismiss feature for rejected-proof banner preserved
+// + Match Verification Rules Dialog Integrated on Accept Match
 // ----------------------------------------------------------------
 // File: lib/screens/teams_screen.dart
 // ================================================================
@@ -20,6 +21,7 @@ import "../services/team_service.dart";
 import "../widgets/team_card.dart";
 import "../widgets/create_team_dialog.dart";
 import "../widgets/end_match_dialog.dart";
+import "../widgets/match_rules_dialog.dart";
 import "team_matches_screen.dart";
 import "team_match_room_screen.dart";
 import "leaderboard_screen.dart";
@@ -463,7 +465,7 @@ class _TeamsScreenState extends State<TeamsScreen>
           ),
         ),
 
-        // Incoming Challenges
+        // Incoming Challenges (With MatchRulesDialog on Accept)
         if (myTeamId.isNotEmpty)
           StreamBuilder<List<Map<String, dynamic>>>(
             stream: SupabaseService.client
@@ -586,12 +588,19 @@ class _TeamsScreenState extends State<TeamsScreen>
                                   child: ElevatedButton(
                                     onPressed: isAccepting
                                         ? null
-                                        : () => _handleAcceptChallenge(
-                                              challengeId: challengeId.toString(),
-                                              fromTeamId: fromTeamId,
-                                              toTeamId: toTeamId,
-                                              challengeData: doc,
-                                            ),
+                                        : () {
+                                            // Verification rules bottom sheet show karein
+                                            MatchRulesDialog.show(
+                                              context,
+                                              title: "Match Rules ($fromTeamName)",
+                                              onProceed: () => _handleAcceptChallenge(
+                                                challengeId: challengeId.toString(),
+                                                fromTeamId: fromTeamId,
+                                                toTeamId: toTeamId,
+                                                challengeData: doc,
+                                              ),
+                                            );
+                                          },
                                     style: ElevatedButton.styleFrom(
                                       backgroundColor: const Color(0xFF1877F2),
                                       foregroundColor: Colors.white,
