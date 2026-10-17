@@ -1,14 +1,8 @@
 // ===============================================================================
 // EXACT DIFF — Full Adaptive Day & Night Mode Support for GamerFeedScreen
+// + Updated App Branding to "Gamers ID"
 // -------------------------------------------------------------------------------
 // File: lib/screens/gamer_feed_screen.dart
-//
-// 1. Linked with ThemeService.themeModeNotifier for realtime live theme switching.
-// 2. Replaced hardcoded white/grey backgrounds with ThemeService.bg and card.
-// 3. Replaced fixed black text with ThemeService.textPrimary & textSecondary.
-// 4. Comments sheet and dialogs fully synced with active theme.
-//
-// NO LOGIC, FUNCTIONALITY OR DATABASE CODE CHANGED — byte-by-byte safe
 // ===============================================================================
 
 import 'package:flutter/material.dart';
@@ -313,22 +307,22 @@ class _GamerFeedScreenState extends State<GamerFeedScreen> {
     final username = userProfile?['username'] ?? post['username'] ?? 'Gamer';
 
     final shareText = '''
-🎮 Games Khabar - $username ki post
+🎮 Gamers ID - $username ki post
 
 "$content"
 
 👤 Posted by: $username
 
-🔥 Dekho aur bhi gaming khabrein Games Khabar App par!
+🔥 Dekho aur bhi gaming updates Gamers ID App par!
 
 📲 Download App:
-https://play.google.com/store/apps/details?id=com.gameskhabar.app
+https://play.google.com/store/apps/details?id=com.gamersid.app
 
-#GamesKhabar #PUBG #BGMI #Esports
+#GamersID #PUBG #BGMI #FreeFire #Esports
 ''';
 
     try {
-      await Share.share(shareText.trim(), subject: 'Games Khabar - $username');
+      await Share.share(shareText.trim(), subject: 'Gamers ID - $username');
     } catch (e) {
       debugPrint('Share error: $e');
     }
@@ -704,7 +698,7 @@ https://play.google.com/store/apps/details?id=com.gameskhabar.app
             backgroundColor: ThemeService.appBarBg,
             elevation: ThemeService.isDarkMode ? 0 : 1,
             title: const Text(
-              'Games Khabar',
+              'Gamers ID',
               style: TextStyle(
                 color: Color(0xFF1877F2),
                 fontWeight: FontWeight.bold,
