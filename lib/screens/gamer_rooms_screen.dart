@@ -10,6 +10,7 @@
 // - WINNER vs OPPONENT DISPLAY: Banner & player list show who defeated whom
 // - Full Adaptive Day/Night Theme Sync with ThemeService
 // - Match Verification Rules Dialog Integrated (Create, Join & In-Room)
+// - Accurate Under Review vs Rejected Proof States & Banners
 // - Flexible Match Formats (1v1, 2v2, 4v4 TDM)
 // - "End Match / Claim Win" Screenshot Proof Upload to Supabase Storage
 // - Dispute management & Admin approval flow
@@ -100,8 +101,15 @@ class GamerRoom {
       status.toLowerCase() == 'completed' || rewardStatus.toLowerCase() == 'sent';
   bool get isDisputed =>
       disputed || status.toLowerCase() == 'disputed' || status.toLowerCase() == 'under_review';
+
+  // ✅ Check if proof was actually rejected by admin
+  bool get isRejected =>
+      status.toLowerCase() == 'rejected' || rewardStatus.toLowerCase() == 'rejected';
+
+  // ✅ Only true when submitted and still under review (NOT rejected, NOT completed)
   bool get isProofSubmitted =>
       !isCompleted &&
+      !isRejected &&
       (status.toLowerCase() == 'proof_submitted' ||
           status.toLowerCase() == 'review_pending' ||
           (winProofUrl != null && winProofUrl!.isNotEmpty));
@@ -1557,7 +1565,36 @@ class _RoomDetailsSheetState extends State<_RoomDetailsSheet> {
                     ],
                   ),
                 ),
+              ] else if (room.isRejected) ...[
+                // ❌ ADMIN NE PROOF REJECT KIYA HO TAB YEH AAYEGA
+                Container(
+                  width: double.infinity,
+                  margin: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
+                  padding: const EdgeInsets.all(10),
+                  decoration: BoxDecoration(
+                    color: Colors.red.withOpacity(0.12),
+                    borderRadius: BorderRadius.circular(10),
+                    border: Border.all(color: Colors.red),
+                  ),
+                  child: const Row(
+                    children: [
+                      Icon(Icons.cancel_outlined, color: Colors.red, size: 20),
+                      SizedBox(width: 8),
+                      Expanded(
+                        child: Text(
+                          '❌ Proof Rejected! Barah-e-karam durust screenshot dobara upload karein.',
+                          style: TextStyle(
+                            color: Colors.red,
+                            fontWeight: FontWeight.bold,
+                            fontSize: 12.5,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
               ] else if (room.isProofSubmitted) ...[
+                // ⏳ JAB SIRF UNDER REVIEW HO
                 Container(
                   width: double.infinity,
                   margin: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
@@ -1977,7 +2014,7 @@ class _RoomDetailsSheetState extends State<_RoomDetailsSheet> {
                 ),
               ),
 
-              // ACTION BUTTONS: Join Match (With Rules) OR End Match & Dispute
+              // ACTION BUTTONS: Join Match OR End Match & Dispute
               if (!room.isCompleted) ...[
                 if (!isJoined) ...[
                   Padding(
@@ -2006,7 +2043,6 @@ class _RoomDetailsSheetState extends State<_RoomDetailsSheet> {
                         onPressed: _isJoining
                             ? null
                             : () {
-                                // Match join karne se pehle rules popup
                                 MatchRulesDialog.show(
                                   context,
                                   title: 'Match Rules (${room.title})',
@@ -2024,7 +2060,11 @@ class _RoomDetailsSheetState extends State<_RoomDetailsSheet> {
                         Expanded(
                           child: ElevatedButton.icon(
                             style: ElevatedButton.styleFrom(
-                              backgroundColor: Colors.amber[700],
+                              backgroundColor: room.isRejected
+                                  ? const Color(0xFFFF4655)
+                                  : (room.isProofSubmitted
+                                      ? const Color(0xFF1877F2)
+                                      : Colors.amber[700]),
                               foregroundColor: Colors.white,
                               padding: const EdgeInsets.symmetric(vertical: 10),
                               shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
@@ -2035,13 +2075,22 @@ class _RoomDetailsSheetState extends State<_RoomDetailsSheet> {
                                     height: 16,
                                     child: CircularProgressIndicator(
                                         strokeWidth: 2, color: Colors.white))
-                                : const Icon(Icons.emoji_events, size: 18),
+                                : Icon(
+                                    room.isRejected
+                                        ? Icons.refresh_rounded
+                                        : (room.isProofSubmitted
+                                            ? Icons.hourglass_top_rounded
+                                            : Icons.emoji_events),
+                                    size: 18,
+                                  ),
                             label: Text(
                               _isUploadingProof
                                   ? 'Uploading...'
-                                  : (room.isProofSubmitted
-                                      ? 'Re-upload Proof'
-                                      : 'End Match (I Won)'),
+                                  : (room.isRejected
+                                      ? 'Re-upload Proof 🔄'
+                                      : (room.isProofSubmitted
+                                          ? 'Proof Submitted ⏳ (Tap to Change)'
+                                          : 'End Match (I Won)')),
                               style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13),
                             ),
                             onPressed: _isUploadingProof ? null : _uploadWinScreenshot,
