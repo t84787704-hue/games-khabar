@@ -23,7 +23,6 @@ void main() async {
     overlays: [SystemUiOverlay.top, SystemUiOverlay.bottom],
   );
 
-  // Initialize Services
   try {
     await SupabaseService.init();
   } catch (e) {
@@ -44,15 +43,8 @@ void main() async {
 
   runApp(
     EasyLocalization(
-      supportedLocales: const [
-        Locale('en'), // English
-        Locale('ur'), // Urdu
-        Locale('hi'), // Hindi
-        Locale('ar'), // Arabic
-        Locale('bn'), // Bengali
-        Locale('ro'), // Romanian
-        Locale('zh'), // Chinese
-      ],
+      // ✅ Saari 7 languages direct connect hain
+      supportedLocales: LanguageService.supportedLocales,
       path: 'assets/translations',
       fallbackLocale: const Locale('en'),
       child: const GamersIdApp(),
@@ -72,7 +64,6 @@ class GamersIdApp extends StatelessWidget {
           top: true,
           bottom: true,
           child: MaterialApp(
-            key: ValueKey('${themeMode}_${context.locale.languageCode}'),
             title: 'Gamers ID',
             debugShowCheckedModeBanner: false,
             localizationsDelegates: context.localizationDelegates,
