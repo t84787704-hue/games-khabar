@@ -185,22 +185,84 @@ class _AdminTeamMatchesScreenState extends State<AdminTeamMatchesScreen> {
               ),
               onPressed: () async {
                 if (selectedWinner == null) return;
+                final winner = selectedWinner!;
                 Navigator.pop(ctx);
-                await _matchService.adminVerifyMatch(
-                  matchId: match.matchId,
-                  winnerTeamId: selectedWinner!,
-                  adminId: 'Admin',
-                  adminIdentifier: 'Admin',
-                  note: notesController.text.trim(),
-                  notes: notesController.text.trim(),
-                );
-                if (context.mounted) {
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(
-                      content: Text('✅ Match verified & winner recorded to leaderboard!'),
-                      backgroundColor: Color(0xFF00FF88),
-                    ),
+
+                try {
+                  // 1. Verify match via existing service
+                  await _matchService.adminVerifyMatch(
+                    matchId: match.matchId,
+                    winnerTeamId: winner,
+                    adminId: 'Admin',
+                    adminIdentifier: 'Admin',
+                    note: notesController.text.trim(),
+                    notes: notesController.text.trim(),
                   );
+
+                  // 2. ✅ Auto-update `teams` table (Wins, Losses, Draws)
+                  if (winner == 'DRAW') {
+                    for (final tId in [match.team1Id, match.team2Id]) {
+                      if (tId.isNotEmpty) {
+                        final res = await SupabaseService.client
+                            .from('teams')
+                            .select('draws')
+                            .eq('id', tId)
+                            .maybeSingle();
+                        final int cur = (res?['draws'] as num?)?.toInt() ?? 0;
+                        await SupabaseService.client
+                            .from('teams')
+                            .update({'draws': cur + 1})
+                            .eq('id', tId);
+                      }
+                    }
+                  } else {
+                    // Winner team: wins + 1
+                    final winnerRes = await SupabaseService.client
+                        .from('teams')
+                        .select('wins')
+                        .eq('id', winner)
+                        .maybeSingle();
+                    final int curWins = (winnerRes?['wins'] as num?)?.toInt() ?? 0;
+                    await SupabaseService.client
+                        .from('teams')
+                        .update({'wins': curWins + 1})
+                        .eq('id', winner);
+
+                    // Loser team: losses + 1
+                    final loserId = (winner == match.team1Id) ? match.team2Id : match.team1Id;
+                    if (loserId.isNotEmpty) {
+                      final loserRes = await SupabaseService.client
+                          .from('teams')
+                          .select('losses')
+                          .eq('id', loserId)
+                          .maybeSingle();
+                      final int curLosses = (loserRes?['losses'] as num?)?.toInt() ?? 0;
+                      await SupabaseService.client
+                          .from('teams')
+                          .update({'losses': curLosses + 1})
+                          .eq('id', loserId);
+                    }
+                  }
+
+                  if (context.mounted) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(
+                        content: Text('✅ Match verified & winner recorded to leaderboard!'),
+                        backgroundColor: Color(0xFF00FF88),
+                      ),
+                    );
+                    setState(() {});
+                  }
+                } catch (e) {
+                  debugPrint('Error updating teams table stats: $e');
+                  if (context.mounted) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      SnackBar(
+                        content: Text('Error updating leaderboard: $e'),
+                        backgroundColor: const Color(0xFFFF4655),
+                      ),
+                    );
+                  }
                 }
               },
               child: const Text('Confirm Winner 🏆', style: TextStyle(fontWeight: FontWeight.bold)),
@@ -636,7 +698,7 @@ class _AdminTeamMatchesScreenState extends State<AdminTeamMatchesScreen> {
   Widget build(BuildContext context) {
     return Column(
       children: [
-        // Filter Chips Row (Priority for Disputed matches)
+        // Filter Chips Row
         Container(
           padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
           color: const Color(0xFF131A29),
@@ -738,7 +800,7 @@ class _AdminTeamMatchesScreenState extends State<AdminTeamMatchesScreen> {
                                 borderRadius: BorderRadius.circular(6),
                               ),
                               child: Text(
-                                '${match.game} • ${match.mode}',
+                                '${match.game} •${match.mode}',
                                 style: const TextStyle(color: Color(0xFFFF6B00), fontWeight: FontWeight.w900, fontSize: 11),
                               ),
                             ),
@@ -855,7 +917,6 @@ class _AdminTeamMatchesScreenState extends State<AdminTeamMatchesScreen> {
                           ),
                         ],
 
-                        // New proof submitted indicator (waiting for admin review, old note is cleared)
                         if (match.isProofSubmitted) ...[
                           const SizedBox(height: 6),
                           Container(
@@ -881,7 +942,6 @@ class _AdminTeamMatchesScreenState extends State<AdminTeamMatchesScreen> {
                             ),
                           ),
                         ] else if (match.adminNote != null && match.adminNote!.isNotEmpty) ...[
-                          // Only show Admin Note if NOT in 'Proof Submitted' state (old note hidden when new proof uploaded)
                           const SizedBox(height: 6),
                           Container(
                             padding: const EdgeInsets.all(8),
@@ -929,7 +989,7 @@ class _AdminTeamMatchesScreenState extends State<AdminTeamMatchesScreen> {
                         if (match.isVerified && match.winnerName != null) ...[
                           const SizedBox(height: 6),
                           Text(
-                            '🏆 Winner: ${match.winnerName} (Verified by ${match.verifiedBy})',
+                            '🏆 Winner: ${match.winnerName} (Verified by${match.verifiedBy})',
                             style: const TextStyle(color: Color(0xFF00FF88), fontWeight: FontWeight.bold, fontSize: 12),
                           ),
                         ],
@@ -945,7 +1005,6 @@ class _AdminTeamMatchesScreenState extends State<AdminTeamMatchesScreen> {
                           alignment: WrapAlignment.spaceBetween,
                           crossAxisAlignment: WrapCrossAlignment.center,
                           children: [
-                            // Team 1 Screenshot button
                             if (match.team1Proof != null && match.team1Proof!.isNotEmpty) ...[
                               OutlinedButton.icon(
                                 style: OutlinedButton.styleFrom(
@@ -957,19 +1016,17 @@ class _AdminTeamMatchesScreenState extends State<AdminTeamMatchesScreen> {
                                 icon: const Icon(Icons.image_outlined, size: 14),
                                 label: Text(
                                   match.proofAttempts > 0
-                                      ? '${match.team1Name} Proof (Attempt ${match.proofAttempts}/2)'
-                                      : '${match.team1Name} Proof',
+                                      ? '${match.team1Name} Proof (Attempt ${match.proofAttempts}/2)' : '${match.team1Name} Proof',
                                   style: const TextStyle(fontSize: 11),
                                 ),
                                 onPressed: () => _showImageDialog(
                                   context,
                                   match.team1Proof!,
-                                  '${match.team1Name} Proof (Attempt ${match.proofAttempts}/2)',
+                                  '${match.team1Name} Proof (Attempt${match.proofAttempts}/2)',
                                 ),
                               ),
                             ],
 
-                            // Team 2 Screenshot button
                             if (match.team2Proof != null && match.team2Proof!.isNotEmpty) ...[
                               OutlinedButton.icon(
                                 style: OutlinedButton.styleFrom(
@@ -981,19 +1038,17 @@ class _AdminTeamMatchesScreenState extends State<AdminTeamMatchesScreen> {
                                 icon: const Icon(Icons.image_outlined, size: 14),
                                 label: Text(
                                   match.proofAttempts > 0
-                                      ? '${match.team2Name} Proof (Attempt ${match.proofAttempts}/2)'
-                                      : '${match.team2Name} Proof',
+                                      ? '${match.team2Name} Proof (Attempt ${match.proofAttempts}/2)' : '${match.team2Name} Proof',
                                   style: const TextStyle(fontSize: 11),
                                 ),
                                 onPressed: () => _showImageDialog(
                                   context,
                                   match.team2Proof!,
-                                  '${match.team2Name} Proof (Attempt ${match.proofAttempts}/2)',
+                                  '${match.team2Name} Proof (Attempt${match.proofAttempts}/2)',
                                 ),
                               ),
                             ],
 
-                            // Open Match Room button
                             TextButton.icon(
                               style: TextButton.styleFrom(
                                 foregroundColor: Colors.white70,
@@ -1012,11 +1067,9 @@ class _AdminTeamMatchesScreenState extends State<AdminTeamMatchesScreen> {
                               },
                             ),
 
-                            // Verify, Request New Proof & Reject Actions
                             Row(
                               mainAxisSize: MainAxisSize.min,
                               children: [
-                                // 1. Reject Button
                                 if (!match.isRejected) ...[
                                   OutlinedButton(
                                     style: OutlinedButton.styleFrom(
@@ -1031,7 +1084,6 @@ class _AdminTeamMatchesScreenState extends State<AdminTeamMatchesScreen> {
                                   const SizedBox(width: 6),
                                 ],
 
-                                // 2. Request New Proof Button
                                 if (!match.isVerified && match.proofAttempts < 2) ...[
                                   OutlinedButton.icon(
                                     style: OutlinedButton.styleFrom(
@@ -1047,7 +1099,6 @@ class _AdminTeamMatchesScreenState extends State<AdminTeamMatchesScreen> {
                                   const SizedBox(width: 6),
                                 ],
 
-                                // 3. Verify Winner Button
                                 if (!match.isVerified) ...[
                                   ElevatedButton(
                                     style: ElevatedButton.styleFrom(
