@@ -15,7 +15,8 @@ class ContactUsScreen extends StatelessWidget {
   Color get textWhite => ThemeService.textPrimary;
   Color get textGray => ThemeService.textSecondary;
 
-  static const String contactEmail = 'gameskhabar.help@gmail.com';
+  // ✅ Naya Email & Social Details:
+  static const String contactEmail = 'gamersidofficial.help@gmail.com';
   static const String instagramHandle = '@gameskhabar';
   static const String instagramUrl = 'https://instagram.com/gameskhabar';
 
@@ -23,7 +24,7 @@ class ContactUsScreen extends StatelessWidget {
     final Uri emailUri = Uri(
       scheme: 'mailto',
       path: contactEmail,
-      query: 'subject=Games Khabar Support & Feedback',
+      query: 'subject=Gamers ID Support & Feedback',
     );
     try {
       if (await canLaunchUrl(emailUri)) {
@@ -119,7 +120,7 @@ class ContactUsScreen extends StatelessWidget {
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Text(
-                        'Get in Touch with Games Khabar',
+                        'Get in Touch with Gamers ID',
                         style: TextStyle(
                           color: textWhite,
                           fontWeight: FontWeight.w900,
@@ -176,7 +177,7 @@ class ContactUsScreen extends StatelessWidget {
 
                 const SizedBox(height: 28),
 
-                // Response Time Card
+                // Response Time Card (Promise removed)
                 Container(
                   padding: const EdgeInsets.all(16),
                   decoration: BoxDecoration(
@@ -193,7 +194,7 @@ class ContactUsScreen extends StatelessWidget {
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
                             Text(
-                              'Quick Response Promise',
+                              'Quick Response',
                               style: TextStyle(
                                 color: textWhite,
                                 fontWeight: FontWeight.bold,
