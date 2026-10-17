@@ -5,6 +5,14 @@
     <!-- Play Store minimal permission: Only INTERNET for news & images -->
     <uses-permission android:name="android.permission.INTERNET" />
 
+    <!-- External Browser aur Social Links open karne ke liye (Android 11+) -->
+    <queries>
+        <intent>
+            <action android:name="android.intent.action.VIEW" />
+            <data android:scheme="https" />
+        </intent>
+    </queries>
+
     <application
         android:allowBackup="true"
         android:dataExtractionRules="@xml/data_extraction_rules"
