@@ -1,3 +1,9 @@
+// ===============================================================================
+// EXACT UPDATE — Real YouTube & TikTok Channel Links Added
+// -------------------------------------------------------------------------------
+// File: lib/screens/follow_us_screen.dart
+// ===============================================================================
+
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:url_launcher/url_launcher.dart';
@@ -15,20 +21,20 @@ class FollowUsScreen extends StatelessWidget {
   Color get textWhite => ThemeService.textPrimary;
   Color get textGray => ThemeService.textSecondary;
 
-  // Official Handles Update
-  static const String youtubeUrl = 'https://youtube.com/@GamersIDOfficial';
+  // ✅ Aapke Screenshot ke mutabiq 100% Asal Links:
+  static const String youtubeUrl = 'https://www.youtube.com/@GamersID_Official';
+  static const String tiktokUrl = 'https://www.tiktok.com/@gamersidofficial';
   static const String instagramUrl = 'https://instagram.com/gamersidofficial';
-  static const String tiktokUrl = 'https://tiktok.com/@gamersidofficial';
-  
-  // Facebook Page ka jo link aapne 3 dots se copy kiya tha, wo yahan paste karein:
   static const String facebookUrl = 'https://facebook.com/GamersIDOfficial'; 
 
   Future<void> _launchSocialUrl(BuildContext context, String urlStr, String title) async {
     final Uri uri = Uri.parse(urlStr);
     try {
-      final bool launched = await launchUrl(uri, mode: LaunchMode.externalApplication);
+      final bool launched = await launchUrl(
+        uri, 
+        mode: LaunchMode.externalApplication,
+      );
       if (!launched) {
-        // Fallback to in-app webview or platform default if external app fails
         await launchUrl(uri, mode: LaunchMode.platformDefault);
       }
     } catch (_) {
@@ -165,7 +171,7 @@ class FollowUsScreen extends StatelessWidget {
                 ),
                 const SizedBox(height: 14),
 
-                // 1. YouTube Option
+                // 1. YouTube Option (Updated with @_Official)
                 _buildSocialItem(
                   context: context,
                   iconWidget: Container(
@@ -205,7 +211,7 @@ class FollowUsScreen extends StatelessWidget {
 
                 const SizedBox(height: 14),
 
-                // 3. TikTok Option
+                // 3. TikTok Option (Updated)
                 _buildSocialItem(
                   context: context,
                   iconWidget: Container(
