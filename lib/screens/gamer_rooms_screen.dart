@@ -9,7 +9,7 @@
 // - Join Match Button for non-host players with slot reservation
 // - WINNER vs OPPONENT DISPLAY: Banner & player list show who defeated whom
 // - Full Adaptive Day/Night Theme Sync with ThemeService
-// - Esports Match Rules & Guidelines Dialog
+// - Match Verification Rules Dialog Integrated (Create, Join & In-Room)
 // - Flexible Match Formats (1v1, 2v2, 4v4 TDM)
 // - "End Match / Claim Win" Screenshot Proof Upload to Supabase Storage
 // - Dispute management & Admin approval flow
@@ -31,6 +31,7 @@ import '../services/supabase_service.dart';
 import '../services/notification_service.dart';
 import '../services/theme_service.dart';
 import '../widgets/gamer_avatar.dart';
+import '../widgets/match_rules_dialog.dart';
 
 class GamerRoom {
   final String id;
@@ -617,14 +618,26 @@ class _GamerRoomsScreenState extends State<GamerRoomsScreen> {
         return;
       }
 
-      // Agar limit ke andar hai to create dialog open karein
+      // Agar limit ke andar hai to pehle Rules Dialog show karein, phir room banayein
       if (mounted) {
-        _showCreateRoomDialog();
+        MatchRulesDialog.show(
+          context,
+          title: 'Custom Room Creation Rules',
+          onProceed: () {
+            if (mounted) _showCreateRoomDialog();
+          },
+        );
       }
     } catch (e) {
       debugPrint('Error checking active room limit: $e');
       if (mounted) {
-        _showCreateRoomDialog();
+        MatchRulesDialog.show(
+          context,
+          title: 'Custom Room Creation Rules',
+          onProceed: () {
+            if (mounted) _showCreateRoomDialog();
+          },
+        );
       }
     }
   }
@@ -666,7 +679,7 @@ class _GamerRoomsScreenState extends State<GamerRoomsScreen> {
             actions: [
               IconButton(
                 icon: const Icon(Icons.add_circle_outline, color: Color(0xFF1877F2), size: 28),
-                onPressed: _handleCreateRoomTap, // ✅ Intercepted with Max 2 check
+                onPressed: _handleCreateRoomTap, // ✅ Limit Check + Verification Rules Dialog
               ),
               const SizedBox(width: 8),
             ],
@@ -1101,48 +1114,10 @@ class _RoomDetailsSheetState extends State<_RoomDetailsSheet> {
   }
 
   void _showRulesDialog() {
-    showDialog(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        backgroundColor: ThemeService.card,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-        title: Row(
-          children: [
-            const Text('📜 ', style: TextStyle(fontSize: 20)),
-            Text(
-              'Tournament Rules',
-              style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18, color: ThemeService.textPrimary),
-            ),
-          ],
-        ),
-        content: const SingleChildScrollView(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              _RuleItem(icon: Icons.phone_android, title: 'Mobile Only', desc: 'Emulators, PC, and iPad view modifications are strictly prohibited.'),
-              SizedBox(height: 10),
-              _RuleItem(icon: Icons.security, title: 'Fair Play', desc: 'Hacks, scripts, and third-party GFX tools will lead to permanent account ban.'),
-              SizedBox(height: 10),
-              _RuleItem(icon: Icons.camera_alt, title: 'Mandatory Proof', desc: 'End-game screenshot showing kills & rank is mandatory to claim prize.'),
-              SizedBox(height: 10),
-              _RuleItem(icon: Icons.group_off, title: 'No Teaming', desc: 'Teaming with opponents or griefing will forfeit match and coins.'),
-              SizedBox(height: 10),
-              _RuleItem(icon: Icons.gavel, title: 'Admin Authority', desc: 'In case of dispute, Admin verification based on submitted proof is final.'),
-            ],
-          ),
-        ),
-        actions: [
-          ElevatedButton(
-            style: ElevatedButton.styleFrom(
-              backgroundColor: const Color(0xFF1877F2),
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-            ),
-            onPressed: () => Navigator.pop(ctx),
-            child: const Text('I Understand', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
-          ),
-        ],
-      ),
+    MatchRulesDialog.show(
+      context,
+      title: 'Tournament & Verification Rules',
+      onProceed: () {},
     );
   }
 
@@ -2002,7 +1977,7 @@ class _RoomDetailsSheetState extends State<_RoomDetailsSheet> {
                 ),
               ),
 
-              // ACTION BUTTONS: Join Match OR End Match & Dispute
+              // ACTION BUTTONS: Join Match (With Rules) OR End Match & Dispute
               if (!room.isCompleted) ...[
                 if (!isJoined) ...[
                   Padding(
@@ -2028,7 +2003,16 @@ class _RoomDetailsSheetState extends State<_RoomDetailsSheet> {
                           _isJoining ? 'Joining Match...' : 'JOIN MATCH (${room.filledSlots}/${room.totalSlots})',
                           style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
                         ),
-                        onPressed: _isJoining ? null : () => _joinMatch(room),
+                        onPressed: _isJoining
+                            ? null
+                            : () {
+                                // Match join karne se pehle rules popup
+                                MatchRulesDialog.show(
+                                  context,
+                                  title: 'Match Rules (${room.title})',
+                                  onProceed: () => _joinMatch(room),
+                                );
+                              },
                       ),
                     ),
                   ),
@@ -2083,42 +2067,6 @@ class _RoomDetailsSheetState extends State<_RoomDetailsSheet> {
           );
         },
       ),
-    );
-  }
-}
-
-class _RuleItem extends StatelessWidget {
-  final IconData icon;
-  final String title;
-  final String desc;
-
-  const _RuleItem({
-    required this.icon,
-    required this.title,
-    required this.desc,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return Row(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Icon(icon, color: const Color(0xFF1877F2), size: 18),
-        const SizedBox(width: 10),
-        Expanded(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                title,
-                style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: ThemeService.textPrimary),
-              ),
-              const SizedBox(height: 2),
-              Text(desc, style: TextStyle(fontSize: 11.5, color: ThemeService.textSecondary)),
-            ],
-          ),
-        ),
-      ],
     );
   }
 }
