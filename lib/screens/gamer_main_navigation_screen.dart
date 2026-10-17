@@ -1,9 +1,16 @@
+// ===============================================================================
+// EXACT DIFF — Full Adaptive Day & Night Mode + Realtime Language Sync
+// -------------------------------------------------------------------------------
+// File: lib/screens/gamer_main_navigation_screen.dart
+// ===============================================================================
+
 import 'dart:async';
 import 'package:flutter/material.dart';
 import '../constants/gamer_theme.dart';
 import '../services/gamer_auth_service.dart';
 import '../services/supabase_service.dart';
 import '../services/theme_service.dart';
+import '../services/language_service.dart';
 import 'gamer_feed_screen.dart';
 import 'teams_screen.dart';
 import 'gamer_messages_screen.dart';
@@ -103,89 +110,94 @@ class _GamerMainNavigationScreenState extends State<GamerMainNavigationScreen> {
       builder: (context, themeMode, _) {
         final isDark = themeMode == ThemeMode.dark;
 
-        return Scaffold(
-          backgroundColor: ThemeService.bg,
-          extendBody: false,
-          extendBodyBehindAppBar: false,
-          body: SafeArea(
-            top: true,
-            bottom: true,
-            child: IndexedStack(
-              index: _currentIndex.clamp(0, screens.length - 1),
-              children: screens,
-            ),
-          ),
-          bottomNavigationBar: Container(
-            decoration: BoxDecoration(
-              color: ThemeService.bottomNavBg,
-              border: Border(
-                top: BorderSide(color: ThemeService.bottomNavBorder, width: 1),
-              ),
-              boxShadow: [
-                BoxShadow(
-                  color: isDark ? Colors.black.withOpacity(0.35) : Colors.black.withOpacity(0.06),
-                  blurRadius: 8,
-                  offset: const Offset(0, -2),
+        return ValueListenableBuilder<String>(
+          valueListenable: LanguageService.currentLanguage,
+          builder: (context, langCode, _) {
+            return Scaffold(
+              backgroundColor: ThemeService.bg,
+              extendBody: false,
+              extendBodyBehindAppBar: false,
+              body: SafeArea(
+                top: true,
+                bottom: true,
+                child: IndexedStack(
+                  index: _currentIndex.clamp(0, screens.length - 1),
+                  children: screens,
                 ),
-              ],
-            ),
-            child: SafeArea(
-              top: false,
-              bottom: true,
-              child: SizedBox(
-                height: 62,
-                child: Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceAround,
-                  children: [
-                    _buildNavItem(
-                      index: 0,
-                      icon: Icons.home_rounded,
-                      label: 'Feed',
-                      isSelected: _currentIndex == 0,
-                      isDark: isDark,
+              ),
+              bottomNavigationBar: Container(
+                decoration: BoxDecoration(
+                  color: ThemeService.bottomNavBg,
+                  border: Border(
+                    top: BorderSide(color: ThemeService.bottomNavBorder, width: 1),
+                  ),
+                  boxShadow: [
+                    BoxShadow(
+                      color: isDark ? Colors.black.withOpacity(0.35) : Colors.black.withOpacity(0.06),
+                      blurRadius: 8,
+                      offset: const Offset(0, -2),
                     ),
-                    _buildNavItem(
-                      index: 1,
-                      icon: Icons.shield_rounded,
-                      label: 'Teams',
-                      isSelected: _currentIndex == 1,
-                      isDark: isDark,
-                    ),
-                    _buildNavItem(
-                      index: 2,
-                      icon: Icons.chat_bubble_rounded,
-                      label: 'Messages',
-                      isSelected: _currentIndex == 2,
-                      isDark: isDark,
-                    ),
-                    _buildNavItem(
-                      index: 3,
-                      icon: Icons.military_tech_rounded,
-                      label: 'Rooms',
-                      isSelected: _currentIndex == 3,
-                      isDark: isDark,
-                    ),
-                    _buildNavItem(
-                      index: 4,
-                      icon: Icons.person_rounded,
-                      label: 'Profile',
-                      isSelected: _currentIndex == 4,
-                      isDark: isDark,
-                    ),
-                    if (_isAdmin)
-                      _buildNavItem(
-                        index: 5,
-                        icon: Icons.admin_panel_settings_rounded,
-                        label: 'Admin',
-                        isSelected: _currentIndex == 5,
-                        activeColor: const Color(0xFF1877F2),
-                        isDark: isDark,
-                      ),
                   ],
                 ),
+                child: SafeArea(
+                  top: false,
+                  bottom: true,
+                  child: SizedBox(
+                    height: 62,
+                    child: Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceAround,
+                      children: [
+                        _buildNavItem(
+                          index: 0,
+                          icon: Icons.home_rounded,
+                          label: LanguageService.t('Feed'),
+                          isSelected: _currentIndex == 0,
+                          isDark: isDark,
+                        ),
+                        _buildNavItem(
+                          index: 1,
+                          icon: Icons.shield_rounded,
+                          label: LanguageService.t('Teams'),
+                          isSelected: _currentIndex == 1,
+                          isDark: isDark,
+                        ),
+                        _buildNavItem(
+                          index: 2,
+                          icon: Icons.chat_bubble_rounded,
+                          label: LanguageService.t('Messages'),
+                          isSelected: _currentIndex == 2,
+                          isDark: isDark,
+                        ),
+                        _buildNavItem(
+                          index: 3,
+                          icon: Icons.military_tech_rounded,
+                          label: LanguageService.t('Rooms'),
+                          isSelected: _currentIndex == 3,
+                          isDark: isDark,
+                        ),
+                        _buildNavItem(
+                          index: 4,
+                          icon: Icons.person_rounded,
+                          label: LanguageService.t('Profile'),
+                          isSelected: _currentIndex == 4,
+                          isDark: isDark,
+                        ),
+                        if (_isAdmin)
+                          _buildNavItem(
+                            index: 5,
+                            icon: Icons.admin_panel_settings_rounded,
+                            label: LanguageService.t('Admin'),
+                            isSelected: _currentIndex == 5,
+                            activeColor: const Color(0xFF1877F2),
+                            isDark: isDark,
+                          ),
+                      ],
+                    ),
+                  ),
+                ),
               ),
-            ),
-          ),
+            );
+          },
         );
       },
     );
