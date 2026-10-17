@@ -1,16 +1,3 @@
-// ===============================================================================
-// EXACT DIFF — Profile / Settings & Preferences Screen
-// -------------------------------------------------------------------------------
-// File: lib/screens/profile_screen.dart
-//
-// 1. ADDED: "Show Followers" & "Show Following" toggles in Privacy Settings.
-// 2. Safe Scrollable Privacy Bottom Sheet (prevents pixel overflow).
-// 3. UserAttributes imported via supabase_flutter properly.
-// 4. RESTORED: Privacy Settings placed above Blocked Users.
-// 5. REORDERED: Log Out after App Version, Delete Account at the bottom.
-// 6. Full Day/Night Mode sync with ThemeService.
-// ===============================================================================
-
 import 'package:flutter/material.dart';
 import 'package:easy_localization/easy_localization.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
