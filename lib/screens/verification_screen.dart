@@ -1,8 +1,16 @@
+// ===============================================================================
+// VERIFICATION SCREEN — Free Application & Instant VIP Blue Tick (2,000 Coins)
+// -------------------------------------------------------------------------------
+// File: lib/screens/verification_screen.dart
+// ===============================================================================
+
 import 'package:flutter/material.dart';
 import '../constants/gamer_theme.dart';
 import '../models/gamer_user_model.dart';
 import '../services/gamer_auth_service.dart';
 import '../services/verification_service.dart';
+import '../services/coin_wallet_service.dart';
+import '../services/supabase_service.dart';
 import 'create_gamer_id_screen.dart';
 import 'create_post_screen.dart';
 
@@ -19,6 +27,7 @@ class _VerificationScreenState extends State<VerificationScreen> {
   final GamerAuthService _authService = GamerAuthService();
   bool _isLoading = true;
   bool _isSubmitting = false;
+  bool _isPurchasingVip = false;
   VerificationStats? _liveStats;
   GamerUser? _currentUser;
 
@@ -54,6 +63,121 @@ class _VerificationScreenState extends State<VerificationScreen> {
     }
   }
 
+  /// ⚡ INSTANT VIP BLUE TICK (2,000 Coins Purchase Logic)
+  Future<void> _handleInstantVipBuy(GamerUser user) async {
+    final wallet = await CoinWalletService().getOrCreateWallet(user.uid);
+
+    if (wallet.coins < 2000) {
+      showDialog(
+        context: context,
+        builder: (ctx) => AlertDialog(
+          backgroundColor: GamerTheme.cardElevated,
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+          title: const Row(
+            children: [
+              Icon(Icons.warning_amber_rounded, color: Color(0xFFFFB800), size: 24),
+              SizedBox(width: 8),
+              Text('Coins Kam Hain!', style: TextStyle(color: Colors.white, fontSize: 17, fontWeight: FontWeight.bold)),
+            ],
+          ),
+          content: Text(
+            'Instant VIP Blue Tick hasil karne ke liye 2,000 coins darkaar hain.\n\nAapke wallet mein is waqt ${wallet.coins} coins hain. Ads dekh kar ya Top-up kar ke balance poora karein.',
+            style: const TextStyle(color: GamerTheme.textGray, fontSize: 13, height: 1.4),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(ctx),
+              child: const Text('Theek Hai', style: TextStyle(color: GamerTheme.accentBlue, fontWeight: FontWeight.bold)),
+            ),
+          ],
+        ),
+      );
+      return;
+    }
+
+    final confirm = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: GamerTheme.cardElevated,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        title: const Row(
+          children: [
+            Icon(Icons.verified_rounded, color: Colors.blue, size: 24),
+            SizedBox(width: 8),
+            Text('VIP Blue Tick Unlock?', style: TextStyle(color: Colors.white, fontSize: 17, fontWeight: FontWeight.bold)),
+          ],
+        ),
+        content: const Text(
+          'Kya aap 2,000 Coins ada karke foran official Blue Tick hasil karna chahte hain? Koi task poora karne ki zaroorat nahi hogi.',
+          style: TextStyle(color: GamerTheme.textGray, fontSize: 13, height: 1.4),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('Cancel', style: TextStyle(color: GamerTheme.textMuted)),
+          ),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(
+              backgroundColor: Colors.blue,
+              foregroundColor: Colors.white,
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+            ),
+            onPressed: () => Navigator.pop(ctx, true),
+            child: const Text('Haan, 2,000 Coins Pay Karein', style: TextStyle(fontWeight: FontWeight.bold)),
+          ),
+        ],
+      ),
+    );
+
+    if (confirm != true) return;
+
+    setState(() => _isPurchasingVip = true);
+
+    try {
+      // 1. Deduct 2,000 coins via CoinWalletService
+      await CoinWalletService.updateCoins(
+        userId: user.uid,
+        amount: -2000,
+        type: 'store_purchase',
+        title: 'VIP Blue Tick Verification ✨',
+        description: 'Instant Blue Tick unlocked via 2,000 Coins',
+      );
+
+      // 2. Update user profile to Verified in Supabase
+      await SupabaseService.client.from('users').update({
+        'is_verified': true,
+        'has_blue_tick': true,
+        'verification_status': 'verified',
+        'updated_at': DateTime.now().toIso8601String(),
+      }).or('id.eq.${user.uid},uid.eq.${user.uid}');
+
+      // 3. Update in-memory user
+      await _authService.refreshCurrentGamer();
+      final freshest = await _authService.fetchUserProfile(user.uid);
+
+      if (mounted) {
+        setState(() {
+          _currentUser = freshest ?? user.copyWith(
+            verificationStatus: 'verified',
+            isVerified: true,
+          );
+        });
+        _showVerifiedCelebrationDialog();
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            backgroundColor: GamerTheme.redAccent,
+            content: Text('Purchase error: $e'),
+          ),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _isPurchasingVip = false);
+    }
+  }
+
   Future<void> _handleApply(GamerUser user) async {
     final canApply = VerificationService.canApplyForVerification(
       user,
@@ -84,7 +208,7 @@ class _VerificationScreenState extends State<VerificationScreen> {
               const SizedBox(width: 8),
               Expanded(
                 child: Text(
-                  'Cannot apply: ${unmet.length} requirement(s) missing with red cross.',
+                  'Cannot apply: ${unmet.length} requirement(s) missing.',
                   style: const TextStyle(fontWeight: FontWeight.bold),
                 ),
               ),
@@ -98,7 +222,6 @@ class _VerificationScreenState extends State<VerificationScreen> {
     setState(() => _isSubmitting = true);
 
     try {
-      // Step 1: Set to pending and show "Under Review 24h"
       await VerificationService.setPendingUnderReview(user.uid);
       if (mounted) {
         setState(() {
@@ -109,7 +232,6 @@ class _VerificationScreenState extends State<VerificationScreen> {
         });
       }
 
-      // Show brief pending transition dialog
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
@@ -130,7 +252,6 @@ class _VerificationScreenState extends State<VerificationScreen> {
         ),
       );
 
-      // Step 2: Auto-verify since requirements are 100% verified!
       await Future.delayed(const Duration(milliseconds: 900));
       final result = await VerificationService.applyForVerification(user);
 
@@ -207,7 +328,7 @@ class _VerificationScreenState extends State<VerificationScreen> {
             ),
             const SizedBox(height: 10),
             const Text(
-              'All competitive gaming integrity requirements have been validated. Your official Blue Tick ✓ is now live on your Gamer ID and all posts!',
+              'Mubarak ho! Aapka official Blue Tick ✓ live ho chuka hai. Yeh badge aapke profile aur tamam posts par show hoga.',
               style: TextStyle(
                 color: GamerTheme.textGray,
                 fontSize: 13,
@@ -399,7 +520,7 @@ class _VerificationScreenState extends State<VerificationScreen> {
                   style: const TextStyle(color: GamerTheme.textGray, fontSize: 12),
                 ),
                 const SizedBox(height: 16),
-                const Text('GAME RANK (Top Tier Required)', style: TextStyle(color: GamerTheme.textMuted, fontSize: 11, fontWeight: FontWeight.bold)),
+                const Text('GAME RANK', style: TextStyle(color: GamerTheme.textMuted, fontSize: 11, fontWeight: FontWeight.bold)),
                 const SizedBox(height: 6),
                 Container(
                   padding: const EdgeInsets.symmetric(horizontal: 12),
@@ -559,7 +680,13 @@ class _VerificationScreenState extends State<VerificationScreen> {
           children: [
             // Status Header Banner
             _buildStatusHeaderCard(user, isVerified: isVerified, isPending: isPending, metCount: metCount, totalCount: reqs.length),
-            const SizedBox(height: 20),
+            const SizedBox(height: 16),
+
+            // ⚡ INSTANT VIP BLUE TICK CARD (2,000 Coins)
+            if (!isVerified) ...[
+              _buildInstantVipBuyCard(user),
+              const SizedBox(height: 20),
+            ],
 
             // Requirements Section Header
             Row(
@@ -594,20 +721,108 @@ class _VerificationScreenState extends State<VerificationScreen> {
             ),
             const SizedBox(height: 12),
 
-            // 6 Requirements Cards with Progress Bars & Red Cross ❌
+            // Requirements Cards
             ...reqs.map((item) => _buildRequirementCard(item, user)),
 
             const SizedBox(height: 24),
 
-            // Action Center / Apply Button
+            // Bottom Action
             _buildBottomAction(user, allMet: allMet, isVerified: isVerified, isPending: isPending),
 
             const SizedBox(height: 16),
 
-            // Quick Help / Assist Actions
+            // Quick Shortcuts
             if (!isVerified) _buildQuickActionShortcuts(user),
           ],
         ),
+      ),
+    );
+  }
+
+  /// ⚡ VIP Banner Widget
+  Widget _buildInstantVipBuyCard(GamerUser user) {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        gradient: const LinearGradient(
+          colors: [Color(0xFF1E1B4B), Color(0xFF0F172A)],
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+        ),
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: Colors.blue.withOpacity(0.5), width: 1.5),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.blue.withOpacity(0.15),
+            blurRadius: 12,
+            offset: const Offset(0, 4),
+          ),
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Container(
+                padding: const EdgeInsets.all(8),
+                decoration: BoxDecoration(
+                  color: Colors.blue.withOpacity(0.2),
+                  borderRadius: BorderRadius.circular(10),
+                ),
+                child: const Icon(Icons.flash_on_rounded, color: Colors.blue, size: 22),
+              ),
+              const SizedBox(width: 10),
+              const Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'INSTANT VIP BLUE TICK ⚡',
+                      style: TextStyle(
+                        color: Colors.white,
+                        fontWeight: FontWeight.w900,
+                        fontSize: 15,
+                        letterSpacing: 0.5,
+                      ),
+                    ),
+                    Text(
+                      'Sharaait aur intezar ke baghair foran verify hon',
+                      style: TextStyle(color: GamerTheme.textGray, fontSize: 11),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 12),
+          const Text(
+            'Tasks poore nahi karna chahte? Aap direct 2,000 Coins de kar apni profile par official Blue Tick live kar sakte hain!',
+            style: TextStyle(color: Colors.white70, fontSize: 12.5, height: 1.35),
+          ),
+          const SizedBox(height: 14),
+          SizedBox(
+            width: double.infinity,
+            height: 44,
+            child: ElevatedButton.icon(
+              style: ElevatedButton.styleFrom(
+                backgroundColor: Colors.blue,
+                foregroundColor: Colors.white,
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                elevation: 2,
+              ),
+              icon: _isPurchasingVip
+                  ? const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2))
+                  : const Icon(Icons.monetization_on_rounded, color: Color(0xFFFFD700), size: 18),
+              label: Text(
+                _isPurchasingVip ? 'Processing...' : 'Unlock Instantly (2,000 Coins)',
+                style: const TextStyle(fontWeight: FontWeight.w900, fontSize: 13),
+              ),
+              onPressed: _isPurchasingVip ? null : () => _handleInstantVipBuy(user),
+            ),
+          ),
+        ],
       ),
     );
   }
@@ -619,7 +834,6 @@ class _VerificationScreenState extends State<VerificationScreen> {
     required int metCount,
     required int totalCount,
   }) {
-    // Special Owner Header
     if (user.isOwnerUser) {
       return Container(
         width: double.infinity,
@@ -632,13 +846,6 @@ class _VerificationScreenState extends State<VerificationScreen> {
           ),
           borderRadius: BorderRadius.circular(18),
           border: Border.all(color: const Color(0xFFFFD700), width: 2),
-          boxShadow: [
-            BoxShadow(
-              color: const Color(0xFFFFD700).withOpacity(0.3),
-              blurRadius: 18,
-              spreadRadius: 2,
-            ),
-          ],
         ),
         child: Column(
           children: [
@@ -662,563 +869,4 @@ class _VerificationScreenState extends State<VerificationScreen> {
                     shape: BoxShape.circle,
                     border: Border.all(color: Colors.blue, width: 1.5),
                   ),
-                  child: const Icon(Icons.verified_rounded, color: Colors.blue, size: 40),
-                ),
-              ],
-            ),
-            const SizedBox(height: 14),
-            const Text(
-              'OFFICIAL OWNER & CREATOR 👑',
-              style: TextStyle(
-                color: Color(0xFFFFD700),
-                fontSize: 20,
-                fontWeight: FontWeight.w900,
-                letterSpacing: 1.2,
-              ),
-              textAlign: TextAlign.center,
-            ),
-            const SizedBox(height: 6),
-            const Text(
-              'LEGEND Badge 👑 • Official Blue Tick Verified ✅',
-              style: TextStyle(color: Colors.white, fontSize: 13.5, fontWeight: FontWeight.bold),
-              textAlign: TextAlign.center,
-            ),
-            const SizedBox(height: 4),
-            Text(
-              '@${user.username} has permanent verified owner privileges across all supported games on Gamers ID Network.',
-              style: const TextStyle(color: GamerTheme.textGray, fontSize: 12.5, height: 1.35),
-              textAlign: TextAlign.center,
-            ),
-          ],
-        ),
-      );
-    }
-
-    if (isVerified) {
-      return Container(
-        width: double.infinity,
-        padding: const EdgeInsets.all(20),
-        decoration: BoxDecoration(
-          gradient: const LinearGradient(
-            colors: [Color(0xFF0D2538), Color(0xFF133E60)],
-            begin: Alignment.topLeft,
-            end: Alignment.bottomRight,
-          ),
-          borderRadius: BorderRadius.circular(18),
-          border: Border.all(color: Colors.blue.withOpacity(0.8), width: 1.5),
-          boxShadow: [
-            BoxShadow(
-              color: Colors.blue.withOpacity(0.25),
-              blurRadius: 16,
-              spreadRadius: 1,
-            ),
-          ],
-        ),
-        child: Column(
-          children: [
-            Container(
-              padding: const EdgeInsets.all(12),
-              decoration: BoxDecoration(
-                color: Colors.blue.withOpacity(0.2),
-                shape: BoxShape.circle,
-              ),
-              child: const Icon(Icons.verified_rounded, color: Colors.blue, size: 48),
-            ),
-            const SizedBox(height: 12),
-            const Text(
-              'Official Blue Tick Verified ✓',
-              style: TextStyle(
-                color: Colors.white,
-                fontSize: 20,
-                fontWeight: FontWeight.w900,
-              ),
-            ),
-            const SizedBox(height: 6),
-            Text(
-              '@${user.username} is an officially verified competitive gamer. All community integrity and competitive benchmarks are satisfied.',
-              style: const TextStyle(color: GamerTheme.textGray, fontSize: 13, height: 1.35),
-              textAlign: TextAlign.center,
-            ),
-          ],
-        ),
-      );
-    }
-
-    if (isPending) {
-      return Container(
-        width: double.infinity,
-        padding: const EdgeInsets.all(20),
-        decoration: BoxDecoration(
-          gradient: const LinearGradient(
-            colors: [Color(0xFF2A1C0A), Color(0xFF3F2B12)],
-            begin: Alignment.topLeft,
-            end: Alignment.bottomRight,
-          ),
-          borderRadius: BorderRadius.circular(18),
-          border: Border.all(color: const Color(0xFFFF8A00), width: 1.5),
-          boxShadow: [
-            BoxShadow(
-              color: const Color(0xFFFF8A00).withOpacity(0.2),
-              blurRadius: 14,
-            ),
-          ],
-        ),
-        child: Column(
-          children: [
-            Container(
-              padding: const EdgeInsets.all(12),
-              decoration: BoxDecoration(
-                color: const Color(0xFFFF8A00).withOpacity(0.2),
-                shape: BoxShape.circle,
-              ),
-              child: const Icon(Icons.hourglass_top_rounded, color: Color(0xFFFF8A00), size: 44),
-            ),
-            const SizedBox(height: 12),
-            const Text(
-              'Under Review 24h',
-              style: TextStyle(
-                color: Colors.white,
-                fontSize: 20,
-                fontWeight: FontWeight.w900,
-              ),
-            ),
-            const SizedBox(height: 6),
-            const Text(
-              'Your verification application has been submitted and is currently under 24-hour review. All 6 requirements will be validated before permanent badge activation.',
-              style: TextStyle(color: GamerTheme.textGray, fontSize: 12.5, height: 1.35),
-              textAlign: TextAlign.center,
-            ),
-            const SizedBox(height: 14),
-            ElevatedButton.icon(
-              style: ElevatedButton.styleFrom(
-                backgroundColor: const Color(0xFFFF8A00),
-                foregroundColor: Colors.white,
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-              ),
-              icon: const Icon(Icons.verified_rounded, size: 18),
-              label: const Text('Complete Verification Review', style: TextStyle(fontWeight: FontWeight.w900, fontSize: 13)),
-              onPressed: () => _handleApply(user),
-            ),
-          ],
-        ),
-      );
-    }
-
-    // Default In-Progress / Not Applied
-    return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.all(20),
-      decoration: BoxDecoration(
-        color: GamerTheme.cardDark,
-        borderRadius: BorderRadius.circular(18),
-        border: Border.all(color: GamerTheme.borderDark),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              Container(
-                padding: const EdgeInsets.all(10),
-                decoration: BoxDecoration(
-                  color: Colors.blue.withOpacity(0.15),
-                  borderRadius: BorderRadius.circular(12),
-                ),
-                child: const Icon(Icons.verified, color: Colors.blue, size: 28),
-              ),
-              const SizedBox(width: 14),
-              const Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      'Get The Official Blue Tick',
-                      style: TextStyle(
-                        color: GamerTheme.textWhite,
-                        fontSize: 18,
-                        fontWeight: FontWeight.w900,
-                      ),
-                    ),
-                    SizedBox(height: 2),
-                    Text(
-                      'User must meet ALL 6 requirements to apply',
-                      style: TextStyle(color: GamerTheme.textMuted, fontSize: 12),
-                    ),
-                  ],
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 16),
-          ClipRRect(
-            borderRadius: BorderRadius.circular(6),
-            child: LinearProgressIndicator(
-              value: totalCount > 0 ? metCount / totalCount : 0.0,
-              minHeight: 8,
-              backgroundColor: GamerTheme.cardElevated,
-              valueColor: AlwaysStoppedAnimation<Color>(
-                metCount == totalCount ? GamerTheme.neonGreen : GamerTheme.accentBlue,
-              ),
-            ),
-          ),
-          const SizedBox(height: 8),
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              Text(
-                '$metCount of $totalCount Requirements Completed',
-                style: const TextStyle(color: GamerTheme.textGray, fontSize: 12, fontWeight: FontWeight.bold),
-              ),
-              Text(
-                '${((metCount / (totalCount > 0 ? totalCount : 1)) * 100).toInt()}%',
-                style: TextStyle(
-                  color: metCount == totalCount ? GamerTheme.neonGreen : GamerTheme.accentBlue,
-                  fontSize: 12,
-                  fontWeight: FontWeight.w900,
-                ),
-              ),
-            ],
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildRequirementCard(VerificationRequirementItem item, GamerUser user) {
-    return Container(
-      margin: const EdgeInsets.only(bottom: 12),
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: GamerTheme.cardDark,
-        borderRadius: BorderRadius.circular(14),
-        border: Border.all(
-          color: item.isMet
-              ? GamerTheme.neonGreen.withOpacity(0.35)
-              : GamerTheme.redAccent.withOpacity(0.35),
-          width: 1.2,
-        ),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              // Category Icon
-              Container(
-                padding: const EdgeInsets.all(8),
-                decoration: BoxDecoration(
-                  color: (item.isMet ? GamerTheme.neonGreen : GamerTheme.redAccent).withOpacity(0.12),
-                  borderRadius: BorderRadius.circular(10),
-                ),
-                child: Icon(
-                  item.icon,
-                  color: item.isMet ? GamerTheme.neonGreen : GamerTheme.redAccent,
-                  size: 20,
-                ),
-              ),
-              const SizedBox(width: 12),
-
-              // Title & Description
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      item.title,
-                      style: const TextStyle(
-                        color: GamerTheme.textWhite,
-                        fontSize: 14,
-                        fontWeight: FontWeight.w900,
-                      ),
-                    ),
-                    const SizedBox(height: 2),
-                    Text(
-                      item.description,
-                      style: const TextStyle(color: GamerTheme.textMuted, fontSize: 12, height: 1.3),
-                    ),
-                  ],
-                ),
-              ),
-
-              const SizedBox(width: 8),
-
-              // Green Checkmark OR Red Cross ❌
-              Container(
-                padding: const EdgeInsets.all(6),
-                decoration: BoxDecoration(
-                  color: item.isMet
-                      ? GamerTheme.neonGreen.withOpacity(0.15)
-                      : GamerTheme.redAccent.withOpacity(0.15),
-                  shape: BoxShape.circle,
-                  border: Border.all(
-                    color: item.isMet ? GamerTheme.neonGreen : GamerTheme.redAccent,
-                    width: 1.5,
-                  ),
-                ),
-                child: Icon(
-                  item.isMet ? Icons.check_rounded : Icons.close_rounded,
-                  color: item.isMet ? GamerTheme.neonGreen : GamerTheme.redAccent,
-                  size: 16,
-                ),
-              ),
-            ],
-          ),
-
-          const SizedBox(height: 12),
-
-          // Progress Bar
-          ClipRRect(
-            borderRadius: BorderRadius.circular(4),
-            child: LinearProgressIndicator(
-              value: item.progress,
-              minHeight: 6,
-              backgroundColor: GamerTheme.cardElevated,
-              valueColor: AlwaysStoppedAnimation<Color>(
-                item.isMet
-                    ? GamerTheme.neonGreen
-                    : (item.progress > 0 ? GamerTheme.flameOrange : GamerTheme.redAccent),
-              ),
-            ),
-          ),
-
-          const SizedBox(height: 8),
-
-          // Current vs Target Values
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              Text(
-                item.currentFormatted,
-                style: TextStyle(
-                  color: item.isMet ? GamerTheme.neonGreen : GamerTheme.textGray,
-                  fontSize: 12,
-                  fontWeight: FontWeight.w700,
-                ),
-              ),
-              Text(
-                'Target: ${item.targetFormatted}',
-                style: const TextStyle(
-                  color: GamerTheme.textMuted,
-                  fontSize: 11,
-                  fontWeight: FontWeight.w600,
-                ),
-              ),
-            ],
-          ),
-
-          // Red Cross missing details if unmet
-          if (!item.isMet && item.missingReason != null) ...[
-            const SizedBox(height: 10),
-            Container(
-              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-              decoration: BoxDecoration(
-                color: GamerTheme.redAccent.withOpacity(0.08),
-                borderRadius: BorderRadius.circular(8),
-                border: Border.all(color: GamerTheme.redAccent.withOpacity(0.25)),
-              ),
-              child: Row(
-                children: [
-                  const Icon(Icons.close_rounded, color: GamerTheme.redAccent, size: 14),
-                  const SizedBox(width: 6),
-                  Expanded(
-                    child: Text(
-                      item.missingReason!,
-                      style: const TextStyle(
-                        color: GamerTheme.redAccent,
-                        fontSize: 11.5,
-                        fontWeight: FontWeight.bold,
-                      ),
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          ],
-        ],
-      ),
-    );
-  }
-
-  Widget _buildBottomAction(
-    GamerUser user, {
-    required bool allMet,
-    required bool isVerified,
-    required bool isPending,
-  }) {
-    if (isVerified) {
-      return Container(
-        width: double.infinity,
-        height: 52,
-        decoration: BoxDecoration(
-          borderRadius: BorderRadius.circular(14),
-          color: Colors.blue.withOpacity(0.15),
-          border: Border.all(color: Colors.blue, width: 1.5),
-        ),
-        child: const Center(
-          child: Row(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              Icon(Icons.verified_rounded, color: Colors.blue, size: 22),
-              SizedBox(width: 8),
-              Text(
-                'Official Blue Tick Verified ✓',
-                style: TextStyle(color: Colors.blue, fontWeight: FontWeight.w900, fontSize: 15),
-              ),
-            ],
-          ),
-        ),
-      );
-    }
-
-    if (isPending) {
-      return SizedBox(
-        width: double.infinity,
-        height: 52,
-        child: ElevatedButton.icon(
-          style: ElevatedButton.styleFrom(
-            backgroundColor: const Color(0xFFFF8A00),
-            foregroundColor: Colors.white,
-            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
-          ),
-          icon: _isSubmitting
-              ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2))
-              : const Icon(Icons.hourglass_bottom_rounded, size: 20),
-          label: const Text(
-            'Under Review 24h ⏳',
-            style: TextStyle(fontWeight: FontWeight.w900, fontSize: 15),
-          ),
-          onPressed: _isSubmitting ? null : () => _handleApply(user),
-        ),
-      );
-    }
-
-    return SizedBox(
-      width: double.infinity,
-      height: 52,
-      child: ElevatedButton.icon(
-        style: ElevatedButton.styleFrom(
-          backgroundColor: allMet ? Colors.blue : GamerTheme.cardElevated,
-          foregroundColor: allMet ? Colors.white : GamerTheme.textMuted,
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(14),
-            side: BorderSide(
-              color: allMet ? Colors.blue : GamerTheme.borderDark,
-            ),
-          ),
-          elevation: allMet ? 4 : 0,
-        ),
-        icon: _isSubmitting
-            ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2))
-            : Icon(allMet ? Icons.verified_rounded : Icons.lock_outline_rounded, size: 20),
-        label: Text(
-          allMet ? 'APPLY FOR VERIFICATION' : 'Apply for Verification (Locked)',
-          style: TextStyle(
-            fontWeight: FontWeight.w900,
-            fontSize: 14.5,
-            letterSpacing: 0.5,
-            color: allMet ? Colors.white : GamerTheme.textMuted,
-          ),
-        ),
-        onPressed: _isSubmitting ? null : () => _handleApply(user),
-      ),
-    );
-  }
-
-  Widget _buildQuickActionShortcuts(GamerUser user) {
-    return Container(
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: GamerTheme.cardDark,
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: GamerTheme.borderDark),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          const Text(
-            'QUICK SHORTCUTS TO COMPLETE REQUIREMENTS',
-            style: TextStyle(
-              color: GamerTheme.textMuted,
-              fontSize: 11,
-              fontWeight: FontWeight.w900,
-              letterSpacing: 0.8,
-            ),
-          ),
-          const SizedBox(height: 12),
-          Row(
-            children: [
-              Expanded(
-                child: OutlinedButton.icon(
-                  style: OutlinedButton.styleFrom(
-                    side: const BorderSide(color: GamerTheme.accentBlue),
-                    padding: const EdgeInsets.symmetric(vertical: 10),
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-                  ),
-                  icon: const Icon(Icons.sports_esports_rounded, color: GamerTheme.accentBlue, size: 16),
-                  label: const Text('Link Game UID', style: TextStyle(color: GamerTheme.accentBlue, fontSize: 12, fontWeight: FontWeight.bold)),
-                  onPressed: () => _showLinkGameUidDialog(user),
-                ),
-              ),
-              const SizedBox(width: 8),
-              Expanded(
-                child: OutlinedButton.icon(
-                  style: OutlinedButton.styleFrom(
-                    side: const BorderSide(color: GamerTheme.flameOrange),
-                    padding: const EdgeInsets.symmetric(vertical: 10),
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-                  ),
-                  icon: const Icon(Icons.military_tech_rounded, color: GamerTheme.flameOrange, size: 16),
-                  label: const Text('Set Game Rank', style: TextStyle(color: GamerTheme.flameOrange, fontSize: 12, fontWeight: FontWeight.bold)),
-                  onPressed: () => _showQuickRankKdDialog(user),
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 8),
-          Row(
-            children: [
-              Expanded(
-                child: OutlinedButton.icon(
-                  style: OutlinedButton.styleFrom(
-                    side: const BorderSide(color: GamerTheme.borderLight),
-                    padding: const EdgeInsets.symmetric(vertical: 10),
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-                  ),
-                  icon: const Icon(Icons.edit_note_rounded, color: GamerTheme.textWhite, size: 16),
-                  label: const Text('Edit Bio & Avatar', style: TextStyle(color: GamerTheme.textWhite, fontSize: 12, fontWeight: FontWeight.bold)),
-                  onPressed: () {
-                    Navigator.push(
-                      context,
-                      MaterialPageRoute(
-                        builder: (_) => CreateGamerIdScreen(isEditing: true, existingUser: user),
-                      ),
-                    ).then((_) => _refreshData());
-                  },
-                ),
-              ),
-              const SizedBox(width: 8),
-              Expanded(
-                child: OutlinedButton.icon(
-                  style: OutlinedButton.styleFrom(
-                    side: const BorderSide(color: GamerTheme.borderLight),
-                    padding: const EdgeInsets.symmetric(vertical: 10),
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-                  ),
-                  icon: const Icon(Icons.movie_creation_rounded, color: GamerTheme.textWhite, size: 16),
-                  label: const Text('Post Clip/Room', style: TextStyle(color: GamerTheme.textWhite, fontSize: 12, fontWeight: FontWeight.bold)),
-                  onPressed: () {
-                    Navigator.push(
-                      context,
-                      MaterialPageRoute(builder: (_) => const CreatePostScreen()),
-                    ).then((_) => _refreshData());
-                  },
-                ),
-              ),
-            ],
-          ),
-        ],
-      ),
-    );
-  }
-}
+                  child: const Icon(Icons.verified_rounded,
