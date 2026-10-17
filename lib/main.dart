@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:easy_localization/easy_localization.dart';
 import 'services/supabase_service.dart';
 import 'constants/gamer_theme.dart';
 import 'services/theme_service.dart';
@@ -15,6 +16,9 @@ import 'screens/gamer_terms_of_service_screen.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
+
+  // ✅ 1. EasyLocalization initialize karna zaroori hai
+  await EasyLocalization.ensureInitialized();
 
   SystemChrome.setEnabledSystemUIMode(
     SystemUiMode.manual,
@@ -42,7 +46,20 @@ void main() async {
     debugPrint('ThemeService init error: $e');
   }
 
-  runApp(const GamersIdApp());
+  // ✅ 2. App ko EasyLocalization widget mein wrap karein
+  runApp(
+    EasyLocalization(
+      supportedLocales: const [
+        Locale('en'), // English
+        Locale('ur'), // Urdu
+        Locale('hi'), // Hindi
+        Locale('ar'), // Arabic
+      ],
+      path: 'assets/translations',
+      fallbackLocale: const Locale('en'),
+      child: const GamersIdApp(),
+    ),
+  );
 }
 
 class GamersIdApp extends StatelessWidget {
@@ -57,9 +74,15 @@ class GamersIdApp extends StatelessWidget {
           top: true,
           bottom: true,
           child: MaterialApp(
-            key: ValueKey(themeMode),
+            key: ValueKey('${themeMode}_${context.locale.languageCode}'),
             title: 'Gamers ID',
             debugShowCheckedModeBanner: false,
+
+            // ✅ 3. EasyLocalization ke delegates connect karein (Inke baghair language nahi badalti)
+            localizationsDelegates: context.localizationDelegates,
+            supportedLocales: context.supportedLocales,
+            locale: context.locale,
+
             themeMode: themeMode,
             theme: ThemeService.lightTheme,
             darkTheme: ThemeService.darkTheme,
