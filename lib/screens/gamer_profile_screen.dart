@@ -3,6 +3,7 @@
 // + StreamBuilder removed / direct _cachedUser use
 // + 10-second silent background refresh
 // + Direct Settings navigation on Gear icon
+// + Professional & Dynamic Profile Sharing (No empty Bio/Rank, App Link included)
 // ----------------------------------------------------------------
 // File: lib/screens/gamer_profile_screen.dart
 // ================================================================
@@ -625,12 +626,38 @@ class _GamerProfileScreenState extends State<GamerProfileScreen>
   }
 
   void _shareProfile(GamerUser user) {
-    final text =
-        '🎮 Check out ${user.displayName}\'s Gamer ID on Gamers ID!\n\n'
-        'Handle: @${user.username}\n'
-        'Game: ${user.favoriteGame} | Rank: ${user.rank}\n'
-        'Bio: ${user.bio}';
-    Share.share(text);
+    final displayName = user.displayName.isNotEmpty ? user.displayName : user.username;
+    final game = user.favoriteGame.isNotEmpty ? user.favoriteGame : 'BGMI';
+
+    // Rank sirf tabhi share message mein aaye jab approved aur valid ho
+    final bool hasValidRank = user.isRankApproved &&
+        user.rank.isNotEmpty &&
+        user.rank.toLowerCase() != 'none' &&
+        user.rank.toLowerCase() != 'skip';
+    final String rankText = hasValidRank ? ' | Rank: ${user.rank}' : '';
+
+    // Khali bio ho to clean format mein ignore ho jaye
+    final bio = user.bio.trim();
+    final String bioText = bio.isNotEmpty ? '\n💬 "$bio"' : '';
+
+    const String appLink = 'https://play.google.com/store/apps/details?id=com.gameskhabar.gamersid';
+
+    final String shareMessage = '''
+🔥 Check out $displayName on Gamers ID!
+
+🎮 Handle: @${user.username}
+🎯 Game: $game$rankText
+📊 Stats: ${user.followersCount} Followers • ${user.postsCount} Posts$bioText
+
+⚔️ Mujhe custom rooms aur 1v1 matches mein challenge karein!
+📲 Download Gamers ID App:
+👉 $appLink
+'''.trim();
+
+    Share.share(
+      shareMessage,
+      subject: 'Follow $displayName on Gamers ID',
+    );
   }
 
   void _confirmSignOut() {
