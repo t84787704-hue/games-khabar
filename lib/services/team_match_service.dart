@@ -1,3 +1,9 @@
+// ===============================================================================
+// TEAM MATCH SERVICE — Updated with 5 Points per Win & Top 100 Leaderboard
+// -------------------------------------------------------------------------------
+// File: lib/services/team_match_service.dart
+// ===============================================================================
+
 import 'dart:async';
 import 'dart:io';
 import 'package:flutter/foundation.dart';
@@ -444,7 +450,7 @@ class TeamMatchService {
     return SupabaseService.getMatchChatStream(matchId);
   }
 
-  /// 8. Admin Verification & Outcome Decision
+  /// 8. Admin Verification & Outcome Decision (+5 Points on Win)
   Future<bool> adminVerifyMatch({
     required String matchId,
     required String winnerTeamId,
@@ -497,6 +503,7 @@ class TeamMatchService {
         final loserLeaderName = isTeam1Winner ? match.team2LeaderName : match.team1LeaderName;
         final loserAvatar = isTeam1Winner ? match.team2Avatar : match.team1Avatar;
 
+        // ✅ Winner gets +5 points, loser gets 0 points
         await _recordTeamResult(winnerId, winnerTeamName, winnerLeaderId, winnerLeaderName, winnerAvatar, match.game, isWin: true);
         await _recordTeamResult(loserId, loserTeamName, loserLeaderId, loserLeaderName, loserAvatar, match.game, isLoss: true);
       } else {
@@ -571,7 +578,7 @@ class TeamMatchService {
     }
   }
 
-  /// Record team result in team_rankings
+  /// Record team result in team_rankings (+5 Points per win)
   Future<void> _recordTeamResult(
     String teamId,
     String teamName,
@@ -602,7 +609,9 @@ class TeamMatchService {
       }
 
       final tm = w + l + dr;
-      final pts = (w * 3) + dr;
+
+      // ✅ Har win par 5 Points milenge:
+      final pts = (w * 5) + dr;
 
       final nowStr = DateTime.now().toIso8601String();
       await SupabaseService.client.from('team_rankings').upsert({
@@ -682,11 +691,15 @@ class TeamMatchService {
     }
   }
 
-  /// Stream Top 10 Leaderboard teams
-  Stream<List<TeamRanking>> getTopTeamsLeaderboard({int limit = 10}) async* {
+  /// Stream Top 100 Leaderboard teams (Sorted by points descending)
+  Stream<List<TeamRanking>> getTopTeamsLeaderboard({int limit = 100}) async* {
     while (true) {
       try {
-        final rows = await SupabaseService.query('team_rankings', order: 'points.desc', limit: limit);
+        final rows = await SupabaseService.query(
+          'team_rankings', 
+          order: 'points.desc', 
+          limit: limit,
+        );
         yield rows.map((r) => TeamRanking.fromMap(r)).toList();
       } catch (_) {
         yield [];
