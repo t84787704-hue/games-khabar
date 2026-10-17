@@ -16,8 +16,6 @@ import 'screens/gamer_terms_of_service_screen.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
-
-  // ✅ 1. EasyLocalization initialize karna zaroori hai
   await EasyLocalization.ensureInitialized();
 
   SystemChrome.setEnabledSystemUIMode(
@@ -25,28 +23,25 @@ void main() async {
     overlays: [SystemUiOverlay.top, SystemUiOverlay.bottom],
   );
 
-  // ✅ Initialize Supabase
+  // Initialize Services
   try {
     await SupabaseService.init();
   } catch (e) {
     debugPrint('Supabase initialize error: $e');
   }
 
-  // ✅ Language init
   try {
     await LanguageService.init();
   } catch (e) {
     debugPrint('LanguageService init error: $e');
   }
 
-  // ✅ Theme init
   try {
     await ThemeService.init();
   } catch (e) {
     debugPrint('ThemeService init error: $e');
   }
 
-  // ✅ 2. App ko EasyLocalization widget mein wrap karein
   runApp(
     EasyLocalization(
       supportedLocales: const [
@@ -54,6 +49,9 @@ void main() async {
         Locale('ur'), // Urdu
         Locale('hi'), // Hindi
         Locale('ar'), // Arabic
+        Locale('bn'), // Bengali
+        Locale('ro'), // Romanian
+        Locale('zh'), // Chinese
       ],
       path: 'assets/translations',
       fallbackLocale: const Locale('en'),
@@ -77,12 +75,9 @@ class GamersIdApp extends StatelessWidget {
             key: ValueKey('${themeMode}_${context.locale.languageCode}'),
             title: 'Gamers ID',
             debugShowCheckedModeBanner: false,
-
-            // ✅ 3. EasyLocalization ke delegates connect karein (Inke baghair language nahi badalti)
             localizationsDelegates: context.localizationDelegates,
             supportedLocales: context.supportedLocales,
             locale: context.locale,
-
             themeMode: themeMode,
             theme: ThemeService.lightTheme,
             darkTheme: ThemeService.darkTheme,
