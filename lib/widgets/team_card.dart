@@ -1,15 +1,8 @@
 // ===============================================================================
 // EXACT DIFF — Full Adaptive Day & Night Mode Support for TeamCard
+// + Match Verification Rules Dialog on Challenge Action
 // -------------------------------------------------------------------------------
 // File: lib/widgets/team_card.dart
-//
-// 1. FIXED: Removed invalid `const` keyword before Text(team.tag) causing build failure.
-// 2. Linked with ThemeService.themeModeNotifier for live day/night toggle.
-// 3. Dynamic cardBgColor: Dark slate card in Night Mode (with dark gold/blue tints).
-// 4. Dynamic text & border colors linked with ThemeService.textPrimary & border.
-// 5. View Team & Action buttons adapt seamlessly to dark mode.
-//
-// NO OTHER LOGIC, SERVICE OR DATABASE CODE CHANGED — byte-by-byte safe
 // ===============================================================================
 
 import 'dart:io';
@@ -24,6 +17,7 @@ import '../screens/teams_screen.dart';
 import '../screens/private_match_room_screen.dart';
 import '../services/theme_service.dart';
 import 'coin_or_ad_popup.dart';
+import 'match_rules_dialog.dart';
 
 class TeamCard extends StatefulWidget {
   final TeamModel team;
@@ -256,45 +250,56 @@ class _TeamCardState extends State<TeamCard> {
         return;
       }
 
-      try {
-        await SupabaseService.client.from('challenges').insert({
-          'from_team_id': effectiveMyTeamId,
-          'to_team_id': effectiveTargetId,
-          'from_team_name': effectiveMyTeamName,
-          'to_team_name': widget.team.name,
-          'status': 'pending',
-          'game': 'BGMI',
-        });
-      } catch (_) {
-        await SupabaseService.client.from('challenges').insert({
-          'from_team_id': effectiveMyTeamId,
-          'to_team_id': effectiveTargetId,
-          'from_team_name': effectiveMyTeamName,
-          'to_team_name': widget.team.name,
-          'status': 'pending',
-        });
-      }
+      // Verification Rules dialog show karein challenge bhejte waqt
+      MatchRulesDialog.show(
+        context,
+        title: 'Challenge Rules (${widget.team.name})',
+        onProceed: () async {
+          try {
+            try {
+              await SupabaseService.client.from('challenges').insert({
+                'from_team_id': effectiveMyTeamId,
+                'to_team_id': effectiveTargetId,
+                'from_team_name': effectiveMyTeamName,
+                'to_team_name': widget.team.name,
+                'status': 'pending',
+                'game': 'BGMI',
+              });
+            } catch (_) {
+              await SupabaseService.client.from('challenges').insert({
+                'from_team_id': effectiveMyTeamId,
+                'to_team_id': effectiveTargetId,
+                'from_team_name': effectiveMyTeamName,
+                'to_team_name': widget.team.name,
+                'status': 'pending',
+              });
+            }
 
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(
-                '✅ Aapka challenge bhej diya gaya hai - ${widget.team.name} ko challenge bhej diya gaya hai, jawab ka intezar hai'),
-            backgroundColor: const Color(0xFF1877F2),
-            duration: const Duration(seconds: 4),
-          ),
-        );
-      }
+            if (mounted) {
+              ScaffoldMessenger.of(context).showSnackBar(
+                SnackBar(
+                  content: Text(
+                      '✅ Aapka challenge bhej diya gaya hai - ${widget.team.name} ko challenge bhej diya gaya hai, jawab ka intezar hai'),
+                  backgroundColor: const Color(0xFF1877F2),
+                  duration: const Duration(seconds: 4),
+                ),
+              );
+            }
+          } catch (e) {
+            debugPrint('[TeamCard] Error sending challenge via Supabase: $e');
+            if (mounted) {
+              ScaffoldMessenger.of(context).showSnackBar(
+                SnackBar(
+                  content: Text('Error sending challenge: $e'),
+                  backgroundColor: const Color(0xFFFF4655),
+                ),
+              );
+            }
+          }
+        },
+      );
     } catch (e) {
-      debugPrint('[TeamCard] Error sending challenge via Supabase: $e');
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Error sending challenge: $e'),
-            backgroundColor: const Color(0xFFFF4655),
-          ),
-        );
-      }
+      debugPrint('[TeamCard] Error in _handleChallenge: $e');
     }
   }
 
