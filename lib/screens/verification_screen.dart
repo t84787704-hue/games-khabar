@@ -1,5 +1,5 @@
 // ===============================================================================
-// VERIFICATION SCREEN — Free Application & Instant VIP Blue Tick (2,000 Coins)
+// VERIFICATION SCREEN — Fully Localized Popups & VIP Blue Tick
 // -------------------------------------------------------------------------------
 // File: lib/screens/verification_screen.dart
 // ===============================================================================
@@ -11,6 +11,7 @@ import '../services/gamer_auth_service.dart';
 import '../services/verification_service.dart';
 import '../services/coin_wallet_service.dart';
 import '../services/supabase_service.dart';
+import '../services/language_service.dart';
 import 'create_gamer_id_screen.dart';
 import 'create_post_screen.dart';
 
@@ -58,9 +59,11 @@ class _VerificationScreenState extends State<VerificationScreen> {
     }
   }
 
+  /// ⚡ INSTANT VIP BLUE TICK (Fully Localized Popups)
   Future<void> _handleInstantVipBuy(GamerUser user) async {
     final wallet = await CoinWalletService().getOrCreateWallet(user.uid);
 
+    // 1. Kam Coins ka Alert Popup
     if (wallet.coins < 2000) {
       if (!mounted) return;
       showDialog(
@@ -68,21 +71,35 @@ class _VerificationScreenState extends State<VerificationScreen> {
         builder: (ctx) => AlertDialog(
           backgroundColor: GamerTheme.cardElevated,
           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-          title: const Row(
+          title: Row(
             children: [
-              Icon(Icons.warning_amber_rounded, color: Color(0xFFFFB800), size: 24),
-              SizedBox(width: 8),
-              Text('Coins Kam Hain!', style: TextStyle(color: Colors.white, fontSize: 17, fontWeight: FontWeight.bold)),
+              const Icon(Icons.warning_amber_rounded, color: Color(0xFFFFB800), size: 24),
+              const SizedBox(width: 8),
+              Expanded(
+                child: Text(
+                  LanguageService.isUrdu
+                      ? 'کوائنز کم ہیں!'
+                      : (LanguageService.isHindi ? 'कॉइन्स कम हैं!' : 'Insufficient Coins!'),
+                  style: const TextStyle(color: Colors.white, fontSize: 17, fontWeight: FontWeight.bold),
+                ),
+              ),
             ],
           ),
           content: Text(
-            'Instant VIP Blue Tick ke liye 2,000 coins darkaar hain.\nAapke wallet mein is waqt ${wallet.coins} coins hain.',
+            LanguageService.isUrdu
+                ? 'وی آئی پی بلیو ٹک کے لیے 2,000 کوائنز درکار ہیں۔ آپ کے والٹ میں اس وقت ${wallet.coins} کوائنز ہیں۔'
+                : (LanguageService.isHindi
+                    ? 'वीआईपी ब्लू टिक के लिए 2,000 कॉइन्स चाहिए। आपके वॉलेट में अभी ${wallet.coins} कॉइन्स हैं।'
+                    : 'Instant VIP Blue Tick requires 2,000 coins. You currently have ${wallet.coins} coins.'),
             style: const TextStyle(color: GamerTheme.textGray, fontSize: 13, height: 1.4),
           ),
           actions: [
             TextButton(
               onPressed: () => Navigator.pop(ctx),
-              child: const Text('Theek Hai', style: TextStyle(color: GamerTheme.accentBlue, fontWeight: FontWeight.bold)),
+              child: Text(
+                LanguageService.isUrdu ? 'ٹھیک ہے' : (LanguageService.isHindi ? 'ठीक है' : 'OK'),
+                style: const TextStyle(color: GamerTheme.accentBlue, fontWeight: FontWeight.bold),
+              ),
             ),
           ],
         ),
@@ -90,26 +107,41 @@ class _VerificationScreenState extends State<VerificationScreen> {
       return;
     }
 
+    // 2. Buy Confirmation Popup
     final confirm = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
         backgroundColor: GamerTheme.cardElevated,
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-        title: const Row(
+        title: Row(
           children: [
-            Icon(Icons.verified_rounded, color: Colors.blue, size: 24),
-            SizedBox(width: 8),
-            Text('VIP Blue Tick Unlock?', style: TextStyle(color: Colors.white, fontSize: 17, fontWeight: FontWeight.bold)),
+            const Icon(Icons.verified_rounded, color: Colors.blue, size: 24),
+            const SizedBox(width: 8),
+            Expanded(
+              child: Text(
+                LanguageService.isUrdu
+                    ? 'وی آئی پی بلیو ٹک انلاک؟'
+                    : (LanguageService.isHindi ? 'वीआईपी ब्लू टिक अनलॉक?' : 'Unlock VIP Blue Tick?'),
+                style: const TextStyle(color: Colors.white, fontSize: 17, fontWeight: FontWeight.bold),
+              ),
+            ),
           ],
         ),
-        content: const Text(
-          'Kya aap 2,000 Coins de kar foran Blue Tick unlock karna chahte hain? Kisi task ki zaroorat nahi hogi.',
-          style: TextStyle(color: GamerTheme.textGray, fontSize: 13),
+        content: Text(
+          LanguageService.isUrdu
+              ? 'کیا آپ 2,000 کوائنز ادا کر کے فوراً بلیو ٹک حاصل کرنا چاہتے ہیں؟ کسی بھی ٹاسک کی ضرورت نہیں ہوگی۔'
+              : (LanguageService.isHindi
+                  ? 'क्या आप 2,000 कॉइन्स देकर तुरंत ब्लू टिक अनलॉक करना चाहते हैं?'
+                  : 'Do you want to unlock official Blue Tick instantly for 2,000 coins? No tasks required.'),
+          style: const TextStyle(color: GamerTheme.textGray, fontSize: 13, height: 1.4),
         ),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(ctx, false),
-            child: const Text('Cancel', style: TextStyle(color: GamerTheme.textMuted)),
+            child: Text(
+              LanguageService.isUrdu ? 'منسوخ' : (LanguageService.isHindi ? 'रद्द करें' : 'Cancel'),
+              style: const TextStyle(color: GamerTheme.textMuted),
+            ),
           ),
           ElevatedButton(
             style: ElevatedButton.styleFrom(
@@ -118,7 +150,10 @@ class _VerificationScreenState extends State<VerificationScreen> {
               shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
             ),
             onPressed: () => Navigator.pop(ctx, true),
-            child: const Text('Haan, 2,000 Coins Pay Karein', style: TextStyle(fontWeight: FontWeight.bold)),
+            child: Text(
+              LanguageService.isUrdu ? '2,000 کوائنز پے کریں' : (LanguageService.isHindi ? '2,000 कॉइन्स दें' : 'Pay 2,000 Coins'),
+              style: const TextStyle(fontWeight: FontWeight.bold),
+            ),
           ),
         ],
       ),
@@ -190,7 +225,11 @@ class _VerificationScreenState extends State<VerificationScreen> {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           backgroundColor: GamerTheme.redAccent,
-          content: Text('Cannot apply: ${unmet.length} requirement(s) missing.'),
+          content: Text(
+            LanguageService.isUrdu
+                ? 'درخواست نہیں بھیجی جا سکتی: ${unmet.length} شرائط باقی ہیں۔'
+                : 'Cannot apply: ${unmet.length} requirement(s) missing.',
+          ),
         ),
       );
       return;
@@ -246,15 +285,17 @@ class _VerificationScreenState extends State<VerificationScreen> {
           children: [
             const Icon(Icons.verified_rounded, color: Colors.blue, size: 64),
             const SizedBox(height: 16),
-            const Text(
-              'Official Blue Tick Verified!',
-              style: TextStyle(color: GamerTheme.textWhite, fontSize: 20, fontWeight: FontWeight.w900),
+            Text(
+              LanguageService.isUrdu ? 'مبارک ہو! بلیو ٹک تصدیق شدہ' : 'Official Blue Tick Verified!',
+              style: const TextStyle(color: GamerTheme.textWhite, fontSize: 20, fontWeight: FontWeight.w900),
               textAlign: TextAlign.center,
             ),
             const SizedBox(height: 8),
-            const Text(
-              'Aapka official Blue Tick ✓ active ho chuka hai. Yeh badge aapki profile aur tamam posts par nazar aayega.',
-              style: TextStyle(color: GamerTheme.textGray, fontSize: 13),
+            Text(
+              LanguageService.isUrdu
+                  ? 'آپ کا بلیو ٹک فعال ہو چکا ہے۔ یہ بیج آپ کی پروفائل اور تمام پوسٹس پر نظر آئے گا۔'
+                  : 'Your official Blue Tick is now live across your profile and posts!',
+              style: const TextStyle(color: GamerTheme.textGray, fontSize: 13),
               textAlign: TextAlign.center,
             ),
             const SizedBox(height: 20),
@@ -268,7 +309,10 @@ class _VerificationScreenState extends State<VerificationScreen> {
                   shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
                 ),
                 onPressed: () => Navigator.pop(ctx),
-                child: const Text('LET\'S FLEX 🎮', style: TextStyle(fontWeight: FontWeight.bold)),
+                child: Text(
+                  LanguageService.isUrdu ? 'بہترین! آگے بڑھیں' : 'LET\'S FLEX 🎮',
+                  style: const TextStyle(fontWeight: FontWeight.bold),
+                ),
               ),
             ),
           ],
@@ -289,14 +333,20 @@ class _VerificationScreenState extends State<VerificationScreen> {
         builder: (ctx, setDlgState) => AlertDialog(
           backgroundColor: GamerTheme.cardElevated,
           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-          title: const Text('Link Game UID', style: TextStyle(color: GamerTheme.textWhite, fontSize: 18, fontWeight: FontWeight.bold)),
+          title: Text(
+            LanguageService.isUrdu ? 'گیم یو آئی ڈی لنک کریں' : 'Link Game UID',
+            style: const TextStyle(color: GamerTheme.textWhite, fontSize: 18, fontWeight: FontWeight.bold),
+          ),
           content: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
               DropdownButtonFormField<String>(
                 value: selectedGame,
                 dropdownColor: GamerTheme.cardElevated,
-                decoration: const InputDecoration(labelText: 'Game', labelStyle: TextStyle(color: GamerTheme.textMuted)),
+                decoration: InputDecoration(
+                  labelText: LanguageService.isUrdu ? 'گیم منتخب کریں' : 'Game',
+                  labelStyle: const TextStyle(color: GamerTheme.textMuted),
+                ),
                 items: supportedGames.map((g) => DropdownMenuItem(value: g, child: Text(g, style: const TextStyle(color: Colors.white)))).toList(),
                 onChanged: (v) {
                   if (v != null) setDlgState(() => selectedGame = v);
@@ -306,17 +356,23 @@ class _VerificationScreenState extends State<VerificationScreen> {
               TextField(
                 controller: controller,
                 style: const TextStyle(color: Colors.white),
-                decoration: const InputDecoration(
-                  labelText: 'Character UID',
-                  labelStyle: TextStyle(color: GamerTheme.textMuted),
+                decoration: InputDecoration(
+                  labelText: LanguageService.isUrdu ? 'کریکٹر یو آئی ڈی' : 'Character UID',
+                  labelStyle: const TextStyle(color: GamerTheme.textMuted),
                   hintText: 'e.g. 5129384729',
-                  hintStyle: TextStyle(color: Colors.white30),
+                  hintStyle: const TextStyle(color: Colors.white30),
                 ),
               ),
             ],
           ),
           actions: [
-            TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Cancel', style: TextStyle(color: GamerTheme.textMuted))),
+            TextButton(
+              onPressed: () => Navigator.pop(ctx),
+              child: Text(
+                LanguageService.isUrdu ? 'منسوخ' : LanguageService.t('Cancel'),
+                style: const TextStyle(color: GamerTheme.textMuted),
+              ),
+            ),
             ElevatedButton(
               style: ElevatedButton.styleFrom(backgroundColor: GamerTheme.accentBlue),
               onPressed: () async {
@@ -327,7 +383,10 @@ class _VerificationScreenState extends State<VerificationScreen> {
                   _refreshData();
                 }
               },
-              child: const Text('Save', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+              child: Text(
+                LanguageService.isUrdu ? 'محفوظ کریں' : 'Save',
+                style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
+              ),
             ),
           ],
         ),
@@ -346,7 +405,10 @@ class _VerificationScreenState extends State<VerificationScreen> {
         builder: (ctx, setDlgState) => AlertDialog(
           backgroundColor: GamerTheme.cardElevated,
           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-          title: Text('Rank in $selectedGame', style: const TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.bold)),
+          title: Text(
+            LanguageService.isUrdu ? '$selectedGame میں رینک منتخب کریں' : 'Rank in $selectedGame',
+            style: const TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.bold),
+          ),
           content: DropdownButtonFormField<String>(
             value: ranksList.contains(selectedRank) ? selectedRank : ranksList.first,
             dropdownColor: GamerTheme.cardElevated,
@@ -356,7 +418,13 @@ class _VerificationScreenState extends State<VerificationScreen> {
             },
           ),
           actions: [
-            TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Cancel', style: TextStyle(color: GamerTheme.textMuted))),
+            TextButton(
+              onPressed: () => Navigator.pop(ctx),
+              child: Text(
+                LanguageService.isUrdu ? 'منسوخ' : LanguageService.t('Cancel'),
+                style: const TextStyle(color: GamerTheme.textMuted),
+              ),
+            ),
             ElevatedButton(
               style: ElevatedButton.styleFrom(backgroundColor: GamerTheme.flameOrange),
               onPressed: () async {
@@ -364,7 +432,10 @@ class _VerificationScreenState extends State<VerificationScreen> {
                 await _authService.updateProfile(rank: selectedRank);
                 _refreshData();
               },
-              child: const Text('Update', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+              child: Text(
+                LanguageService.isUrdu ? 'اپ ڈیٹ کریں' : 'Update',
+                style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
+              ),
             ),
           ],
         ),
@@ -374,40 +445,51 @@ class _VerificationScreenState extends State<VerificationScreen> {
 
   @override
   Widget build(BuildContext context) {
-    return StreamBuilder<GamerUser?>(
-      stream: _authService.userProfileStream(_currentUser?.uid ?? _authService.currentUid ?? ''),
-      builder: (context, snapshot) {
-        final user = snapshot.data ?? _currentUser;
+    return ValueListenableBuilder<String>(
+      valueListenable: LanguageService.currentLanguage,
+      builder: (context, _, __) {
+        return StreamBuilder<GamerUser?>(
+          stream: _authService.userProfileStream(_currentUser?.uid ?? _authService.currentUid ?? ''),
+          builder: (context, snapshot) {
+            final user = snapshot.data ?? _currentUser;
 
-        return Scaffold(
-          backgroundColor: GamerTheme.bgDark,
-          appBar: AppBar(
-            backgroundColor: GamerTheme.cardDark,
-            elevation: 0,
-            leading: IconButton(
-              icon: const Icon(Icons.arrow_back_ios_new_rounded, color: GamerTheme.textWhite, size: 20),
-              onPressed: () => Navigator.pop(context),
-            ),
-            title: const Row(
-              children: [
-                Icon(Icons.verified_rounded, color: Colors.blue, size: 22),
-                SizedBox(width: 8),
-                Text('Blue Tick Verification', style: TextStyle(fontWeight: FontWeight.w900, fontSize: 17, color: GamerTheme.textWhite)),
-              ],
-            ),
-            actions: [
-              IconButton(
-                icon: const Icon(Icons.refresh_rounded, color: GamerTheme.accentBlue),
-                tooltip: 'Refresh',
-                onPressed: _refreshData,
+            return Scaffold(
+              backgroundColor: GamerTheme.bgDark,
+              appBar: AppBar(
+                backgroundColor: GamerTheme.cardDark,
+                elevation: 0,
+                leading: IconButton(
+                  icon: const Icon(Icons.arrow_back_ios_new_rounded, color: GamerTheme.textWhite, size: 20),
+                  onPressed: () => Navigator.pop(context),
+                ),
+                title: Row(
+                  children: [
+                    const Icon(Icons.verified_rounded, color: Colors.blue, size: 22),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: Text(
+                        LanguageService.isUrdu ? 'بلیو ٹک تصدیق' : 'Blue Tick Verification',
+                        style: const TextStyle(fontWeight: FontWeight.w900, fontSize: 17, color: GamerTheme.textWhite),
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ),
+                  ],
+                ),
+                actions: [
+                  IconButton(
+                    icon: const Icon(Icons.refresh_rounded, color: GamerTheme.accentBlue),
+                    tooltip: 'Refresh',
+                    onPressed: _refreshData,
+                  ),
+                ],
               ),
-            ],
-          ),
-          body: user == null
-              ? const Center(child: CircularProgressIndicator(color: GamerTheme.accentBlue))
-              : _isLoading
+              body: user == null
                   ? const Center(child: CircularProgressIndicator(color: GamerTheme.accentBlue))
-                  : _buildBody(user),
+                  : _isLoading
+                      ? const Center(child: CircularProgressIndicator(color: GamerTheme.accentBlue))
+                      : _buildBody(user),
+            );
+          },
         );
       },
     );
@@ -449,7 +531,10 @@ class _VerificationScreenState extends State<VerificationScreen> {
             Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
-                const Text('MANDATORY REQUIREMENTS', style: TextStyle(color: GamerTheme.textMuted, fontSize: 12, fontWeight: FontWeight.w900)),
+                Text(
+                  LanguageService.isUrdu ? 'لازمی شرائط' : 'MANDATORY REQUIREMENTS',
+                  style: const TextStyle(color: GamerTheme.textMuted, fontSize: 12, fontWeight: FontWeight.w900),
+                ),
                 Container(
                   padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
                   decoration: BoxDecoration(
@@ -497,19 +582,24 @@ class _VerificationScreenState extends State<VerificationScreen> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const Row(
+          Row(
             children: [
-              Icon(Icons.flash_on_rounded, color: Colors.blue, size: 22),
-              SizedBox(width: 8),
+              const Icon(Icons.flash_on_rounded, color: Colors.blue, size: 22),
+              const SizedBox(width: 8),
               Expanded(
-                child: Text('INSTANT VIP BLUE TICK ⚡', style: TextStyle(color: Colors.white, fontWeight: FontWeight.w900, fontSize: 15)),
+                child: Text(
+                  LanguageService.isUrdu ? 'فوری وی آئی پی بلیو ٹک ⚡' : 'INSTANT VIP BLUE TICK ⚡',
+                  style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w900, fontSize: 15),
+                ),
               ),
             ],
           ),
           const SizedBox(height: 8),
-          const Text(
-            'Tasks poore karne ka intezar nahi karna chahte? Aap direct 2,000 Coins ada karke foran Blue Tick unlock kar sakte hain!',
-            style: TextStyle(color: Colors.white70, fontSize: 12.5),
+          Text(
+            LanguageService.isUrdu
+                ? 'ٹاسک مکمل کرنے کا انتظار نہیں کرنا چاہتے؟ آپ براہ راست 2,000 کوائنز ادا کر کے فوراً بلیو ٹک حاصل کر سکتے ہیں!'
+                : 'Skip the wait and requirements! Unlock your official Blue Tick immediately with 2,000 coins.',
+            style: const TextStyle(color: Colors.white70, fontSize: 12.5),
           ),
           const SizedBox(height: 12),
           SizedBox(
@@ -524,7 +614,12 @@ class _VerificationScreenState extends State<VerificationScreen> {
               icon: _isPurchasingVip
                   ? const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2))
                   : const Icon(Icons.monetization_on_rounded, color: Color(0xFFFFD700), size: 18),
-              label: Text(_isPurchasingVip ? 'Processing...' : 'Unlock Instantly (2,000 Coins)', style: const TextStyle(fontWeight: FontWeight.bold)),
+              label: Text(
+                _isPurchasingVip
+                    ? 'Processing...'
+                    : (LanguageService.isUrdu ? 'فوراً حاصل کریں (2,000 کوائنز)' : 'Unlock Instantly (2,000 Coins)'),
+                style: const TextStyle(fontWeight: FontWeight.bold),
+              ),
               onPressed: _isPurchasingVip ? null : () => _handleInstantVipBuy(user),
             ),
           ),
@@ -568,9 +663,16 @@ class _VerificationScreenState extends State<VerificationScreen> {
           children: [
             const Icon(Icons.verified_rounded, color: Colors.blue, size: 44),
             const SizedBox(height: 8),
-            const Text('Official Blue Tick Verified ✓', style: TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.w900)),
+            Text(
+              LanguageService.isUrdu ? 'تصدیق شدہ بلیو ٹک ✓' : 'Official Blue Tick Verified ✓',
+              style: const TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.w900),
+            ),
             const SizedBox(height: 4),
-            Text('@${user.username} is an officially verified competitive gamer.', style: const TextStyle(color: GamerTheme.textGray, fontSize: 12.5), textAlign: TextAlign.center),
+            Text(
+              '@${user.username} is an officially verified competitive gamer.',
+              style: const TextStyle(color: GamerTheme.textGray, fontSize: 12.5),
+              textAlign: TextAlign.center,
+            ),
           ],
         ),
       );
@@ -589,9 +691,16 @@ class _VerificationScreenState extends State<VerificationScreen> {
           children: [
             Icon(Icons.hourglass_top_rounded, color: Color(0xFFFF8A00), size: 40),
             SizedBox(height: 8),
-            Text('Under Review 24h', style: TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.w900)),
-            SizedBox(height: 4),
-            Text('Aapki verification application 24 ghante ke review mein hai.', style: TextStyle(color: GamerTheme.textGray, fontSize: 12), textAlign: TextAlign.center),
+            Text(
+              LanguageService.isUrdu ? '24 گھنٹے کے ریویو میں ہے' : 'Under Review 24h',
+              style: const TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.w900),
+            ),
+            const SizedBox(height: 4),
+            Text(
+              LanguageService.isUrdu ? 'آپ کی درخواست 24 گھنٹے کے ریویو میں ہے۔' : 'Your application is currently under 24-hour review.',
+              style: const TextStyle(color: GamerTheme.textGray, fontSize: 12),
+              textAlign: TextAlign.center,
+            ),
           ],
         ),
       );
@@ -608,16 +717,22 @@ class _VerificationScreenState extends State<VerificationScreen> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const Row(
+          Row(
             children: [
-              Icon(Icons.verified, color: Colors.blue, size: 26),
-              SizedBox(width: 10),
+              const Icon(Icons.verified, color: Colors.blue, size: 26),
+              const SizedBox(width: 10),
               Expanded(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text('Get The Official Blue Tick', style: TextStyle(color: GamerTheme.textWhite, fontSize: 16, fontWeight: FontWeight.w900)),
-                    Text('User must meet ALL requirements to apply', style: TextStyle(color: GamerTheme.textMuted, fontSize: 11)),
+                    Text(
+                      LanguageService.isUrdu ? 'بلیو ٹک حاصل کریں' : 'Get The Official Blue Tick',
+                      style: const TextStyle(color: GamerTheme.textWhite, fontSize: 16, fontWeight: FontWeight.w900),
+                    ),
+                    Text(
+                      LanguageService.isUrdu ? 'اپلائی کرنے کے لیے تمام شرائط پوری کریں' : 'User must meet ALL requirements to apply',
+                      style: const TextStyle(color: GamerTheme.textMuted, fontSize: 11),
+                    ),
                   ],
                 ),
               ),
@@ -637,8 +752,14 @@ class _VerificationScreenState extends State<VerificationScreen> {
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              Text('$metCount of $totalCount Requirements Completed', style: const TextStyle(color: GamerTheme.textGray, fontSize: 11, fontWeight: FontWeight.bold)),
-              Text('${((metCount / (totalCount > 0 ? totalCount : 1)) * 100).toInt()}%', style: const TextStyle(color: GamerTheme.accentBlue, fontSize: 11, fontWeight: FontWeight.w900)),
+              Text(
+                '$metCount of $totalCount Completed',
+                style: const TextStyle(color: GamerTheme.textGray, fontSize: 11, fontWeight: FontWeight.bold),
+              ),
+              Text(
+                '${((metCount / (totalCount > 0 ? totalCount : 1)) * 100).toInt()}%',
+                style: const TextStyle(color: GamerTheme.accentBlue, fontSize: 11, fontWeight: FontWeight.w900),
+              ),
             ],
           ),
         ],
@@ -734,7 +855,10 @@ class _VerificationScreenState extends State<VerificationScreen> {
             shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
           ),
           icon: _isSubmitting ? const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2)) : const Icon(Icons.hourglass_bottom_rounded, size: 18),
-          label: const Text('Under Review 24h ⏳', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14)),
+          label: Text(
+            LanguageService.isUrdu ? 'زیر التوا (24 گھنٹے) ⏳' : 'Under Review 24h ⏳',
+            style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
+          ),
           onPressed: _isSubmitting ? null : () => _handleApply(user),
         ),
       );
@@ -750,7 +874,12 @@ class _VerificationScreenState extends State<VerificationScreen> {
           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
         ),
         icon: _isSubmitting ? const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2)) : Icon(allMet ? Icons.verified_rounded : Icons.lock_outline_rounded, size: 18),
-        label: Text(allMet ? 'APPLY FOR VERIFICATION' : 'Apply for Verification (Locked)', style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13.5)),
+        label: Text(
+          allMet
+              ? (LanguageService.isUrdu ? 'درخواست جمع کروائیں' : 'APPLY FOR VERIFICATION')
+              : (LanguageService.isUrdu ? 'درخواست بند ہے (شرائط باقی ہیں)' : 'Apply for Verification (Locked)'),
+          style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13.5),
+        ),
         onPressed: _isSubmitting ? null : () => _handleApply(user),
       ),
     );
@@ -767,7 +896,10 @@ class _VerificationScreenState extends State<VerificationScreen> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const Text('QUICK SHORTCUTS TO COMPLETE REQUIREMENTS', style: TextStyle(color: GamerTheme.textMuted, fontSize: 10.5, fontWeight: FontWeight.w900)),
+          Text(
+            LanguageService.isUrdu ? 'شرائط پوری کرنے کے لیے فوری راستے' : 'QUICK SHORTCUTS TO COMPLETE REQUIREMENTS',
+            style: const TextStyle(color: GamerTheme.textMuted, fontSize: 10.5, fontWeight: FontWeight.w900),
+          ),
           const SizedBox(height: 10),
           Row(
             children: [
@@ -775,7 +907,10 @@ class _VerificationScreenState extends State<VerificationScreen> {
                 child: OutlinedButton.icon(
                   style: OutlinedButton.styleFrom(side: const BorderSide(color: GamerTheme.accentBlue), padding: const EdgeInsets.symmetric(vertical: 8)),
                   icon: const Icon(Icons.sports_esports_rounded, color: GamerTheme.accentBlue, size: 15),
-                  label: const Text('Link Game UID', style: TextStyle(color: GamerTheme.accentBlue, fontSize: 11, fontWeight: FontWeight.bold)),
+                  label: Text(
+                    LanguageService.isUrdu ? 'گیم یو آئی ڈی' : 'Link Game UID',
+                    style: const TextStyle(color: GamerTheme.accentBlue, fontSize: 11, fontWeight: FontWeight.bold),
+                  ),
                   onPressed: () => _showLinkGameUidDialog(user),
                 ),
               ),
@@ -784,7 +919,10 @@ class _VerificationScreenState extends State<VerificationScreen> {
                 child: OutlinedButton.icon(
                   style: OutlinedButton.styleFrom(side: const BorderSide(color: GamerTheme.flameOrange), padding: const EdgeInsets.symmetric(vertical: 8)),
                   icon: const Icon(Icons.military_tech_rounded, color: GamerTheme.flameOrange, size: 15),
-                  label: const Text('Set Game Rank', style: TextStyle(color: GamerTheme.flameOrange, fontSize: 11, fontWeight: FontWeight.bold)),
+                  label: Text(
+                    LanguageService.isUrdu ? 'گیم رینک' : 'Set Game Rank',
+                    style: const TextStyle(color: GamerTheme.flameOrange, fontSize: 11, fontWeight: FontWeight.bold),
+                  ),
                   onPressed: () => _showQuickRankKdDialog(user),
                 ),
               ),
@@ -797,7 +935,10 @@ class _VerificationScreenState extends State<VerificationScreen> {
                 child: OutlinedButton.icon(
                   style: OutlinedButton.styleFrom(side: const BorderSide(color: GamerTheme.borderLight), padding: const EdgeInsets.symmetric(vertical: 8)),
                   icon: const Icon(Icons.edit_note_rounded, color: GamerTheme.textWhite, size: 15),
-                  label: const Text('Edit Bio & Avatar', style: TextStyle(color: GamerTheme.textWhite, fontSize: 11, fontWeight: FontWeight.bold)),
+                  label: Text(
+                    LanguageService.isUrdu ? 'بائیو اور اواتار' : 'Edit Bio & Avatar',
+                    style: const TextStyle(color: GamerTheme.textWhite, fontSize: 11, fontWeight: FontWeight.bold),
+                  ),
                   onPressed: () {
                     Navigator.push(context, MaterialPageRoute(builder: (_) => CreateGamerIdScreen(isEditing: true, existingUser: user))).then((_) => _refreshData());
                   },
@@ -808,7 +949,10 @@ class _VerificationScreenState extends State<VerificationScreen> {
                 child: OutlinedButton.icon(
                   style: OutlinedButton.styleFrom(side: const BorderSide(color: GamerTheme.borderLight), padding: const EdgeInsets.symmetric(vertical: 8)),
                   icon: const Icon(Icons.movie_creation_rounded, color: GamerTheme.textWhite, size: 15),
-                  label: const Text('Post Clip/Room', style: TextStyle(color: GamerTheme.textWhite, fontSize: 11, fontWeight: FontWeight.bold)),
+                  label: Text(
+                    LanguageService.isUrdu ? 'پوسٹ کلپ' : 'Post Clip/Room',
+                    style: const TextStyle(color: GamerTheme.textWhite, fontSize: 11, fontWeight: FontWeight.bold),
+                  ),
                   onPressed: () {
                     Navigator.push(context, MaterialPageRoute(builder: (_) => const CreatePostScreen())).then((_) => _refreshData());
                   },
