@@ -1,7 +1,7 @@
 // ===============================================================================
 // TEAMS SCREEN — Full Adaptive Day & Night Mode
 // + Strict 1,000 Coins Rule for Team Creation & Maintenance
-// + Frozen Team Detection & Live Warning Banner
+// + Wallet-based Live Frozen Team Detection & Warning Banner
 // + Multi-Language Translation via LanguageService
 // -------------------------------------------------------------------------------
 // File: lib/screens/teams_screen.dart
@@ -17,6 +17,7 @@ import "package:shared_preferences/shared_preferences.dart";
 import "package:cached_network_image/cached_network_image.dart";
 import "../services/supabase_service.dart";
 import "../models/team_model.dart";
+import "../models/coin_wallet_model.dart";
 import "../services/team_service.dart";
 import "../widgets/team_card.dart";
 import "../widgets/create_team_dialog.dart";
@@ -166,7 +167,6 @@ class _TeamsScreenState extends State<TeamsScreen>
     required bool isMyTeamFrozen,
     Map<String, dynamic>? challengeData,
   }) async {
-    // ⚠️ Agar team freeze hai to challenge accept nahi karne dein
     if (isMyTeamFrozen) {
       _showCoinRequirementDialog(
         title: LanguageService.isUrdu ? 'ٹیم منجمد ہے (Frozen)' : 'Team Frozen',
@@ -283,7 +283,6 @@ class _TeamsScreenState extends State<TeamsScreen>
     }
   }
 
-  /// ✅ 1,000 Coins Check on Team Creation
   void _openCreateTeamDialog() async {
     final currentUid = SupabaseService.client.auth.currentUser?.id ?? "";
     if (currentUid.isNotEmpty) {
@@ -363,66 +362,78 @@ class _TeamsScreenState extends State<TeamsScreen>
                 final String myTeamId = myTeam?.id ?? "";
                 final String myTeamName = myTeam?.name ?? "";
                 final String myTeamUuid = SupabaseService.toUuid(myTeamId);
-                final bool isMyTeamFrozen = myTeam != null && myTeam.status.toLowerCase() == 'frozen';
 
-                return StreamBuilder<List<Map<String, dynamic>>>(
-                  stream: myTeamId.isNotEmpty
-                      ? SupabaseService.client.from("active_matches").stream(primaryKey: ["id"])
-                      : Stream.value([]),
-                  builder: (context, matchSnap) {
-                    final rawMatches = matchSnap.data ?? [];
-                    final myActiveMatches = _filterMyActiveMatches(rawMatches, myTeamId, myTeamUuid);
-                    final liveCount = myActiveMatches.length;
+                // ✅ Realtime wallet balance listener for Frozen status check
+                return StreamBuilder<CoinWallet>(
+                  stream: currentUid.isNotEmpty
+                      ? CoinWalletService().walletStream(currentUid)
+                      : Stream.value(const CoinWallet(userId: 'guest', coins: 1000)),
+                  builder: (context, walletSnap) {
+                    final myCoins = walletSnap.data?.coins ??
+                        CoinWalletService().currentWallet?.coins ??
+                        1000;
+                    final bool isMyTeamFrozen = myTeam != null && myCoins < 1000;
 
-                    return Scaffold(
-                      backgroundColor: ThemeService.bg,
-                      appBar: AppBar(
-                        backgroundColor: ThemeService.appBarBg,
-                        elevation: ThemeService.isDarkMode ? 0 : 1,
-                        title: Text(
-                          LanguageService.t("Teams"),
-                          style: const TextStyle(color: Color(0xFF1877F2), fontWeight: FontWeight.bold, fontSize: 22),
-                        ),
-                        actions: [
-                          IconButton(
-                            tooltip: "TOP 100 TEAMS Leaderboard",
-                            icon: Icon(Icons.emoji_events_rounded, color: ThemeService.textSecondary),
-                            onPressed: () => Navigator.push(
-                              context,
-                              MaterialPageRoute(builder: (_) => const LeaderboardScreen()),
+                    return StreamBuilder<List<Map<String, dynamic>>>(
+                      stream: myTeamId.isNotEmpty
+                          ? SupabaseService.client.from("active_matches").stream(primaryKey: ["id"])
+                          : Stream.value([]),
+                      builder: (context, matchSnap) {
+                        final rawMatches = matchSnap.data ?? [];
+                        final myActiveMatches = _filterMyActiveMatches(rawMatches, myTeamId, myTeamUuid);
+                        final liveCount = myActiveMatches.length;
+
+                        return Scaffold(
+                          backgroundColor: ThemeService.bg,
+                          appBar: AppBar(
+                            backgroundColor: ThemeService.appBarBg,
+                            elevation: ThemeService.isDarkMode ? 0 : 1,
+                            title: Text(
+                              LanguageService.t("Teams"),
+                              style: const TextStyle(color: Color(0xFF1877F2), fontWeight: FontWeight.bold, fontSize: 22),
+                            ),
+                            actions: [
+                              IconButton(
+                                tooltip: "TOP 100 TEAMS Leaderboard",
+                                icon: Icon(Icons.emoji_events_rounded, color: ThemeService.textSecondary),
+                                onPressed: () => Navigator.push(
+                                  context,
+                                  MaterialPageRoute(builder: (_) => const LeaderboardScreen()),
+                                ),
+                              ),
+                            ],
+                            bottom: TabBar(
+                              controller: _tabController,
+                              indicatorColor: const Color(0xFF1877F2),
+                              indicatorWeight: 3,
+                              labelColor: const Color(0xFF1877F2),
+                              unselectedLabelColor: ThemeService.textSecondary,
+                              labelStyle: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
+                              tabs: [
+                                Tab(text: LanguageService.t("Teams")),
+                                Tab(text: liveCount > 0 ? "${LanguageService.t('Live')} 🔴 $liveCount" : LanguageService.t("Live")),
+                              ],
                             ),
                           ),
-                        ],
-                        bottom: TabBar(
-                          controller: _tabController,
-                          indicatorColor: const Color(0xFF1877F2),
-                          indicatorWeight: 3,
-                          labelColor: const Color(0xFF1877F2),
-                          unselectedLabelColor: ThemeService.textSecondary,
-                          labelStyle: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
-                          tabs: [
-                            Tab(text: LanguageService.t("Teams")),
-                            Tab(text: liveCount > 0 ? "${LanguageService.t('Live')} 🔴 $liveCount" : LanguageService.t("Live")),
-                          ],
-                        ),
-                      ),
-                      body: TabBarView(
-                        controller: _tabController,
-                        children: [
-                          _buildTeamsTab(
-                            myTeamId: myTeamId,
-                            myTeamUuid: myTeamUuid,
-                            myTeamName: myTeamName,
-                            isMyTeamFrozen: isMyTeamFrozen,
+                          body: TabBarView(
+                            controller: _tabController,
+                            children: [
+                              _buildTeamsTab(
+                                myTeamId: myTeamId,
+                                myTeamUuid: myTeamUuid,
+                                myTeamName: myTeamName,
+                                isMyTeamFrozen: isMyTeamFrozen,
+                              ),
+                              _buildLiveMatchesTab(
+                                myActiveMatches: myActiveMatches,
+                                myTeamId: myTeamId,
+                                myTeamUuid: myTeamUuid,
+                                myTeamName: myTeamName,
+                              ),
+                            ],
                           ),
-                          _buildLiveMatchesTab(
-                            myActiveMatches: myActiveMatches,
-                            myTeamId: myTeamId,
-                            myTeamUuid: myTeamUuid,
-                            myTeamName: myTeamName,
-                          ),
-                        ],
-                      ),
+                        );
+                      },
                     );
                   },
                 );
