@@ -1,10 +1,13 @@
 // ═══════════════════════════════════════════════════════════════════════════════
 // EXACT DIFF:
-// - Replaced .eq('id', uid) with .or('id.eq.$uid,uid.eq.$uid') on users table
+// 1. Added auto Language Selection Dialog on screen load for new users (!isEditing).
+// 2. Added easy_localization, ThemeService, and LanguageService integrations.
+// 3. Replaced .eq('id', uid) with .or('id.eq.$uid,uid.eq.$uid') on users table.
 // ═══════════════════════════════════════════════════════════════════════════════
 import 'dart:async';
 import 'dart:io';
 import 'package:flutter/material.dart';
+import 'package:easy_localization/easy_localization.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -13,6 +16,8 @@ import '../constants/mobile_games_rank_data.dart';
 import '../models/gamer_user_model.dart';
 import '../services/gamer_auth_service.dart';
 import '../services/supabase_service.dart';
+import '../services/theme_service.dart';
+import '../services/language_service.dart';
 import '../widgets/gamer_avatar.dart';
 import 'coin_store_screen.dart';
 import 'gamer_main_navigation_screen.dart';
@@ -59,6 +64,121 @@ class _CreateGamerIdScreenState extends State<CreateGamerIdScreen> {
   List<String> _unlockedBadges = [];
   Timer? _lockedItemBannerTimer;
 
+  void _showNewUserLanguageDialog(BuildContext context) {
+    final languages = [
+      {'code': 'en', 'name': 'English', 'flag': '🇬🇧'},
+      {'code': 'ur', 'name': 'اردو', 'flag': '🇵🇰'},
+      {'code': 'hi', 'name': 'हिंदी', 'flag': '🇮🇳'},
+      {'code': 'ro', 'name': 'Roman', 'flag': '🌐'},
+      {'code': 'ar', 'name': 'العربية', 'flag': '🇸🇦'},
+      {'code': 'zh', 'name': '中文', 'flag': '🇨🇳'},
+    ];
+
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (ctx) {
+        return AlertDialog(
+          backgroundColor: GamerTheme.cardDark,
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(20),
+            side: BorderSide(color: GamerTheme.neonGreen.withOpacity(0.5), width: 1.5),
+          ),
+          title: Column(
+            children: [
+              Container(
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: GamerTheme.neonGreen.withOpacity(0.15),
+                  shape: BoxShape.circle,
+                ),
+                child: const Icon(Icons.language_rounded, color: GamerTheme.neonGreen, size: 28),
+              ),
+              const SizedBox(height: 10),
+              const Text(
+                'Select Language',
+                style: TextStyle(
+                  color: GamerTheme.textWhite,
+                  fontWeight: FontWeight.bold,
+                  fontSize: 18,
+                ),
+              ),
+              const SizedBox(height: 4),
+              const Text(
+                'Apni pasandeeda zuban muntakhib karein',
+                style: TextStyle(color: GamerTheme.textMuted, fontSize: 11),
+                textAlign: TextAlign.center,
+              ),
+            ],
+          ),
+          content: SizedBox(
+            width: double.maxFinite,
+            child: GridView.builder(
+              shrinkWrap: true,
+              physics: const NeverScrollableScrollPhysics(),
+              itemCount: languages.length,
+              gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+                crossAxisCount: 2,
+                childAspectRatio: 2.3,
+                crossAxisSpacing: 8,
+                mainAxisSpacing: 8,
+              ),
+              itemBuilder: (context, index) {
+                final lang = languages[index];
+                final isCurrent = context.locale.languageCode == lang['code'];
+
+                return InkWell(
+                  borderRadius: BorderRadius.circular(12),
+                  onTap: () async {
+                    final code = lang['code']!;
+                    await context.setLocale(Locale(code));
+                    try {
+                      await LanguageService.setLanguage(code);
+                    } catch (_) {}
+
+                    if (ctx.mounted) {
+                      Navigator.pop(ctx);
+                    }
+                    if (mounted) {
+                      setState(() {});
+                    }
+                  },
+                  child: Container(
+                    decoration: BoxDecoration(
+                      color: isCurrent
+                          ? GamerTheme.neonGreen.withOpacity(0.2)
+                          : GamerTheme.cardElevated,
+                      borderRadius: BorderRadius.circular(12),
+                      border: Border.all(
+                        color: isCurrent ? GamerTheme.neonGreen : GamerTheme.borderLight,
+                        width: isCurrent ? 1.5 : 1,
+                      ),
+                    ),
+                    child: Row(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        Text(lang['flag']!, style: const TextStyle(fontSize: 16)),
+                        const SizedBox(width: 6),
+                        Text(
+                          lang['name']!,
+                          style: TextStyle(
+                            color: isCurrent ? GamerTheme.neonGreen : GamerTheme.textWhite,
+                            fontWeight: FontWeight.bold,
+                            fontSize: 13,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                );
+              },
+            ),
+          ),
+        );
+      },
+    );
+  }
+
   void _showLockedItemBanner(String itemName) {
     _lockedItemBannerTimer?.cancel();
     ScaffoldMessenger.of(context).hideCurrentSnackBar();
@@ -89,7 +209,6 @@ class _CreateGamerIdScreenState extends State<CreateGamerIdScreen> {
     });
   }
 
-  // ✅ NEW: Show "Coming Soon" banner for rank verification
   void _showRankComingSoonBanner() {
     ScaffoldMessenger.of(context).hideCurrentSnackBar();
     ScaffoldMessenger.of(context).showSnackBar(
@@ -123,7 +242,7 @@ class _CreateGamerIdScreenState extends State<CreateGamerIdScreen> {
   static const String _defaultBgmiCoverUrl =
       'https://images.unsplash.com/photo-1542751371-adc38448a05e?w=1200&auto=format&fit=crop&q=80';
 
-  // Gaming avatar presets (Helmet, Skull, Ninja, Crown, Crosshair)
+  // Gaming avatar presets
   final List<Map<String, dynamic>> _gamingPresets = [
     {
       'id': 'preset:helmet',
@@ -162,7 +281,6 @@ class _CreateGamerIdScreenState extends State<CreateGamerIdScreen> {
     },
   ];
 
-  // Dynamic Ranks strictly per selected mobile game
   List<String> get _dynamicRanks {
     return MobileGamesRankData.getRanksForGame(_selectedRankGame);
   }
@@ -207,6 +325,15 @@ class _CreateGamerIdScreenState extends State<CreateGamerIdScreen> {
       _gameIdController.text = '12345';
     }
     _loadStorePerks();
+
+    // Naye user ke liye screen load hote hi language popup open hoga
+    if (!widget.isEditing) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) {
+          _showNewUserLanguageDialog(context);
+        }
+      });
+    }
   }
 
   Future<void> _loadStorePerks() async {
@@ -382,60 +509,6 @@ class _CreateGamerIdScreenState extends State<CreateGamerIdScreen> {
     }
   }
 
-  void _showRankScreenshotPickerSheet() {
-    showModalBottomSheet(
-      context: context,
-      backgroundColor: const Color(0xFF10141D),
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
-      ),
-      builder: (ctx) => SafeArea(
-        child: Padding(
-          padding: const EdgeInsets.symmetric(vertical: 20, horizontal: 16),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              const Text(
-                'Upload Rank Screenshot Proof',
-                style: TextStyle(
-                  color: Colors.white,
-                  fontWeight: FontWeight.bold,
-                  fontSize: 16,
-                ),
-              ),
-              const SizedBox(height: 6),
-              const Text(
-                'اسکرین شاٹ میں گیم کی اصل ID اور Rank صاف نظر آنا چاہیے',
-                style: TextStyle(
-                  color: Color(0xFF8B949E),
-                  fontSize: 12,
-                ),
-              ),
-              const SizedBox(height: 16),
-              ListTile(
-                leading: const Icon(Icons.photo_library_rounded, color: Color(0xFF00FF88)),
-                title: const Text('Choose from Gallery / گیلری سے منتخب کریں', style: TextStyle(color: Colors.white, fontSize: 13.5)),
-                onTap: () {
-                  Navigator.pop(ctx);
-                  _pickRankScreenshot(ImageSource.gallery);
-                },
-              ),
-              ListTile(
-                leading: const Icon(Icons.camera_alt_rounded, color: Color(0xFF38BDF8)),
-                title: const Text('Take Photo / کیمرہ سے تصویر لیں', style: TextStyle(color: Colors.white, fontSize: 13.5)),
-                onTap: () {
-                  Navigator.pop(ctx);
-                  _pickRankScreenshot(ImageSource.camera);
-                },
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-
   Future<void> _saveGamerId() async {
     if (!_formKey.currentState!.validate()) return;
 
@@ -465,7 +538,6 @@ class _CreateGamerIdScreenState extends State<CreateGamerIdScreen> {
     setState(() => _isSaving = true);
 
     try {
-      // ✅ FIX 1: Profile photo upload — fail hone pe rok do
       String finalPhotoUrl = _photoUrl;
       if (_pickedImageFile != null) {
         final uploaded = await GamerAuthService().uploadProfilePhoto(_pickedImageFile!, uid);
@@ -485,7 +557,6 @@ class _CreateGamerIdScreenState extends State<CreateGamerIdScreen> {
         }
       }
 
-      // ✅ FIX 2: Cover photo upload — fail hone pe rok do
       String finalCoverUrl = _coverUrl;
       if (_pickedCoverFile != null) {
         final uploaded = await GamerAuthService().uploadCoverPhoto(_pickedCoverFile!, uid);
@@ -505,7 +576,6 @@ class _CreateGamerIdScreenState extends State<CreateGamerIdScreen> {
         }
       }
 
-      // Rank & Screenshot verification logic (Optional)
       final enteredRank = _rankController.text.trim();
       String finalRank = '';
       String finalRankScreenshot = _rankScreenshotUrl;
@@ -517,9 +587,8 @@ class _CreateGamerIdScreenState extends State<CreateGamerIdScreen> {
       if (enteredRank.isNotEmpty && enteredRank.toLowerCase() != 'none' && enteredRank.toLowerCase() != 'skip') {
         finalRank = enteredRank;
         if (_pickedRankScreenshot != null) {
-          // Upload new screenshot proof
           finalRankScreenshot = await GamerAuthService().uploadRankScreenshot(_pickedRankScreenshot!, uid);
-          finalRankStatus = 'pending'; // Mark pending for Admin review
+          finalRankStatus = 'pending';
           finalRankRejectReason = '';
           isRankVerified = false;
         } else if (finalRankScreenshot.isNotEmpty) {
@@ -527,13 +596,11 @@ class _CreateGamerIdScreenState extends State<CreateGamerIdScreen> {
               ? widget.existingUser!.rankStatus
               : 'pending';
         } else {
-          // User chose rank but skipped screenshot (Optional)
           finalRankStatus = 'none';
           finalRankScreenshot = '';
           isRankVerified = false;
         }
       } else {
-        // Skipped
         finalRank = '';
         finalRankStatus = 'none';
         finalRankScreenshot = '';
@@ -579,7 +646,6 @@ class _CreateGamerIdScreenState extends State<CreateGamerIdScreen> {
 
       await GamerAuthService().saveGamerProfile(gamerUser);
 
-      // Direct update in Supabase users table so avatar_url and cover_url are 100% saved
       final Map<String, dynamic> directUpdates = {
         'avatar_url': finalPhotoUrl,
         'cover_url': finalCoverUrl,
@@ -596,7 +662,6 @@ class _CreateGamerIdScreenState extends State<CreateGamerIdScreen> {
             .or('id.eq.$uid,uid.eq.$uid');
       } catch (_) {}
 
-      // Evict old and new image caches so the profile screen updates immediately
       try {
         if (_photoUrl.isNotEmpty) await CachedNetworkImage.evictFromCache(_photoUrl);
         if (finalPhotoUrl.isNotEmpty) await CachedNetworkImage.evictFromCache(finalPhotoUrl);
@@ -624,7 +689,6 @@ class _CreateGamerIdScreenState extends State<CreateGamerIdScreen> {
         await prefs.setStringList('user_unlocked_badges_$uid', _unlockedBadges);
       } catch (_) {}
 
-      // ✅ FIX: State variables update karo (naye URLs)
       if (finalPhotoUrl.isNotEmpty) {
         _photoUrl = finalPhotoUrl;
       }
@@ -632,9 +696,7 @@ class _CreateGamerIdScreenState extends State<CreateGamerIdScreen> {
         _coverUrl = finalCoverUrl;
       }
 
-      // ✅ FIX: currentGamerNotifier update karo
       GamerAuthService().currentGamerNotifier.value = gamerUser;
-
       saveSucceeded = true;
     } catch (e) {
       if (mounted) {
@@ -652,7 +714,6 @@ class _CreateGamerIdScreenState extends State<CreateGamerIdScreen> {
     if (saveSucceeded) {
       if (!mounted) return;
 
-      // ✅ FIX: Picked files reset karo
       setState(() {
         _pickedImageFile = null;
         _pickedCoverFile = null;
@@ -666,20 +727,15 @@ class _CreateGamerIdScreenState extends State<CreateGamerIdScreen> {
       );
 
       if (widget.isEditing) {
-        // ✅ FIX 3: Pop se pehle refreshCurrentGamer call karo
         try {
           await GamerAuthService().refreshCurrentGamer();
         } catch (_) {}
         Navigator.of(context).pop(true);
       } else {
-        // Always navigate to main screen on save success
-        // (don't wait for refreshCurrentGamer)
         Navigator.of(context).pushAndRemoveUntil(
           MaterialPageRoute(builder: (_) => const GamerMainNavigationScreen()),
           (route) => false,
         );
-
-        // Refresh profile in background
         GamerAuthService().refreshCurrentGamer();
       }
     }
@@ -709,7 +765,6 @@ class _CreateGamerIdScreenState extends State<CreateGamerIdScreen> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                // 1. TOP: Cover Photo Banner (BGMI theme + OFFICIAL GAMER PASS badge + Change Cover Photo button like Facebook)
                 Stack(
                   children: [
                     Container(
@@ -744,7 +799,6 @@ class _CreateGamerIdScreenState extends State<CreateGamerIdScreen> {
                                 ),
                               ),
                             ),
-                          // Dark Vignette & Gradient Overlay
                           Container(
                             decoration: BoxDecoration(
                               gradient: LinearGradient(
@@ -761,10 +815,6 @@ class _CreateGamerIdScreenState extends State<CreateGamerIdScreen> {
                         ],
                       ),
                     ),
-
-
-
-                    // Right Side: Change Cover Photo Button (camera icon) like Facebook
                     Positioned(
                       right: 14,
                       bottom: 12,
@@ -804,14 +854,11 @@ class _CreateGamerIdScreenState extends State<CreateGamerIdScreen> {
                     ),
                   ],
                 ),
-
-                // Form content with horizontal padding
                 Padding(
                   padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 18),
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      // 2. AVATAR: Keep F with orange glow and small camera icon, Upload Photo From Gallery text below
                       Center(
                         child: Column(
                           children: [
@@ -841,7 +888,6 @@ class _CreateGamerIdScreenState extends State<CreateGamerIdScreen> {
                                     frameId: _selectedFrame,
                                   ),
                                 ),
-                                // Small camera icon on bottom-right of avatar
                                 Positioned(
                                   bottom: 0,
                                   right: 0,
@@ -876,8 +922,6 @@ class _CreateGamerIdScreenState extends State<CreateGamerIdScreen> {
                                 ),
                               ),
                             ),
-
-                            // 3. CHANGE AVATAR PRESETS: Replace human faces with gaming icons like helmet, skull, ninja, crown, crosshair
                             const SizedBox(height: 10),
                             const Text(
                               'PRO GAMER AVATAR PRESETS',
@@ -955,10 +999,7 @@ class _CreateGamerIdScreenState extends State<CreateGamerIdScreen> {
                           ],
                         ),
                       ),
-
                       const SizedBox(height: 18),
-
-                      // 4. AVATAR FRAMES & PRESTIGE BADGES (STORE PERKS)
                       Container(
                         padding: const EdgeInsets.all(14),
                         decoration: BoxDecoration(
@@ -1114,7 +1155,6 @@ class _CreateGamerIdScreenState extends State<CreateGamerIdScreen> {
                             const SizedBox(height: 14),
                             const Divider(color: GamerTheme.borderDark, height: 1),
                             const SizedBox(height: 12),
-                            // BADGES ROW
                             const Row(
                               children: [
                                 Icon(Icons.military_tech_rounded, color: GamerTheme.accentBlue, size: 18),
@@ -1202,10 +1242,7 @@ class _CreateGamerIdScreenState extends State<CreateGamerIdScreen> {
                           ],
                         ),
                       ),
-
                       const SizedBox(height: 24),
-
-                      // 5. KEEP: Username @fua with Verified green tick
                       Row(
                         children: [
                           const Text(
@@ -1261,10 +1298,7 @@ class _CreateGamerIdScreenState extends State<CreateGamerIdScreen> {
                           ),
                         ),
                       ],
-
                       const SizedBox(height: 20),
-
-                      // 5. KEEP: Display Name
                       const Text(
                         'DISPLAY NAME',
                         style: TextStyle(color: GamerTheme.textGray, fontSize: 12, fontWeight: FontWeight.w800, letterSpacing: 0.8),
@@ -1282,10 +1316,7 @@ class _CreateGamerIdScreenState extends State<CreateGamerIdScreen> {
                           return null;
                         },
                       ),
-
                       const SizedBox(height: 20),
-
-                      // 5. KEEP: Favorite Game dropdown (Dynamic Ranks trigger)
                       const Text(
                         'FAVORITE GAME',
                         style: TextStyle(color: GamerTheme.textGray, fontSize: 12, fontWeight: FontWeight.w800, letterSpacing: 0.8),
@@ -1339,11 +1370,7 @@ class _CreateGamerIdScreenState extends State<CreateGamerIdScreen> {
                           ),
                         ),
                       ),
-
                       const SizedBox(height: 20),
-
-                      // 4. MOBILE GAMES RANK / TIER & SCREENSHOT VERIFICATION
-                      // ✅ COMING SOON: Rank verification disabled — user can only Skip
                       Row(
                         mainAxisAlignment: MainAxisAlignment.spaceBetween,
                         children: [
@@ -1362,7 +1389,6 @@ class _CreateGamerIdScreenState extends State<CreateGamerIdScreen> {
                               ),
                             ],
                           ),
-                          // ✅ NEW: Coming Soon badge
                           Container(
                             padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
                             decoration: BoxDecoration(
@@ -1391,8 +1417,6 @@ class _CreateGamerIdScreenState extends State<CreateGamerIdScreen> {
                         ],
                       ),
                       const SizedBox(height: 8),
-
-                      // ✅ NEW: Coming soon message banner
                       Container(
                         padding: const EdgeInsets.all(12),
                         decoration: BoxDecoration(
@@ -1418,8 +1442,6 @@ class _CreateGamerIdScreenState extends State<CreateGamerIdScreen> {
                         ),
                       ),
                       const SizedBox(height: 12),
-
-                      // 1. GAME SELECTION DROPDOWN (15 Major Mobile Games)
                       Container(
                         padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 2),
                         decoration: BoxDecoration(
@@ -1476,10 +1498,7 @@ class _CreateGamerIdScreenState extends State<CreateGamerIdScreen> {
                           ),
                         ),
                       ),
-
                       const SizedBox(height: 12),
-
-                      // 2. RANK SELECTION (Top 10 Ranks for selected game)
                       Row(
                         mainAxisAlignment: MainAxisAlignment.spaceBetween,
                         children: [
@@ -1503,13 +1522,10 @@ class _CreateGamerIdScreenState extends State<CreateGamerIdScreen> {
                         ],
                       ),
                       const SizedBox(height: 8),
-
-                      // ✅ COMING SOON: Rank chips disabled — tap shows Snackbar
                       Wrap(
                         spacing: 8,
                         runSpacing: 8,
                         children: [
-                          // Skip / No Rank chip
                           InkWell(
                             onTap: () {
                               setState(() {
@@ -1551,12 +1567,11 @@ class _CreateGamerIdScreenState extends State<CreateGamerIdScreen> {
                               ),
                             ),
                           ),
-                          // ✅ COMING SOON: Rank chips show lock icon and disabled state
                           ..._dynamicRanks.map((rank) {
                             final isSelected = _rankController.text.trim() == rank;
                             final gameColor = MobileGamesRankData.getGameColor(_selectedRankGame);
                             return InkWell(
-                              onTap: _showRankComingSoonBanner, // ✅ NEW: Show coming soon
+                              onTap: _showRankComingSoonBanner,
                               borderRadius: BorderRadius.circular(12),
                               child: Container(
                                 padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
@@ -1583,7 +1598,6 @@ class _CreateGamerIdScreenState extends State<CreateGamerIdScreen> {
                                         fontWeight: isSelected ? FontWeight.w900 : FontWeight.w700,
                                       ),
                                     ),
-                                    // ✅ NEW: Lock icon to show disabled
                                     const SizedBox(width: 5),
                                     const Icon(Icons.lock_rounded, size: 11, color: Colors.amber),
                                   ],
@@ -1593,9 +1607,6 @@ class _CreateGamerIdScreenState extends State<CreateGamerIdScreen> {
                           }),
                         ],
                       ),
-
-                      // ✅ COMING SOON: Screenshot upload box — tap shows Snackbar
-                      // (Only show if user previously had a rank selected — for existing users)
                       if (_rankController.text.trim().isNotEmpty) ...[
                         const SizedBox(height: 14),
                         Container(
@@ -1610,7 +1621,6 @@ class _CreateGamerIdScreenState extends State<CreateGamerIdScreen> {
                           child: Column(
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
-                              // Status Banner if previously reviewed or pending
                               if (_rankStatus.toLowerCase() == 'pending') ...[
                                 Container(
                                   padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
@@ -1690,8 +1700,6 @@ class _CreateGamerIdScreenState extends State<CreateGamerIdScreen> {
                                 ),
                                 const SizedBox(height: 10),
                               ],
-
-                              // Instructions notice
                               Container(
                                 padding: const EdgeInsets.all(10),
                                 decoration: BoxDecoration(
@@ -1713,8 +1721,6 @@ class _CreateGamerIdScreenState extends State<CreateGamerIdScreen> {
                                 ),
                               ),
                               const SizedBox(height: 12),
-
-                              // Image Preview or Upload Prompt
                               if (_pickedRankScreenshot != null) ...[
                                 ClipRRect(
                                   borderRadius: BorderRadius.circular(10),
@@ -1747,7 +1753,7 @@ class _CreateGamerIdScreenState extends State<CreateGamerIdScreen> {
                                   children: [
                                     Expanded(
                                       child: OutlinedButton.icon(
-                                        onPressed: _showRankComingSoonBanner, // ✅ NEW
+                                        onPressed: _showRankComingSoonBanner,
                                         icon: const Icon(Icons.edit_rounded, size: 14, color: Colors.white38),
                                         label: const Text('تصویر تبدیل کریں (Coming Soon)', style: TextStyle(color: Colors.white38, fontSize: 11.5)),
                                         style: OutlinedButton.styleFrom(
@@ -1783,7 +1789,7 @@ class _CreateGamerIdScreenState extends State<CreateGamerIdScreen> {
                                   children: [
                                     Expanded(
                                       child: OutlinedButton.icon(
-                                        onPressed: _showRankComingSoonBanner, // ✅ NEW
+                                        onPressed: _showRankComingSoonBanner,
                                         icon: const Icon(Icons.refresh_rounded, size: 14, color: Colors.white38),
                                         label: const Text('نیا اسکرین شاٹ (Coming Soon)', style: TextStyle(color: Colors.white38, fontSize: 11.5)),
                                         style: OutlinedButton.styleFrom(
@@ -1796,7 +1802,7 @@ class _CreateGamerIdScreenState extends State<CreateGamerIdScreen> {
                                 ),
                               ] else ...[
                                 InkWell(
-                                  onTap: _showRankComingSoonBanner, // ✅ NEW
+                                  onTap: _showRankComingSoonBanner,
                                   borderRadius: BorderRadius.circular(12),
                                   child: Container(
                                     width: double.infinity,
@@ -1840,10 +1846,7 @@ class _CreateGamerIdScreenState extends State<CreateGamerIdScreen> {
                           ),
                         ),
                       ],
-
                       const SizedBox(height: 20),
-
-                      // 5. KEEP: Gamer Bio
                       Row(
                         mainAxisAlignment: MainAxisAlignment.spaceBetween,
                         children: [
@@ -1882,10 +1885,7 @@ class _CreateGamerIdScreenState extends State<CreateGamerIdScreen> {
                           hintText: 'e.g. BGMI Conqueror | Clan Leader | Sniper Specialist',
                         ),
                       ),
-
                       const SizedBox(height: 20),
-
-                      // 5. KEEP: In-Game UID 12345 field. Remove BLUE TICK REQUIREMENT text, instead show small lock icon.
                       Row(
                         children: const [
                           Text(
@@ -1907,10 +1907,7 @@ class _CreateGamerIdScreenState extends State<CreateGamerIdScreen> {
                           helperStyle: TextStyle(color: GamerTheme.textMuted, fontSize: 11),
                         ),
                       ),
-
                       const SizedBox(height: 32),
-
-                      // 6. BUTTON: Save Changes gradient orange
                       SizedBox(
                         width: double.infinity,
                         height: 52,
@@ -1964,7 +1961,6 @@ class _CreateGamerIdScreenState extends State<CreateGamerIdScreen> {
                           ),
                         ),
                       ),
-
                       const SizedBox(height: 24),
                     ],
                   ),
