@@ -31,6 +31,72 @@ class LanguageService {
   static String get selectedLang => currentLanguage.value;
   static bool get isUrdu => currentLanguage.value == 'ur';
 
+  /// ✅ Global Translation Helper Function
+  /// Kisi bhi screen par Text(LanguageService.t('Teams')) likhein
+  static String t(String key) {
+    if (!isUrdu) return key;
+    return _urduDictionary[key] ?? key;
+  }
+
+  /// App ke saare alfaz ki Dictionary
+  static final Map<String, String> _urduDictionary = {
+    // Bottom Nav & Titles
+    'Feed': 'فیڈ',
+    'Teams': 'ٹیمز',
+    'Messages': 'پیغامات',
+    'Rooms': 'رومز',
+    'Profile': 'پروفائل',
+    'Admin': 'ایڈمن',
+    'Gamers ID': 'گیمرز آئی ڈی',
+
+    // Feed Screen
+    "What's on your mind?": 'آپ کے ذہن میں کیا ہے؟',
+    'Post': 'پوسٹ',
+    'Like': 'پسند',
+    'Comment': 'تبصرہ',
+    'Share': 'شیئر',
+    'Search Gamers': 'گیمرز تلاش کریں',
+    'comments': 'تبصرے',
+    'Comments': 'تبصرے',
+    'Write a comment...': 'ایک تبصرہ لکھیں...',
+    'Just now': 'ابھی',
+    'Report Post': 'پوسٹ رپورٹ کریں',
+    'Delete Post': 'پوسٹ ڈیلیٹ کریں',
+
+    // Teams Screen
+    'Create Team': 'ٹیم بنائیں',
+    'Incoming Challenges': 'موصولہ چیلنجز',
+    'Live': 'لائیو',
+    'No live matches': 'کوئی لائیو میچ نہیں',
+    'Search teams by name or tag...': 'نام یا ٹیگ سے تلاش کریں...',
+    'Accept': 'قبول کریں',
+    'Reject': 'مسترد',
+    'CHALLENGE': 'چیلنج',
+    'Challenge': 'چیلنج',
+    'Team DM': 'ٹیم چیٹ',
+    'END MATCH': 'میچ ختم کریں',
+    'Join': 'شامل ہوں',
+    'Requested': 'درخواست بھیجی',
+    'Members': 'ارکان',
+    'Leader': 'لیڈر',
+
+    // Rooms Screen
+    'Create Game Room': 'گیم روم بنائیں',
+    'JOIN MATCH': 'میچ میں شامل ہوں',
+    'ROOM CREDENTIALS': 'روم کی تفصیلات',
+    'ROOM ID': 'روم آئی ڈی',
+    'PASSWORD': 'پاس ورڈ',
+    'Rules': 'قوانین',
+    'PLAYERS': 'کھلاڑی',
+    'Prize Pool': 'انعام',
+    'WINNER': 'فاتح',
+    'DEFEATED': 'شکست',
+    'Type a message...': 'پیغام لکھیں...',
+    'End Match (I Won)': 'میچ ختم (میں جیت گیا)',
+    'Proof Submitted ⏳ (Tap to Change)': 'ثبوت جمع ہوگیا ⏳ (تبدیل کریں)',
+    'Re-upload Proof 🔄': 'دوبارہ ثبوت اپلوڈ کریں 🔄',
+  };
+
   /// Initialize and load saved language preference
   static Future<void> init() async {
     try {
@@ -86,7 +152,7 @@ class LanguageService {
   static LanguageModel getLanguageModel(String code) {
     return languages.firstWhere(
       (lang) => lang.code == code,
-      orElse: () => languages[1], // default english
+      orElse: () => languages[1],
     );
   }
 
@@ -189,7 +255,6 @@ class LanguageService {
                     mainAxisSize: MainAxisSize.min,
                     crossAxisAlignment: CrossAxisAlignment.stretch,
                     children: [
-                      // Handle bar
                       Center(
                         child: Container(
                           width: 44,
@@ -201,8 +266,6 @@ class LanguageService {
                           ),
                         ),
                       ),
-
-                      // Header
                       Row(
                         children: [
                           Container(
@@ -245,8 +308,6 @@ class LanguageService {
                         ],
                       ),
                       const SizedBox(height: 20),
-
-                      // 7 Language Options Grid
                       Wrap(
                         spacing: 10,
                         runSpacing: 10,
@@ -259,20 +320,18 @@ class LanguageService {
                                 selectedCode = lang.code;
                               });
 
-                              // 1. Save Preference
                               await saveLanguagePreference(lang.code);
 
-                              // 2. Close bottom sheet
                               if (modalContext.mounted) {
                                 Navigator.pop(modalContext);
                               }
 
-                              // 3. Set locale on main app context
-                              if (context.mounted) {
-                                await context.setLocale(Locale(lang.code));
-                              }
+                              try {
+                                if (context.mounted) {
+                                  await context.setLocale(Locale(lang.code));
+                                }
+                              } catch (_) {}
 
-                              // 4. Trigger callback to refresh UI
                               onLanguageChanged?.call();
                             },
                             borderRadius: BorderRadius.circular(14),
