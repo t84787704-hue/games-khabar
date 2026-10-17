@@ -72,7 +72,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
 
   String _safeTr(String key, {String? fallback, List<String>? args}) {
     try {
-      final res = key.tr(args: args);
+      final res = key.tr(args: args, context: context);
       if (res.isNotEmpty && res != key) return res;
     } catch (_) {}
     if (fallback != null) return fallback;
@@ -188,17 +188,20 @@ class _ProfileScreenState extends State<ProfileScreen> {
         backgroundColor: cardDark,
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
         title: Text(
-          'Log Out',
+          _safeTr('log_out', fallback: 'Log Out'),
           style: TextStyle(color: textWhite, fontWeight: FontWeight.bold),
         ),
         content: Text(
-          'Are you sure you want to log out of Gamers ID?',
+          _safeTr('log_out_confirm', fallback: 'Are you sure you want to log out of Gamers ID?'),
           style: TextStyle(color: textGray),
         ),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(ctx),
-            child: Text('Cancel', style: TextStyle(color: textGray)),
+            child: Text(
+              _safeTr('cancel', fallback: 'Cancel'),
+              style: TextStyle(color: textGray),
+            ),
           ),
           ElevatedButton(
             style: ElevatedButton.styleFrom(
@@ -218,7 +221,10 @@ class _ProfileScreenState extends State<ProfileScreen> {
                 );
               }
             },
-            child: const Text('Log Out', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+            child: Text(
+              _safeTr('log_out', fallback: 'Log Out'),
+              style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
+            ),
           ),
         ],
       ),
@@ -287,7 +293,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
                             Text(
-                              'Privacy Settings',
+                              _safeTr('privacy_settings', fallback: 'Privacy Settings'),
                               style: TextStyle(
                                 color: ThemeService.textPrimary,
                                 fontWeight: FontWeight.bold,
@@ -295,7 +301,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                               ),
                             ),
                             Text(
-                              'Control what others can see on your profile',
+                              _safeTr('privacy_settings_sub', fallback: 'Control what others can see on your profile'),
                               style: TextStyle(color: ThemeService.textSecondary, fontSize: 12),
                             ),
                           ],
@@ -311,11 +317,11 @@ class _ProfileScreenState extends State<ProfileScreen> {
                     contentPadding: EdgeInsets.zero,
                     activeColor: const Color(0xFF1877F2),
                     title: Text(
-                      'Private Profile',
+                      _safeTr('private_profile', fallback: 'Private Profile'),
                       style: TextStyle(color: ThemeService.textPrimary, fontWeight: FontWeight.bold, fontSize: 14),
                     ),
                     subtitle: Text(
-                      'Only your followers/team members can view your full profile',
+                      _safeTr('private_profile_sub', fallback: 'Only your followers/team members can view your full profile'),
                       style: TextStyle(color: ThemeService.textSecondary, fontSize: 11.5),
                     ),
                     value: isPrivate,
@@ -328,11 +334,11 @@ class _ProfileScreenState extends State<ProfileScreen> {
                     contentPadding: EdgeInsets.zero,
                     activeColor: const Color(0xFF1877F2),
                     title: Text(
-                      'Show In-Game Name & Game UID',
+                      _safeTr('show_game_uid', fallback: 'Show In-Game Name & Game UID'),
                       style: TextStyle(color: ThemeService.textPrimary, fontWeight: FontWeight.bold, fontSize: 14),
                     ),
                     subtitle: Text(
-                      'Allow other players to copy your official game character ID',
+                      _safeTr('show_game_uid_sub', fallback: 'Allow other players to copy your official game character ID'),
                       style: TextStyle(color: ThemeService.textSecondary, fontSize: 11.5),
                     ),
                     value: showUid,
@@ -345,11 +351,11 @@ class _ProfileScreenState extends State<ProfileScreen> {
                     contentPadding: EdgeInsets.zero,
                     activeColor: const Color(0xFF1877F2),
                     title: Text(
-                      'Show Match Stats & Wins',
+                      _safeTr('show_match_stats', fallback: 'Show Match Stats & Wins'),
                       style: TextStyle(color: ThemeService.textPrimary, fontWeight: FontWeight.bold, fontSize: 14),
                     ),
                     subtitle: Text(
-                      'Display your tournament wins, win rate, and room history',
+                      _safeTr('show_match_stats_sub', fallback: 'Display your tournament wins, win rate, and room history'),
                       style: TextStyle(color: ThemeService.textSecondary, fontSize: 11.5),
                     ),
                     value: showStats,
@@ -362,11 +368,11 @@ class _ProfileScreenState extends State<ProfileScreen> {
                     contentPadding: EdgeInsets.zero,
                     activeColor: const Color(0xFF1877F2),
                     title: Text(
-                      'Show Followers List & Count',
+                      _safeTr('show_followers', fallback: 'Show Followers List & Count'),
                       style: TextStyle(color: ThemeService.textPrimary, fontWeight: FontWeight.bold, fontSize: 14),
                     ),
                     subtitle: Text(
-                      'Allow other gamers to see who follows your Gamer ID',
+                      _safeTr('show_followers_sub', fallback: 'Allow other gamers to see who follows your Gamer ID'),
                       style: TextStyle(color: ThemeService.textSecondary, fontSize: 11.5),
                     ),
                     value: showFollowers,
@@ -379,11 +385,11 @@ class _ProfileScreenState extends State<ProfileScreen> {
                     contentPadding: EdgeInsets.zero,
                     activeColor: const Color(0xFF1877F2),
                     title: Text(
-                      'Show Following List & Count',
+                      _safeTr('show_following', fallback: 'Show Following List & Count'),
                       style: TextStyle(color: ThemeService.textPrimary, fontWeight: FontWeight.bold, fontSize: 14),
                     ),
                     subtitle: Text(
-                      'Allow other gamers to see who you are following',
+                      _safeTr('show_following_sub', fallback: 'Allow other gamers to see who you are following'),
                       style: TextStyle(color: ThemeService.textSecondary, fontSize: 11.5),
                     ),
                     value: showFollowing,
@@ -396,11 +402,11 @@ class _ProfileScreenState extends State<ProfileScreen> {
                     contentPadding: EdgeInsets.zero,
                     activeColor: const Color(0xFF1877F2),
                     title: Text(
-                      'Allow Direct Challenges',
+                      _safeTr('allow_challenges', fallback: 'Allow Direct Challenges'),
                       style: TextStyle(color: ThemeService.textPrimary, fontWeight: FontWeight.bold, fontSize: 14),
                     ),
                     subtitle: Text(
-                      'Allow other gamers and teams to challenge you in 1v1 matches',
+                      _safeTr('allow_challenges_sub', fallback: 'Allow other gamers and teams to challenge you in 1v1 matches'),
                       style: TextStyle(color: ThemeService.textSecondary, fontSize: 11.5),
                     ),
                     value: allowChallenges,
@@ -450,15 +456,20 @@ class _ProfileScreenState extends State<ProfileScreen> {
 
                         if (mounted) {
                           ScaffoldMessenger.of(context).showSnackBar(
-                            const SnackBar(
-                              content: Text('✅ Privacy Settings updated successfully!'),
-                              backgroundColor: Color(0xFF00FF88),
+                            SnackBar(
+                              content: Text(
+                                _safeTr('privacy_settings_updated', fallback: '✅ Privacy Settings updated successfully!'),
+                              ),
+                              backgroundColor: const Color(0xFF00FF88),
                               behavior: SnackBarBehavior.floating,
                             ),
                           );
                         }
                       },
-                      child: const Text('Save Settings', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14)),
+                      child: Text(
+                        _safeTr('save_settings', fallback: 'Save Settings'),
+                        style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
+                      ),
                     ),
                   ),
                 ],
@@ -702,8 +713,10 @@ class _ProfileScreenState extends State<ProfileScreen> {
                                         children: [
                                           Text(
                                             isVerified
-                                                ? 'Official Verified Gamer'
-                                                : (isPending ? 'Under Review 24h' : 'Apply for Verification'),
+                                                ? _safeTr('official_verified_gamer', fallback: 'Official Verified Gamer')
+                                                : (isPending
+                                                    ? _safeTr('under_review_24h', fallback: 'Under Review 24h')
+                                                    : _safeTr('apply_for_verification', fallback: 'Apply for Verification')),
                                             style: TextStyle(
                                               color: textWhite,
                                               fontWeight: FontWeight.w900,
@@ -720,17 +733,20 @@ class _ProfileScreenState extends State<ProfileScreen> {
                                                 color: const Color(0xFFFF8A00).withOpacity(0.15),
                                                 borderRadius: BorderRadius.circular(4),
                                               ),
-                                              child: const Text('24H REVIEW', style: TextStyle(color: Color(0xFFFF8A00), fontSize: 9, fontWeight: FontWeight.w900)),
+                                              child: Text(
+                                                _safeTr('review_24h_tag', fallback: '24H REVIEW'),
+                                                style: const TextStyle(color: Color(0xFFFF8A00), fontSize: 9, fontWeight: FontWeight.w900),
+                                              ),
                                             ),
                                         ],
                                       ),
                                       const SizedBox(height: 3),
                                       Text(
                                         isVerified
-                                            ? 'Blue Tick active on your Gamer ID & all posts.'
+                                            ? _safeTr('blue_tick_active_desc', fallback: 'Blue Tick active on your Gamer ID & all posts.')
                                             : (isPending
-                                                ? 'Application under review • 24h validation.'
-                                                : 'Get Blue Tick (Crown/Ace, K/D 3.0+, 5k Likes)'),
+                                                ? _safeTr('app_under_review_desc', fallback: 'Application under review • 24h validation.')
+                                                : _safeTr('get_blue_tick_desc', fallback: 'Get Blue Tick (Crown/Ace, K/D 3.0+, 5k Likes)')),
                                         style: TextStyle(color: textGray, fontSize: 12),
                                       ),
                                     ],
@@ -744,7 +760,11 @@ class _ProfileScreenState extends State<ProfileScreen> {
                                     borderRadius: BorderRadius.circular(8),
                                   ),
                                   child: Text(
-                                    isVerified ? 'VERIFIED' : (isPending ? 'PENDING' : 'APPLY'),
+                                    isVerified
+                                        ? _safeTr('verified', fallback: 'VERIFIED')
+                                        : (isPending
+                                            ? _safeTr('pending', fallback: 'PENDING')
+                                            : _safeTr('apply', fallback: 'APPLY')),
                                     style: TextStyle(
                                       color: isVerified ? Colors.blue : (isPending ? const Color(0xFFFF8A00) : Colors.blue),
                                       fontSize: 11,
@@ -859,11 +879,11 @@ class _ProfileScreenState extends State<ProfileScreen> {
                           child: const Icon(Icons.history_edu_rounded, color: Color(0xFFFFD700), size: 20),
                         ),
                         title: Text(
-                          'Coin History & Passbook',
+                          _safeTr('coin_history_passbook', fallback: 'Coin History & Passbook'),
                           style: TextStyle(color: textWhite, fontSize: 14, fontWeight: FontWeight.bold),
                         ),
                         subtitle: Text(
-                          'Kb kitne coin kis liye cut ya add huway',
+                          _safeTr('coin_history_sub', fallback: 'Kb kitne coin kis liye cut ya add huway'),
                           style: TextStyle(color: textGray, fontSize: 12),
                         ),
                         trailing: Icon(Icons.arrow_forward_ios_rounded, color: textGray, size: 14),
@@ -885,11 +905,11 @@ class _ProfileScreenState extends State<ProfileScreen> {
                           child: const Icon(Icons.lock_rounded, color: Color(0xFF1877F2), size: 20),
                         ),
                         title: Text(
-                          'Privacy Settings',
+                          _safeTr('privacy_settings', fallback: 'Privacy Settings'),
                           style: TextStyle(color: textWhite, fontSize: 14, fontWeight: FontWeight.bold),
                         ),
                         subtitle: Text(
-                          'Control what others can see on your profile',
+                          _safeTr('privacy_settings_sub', fallback: 'Control what others can see on your profile'),
                           style: TextStyle(color: textGray, fontSize: 12),
                         ),
                         trailing: Icon(Icons.arrow_forward_ios_rounded, color: textGray, size: 14),
@@ -908,11 +928,11 @@ class _ProfileScreenState extends State<ProfileScreen> {
                           child: const Icon(Icons.block_rounded, color: Color(0xFFDC2626), size: 20),
                         ),
                         title: Text(
-                          'Blocked Users',
+                          _safeTr('blocked_users', fallback: 'Blocked Users'),
                           style: TextStyle(color: textWhite, fontSize: 14, fontWeight: FontWeight.bold),
                         ),
                         subtitle: Text(
-                          'Manage users you have blocked',
+                          _safeTr('blocked_users_sub', fallback: 'Manage users you have blocked'),
                           style: TextStyle(color: textGray, fontSize: 12),
                         ),
                         trailing: Icon(Icons.arrow_forward_ios_rounded, color: textGray, size: 14),
@@ -935,11 +955,11 @@ class _ProfileScreenState extends State<ProfileScreen> {
                           child: const Icon(Icons.bookmark_rounded, color: Color(0xFF1877F2), size: 20),
                         ),
                         title: Text(
-                          'Saved Posts & News',
+                          _safeTr('saved_posts_news', fallback: 'Saved Posts & News'),
                           style: TextStyle(color: textWhite, fontSize: 14, fontWeight: FontWeight.bold),
                         ),
                         subtitle: Text(
-                          'View your bookmarked clips & articles',
+                          _safeTr('saved_posts_news_sub', fallback: 'View your bookmarked clips & articles'),
                           style: TextStyle(color: textGray, fontSize: 12),
                         ),
                         trailing: Icon(Icons.arrow_forward_ios_rounded, color: textGray, size: 14),
@@ -1036,11 +1056,11 @@ class _ProfileScreenState extends State<ProfileScreen> {
                           child: Icon(Icons.download_rounded, color: neonGreen, size: 20),
                         ),
                         title: Text(
-                          'Download My Data',
+                          _safeTr('download_my_data', fallback: 'Download My Data'),
                           style: TextStyle(color: textWhite, fontSize: 14, fontWeight: FontWeight.bold),
                         ),
                         subtitle: Text(
-                          'Get a copy of your Gamers ID data (JSON)',
+                          _safeTr('download_my_data_sub', fallback: 'Get a copy of your Gamers ID data (JSON)'),
                           style: TextStyle(color: textGray, fontSize: 12),
                         ),
                         trailing: Icon(Icons.arrow_forward_ios_rounded, color: textGray, size: 14),
@@ -1126,11 +1146,11 @@ class _ProfileScreenState extends State<ProfileScreen> {
                           child: Icon(Icons.privacy_tip_rounded, color: neonGreen, size: 20),
                         ),
                         title: Text(
-                          'Privacy Policy',
+                          _safeTr('privacy_policy', fallback: 'Privacy Policy'),
                           style: TextStyle(color: textWhite, fontSize: 14, fontWeight: FontWeight.bold),
                         ),
                         subtitle: Text(
-                          'How we collect and protect your data',
+                          _safeTr('privacy_policy_sub', fallback: 'How we collect and protect your data'),
                           style: TextStyle(color: textGray, fontSize: 12),
                         ),
                         trailing: Icon(Icons.arrow_forward_ios_rounded, color: textGray, size: 14),
@@ -1154,11 +1174,11 @@ class _ProfileScreenState extends State<ProfileScreen> {
                           child: Icon(Icons.gavel_rounded, color: neonGreen, size: 20),
                         ),
                         title: Text(
-                          'Terms of Service',
+                          _safeTr('terms_of_service', fallback: 'Terms of Service'),
                           style: TextStyle(color: textWhite, fontSize: 14, fontWeight: FontWeight.bold),
                         ),
                         subtitle: Text(
-                          'Rules for using Gamers ID',
+                          _safeTr('terms_of_service_sub', fallback: 'Rules for using Gamers ID'),
                           style: TextStyle(color: textGray, fontSize: 12),
                         ),
                         trailing: Icon(Icons.arrow_forward_ios_rounded, color: textGray, size: 14),
@@ -1200,12 +1220,12 @@ class _ProfileScreenState extends State<ProfileScreen> {
                           ),
                           child: const Icon(Icons.logout_rounded, color: Color(0xFFDC2626), size: 20),
                         ),
-                        title: const Text(
-                          'Log Out',
-                          style: TextStyle(color: Color(0xFFDC2626), fontWeight: FontWeight.bold, fontSize: 14),
+                        title: Text(
+                          _safeTr('log_out', fallback: 'Log Out'),
+                          style: const TextStyle(color: Color(0xFFDC2626), fontWeight: FontWeight.bold, fontSize: 14),
                         ),
                         subtitle: Text(
-                          'Sign out of Gamers ID Network',
+                          _safeTr('log_out_sub', fallback: 'Sign out of Gamers ID Network'),
                           style: TextStyle(color: textGray, fontSize: 12),
                         ),
                         onTap: _confirmSignOut,
@@ -1222,12 +1242,12 @@ class _ProfileScreenState extends State<ProfileScreen> {
                           ),
                           child: const Icon(Icons.delete_forever_rounded, color: Color(0xFFDC2626), size: 20),
                         ),
-                        title: const Text(
-                          'Delete Account',
-                          style: TextStyle(color: Color(0xFFDC2626), fontWeight: FontWeight.bold, fontSize: 14),
+                        title: Text(
+                          _safeTr('delete_account', fallback: 'Delete Account'),
+                          style: const TextStyle(color: Color(0xFFDC2626), fontWeight: FontWeight.bold, fontSize: 14),
                         ),
                         subtitle: Text(
-                          'Permanently delete your Gamer ID (30-day grace)',
+                          _safeTr('delete_account_sub', fallback: 'Permanently delete your Gamer ID (30-day grace)'),
                           style: TextStyle(color: textGray, fontSize: 12),
                         ),
                         trailing: Icon(Icons.arrow_forward_ios_rounded, color: textGray, size: 14),
@@ -1278,7 +1298,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                               borderRadius: BorderRadius.circular(4),
                             ),
                             child: Text(
-                              'UNLOCKED',
+                              _safeTr('unlocked', fallback: 'UNLOCKED'),
                               style: TextStyle(
                                 color: neonGreen,
                                 fontSize: 9,
