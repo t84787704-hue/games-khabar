@@ -25,7 +25,7 @@ class LanguageService {
   static const String keySelectedLang = 'selectedLang';
   static const String keyHasChosenLanguage = 'has_selected_language_first_launch';
 
-  /// Reactive notifier for the currently selected language ('en' or 'ur')
+  /// Reactive notifier for current language
   static final ValueNotifier<String> currentLanguage = ValueNotifier<String>('en');
 
   static String get selectedLang => currentLanguage.value;
@@ -35,10 +35,9 @@ class LanguageService {
   static Future<void> init() async {
     try {
       final prefs = await SharedPreferences.getInstance();
-      // First check selectedLang as requested
-      final savedLang = prefs.getString(keySelectedLang) ?? prefs.getString(keySelectedLanguage);
+      final savedLang = prefs.getString(keySelectedLanguage) ?? prefs.getString(keySelectedLang);
       if (savedLang != null && savedLang.isNotEmpty) {
-        currentLanguage.value = savedLang == 'ur' ? 'ur' : 'en';
+        currentLanguage.value = savedLang;
       } else {
         currentLanguage.value = 'en';
       }
@@ -49,12 +48,11 @@ class LanguageService {
 
   /// Change active language and persist in SharedPreferences
   static Future<void> setLanguage(String code) async {
-    final cleanCode = code.toLowerCase() == 'ur' ? 'ur' : 'en';
-    currentLanguage.value = cleanCode;
+    currentLanguage.value = code;
     try {
       final prefs = await SharedPreferences.getInstance();
-      await prefs.setString(keySelectedLang, cleanCode);
-      await prefs.setString(keySelectedLanguage, cleanCode);
+      await prefs.setString(keySelectedLang, code);
+      await prefs.setString(keySelectedLanguage, code);
       await prefs.setBool(keyHasChosenLanguage, true);
     } catch (_) {}
   }
@@ -96,8 +94,6 @@ class LanguageService {
     return locale.languageCode == 'ar' || locale.languageCode == 'ur';
   }
 
-  /// Detect SIM/device country and suggest initial locale
-  /// PK -> ur/ro, IN -> hi/ro, BD -> bn, SA/AE/EG -> ar, CN -> zh, else en
   static Future<String> getAutoDetectedLanguageCode() async {
     final prefs = await SharedPreferences.getInstance();
     final savedCode = prefs.getString(keySelectedLanguage);
@@ -134,9 +130,9 @@ class LanguageService {
   static Future<void> saveLanguagePreference(String code) async {
     final prefs = await SharedPreferences.getInstance();
     await prefs.setString(keySelectedLanguage, code);
-    await prefs.setString(keySelectedLang, code == 'ur' ? 'ur' : 'en');
+    await prefs.setString(keySelectedLang, code);
     await prefs.setBool(keyHasChosenLanguage, true);
-    currentLanguage.value = code == 'ur' ? 'ur' : 'en';
+    currentLanguage.value = code;
   }
 
   /// Shows the 7-language bottom sheet
@@ -154,11 +150,10 @@ class LanguageService {
       builder: (modalContext) {
         String currentLocaleCode = 'en';
         try {
-          currentLocaleCode = LanguageService.currentLanguage.value;
-        } catch (_) {}
-        try {
           currentLocaleCode = context.locale.languageCode;
-        } catch (_) {}
+        } catch (_) {
+          currentLocaleCode = LanguageService.currentLanguage.value;
+        }
 
         final isDark = ThemeService.isDarkMode;
         final bg = isDark ? const Color(0xFF161B22) : const Color(0xFFFFFFFF);
@@ -170,20 +165,8 @@ class LanguageService {
 
         String selectedCode = currentLocaleCode;
 
-        String titleText = 'Select Language';
-        try {
-          final t = 'select_language_title'.tr();
-          if (t.isNotEmpty && t != 'select_language_title') titleText = t;
-        } catch (_) {}
-
-        String subtitleText = 'Choose your preferred language';
-        try {
-          final s = 'select_language_subtitle'.tr();
-          if (s.isNotEmpty && s != 'select_language_subtitle') subtitleText = s;
-        } catch (_) {}
-
         return StatefulBuilder(
-          builder: (context, setSheetState) {
+          builder: (sheetCtx, setSheetState) {
             return PopScope(
               canPop: !isFirstLaunch,
               child: SafeArea(
@@ -236,7 +219,7 @@ class LanguageService {
                               crossAxisAlignment: CrossAxisAlignment.start,
                               children: [
                                 Text(
-                                  titleText,
+                                  'Select Language',
                                   style: TextStyle(
                                     color: textPrimary,
                                     fontSize: 17,
@@ -245,7 +228,7 @@ class LanguageService {
                                 ),
                                 const SizedBox(height: 2),
                                 Text(
-                                  subtitleText,
+                                  'Choose your preferred language',
                                   style: TextStyle(
                                     color: textSecondary,
                                     fontSize: 12,
@@ -263,7 +246,7 @@ class LanguageService {
                       ),
                       const SizedBox(height: 20),
 
-                      // 7 Language Options Grid / List
+                      // 7 Language Options Grid
                       Wrap(
                         spacing: 10,
                         runSpacing: 10,
@@ -276,23 +259,21 @@ class LanguageService {
                                 selectedCode = lang.code;
                               });
 
+                              // 1. Save Preference
                               await saveLanguagePreference(lang.code);
-                              try {
-                                if (modalContext.mounted) {
-                                  await modalContext.setLocale(Locale(lang.code));
-                                }
-                              } catch (_) {}
-                              try {
-                                if (context.mounted) {
-                                  await context.setLocale(Locale(lang.code));
-                                }
-                              } catch (_) {}
-                              if (onLanguageChanged != null) {
-                                onLanguageChanged();
-                              }
+
+                              // 2. Close bottom sheet
                               if (modalContext.mounted) {
                                 Navigator.pop(modalContext);
                               }
+
+                              // 3. Set locale on main app context
+                              if (context.mounted) {
+                                await context.setLocale(Locale(lang.code));
+                              }
+
+                              // 4. Trigger callback to refresh UI
+                              onLanguageChanged?.call();
                             },
                             borderRadius: BorderRadius.circular(14),
                             child: AnimatedContainer(
