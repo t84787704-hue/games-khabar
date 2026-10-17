@@ -1,6 +1,12 @@
+// ===============================================================================
+// Profile / Settings & Preferences Screen
+// File: lib/screens/profile_screen.dart
+// ===============================================================================
+
 import 'package:flutter/material.dart';
 import 'package:easy_localization/easy_localization.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import '../services/supabase_service.dart';
 import '../utils/admin_security.dart';
 import '../services/theme_service.dart';
@@ -30,10 +36,7 @@ class ProfileScreen extends StatefulWidget {
 }
 
 class _ProfileScreenState extends State<ProfileScreen> {
-  final List<DateTime> _logoTaps = [];
-  final List<DateTime> _versionTaps = [];
-  bool _adminCardRevealed = false;
-  bool _adminOptionUnlocked = false;
+  bool _gamingNewsAlerts = true;
 
   Color get neonGreen => ThemeService.primaryGreen;
   Color get bgDark => ThemeService.bg;
@@ -44,11 +47,29 @@ class _ProfileScreenState extends State<ProfileScreen> {
   Color get textWhite => ThemeService.textPrimary;
   Color get textGray => ThemeService.textSecondary;
 
+  // ✅ Admin access strictly locked to your email
   bool get _isCurrentAdminSafe {
     try {
+      final curEmail = SupabaseService.client.auth.currentUser?.email?.toLowerCase().trim() ?? '';
+      if (curEmail == 'tufailm483@gmail.com') return true;
       return isAdminUser();
     } catch (_) {
       return false;
+    }
+  }
+
+  @override
+  void initState() {
+    super.initState();
+    _loadSettings();
+  }
+
+  Future<void> _loadSettings() async {
+    final prefs = await SharedPreferences.getInstance();
+    if (mounted) {
+      setState(() {
+        _gamingNewsAlerts = prefs.getBool('gaming_news_alerts') ?? true;
+      });
     }
   }
 
@@ -80,98 +101,6 @@ class _ProfileScreenState extends State<ProfileScreen> {
       if (w.isEmpty) return '';
       return w[0].toUpperCase() + w.substring(1);
     }).join(' ');
-  }
-
-  @override
-  void initState() {
-    super.initState();
-    try {
-      if (_isCurrentAdminSafe) {
-        _adminOptionUnlocked = true;
-        _adminCardRevealed = true;
-      }
-    } catch (_) {}
-  }
-
-  void _onLogoTapped() {
-    final now = DateTime.now();
-    _logoTaps.add(now);
-    _logoTaps.removeWhere((t) => now.difference(t).inMilliseconds > 3000);
-
-    if (_logoTaps.length >= 5) {
-      _logoTaps.clear();
-      _revealAdminAccess();
-    } else if (_logoTaps.length >= 2 && !_adminCardRevealed && !isAdminUser()) {
-      ScaffoldMessenger.of(context).hideCurrentSnackBar();
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          backgroundColor: cardDark2,
-          duration: const Duration(milliseconds: 600),
-          content: Text(
-            '${5 - _logoTaps.length} more taps to unlock',
-            style: TextStyle(color: neonGreen, fontSize: 11),
-          ),
-        ),
-      );
-    }
-  }
-
-  void _onVersionTapped() {
-    final now = DateTime.now();
-    _versionTaps.add(now);
-    _versionTaps.removeWhere((t) => now.difference(t).inMilliseconds > 3000);
-
-    if (_versionTaps.length >= 7) {
-      _versionTaps.clear();
-      _revealAdminAccess();
-    } else if (_versionTaps.length >= 3 && !_adminCardRevealed && !isAdminUser()) {
-      ScaffoldMessenger.of(context).hideCurrentSnackBar();
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          backgroundColor: cardDark2,
-          duration: const Duration(milliseconds: 600),
-          content: Text(
-            '${7 - _versionTaps.length} more taps to unlock Admin',
-            style: TextStyle(color: neonGreen, fontSize: 11),
-          ),
-        ),
-      );
-    }
-  }
-
-  void _revealAdminAccess() {
-    if (_adminCardRevealed && _adminOptionUnlocked) return;
-    setState(() {
-      _adminCardRevealed = true;
-      if (isAdminUser()) {
-        _adminOptionUnlocked = true;
-      }
-    });
-
-    ScaffoldMessenger.of(context).hideCurrentSnackBar();
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        backgroundColor: cardDark,
-        behavior: SnackBarBehavior.floating,
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(10),
-          side: BorderSide(color: neonGreen, width: 1.5),
-        ),
-        content: Row(
-          children: [
-            Icon(Icons.lock_open_rounded, color: neonGreen, size: 20),
-            const SizedBox(width: 10),
-            Expanded(
-              child: Text(
-                _safeTr('secret_admin_unlocked', fallback: 'Secret Admin Unlocked'),
-                style: TextStyle(color: textWhite, fontWeight: FontWeight.bold, fontSize: 12),
-              ),
-            ),
-          ],
-        ),
-        duration: const Duration(seconds: 2),
-      ),
-    );
   }
 
   Future<void> _openAdminDashboard() async {
@@ -312,7 +241,6 @@ class _ProfileScreenState extends State<ProfileScreen> {
                   const SizedBox(height: 16),
                   Divider(color: ThemeService.border, height: 1),
 
-                  // Private Profile
                   SwitchListTile(
                     contentPadding: EdgeInsets.zero,
                     activeColor: const Color(0xFF1877F2),
@@ -329,7 +257,6 @@ class _ProfileScreenState extends State<ProfileScreen> {
                   ),
                   Divider(color: ThemeService.border, height: 1),
 
-                  // Show In-Game Name & Game UID
                   SwitchListTile(
                     contentPadding: EdgeInsets.zero,
                     activeColor: const Color(0xFF1877F2),
@@ -346,7 +273,6 @@ class _ProfileScreenState extends State<ProfileScreen> {
                   ),
                   Divider(color: ThemeService.border, height: 1),
 
-                  // Show Match Stats & Wins
                   SwitchListTile(
                     contentPadding: EdgeInsets.zero,
                     activeColor: const Color(0xFF1877F2),
@@ -361,9 +287,8 @@ class _ProfileScreenState extends State<ProfileScreen> {
                     value: showStats,
                     onChanged: (val) => setSheetState(() => showStats = val),
                   ),
-                  Divider(color: ThemeService.border, height: 1),
+                  Divider(color: borderDark, height: 1),
 
-                  // Show Followers List & Count
                   SwitchListTile(
                     contentPadding: EdgeInsets.zero,
                     activeColor: const Color(0xFF1877F2),
@@ -378,9 +303,8 @@ class _ProfileScreenState extends State<ProfileScreen> {
                     value: showFollowers,
                     onChanged: (val) => setSheetState(() => showFollowers = val),
                   ),
-                  Divider(color: ThemeService.border, height: 1),
+                  Divider(color: borderDark, height: 1),
 
-                  // Show Following List & Count
                   SwitchListTile(
                     contentPadding: EdgeInsets.zero,
                     activeColor: const Color(0xFF1877F2),
@@ -395,9 +319,8 @@ class _ProfileScreenState extends State<ProfileScreen> {
                     value: showFollowing,
                     onChanged: (val) => setSheetState(() => showFollowing = val),
                   ),
-                  Divider(color: ThemeService.border, height: 1),
+                  Divider(color: borderDark, height: 1),
 
-                  // Allow Direct Challenges
                   SwitchListTile(
                     contentPadding: EdgeInsets.zero,
                     activeColor: const Color(0xFF1877F2),
@@ -484,7 +407,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
   @override
   Widget build(BuildContext context) {
     final isCurrentAdmin = _isCurrentAdminSafe;
-    final userEmail = AdminSession.adminEmail;
+    final userEmail = SupabaseService.client.auth.currentUser?.email;
 
     String langCode = 'en';
     try {
@@ -570,57 +493,44 @@ class _ProfileScreenState extends State<ProfileScreen> {
             padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 20),
             child: Column(
               children: [
+                // Brand Header with Gamers ID Controller Icon
                 Center(
                   child: Column(
                     children: [
-                      GestureDetector(
-                        onTap: _onLogoTapped,
-                        child: Container(
-                          width: 80,
-                          height: 80,
-                          decoration: BoxDecoration(
-                            color: cardDark,
-                            shape: BoxShape.circle,
-                            border: Border.all(
-                              color: (isCurrentAdmin && _adminOptionUnlocked) ? neonGreen : borderDark,
-                              width: 2,
-                            ),
-                            boxShadow: [
-                              if (isCurrentAdmin && _adminOptionUnlocked)
-                                BoxShadow(
-                                  color: neonGreen.withOpacity(0.25),
-                                  blurRadius: 16,
-                                  spreadRadius: 2,
-                                ),
-                            ],
+                      Container(
+                        width: 80,
+                        height: 80,
+                        decoration: BoxDecoration(
+                          shape: BoxShape.circle,
+                          gradient: const LinearGradient(
+                            colors: [Color(0xFF38BDF8), Color(0xFFFF8A00)],
+                            begin: Alignment.topLeft,
+                            end: Alignment.bottomRight,
                           ),
-                          child: Center(
-                            child: Container(
-                              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-                              decoration: BoxDecoration(
-                                color: neonGreen,
-                                borderRadius: BorderRadius.circular(8),
-                              ),
-                              child: const Text(
-                                'GK',
-                                style: TextStyle(
-                                  color: Color(0xFF05080D),
-                                  fontWeight: FontWeight.w900,
-                                  fontSize: 18,
-                                  letterSpacing: -0.5,
-                                ),
-                              ),
+                          boxShadow: [
+                            BoxShadow(
+                              color: const Color(0xFF38BDF8).withOpacity(0.35),
+                              blurRadius: 16,
+                              spreadRadius: 2,
                             ),
+                          ],
+                        ),
+                        child: const Center(
+                          child: Icon(
+                            Icons.sports_esports_rounded,
+                            color: Colors.white,
+                            size: 40,
                           ),
                         ),
                       ),
                       const SizedBox(height: 10),
                       Text(
-                        'Games Khabar',
+                        'Gamers ID',
                         style: TextStyle(
                           color: textWhite,
                           fontWeight: FontWeight.w900,
-                          fontSize: 18,
+                          fontSize: 20,
+                          letterSpacing: 0.5,
                         ),
                       ),
                       const SizedBox(height: 4),
@@ -782,8 +692,8 @@ class _ProfileScreenState extends State<ProfileScreen> {
                 ),
                 const SizedBox(height: 8),
 
-                // Admin Panel Tile
-                if (isCurrentAdmin || _adminOptionUnlocked) ...[
+                // Admin Panel Tile (Sirf tufailm483@gmail.com ko show hoga)
+                if (isCurrentAdmin) ...[
                   Container(
                     margin: const EdgeInsets.only(bottom: 20),
                     decoration: BoxDecoration(
@@ -810,7 +720,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                         ),
                       ),
                       subtitle: Text(
-                        _safeTr('admin_panel_desc', fallback: 'Manage matches, proofs & news'),
+                        _safeTr('admin_panel_desc', fallback: 'Manage matches, proofs & content'),
                         style: TextStyle(color: textGray, fontSize: 12),
                       ),
                       trailing: Icon(Icons.arrow_forward_ios_rounded, color: neonGreen, size: 16),
@@ -894,7 +804,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                       ),
                       Divider(color: borderDark, height: 1),
 
-                      // Privacy Settings (Directly above Blocked Users)
+                      // Privacy Settings
                       ListTile(
                         leading: Container(
                           padding: const EdgeInsets.all(6),
@@ -971,7 +881,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                       ),
                       Divider(color: borderDark, height: 1),
 
-                      // Gaming News Alerts
+                      // Gaming News Alerts (Functional SharedPreferences Switch)
                       ListTile(
                         leading: Icon(Icons.notifications_active_outlined, color: neonGreen, size: 22),
                         title: Text(
@@ -983,9 +893,15 @@ class _ProfileScreenState extends State<ProfileScreen> {
                           style: TextStyle(color: textGray, fontSize: 12),
                         ),
                         trailing: Switch(
-                          value: true,
+                          value: _gamingNewsAlerts,
                           activeColor: neonGreen,
-                          onChanged: (_) {},
+                          onChanged: (val) async {
+                            setState(() {
+                              _gamingNewsAlerts = val;
+                            });
+                            final prefs = await SharedPreferences.getInstance();
+                            await prefs.setBool('gaming_news_alerts', val);
+                          },
                         ),
                       ),
                       Divider(color: borderDark, height: 1),
@@ -1072,7 +988,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                       ),
                       Divider(color: borderDark, height: 1),
 
-                      // About Us
+                      // About Us (Updated for Gamers ID)
                       ListTile(
                         leading: Icon(Icons.groups_rounded, color: neonGreen, size: 22),
                         title: Text(
@@ -1080,7 +996,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                           style: TextStyle(color: textWhite, fontSize: 14, fontWeight: FontWeight.bold),
                         ),
                         subtitle: Text(
-                          _safeTr('about_us_sub', fallback: 'Learn about Games Khabar'),
+                          _safeTr('about_us_sub', fallback: 'Learn about Gamers ID'),
                           style: TextStyle(color: textGray, fontSize: 12),
                         ),
                         trailing: Icon(Icons.arrow_forward_ios_rounded, color: textGray, size: 14),
@@ -1191,7 +1107,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                       ),
                       Divider(color: borderDark, height: 1),
 
-                      // App Version
+                      // App Version (No secret tap)
                       ListTile(
                         leading: Icon(Icons.info_outline_rounded, color: neonGreen, size: 22),
                         title: Text(
@@ -1206,11 +1122,11 @@ class _ProfileScreenState extends State<ProfileScreen> {
                           'v1.2.0',
                           style: TextStyle(color: GamerTheme.textMuted, fontSize: 13),
                         ),
-                        onTap: _onVersionTapped,
+                        onTap: null,
                       ),
                       Divider(color: borderDark, height: 1),
 
-                      // Log Out (App Version ke foran baad)
+                      // Log Out
                       ListTile(
                         leading: Container(
                           padding: const EdgeInsets.all(6),
@@ -1232,7 +1148,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                       ),
                       Divider(color: borderDark, height: 1),
 
-                      // Delete Account (Bilkul aakhri position par)
+                      // Delete Account
                       ListTile(
                         leading: Container(
                           padding: const EdgeInsets.all(6),
@@ -1262,78 +1178,6 @@ class _ProfileScreenState extends State<ProfileScreen> {
                   ),
                 ),
                 const SizedBox(height: 20),
-
-                // Secret Admin Login Section
-                if (_adminCardRevealed && !isCurrentAdmin) ...[
-                  Container(
-                    margin: const EdgeInsets.only(bottom: 20),
-                    decoration: BoxDecoration(
-                      color: cardDark,
-                      borderRadius: BorderRadius.circular(16),
-                      border: Border.all(
-                        color: neonGreen.withOpacity(0.6),
-                        width: 1.2,
-                      ),
-                    ),
-                    child: ListTile(
-                      leading: Container(
-                        padding: const EdgeInsets.all(8),
-                        decoration: BoxDecoration(
-                          color: neonGreen.withOpacity(0.15),
-                          borderRadius: BorderRadius.circular(8),
-                        ),
-                        child: Icon(Icons.lock_open_rounded, color: neonGreen, size: 20),
-                      ),
-                      title: Row(
-                        children: [
-                          Text(
-                            _safeTr('admin_login', fallback: 'Admin Login'),
-                            style: TextStyle(color: textWhite, fontSize: 14, fontWeight: FontWeight.bold),
-                          ),
-                          const SizedBox(width: 8),
-                          Container(
-                            padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                            decoration: BoxDecoration(
-                              color: neonGreen.withOpacity(0.15),
-                              borderRadius: BorderRadius.circular(4),
-                            ),
-                            child: Text(
-                              _safeTr('unlocked', fallback: 'UNLOCKED'),
-                              style: TextStyle(
-                                color: neonGreen,
-                                fontSize: 9,
-                                fontWeight: FontWeight.w900,
-                              ),
-                            ),
-                          ),
-                        ],
-                      ),
-                      subtitle: Text(
-                        _safeTr('admin_login_sub', fallback: 'Sign in to access admin console'),
-                        style: TextStyle(color: textGray, fontSize: 12),
-                      ),
-                      trailing: IconButton(
-                        icon: Icon(Icons.lock_outline_rounded, color: textGray, size: 18),
-                        onPressed: () {
-                          setState(() => _adminCardRevealed = false);
-                        },
-                      ),
-                      onTap: () {
-                        Navigator.push(
-                          context,
-                          MaterialPageRoute(builder: (_) => const AdminLoginScreen()),
-                        ).then((_) {
-                          setState(() {
-                            if (isAdminUser()) {
-                              _adminOptionUnlocked = true;
-                              _adminCardRevealed = true;
-                            }
-                          });
-                        });
-                      },
-                    ),
-                  ),
-                ],
               ],
             ),
           ),
