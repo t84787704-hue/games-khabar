@@ -1,3 +1,16 @@
+// ===============================================================================
+// EXACT DIFF — Profile / Settings & Preferences Screen
+// -------------------------------------------------------------------------------
+// File: lib/screens/profile_screen.dart
+//
+// 1. ADDED: "Show Followers" & "Show Following" toggles in Privacy Settings.
+// 2. Safe Scrollable Privacy Bottom Sheet (prevents pixel overflow).
+// 3. UserAttributes imported via supabase_flutter properly.
+// 4. RESTORED: Privacy Settings placed above Blocked Users.
+// 5. REORDERED: Log Out after App Version, Delete Account at the bottom.
+// 6. Full Day/Night Mode sync with ThemeService.
+// ===============================================================================
+
 import 'package:flutter/material.dart';
 import 'package:easy_localization/easy_localization.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
@@ -236,6 +249,8 @@ class _ProfileScreenState extends State<ProfileScreen> {
     bool showUid = privacy['show_game_uid'] ?? true;
     bool showStats = privacy['show_match_stats'] ?? true;
     bool allowChallenges = privacy['allow_challenges'] ?? true;
+    bool showFollowers = privacy['show_followers'] ?? true;
+    bool showFollowing = privacy['show_following'] ?? true;
 
     showModalBottomSheet(
       context: context,
@@ -244,176 +259,223 @@ class _ProfileScreenState extends State<ProfileScreen> {
       builder: (ctx) => StatefulBuilder(
         builder: (sheetCtx, setSheetState) {
           return Container(
+            constraints: BoxConstraints(
+              maxHeight: MediaQuery.of(context).size.height * 0.88,
+            ),
             padding: const EdgeInsets.fromLTRB(20, 12, 20, 24),
             decoration: BoxDecoration(
               color: ThemeService.card,
               borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
               border: Border.all(color: ThemeService.border),
             ),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Center(
-                  child: Container(
-                    width: 40,
-                    height: 4,
-                    decoration: BoxDecoration(
-                      color: ThemeService.border,
-                      borderRadius: BorderRadius.circular(2),
-                    ),
-                  ),
-                ),
-                const SizedBox(height: 14),
-                Row(
-                  children: [
-                    Container(
-                      padding: const EdgeInsets.all(8),
+            child: SingleChildScrollView(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Center(
+                    child: Container(
+                      width: 40,
+                      height: 4,
                       decoration: BoxDecoration(
-                        color: const Color(0xFF1877F2).withOpacity(0.15),
-                        borderRadius: BorderRadius.circular(10),
+                        color: ThemeService.border,
+                        borderRadius: BorderRadius.circular(2),
                       ),
-                      child: const Icon(Icons.lock_rounded, color: Color(0xFF1877F2), size: 22),
                     ),
-                    const SizedBox(width: 12),
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            'Privacy Settings',
-                            style: TextStyle(
-                              color: ThemeService.textPrimary,
-                              fontWeight: FontWeight.bold,
-                              fontSize: 16,
+                  ),
+                  const SizedBox(height: 14),
+                  Row(
+                    children: [
+                      Container(
+                        padding: const EdgeInsets.all(8),
+                        decoration: BoxDecoration(
+                          color: const Color(0xFF1877F2).withOpacity(0.15),
+                          borderRadius: BorderRadius.circular(10),
+                        ),
+                        child: const Icon(Icons.lock_rounded, color: Color(0xFF1877F2), size: 22),
+                      ),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              'Privacy Settings',
+                              style: TextStyle(
+                                color: ThemeService.textPrimary,
+                                fontWeight: FontWeight.bold,
+                                fontSize: 16,
+                              ),
                             ),
-                          ),
-                          Text(
-                            'Control what others can see on your profile',
-                            style: TextStyle(color: ThemeService.textSecondary, fontSize: 12),
-                          ),
-                        ],
+                            Text(
+                              'Control what others can see on your profile',
+                              style: TextStyle(color: ThemeService.textSecondary, fontSize: 12),
+                            ),
+                          ],
+                        ),
                       ),
+                    ],
+                  ),
+                  const SizedBox(height: 16),
+                  Divider(color: ThemeService.border, height: 1),
+
+                  // Private Profile
+                  SwitchListTile(
+                    contentPadding: EdgeInsets.zero,
+                    activeColor: const Color(0xFF1877F2),
+                    title: Text(
+                      'Private Profile',
+                      style: TextStyle(color: ThemeService.textPrimary, fontWeight: FontWeight.bold, fontSize: 14),
                     ),
-                  ],
-                ),
-                const SizedBox(height: 16),
-                Divider(color: ThemeService.border, height: 1),
-
-                SwitchListTile(
-                  contentPadding: EdgeInsets.zero,
-                  activeColor: const Color(0xFF1877F2),
-                  title: Text(
-                    'Private Profile',
-                    style: TextStyle(color: ThemeService.textPrimary, fontWeight: FontWeight.bold, fontSize: 14),
-                  ),
-                  subtitle: Text(
-                    'Only your followers/team members can view your full profile',
-                    style: TextStyle(color: ThemeService.textSecondary, fontSize: 11.5),
-                  ),
-                  value: isPrivate,
-                  onChanged: (val) => setSheetState(() => isPrivate = val),
-                ),
-                Divider(color: ThemeService.border, height: 1),
-
-                SwitchListTile(
-                  contentPadding: EdgeInsets.zero,
-                  activeColor: const Color(0xFF1877F2),
-                  title: Text(
-                    'Show In-Game Name & Game UID',
-                    style: TextStyle(color: ThemeService.textPrimary, fontWeight: FontWeight.bold, fontSize: 14),
-                  ),
-                  subtitle: Text(
-                    'Allow other players to copy your official game character ID',
-                    style: TextStyle(color: ThemeService.textSecondary, fontSize: 11.5),
-                  ),
-                  value: showUid,
-                  onChanged: (val) => setSheetState(() => showUid = val),
-                ),
-                Divider(color: ThemeService.border, height: 1),
-
-                SwitchListTile(
-                  contentPadding: EdgeInsets.zero,
-                  activeColor: const Color(0xFF1877F2),
-                  title: Text(
-                    'Show Match Stats & Wins',
-                    style: TextStyle(color: ThemeService.textPrimary, fontWeight: FontWeight.bold, fontSize: 14),
-                  ),
-                  subtitle: Text(
-                    'Display your tournament wins, win rate, and room history',
-                    style: TextStyle(color: ThemeService.textSecondary, fontSize: 11.5),
-                  ),
-                  value: showStats,
-                  onChanged: (val) => setSheetState(() => showStats = val),
-                ),
-                Divider(color: ThemeService.border, height: 1),
-
-                SwitchListTile(
-                  contentPadding: EdgeInsets.zero,
-                  activeColor: const Color(0xFF1877F2),
-                  title: Text(
-                    'Allow Direct Challenges',
-                    style: TextStyle(color: ThemeService.textPrimary, fontWeight: FontWeight.bold, fontSize: 14),
-                  ),
-                  subtitle: Text(
-                    'Allow other gamers and teams to challenge you in 1v1 matches',
-                    style: TextStyle(color: ThemeService.textSecondary, fontSize: 11.5),
-                  ),
-                  value: allowChallenges,
-                  onChanged: (val) => setSheetState(() => allowChallenges = val),
-                ),
-                const SizedBox(height: 18),
-
-                SizedBox(
-                  width: double.infinity,
-                  child: ElevatedButton(
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: const Color(0xFF1877F2),
-                      foregroundColor: Colors.white,
-                      padding: const EdgeInsets.symmetric(vertical: 12),
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                    subtitle: Text(
+                      'Only your followers/team members can view your full profile',
+                      style: TextStyle(color: ThemeService.textSecondary, fontSize: 11.5),
                     ),
-                    onPressed: () async {
-                      Navigator.pop(ctx);
-                      final updated = {
-                        'is_private': isPrivate,
-                        'show_game_uid': showUid,
-                        'show_match_stats': showStats,
-                        'allow_challenges': allowChallenges,
-                      };
-                      try {
-                        await SupabaseService.client.auth.updateUser(
-                          UserAttributes(
-                            data: {
-                              ...meta,
-                              'privacy_settings': updated,
-                            },
-                          ),
-                        );
-                        final curUid = user?.id;
-                        if (curUid != null) {
-                          await SupabaseService.client.from('users').update({
-                            'is_private': isPrivate,
-                          }).or('id.eq.$curUid,uid.eq.$curUid');
+                    value: isPrivate,
+                    onChanged: (val) => setSheetState(() => isPrivate = val),
+                  ),
+                  Divider(color: ThemeService.border, height: 1),
+
+                  // Show In-Game Name & Game UID
+                  SwitchListTile(
+                    contentPadding: EdgeInsets.zero,
+                    activeColor: const Color(0xFF1877F2),
+                    title: Text(
+                      'Show In-Game Name & Game UID',
+                      style: TextStyle(color: ThemeService.textPrimary, fontWeight: FontWeight.bold, fontSize: 14),
+                    ),
+                    subtitle: Text(
+                      'Allow other players to copy your official game character ID',
+                      style: TextStyle(color: ThemeService.textSecondary, fontSize: 11.5),
+                    ),
+                    value: showUid,
+                    onChanged: (val) => setSheetState(() => showUid = val),
+                  ),
+                  Divider(color: ThemeService.border, height: 1),
+
+                  // Show Match Stats & Wins
+                  SwitchListTile(
+                    contentPadding: EdgeInsets.zero,
+                    activeColor: const Color(0xFF1877F2),
+                    title: Text(
+                      'Show Match Stats & Wins',
+                      style: TextStyle(color: ThemeService.textPrimary, fontWeight: FontWeight.bold, fontSize: 14),
+                    ),
+                    subtitle: Text(
+                      'Display your tournament wins, win rate, and room history',
+                      style: TextStyle(color: ThemeService.textSecondary, fontSize: 11.5),
+                    ),
+                    value: showStats,
+                    onChanged: (val) => setSheetState(() => showStats = val),
+                  ),
+                  Divider(color: ThemeService.border, height: 1),
+
+                  // Show Followers List & Count
+                  SwitchListTile(
+                    contentPadding: EdgeInsets.zero,
+                    activeColor: const Color(0xFF1877F2),
+                    title: Text(
+                      'Show Followers List & Count',
+                      style: TextStyle(color: ThemeService.textPrimary, fontWeight: FontWeight.bold, fontSize: 14),
+                    ),
+                    subtitle: Text(
+                      'Allow other gamers to see who follows your Gamer ID',
+                      style: TextStyle(color: ThemeService.textSecondary, fontSize: 11.5),
+                    ),
+                    value: showFollowers,
+                    onChanged: (val) => setSheetState(() => showFollowers = val),
+                  ),
+                  Divider(color: ThemeService.border, height: 1),
+
+                  // Show Following List & Count
+                  SwitchListTile(
+                    contentPadding: EdgeInsets.zero,
+                    activeColor: const Color(0xFF1877F2),
+                    title: Text(
+                      'Show Following List & Count',
+                      style: TextStyle(color: ThemeService.textPrimary, fontWeight: FontWeight.bold, fontSize: 14),
+                    ),
+                    subtitle: Text(
+                      'Allow other gamers to see who you are following',
+                      style: TextStyle(color: ThemeService.textSecondary, fontSize: 11.5),
+                    ),
+                    value: showFollowing,
+                    onChanged: (val) => setSheetState(() => showFollowing = val),
+                  ),
+                  Divider(color: ThemeService.border, height: 1),
+
+                  // Allow Direct Challenges
+                  SwitchListTile(
+                    contentPadding: EdgeInsets.zero,
+                    activeColor: const Color(0xFF1877F2),
+                    title: Text(
+                      'Allow Direct Challenges',
+                      style: TextStyle(color: ThemeService.textPrimary, fontWeight: FontWeight.bold, fontSize: 14),
+                    ),
+                    subtitle: Text(
+                      'Allow other gamers and teams to challenge you in 1v1 matches',
+                      style: TextStyle(color: ThemeService.textSecondary, fontSize: 11.5),
+                    ),
+                    value: allowChallenges,
+                    onChanged: (val) => setSheetState(() => allowChallenges = val),
+                  ),
+                  const SizedBox(height: 18),
+
+                  SizedBox(
+                    width: double.infinity,
+                    child: ElevatedButton(
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: const Color(0xFF1877F2),
+                        foregroundColor: Colors.white,
+                        padding: const EdgeInsets.symmetric(vertical: 12),
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                      ),
+                      onPressed: () async {
+                        Navigator.pop(ctx);
+                        final updated = {
+                          'is_private': isPrivate,
+                          'show_game_uid': showUid,
+                          'show_match_stats': showStats,
+                          'allow_challenges': allowChallenges,
+                          'show_followers': showFollowers,
+                          'show_following': showFollowing,
+                        };
+                        try {
+                          await SupabaseService.client.auth.updateUser(
+                            UserAttributes(
+                              data: {
+                                ...meta,
+                                'privacy_settings': updated,
+                              },
+                            ),
+                          );
+                          final curUid = user?.id;
+                          if (curUid != null) {
+                            await SupabaseService.client.from('users').update({
+                              'is_private': isPrivate,
+                              'show_followers': showFollowers,
+                              'show_following': showFollowing,
+                            }).or('id.eq.$curUid,uid.eq.$curUid');
+                          }
+                        } catch (e) {
+                          debugPrint('Error updating privacy settings: $e');
                         }
-                      } catch (e) {
-                        debugPrint('Error updating privacy settings: $e');
-                      }
 
-                      if (mounted) {
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          const SnackBar(
-                            content: Text('✅ Privacy Settings updated successfully!'),
-                            backgroundColor: Color(0xFF00FF88),
-                            behavior: SnackBarBehavior.floating,
-                          ),
-                        );
-                      }
-                    },
-                    child: const Text('Save Settings', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14)),
+                        if (mounted) {
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            const SnackBar(
+                              content: Text('✅ Privacy Settings updated successfully!'),
+                              backgroundColor: Color(0xFF00FF88),
+                              behavior: SnackBarBehavior.floating,
+                            ),
+                          );
+                        }
+                      },
+                      child: const Text('Save Settings', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14)),
+                    ),
                   ),
-                ),
-              ],
+                ],
+              ),
             ),
           );
         },
