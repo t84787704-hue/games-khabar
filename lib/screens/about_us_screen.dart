@@ -41,20 +41,23 @@ class AboutUsScreen extends StatelessWidget {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                // Logo & Brand Header
+                // 1. Logo & Brand Header (Gamers ID Controller Icon)
                 Center(
                   child: Column(
                     children: [
                       Container(
-                        width: 76,
-                        height: 76,
+                        width: 82,
+                        height: 82,
                         decoration: BoxDecoration(
-                          color: cardDark,
                           shape: BoxShape.circle,
-                          border: Border.all(color: primaryGreen, width: 2),
+                          gradient: const LinearGradient(
+                            colors: [Color(0xFF38BDF8), Color(0xFFFF8A00)],
+                            begin: Alignment.topLeft,
+                            end: Alignment.bottomRight,
+                          ),
                           boxShadow: [
                             BoxShadow(
-                              color: primaryGreen.withOpacity(0.2),
+                              color: const Color(0xFF38BDF8).withOpacity(0.3),
                               blurRadius: 16,
                               spreadRadius: 2,
                             ),
@@ -62,18 +65,21 @@ class AboutUsScreen extends StatelessWidget {
                         ),
                         child: Center(
                           child: Container(
-                            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-                            decoration: BoxDecoration(
-                              color: primaryGreen,
-                              borderRadius: BorderRadius.circular(8),
+                            width: 74,
+                            height: 74,
+                            decoration: const BoxDecoration(
+                              shape: BoxShape.circle,
+                              gradient: LinearGradient(
+                                colors: [Color(0xFF38BDF8), Color(0xFFFF8A00)],
+                                begin: Alignment.topLeft,
+                                end: Alignment.bottomRight,
+                              ),
                             ),
-                            child: const Text(
-                              'GK',
-                              style: TextStyle(
-                                color: Color(0xFF05080D),
-                                fontWeight: FontWeight.w900,
-                                fontSize: 18,
-                                letterSpacing: -0.5,
+                            child: const Center(
+                              child: Icon(
+                                Icons.sports_esports_rounded,
+                                color: Colors.white,
+                                size: 40,
                               ),
                             ),
                           ),
@@ -81,16 +87,17 @@ class AboutUsScreen extends StatelessWidget {
                       ),
                       const SizedBox(height: 12),
                       Text(
-                        'Games Khabar',
+                        'Gamers ID',
                         style: TextStyle(
                           color: textWhite,
                           fontWeight: FontWeight.w900,
                           fontSize: 22,
+                          letterSpacing: 0.5,
                         ),
                       ),
                       const SizedBox(height: 4),
                       Text(
-                        'Your Ultimate Gaming & Esports News Hub',
+                        'Your Ultimate Gaming & Esports Community Hub',
                         style: TextStyle(
                           color: primaryGreen,
                           fontSize: 13,
@@ -102,7 +109,7 @@ class AboutUsScreen extends StatelessWidget {
                 ),
                 const SizedBox(height: 28),
 
-                // Mission Statement
+                // 2. Mission Statement
                 Container(
                   padding: const EdgeInsets.all(18),
                   decoration: BoxDecoration(
@@ -111,7 +118,7 @@ class AboutUsScreen extends StatelessWidget {
                     border: Border.all(color: borderDark),
                   ),
                   child: Text(
-                    'Games Khabar is dedicated to bringing passionate gamers the fastest, most reliable, and up-to-date gaming news, tournament coverage, daily reward codes, and patch updates in one unified, modern experience.',
+                    'Gamers ID is dedicated to bringing passionate gamers the ultimate competitive platform — create custom rooms, challenge opponents in 1v1 and squad battles, verify in-game ranks, connect with teammates, and get real-time tournament updates in one unified, modern experience.',
                     style: TextStyle(
                       color: textWhite,
                       fontSize: 14,
@@ -122,7 +129,7 @@ class AboutUsScreen extends StatelessWidget {
                 const SizedBox(height: 24),
 
                 Text(
-                  'What We Cover',
+                  'What We Cover & Support',
                   style: TextStyle(
                     color: textWhite,
                     fontSize: 16,
@@ -133,33 +140,38 @@ class AboutUsScreen extends StatelessWidget {
 
                 _buildGameCategoryCard(
                   icon: Icons.sports_esports_rounded,
+                  iconColor: const Color(0xFF38BDF8),
                   title: 'BGMI & PUBG Mobile',
-                  description: 'Latest updates, royal pass leaks, esports tournaments, and pro player news.',
+                  description: 'Custom rooms, Erangel & TDM tournaments, rank verification, and pro player updates.',
                 ),
                 _buildGameCategoryCard(
                   icon: Icons.local_fire_department_rounded,
+                  iconColor: const Color(0xFFFF5252),
                   title: 'Free Fire & Free Fire MAX',
-                  description: 'Daily reward codes, OB updates, gun skin releases, and event rewards.',
+                  description: 'Clash Squad rooms, tournament prize matches, redeem codes, and guild battles.',
                 ),
                 _buildGameCategoryCard(
                   icon: Icons.military_tech_rounded,
+                  iconColor: const Color(0xFFFFD700),
                   title: 'Call of Duty (COD & Warzone Mobile)',
-                  description: 'Season battle passes, meta loadouts, patch notes, and esports scene.',
+                  description: 'Multiplayer custom matches, meta loadouts, battle passes, and competitive leagues.',
                 ),
                 _buildGameCategoryCard(
                   icon: Icons.shield_rounded,
+                  iconColor: const Color(0xFF00FF88),
                   title: 'Valorant & PC Gaming',
-                  description: 'VCT tournament matches, agent tier lists, skin bundles, and tactical guides.',
+                  description: 'Tactical team finder, competitive scrims, esports rankings, and match results.',
                 ),
                 _buildGameCategoryCard(
-                  icon: Icons.confirmation_number_rounded,
-                  title: 'Daily Promo Codes & Free Rewards',
-                  description: 'Verified active promo codes and giveaways updated every single day.',
+                  icon: Icons.workspace_premium_rounded,
+                  iconColor: const Color(0xFFFFA000),
+                  title: 'Custom Challenges & G-Coins',
+                  description: 'Host custom room challenges, earn G-Coins, climb leaderboards, and get verified blue tick.',
                 ),
 
                 const SizedBox(height: 20),
 
-                // Footer note
+                // 3. Footer note
                 Container(
                   width: double.infinity,
                   padding: const EdgeInsets.all(16),
@@ -180,7 +192,7 @@ class AboutUsScreen extends StatelessWidget {
                       ),
                       const SizedBox(height: 6),
                       Text(
-                        'Stay connected for 24/7 gaming updates.',
+                        'Gamers ID Network • 24/7 Competitive Gaming Platform',
                         style: TextStyle(color: textGray, fontSize: 12),
                       ),
                     ],
@@ -197,6 +209,7 @@ class AboutUsScreen extends StatelessWidget {
 
   Widget _buildGameCategoryCard({
     required IconData icon,
+    required Color iconColor,
     required String title,
     required String description,
   }) {
@@ -214,10 +227,10 @@ class AboutUsScreen extends StatelessWidget {
           Container(
             padding: const EdgeInsets.all(10),
             decoration: BoxDecoration(
-              color: primaryGreen.withOpacity(0.15),
+              color: iconColor.withOpacity(0.15),
               borderRadius: BorderRadius.circular(10),
             ),
-            child: Icon(icon, color: primaryGreen, size: 22),
+            child: Icon(icon, color: iconColor, size: 22),
           ),
           const SizedBox(width: 14),
           Expanded(
