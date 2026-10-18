@@ -107,5 +107,10 @@
   "yesterday": "گزشتہ کل",
   "yesterday_at": "گزشتہ کل {}",
   "say_hi_start_chat": "بات چیت شروع کرنے کے لیے سلام کہیں",
-  "message_input_hint": "پیغام لکھیں..."
+  "message_input_hint": "پیغام لکھیں...",
+  "nav_feed": "فیڈ",
+  "nav_teams": "ٹیمیں",
+  "nav_messages": "پیغامات",
+  "nav_rooms": "رومز",
+  "nav_admin": "ایڈمن"
 }

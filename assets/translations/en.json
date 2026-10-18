@@ -107,5 +107,11 @@
   "yesterday": "Yesterday",
   "yesterday_at": "Yesterday {}",
   "say_hi_start_chat": "Say hi to start the conversation",
-  "message_input_hint": "Message..."
+  "message_input_hint": "Message...",
+  "nav_feed": "Feed",
+  "nav_teams": "Teams",
+  "nav_messages": "Messages",
+  "nav_rooms": "Rooms",
+  "nav_profile": "Profile",
+  "nav_admin": "Admin"
 }

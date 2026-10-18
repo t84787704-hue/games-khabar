@@ -105,5 +105,12 @@
   "yesterday": "Kal",
   "yesterday_at": "Kal {}",
   "say_hi_start_chat": "Chat shuru karne ke liye hi kahein",
-  "message_input_hint": "Message..."
+  "message_input_hint": "Message...",
+  "follow_us": "Humein Follow Karein",
+  "follow_us_sub": "Hamare social channels par juray rahein",
+  "nav_feed": "Feed",
+  "nav_teams": "Teams",
+  "nav_messages": "Messages",
+  "nav_rooms": "Rooms",
+  "nav_admin": "Admin"
 }

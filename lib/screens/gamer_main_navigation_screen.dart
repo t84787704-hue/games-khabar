@@ -5,6 +5,7 @@
 
 import 'dart:async';
 import 'package:flutter/material.dart';
+import 'package:easy_localization/easy_localization.dart' hide TextDirection;
 import '../constants/gamer_theme.dart';
 import '../services/gamer_auth_service.dart';
 import '../services/supabase_service.dart';
@@ -147,35 +148,35 @@ class _GamerMainNavigationScreenState extends State<GamerMainNavigationScreen> {
                         _buildNavItem(
                           index: 0,
                           icon: Icons.home_rounded,
-                          label: LanguageService.t('Feed'),
+                          label: 'nav_feed'.tr(),
                           isSelected: _currentIndex == 0,
                           isDark: isDark,
                         ),
                         _buildNavItem(
                           index: 1,
                           icon: Icons.shield_rounded,
-                          label: LanguageService.t('Teams'),
+                          label: 'nav_teams'.tr(),
                           isSelected: _currentIndex == 1,
                           isDark: isDark,
                         ),
                         _buildNavItem(
                           index: 2,
                           icon: Icons.chat_bubble_rounded,
-                          label: LanguageService.t('Messages'),
+                          label: 'nav_messages'.tr(),
                           isSelected: _currentIndex == 2,
                           isDark: isDark,
                         ),
                         _buildNavItem(
                           index: 3,
                           icon: Icons.military_tech_rounded,
-                          label: LanguageService.t('Rooms'),
+                          label: 'nav_rooms'.tr(),
                           isSelected: _currentIndex == 3,
                           isDark: isDark,
                         ),
                         _buildNavItem(
                           index: 4,
                           icon: Icons.person_rounded,
-                          label: LanguageService.t('Profile'),
+                          label: 'nav_profile'.tr(),
                           isSelected: _currentIndex == 4,
                           isDark: isDark,
                         ),
@@ -183,7 +184,7 @@ class _GamerMainNavigationScreenState extends State<GamerMainNavigationScreen> {
                           _buildNavItem(
                             index: 5,
                             icon: Icons.admin_panel_settings_rounded,
-                            label: LanguageService.t('Admin'),
+                            label: 'nav_admin'.tr(),
                             isSelected: _currentIndex == 5,
                             activeColor: const Color(0xFF1877F2),
                             isDark: isDark,

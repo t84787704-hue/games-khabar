@@ -105,5 +105,12 @@
   "yesterday": "कल",
   "yesterday_at": "कल {}",
   "say_hi_start_chat": "बातचीत शुरू करने के लिए नमस्ते कहें",
-  "message_input_hint": "संदेश लिखें..."
+  "message_input_hint": "संदेश लिखें...",
+  "follow_us": "हमें फॉलो करें",
+  "follow_us_sub": "हमारे सोशल चैनलों पर जुड़े रहें",
+  "nav_feed": "फ़ीड",
+  "nav_teams": "टीमें",
+  "nav_messages": "संदेश",
+  "nav_rooms": "कमरे",
+  "nav_admin": "व्यवस्थापक"
 }

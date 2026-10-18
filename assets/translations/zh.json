@@ -105,5 +105,12 @@
   "yesterday": "昨天",
   "yesterday_at": "昨天 {}",
   "say_hi_start_chat": "打个招呼开始对话",
-  "message_input_hint": "消息..."
+  "message_input_hint": "消息...",
+  "follow_us": "关注我们",
+  "follow_us_sub": "通过我们的社交渠道保持联系",
+  "nav_feed": "动态",
+  "nav_teams": "战队",
+  "nav_messages": "消息",
+  "nav_rooms": "房间",
+  "nav_admin": "管理"
 }

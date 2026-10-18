@@ -105,5 +105,12 @@
   "yesterday": "গতকাল",
   "yesterday_at": "গতকাল {}",
   "say_hi_start_chat": "কথোপকথন শুরু করতে হাই বলুন",
-  "message_input_hint": "বার্তা..."
+  "message_input_hint": "বার্তা...",
+  "follow_us": "আমাদের অনুসরণ করুন",
+  "follow_us_sub": "আমাদের সোশ্যাল চ্যানেলের মাধ্যমে সংযুক্ত থাকুন",
+  "nav_feed": "ফিড",
+  "nav_teams": "দলসমূহ",
+  "nav_messages": "বার্তা",
+  "nav_rooms": "রুম",
+  "nav_admin": "অ্যাডমিন"
 }

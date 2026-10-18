@@ -105,5 +105,12 @@
   "yesterday": "أمس",
   "yesterday_at": "أمس {}",
   "say_hi_start_chat": "قل مرحبًا لبدء المحادثة",
-  "message_input_hint": "رسالة..."
+  "message_input_hint": "رسالة...",
+  "follow_us": "تابعنا",
+  "follow_us_sub": "ابق على اتصال عبر قنوات التواصل الاجتماعي الخاصة بنا",
+  "nav_feed": "الرئيسية",
+  "nav_teams": "الفرق",
+  "nav_messages": "الرسائل",
+  "nav_rooms": "الغرف",
+  "nav_admin": "المشرف"
 }
