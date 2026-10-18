@@ -325,7 +325,7 @@ class GamerRoomsScreen extends StatefulWidget {
             const SizedBox(width: 8),
             Expanded(
               child: Text(
-                '$gameName ID Details',
+                '$gameName آئی ڈی کی تفصیلات',
                 style: TextStyle(fontWeight: FontWeight.bold, fontSize: 17, color: ThemeService.textPrimary),
               ),
             ),
@@ -337,7 +337,7 @@ class GamerRoomsScreen extends StatefulWidget {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Text(
-                'Enter your official $gameName details. This will be automatically saved for all future $gameName matches.',
+                'اپنی آفیشل $gameName کی تفصیلات درج کریں۔ یہ مستقبل کے تمام $gameName میچوں کے لیے خود بخود محفوظ ہو جائے گی۔',
                 style: TextStyle(fontSize: 12, color: ThemeService.textSecondary),
               ),
               const SizedBox(height: 14),
@@ -345,9 +345,9 @@ class GamerRoomsScreen extends StatefulWidget {
                 controller: ignController,
                 style: TextStyle(color: ThemeService.textPrimary),
                 decoration: InputDecoration(
-                  labelText: 'In-Game Name (IGN)',
+                  labelText: 'ان-گেম نام (IGN)',
                   labelStyle: TextStyle(color: ThemeService.textSecondary),
-                  hintText: 'e.g. Sniper_King',
+                  hintText: 'مثلاً Sniper_King',
                   hintStyle: TextStyle(color: ThemeService.textSecondary.withOpacity(0.6)),
                   prefixIcon: Icon(Icons.badge_outlined, size: 20, color: ThemeService.textSecondary),
                   filled: true,
@@ -365,9 +365,9 @@ class GamerRoomsScreen extends StatefulWidget {
                 keyboardType: TextInputType.text,
                 style: TextStyle(color: ThemeService.textPrimary),
                 decoration: InputDecoration(
-                  labelText: 'Character ID / Game UID',
+                  labelText: 'کریکٹر آئی ڈی / گیم UID',
                   labelStyle: TextStyle(color: ThemeService.textSecondary),
-                  hintText: 'e.g. 5123456789',
+                  hintText: 'مثلاً 5123456789',
                   hintStyle: TextStyle(color: ThemeService.textSecondary.withOpacity(0.6)),
                   prefixIcon: Icon(Icons.tag, size: 20, color: ThemeService.textSecondary),
                   filled: true,
@@ -385,7 +385,7 @@ class GamerRoomsScreen extends StatefulWidget {
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(ctx, null),
-            child: const Text('Cancel', style: TextStyle(color: Colors.grey)),
+            child: const Text('منسوخ', style: TextStyle(color: Colors.grey)),
           ),
           ElevatedButton(
             style: ElevatedButton.styleFrom(
@@ -397,7 +397,7 @@ class GamerRoomsScreen extends StatefulWidget {
               final uid = uidController.text.trim();
               if (ign.isEmpty || uid.isEmpty) {
                 ScaffoldMessenger.of(ctx).showSnackBar(
-                  const SnackBar(content: Text('Please fill both In-Game Name & UID')),
+                  const SnackBar(content: Text('براہ کرم In-Game Name اور UID دونوں درج کریں')),
                 );
                 return;
               }
@@ -432,7 +432,7 @@ class GamerRoomsScreen extends StatefulWidget {
                 Navigator.pop(ctx, {'ign': ign, 'game_uid': uid});
               }
             },
-            child: const Text('Save & Continue', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+            child: const Text('محفوظ کریں اور جاری رکھیں', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
           ),
         ],
       ),
@@ -537,7 +537,7 @@ class _GamerRoomsScreenState extends State<GamerRoomsScreen> {
   Future<void> _handleCreateRoomTap() async {
     if (currentUserId == 'guest') {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Please log in to create a room')),
+        const SnackBar(content: Text('روم بنانے کے لیے براہ کرم لاگ ان کریں')),
       );
       return;
     }
@@ -597,7 +597,7 @@ class _GamerRoomsScreenState extends State<GamerRoomsScreen> {
                 const SizedBox(width: 8),
                 Expanded(
                   child: Text(
-                    'Room Limit Reached (Max 2)',
+                    'روم کی حد پوری ہو گئی (زیادہ سے زیادہ 2)',
                     style: TextStyle(
                       color: ThemeService.textPrimary,
                       fontWeight: FontWeight.bold,
@@ -608,7 +608,7 @@ class _GamerRoomsScreenState extends State<GamerRoomsScreen> {
               ],
             ),
             content: Text(
-              'Aap ek waqt mein sirf 2 rooms bana sakte hain.\n\nJab aapke rooms ka result proof verify hone ke baad winner banner show hoga aur 5 minutes baad room auto-delete hoga, tabhi aap naya room bana sakein ge.',
+              'آپ ایک وقت میں صرف 2 رومز بنا سکتے ہیں۔\n\nجب آپ کے رومز کا رزلٹ پروف تصدیق ہونے کے بعد ونر بینر شو ہوگا اور 5 منٹ بعد روم آٹو ڈیلیٹ ہوگا، تبھی آپ نیا روم بنا سکیں گے۔',
               style: TextStyle(color: ThemeService.textSecondary, fontSize: 13, height: 1.4),
             ),
             actions: [
@@ -618,7 +618,7 @@ class _GamerRoomsScreenState extends State<GamerRoomsScreen> {
                   shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
                 ),
                 onPressed: () => Navigator.pop(ctx),
-                child: const Text('Theek Hai', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+                child: const Text('ٹھیک ہے', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
               ),
             ],
           ),
@@ -630,7 +630,7 @@ class _GamerRoomsScreenState extends State<GamerRoomsScreen> {
       if (mounted) {
         MatchRulesDialog.show(
           context,
-          title: 'Custom Room Creation Rules',
+          title: 'کسٹم روم بنانے کے اصول',
           onProceed: () {
             if (mounted) _showCreateRoomDialog();
           },
@@ -641,7 +641,7 @@ class _GamerRoomsScreenState extends State<GamerRoomsScreen> {
       if (mounted) {
         MatchRulesDialog.show(
           context,
-          title: 'Custom Room Creation Rules',
+          title: 'کسٹم روم بنانے کے اصول',
           onProceed: () {
             if (mounted) _showCreateRoomDialog();
           },
@@ -677,7 +677,7 @@ class _GamerRoomsScreenState extends State<GamerRoomsScreen> {
             backgroundColor: ThemeService.appBarBg,
             elevation: 0.5,
             title: Text(
-              'Rooms',
+              'رومز',
               style: TextStyle(
                 color: ThemeService.textPrimary,
                 fontWeight: FontWeight.bold,
@@ -744,7 +744,7 @@ class _GamerRoomsScreenState extends State<GamerRoomsScreen> {
                     if (filtered.isEmpty) {
                       return Center(
                         child: Text(
-                          'No active rooms found. Tap + to create one!',
+                          'کوئی فعال روم نہیں ملا۔ نیا روم بنانے کے لیے + پر ٹیپ کریں!',
                           style: TextStyle(color: ThemeService.textSecondary),
                         ),
                       );
@@ -788,7 +788,7 @@ class _GamerRoomsScreenState extends State<GamerRoomsScreen> {
                                       const SizedBox(width: 6),
                                       Expanded(
                                         child: Text(
-                                          'WINNER: ${room.winnerName ?? "Champion"} (Closes in 5m)',
+                                          'فاتح: ${room.winnerName ?? "چیمپئن"} (5 منٹ میں بند ہوگا)',
                                           style: const TextStyle(
                                             color: Colors.black87,
                                             fontWeight: FontWeight.w900,
@@ -820,7 +820,7 @@ class _GamerRoomsScreenState extends State<GamerRoomsScreen> {
                                   ),
                                 ),
                                 subtitle: Text(
-                                  'Host: ${room.hostName} • ${room.mode}',
+                                  'ہوسٹ: ${room.hostName} • ${room.mode}',
                                   style: TextStyle(color: ThemeService.textSecondary, fontSize: 12),
                                 ),
                                 trailing: Column(
@@ -828,7 +828,7 @@ class _GamerRoomsScreenState extends State<GamerRoomsScreen> {
                                   crossAxisAlignment: CrossAxisAlignment.end,
                                   children: [
                                     Text(
-                                      '🏆 ${room.prizePool} Coins',
+                                      '🏆 ${room.prizePool} کوائنز',
                                       style: const TextStyle(
                                         fontWeight: FontWeight.bold,
                                         color: Colors.orange,
@@ -836,7 +836,7 @@ class _GamerRoomsScreenState extends State<GamerRoomsScreen> {
                                     ),
                                     const SizedBox(height: 4),
                                     Text(
-                                      '${room.filledSlots}/${room.totalSlots} Players',
+                                      '${room.filledSlots}/${room.totalSlots} کھلاڑی',
                                       style: TextStyle(fontSize: 11, color: ThemeService.textSecondary),
                                     ),
                                   ],
@@ -880,7 +880,7 @@ class _GamerRoomsScreenState extends State<GamerRoomsScreen> {
           backgroundColor: ThemeService.card,
           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
           title: Text(
-            'Create Game Room',
+            'گیم روم بنائیں',
             style: TextStyle(fontWeight: FontWeight.bold, color: ThemeService.textPrimary),
           ),
           content: SingleChildScrollView(
@@ -891,7 +891,7 @@ class _GamerRoomsScreenState extends State<GamerRoomsScreen> {
                   controller: gameCtrl,
                   style: TextStyle(color: ThemeService.textPrimary),
                   decoration: InputDecoration(
-                    labelText: 'Game',
+                    labelText: 'گیم',
                     labelStyle: TextStyle(color: ThemeService.textSecondary),
                   ),
                 ),
@@ -899,7 +899,7 @@ class _GamerRoomsScreenState extends State<GamerRoomsScreen> {
                   controller: modeCtrl,
                   style: TextStyle(color: ThemeService.textPrimary),
                   decoration: InputDecoration(
-                    labelText: 'Map / Mode',
+                    labelText: 'م্যাপ / موڈ',
                     labelStyle: TextStyle(color: ThemeService.textSecondary),
                   ),
                 ),
@@ -908,7 +908,7 @@ class _GamerRoomsScreenState extends State<GamerRoomsScreen> {
                   dropdownColor: ThemeService.card,
                   style: TextStyle(color: ThemeService.textPrimary),
                   decoration: InputDecoration(
-                    labelText: 'Match Format / Slots',
+                    labelText: 'میچ فارمیٹ / سلاٹس',
                     labelStyle: TextStyle(color: ThemeService.textSecondary),
                   ),
                   items: formatOptions.keys.map((format) {
@@ -930,7 +930,7 @@ class _GamerRoomsScreenState extends State<GamerRoomsScreen> {
                   controller: roomIdCtrl,
                   style: TextStyle(color: ThemeService.textPrimary),
                   decoration: InputDecoration(
-                    labelText: 'Room ID',
+                    labelText: 'روم آئی ڈی',
                     labelStyle: TextStyle(color: ThemeService.textSecondary),
                   ),
                 ),
@@ -938,7 +938,7 @@ class _GamerRoomsScreenState extends State<GamerRoomsScreen> {
                   controller: passCtrl,
                   style: TextStyle(color: ThemeService.textPrimary),
                   decoration: InputDecoration(
-                    labelText: 'Password',
+                    labelText: 'پاس ورڈ',
                     labelStyle: TextStyle(color: ThemeService.textSecondary),
                   ),
                 ),
@@ -947,7 +947,7 @@ class _GamerRoomsScreenState extends State<GamerRoomsScreen> {
                   keyboardType: TextInputType.number,
                   style: TextStyle(color: ThemeService.textPrimary),
                   decoration: InputDecoration(
-                    labelText: 'Prize Pool (Coins)',
+                    labelText: 'پرائز پول (کوائنز)',
                     labelStyle: TextStyle(color: ThemeService.textSecondary),
                   ),
                 ),
@@ -957,7 +957,7 @@ class _GamerRoomsScreenState extends State<GamerRoomsScreen> {
           actions: [
             TextButton(
               onPressed: isCreating ? null : () => Navigator.pop(ctx),
-              child: const Text('Cancel', style: TextStyle(color: Colors.grey)),
+              child: const Text('منسوخ', style: TextStyle(color: Colors.grey)),
             ),
             ElevatedButton(
               style: ElevatedButton.styleFrom(
@@ -993,7 +993,7 @@ class _GamerRoomsScreenState extends State<GamerRoomsScreen> {
                           if (mounted) {
                             ScaffoldMessenger.of(context).showSnackBar(
                               const SnackBar(
-                                content: Text('⚠️ Maximum 2 rooms allowed! Purane room delete hone ka intezar karein.'),
+                                content: Text('⚠️ زیادہ سے زیادہ 2 رومز کی اجازت ہے! پرانے رومز ڈیلیট ہونے کا انتظار کریں۔'),
                                 backgroundColor: Colors.red,
                               ),
                             );
@@ -1053,7 +1053,7 @@ class _GamerRoomsScreenState extends State<GamerRoomsScreen> {
                         if (mounted) {
                           ScaffoldMessenger.of(context).showSnackBar(
                             const SnackBar(
-                              content: Text('✅ Game Room successfully create ho gaya!'),
+                              content: Text('✅ گیم روم کامیابی کے ساتھ بن گیا!'),
                               backgroundColor: Color(0xFF00FF88),
                             ),
                           );
@@ -1064,7 +1064,7 @@ class _GamerRoomsScreenState extends State<GamerRoomsScreen> {
                         if (mounted) {
                           ScaffoldMessenger.of(context).showSnackBar(
                             SnackBar(
-                              content: Text('Error creating room: $e'),
+                              content: Text('روم بنانے میں خرابی: $e'),
                               backgroundColor: Colors.red,
                             ),
                           );
@@ -1077,7 +1077,7 @@ class _GamerRoomsScreenState extends State<GamerRoomsScreen> {
                       height: 18,
                       child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
                     )
-                  : const Text('Create', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+                  : const Text('بنائیں', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
             ),
           ],
         ),
@@ -1124,7 +1124,7 @@ class _RoomDetailsSheetState extends State<_RoomDetailsSheet> {
   void _showRulesDialog() {
     MatchRulesDialog.show(
       context,
-      title: 'Tournament & Verification Rules',
+      title: 'ٹورنامنٹ اور تصدیق کے اصول',
       onProceed: () {},
     );
   }
@@ -1160,7 +1160,7 @@ class _RoomDetailsSheetState extends State<_RoomDetailsSheet> {
         if (mounted) {
           Navigator.of(context).pop();
           ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('Match finished. Room auto-deleted.')),
+            const SnackBar(content: Text('میچ ختم ہو گیا۔ روم آٹو ڈیلیفت ہو گیا۔')),
           );
         }
       });
@@ -1181,7 +1181,7 @@ class _RoomDetailsSheetState extends State<_RoomDetailsSheet> {
         if (mounted) {
           Navigator.of(context).pop();
           ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('Match finished. Room auto-deleted.')),
+            const SnackBar(content: Text('میچ ختم ہو گیا۔ روم آٹو ڈیلیट ہو گیا۔')),
           );
         }
       } else {
@@ -1194,7 +1194,7 @@ class _RoomDetailsSheetState extends State<_RoomDetailsSheet> {
     if (_isJoining) return;
     if (room.isFull) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Room is already full!')),
+        const SnackBar(content: Text('روم پہلے ہی بھر چکا ہے!')),
       );
       return;
     }
@@ -1238,7 +1238,7 @@ class _RoomDetailsSheetState extends State<_RoomDetailsSheet> {
         'room_id': widget.roomId,
         'sender_id': 'system',
         'sender_name': 'ROOM BOT',
-        'message': '👋 ${widget.currentUserName} ($myIgn) joined the match!',
+        'message': '👋 ${widget.currentUserName} ($myIgn) میچ میں شامل ہو گیا!',
         'type': 'system',
         'created_at': DateTime.now().toUtc().toIso8601String(),
       });
@@ -1246,7 +1246,7 @@ class _RoomDetailsSheetState extends State<_RoomDetailsSheet> {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
-            content: Text('✅ Successfully joined room!'),
+            content: Text('✅ کامیابی کے ساتھ روم جوائن کر لیا!'),
             backgroundColor: Colors.green,
           ),
         );
@@ -1254,7 +1254,7 @@ class _RoomDetailsSheetState extends State<_RoomDetailsSheet> {
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Error joining room: $e'), backgroundColor: Colors.red),
+          SnackBar(content: Text('روم جوائن کرنے میں خرابی: $e'), backgroundColor: Colors.red),
         );
       }
     } finally {
@@ -1297,7 +1297,7 @@ class _RoomDetailsSheetState extends State<_RoomDetailsSheet> {
         'room_id': widget.roomId,
         'sender_id': 'system',
         'sender_name': 'ROOM BOT',
-        'message': '📸 ${widget.currentUserName} uploaded win proof! Waiting for admin approval.',
+        'message': '📸 ${widget.currentUserName} نے جیت کا ثبوت اپلوڈ کر دیا! ایڈمن کی منظوری کا انتظار ہے۔',
         'type': 'system',
         'created_at': DateTime.now().toUtc().toIso8601String(),
       });
@@ -1305,7 +1305,7 @@ class _RoomDetailsSheetState extends State<_RoomDetailsSheet> {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
-            content: Text('Screenshot submitted! Admin will verify soon.'),
+            content: Text('اسکرین شاٹ جمع ہو گیا! ایڈمن جلد تصدیق کرے گا۔'),
             backgroundColor: Colors.green,
           ),
         );
@@ -1313,7 +1313,7 @@ class _RoomDetailsSheetState extends State<_RoomDetailsSheet> {
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Upload failed: $e'), backgroundColor: Colors.red),
+          SnackBar(content: Text('اپলোড ناکام ہو گیا: $e'), backgroundColor: Colors.red),
         );
       }
     } finally {
@@ -1327,17 +1327,17 @@ class _RoomDetailsSheetState extends State<_RoomDetailsSheet> {
       context: context,
       builder: (ctx) => AlertDialog(
         backgroundColor: ThemeService.card,
-        title: Text('Raise Dispute / Report Issue', style: TextStyle(color: ThemeService.textPrimary)),
+        title: Text('تنازعہ اٹھائیں / مسئلہ رپورٹ کریں', style: TextStyle(color: ThemeService.textPrimary)),
         content: TextField(
           controller: reasonCtrl,
           style: TextStyle(color: ThemeService.textPrimary),
           decoration: InputDecoration(
-            hintText: 'Enter reason for dispute...',
+            hintText: 'تنازعے کی وجہ درج کریں...',
             hintStyle: TextStyle(color: ThemeService.textSecondary),
           ),
         ),
         actions: [
-          TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Cancel')),
+          TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('منسوخ')),
           ElevatedButton(
             style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
             onPressed: () async {
@@ -1358,12 +1358,12 @@ class _RoomDetailsSheetState extends State<_RoomDetailsSheet> {
                 'room_id': widget.roomId,
                 'sender_id': 'system',
                 'sender_name': 'DISPUTE BOT',
-                'message': '⚠️ Dispute raised by ${widget.currentUserName}: "$reason". Admin will review.',
+                'message': '⚠️ ${widget.currentUserName} کی طرف سے تنازعہ اٹھایا گیا: "$reason"۔ ایڈمن جائزہ لے گا۔',
                 'type': 'system_dispute',
                 'created_at': DateTime.now().toUtc().toIso8601String(),
               });
             },
-            child: const Text('Submit Dispute', style: TextStyle(color: Colors.white)),
+            child: const Text('تنازعہ جمع کریں', style: TextStyle(color: Colors.white)),
           ),
         ],
       ),
@@ -1447,7 +1447,7 @@ class _RoomDetailsSheetState extends State<_RoomDetailsSheet> {
                           ),
                         ),
                         Text(
-                          'Host: ${room.hostName} • ${room.mode}',
+                          'ہوسٹ: ${room.hostName} • ${room.mode}',
                           style: TextStyle(color: ThemeService.textSecondary, fontSize: 12),
                         ),
                       ],
@@ -1468,11 +1468,11 @@ class _RoomDetailsSheetState extends State<_RoomDetailsSheet> {
                       .where((u) => (u['id'] ?? '').toString() != (room.winnerId ?? ''))
                       .map((u) {
                         final ign = u['ign']?.toString() ?? '';
-                        final name = u['name']?.toString() ?? 'Player';
+                        final name = u['name']?.toString() ?? 'کھلاڑی';
                         return ign.isNotEmpty ? '$name ($ign)' : name;
                       })
                       .toList();
-                  final vsText = opponents.isNotEmpty ? opponents.join(', ') : 'Opponent';
+                  final vsText = opponents.isNotEmpty ? opponents.join(', ') : 'مخالف';
 
                   return Container(
                     width: double.infinity,
@@ -1502,7 +1502,7 @@ class _RoomDetailsSheetState extends State<_RoomDetailsSheet> {
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
                               Text(
-                                'WINNER: ${room.winnerName ?? "Champion"}!',
+                                'فاتح: ${room.winnerName ?? "چیمپئن"}!',
                                 style: const TextStyle(
                                   color: Colors.black87,
                                   fontWeight: FontWeight.w900,
@@ -1511,7 +1511,7 @@ class _RoomDetailsSheetState extends State<_RoomDetailsSheet> {
                               ),
                               const SizedBox(height: 3),
                               Text(
-                                '⚔️ Won against: $vsText',
+                                '⚔️ کس کے خلاف جیتے: $vsText',
                                 style: const TextStyle(
                                   color: Colors.black87,
                                   fontWeight: FontWeight.bold,
@@ -1522,7 +1522,7 @@ class _RoomDetailsSheetState extends State<_RoomDetailsSheet> {
                               ),
                               const SizedBox(height: 3),
                               Text(
-                                'Prize: ${room.prizePool} Coins • Room closes in: $timeStr',
+                                'انعام: ${room.prizePool} کوائنز • روم بند ہونے میں باقی وقت: $timeStr',
                                 style: TextStyle(
                                   color: Colors.black.withOpacity(0.75),
                                   fontWeight: FontWeight.w600,
@@ -1550,7 +1550,7 @@ class _RoomDetailsSheetState extends State<_RoomDetailsSheet> {
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       const Text(
-                        '⚠️ MATCH DISPUTED — ESCALATED TO ADMIN',
+                        '⚠️ میچ متنازعہ ہے — ایڈمن کو بھیج دیا گیا',
                         style: TextStyle(
                           color: Colors.red,
                           fontWeight: FontWeight.bold,
@@ -1559,7 +1559,7 @@ class _RoomDetailsSheetState extends State<_RoomDetailsSheet> {
                       ),
                       if (room.disputeReason != null)
                         Text(
-                          'Reason: ${room.disputeReason}',
+                          'وجہ: ${room.disputeReason}',
                           style: TextStyle(color: ThemeService.textPrimary, fontSize: 12),
                         ),
                     ],
@@ -1582,7 +1582,7 @@ class _RoomDetailsSheetState extends State<_RoomDetailsSheet> {
                       SizedBox(width: 8),
                       Expanded(
                         child: Text(
-                          '❌ Proof Rejected! Barah-e-karam durust screenshot dobara upload karein.',
+                          '❌ ثبوت مسترد کر دیا گیا! براہ-کرم درست اسکرین شاٹ دوبارہ اپلوڈ کریں۔',
                           style: TextStyle(
                             color: Colors.red,
                             fontWeight: FontWeight.bold,
@@ -1610,7 +1610,7 @@ class _RoomDetailsSheetState extends State<_RoomDetailsSheet> {
                       SizedBox(width: 8),
                       Expanded(
                         child: Text(
-                          'Match Finished! Winner proof under admin review ⏳',
+                          'میچ ختم ہو گیا! ونر کا ثبوت ایڈمن کے پاس زیرِ جائزہ ہے ⏳',
                           style: TextStyle(
                             color: Colors.deepOrange,
                             fontWeight: FontWeight.bold,
@@ -1643,7 +1643,7 @@ class _RoomDetailsSheetState extends State<_RoomDetailsSheet> {
                             const Icon(Icons.key, color: Colors.amber, size: 16),
                             const SizedBox(width: 6),
                             Text(
-                              'ROOM CREDENTIALS',
+                              'روم کریڈینشلز (ڈیٹا)',
                               style: TextStyle(
                                 color: isDark ? const Color(0xFFFDE68A) : const Color(0xFF92400E),
                                 fontWeight: FontWeight.bold,
@@ -1665,7 +1665,7 @@ class _RoomDetailsSheetState extends State<_RoomDetailsSheet> {
                               children: [
                                 const Text('📜 ', style: TextStyle(fontSize: 11)),
                                 Text(
-                                  'Rules',
+                                  'اصول',
                                   style: TextStyle(
                                     color: isDark ? const Color(0xFFFDE68A) : const Color(0xFF92400E),
                                     fontWeight: FontWeight.bold,
@@ -1683,7 +1683,7 @@ class _RoomDetailsSheetState extends State<_RoomDetailsSheet> {
                       mainAxisAlignment: MainAxisAlignment.spaceBetween,
                       children: [
                         Text(
-                          'ROOM ID\n${room.roomId}',
+                          'روم آئی ڈی\n${room.roomId}',
                           style: TextStyle(
                             fontWeight: FontWeight.bold,
                             fontSize: 14,
@@ -1695,7 +1695,7 @@ class _RoomDetailsSheetState extends State<_RoomDetailsSheet> {
                           onPressed: () {
                             Clipboard.setData(ClipboardData(text: room.roomId));
                             ScaffoldMessenger.of(context).showSnackBar(
-                              const SnackBar(content: Text('Room ID copied!')),
+                              const SnackBar(content: Text('روم آئی ڈی کاپی ہو گئی!')),
                             );
                           },
                         ),
@@ -1706,7 +1706,7 @@ class _RoomDetailsSheetState extends State<_RoomDetailsSheet> {
                       mainAxisAlignment: MainAxisAlignment.spaceBetween,
                       children: [
                         Text(
-                          'PASSWORD\n${room.roomPassword}',
+                          'پاس ورڈ\n${room.roomPassword}',
                           style: TextStyle(
                             fontWeight: FontWeight.bold,
                             fontSize: 14,
@@ -1718,7 +1718,7 @@ class _RoomDetailsSheetState extends State<_RoomDetailsSheet> {
                           onPressed: () {
                             Clipboard.setData(ClipboardData(text: room.roomPassword));
                             ScaffoldMessenger.of(context).showSnackBar(
-                              const SnackBar(content: Text('Password copied!')),
+                              const SnackBar(content: Text('پاس ورڈ کاپی ہو گیا!')),
                             );
                           },
                         ),
@@ -1745,7 +1745,7 @@ class _RoomDetailsSheetState extends State<_RoomDetailsSheet> {
                         const Icon(Icons.group, size: 16, color: Color(0xFF1877F2)),
                         const SizedBox(width: 6),
                         Text(
-                          'PLAYERS (${room.joinedUsers.length}/${room.totalSlots})',
+                          'کھلاڑی (${room.joinedUsers.length}/${room.totalSlots})',
                           style: TextStyle(
                             fontWeight: FontWeight.bold,
                             fontSize: 12,
@@ -1757,7 +1757,7 @@ class _RoomDetailsSheetState extends State<_RoomDetailsSheet> {
                     const SizedBox(height: 6),
                     ...room.joinedUsers.map((user) {
                       final uId = (user['id'] ?? '').toString();
-                      final uName = (user['name'] ?? 'Player').toString();
+                      final uName = (user['name'] ?? 'کھلاڑی').toString();
                       final uAvatar = (user['avatar'] ?? '').toString();
                       final ign = user['ign']?.toString() ?? user['in_game_name']?.toString();
                       final gameUid = user['game_uid']?.toString() ?? user['character_id']?.toString();
@@ -1804,7 +1804,7 @@ class _RoomDetailsSheetState extends State<_RoomDetailsSheet> {
                                             color: const Color(0xFFFFB300),
                                             borderRadius: BorderRadius.circular(4),
                                           ),
-                                          child: const Text('🏆 WINNER',
+                                          child: const Text('🏆 فاتح',
                                               style: TextStyle(
                                                   color: Colors.black87,
                                                   fontSize: 9,
@@ -1819,7 +1819,7 @@ class _RoomDetailsSheetState extends State<_RoomDetailsSheet> {
                                             borderRadius: BorderRadius.circular(4),
                                             border: Border.all(color: Colors.red, width: 0.8),
                                           ),
-                                          child: const Text('DEFEATED',
+                                          child: const Text('شکست خوردہ',
                                               style: TextStyle(
                                                   color: Colors.red,
                                                   fontSize: 9,
@@ -1833,7 +1833,7 @@ class _RoomDetailsSheetState extends State<_RoomDetailsSheet> {
                                             color: Colors.blue.withOpacity(0.15),
                                             borderRadius: BorderRadius.circular(4),
                                           ),
-                                          child: const Text('HOST',
+                                          child: const Text('ہوسٹ',
                                               style: TextStyle(
                                                   color: Colors.blue,
                                                   fontSize: 9,
@@ -1848,7 +1848,7 @@ class _RoomDetailsSheetState extends State<_RoomDetailsSheet> {
                                             color: Colors.green,
                                             borderRadius: BorderRadius.circular(4),
                                           ),
-                                          child: const Text('YOU',
+                                          child: const Text('آپ',
                                               style: TextStyle(
                                                   color: Colors.white,
                                                   fontSize: 9,
@@ -1882,7 +1882,7 @@ class _RoomDetailsSheetState extends State<_RoomDetailsSheet> {
                                             Clipboard.setData(ClipboardData(text: gameUid));
                                             ScaffoldMessenger.of(context).showSnackBar(
                                               SnackBar(
-                                                content: Text('Copied Game UID: $gameUid'),
+                                                content: Text('گیم UID کاپی ہو گئی: $gameUid'),
                                                 duration: const Duration(seconds: 1),
                                               ),
                                             );
@@ -1922,7 +1922,7 @@ class _RoomDetailsSheetState extends State<_RoomDetailsSheet> {
                       itemBuilder: (context, idx) {
                         final m = msgs[idx];
                         final isSys = m['type'] != 'chat';
-                        final sender = m['sender_name'] ?? 'Player';
+                        final sender = m['sender_name'] ?? 'کھلاڑی';
                         final txt = m['message'] ?? '';
 
                         if (isSys) {
@@ -1994,7 +1994,7 @@ class _RoomDetailsSheetState extends State<_RoomDetailsSheet> {
                         controller: _msgController,
                         style: TextStyle(color: ThemeService.textPrimary),
                         decoration: InputDecoration(
-                          hintText: 'Type a message...',
+                          hintText: 'کوئی پیغام لکھیں...',
                           hintStyle: TextStyle(color: ThemeService.textSecondary),
                           contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
                           filled: true,
@@ -2037,7 +2037,7 @@ class _RoomDetailsSheetState extends State<_RoomDetailsSheet> {
                               )
                             : const Icon(Icons.login, size: 20),
                         label: Text(
-                          _isJoining ? 'Joining Match...' : 'JOIN MATCH (${room.filledSlots}/${room.totalSlots})',
+                          _isJoining ? 'شامل ہو رہے ہیں...' : 'میچ جوائن کریں (${room.filledSlots}/${room.totalSlots})',
                           style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
                         ),
                         onPressed: _isJoining
@@ -2045,7 +2045,7 @@ class _RoomDetailsSheetState extends State<_RoomDetailsSheet> {
                             : () {
                                 MatchRulesDialog.show(
                                   context,
-                                  title: 'Match Rules (${room.title})',
+                                  title: 'میچ کے اصول (${room.title})',
                                   onProceed: () => _joinMatch(room),
                                 );
                               },
@@ -2085,12 +2085,12 @@ class _RoomDetailsSheetState extends State<_RoomDetailsSheet> {
                                   ),
                             label: Text(
                               _isUploadingProof
-                                  ? 'Uploading...'
+                                  ? 'اپলোড ہو رہا ہے...'
                                   : (room.isRejected
-                                      ? 'Re-upload Proof 🔄'
+                                      ? 'ثبوت دوبارہ اپلوڈ کریں 🔄'
                                       : (room.isProofSubmitted
-                                          ? 'Proof Submitted ⏳ (Tap to Change)'
-                                          : 'End Match (I Won)')),
+                                          ? 'ثبوت جمع ہو چکا ⏳ (تبدیل کرنے کے لیے ٹیپ کریں)'
+                                          : 'میچ ختم کریں (میں جیت گیا)')),
                               style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13),
                             ),
                             onPressed: _isUploadingProof ? null : _uploadWinScreenshot,
@@ -2105,7 +2105,7 @@ class _RoomDetailsSheetState extends State<_RoomDetailsSheet> {
                       padding: const EdgeInsets.only(bottom: 8),
                       child: TextButton.icon(
                         icon: const Icon(Icons.warning_amber_rounded, size: 16, color: Colors.grey),
-                        label: const Text('Raise Dispute / Report Issue',
+                        label: const Text('تنازعہ اٹھائیں / مسئلہ رپورٹ کریں',
                             style: TextStyle(color: Colors.grey, fontSize: 12)),
                         onPressed: _raiseDisputeDialog,
                       ),
