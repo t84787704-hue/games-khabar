@@ -47,7 +47,6 @@ class _ProfileScreenState extends State<ProfileScreen> {
   Color get textWhite => ThemeService.textPrimary;
   Color get textGray => ThemeService.textSecondary;
 
-  // ✅ Admin access strictly locked to your email
   bool get _isCurrentAdminSafe {
     try {
       final curEmail = SupabaseService.client.auth.currentUser?.email?.toLowerCase().trim() ?? '';
@@ -472,7 +471,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                           const Text('🪙', style: TextStyle(fontSize: 13)),
                           const SizedBox(width: 4),
                           Text(
-                            'G-Coins: $coins',
+                            _safeTr('g_coins_count', fallback: 'G-Coins: $coins', args: ['$coins']),
                             style: const TextStyle(
                               color: Color(0xFFFFD700),
                               fontWeight: FontWeight.w900,
@@ -493,7 +492,6 @@ class _ProfileScreenState extends State<ProfileScreen> {
             padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 20),
             child: Column(
               children: [
-                // Brand Header with Gamers ID Controller Icon
                 Center(
                   child: Column(
                     children: [
@@ -567,7 +565,6 @@ class _ProfileScreenState extends State<ProfileScreen> {
                 ),
                 const SizedBox(height: 20),
 
-                // Blue Tick Verification Card
                 ValueListenableBuilder<GamerUser?>(
                   valueListenable: GamerAuthService().currentGamerNotifier,
                   builder: (context, gamer, _) {
@@ -692,7 +689,6 @@ class _ProfileScreenState extends State<ProfileScreen> {
                 ),
                 const SizedBox(height: 8),
 
-                // Admin Panel Tile (Sirf tufailm483@gmail.com ko show hoga)
                 if (isCurrentAdmin) ...[
                   Container(
                     margin: const EdgeInsets.only(bottom: 20),
@@ -729,7 +725,6 @@ class _ProfileScreenState extends State<ProfileScreen> {
                   ),
                 ],
 
-                // Settings Card
                 Container(
                   decoration: BoxDecoration(
                     color: cardDark,
@@ -738,7 +733,6 @@ class _ProfileScreenState extends State<ProfileScreen> {
                   ),
                   child: Column(
                     children: [
-                      // App Language
                       ListTile(
                         leading: Container(
                           padding: const EdgeInsets.all(6),
@@ -778,7 +772,6 @@ class _ProfileScreenState extends State<ProfileScreen> {
                       ),
                       Divider(color: borderDark, height: 1),
 
-                      // Coin History & Passbook
                       ListTile(
                         leading: Container(
                           padding: const EdgeInsets.all(6),
@@ -791,8 +784,10 @@ class _ProfileScreenState extends State<ProfileScreen> {
                         title: Text(
                           _safeTr('coin_history_passbook', fallback: 'Coin History & Passbook'),
                           style: TextStyle(color: textWhite, fontSize: 14, fontWeight: FontWeight.bold),
-                       
-                          
+                        ),
+                        subtitle: Text(
+                          _safeTr('coin_history_sub', fallback: 'When coins were added or deducted and reason'),
+                          style: TextStyle(color: textGray, fontSize: 12),
                         ),
                         trailing: Icon(Icons.arrow_forward_ios_rounded, color: textGray, size: 14),
                         onTap: () {
@@ -802,7 +797,6 @@ class _ProfileScreenState extends State<ProfileScreen> {
                       ),
                       Divider(color: borderDark, height: 1),
 
-                      // Privacy Settings
                       ListTile(
                         leading: Container(
                           padding: const EdgeInsets.all(6),
@@ -825,7 +819,6 @@ class _ProfileScreenState extends State<ProfileScreen> {
                       ),
                       Divider(color: borderDark, height: 1),
 
-                      // Blocked Users
                       ListTile(
                         leading: Container(
                           padding: const EdgeInsets.all(6),
@@ -852,7 +845,6 @@ class _ProfileScreenState extends State<ProfileScreen> {
                       ),
                       Divider(color: borderDark, height: 1),
 
-                      // Saved Posts & News
                       ListTile(
                         leading: Container(
                           padding: const EdgeInsets.all(6),
@@ -879,7 +871,6 @@ class _ProfileScreenState extends State<ProfileScreen> {
                       ),
                       Divider(color: borderDark, height: 1),
 
-                      // Gaming News Alerts (Functional SharedPreferences Switch)
                       ListTile(
                         leading: Icon(Icons.notifications_active_outlined, color: neonGreen, size: 22),
                         title: Text(
@@ -904,7 +895,6 @@ class _ProfileScreenState extends State<ProfileScreen> {
                       ),
                       Divider(color: borderDark, height: 1),
 
-                      // Day / Night Theme Mode
                       ValueListenableBuilder<ThemeMode>(
                         valueListenable: ThemeService.themeModeNotifier,
                         builder: (context, mode, _) {
@@ -937,12 +927,15 @@ class _ProfileScreenState extends State<ProfileScreen> {
                       ),
                       Divider(color: borderDark, height: 1),
 
-                      // Clear Image Cache
                       ListTile(
                         leading: Icon(Icons.cleaning_services_rounded, color: neonGreen, size: 22),
                         title: Text(
                           _safeTr('clear_cache', fallback: 'Clear Cache'),
                           style: TextStyle(color: textWhite, fontSize: 14, fontWeight: FontWeight.bold),
+                        ),
+                        subtitle: Text(
+                          _safeTr('clear_cache_sub', fallback: 'Free up local image storage space'),
+                          style: TextStyle(color: textGray, fontSize: 12),
                         ),
                         trailing: Icon(Icons.arrow_forward_ios_rounded, color: textGray, size: 14),
                         onTap: () {
@@ -959,7 +952,6 @@ class _ProfileScreenState extends State<ProfileScreen> {
                       ),
                       Divider(color: borderDark, height: 1),
 
-                      // Download My Data
                       ListTile(
                         leading: Container(
                           padding: const EdgeInsets.all(6),
@@ -986,7 +978,6 @@ class _ProfileScreenState extends State<ProfileScreen> {
                       ),
                       Divider(color: borderDark, height: 1),
 
-                      // About Us (Updated for Gamers ID)
                       ListTile(
                         leading: Icon(Icons.groups_rounded, color: neonGreen, size: 22),
                         title: Text(
@@ -1007,7 +998,6 @@ class _ProfileScreenState extends State<ProfileScreen> {
                       ),
                       Divider(color: borderDark, height: 1),
 
-                      // Contact Us
                       ListTile(
                         leading: Icon(Icons.support_agent_rounded, color: neonGreen, size: 22),
                         title: Text(
@@ -1028,7 +1018,6 @@ class _ProfileScreenState extends State<ProfileScreen> {
                       ),
                       Divider(color: borderDark, height: 1),
 
-                      // Follow Us
                       ListTile(
                         leading: Icon(Icons.share_rounded, color: neonGreen, size: 22),
                         title: Text(
@@ -1049,7 +1038,6 @@ class _ProfileScreenState extends State<ProfileScreen> {
                       ),
                       Divider(color: borderDark, height: 1),
 
-                      // Privacy Policy
                       ListTile(
                         leading: Container(
                           padding: const EdgeInsets.all(6),
@@ -1077,7 +1065,6 @@ class _ProfileScreenState extends State<ProfileScreen> {
                       ),
                       Divider(color: borderDark, height: 1),
 
-                      // Terms of Service
                       ListTile(
                         leading: Container(
                           padding: const EdgeInsets.all(6),
@@ -1105,7 +1092,6 @@ class _ProfileScreenState extends State<ProfileScreen> {
                       ),
                       Divider(color: borderDark, height: 1),
 
-                      // App Version (No secret tap)
                       ListTile(
                         leading: Icon(Icons.info_outline_rounded, color: neonGreen, size: 22),
                         title: Text(
@@ -1124,7 +1110,6 @@ class _ProfileScreenState extends State<ProfileScreen> {
                       ),
                       Divider(color: borderDark, height: 1),
 
-                      // Log Out
                       ListTile(
                         leading: Container(
                           padding: const EdgeInsets.all(6),
@@ -1146,7 +1131,6 @@ class _ProfileScreenState extends State<ProfileScreen> {
                       ),
                       Divider(color: borderDark, height: 1),
 
-                      // Delete Account
                       ListTile(
                         leading: Container(
                           padding: const EdgeInsets.all(6),
