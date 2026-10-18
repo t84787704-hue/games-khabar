@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:easy_localization/easy_localization.dart';
 import '../services/coin_reward_service.dart';
 import '../services/theme_service.dart';
 
@@ -32,7 +33,7 @@ class EarnScreen extends StatelessWidget {
             const Text('🪙', style: TextStyle(fontSize: 20)),
             const SizedBox(width: 8),
             Text(
-              'Earn GK Coins',
+              'earn_gk_coins'.tr(),
               style: TextStyle(
                 color: textWhite,
                 fontWeight: FontWeight.w900,
@@ -72,7 +73,7 @@ class EarnScreen extends StatelessWidget {
               child: Column(
                 children: [
                   Text(
-                    'TOTAL COIN BALANCE',
+                    'total_coin_balance'.tr(),
                     style: TextStyle(
                       color: neonGreen,
                       fontSize: 11,
@@ -118,7 +119,7 @@ class EarnScreen extends StatelessWidget {
                       border: Border.all(color: borderDark),
                     ),
                     child: Text(
-                      'Har roz app istemal karein aur free coins kamayein!',
+                      'earn_sub_tip'.tr(),
                       textAlign: TextAlign.center,
                       style: TextStyle(color: textGray, fontSize: 12, fontWeight: FontWeight.w500),
                     ),
@@ -142,7 +143,7 @@ class EarnScreen extends StatelessWidget {
                 ),
                 const SizedBox(width: 8),
                 Text(
-                  'Daily Activities & Rewards',
+                  'daily_activities_rewards'.tr(),
                   style: TextStyle(
                     color: textWhite,
                     fontWeight: FontWeight.w900,
@@ -154,7 +155,7 @@ class EarnScreen extends StatelessWidget {
             ),
             const SizedBox(height: 6),
             Text(
-              'Niche di gayi activities complete karein aur foran coins paayein.',
+              'daily_activities_sub'.tr(),
               style: TextStyle(color: textGray, fontSize: 12),
             ),
 
@@ -167,15 +168,15 @@ class EarnScreen extends StatelessWidget {
                 return _buildTaskCard(
                   context: context,
                   emoji: '📅',
-                  title: 'Daily Login',
-                  rewardText: '+20 Coins',
-                  description: 'Har roz app open karne par 20 coins milte hain.',
+                  title: 'task_daily_login'.tr(),
+                  rewardText: 'reward_20_coins'.tr(),
+                  description: 'task_daily_login_desc'.tr(),
                   statusBadge: isClaimed
-                      ? _buildBadge('Completed ✓', neonGreen, Colors.black)
+                      ? _buildBadge('status_completed'.tr(), neonGreen, Colors.black)
                       : InkWell(
                           onTap: () => coinService.checkDailyLogin(context),
                           borderRadius: BorderRadius.circular(8),
-                          child: _buildBadge('Claim Now', gold, const Color(0xFF0D121B)),
+                          child: _buildBadge('btn_claim_now'.tr(), gold, const Color(0xFF0D121B)),
                         ),
                   progressWidget: null,
                 );
@@ -192,12 +193,12 @@ class EarnScreen extends StatelessWidget {
                 return _buildTaskCard(
                   context: context,
                   emoji: '📰',
-                  title: 'Read News',
-                  rewardText: '+10 Coins / News',
-                  description: 'Gaming news parhein aur mazeed updates jaanien (Max 5 articles).',
+                  title: 'task_read_news'.tr(),
+                  rewardText: 'reward_10_coins_news'.tr(),
+                  description: 'task_read_news_desc'.tr(),
                   statusBadge: count >= 5
-                      ? _buildBadge('5 / 5 Done ✓', neonGreen, Colors.black)
-                      : _buildBadge('$count / 5 Today', const Color(0xFF4A90E2), Colors.white),
+                      ? _buildBadge('status_done_check'.tr(args: ['5 / 5']), neonGreen, Colors.black)
+                      : _buildBadge('status_count_today'.tr(args: ['$count', '5']), const Color(0xFF4A90E2), Colors.white),
                   progressWidget: ClipRRect(
                     borderRadius: BorderRadius.circular(4),
                     child: LinearProgressIndicator(
@@ -221,12 +222,12 @@ class EarnScreen extends StatelessWidget {
                 return _buildTaskCard(
                   context: context,
                   emoji: '✍️',
-                  title: 'Create Post',
-                  rewardText: '+20 Coins / Post',
-                  description: 'Community Wall par squad ID ya tip share karein (>20 characters, Max 3 per day).',
+                  title: 'task_create_post'.tr(),
+                  rewardText: 'reward_20_coins_post'.tr(),
+                  description: 'task_create_post_desc'.tr(),
                   statusBadge: count >= 3
-                      ? _buildBadge('3 / 3 Done ✓', neonGreen, Colors.black)
-                      : _buildBadge('$count / 3 Today', const Color(0xFFFF9800), Colors.white),
+                      ? _buildBadge('status_done_check'.tr(args: ['3 / 3']), neonGreen, Colors.black)
+                      : _buildBadge('status_count_today'.tr(args: ['$count', '3']), const Color(0xFFFF9800), Colors.white),
                   progressWidget: ClipRRect(
                     borderRadius: BorderRadius.circular(4),
                     child: LinearProgressIndicator(
@@ -246,10 +247,10 @@ class EarnScreen extends StatelessWidget {
             _buildTaskCard(
               context: context,
               emoji: '💡',
-              title: 'Helpful Received',
-              rewardText: '+5 Coins / Vote',
-              description: 'Jab dusre gamers aapke community post ya tip ko "Helpful" mark karein.',
-              statusBadge: _buildBadge('Community Perk', gold, const Color(0xFF0D121B)),
+              title: 'task_helpful_received'.tr(),
+              rewardText: 'reward_5_coins_vote'.tr(),
+              description: 'task_helpful_desc'.tr(),
+              statusBadge: _buildBadge('badge_community_perk'.tr(), gold, const Color(0xFF0D121B)),
               progressWidget: null,
             ),
 
@@ -271,7 +272,7 @@ class EarnScreen extends StatelessWidget {
                       const Icon(Icons.card_giftcard_rounded, color: Colors.amber, size: 20),
                       const SizedBox(width: 8),
                       Text(
-                        'Coins Se Kya Milta Hai?',
+                        'perks_title'.tr(),
                         style: TextStyle(
                           color: textWhite,
                           fontWeight: FontWeight.bold,
@@ -281,11 +282,11 @@ class EarnScreen extends StatelessWidget {
                     ],
                   ),
                   const SizedBox(height: 10),
-                  _buildPerkItem('🎁 Weekly Pro Gamer Pass & Epic Badges Giveaway'),
+                  _buildPerkItem('perk_giveaway'.tr()),
                   const SizedBox(height: 6),
-                  _buildPerkItem('👑 VIP Golden Gamer Badge on Community Wall'),
+                  _buildPerkItem('perk_vip_badge'.tr()),
                   const SizedBox(height: 6),
-                  _buildPerkItem('⚡ Early access to game sales, freebies & price drops'),
+                  _buildPerkItem('perk_early_access'.tr()),
                 ],
               ),
             ),
