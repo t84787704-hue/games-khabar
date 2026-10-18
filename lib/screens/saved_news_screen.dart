@@ -165,13 +165,13 @@ class _SavedNewsScreenState extends State<SavedNewsScreen> {
                 children: [
                   IconButton(
                     icon: Icon(
-                      _isSearching? Icons.close : Icons.search_rounded,
+                      _isSearching ? Icons.close : Icons.search_rounded,
                       color: neonGreen,
                       size: 22,
                     ),
                     onPressed: () {
                       setState(() {
-                        _isSearching =!_isSearching;
+                        _isSearching = !_isSearching;
                         if (!_isSearching) {
                           _searchQuery = '';
                           _searchController.clear();
@@ -196,7 +196,7 @@ class _SavedNewsScreenState extends State<SavedNewsScreen> {
           if (savedList.isEmpty) {
             return _buildEmptyState();
           }
-          final categories = ['All',...savedList.map((e) => e.category).toSet()];
+          final categories = ['All', ...savedList.map((e) => e.category).toSet()];
           final langCode = context.locale.languageCode;
           final filtered = savedList.where((item) {
             final matchesCat = _selectedCategory == 'All' ||
@@ -230,7 +230,7 @@ class _SavedNewsScreenState extends State<SavedNewsScreen> {
                       hintStyle: TextStyle(color: textGray, fontSize: 13),
                       prefixIcon: Icon(Icons.search_rounded, color: neonGreen, size: 20),
                       suffixIcon: _searchQuery.isNotEmpty
-                         ? IconButton(
+                          ? IconButton(
                               icon: Icon(Icons.clear, color: textGray, size: 18),
                               onPressed: () {
                                 _searchController.clear();
@@ -270,19 +270,19 @@ class _SavedNewsScreenState extends State<SavedNewsScreen> {
                     itemBuilder: (context, index) {
                       final cat = categories[index];
                       final isSelected = cat == _selectedCategory;
-                      final label = cat == 'All'? 'category_all'.tr() : cat;
+                      final label = cat == 'All' ? 'category_all'.tr() : cat;
                       return ChoiceChip(
                         label: Text(label),
                         selected: isSelected,
                         selectedColor: neonGreen,
                         backgroundColor: cardDark,
                         side: BorderSide(
-                          color: isSelected? neonGreen : borderDark,
+                          color: isSelected ? neonGreen : borderDark,
                           width: 1,
                         ),
                         labelStyle: TextStyle(
-                          color: isSelected? const Color(0xFF0A0A0F) : textWhite,
-                          fontWeight: isSelected? FontWeight.w900 : FontWeight.normal,
+                          color: isSelected ? const Color(0xFF0A0A0F) : textWhite,
+                          fontWeight: isSelected ? FontWeight.w900 : FontWeight.normal,
                           fontSize: 12,
                         ),
                         onSelected: (val) {
@@ -322,7 +322,7 @@ class _SavedNewsScreenState extends State<SavedNewsScreen> {
               ),
               Expanded(
                 child: filtered.isEmpty
-                   ? Center(
+                    ? Center(
                         child: Column(
                           mainAxisAlignment: MainAxisAlignment.center,
                           children: [
@@ -354,12 +354,14 @@ class _SavedNewsScreenState extends State<SavedNewsScreen> {
   }
 
   Widget _buildSavedCard(NewsModel item) {
+    final titleTruncated = item.title.length > 25 ? '${item.title.substring(0, 22)}...' : item.title;
+
     return Dismissible(
       key: Key('bookmark_${item.id}'),
       direction: DismissDirection.endToStart,
       background: Container(
-        alignment: Alignment.centerRight,
-        padding: const EdgeInsets.only(right: 20),
+        alignment: AlignmentDirectional.centerEnd,
+        padding: const EdgeInsets.symmetric(horizontal: 20),
         decoration: BoxDecoration(
           color: alertRed.withOpacity(0.85),
           borderRadius: BorderRadius.circular(14),
@@ -387,11 +389,11 @@ class _SavedNewsScreenState extends State<SavedNewsScreen> {
               side: BorderSide(color: borderDark),
             ),
             content: Text(
-              'Removed "${item.title.length > 25? '${item.title.substring(0, 22)}...' : item.title}"',
+              'removed_named'.tr(args: [titleTruncated]),
               style: TextStyle(color: textWhite, fontSize: 12),
             ),
             action: SnackBarAction(
-              label: 'UNDO',
+              label: 'undo'.tr(),
               textColor: neonGreen,
               onPressed: () {
                 _bookmarkService.toggleBookmark(item);
@@ -419,10 +421,9 @@ class _SavedNewsScreenState extends State<SavedNewsScreen> {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               ClipRRect(
-                borderRadius: const BorderRadius.only(
-                  topLeft: Radius.circular(13),
-                  bottomLeft: Radius.circular(13),
-                ),
+                borderRadius: const BorderRadiusDirectional.horizontal(
+                  start: Radius.circular(13),
+                ).resolve(Directionality.of(context)),
                 child: SizedBox(
                   width: 110,
                   height: 105,
@@ -433,7 +434,7 @@ class _SavedNewsScreenState extends State<SavedNewsScreen> {
                         imageUrl: item.effectiveImageUrl,
                         fit: BoxFit.cover,
                       ),
-                      if (item.videoUrl!= null && item.videoUrl!.isNotEmpty)
+                      if (item.videoUrl != null && item.videoUrl!.isNotEmpty)
                         Container(
                           color: Colors.black.withOpacity(0.3),
                           child: Center(
@@ -458,7 +459,7 @@ class _SavedNewsScreenState extends State<SavedNewsScreen> {
                         children: [
                           Expanded(
                             child: Align(
-                              alignment: Alignment.centerLeft,
+                              alignment: AlignmentDirectional.centerStart,
                               child: Container(
                                 padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
                                 decoration: BoxDecoration(
@@ -496,8 +497,8 @@ class _SavedNewsScreenState extends State<SavedNewsScreen> {
                         langCode: context.locale.languageCode,
                         maxLines: 2,
                         overflow: TextOverflow.ellipsis,
-                        textAlign: LanguageService.isRtlLocale(context.locale)? TextAlign.right : TextAlign.left,
-                        textDirection: LanguageService.isRtlLocale(context.locale)? ui.TextDirection.rtl : ui.TextDirection.ltr,
+                        textAlign: LanguageService.isRtlLocale(context.locale) ? TextAlign.right : TextAlign.left,
+                        textDirection: LanguageService.isRtlLocale(context.locale) ? ui.TextDirection.rtl : ui.TextDirection.ltr,
                         style: TextStyle(
                           color: textWhite,
                           fontSize: 13,
@@ -533,7 +534,7 @@ class _SavedNewsScreenState extends State<SavedNewsScreen> {
                                       style: TextStyle(color: textWhite, fontSize: 12),
                                     ),
                                     action: SnackBarAction(
-                                      label: 'UNDO',
+                                      label: 'undo'.tr(),
                                       textColor: neonGreen,
                                       onPressed: () {
                                         _bookmarkService.toggleBookmark(item);
