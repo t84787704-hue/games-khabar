@@ -1,5 +1,5 @@
 // ===============================================================================
-// Profile / Settings & Preferences Screen
+// Profile / Settings & Preferences Screen — Full Multi-Language Support
 // File: lib/screens/profile_screen.dart
 // ===============================================================================
 
@@ -523,7 +523,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                       ),
                       const SizedBox(height: 10),
                       Text(
-                        'Gamers ID',
+                        'app_name'.tr(),
                         style: TextStyle(
                           color: textWhite,
                           fontWeight: FontWeight.w900,
