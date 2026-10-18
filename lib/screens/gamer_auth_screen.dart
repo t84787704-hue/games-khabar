@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:easy_localization/easy_localization.dart';
 import '../constants/gamer_theme.dart';
 import '../services/gamer_auth_service.dart';
 import '../services/supabase_service.dart';
@@ -18,12 +19,10 @@ class _GamerAuthScreenState extends State<GamerAuthScreen> {
   String? _errorMessage;
 
   Future<void> _handlePostAuth() async {
-    // 1. Get current Supabase auth user
     final authUser = SupabaseService.client.auth.currentUser;
     if (authUser == null) return;
 
     try {
-      // 2. Query public.users table for this user:
       Map<String, dynamic>? profile;
       try {
         profile = await SupabaseService.client
@@ -41,9 +40,8 @@ class _GamerAuthScreenState extends State<GamerAuthScreen> {
 
       if (!mounted) return;
 
-      // 4. If profile exists AND is_banned = true:
       if (profile != null && profile['is_banned'] == true) {
-        final reason = profile['banned_reason']?.toString() ?? 'Account suspended';
+        final reason = profile['banned_reason']?.toString() ?? 'account_suspended'.tr();
         Navigator.of(context).pushAndRemoveUntil(
           MaterialPageRoute(builder: (_) => BannedScreen(reason: reason)),
           (route) => false,
@@ -51,12 +49,9 @@ class _GamerAuthScreenState extends State<GamerAuthScreen> {
         return;
       }
 
-      // Check if profile exists and username is not empty
       final rawUsername = profile != null ? profile['username'] : null;
       final username = rawUsername?.toString().trim() ?? '';
 
-      // 3. If profile exists AND username is not empty:
-      //    → go to GamerMainNavigationScreen (directly, no Create ID screen)
       if (profile != null && username.isNotEmpty) {
         await GamerAuthService().refreshCurrentGamer();
         if (!mounted) return;
@@ -67,8 +62,6 @@ class _GamerAuthScreenState extends State<GamerAuthScreen> {
         return;
       }
 
-      // 5. If profile does NOT exist OR username is empty:
-      //    → go to CreateGamerIdScreen
       Navigator.of(context).pushAndRemoveUntil(
         MaterialPageRoute(builder: (_) => const CreateGamerIdScreen()),
         (route) => false,
@@ -100,7 +93,7 @@ class _GamerAuthScreenState extends State<GamerAuthScreen> {
     } catch (e) {
       if (mounted) {
         setState(() {
-          _errorMessage = 'Google Sign In could not complete: $e';
+          _errorMessage = 'err_google_sign_in'.tr(args: [e.toString()]);
         });
       }
     } finally {
@@ -125,7 +118,7 @@ class _GamerAuthScreenState extends State<GamerAuthScreen> {
     } catch (e) {
       if (mounted) {
         setState(() {
-          _errorMessage = 'Guest login error: $e';
+          _errorMessage = 'err_guest_login'.tr(args: [e.toString()]);
         });
       }
     } finally {
@@ -146,7 +139,6 @@ class _GamerAuthScreenState extends State<GamerAuthScreen> {
             child: Column(
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
-                // App Logo / Gaming Emblem
                 Container(
                   width: 88,
                   height: 88,
@@ -171,7 +163,6 @@ class _GamerAuthScreenState extends State<GamerAuthScreen> {
                 ),
                 const SizedBox(height: 20),
 
-                // App Title
                 ShaderMask(
                   shaderCallback: (bounds) => GamerTheme.blueOrangeGradient.createShader(bounds),
                   child: const Text(
@@ -185,9 +176,9 @@ class _GamerAuthScreenState extends State<GamerAuthScreen> {
                   ),
                 ),
                 const SizedBox(height: 6),
-                const Text(
-                  'Mini Facebook for Gamers',
-                  style: TextStyle(
+                Text(
+                  'auth_subtitle'.tr(),
+                  style: const TextStyle(
                     color: GamerTheme.textGray,
                     fontSize: 14,
                     fontWeight: FontWeight.w600,
@@ -196,7 +187,6 @@ class _GamerAuthScreenState extends State<GamerAuthScreen> {
                 ),
                 const SizedBox(height: 48),
 
-                // Error Banner
                 if (_errorMessage != null) ...[
                   Container(
                     width: double.infinity,
@@ -233,7 +223,6 @@ class _GamerAuthScreenState extends State<GamerAuthScreen> {
                   const SizedBox(height: 24),
                 ],
 
-                // Google Sign In Button (Only Google Sign In via Supabase OAuth)
                 SizedBox(
                   width: double.infinity,
                   height: 52,
@@ -276,9 +265,9 @@ class _GamerAuthScreenState extends State<GamerAuthScreen> {
                                 ),
                               ),
                               const SizedBox(width: 12),
-                              const Text(
-                                'Continue with Google',
-                                style: TextStyle(
+                              Text(
+                                'continue_with_google'.tr(),
+                                style: const TextStyle(
                                   color: Colors.black87,
                                   fontWeight: FontWeight.bold,
                                   fontSize: 15,
@@ -290,15 +279,14 @@ class _GamerAuthScreenState extends State<GamerAuthScreen> {
                 ),
                 const SizedBox(height: 16),
 
-                // OR Divider
                 Row(
                   children: [
                     Expanded(child: Divider(color: Colors.white.withOpacity(0.15))),
                     Padding(
                       padding: const EdgeInsets.symmetric(horizontal: 12),
                       child: Text(
-                        'OR',
-                        style: TextStyle(
+                        'or_divider'.tr(),
+                        style: const TextStyle(
                           color: GamerTheme.textMuted,
                           fontSize: 12,
                           fontWeight: FontWeight.bold,
@@ -310,16 +298,15 @@ class _GamerAuthScreenState extends State<GamerAuthScreen> {
                 ),
                 const SizedBox(height: 16),
 
-                // Quick Guest / Instant Play Button
                 SizedBox(
                   width: double.infinity,
                   height: 50,
                   child: OutlinedButton.icon(
                     onPressed: _isLoading ? null : _continueAsGuest,
                     icon: const Icon(Icons.flash_on_rounded, color: GamerTheme.accentOrange, size: 20),
-                    label: const Text(
-                      'Play as Guest (Instant Access)',
-                      style: TextStyle(
+                    label: Text(
+                      'play_as_guest'.tr(),
+                      style: const TextStyle(
                         color: Colors.white,
                         fontWeight: FontWeight.bold,
                         fontSize: 14,
@@ -333,10 +320,10 @@ class _GamerAuthScreenState extends State<GamerAuthScreen> {
                 ),
                 const SizedBox(height: 18),
 
-                const Text(
-                  'Sign in with Google to sync your rank, teams, and tournament matches across devices.',
+                Text(
+                  'google_sync_notice'.tr(),
                   textAlign: TextAlign.center,
-                  style: TextStyle(
+                  style: const TextStyle(
                     color: GamerTheme.textMuted,
                     fontSize: 12,
                     height: 1.4,
