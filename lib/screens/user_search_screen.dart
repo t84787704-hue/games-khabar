@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:cached_network_image/cached_network_image.dart';
+import 'package:easy_localization/easy_localization.dart';
 import '../constants/gamer_theme.dart';
 import '../models/gamer_user_model.dart';
 import '../services/gamer_social_service.dart';
@@ -106,9 +107,9 @@ class _UserSearchScreenState extends State<UserSearchScreen> {
         backgroundColor: Colors.white,
         elevation: 1,
         iconTheme: const IconThemeData(color: Color(0xFF1877F2)),
-        title: const Text(
-          'Search Gamers',
-          style: TextStyle(
+        title: Text(
+          'search_gamers_title'.tr(),
+          style: const TextStyle(
             color: Color(0xFF1877F2),
             fontWeight: FontWeight.bold,
             fontSize: 20,
@@ -132,7 +133,7 @@ class _UserSearchScreenState extends State<UserSearchScreen> {
                 fontSize: 15,
               ),
               decoration: InputDecoration(
-                hintText: 'Search by name or @username...',
+                hintText: 'search_gamers_hint'.tr(),
                 hintStyle: const TextStyle(
                   color: Color(0xFF65676B),
                   fontSize: 14,
@@ -190,7 +191,6 @@ class _UserSearchScreenState extends State<UserSearchScreen> {
   }
 
   Widget _buildResults() {
-    // Empty state — pehle search karo
     if (!_hasSearched) {
       return Center(
         child: Padding(
@@ -211,19 +211,19 @@ class _UserSearchScreenState extends State<UserSearchScreen> {
                 ),
               ),
               const SizedBox(height: 16),
-              const Text(
-                'Search for Gamers',
-                style: TextStyle(
+              Text(
+                'search_for_gamers_heading'.tr(),
+                style: const TextStyle(
                   color: Color(0xFF050505),
                   fontWeight: FontWeight.bold,
                   fontSize: 17,
                 ),
               ),
               const SizedBox(height: 6),
-              const Text(
-                'Apne dost ka naam ya @username likho\nunko dhoondne ke liye',
+              Text(
+                'search_for_gamers_sub'.tr(),
                 textAlign: TextAlign.center,
-                style: TextStyle(
+                style: const TextStyle(
                   color: Color(0xFF65676B),
                   fontSize: 13,
                   height: 1.4,
@@ -235,14 +235,12 @@ class _UserSearchScreenState extends State<UserSearchScreen> {
       );
     }
 
-    // Loading
     if (_isSearching) {
       return const Center(
         child: CircularProgressIndicator(color: Color(0xFF1877F2)),
       );
     }
 
-    // No results
     if (_results.isEmpty) {
       return Center(
         child: Padding(
@@ -252,8 +250,8 @@ class _UserSearchScreenState extends State<UserSearchScreen> {
             children: [
               Container(
                 padding: const EdgeInsets.all(20),
-                decoration: BoxDecoration(
-                  color: const Color(0xFFE4E6EB),
+                decoration: const BoxDecoration(
+                  color: Color(0xFFE4E6EB),
                   shape: BoxShape.circle,
                 ),
                 child: const Icon(
@@ -263,9 +261,9 @@ class _UserSearchScreenState extends State<UserSearchScreen> {
                 ),
               ),
               const SizedBox(height: 16),
-              const Text(
-                'Koi user nahi mila',
-                style: TextStyle(
+              Text(
+                'no_users_found'.tr(),
+                style: const TextStyle(
                   color: Color(0xFF050505),
                   fontWeight: FontWeight.bold,
                   fontSize: 17,
@@ -273,9 +271,9 @@ class _UserSearchScreenState extends State<UserSearchScreen> {
               ),
               const SizedBox(height: 6),
               Text(
-                'Koi aur naam ya username try karo',
+                'no_users_found_sub'.tr(),
                 textAlign: TextAlign.center,
-                style: TextStyle(
+                style: const TextStyle(
                   color: Color(0xFF65676B),
                   fontSize: 13,
                 ),
@@ -286,7 +284,6 @@ class _UserSearchScreenState extends State<UserSearchScreen> {
       );
     }
 
-    // Results list
     return ListView.separated(
       padding: const EdgeInsets.symmetric(vertical: 8),
       itemCount: _results.length,
@@ -390,18 +387,18 @@ class _UserSearchScreenState extends State<UserSearchScreen> {
                     color: const Color(0xFF1877F2).withOpacity(0.4),
                   ),
                 ),
-                child: const Row(
+                child: Row(
                   mainAxisSize: MainAxisSize.min,
                   children: [
-                    Icon(
+                    const Icon(
                       Icons.person_outline_rounded,
                       color: Color(0xFF1877F2),
                       size: 13,
                     ),
-                    SizedBox(width: 4),
+                    const SizedBox(width: 4),
                     Text(
-                      'View',
-                      style: TextStyle(
+                      'btn_view'.tr(),
+                      style: const TextStyle(
                         color: Color(0xFF1877F2),
                         fontWeight: FontWeight.bold,
                         fontSize: 11.5,
