@@ -2,16 +2,10 @@
 // EXACT DIFF — Dynamic Thematic Avatars, Real-time Unread Count & Theme Support
 // -------------------------------------------------------------------------------
 // File: lib/screens/notifications_screen.dart
-//
-// 1. FIXED "S" AVATAR BUG: System & reward notifications now display professional,
-//    distinctive category icons (Trophy, Coin, Shopping Bag, Alert) instead of "S".
-// 2. Real gamer avatars (Followers, Comments, Challenges) preserved for user events.
-// 3. Instant read marking: _locallyReadIds immediately decrements badge & updates UI.
-// 4. Reliable DB update for `is_read = true` without schema mismatch.
-// 5. Full Adaptive Day & Night Mode support with ThemeService.
 // ===============================================================================
 
 import 'package:flutter/material.dart';
+import 'package:easy_localization/easy_localization.dart';
 import '../constants/gamer_theme.dart';
 import '../models/notification_model.dart';
 import '../services/gamer_auth_service.dart';
@@ -144,21 +138,24 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
           borderRadius: BorderRadius.circular(16),
           side: BorderSide(color: ThemeService.border),
         ),
-        title: const Row(
+        title: Row(
           children: [
-            Icon(Icons.delete_sweep_rounded, color: Color(0xFFFF4655), size: 22),
-            SizedBox(width: 8),
-            Text('Clear All Activity?', style: TextStyle(color: Color(0xFFFF4655), fontSize: 16, fontWeight: FontWeight.bold)),
+            const Icon(Icons.delete_sweep_rounded, color: Color(0xFFFF4655), size: 22),
+            const SizedBox(width: 8),
+            Text(
+              'clear_all_activity_q'.tr(),
+              style: const TextStyle(color: Color(0xFFFF4655), fontSize: 16, fontWeight: FontWeight.bold),
+            ),
           ],
         ),
         content: Text(
-          'This will permanently delete all your notifications.',
+          'clear_all_activity_desc'.tr(),
           style: TextStyle(color: ThemeService.textSecondary, fontSize: 13),
         ),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(ctx, false),
-            child: Text('CANCEL', style: TextStyle(color: ThemeService.textSecondary)),
+            child: Text('cancel'.tr().toUpperCase(), style: TextStyle(color: ThemeService.textSecondary)),
           ),
           ElevatedButton(
             style: ElevatedButton.styleFrom(
@@ -167,7 +164,7 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
               shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
             ),
             onPressed: () => Navigator.pop(ctx, true),
-            child: const Text('CLEAR ALL', style: TextStyle(fontWeight: FontWeight.bold)),
+            child: Text('clear_all'.tr().toUpperCase(), style: const TextStyle(fontWeight: FontWeight.bold)),
           ),
         ],
       ),
@@ -189,9 +186,9 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
           _streamKey = UniqueKey();
         });
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('All notifications cleared.'),
-            backgroundColor: Color(0xFF1877F2),
+          SnackBar(
+            content: Text('msg_all_notifs_cleared'.tr()),
+            backgroundColor: const Color(0xFF1877F2),
             behavior: SnackBarBehavior.floating,
           ),
         );
@@ -210,7 +207,7 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
             backgroundColor: ThemeService.appBarBg,
             elevation: ThemeService.isDarkMode ? 0 : 1,
             title: Text(
-              'Gamer Activity',
+              'gamer_activity_title'.tr(),
               style: TextStyle(
                 color: ThemeService.textPrimary,
                 fontWeight: FontWeight.bold,
@@ -218,7 +215,7 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
             ),
             actions: [
               IconButton(
-                tooltip: 'Mark all read',
+                tooltip: 'tooltip_mark_all_read'.tr(),
                 icon: const Icon(Icons.done_all_rounded, color: Color(0xFF1877F2), size: 22),
                 onPressed: () async {
                   setState(() {
@@ -231,9 +228,9 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
                   await _notificationService.markAllAsRead(_currentUid);
                   if (mounted) {
                     ScaffoldMessenger.of(context).showSnackBar(
-                      const SnackBar(
-                        content: Text('All notifications marked as read.'),
-                        backgroundColor: Color(0xFF00FF88),
+                      SnackBar(
+                        content: Text('msg_all_notifs_marked_read'.tr()),
+                        backgroundColor: const Color(0xFF00FF88),
                         behavior: SnackBarBehavior.floating,
                       ),
                     );
@@ -241,7 +238,7 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
                 },
               ),
               IconButton(
-                tooltip: 'Clear all',
+                tooltip: 'clear_all'.tr(),
                 icon: Icon(Icons.delete_outline_rounded, color: ThemeService.textSecondary, size: 22),
                 onPressed: _confirmClearAll,
               ),
@@ -293,11 +290,11 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
 
   Widget _buildFilterTabs() {
     final tabs = [
-      {'label': 'All', 'icon': Icons.all_inbox_rounded},
-      {'label': 'Unread', 'icon': Icons.mark_email_unread_rounded},
-      {'label': 'Social', 'icon': Icons.people_rounded},
-      {'label': 'Matches', 'icon': Icons.sports_esports_rounded},
-      {'label': 'Coins', 'icon': Icons.monetization_on_rounded},
+      {'key': 'tab_all', 'icon': Icons.all_inbox_rounded},
+      {'key': 'tab_unread', 'icon': Icons.mark_email_unread_rounded},
+      {'key': 'tab_social', 'icon': Icons.people_rounded},
+      {'key': 'tab_matches', 'icon': Icons.sports_esports_rounded},
+      {'key': 'tab_coins', 'icon': Icons.monetization_on_rounded},
     ];
 
     return Container(
@@ -334,7 +331,7 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
                   ),
                   const SizedBox(width: 6),
                   Text(
-                    tab['label'] as String,
+                    (tab['key'] as String).tr(),
                     style: TextStyle(
                       color: isSelected ? const Color(0xFF1877F2) : ThemeService.textSecondary,
                       fontSize: 12,
@@ -362,7 +359,6 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
             notif.type.contains('challenge') ||
             notif.type.contains('team'));
 
-    // Real Gamer Avatar
     if (isUserEvent) {
       return Stack(
         children: [
@@ -393,7 +389,6 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
       );
     }
 
-    // System / Event Avatar: Distinctive thematic styling
     Color bgColor;
     Color iconColor;
     IconData icon;
@@ -444,7 +439,7 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
 
   Widget _buildNotificationCard(InAppNotification notif) {
     final isRead = notif.isRead || _locallyReadIds.contains(notif.id);
-    final senderName = notif.senderName ?? 'System Notification';
+    final senderName = notif.senderName ?? 'system_notification'.tr();
     final senderPhoto = notif.senderAvatar ?? '';
     final senderId = notif.senderId ?? '';
 
@@ -452,8 +447,8 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
       key: Key(notif.id.isNotEmpty ? notif.id : UniqueKey().toString()),
       direction: DismissDirection.endToStart,
       background: Container(
-        alignment: Alignment.centerRight,
-        padding: const EdgeInsets.only(right: 20),
+        alignment: AlignmentDirectional.centerEnd,
+        padding: const EdgeInsets.symmetric(horizontal: 20),
         decoration: BoxDecoration(
           color: const Color(0xFFFF4655).withOpacity(0.2),
           borderRadius: BorderRadius.circular(14),
@@ -556,7 +551,7 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
 
                       if (!isRead)
                         Padding(
-                          padding: const EdgeInsets.only(left: 6, top: 4),
+                          padding: const EdgeInsetsDirectional.only(start: 6, top: 4),
                           child: Container(
                             width: 8,
                             height: 8,
@@ -586,7 +581,7 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
 
     if (notif.type == 'challenge_received' && challengeId != null) {
       return Padding(
-        padding: const EdgeInsets.only(top: 10, left: 52),
+        padding: const EdgeInsetsDirectional.only(top: 10, start: 52),
         child: Row(
           children: [
             ElevatedButton(
@@ -609,15 +604,18 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
                 await _notificationService.markAsRead(notif.id);
                 if (mounted) {
                   ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(
-                      content: Text('⚔️ 1v1 Challenge Accepted! Match room is ready.'),
-                      backgroundColor: Color(0xFF00FF88),
+                    SnackBar(
+                      content: Text('msg_challenge_accepted'.tr()),
+                      backgroundColor: const Color(0xFF00FF88),
                       behavior: SnackBarBehavior.floating,
                     ),
                   );
                 }
               },
-              child: const Text('ACCEPT ⚔️', style: TextStyle(fontWeight: FontWeight.w900, fontSize: 11)),
+              child: Text(
+                'btn_accept_challenge'.tr(),
+                style: const TextStyle(fontWeight: FontWeight.w900, fontSize: 11),
+              ),
             ),
             const SizedBox(width: 8),
             OutlinedButton(
@@ -635,7 +633,10 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
                 await ChallengeService().declineChallenge(challengeId.toString());
                 await _notificationService.markAsRead(notif.id);
               },
-              child: const Text('Decline', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 11)),
+              child: Text(
+                'btn_decline'.tr(),
+                style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 11),
+              ),
             ),
           ],
         ),
@@ -647,7 +648,7 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
         notif.type.contains('proof') ||
         notif.type.contains('tournament')) {
       return Padding(
-        padding: const EdgeInsets.only(top: 8, left: 52),
+        padding: const EdgeInsetsDirectional.only(top: 8, start: 52),
         child: OutlinedButton.icon(
           style: OutlinedButton.styleFrom(
             side: BorderSide(color: notif.iconColor),
@@ -657,7 +658,7 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
             minimumSize: Size.zero,
           ),
           icon: const Icon(Icons.meeting_room_rounded, size: 12),
-          label: const Text('Open Rooms', style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold)),
+          label: Text('btn_open_rooms'.tr(), style: const TextStyle(fontSize: 11, fontWeight: FontWeight.bold)),
           onPressed: () {
             setState(() {
               _locallyReadIds.add(notif.id);
@@ -671,7 +672,7 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
 
     if (matchId != null && matchId.toString().isNotEmpty) {
       return Padding(
-        padding: const EdgeInsets.only(top: 8, left: 52),
+        padding: const EdgeInsetsDirectional.only(top: 8, start: 52),
         child: OutlinedButton.icon(
           style: OutlinedButton.styleFrom(
             side: BorderSide(color: notif.iconColor),
@@ -681,7 +682,7 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
             minimumSize: Size.zero,
           ),
           icon: const Icon(Icons.open_in_new_rounded, size: 12),
-          label: const Text('Open Match Room', style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold)),
+          label: Text('btn_open_match_room'.tr(), style: const TextStyle(fontSize: 11, fontWeight: FontWeight.bold)),
           onPressed: () {
             setState(() {
               _locallyReadIds.add(notif.id);
@@ -698,7 +699,7 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
 
     if (notif.type.contains('coin') || notif.type.contains('proof_accepted')) {
       return Padding(
-        padding: const EdgeInsets.only(top: 8, left: 52),
+        padding: const EdgeInsetsDirectional.only(top: 8, start: 52),
         child: OutlinedButton.icon(
           style: OutlinedButton.styleFrom(
             side: const BorderSide(color: Color(0xFFFFD700)),
@@ -708,7 +709,7 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
             minimumSize: Size.zero,
           ),
           icon: const Text('🪙', style: TextStyle(fontSize: 12)),
-          label: const Text('View Wallet', style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold)),
+          label: Text('btn_view_wallet'.tr(), style: const TextStyle(fontSize: 11, fontWeight: FontWeight.bold)),
           onPressed: () {
             setState(() {
               _locallyReadIds.add(notif.id);
@@ -722,7 +723,7 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
 
     if (notif.type == 'store_purchase' || notif.type == 'perk_expiry') {
       return Padding(
-        padding: const EdgeInsets.only(top: 8, left: 52),
+        padding: const EdgeInsetsDirectional.only(top: 8, start: 52),
         child: OutlinedButton.icon(
           style: OutlinedButton.styleFrom(
             side: const BorderSide(color: Color(0xFF00E5FF)),
@@ -732,7 +733,7 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
             minimumSize: Size.zero,
           ),
           icon: const Icon(Icons.storefront_rounded, size: 12),
-          label: const Text('Open Coin Store', style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold)),
+          label: Text('btn_open_coin_store'.tr(), style: const TextStyle(fontSize: 11, fontWeight: FontWeight.bold)),
           onPressed: () {
             setState(() {
               _locallyReadIds.add(notif.id);
@@ -766,13 +767,13 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
             const SizedBox(height: 16),
             Text(
               _selectedFilterIndex == 1
-                  ? 'No unread notifications'
-                  : 'No notifications yet',
+                  ? 'no_unread_notifications'.tr()
+                  : 'no_notifications_yet'.tr(),
               style: TextStyle(color: ThemeService.textPrimary, fontSize: 16, fontWeight: FontWeight.bold),
             ),
             const SizedBox(height: 6),
             Text(
-              'When gamers follow you, challenge your team, or your match proofs are approved, updates appear here!',
+              'notifications_empty_desc'.tr(),
               textAlign: TextAlign.center,
               style: TextStyle(color: ThemeService.textSecondary, fontSize: 12, height: 1.4),
             ),
