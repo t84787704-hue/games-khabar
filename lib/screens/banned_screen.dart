@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:easy_localization/easy_localization.dart';
 import '../constants/gamer_theme.dart';
 import '../services/gamer_auth_service.dart';
 import '../services/supabase_service.dart';
@@ -10,8 +11,8 @@ class BannedScreen extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return WillPopScope(
-      onWillPop: () async => false, // Block Android back button
+    return PopScope(
+      canPop: false, // Block Android back button
       child: Scaffold(
         backgroundColor: const Color(0xFF070A0F),
         body: SafeArea(
@@ -55,9 +56,9 @@ class BannedScreen extends StatelessWidget {
                       borderRadius: BorderRadius.circular(20),
                       border: Border.all(color: const Color(0xFFFF4655), width: 1.5),
                     ),
-                    child: const Text(
-                      'ACCOUNT BANNED',
-                      style: TextStyle(
+                    child: Text(
+                      'banned_badge'.tr(),
+                      style: const TextStyle(
                         color: Color(0xFFFF4655),
                         fontWeight: FontWeight.w900,
                         fontSize: 13,
@@ -68,9 +69,9 @@ class BannedScreen extends StatelessWidget {
                   const SizedBox(height: 20),
 
                   // Title
-                  const Text(
-                    'Access Restricted',
-                    style: TextStyle(
+                  Text(
+                    'access_restricted'.tr(),
+                    style: const TextStyle(
                       color: Colors.white,
                       fontSize: 24,
                       fontWeight: FontWeight.w900,
@@ -80,10 +81,10 @@ class BannedScreen extends StatelessWidget {
                   const SizedBox(height: 12),
 
                   // Description
-                  const Text(
-                    'Your account has been banned by admin.',
+                  Text(
+                    'account_banned_desc'.tr(),
                     textAlign: TextAlign.center,
-                    style: TextStyle(
+                    style: const TextStyle(
                       color: Color(0xFFE6EDF3),
                       fontSize: 15,
                       fontWeight: FontWeight.w600,
@@ -104,9 +105,9 @@ class BannedScreen extends StatelessWidget {
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          const Text(
-                            'Reason:',
-                            style: TextStyle(
+                          Text(
+                            'banned_reason_label'.tr(),
+                            style: const TextStyle(
                               color: Color(0xFFFF4655),
                               fontWeight: FontWeight.bold,
                               fontSize: 12,
@@ -137,9 +138,9 @@ class BannedScreen extends StatelessWidget {
                     ),
                     child: Column(
                       children: [
-                        const Text(
-                          'Contact support:',
-                          style: TextStyle(color: Color(0xFF8B949E), fontSize: 12),
+                        Text(
+                          'contact_support_label'.tr(),
+                          style: const TextStyle(color: Color(0xFF8B949E), fontSize: 12),
                         ),
                         const SizedBox(height: 4),
                         SelectableText(
@@ -177,9 +178,9 @@ class BannedScreen extends StatelessWidget {
                         ),
                       ),
                       icon: const Icon(Icons.logout_rounded, size: 18),
-                      label: const Text(
-                        'Logout',
-                        style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold),
+                      label: Text(
+                        'log_out'.tr(),
+                        style: const TextStyle(fontSize: 14, fontWeight: FontWeight.bold),
                       ),
                     ),
                   ),
