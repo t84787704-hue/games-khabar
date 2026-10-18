@@ -16,25 +16,33 @@ import 'screens/gamer_terms_of_service_screen.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
-  await EasyLocalization.ensureInitialized();
+
+  try {
+    await EasyLocalization.ensureInitialized();
+  } catch (e) {
+    debugPrint('EasyLocalization init error: $e');
+  }
 
   SystemChrome.setEnabledSystemUIMode(
     SystemUiMode.manual,
     overlays: [SystemUiOverlay.top, SystemUiOverlay.bottom],
   );
 
+  // ✅ Initialize Supabase
   try {
     await SupabaseService.init();
   } catch (e) {
     debugPrint('Supabase initialize error: $e');
   }
 
+  // ✅ Language init
   try {
     await LanguageService.init();
   } catch (e) {
     debugPrint('LanguageService init error: $e');
   }
 
+  // ✅ Theme init
   try {
     await ThemeService.init();
   } catch (e) {
@@ -43,7 +51,6 @@ void main() async {
 
   runApp(
     EasyLocalization(
-      // ✅ Saari 7 languages direct connect hain
       supportedLocales: LanguageService.supportedLocales,
       path: 'assets/translations',
       fallbackLocale: const Locale('en'),
@@ -64,6 +71,7 @@ class GamersIdApp extends StatelessWidget {
           top: true,
           bottom: true,
           child: MaterialApp(
+            key: ValueKey(themeMode),
             title: 'Gamers ID',
             debugShowCheckedModeBanner: false,
             localizationsDelegates: context.localizationDelegates,

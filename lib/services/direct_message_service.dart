@@ -201,14 +201,24 @@ class DirectMessageService {
       yield [];
       return;
     }
+    final u1 = await resolveToTableId(userId1);
+    final u2 = await resolveToTableId(userId2);
+
     final aliases1 = await getUserAliases(userId1);
     final aliases2 = await getUserAliases(userId2);
 
+    final uuids1 = aliases1.where((a) => _uuidRegex.hasMatch(a)).toSet();
+    final uuids2 = aliases2.where((a) => _uuidRegex.hasMatch(a)).toSet();
+    if (u1.isNotEmpty && _uuidRegex.hasMatch(u1)) uuids1.add(u1);
+    if (u2.isNotEmpty && _uuidRegex.hasMatch(u2)) uuids2.add(u2);
+
     final pairs = <String>[];
-    for (final a1 in aliases1) {
-      for (final a2 in aliases2) {
-        pairs.add('and(sender_id.eq.$a1,receiver_id.eq.$a2)');
-        pairs.add('and(sender_id.eq.$a2,receiver_id.eq.$a1)');
+    for (final a1 in uuids1) {
+      for (final a2 in uuids2) {
+        final p1 = 'and(sender_id.eq.$a1,receiver_id.eq.$a2)';
+        final p2 = 'and(sender_id.eq.$a2,receiver_id.eq.$a1)';
+        if (!pairs.contains(p1)) pairs.add(p1);
+        if (!pairs.contains(p2)) pairs.add(p2);
       }
     }
     final orCondition = pairs.isNotEmpty ? pairs.join(',') : '';
@@ -253,8 +263,17 @@ class DirectMessageService {
         myAliases.add(currentAuthId.toLowerCase());
       }
 
+      // Only query with valid UUIDs in SQL to prevent PostgreSQL invalid syntax errors
+      final queryUuids = myAliases.where((a) => _uuidRegex.hasMatch(a)).toSet();
+      if (myCanonicalId.isNotEmpty && _uuidRegex.hasMatch(myCanonicalId)) {
+        queryUuids.add(myCanonicalId);
+      }
+      if (queryUuids.isEmpty) {
+        queryUuids.add(SupabaseService.toUuid(userId));
+      }
+
       final filterList = <String>[];
-      for (final a in myAliases) {
+      for (final a in queryUuids) {
         filterList.add('sender_id.eq.$a');
         filterList.add('receiver_id.eq.$a');
       }
@@ -392,9 +411,16 @@ class DirectMessageService {
     try {
       final myAliases = await getUserAliases(currentUserId);
       final otherAliases = await getUserAliases(otherUserId);
+      final myUuids = myAliases.where((a) => _uuidRegex.hasMatch(a)).toSet();
+      final otherUuids = otherAliases.where((a) => _uuidRegex.hasMatch(a)).toSet();
 
-      for (final myId in myAliases) {
-        for (final otherId in otherAliases) {
+      final myCanonical = await resolveToTableId(currentUserId);
+      final otherCanonical = await resolveToTableId(otherUserId);
+      if (myCanonical.isNotEmpty && _uuidRegex.hasMatch(myCanonical)) myUuids.add(myCanonical);
+      if (otherCanonical.isNotEmpty && _uuidRegex.hasMatch(otherCanonical)) otherUuids.add(otherCanonical);
+
+      for (final myId in myUuids) {
+        for (final otherId in otherUuids) {
           try {
             await _client
                 .from('direct_messages')
@@ -415,7 +441,15 @@ class DirectMessageService {
     if (userId.isEmpty) return 0;
     try {
       final myAliases = await getUserAliases(userId);
-      final filterList = myAliases.map((a) => 'receiver_id.eq.$a').join(',');
+      final myCanonical = await resolveToTableId(userId);
+      final myUuids = myAliases.where((a) => _uuidRegex.hasMatch(a)).toSet();
+      if (myCanonical.isNotEmpty && _uuidRegex.hasMatch(myCanonical)) {
+        myUuids.add(myCanonical);
+      }
+      if (myUuids.isEmpty) {
+        myUuids.add(SupabaseService.toUuid(userId));
+      }
+      final filterList = myUuids.map((a) => 'receiver_id.eq.$a').join(',');
 
       final rows = await _client
           .from('direct_messages')
