@@ -128,5 +128,21 @@
   "log_out_confirm": "确定要退出当前游戏快讯账号吗？",
   "delete_account": "注销账号",
   "delete_account_sub": "永久删除您的玩家 ID（提供 30 天缓冲期）",
-  "unlocked": "已解锁"
+  "unlocked": "已解锁",
+  "nav_following": "关注",
+  "nav_community": "社区",
+  "bookmark_added": "已保存到书签！🔖",
+  "bookmark_removed": "已从书签中移除",
+  "tooltip_notifications": "通知",
+  "search_news_hint": "搜索游戏资讯、更新和游戏...",
+  "loading_khabar": "正在加载资讯...",
+  "btn_retry": "重试",
+  "no_news_yet": "暂无资讯",
+  "badge_featured": "精选",
+  "badge_video": "视频",
+  "no_articles_found": "未找到相关文章",
+  "whats_on_mind": "在想些什么？",
+  "like": "点赞",
+  "comment": "评论",
+  "comments": "条评论"
 }
