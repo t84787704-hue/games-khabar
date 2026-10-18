@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:easy_localization/easy_localization.dart';
 import '../constants/gamer_theme.dart';
 import '../models/gamer_user_model.dart';
 import '../services/gamer_auth_service.dart';
@@ -56,10 +57,8 @@ class _FollowersFollowingScreenState extends State<FollowersFollowingScreen> wit
 
     if (mounted) {
       setState(() {
-        // ✅ FIX: Khud ko followers list se hataao
+        // Khud ko list se exclude karna
         _followers = followers.where((u) => u.uid != widget.userId).toList();
-
-        // ✅ FIX: Khud ko following list se bhi hataao
         _following = following.where((u) => u.uid != widget.userId).toList();
 
         _loadingFollowers = false;
@@ -175,7 +174,7 @@ class _FollowersFollowingScreenState extends State<FollowersFollowingScreen> wit
                           _loadData();
                         },
                         child: Text(
-                          isFollowing ? 'Following' : 'Follow',
+                          isFollowing ? 'btn_following'.tr() : 'btn_follow'.tr(),
                           style: TextStyle(
                             fontWeight: FontWeight.w800,
                             fontSize: 12,
@@ -201,7 +200,7 @@ class _FollowersFollowingScreenState extends State<FollowersFollowingScreen> wit
     return Scaffold(
       backgroundColor: GamerTheme.bgDark,
       appBar: AppBar(
-        title: Text('${widget.displayName}\'s Network'),
+        title: Text('network_title'.tr(args: [widget.displayName])),
         bottom: TabBar(
           controller: _tabController,
           indicatorColor: GamerTheme.accentBlue,
@@ -210,16 +209,16 @@ class _FollowersFollowingScreenState extends State<FollowersFollowingScreen> wit
           unselectedLabelColor: GamerTheme.textMuted,
           labelStyle: const TextStyle(fontWeight: FontWeight.w800, fontSize: 14),
           tabs: [
-            Tab(text: 'Followers (${_followers.length})'),
-            Tab(text: 'Following (${_following.length})'),
+            Tab(text: 'tab_followers_count'.tr(args: ['${_followers.length}'])),
+            Tab(text: 'tab_following_count'.tr(args: ['${_following.length}'])),
           ],
         ),
       ),
       body: TabBarView(
         controller: _tabController,
         children: [
-          _buildUserList(_followers, _loadingFollowers, 'No followers yet'),
-          _buildUserList(_following, _loadingFollowing, 'Not following anyone yet'),
+          _buildUserList(_followers, _loadingFollowers, 'no_followers_yet'.tr()),
+          _buildUserList(_following, _loadingFollowing, 'not_following_anyone_yet'.tr()),
         ],
       ),
     );
