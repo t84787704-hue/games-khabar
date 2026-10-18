@@ -3,6 +3,7 @@ import 'package:easy_localization/easy_localization.dart';
 import '../constants/gamer_theme.dart';
 import '../services/gamer_auth_service.dart';
 import '../services/supabase_service.dart';
+import 'gamer_auth_screen.dart';
 
 class BannedScreen extends StatelessWidget {
   final String? reason;
@@ -166,6 +167,12 @@ class BannedScreen extends StatelessWidget {
                           await GamerAuthService().signOut();
                         } catch (_) {
                           await SupabaseService.signOut();
+                        }
+                        if (context.mounted) {
+                          Navigator.of(context).pushAndRemoveUntil(
+                            MaterialPageRoute(builder: (_) => const GamerAuthScreen()),
+                            (route) => false,
+                          );
                         }
                       },
                       style: ElevatedButton.styleFrom(
