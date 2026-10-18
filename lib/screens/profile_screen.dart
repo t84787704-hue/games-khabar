@@ -791,10 +791,8 @@ class _ProfileScreenState extends State<ProfileScreen> {
                         title: Text(
                           _safeTr('coin_history_passbook', fallback: 'Coin History & Passbook'),
                           style: TextStyle(color: textWhite, fontSize: 14, fontWeight: FontWeight.bold),
-                        ),
-                        subtitle: Text(
-                          _safeTr('coin_history_sub', fallback: 'Kb kitne coin kis liye cut ya add huway'),
-                          style: TextStyle(color: textGray, fontSize: 12),
+                       
+                          
                         ),
                         trailing: Icon(Icons.arrow_forward_ios_rounded, color: textGray, size: 14),
                         onTap: () {
