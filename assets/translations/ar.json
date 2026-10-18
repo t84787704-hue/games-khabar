@@ -128,5 +128,21 @@
   "log_out_confirm": "هل أنت متأكد أنك تريد تسجيل الخروج من شبكة جيمز خبر؟",
   "delete_account": "حذف الحساب",
   "delete_account_sub": "حذف حسابك نهائياً (فترة سماح 30 يوماً)",
-  "unlocked": "مفتوح"
+  "unlocked": "مفتوح",
+  "nav_following": "المتابعة",
+  "nav_community": "المجتمع",
+  "bookmark_added": "تم الحفظ في الإشارات المرجعية! 🔖",
+  "bookmark_removed": "تمت الإزالة من الإشارات المرجعية",
+  "tooltip_notifications": "الإشعارات",
+  "search_news_hint": "ابحث عن أخبار الألعاب والتحديثات...",
+  "loading_khabar": "جارٍ تحميل الأخبار...",
+  "btn_retry": "إعادة المحاولة",
+  "no_news_yet": "لا توجد أخبار بعد",
+  "badge_featured": "مميز",
+  "badge_video": "فيديو",
+  "no_articles_found": "لم يتم العثور على مقالات",
+  "whats_on_mind": "ما الذي يدور في ذهنك؟",
+  "like": "إعجاب",
+  "comment": "تعليق",
+  "comments": "تعليقات"
 }
