@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:url_launcher/url_launcher.dart';
+import 'package:easy_localization/easy_localization.dart';
 
 /// Play Store compliant Terms of Service Screen.
 class GamerTermsOfServiceScreen extends StatelessWidget {
@@ -19,9 +20,9 @@ class GamerTermsOfServiceScreen extends StatelessWidget {
       } else {
         if (context.mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-              content: Text('Could not open link'),
-              backgroundColor: Color(0xFFFF4655),
+            SnackBar(
+              content: Text('err_could_not_open_link'.tr()),
+              backgroundColor: const Color(0xFFFF4655),
             ),
           );
         }
@@ -38,9 +39,9 @@ class GamerTermsOfServiceScreen extends StatelessWidget {
       appBar: AppBar(
         backgroundColor: Colors.white,
         elevation: 1,
-        title: const Text(
-          'Terms of Service',
-          style: TextStyle(
+        title: Text(
+          'terms_of_service_title'.tr(),
+          style: const TextStyle(
             color: Color(0xFF1877F2),
             fontWeight: FontWeight.bold,
             fontSize: 18,
@@ -79,10 +80,10 @@ class GamerTermsOfServiceScreen extends StatelessWidget {
                               color: Color(0xFF1877F2), size: 22),
                         ),
                         const SizedBox(width: 12),
-                        const Expanded(
+                        Expanded(
                           child: Text(
-                            'Terms of Service',
-                            style: TextStyle(
+                            'terms_of_service_title'.tr(),
+                            style: const TextStyle(
                               color: Color(0xFF050505),
                               fontWeight: FontWeight.bold,
                               fontSize: 16,
@@ -93,7 +94,7 @@ class GamerTermsOfServiceScreen extends StatelessWidget {
                     ),
                     const SizedBox(height: 10),
                     Text(
-                      'By using $appName, you agree to these terms. Please read them carefully.',
+                      'terms_header_desc'.tr(args: [appName]),
                       style: const TextStyle(
                         color: Color(0xFF050505),
                         fontSize: 13,
@@ -102,7 +103,7 @@ class GamerTermsOfServiceScreen extends StatelessWidget {
                     ),
                     const SizedBox(height: 8),
                     Text(
-                      'Last updated: $lastUpdated',
+                      'terms_last_updated'.tr(args: [lastUpdated]),
                       style: const TextStyle(
                         color: Color(0xFF65676B),
                         fontSize: 11,
@@ -117,130 +118,130 @@ class GamerTermsOfServiceScreen extends StatelessWidget {
               // Section 1: Acceptance
               _buildSection(
                 number: '1',
-                title: 'Acceptance of Terms',
+                title: 'terms_sec1_title'.tr(),
                 items: [
-                  'By creating an account or using the app, you accept these terms.',
-                  'If you do not agree, please do not use the app.',
-                  'You must be at least 13 years old to use this app.',
+                  'terms_sec1_item1'.tr(),
+                  'terms_sec1_item2'.tr(),
+                  'terms_sec1_item3'.tr(),
                 ],
               ),
 
               // Section 2: Account Responsibilities
               _buildSection(
                 number: '2',
-                title: 'Account Responsibilities',
+                title: 'terms_sec2_title'.tr(),
                 items: [
-                  'You are responsible for maintaining the confidentiality of your account.',
-                  'You must provide accurate information during registration.',
-                  'You must not share your account with others.',
-                  'You are responsible for all activity under your account.',
+                  'terms_sec2_item1'.tr(),
+                  'terms_sec2_item2'.tr(),
+                  'terms_sec2_item3'.tr(),
+                  'terms_sec2_item4'.tr(),
                 ],
               ),
 
               // Section 3: Acceptable Use
               _buildSection(
                 number: '3',
-                title: 'Acceptable Use',
+                title: 'terms_sec3_title'.tr(),
                 items: [
-                  'No hate speech, harassment, or threats.',
-                  'No spam, scams, or misleading content.',
-                  'No sharing of illegal, violent, or adult content.',
-                  'No impersonation of other users or brands.',
-                  'No cheating, hacking, or exploiting the app.',
-                  'No posting false or misleading rank screenshots.',
+                  'terms_sec3_item1'.tr(),
+                  'terms_sec3_item2'.tr(),
+                  'terms_sec3_item3'.tr(),
+                  'terms_sec3_item4'.tr(),
+                  'terms_sec3_item5'.tr(),
+                  'terms_sec3_item6'.tr(),
                 ],
               ),
 
               // Section 4: Content Ownership
               _buildSection(
                 number: '4',
-                title: 'Content Ownership',
+                title: 'terms_sec4_title'.tr(),
                 items: [
-                  'You own the content you post (posts, comments, images).',
-                  'By posting, you grant us a license to display your content in the app.',
-                  'You must not post copyrighted content without permission.',
-                  'We may remove any content that violates these terms.',
+                  'terms_sec4_item1'.tr(),
+                  'terms_sec4_item2'.tr(),
+                  'terms_sec4_item3'.tr(),
+                  'terms_sec4_item4'.tr(),
                 ],
               ),
 
               // Section 5: Virtual Coins
               _buildSection(
                 number: '5',
-                title: 'Virtual Coins (G-Coins)',
+                title: 'terms_sec5_title'.tr(),
                 items: [
-                  'G-Coins are virtual currency for in-app use only.',
-                  'G-Coins have NO real-world value and cannot be exchanged for cash.',
-                  'We may adjust G-Coin prices, rewards, or balances at any time.',
-                  'Abuse of the coin system may result in account suspension.',
+                  'terms_sec5_item1'.tr(),
+                  'terms_sec5_item2'.tr(),
+                  'terms_sec5_item3'.tr(),
+                  'terms_sec5_item4'.tr(),
                 ],
               ),
 
               // Section 6: 1v1 Challenges & Teams
               _buildSection(
                 number: '6',
-                title: '1v1 Challenges & Teams',
+                title: 'terms_sec6_title'.tr(),
                 items: [
-                  'You must provide valid screenshots for match verification.',
-                  'Fake or edited screenshots will result in disqualification.',
-                  'We are not responsible for disputes between players.',
-                  'Admin decisions on match results are final.',
+                  'terms_sec6_item1'.tr(),
+                  'terms_sec6_item2'.tr(),
+                  'terms_sec6_item3'.tr(),
+                  'terms_sec6_item4'.tr(),
                 ],
               ),
 
               // Section 7: Account Suspension
               _buildSection(
                 number: '7',
-                title: 'Account Suspension & Termination',
+                title: 'terms_sec7_title'.tr(),
                 items: [
-                  'We may suspend or ban accounts that violate these terms.',
-                  'Repeated violations may result in permanent ban.',
-                  'You may delete your own account anytime from settings.',
-                  'Banned accounts may lose access to all content and coins.',
+                  'terms_sec7_item1'.tr(),
+                  'terms_sec7_item2'.tr(),
+                  'terms_sec7_item3'.tr(),
+                  'terms_sec7_item4'.tr(),
                 ],
               ),
 
               // Section 8: Disclaimers
               _buildSection(
                 number: '8',
-                title: 'Disclaimers',
+                title: 'terms_sec8_title'.tr(),
                 items: [
-                  'The app is provided "as is" without warranties.',
-                  'We do not guarantee uninterrupted service or bug-free experience.',
-                  'We are not responsible for any loss of data or coins.',
-                  'Game names and trademarks belong to their respective owners.',
+                  'terms_sec8_item1'.tr(),
+                  'terms_sec8_item2'.tr(),
+                  'terms_sec8_item3'.tr(),
+                  'terms_sec8_item4'.tr(),
                 ],
               ),
 
               // Section 9: Limitation of Liability
               _buildSection(
                 number: '9',
-                title: 'Limitation of Liability',
+                title: 'terms_sec9_title'.tr(),
                 items: [
-                  'We are not liable for any indirect or consequential damages.',
-                  'Our total liability is limited to the amount you paid us (if any).',
-                  'This app is a community platform — user interactions are their own responsibility.',
+                  'terms_sec9_item1'.tr(),
+                  'terms_sec9_item2'.tr(),
+                  'terms_sec9_item3'.tr(),
                 ],
               ),
 
               // Section 10: Changes to Terms
               _buildSection(
                 number: '10',
-                title: 'Changes to Terms',
+                title: 'terms_sec10_title'.tr(),
                 items: [
-                  'We may update these terms from time to time.',
-                  'Continued use of the app means you accept the new terms.',
-                  'Major changes will be notified via in-app notification.',
+                  'terms_sec10_item1'.tr(),
+                  'terms_sec10_item2'.tr(),
+                  'terms_sec10_item3'.tr(),
                 ],
               ),
 
               // Section 11: Contact
               _buildSection(
                 number: '11',
-                title: 'Contact Us',
+                title: 'terms_sec11_title'.tr(),
                 items: [
-                  'For any questions about these terms:',
-                  'Email: $contactEmail',
-                  'We respond within 7 business days.',
+                  'terms_sec11_item1'.tr(),
+                  'terms_sec11_item2'.tr(args: [contactEmail]),
+                  'terms_sec11_item3'.tr(),
                 ],
               ),
 
@@ -259,9 +260,9 @@ class GamerTermsOfServiceScreen extends StatelessWidget {
                     ),
                   ),
                   icon: const Icon(Icons.open_in_new_rounded, size: 18),
-                  label: const Text(
-                    'Open Hosted Version',
-                    style: TextStyle(
+                  label: Text(
+                    'btn_open_hosted_version'.tr(),
+                    style: const TextStyle(
                       fontWeight: FontWeight.bold,
                       fontSize: 14,
                     ),
@@ -284,9 +285,9 @@ class GamerTermsOfServiceScreen extends StatelessWidget {
                       borderRadius: BorderRadius.circular(12),
                     ),
                   ),
-                  child: const Text(
-                    'I Agree',
-                    style: TextStyle(
+                  child: Text(
+                    'btn_i_agree'.tr(),
+                    style: const TextStyle(
                       fontWeight: FontWeight.bold,
                       fontSize: 15,
                     ),
@@ -369,7 +370,7 @@ class GamerTermsOfServiceScreen extends StatelessWidget {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     const Padding(
-                      padding: EdgeInsets.only(top: 6, right: 10),
+                      padding: EdgeInsetsDirectional.only(top: 6, end: 10),
                       child: Icon(
                         Icons.circle,
                         size: 5,
