@@ -1,3 +1,8 @@
+// ===============================================================================
+// COIN HISTORY SHEET — 100% Urdu Localization
+// File: lib/widgets/coin_history_sheet.dart
+// ===============================================================================
+
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import '../constants/gamer_theme.dart';
@@ -133,20 +138,20 @@ class _CoinHistorySheetState extends State<CoinHistorySheet> {
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Text(
-                        'Coin Activity History',
+                        'کوائن ہسٹری اور پاس بک',
                         style: TextStyle(
                           color: Colors.white,
-                          fontSize: 18,
+                          fontSize: 17,
                           fontWeight: FontWeight.w900,
                           letterSpacing: 0.5,
                         ),
                       ),
                       SizedBox(height: 2),
                       Text(
-                        'Detailed earnings, entry fees, prizes & store purchases',
+                        'تفصیلی کمائی، انٹری فیس، انعامات اور اسٹور خریداری',
                         style: TextStyle(
                           color: GamerTheme.textGray,
-                          fontSize: 12,
+                          fontSize: 11.5,
                         ),
                       ),
                     ],
@@ -231,7 +236,7 @@ class _CoinHistorySheetState extends State<CoinHistorySheet> {
                                 crossAxisAlignment: CrossAxisAlignment.start,
                                 children: [
                                   const Text(
-                                    'CURRENT BALANCE',
+                                    'موجودہ بیلنس',
                                     style: TextStyle(
                                       color: GamerTheme.textMuted,
                                       fontSize: 11,
@@ -245,10 +250,10 @@ class _CoinHistorySheetState extends State<CoinHistorySheet> {
                                       const Text('🪙', style: TextStyle(fontSize: 18)),
                                       const SizedBox(width: 6),
                                       Text(
-                                        '${NumberFormat("#,###").format(displayCoins)} Coins',
+                                        '${NumberFormat("#,###").format(displayCoins)} کوائنز',
                                         style: const TextStyle(
                                           color: Color(0xFFFFD700),
-                                          fontSize: 22,
+                                          fontSize: 20,
                                           fontWeight: FontWeight.w900,
                                         ),
                                       ),
@@ -268,7 +273,7 @@ class _CoinHistorySheetState extends State<CoinHistorySheet> {
                                   crossAxisAlignment: CrossAxisAlignment.end,
                                   children: [
                                     const Text(
-                                      'ESCROW HOLD',
+                                      'اسکرو ہولڈ',
                                       style: TextStyle(
                                         color: GamerTheme.accentOrange,
                                         fontSize: 9.5,
@@ -278,7 +283,7 @@ class _CoinHistorySheetState extends State<CoinHistorySheet> {
                                     ),
                                     const SizedBox(height: 2),
                                     Text(
-                                      '${NumberFormat("#,###").format(inEscrow)} Coins',
+                                      '${NumberFormat("#,###").format(inEscrow)} کوائنز',
                                       style: const TextStyle(
                                         color: Colors.white70,
                                         fontSize: 11,
@@ -313,7 +318,7 @@ class _CoinHistorySheetState extends State<CoinHistorySheet> {
                                           crossAxisAlignment: CrossAxisAlignment.start,
                                           children: [
                                             const Text(
-                                              'Total Added',
+                                              'کل شامل شدہ',
                                               style: TextStyle(color: GamerTheme.textMuted, fontSize: 10),
                                             ),
                                             Text(
@@ -351,7 +356,7 @@ class _CoinHistorySheetState extends State<CoinHistorySheet> {
                                           crossAxisAlignment: CrossAxisAlignment.start,
                                           children: [
                                             const Text(
-                                              'Total Deducted',
+                                              'کل کٹے ہوئے',
                                               style: TextStyle(color: GamerTheme.textMuted, fontSize: 10),
                                             ),
                                             Text(
@@ -384,7 +389,7 @@ class _CoinHistorySheetState extends State<CoinHistorySheet> {
                               ),
                               icon: const Icon(Icons.storefront_rounded, size: 16),
                               label: const Text(
-                                'OPEN COIN STORE 🛒',
+                                'کوائن اسٹور کھولیں 🛒',
                                 style: TextStyle(fontWeight: FontWeight.w900, fontSize: 11),
                               ),
                               onPressed: () {
@@ -411,11 +416,11 @@ class _CoinHistorySheetState extends State<CoinHistorySheet> {
             padding: const EdgeInsets.symmetric(horizontal: 16),
             child: Row(
               children: [
-                _buildFilterChip('All Activity', 0, Icons.list_alt_rounded),
+                _buildFilterChip('تمام سرگرمیاں', 0, Icons.list_alt_rounded),
                 const SizedBox(width: 8),
-                _buildFilterChip('Earned (+)', 1, Icons.add_circle_outline_rounded, activeColor: GamerTheme.neonGreen),
+                _buildFilterChip('کمائے گئے (+)', 1, Icons.add_circle_outline_rounded, activeColor: GamerTheme.neonGreen),
                 const SizedBox(width: 8),
-                _buildFilterChip('Spent (-)', 2, Icons.remove_circle_outline_rounded, activeColor: GamerTheme.redAccent),
+                _buildFilterChip('خرچ ہوئے (-)', 2, Icons.remove_circle_outline_rounded, activeColor: GamerTheme.redAccent),
               ],
             ),
           ),
@@ -490,7 +495,7 @@ class _CoinHistorySheetState extends State<CoinHistorySheet> {
                 label,
                 style: TextStyle(
                   color: isSelected ? Colors.white : GamerTheme.textMuted,
-                  fontSize: 11.5,
+                  fontSize: 11,
                   fontWeight: isSelected ? FontWeight.bold : FontWeight.w500,
                 ),
               ),
@@ -512,9 +517,9 @@ class _CoinHistorySheetState extends State<CoinHistorySheet> {
 
     final IconData typeIcon = _getIconForType(tx.type, isCredit);
     final String badgeText = isCredit
-        ? 'EARNED'
-        : (isRelease ? 'RELEASED' : (isEscrowHold ? 'ESCROW' : 'SPENT'));
-    final String amountText = isCredit ? '+${tx.amount} Coins' : '-${tx.amount.abs()} Coins';
+        ? 'کمایا گیا'
+        : (isRelease ? 'جاری کیا گیا' : (isEscrowHold ? 'اسکرو' : 'خرچ ہوا'));
+    final String amountText = isCredit ? '+${tx.amount} کوائنز' : '-${tx.amount.abs()} کوائنز';
 
     return Container(
       decoration: BoxDecoration(
@@ -567,14 +572,14 @@ class _CoinHistorySheetState extends State<CoinHistorySheet> {
                             style: TextStyle(
                               color: badgeColor,
                               fontWeight: FontWeight.w900,
-                              fontSize: 14,
+                              fontSize: 13.5,
                             ),
                           ),
                         ],
                       ),
                       const SizedBox(height: 4),
                       Text(
-                        tx.description.isNotEmpty ? tx.description : (isCredit ? 'Coins added' : 'Coins deducted'),
+                        tx.description.isNotEmpty ? tx.description : (isCredit ? 'کوائنز شامل کیے گئے' : 'کوائنز کاٹے گئے'),
                         style: const TextStyle(
                           color: GamerTheme.textGray,
                           fontSize: 12,
@@ -641,19 +646,20 @@ class _CoinHistorySheetState extends State<CoinHistorySheet> {
             const SizedBox(height: 16),
             Text(
               _selectedFilter == 1
-                  ? 'No coins earned yet'
+                  ? 'ابھی تک کوئی کوائن نہیں کمایا گیا'
                   : _selectedFilter == 2
-                      ? 'No coins spent yet'
-                      : 'No coin history yet',
+                      ? 'ابھی تک کوئی کوائن خرچ نہیں ہوا'
+                      : 'ابھی تک کوئی کوائن ہسٹری موجود نہیں',
               style: const TextStyle(
                 color: Colors.white,
                 fontSize: 15,
                 fontWeight: FontWeight.bold,
               ),
+              textAlign: TextAlign.center,
             ),
             const SizedBox(height: 6),
             const Text(
-              'Join rooms, win matches, watch ads or claim daily bonus to see activity here.',
+              'رومز جوائن کریں، میچز جیتیں، اشتہارات دیکھیں یا یہاں سرگرمی دیکھنے کے لیے روزانہ کا بونس حاصل کریں۔',
               textAlign: TextAlign.center,
               style: TextStyle(
                 color: GamerTheme.textMuted,
@@ -760,12 +766,12 @@ class _CoinHistorySheetState extends State<CoinHistorySheet> {
                 child: Column(
                   children: [
                     Text(
-                      isCredit ? 'Coins Added' : 'Coins Deducted',
+                      isCredit ? 'کوائنز شامل کیے گئے' : 'کوائنز کاٹے گئے',
                       style: TextStyle(color: color, fontSize: 11, fontWeight: FontWeight.bold),
                     ),
                     const SizedBox(height: 4),
                     Text(
-                      '${isCredit ? '+' : ''}${tx.amount} Coins',
+                      '${isCredit ? '+' : ''}${tx.amount} کوائنز',
                       style: TextStyle(
                         color: color,
                         fontSize: 24,
@@ -776,27 +782,27 @@ class _CoinHistorySheetState extends State<CoinHistorySheet> {
                 ),
               ),
               const SizedBox(height: 16),
-              _detailRow('Reason:', tx.description.isNotEmpty ? tx.description : tx.title),
+              _detailRow('وجہ:', tx.description.isNotEmpty ? tx.description : tx.title),
               const SizedBox(height: 8),
-              _detailRow('Type:', tx.type.replaceAll('_', ' ').toUpperCase()),
+              _detailRow('قسم:', tx.type.replaceAll('_', ' ').toUpperCase()),
               const SizedBox(height: 8),
-              _detailRow('Date & Time:', DateFormat('dd MMMM yyyy, hh:mm:ss a').format(tx.timestamp)),
+              _detailRow('تاریخ اور وقت:', DateFormat('dd MMMM yyyy، hh:mm:ss a').format(tx.timestamp)),
               if (tx.roomId != null && tx.roomId!.isNotEmpty) ...[
                 const SizedBox(height: 8),
-                _detailRow('Room ID:', tx.roomId!),
+                _detailRow('روم آئی ڈی:', tx.roomId!),
               ],
               const SizedBox(height: 8),
-              _detailRow('Status:', tx.status.toUpperCase()),
+              _detailRow('اسٹیٹس:', tx.status.toUpperCase()),
               if (tx.id.isNotEmpty) ...[
                 const SizedBox(height: 8),
-                _detailRow('Tx ID:', tx.id),
+                _detailRow('ٹرانزیکشن ID:', tx.id),
               ],
             ],
           ),
           actions: [
             TextButton(
               onPressed: () => Navigator.pop(ctx),
-              child: const Text('Close', style: TextStyle(color: GamerTheme.accentBlue, fontWeight: FontWeight.bold)),
+              child: const Text('بند کریں', style: TextStyle(color: GamerTheme.accentBlue, fontWeight: FontWeight.bold)),
             ),
           ],
         );
