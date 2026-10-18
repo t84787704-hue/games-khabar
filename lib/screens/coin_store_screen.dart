@@ -1,6 +1,5 @@
 // ═══════════════════════════════════════════════════════════════════════════════
-// CLEAN COIN STORE SCREEN
-// - Removed: Frames, Badges, VIP passes, Spotlight, Chat colors, Feed/Room Boost
+// CLEAN COIN STORE SCREEN — Localized with easy_localization
 // - Retained: Live Balance, Daily Check-in, Rewarded Ads, Referral & Activity History
 // ═══════════════════════════════════════════════════════════════════════════════
 import 'dart:async';
@@ -8,6 +7,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:intl/intl.dart';
 import 'package:share_plus/share_plus.dart';
+import 'package:easy_localization/easy_localization.dart';
 import '../constants/gamer_theme.dart';
 import '../models/coin_wallet_model.dart';
 import '../models/coin_transaction_model.dart';
@@ -101,15 +101,17 @@ class _CoinStoreScreenState extends State<CoinStoreScreen> {
                   setState(() => _isClaimingDaily = false);
                   if (success) {
                     ScaffoldMessenger.of(this.context).showSnackBar(
-                      const SnackBar(
+                      SnackBar(
                         backgroundColor: GamerTheme.neonGreen,
                         content: Row(
                           children: [
-                            Text('🎁', style: TextStyle(fontSize: 20)),
-                            SizedBox(width: 10),
-                            Text(
-                              '+50 G-Coins Claimed! Daily Login Streak Bonus.',
-                              style: TextStyle(color: Colors.black, fontWeight: FontWeight.bold),
+                            const Text('🎁', style: TextStyle(fontSize: 20)),
+                            const SizedBox(width: 10),
+                            Expanded(
+                              child: Text(
+                                'msg_daily_streak_claimed'.tr(),
+                                style: const TextStyle(color: Colors.black, fontWeight: FontWeight.bold),
+                              ),
                             ),
                           ],
                         ),
@@ -138,10 +140,10 @@ class _CoinStoreScreenState extends State<CoinStoreScreen> {
                   child: const Icon(Icons.play_arrow_rounded, color: GamerTheme.accentOrange, size: 20),
                 ),
                 const SizedBox(width: 10),
-                const Expanded(
+                Expanded(
                   child: Text(
-                    'DAILY BONUS AD',
-                    style: TextStyle(
+                    'daily_bonus_ad_title'.tr(),
+                    style: const TextStyle(
                       color: GamerTheme.accentOrange,
                       fontSize: 13,
                       fontWeight: FontWeight.w900,
@@ -177,20 +179,20 @@ class _CoinStoreScreenState extends State<CoinStoreScreen> {
                     borderRadius: BorderRadius.circular(16),
                     border: Border.all(color: GamerTheme.borderLight),
                   ),
-                  child: const Center(
+                  child: Center(
                     child: Column(
                       mainAxisAlignment: MainAxisAlignment.center,
                       children: [
-                        Icon(Icons.ondemand_video_rounded, color: GamerTheme.accentOrange, size: 44),
-                        SizedBox(height: 8),
+                        const Icon(Icons.ondemand_video_rounded, color: GamerTheme.accentOrange, size: 44),
+                        const SizedBox(height: 8),
                         Text(
-                          'Sponsor Gaming Network',
-                          style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 13),
+                          'sponsor_gaming_network'.tr(),
+                          style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 13),
                         ),
-                        SizedBox(height: 4),
+                        const SizedBox(height: 4),
                         Text(
-                          'Watch 5s ad to claim 50 G-Coins...',
-                          style: TextStyle(color: GamerTheme.textMuted, fontSize: 11),
+                          'watch_5s_ad_desc'.tr(),
+                          style: const TextStyle(color: GamerTheme.textMuted, fontSize: 11),
                         ),
                       ],
                     ),
@@ -237,15 +239,17 @@ class _CoinStoreScreenState extends State<CoinStoreScreen> {
               if (mounted) {
                 setState(() => _isWatchingAd = false);
                 ScaffoldMessenger.of(this.context).showSnackBar(
-                  const SnackBar(
+                  SnackBar(
                     backgroundColor: GamerTheme.neonGreen,
                     content: Row(
                       children: [
-                        Text('⚡', style: TextStyle(fontSize: 20)),
-                        SizedBox(width: 10),
-                        Text(
-                          '+100 G-Coins Added! Rewarded Video Ad completed.',
-                          style: TextStyle(color: Colors.black, fontWeight: FontWeight.bold),
+                        const Text('⚡', style: TextStyle(fontSize: 20)),
+                        const SizedBox(width: 10),
+                        Expanded(
+                          child: Text(
+                            'msg_ad_coins_added'.tr(),
+                            style: const TextStyle(color: Colors.black, fontWeight: FontWeight.bold),
+                          ),
                         ),
                       ],
                     ),
@@ -272,10 +276,10 @@ class _CoinStoreScreenState extends State<CoinStoreScreen> {
                   child: const Icon(Icons.play_arrow_rounded, color: GamerTheme.accentBlue, size: 20),
                 ),
                 const SizedBox(width: 10),
-                const Expanded(
+                Expanded(
                   child: Text(
-                    'REWARDED AD SPONSOR',
-                    style: TextStyle(
+                    'rewarded_ad_sponsor_title'.tr(),
+                    style: const TextStyle(
                       color: GamerTheme.accentBlue,
                       fontSize: 13,
                       fontWeight: FontWeight.w900,
@@ -311,20 +315,20 @@ class _CoinStoreScreenState extends State<CoinStoreScreen> {
                     borderRadius: BorderRadius.circular(16),
                     border: Border.all(color: GamerTheme.borderLight),
                   ),
-                  child: const Center(
+                  child: Center(
                     child: Column(
                       mainAxisAlignment: MainAxisAlignment.center,
                       children: [
-                        Icon(Icons.smart_display_rounded, color: GamerTheme.accentBlue, size: 44),
-                        SizedBox(height: 8),
+                        const Icon(Icons.smart_display_rounded, color: GamerTheme.accentBlue, size: 44),
+                        const SizedBox(height: 8),
                         Text(
-                          'Streaming Gaming Sponsor',
-                          style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 13),
+                          'streaming_gaming_sponsor'.tr(),
+                          style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 13),
                         ),
-                        SizedBox(height: 4),
+                        const SizedBox(height: 4),
                         Text(
-                          'Watch 5s to earn +100 G-Coins...',
-                          style: TextStyle(color: GamerTheme.textMuted, fontSize: 11),
+                          'watch_5s_earn_100_desc'.tr(),
+                          style: const TextStyle(color: GamerTheme.textMuted, fontSize: 11),
                         ),
                       ],
                     ),
@@ -362,14 +366,14 @@ class _CoinStoreScreenState extends State<CoinStoreScreen> {
           icon: const Icon(Icons.arrow_back_rounded, color: Colors.white),
           onPressed: () => Navigator.pop(context),
         ),
-        title: const Row(
+        title: Row(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Icon(Icons.storefront_rounded, color: GamerTheme.neonGreen, size: 22),
-            SizedBox(width: 8),
+            const Icon(Icons.storefront_rounded, color: GamerTheme.neonGreen, size: 22),
+            const SizedBox(width: 8),
             Text(
-              'COIN STORE',
-              style: TextStyle(
+              'title_coin_store'.tr(),
+              style: const TextStyle(
                 color: Colors.white,
                 fontWeight: FontWeight.w900,
                 fontSize: 18,
@@ -421,12 +425,12 @@ class _CoinStoreScreenState extends State<CoinStoreScreen> {
               Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  const Text(
-                    'BALANCE',
-                    style: TextStyle(color: GamerTheme.textMuted, fontSize: 10, fontWeight: FontWeight.bold),
+                  Text(
+                    'balance_caps'.tr(),
+                    style: const TextStyle(color: GamerTheme.textMuted, fontSize: 10, fontWeight: FontWeight.bold),
                   ),
                   Text(
-                    '${NumberFormat('#,###').format(wallet.coins)} G-Coins',
+                    'coins_formatted_gcoins'.tr(args: [NumberFormat('#,###').format(wallet.coins)]),
                     style: const TextStyle(
                       color: Colors.white,
                       fontSize: 18,
@@ -446,13 +450,13 @@ class _CoinStoreScreenState extends State<CoinStoreScreen> {
                 color: GamerTheme.neonGreen,
                 borderRadius: BorderRadius.circular(10),
               ),
-              child: const Row(
+              child: Row(
                 children: [
-                  Icon(Icons.play_circle_fill_rounded, color: Colors.black, size: 16),
-                  SizedBox(width: 6),
+                  const Icon(Icons.play_circle_fill_rounded, color: Colors.black, size: 16),
+                  const SizedBox(width: 6),
                   Text(
-                    'EARN +100 📺',
-                    style: TextStyle(color: Colors.black, fontWeight: FontWeight.w900, fontSize: 11),
+                    'btn_earn_100_ad'.tr(),
+                    style: const TextStyle(color: Colors.black, fontWeight: FontWeight.w900, fontSize: 11),
                   ),
                 ],
               ),
@@ -473,15 +477,15 @@ class _CoinStoreScreenState extends State<CoinStoreScreen> {
         _buildEarnActionCard(
           icon: Icons.calendar_today_rounded,
           iconColor: GamerTheme.neonGreen,
-          badge: '+50 COINS',
+          badge: 'badge_plus_50_coins'.tr(),
           badgeColor: GamerTheme.neonGreen,
-          title: 'Daily Check-In Reward',
+          title: 'daily_checkin_reward_title'.tr(),
           subtitle: canClaimDaily
-              ? 'Watch 1 sponsored ad to claim your 50 G-Coins daily bonus.'
-              : 'Next daily claim available in ${_formatDuration(_timeUntilNextClaim)}',
+              ? 'daily_checkin_ready_sub'.tr()
+              : 'daily_checkin_next_in'.tr(args: [_formatDuration(_timeUntilNextClaim)]),
           buttonText: _isClaimingDaily
-              ? 'WATCHING...'
-              : (canClaimDaily ? 'CLAIM 50 COINS 🎁' : _formatDuration(_timeUntilNextClaim)),
+              ? 'btn_watching'.tr()
+              : (canClaimDaily ? 'btn_claim_50_coins'.tr() : _formatDuration(_timeUntilNextClaim)),
           buttonColor: canClaimDaily ? GamerTheme.neonGreen : GamerTheme.cardElevated,
           textColor: canClaimDaily ? Colors.black : GamerTheme.textMuted,
           onTap: canClaimDaily ? () => _handleClaimDaily(uid) : null,
@@ -490,11 +494,11 @@ class _CoinStoreScreenState extends State<CoinStoreScreen> {
         _buildEarnActionCard(
           icon: Icons.play_circle_filled_rounded,
           iconColor: GamerTheme.accentOrange,
-          badge: '+100 COINS EACH',
+          badge: 'badge_plus_100_each'.tr(),
           badgeColor: GamerTheme.accentOrange,
-          title: 'Watch Sponsored Rewarded Ads',
-          subtitle: 'Support the community and earn 100 G-Coins for each completed 5s sponsor video.',
-          buttonText: _isWatchingAd ? 'STREAMING AD...' : 'WATCH AD (+100 COINS) 📺',
+          title: 'watch_sponsored_ads_title'.tr(),
+          subtitle: 'watch_sponsored_ads_sub'.tr(),
+          buttonText: _isWatchingAd ? 'btn_streaming_ad'.tr() : 'btn_watch_ad_100'.tr(),
           buttonColor: GamerTheme.accentOrange,
           textColor: Colors.white,
           onTap: _isWatchingAd ? null : () => _handleWatchAd(uid),
@@ -503,23 +507,23 @@ class _CoinStoreScreenState extends State<CoinStoreScreen> {
         _buildEarnActionCard(
           icon: Icons.people_alt_rounded,
           iconColor: GamerTheme.accentBlue,
-          badge: '+200 COINS',
+          badge: 'badge_plus_200_coins'.tr(),
           badgeColor: GamerTheme.accentBlue,
-          title: 'Squad Referral Bonus',
-          subtitle: 'Share code $inviteCode with your squad. Both earn +200 G-Coins after 5 matches!',
-          buttonText: 'SHARE CODE ($inviteCode) 🚀',
+          title: 'squad_referral_bonus_title'.tr(),
+          subtitle: 'squad_referral_bonus_sub'.tr(args: [inviteCode]),
+          buttonText: 'btn_share_code'.tr(args: [inviteCode]),
           buttonColor: GamerTheme.accentBlue,
           textColor: Colors.white,
           onTap: () {
             Share.share(
-              'Join My Gamer ID for free skill tournaments! Use code: $inviteCode. Play 5 matches to earn +200 G-Coins! 🎮💰',
+              'share_invite_msg'.tr(args: [inviteCode]),
             );
           },
         ),
         const SizedBox(height: 24),
-        const Text(
-          'STORE & REWARD HISTORY',
-          style: TextStyle(
+        Text(
+          'store_reward_history_title'.tr(),
+          style: const TextStyle(
             color: GamerTheme.accentBlue,
             fontSize: 13,
             fontWeight: FontWeight.w900,
@@ -539,9 +543,11 @@ class _CoinStoreScreenState extends State<CoinStoreScreen> {
                   borderRadius: BorderRadius.circular(16),
                   border: Border.all(color: GamerTheme.borderDark),
                 ),
-                child: const Center(
-                  child: Text('No store transactions yet.',
-                      style: TextStyle(color: GamerTheme.textMuted, fontSize: 13)),
+                child: Center(
+                  child: Text(
+                    'no_store_transactions'.tr(),
+                    style: const TextStyle(color: GamerTheme.textMuted, fontSize: 13),
+                  ),
                 ),
               );
             }
@@ -582,9 +588,14 @@ class _CoinStoreScreenState extends State<CoinStoreScreen> {
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            Text(tx.title,
-                                style: const TextStyle(
-                                    color: Colors.white, fontWeight: FontWeight.bold, fontSize: 12)),
+                            Text(
+                              tx.title,
+                              style: const TextStyle(
+                                color: Colors.white,
+                                fontWeight: FontWeight.bold,
+                                fontSize: 12,
+                              ),
+                            ),
                             const SizedBox(height: 2),
                             Text(
                               DateFormat('dd MMM, hh:mm a').format(tx.timestamp),
