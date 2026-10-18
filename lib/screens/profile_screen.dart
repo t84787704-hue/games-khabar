@@ -116,18 +116,18 @@ class _ProfileScreenState extends State<ProfileScreen> {
         backgroundColor: cardDark,
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
         title: Text(
-          _safeTr('log_out', fallback: 'Log Out'),
+          _safeTr('log_out', fallback: 'لاگ آؤٹ'),
           style: TextStyle(color: textWhite, fontWeight: FontWeight.bold),
         ),
         content: Text(
-          _safeTr('log_out_confirm', fallback: 'Are you sure you want to log out of Gamers ID?'),
+          _safeTr('log_out_confirm', fallback: 'کیا آپ واقعی گیمرز آئی ڈی سے لاگ آؤٹ کرنا چاہتے ہیں؟'),
           style: TextStyle(color: textGray),
         ),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(ctx),
             child: Text(
-              _safeTr('cancel', fallback: 'Cancel'),
+              _safeTr('cancel', fallback: 'منسوخ'),
               style: TextStyle(color: textGray),
             ),
           ),
@@ -150,7 +150,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
               }
             },
             child: Text(
-              _safeTr('log_out', fallback: 'Log Out'),
+              _safeTr('log_out', fallback: 'لاگ آؤٹ'),
               style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
             ),
           ),
@@ -221,7 +221,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
                             Text(
-                              _safeTr('privacy_settings', fallback: 'Privacy Settings'),
+                              _safeTr('privacy_settings', fallback: 'پراائیویسی سیٹنگز'),
                               style: TextStyle(
                                 color: ThemeService.textPrimary,
                                 fontWeight: FontWeight.bold,
@@ -229,7 +229,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                               ),
                             ),
                             Text(
-                              _safeTr('privacy_settings_sub', fallback: 'Control what others can see on your profile'),
+                              _safeTr('privacy_settings_sub', fallback: 'کنٹرول کریں کہ دوسرے آپ کی پروفائل پر کیا دیکھ سکتے ہیں'),
                               style: TextStyle(color: ThemeService.textSecondary, fontSize: 12),
                             ),
                           ],
@@ -244,11 +244,11 @@ class _ProfileScreenState extends State<ProfileScreen> {
                     contentPadding: EdgeInsets.zero,
                     activeColor: const Color(0xFF1877F2),
                     title: Text(
-                      _safeTr('private_profile', fallback: 'Private Profile'),
+                      _safeTr('private_profile', fallback: 'پراائیویٹ پروفائل'),
                       style: TextStyle(color: ThemeService.textPrimary, fontWeight: FontWeight.bold, fontSize: 14),
                     ),
                     subtitle: Text(
-                      _safeTr('private_profile_sub', fallback: 'Only your followers/team members can view your full profile'),
+                      _safeTr('private_profile_sub', fallback: 'صرف آپ کے فالوورز یا ٹیم ممبرز آپ کی مکمل پروفائل دیکھ سکتے ہیں'),
                       style: TextStyle(color: ThemeService.textSecondary, fontSize: 11.5),
                     ),
                     value: isPrivate,
@@ -260,11 +260,11 @@ class _ProfileScreenState extends State<ProfileScreen> {
                     contentPadding: EdgeInsets.zero,
                     activeColor: const Color(0xFF1877F2),
                     title: Text(
-                      _safeTr('show_game_uid', fallback: 'Show In-Game Name & Game UID'),
+                      _safeTr('show_game_uid', fallback: 'ان-گیم نام اور گیم UID دکھائیں'),
                       style: TextStyle(color: ThemeService.textPrimary, fontWeight: FontWeight.bold, fontSize: 14),
                     ),
                     subtitle: Text(
-                      _safeTr('show_game_uid_sub', fallback: 'Allow other players to copy your official game character ID'),
+                      _safeTr('show_game_uid_sub', fallback: 'دوسرے کھلاڑیوں کو آپ کی آفیشل گیم کریکٹر آئی ڈی کاپی کرنے کی اجازت دیں'),
                       style: TextStyle(color: ThemeService.textSecondary, fontSize: 11.5),
                     ),
                     value: showUid,
@@ -276,11 +276,11 @@ class _ProfileScreenState extends State<ProfileScreen> {
                     contentPadding: EdgeInsets.zero,
                     activeColor: const Color(0xFF1877F2),
                     title: Text(
-                      _safeTr('show_match_stats', fallback: 'Show Match Stats & Wins'),
+                      _safeTr('show_match_stats', fallback: 'میچ اسٹیٹس اور فتوحات دکھائیں'),
                       style: TextStyle(color: ThemeService.textPrimary, fontWeight: FontWeight.bold, fontSize: 14),
                     ),
                     subtitle: Text(
-                      _safeTr('show_match_stats_sub', fallback: 'Display your tournament wins, win rate, and room history'),
+                      _safeTr('show_match_stats_sub', fallback: 'اپنے ٹورنامنٹ کی جیت، ون ریٹ اور روم ہسٹری دکھائیں'),
                       style: TextStyle(color: ThemeService.textSecondary, fontSize: 11.5),
                     ),
                     value: showStats,
@@ -292,11 +292,11 @@ class _ProfileScreenState extends State<ProfileScreen> {
                     contentPadding: EdgeInsets.zero,
                     activeColor: const Color(0xFF1877F2),
                     title: Text(
-                      _safeTr('show_followers', fallback: 'Show Followers List & Count'),
+                      _safeTr('show_followers', fallback: 'فالوورز کی لسٹ اور تعداد دکھائیں'),
                       style: TextStyle(color: ThemeService.textPrimary, fontWeight: FontWeight.bold, fontSize: 14),
                     ),
                     subtitle: Text(
-                      _safeTr('show_followers_sub', fallback: 'Allow other gamers to see who follows your Gamer ID'),
+                      _safeTr('show_followers_sub', fallback: 'دوسرے گیمرز کو دیکھنے دیں کہ آپ کو کون فالو کرتا ہے'),
                       style: TextStyle(color: ThemeService.textSecondary, fontSize: 11.5),
                     ),
                     value: showFollowers,
@@ -308,11 +308,11 @@ class _ProfileScreenState extends State<ProfileScreen> {
                     contentPadding: EdgeInsets.zero,
                     activeColor: const Color(0xFF1877F2),
                     title: Text(
-                      _safeTr('show_following', fallback: 'Show Following List & Count'),
+                      _safeTr('show_following', fallback: 'فالوئنگ لسٹ اور تعداد دکھائیں'),
                       style: TextStyle(color: ThemeService.textPrimary, fontWeight: FontWeight.bold, fontSize: 14),
                     ),
                     subtitle: Text(
-                      _safeTr('show_following_sub', fallback: 'Allow other gamers to see who you are following'),
+                      _safeTr('show_following_sub', fallback: 'دوسرے گیمرز کو دیکھنے دیں کہ آپ کس کو فالو کر رہے ہیں'),
                       style: TextStyle(color: ThemeService.textSecondary, fontSize: 11.5),
                     ),
                     value: showFollowing,
@@ -324,11 +324,11 @@ class _ProfileScreenState extends State<ProfileScreen> {
                     contentPadding: EdgeInsets.zero,
                     activeColor: const Color(0xFF1877F2),
                     title: Text(
-                      _safeTr('allow_challenges', fallback: 'Allow Direct Challenges'),
+                      _safeTr('allow_challenges', fallback: 'براہ راست چیلنجز کی اجازت دیں'),
                       style: TextStyle(color: ThemeService.textPrimary, fontWeight: FontWeight.bold, fontSize: 14),
                     ),
                     subtitle: Text(
-                      _safeTr('allow_challenges_sub', fallback: 'Allow other gamers and teams to challenge you in 1v1 matches'),
+                      _safeTr('allow_challenges_sub', fallback: 'دوسرے گیمرز اور ٹیموں کو 1v1 میچز میں چیلنج کرنے کی اجازت دیں'),
                       style: TextStyle(color: ThemeService.textSecondary, fontSize: 11.5),
                     ),
                     value: allowChallenges,
@@ -380,7 +380,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                           ScaffoldMessenger.of(context).showSnackBar(
                             SnackBar(
                               content: Text(
-                                _safeTr('privacy_settings_updated', fallback: '✅ Privacy Settings updated successfully!'),
+                                _safeTr('privacy_settings_updated', fallback: '✅ پراائیویسی سیٹنگز کامیابی کے ساتھ اپڈیٹ ہو گئیں!'),
                               ),
                               backgroundColor: const Color(0xFF00FF88),
                               behavior: SnackBarBehavior.floating,
@@ -389,7 +389,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                         }
                       },
                       child: Text(
-                        _safeTr('save_settings', fallback: 'Save Settings'),
+                        _safeTr('save_settings', fallback: 'سیٹنگز محفوظ کریں'),
                         style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
                       ),
                     ),
@@ -427,7 +427,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
             elevation: 0,
             centerTitle: true,
             title: Text(
-              _safeTr('profile_settings', fallback: 'Settings & Preferences'),
+              _safeTr('profile_settings', fallback: 'سیٹنگز اور ترجیحات'),
               style: TextStyle(
                 color: textWhite,
                 fontWeight: FontWeight.w900,
@@ -471,7 +471,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                           const Text('🪙', style: TextStyle(fontSize: 13)),
                           const SizedBox(width: 4),
                           Text(
-                            _safeTr('g_coins_count', fallback: 'G-Coins: $coins', args: ['$coins']),
+                            _safeTr('g_coins_count', fallback: 'جی-کوائنز: $coins', args: ['$coins']),
                             style: const TextStyle(
                               color: Color(0xFFFFD700),
                               fontWeight: FontWeight.w900,
@@ -533,7 +533,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                       ),
                       const SizedBox(height: 4),
                       Text(
-                        userEmail ?? _safeTr('community_member', fallback: 'Community Member'),
+                        userEmail ?? _safeTr('community_member', fallback: 'کومونٹی ممبر'),
                         style: TextStyle(
                           color: isCurrentAdmin ? neonGreen : textGray,
                           fontSize: 13,
@@ -550,7 +550,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                             border: Border.all(color: neonGreen, width: 1),
                           ),
                           child: Text(
-                            '🛡️ ${_safeTr('verified_admin', fallback: 'Verified Admin')}',
+                            '🛡️ ${_safeTr('verified_admin', fallback: 'تصدیق شدہ ایڈمن')}',
                             style: TextStyle(
                               color: neonGreen,
                               fontSize: 10,
@@ -620,10 +620,10 @@ class _ProfileScreenState extends State<ProfileScreen> {
                                         children: [
                                           Text(
                                             isVerified
-                                                ? _safeTr('official_verified_gamer', fallback: 'Official Verified Gamer')
+                                                ? _safeTr('official_verified_gamer', fallback: 'آفیشل تصدیق شدہ گیمر')
                                                 : (isPending
-                                                    ? _safeTr('under_review_24h', fallback: 'Under Review 24h')
-                                                    : _safeTr('apply_for_verification', fallback: 'Apply for Verification')),
+                                                    ? _safeTr('under_review_24h', fallback: 'زیرِ جائزہ 24 گھنٹے')
+                                                    : _safeTr('apply_for_verification', fallback: 'تصدیق کے لیے اپلائی کریں')),
                                             style: TextStyle(
                                               color: textWhite,
                                               fontWeight: FontWeight.w900,
@@ -641,7 +641,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                                                 borderRadius: BorderRadius.circular(4),
                                               ),
                                               child: Text(
-                                                _safeTr('review_24h_tag', fallback: '24H REVIEW'),
+                                                _safeTr('review_24h_tag', fallback: '24 گھنٹے جائزہ'),
                                                 style: const TextStyle(color: Color(0xFFFF8A00), fontSize: 9, fontWeight: FontWeight.w900),
                                               ),
                                             ),
@@ -650,10 +650,10 @@ class _ProfileScreenState extends State<ProfileScreen> {
                                       const SizedBox(height: 3),
                                       Text(
                                         isVerified
-                                            ? _safeTr('blue_tick_active_desc', fallback: 'Blue Tick active on your Gamer ID & all posts.')
+                                            ? _safeTr('blue_tick_active_desc', fallback: 'آپ کی گیمرز آئی ڈی اور تمام پوسٹس پر بلیو ٹک فعال ہے۔')
                                             : (isPending
-                                                ? _safeTr('app_under_review_desc', fallback: 'Application under review • 24h validation.')
-                                                : _safeTr('get_blue_tick_desc', fallback: 'Get Blue Tick (Crown/Ace, K/D 3.0+, 5k Likes)')),
+                                                ? _safeTr('app_under_review_desc', fallback: 'درخواست زیرِ جائزہ ہے • 24 گھنٹے تصدیق۔')
+                                                : _safeTr('get_blue_tick_desc', fallback: 'بلیو ٹک حاصل کریں (کاؤن/ایس، K/D 3.0+، 5k لائکس)')),
                                         style: TextStyle(color: textGray, fontSize: 12),
                                       ),
                                     ],
@@ -668,10 +668,10 @@ class _ProfileScreenState extends State<ProfileScreen> {
                                   ),
                                   child: Text(
                                     isVerified
-                                        ? _safeTr('verified', fallback: 'VERIFIED')
+                                        ? _safeTr('verified', fallback: 'تصدیق شدہ')
                                         : (isPending
-                                            ? _safeTr('pending', fallback: 'PENDING')
-                                            : _safeTr('apply', fallback: 'APPLY')),
+                                            ? _safeTr('pending', fallback: 'پینڈنگ')
+                                            : _safeTr('apply', fallback: 'اپلائی')),
                                     style: TextStyle(
                                       color: isVerified ? Colors.blue : (isPending ? const Color(0xFFFF8A00) : Colors.blue),
                                       fontSize: 11,
@@ -708,7 +708,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                         child: Icon(Icons.admin_panel_settings_rounded, color: neonGreen, size: 24),
                       ),
                       title: Text(
-                        _safeTr('admin_panel', fallback: 'Admin Panel'),
+                        _safeTr('admin_panel', fallback: 'ایڈمن پینل'),
                         style: TextStyle(
                           color: textWhite,
                           fontWeight: FontWeight.w900,
@@ -716,7 +716,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                         ),
                       ),
                       subtitle: Text(
-                        _safeTr('admin_panel_desc', fallback: 'Manage matches, proofs & content'),
+                        _safeTr('admin_panel_desc', fallback: 'میچز، پروفس اور مواد کا انتظام کریں'),
                         style: TextStyle(color: textGray, fontSize: 12),
                       ),
                       trailing: Icon(Icons.arrow_forward_ios_rounded, color: neonGreen, size: 16),
@@ -743,7 +743,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                           child: Icon(Icons.language_rounded, color: neonGreen, size: 20),
                         ),
                         title: Text(
-                          _safeTr('app_language', fallback: 'App Language'),
+                          _safeTr('app_language', fallback: 'ایپ کی زبان'),
                           style: TextStyle(color: textWhite, fontSize: 14, fontWeight: FontWeight.bold),
                         ),
                         subtitle: Row(
@@ -754,10 +754,6 @@ class _ProfileScreenState extends State<ProfileScreen> {
                               currentLanguageModel.nativeName,
                               style: TextStyle(color: neonGreen, fontSize: 13, fontWeight: FontWeight.w700),
                             ),
-                            if (currentLanguageModel.code != 'en' && currentLanguageModel.code != 'ro') ...[
-                              const SizedBox(width: 4),
-                              Text('(${currentLanguageModel.englishName})', style: TextStyle(color: textGray, fontSize: 11)),
-                            ],
                           ],
                         ),
                         trailing: Icon(Icons.arrow_forward_ios_rounded, color: textGray, size: 14),
@@ -782,11 +778,11 @@ class _ProfileScreenState extends State<ProfileScreen> {
                           child: const Icon(Icons.history_edu_rounded, color: Color(0xFFFFD700), size: 20),
                         ),
                         title: Text(
-                          _safeTr('coin_history_passbook', fallback: 'Coin History & Passbook'),
+                          _safeTr('coin_history_passbook', fallback: 'کوائن ہسٹری اور پاس بک'),
                           style: TextStyle(color: textWhite, fontSize: 14, fontWeight: FontWeight.bold),
                         ),
                         subtitle: Text(
-                          _safeTr('coin_history_sub', fallback: 'When coins were added or deducted and reason'),
+                          _safeTr('coin_history_sub', fallback: 'کوائنز کب شامل یا کم کیے گئے اور وجہ'),
                           style: TextStyle(color: textGray, fontSize: 12),
                         ),
                         trailing: Icon(Icons.arrow_forward_ios_rounded, color: textGray, size: 14),
@@ -807,11 +803,11 @@ class _ProfileScreenState extends State<ProfileScreen> {
                           child: const Icon(Icons.lock_rounded, color: Color(0xFF1877F2), size: 20),
                         ),
                         title: Text(
-                          _safeTr('privacy_settings', fallback: 'Privacy Settings'),
+                          _safeTr('privacy_settings', fallback: 'پراائیویسی سیٹنگز'),
                           style: TextStyle(color: textWhite, fontSize: 14, fontWeight: FontWeight.bold),
                         ),
                         subtitle: Text(
-                          _safeTr('privacy_settings_sub', fallback: 'Control what others can see on your profile'),
+                          _safeTr('privacy_settings_sub', fallback: 'کنٹرول کریں کہ دوسرے آپ کی پروفائل پر کیا دیکھ سکتے ہیں'),
                           style: TextStyle(color: textGray, fontSize: 12),
                         ),
                         trailing: Icon(Icons.arrow_forward_ios_rounded, color: textGray, size: 14),
@@ -829,11 +825,11 @@ class _ProfileScreenState extends State<ProfileScreen> {
                           child: const Icon(Icons.block_rounded, color: Color(0xFFDC2626), size: 20),
                         ),
                         title: Text(
-                          _safeTr('blocked_users', fallback: 'Blocked Users'),
+                          _safeTr('blocked_users', fallback: 'بلاک کیے گئے صارفین'),
                           style: TextStyle(color: textWhite, fontSize: 14, fontWeight: FontWeight.bold),
                         ),
                         subtitle: Text(
-                          _safeTr('blocked_users_sub', fallback: 'Manage users you have blocked'),
+                          _safeTr('blocked_users_sub', fallback: 'اپنے بلاک کیے گئے صارفین کا انتظام کریں'),
                           style: TextStyle(color: textGray, fontSize: 12),
                         ),
                         trailing: Icon(Icons.arrow_forward_ios_rounded, color: textGray, size: 14),
@@ -855,11 +851,11 @@ class _ProfileScreenState extends State<ProfileScreen> {
                           child: const Icon(Icons.bookmark_rounded, color: Color(0xFF1877F2), size: 20),
                         ),
                         title: Text(
-                          _safeTr('saved_posts_news', fallback: 'Saved Posts & News'),
+                          _safeTr('saved_posts_news', fallback: 'محفوظ کردہ پوسٹس اور نیوز'),
                           style: TextStyle(color: textWhite, fontSize: 14, fontWeight: FontWeight.bold),
                         ),
                         subtitle: Text(
-                          _safeTr('saved_posts_news_sub', fallback: 'View your bookmarked clips & articles'),
+                          _safeTr('saved_posts_news_sub', fallback: 'اپنی محفوظ کردہ کلپس اور آرٹیکلز دیکھیں'),
                           style: TextStyle(color: textGray, fontSize: 12),
                         ),
                         trailing: Icon(Icons.arrow_forward_ios_rounded, color: textGray, size: 14),
@@ -874,11 +870,11 @@ class _ProfileScreenState extends State<ProfileScreen> {
                       ListTile(
                         leading: Icon(Icons.notifications_active_outlined, color: neonGreen, size: 22),
                         title: Text(
-                          _safeTr('gaming_news_alerts', fallback: 'Gaming News Alerts'),
+                          _safeTr('gaming_news_alerts', fallback: 'گیمنگ نیوز الرٹس'),
                           style: TextStyle(color: textWhite, fontSize: 14, fontWeight: FontWeight.bold),
                         ),
                         subtitle: Text(
-                          _safeTr('gaming_alerts_sub', fallback: 'Get notified of latest game releases & tournaments'),
+                          _safeTr('gaming_alerts_sub', fallback: 'نئے گیم ریلیزز اور ٹورنامنٹس کی اطلاع حاصل کریں'),
                           style: TextStyle(color: textGray, fontSize: 12),
                         ),
                         trailing: Switch(
@@ -906,13 +902,13 @@ class _ProfileScreenState extends State<ProfileScreen> {
                               size: 22,
                             ),
                             title: Text(
-                              _safeTr('day_night_mode', fallback: 'Day / Night Mode'),
+                              _safeTr('day_night_mode', fallback: 'ڈے / نائট موڈ'),
                               style: TextStyle(color: textWhite, fontSize: 14, fontWeight: FontWeight.bold),
                             ),
                             subtitle: Text(
                               isDark
-                                  ? _safeTr('dark_theme_sub', fallback: 'Night mode enabled')
-                                  : _safeTr('light_theme_sub', fallback: 'Day mode enabled'),
+                                  ? _safeTr('dark_theme_sub', fallback: 'نائٹ موڈ فعال ہے')
+                                  : _safeTr('light_theme_sub', fallback: 'ڈے موڈ فعال ہے'),
                               style: TextStyle(color: textGray, fontSize: 12),
                             ),
                             trailing: Switch(
@@ -930,11 +926,11 @@ class _ProfileScreenState extends State<ProfileScreen> {
                       ListTile(
                         leading: Icon(Icons.cleaning_services_rounded, color: neonGreen, size: 22),
                         title: Text(
-                          _safeTr('clear_cache', fallback: 'Clear Cache'),
+                          _safeTr('clear_cache', fallback: 'کیش صاف کریں'),
                           style: TextStyle(color: textWhite, fontSize: 14, fontWeight: FontWeight.bold),
                         ),
                         subtitle: Text(
-                          _safeTr('clear_cache_sub', fallback: 'Free up local image storage space'),
+                          _safeTr('clear_cache_sub', fallback: 'لوکل امیج اسٹوریج کی جگہ خالی کریں'),
                           style: TextStyle(color: textGray, fontSize: 12),
                         ),
                         trailing: Icon(Icons.arrow_forward_ios_rounded, color: textGray, size: 14),
@@ -943,7 +939,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                             SnackBar(
                               backgroundColor: cardDark2,
                               content: Text(
-                                _safeTr('cache_cleared', fallback: 'Cache cleared successfully'),
+                                _safeTr('cache_cleared', fallback: 'کیش کامیابی سے صاف کر دیا گیا'),
                                 style: TextStyle(color: neonGreen),
                               ),
                             ),
@@ -962,11 +958,11 @@ class _ProfileScreenState extends State<ProfileScreen> {
                           child: Icon(Icons.download_rounded, color: neonGreen, size: 20),
                         ),
                         title: Text(
-                          _safeTr('download_my_data', fallback: 'Download My Data'),
+                          _safeTr('download_my_data', fallback: 'میرا ڈیٹا ڈاؤن لوڈ کریں'),
                           style: TextStyle(color: textWhite, fontSize: 14, fontWeight: FontWeight.bold),
                         ),
                         subtitle: Text(
-                          _safeTr('download_my_data_sub', fallback: 'Get a copy of your Gamers ID data (JSON)'),
+                          _safeTr('download_my_data_sub', fallback: 'اپنی گیمرز آئی ڈی کے ڈیٹا کی کاپی حاصل کریں (JSON)'),
                           style: TextStyle(color: textGray, fontSize: 12),
                         ),
                         trailing: Icon(Icons.arrow_forward_ios_rounded, color: textGray, size: 14),
@@ -981,11 +977,11 @@ class _ProfileScreenState extends State<ProfileScreen> {
                       ListTile(
                         leading: Icon(Icons.groups_rounded, color: neonGreen, size: 22),
                         title: Text(
-                          _safeTr('about_us', fallback: 'About Us'),
+                          _safeTr('about_us', fallback: 'ہمارے بارے میں'),
                           style: TextStyle(color: textWhite, fontSize: 14, fontWeight: FontWeight.bold),
                         ),
                         subtitle: Text(
-                          _safeTr('about_us_sub', fallback: 'Learn about Gamers ID'),
+                          _safeTr('about_us_sub', fallback: 'گیمرز آئی ڈی کے بارے में ਜਾਣیں'),
                           style: TextStyle(color: textGray, fontSize: 12),
                         ),
                         trailing: Icon(Icons.arrow_forward_ios_rounded, color: textGray, size: 14),
@@ -1001,11 +997,11 @@ class _ProfileScreenState extends State<ProfileScreen> {
                       ListTile(
                         leading: Icon(Icons.support_agent_rounded, color: neonGreen, size: 22),
                         title: Text(
-                          _safeTr('contact_us', fallback: 'Contact Us'),
+                          _safeTr('contact_us', fallback: 'رابطہ کریں'),
                           style: TextStyle(color: textWhite, fontSize: 14, fontWeight: FontWeight.bold),
                         ),
                         subtitle: Text(
-                          _safeTr('contact_us_sub', fallback: 'Reach our gamer support team'),
+                          _safeTr('contact_us_sub', fallback: 'ہماری گیمر سپورٹ ٹیم سے رابطہ کریں'),
                           style: TextStyle(color: textGray, fontSize: 12),
                         ),
                         trailing: Icon(Icons.arrow_forward_ios_rounded, color: textGray, size: 14),
@@ -1021,11 +1017,11 @@ class _ProfileScreenState extends State<ProfileScreen> {
                       ListTile(
                         leading: Icon(Icons.share_rounded, color: neonGreen, size: 22),
                         title: Text(
-                          _safeTr('follow_us', fallback: 'Follow Us'),
+                          _safeTr('follow_us', fallback: 'ہمیں فالو کریں'),
                           style: TextStyle(color: textWhite, fontSize: 14, fontWeight: FontWeight.bold),
                         ),
                         subtitle: Text(
-                          _safeTr('follow_us_sub', fallback: 'Join our gaming community on social media'),
+                          _safeTr('follow_us_sub', fallback: 'سوشل میڈیا پر ہماری گیمنگ کمیونٹی سے جڑیں'),
                           style: TextStyle(color: textGray, fontSize: 12),
                         ),
                         trailing: Icon(Icons.arrow_forward_ios_rounded, color: textGray, size: 14),
@@ -1048,11 +1044,11 @@ class _ProfileScreenState extends State<ProfileScreen> {
                           child: Icon(Icons.privacy_tip_rounded, color: neonGreen, size: 20),
                         ),
                         title: Text(
-                          _safeTr('privacy_policy', fallback: 'Privacy Policy'),
+                          _safeTr('privacy_policy', fallback: 'پراائیویسی پالیسی'),
                           style: TextStyle(color: textWhite, fontSize: 14, fontWeight: FontWeight.bold),
                         ),
                         subtitle: Text(
-                          _safeTr('privacy_policy_sub', fallback: 'How we collect and protect your data'),
+                          _safeTr('privacy_policy_sub', fallback: 'ہم آپ کا ڈیٹا کیسے جمع اور محفوظ کرتے ہیں'),
                           style: TextStyle(color: textGray, fontSize: 12),
                         ),
                         trailing: Icon(Icons.arrow_forward_ios_rounded, color: textGray, size: 14),
@@ -1075,11 +1071,11 @@ class _ProfileScreenState extends State<ProfileScreen> {
                           child: Icon(Icons.gavel_rounded, color: neonGreen, size: 20),
                         ),
                         title: Text(
-                          _safeTr('terms_of_service', fallback: 'Terms of Service'),
+                          _safeTr('terms_of_service', fallback: 'سروس کی شرائط'),
                           style: TextStyle(color: textWhite, fontSize: 14, fontWeight: FontWeight.bold),
                         ),
                         subtitle: Text(
-                          _safeTr('terms_of_service_sub', fallback: 'Rules for using Gamers ID'),
+                          _safeTr('terms_of_service_sub', fallback: 'گیمرز آئی ڈی استعمال کرنے کے اصول'),
                           style: TextStyle(color: textGray, fontSize: 12),
                         ),
                         trailing: Icon(Icons.arrow_forward_ios_rounded, color: textGray, size: 14),
@@ -1095,7 +1091,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                       ListTile(
                         leading: Icon(Icons.info_outline_rounded, color: neonGreen, size: 22),
                         title: Text(
-                          _safeTr('app_version', fallback: 'App Version'),
+                          _safeTr('app_version', fallback: 'ایپ ورژن'),
                           style: TextStyle(color: textWhite, fontSize: 14, fontWeight: FontWeight.bold),
                         ),
                         subtitle: const Text(
@@ -1120,11 +1116,11 @@ class _ProfileScreenState extends State<ProfileScreen> {
                           child: const Icon(Icons.logout_rounded, color: Color(0xFFDC2626), size: 20),
                         ),
                         title: Text(
-                          _safeTr('log_out', fallback: 'Log Out'),
+                          _safeTr('log_out', fallback: 'لاگ آؤٹ'),
                           style: const TextStyle(color: Color(0xFFDC2626), fontWeight: FontWeight.bold, fontSize: 14),
                         ),
                         subtitle: Text(
-                          _safeTr('log_out_sub', fallback: 'Sign out of Gamers ID Network'),
+                          _safeTr('log_out_sub', fallback: 'گیمرز آئی ڈی نیٹ ورک سے سائن آؤٹ کریں'),
                           style: TextStyle(color: textGray, fontSize: 12),
                         ),
                         onTap: _confirmSignOut,
@@ -1141,11 +1137,11 @@ class _ProfileScreenState extends State<ProfileScreen> {
                           child: const Icon(Icons.delete_forever_rounded, color: Color(0xFFDC2626), size: 20),
                         ),
                         title: Text(
-                          _safeTr('delete_account', fallback: 'Delete Account'),
+                          _safeTr('delete_account', fallback: 'اکاؤنٹ ڈیلیٹ کریں'),
                           style: const TextStyle(color: Color(0xFFDC2626), fontWeight: FontWeight.bold, fontSize: 14),
                         ),
                         subtitle: Text(
-                          _safeTr('delete_account_sub', fallback: 'Permanently delete your Gamer ID (30-day grace)'),
+                          _safeTr('delete_account_sub', fallback: 'اپنی گیمرز آئی ڈی مستقل طور پر حذف کریں (30 دن گریس پیریڈ)'),
                           style: TextStyle(color: textGray, fontSize: 12),
                         ),
                         trailing: Icon(Icons.arrow_forward_ios_rounded, color: textGray, size: 14),
