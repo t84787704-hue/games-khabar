@@ -130,5 +130,21 @@
   "log_out_confirm": "کیا آپ واقعی گیمرز آئی ڈی سے لاگ آؤٹ ہونا چاہتے ہیں؟",
   "delete_account": "اکاؤنٹ ڈیلیٹ کریں",
   "delete_account_sub": "اپنا گیمر آئی ڈی مستقل طور پر ختم کریں (30 دن کی مہلت)",
-  "unlocked": "ان لاک"
+  "unlocked": "ان لاک",
+  "nav_following": "فالوئنگ",
+  "nav_community": "کمیونٹی",
+  "bookmark_added": "بک مارکس میں محفوظ ہو گیا! 🔖",
+  "bookmark_removed": "بک مارکس سے ہٹا دیا گیا",
+  "tooltip_notifications": "اطلاعات",
+  "search_news_hint": "گیمنگ خبریں، اپ ڈیٹس اور گیمز تلاش کریں...",
+  "loading_khabar": "خبریں لوڈ ہو رہی ہیں...",
+  "btn_retry": "دوبارہ کوشش کریں",
+  "no_news_yet": "ابھی تک کوئی خبر نہیں",
+  "badge_featured": "نمایاں",
+  "badge_video": "ویڈیو",
+  "no_articles_found": "کوئی مضمون نہیں ملا",
+  "whats_on_mind": "آپ کے ذہن میں کیا ہے؟",
+  "like": "پسند",
+  "comment": "تبصرہ",
+  "comments": "تبصرے"
 }
