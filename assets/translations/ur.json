@@ -659,7 +659,7 @@
   "no_transactions_yet": "ابھی تک کوئی ٹرانزیکشن نہیں ہوئی",
   "tx_coins_amount": "{} کوائنز",
   "msg_daily_bonus_claimed": "ڈیلی بونس کامیابی کے ساتھ کلیم کر لیا گیا!",
-  "msg_daily_bonus_already_claimed": "آپ آج کا بونس پہلے ہی لے چکے ہیں!",
+  "msg_daily_bonus_already_claimed": "آپ آج کا بونس پہلے ہی لے चुके ہیں!",
   "err_failed_with_msg": "خرابی: {}",
 
   "title_coin_store": "کوائن اسٹور",
@@ -687,5 +687,22 @@
   "streaming_gaming_sponsor": "اسٹریمنگ گیمنگ اسپانسر",
   "watch_5s_earn_100_desc": "100 کوائنز حاصل کرنے کے لیے 5 سیکنڈ ویڈیو دیکھیں",
   "msg_daily_streak_claimed": "🎁 روزانہ کا اسٹریک بونس کامیابی سے مل گیا!",
-  "msg_ad_coins_added": "⚡ اشتہار دیکھنے پر کوائنز شامل کر دیے گئے!"
+  "msg_ad_coins_added": "⚡ اشتہار دیکھنے پر کوائنز شامل کر دیے گئے!",
+
+  "title_blue_tick_verification": "بلیو ٹک تصدیق",
+  "get_official_blue_tick_title": "آفیشل بلیو ٹک حاصل کریں",
+  "meet_all_requirements_sub": "بلیو ٹک کے لیے تمام ضروریات پوری کریں",
+  "completed_of_total": "{} میں سے {} مکمل",
+  "instant_vip_blue_tick_title": "فوری VIP بلیو ٹک",
+  "instant_vip_blue_tick_desc": "کوائنز کے ذریعے فوری طور پر بلیو ٹک انلاک کریں",
+  "btn_unlock_instantly_coins": "فوری طور پر انلاک کریں (🪙 کوائنز)",
+  "reqs_met_count": "پوری کی گئی شرائط: {}/{}",
+  "mandatory_requirements_title": "لازمی شرائط",
+  "target_label": "ہدف",
+  "quick_shortcuts_title": "فوری شارٹ کٹس",
+  "btn_shortcut_set_rank": "رینک سیٹ کریں",
+  "btn_shortcut_link_uid": "UID لنک کریں",
+  "btn_shortcut_post_clip": "کلپ پوسٹ کریں",
+  "btn_shortcut_edit_bio": "بائیو میں ترمیم کریں",
+  "btn_apply_locked": "درخواست مقفل ہے (شرائط پوری کریں)"
 }
