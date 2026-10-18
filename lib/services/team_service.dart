@@ -10,6 +10,116 @@ class TeamService {
   factory TeamService() => _instance;
   TeamService._internal();
 
+  /// Helper to enrich a single raw team row with members, pending join requests, and leader info
+  Future<TeamModel> _enrichTeamRow(Map<String, dynamic> rawRow) async {
+    final teamId = (rawRow["id"] ?? "").toString();
+    final teamUuid = SupabaseService.toUuid(teamId);
+
+    // 1. Fetch members from team_members table
+    final members = <String>[];
+    if (rawRow["members"] is List) {
+      for (final m in (rawRow["members"] as List)) {
+        final uid = m.toString().trim();
+        if (uid.isNotEmpty && !members.contains(uid)) {
+          members.add(uid);
+        }
+      }
+    }
+    try {
+      final memberRows = await SupabaseService.client
+          .from("team_members")
+          .select("user_id")
+          .or("team_id.eq.$teamUuid,team_id.eq.$teamId");
+      for (final m in memberRows) {
+        final uid = (m["user_id"] ?? "").toString().trim();
+        if (uid.isNotEmpty && !members.contains(uid)) {
+          members.add(uid);
+        }
+      }
+    } catch (e) {
+      debugPrint("[TeamService] getTeam members fetch error: $e");
+    }
+
+    final leaderId = (rawRow["leader_id"] ?? rawRow["leaderId"] ?? "").toString().trim();
+    if (members.isEmpty && leaderId.isNotEmpty) {
+      members.add(leaderId);
+    }
+
+    // 2. Fetch pending join requests from team_join_requests table
+    final pendingRequests = <String>[];
+    if (rawRow["pending_join_requests"] is List) {
+      for (final r in (rawRow["pending_join_requests"] as List)) {
+        final uid = r.toString().trim();
+        if (uid.isNotEmpty && !pendingRequests.contains(uid)) {
+          pendingRequests.add(uid);
+        }
+      }
+    }
+    try {
+      final reqRows = await SupabaseService.client
+          .from("team_join_requests")
+          .select("user_id, status")
+          .or("team_id.eq.$teamUuid,team_id.eq.$teamId");
+      for (final r in reqRows) {
+        final status = (r["status"] ?? "pending").toString().toLowerCase();
+        final uid = (r["user_id"] ?? "").toString().trim();
+        if (uid.isNotEmpty &&
+            status == "pending" &&
+            !members.contains(uid) &&
+            !pendingRequests.contains(uid)) {
+          pendingRequests.add(uid);
+        }
+      }
+    } catch (e) {
+      debugPrint("[TeamService] pending requests fetch error: $e");
+    }
+
+    // 3. Fetch leader name & avatar from users table
+    String leaderName = (rawRow["leader_name"] ?? rawRow["leaderName"] ?? "").toString().trim();
+    String leaderAvatar = (rawRow["leader_avatar"] ?? rawRow["leaderAvatar"] ?? "").toString().trim();
+    if (leaderId.isNotEmpty) {
+      try {
+        final userRes = await SupabaseService.client
+            .from("users")
+            .select("id, uid, display_name, username, avatar_url")
+            .or("id.eq.$leaderId,uid.eq.$leaderId")
+            .maybeSingle();
+        if (userRes != null) {
+          final d = (userRes["display_name"] ?? "").toString().trim();
+          final un = (userRes["username"] ?? "").toString().trim();
+          if (d.isNotEmpty && d.toLowerCase() != "null") {
+            leaderName = d;
+          } else if (un.isNotEmpty && un.toLowerCase() != "null") {
+            leaderName = un;
+          }
+          final av = (userRes["avatar_url"] ?? "").toString().trim();
+          if (av.isNotEmpty && av.toLowerCase() != "null") {
+            leaderAvatar = av;
+          }
+        }
+      } catch (e) {
+        debugPrint("[TeamService] leader fetch error: $e");
+      }
+    }
+
+    final enrichedMap = Map<String, dynamic>.from(rawRow);
+    enrichedMap["members"] = members;
+    enrichedMap["pending_join_requests"] = pendingRequests;
+    enrichedMap["pendingJoinRequests"] = pendingRequests;
+    enrichedMap["join_requests"] = pendingRequests;
+    enrichedMap["leader_name"] = leaderName.isNotEmpty ? leaderName : "Leader";
+    enrichedMap["leaderName"] = leaderName.isNotEmpty ? leaderName : "Leader";
+    enrichedMap["leader_avatar"] = leaderAvatar;
+    enrichedMap["leaderAvatar"] = leaderAvatar;
+
+    final team = TeamModel.fromSupabase(enrichedMap);
+    return team.copyWith(
+      members: members,
+      leaderName: leaderName.isNotEmpty ? leaderName : "Leader",
+      leaderAvatar: leaderAvatar,
+    );
+  }
+
   /// Get single team by ID
   Future<TeamModel?> getTeam(String teamId) async {
     if (teamId.isEmpty) return null;
@@ -21,61 +131,7 @@ class TeamService {
           .or("id.eq.$teamUuid,id.eq.$teamId")
           .maybeSingle();
       if (res != null) {
-        var team = TeamModel.fromSupabase(res);
-
-        // Fetch members from team_members table
-        final members = <String>[];
-        try {
-          final memberRows = await SupabaseService.client
-              .from("team_members")
-              .select("user_id")
-              .or("team_id.eq.$teamUuid,team_id.eq.$teamId");
-          for (final m in memberRows) {
-            final uid = (m["user_id"] ?? "").toString();
-            if (uid.isNotEmpty && !members.contains(uid)) {
-              members.add(uid);
-            }
-          }
-        } catch (e) {
-          debugPrint("[TeamService] getTeam members fetch error: $e");
-        }
-        if (members.isEmpty && team.leaderId.isNotEmpty) {
-          members.add(team.leaderId);
-        }
-
-        // Fetch leader name & avatar from users table
-        String leaderName = team.leaderName;
-        String leaderAvatar = team.leaderAvatar;
-        if (team.leaderId.isNotEmpty) {
-          try {
-            final userRes = await SupabaseService.client
-                .from("users")
-                .select("id, uid, display_name, username, avatar_url")
-                .or("id.eq.${team.leaderId},uid.eq.${team.leaderId}")
-                .maybeSingle();
-            if (userRes != null) {
-              final d = (userRes["display_name"] ?? "").toString().trim();
-              final un = (userRes["username"] ?? "").toString().trim();
-              if (d.isNotEmpty && d.toLowerCase() != "null") {
-                leaderName = d;
-              } else if (un.isNotEmpty && un.toLowerCase() != "null") {
-                leaderName = un;
-              }
-              final av = (userRes["avatar_url"] ?? "").toString().trim();
-              if (av.isNotEmpty && av.toLowerCase() != "null") {
-                leaderAvatar = av;
-              }
-            }
-          } catch (e) {
-            debugPrint("[TeamService] getTeam leader fetch error: $e");
-          }
-        }
-
-        return team.copyWith(
-          members: members,
-          leaderName: leaderName.isNotEmpty ? leaderName : "Leader",
-          leaderAvatar: leaderAvatar,
-        );
+        return await _enrichTeamRow(res);
       }
     } catch (e) {
       debugPrint("[TeamService] getTeam error: $e");
@@ -83,72 +139,20 @@ class TeamService {
     return null;
   }
 
-  /// Get team stream
-  Stream<TeamModel?> getTeamStream(String teamId) {
-    if (teamId.isEmpty) return Stream.value(null);
-    try {
-      final teamUuid = SupabaseService.toUuid(teamId);
-      return SupabaseService.client
-          .from("teams")
-          .stream(primaryKey: ["id"])
-          .eq("id", teamUuid)
-          .asyncMap((rows) async {
-            if (rows.isEmpty) return null;
-            var t = TeamModel.fromSupabase(rows.first);
-
-            // Fetch members
-            final members = <String>[];
-            try {
-              final mRows = await SupabaseService.client
-                  .from("team_members")
-                  .select("user_id")
-                  .or("team_id.eq.$teamUuid,team_id.eq.$teamId");
-              for (final m in mRows) {
-                final uid = (m["user_id"] ?? "").toString();
-                if (uid.isNotEmpty && !members.contains(uid)) {
-                  members.add(uid);
-                }
-              }
-            } catch (_) {}
-            if (members.isEmpty && t.leaderId.isNotEmpty) {
-              members.add(t.leaderId);
-            }
-
-            // Fetch leader
-            String leaderName = t.leaderName;
-            String leaderAvatar = t.leaderAvatar;
-            if (t.leaderId.isNotEmpty) {
-              try {
-                final userRes = await SupabaseService.client
-                    .from("users")
-                    .select("id, uid, display_name, username, avatar_url")
-                    .or("id.eq.${t.leaderId},uid.eq.${t.leaderId}")
-                    .maybeSingle();
-                if (userRes != null) {
-                  final d = (userRes["display_name"] ?? "").toString().trim();
-                  final un = (userRes["username"] ?? "").toString().trim();
-                  if (d.isNotEmpty && d.toLowerCase() != "null") {
-                    leaderName = d;
-                  } else if (un.isNotEmpty && un.toLowerCase() != "null") {
-                    leaderName = un;
-                  }
-                  final av = (userRes["avatar_url"] ?? "").toString().trim();
-                  if (av.isNotEmpty && av.toLowerCase() != "null") {
-                    leaderAvatar = av;
-                  }
-                }
-              } catch (_) {}
-            }
-
-            return t.copyWith(
-              members: members,
-              leaderName: leaderName.isNotEmpty ? leaderName : "Leader",
-              leaderAvatar: leaderAvatar,
-            );
-          });
-    } catch (e) {
-      debugPrint("[TeamService] getTeamStream error: $e");
-      return Stream.value(null);
+  /// Get team stream (polls + real-time updates for team, members & join requests)
+  Stream<TeamModel?> getTeamStream(String teamId) async* {
+    if (teamId.isEmpty) {
+      yield null;
+      return;
+    }
+    while (true) {
+      try {
+        final team = await getTeam(teamId);
+        yield team;
+      } catch (e) {
+        debugPrint("[TeamService] getTeamStream error: $e");
+      }
+      await Future.delayed(const Duration(seconds: 3));
     }
   }
 
@@ -176,7 +180,7 @@ class TeamService {
       final result = <TeamModel>[];
       final seenIds = <String>{};
       for (final r in res) {
-        final t = TeamModel.fromSupabase(r);
+        final t = await _enrichTeamRow(r);
         seenIds.add(t.id);
         result.add(t);
       }
@@ -197,138 +201,194 @@ class TeamService {
     }
   }
 
-  /// Stream of user teams
-  Stream<List<TeamModel>> getUserTeamsStream(String userId) {
-    if (userId.isEmpty) return Stream.value([]);
-    try {
-      final userUuid = SupabaseService.toUuid(userId);
-      return SupabaseService.client
-          .from("teams")
-          .stream(primaryKey: ["id"])
-          .map((rows) {
-            return rows
-                .where((r) {
-                  final leaderId = (r["leader_id"] ?? "").toString();
-                  if (leaderId == userId || leaderId == userUuid) return true;
-                  final members = r["members"];
-                  if (members is List) {
-                    return members.any((m) =>
-                        m.toString() == userId || m.toString() == userUuid);
-                  }
-                  return false;
-                })
-                .map((r) => TeamModel.fromSupabase(r))
-                .toList();
-          });
-    } catch (e) {
-      debugPrint("[TeamService] getUserTeamsStream error: $e");
-      return Stream.value([]);
+  /// Stream of user teams (includes both leader and joined member teams)
+  Stream<List<TeamModel>> getUserTeamsStream(String userId) async* {
+    if (userId.isEmpty) {
+      yield [];
+      return;
+    }
+    while (true) {
+      try {
+        final teams = await getUserTeams(userId);
+        yield teams;
+      } catch (e) {
+        debugPrint("[TeamService] getUserTeamsStream error: $e");
+      }
+      await Future.delayed(const Duration(seconds: 4));
     }
   }
 
+  /// Fetch all enriched teams with optional gameFilter and searchQuery
+  Future<List<TeamModel>> _fetchAllTeamsEnriched({
+    String? gameFilter,
+    String? searchQuery,
+  }) async {
+    final rows = await SupabaseService.client
+        .from("teams")
+        .select()
+        .order("points", ascending: false);
+
+    if (rows.isEmpty) return <TeamModel>[];
+
+    final teamIds = rows
+        .map((r) => (r["id"] ?? "").toString())
+        .where((id) => id.isNotEmpty)
+        .toList();
+
+    final Map<String, List<String>> membersByTeam = {};
+    final Map<String, List<String>> pendingByTeam = {};
+
+    if (teamIds.isNotEmpty) {
+      try {
+        final memberRows = await SupabaseService.client
+            .from("team_members")
+            .select("team_id, user_id, role")
+            .inFilter("team_id", teamIds);
+        for (final m in memberRows) {
+          final tid = (m["team_id"] ?? "").toString();
+          final uid = (m["user_id"] ?? "").toString();
+          if (tid.isEmpty || uid.isEmpty) continue;
+          final list = membersByTeam.putIfAbsent(tid, () => []);
+          if (!list.contains(uid)) list.add(uid);
+        }
+      } catch (e) {
+        debugPrint("[TeamService] members fetch error: $e");
+      }
+
+      try {
+        final reqRows = await SupabaseService.client
+            .from("team_join_requests")
+            .select("team_id, user_id, status")
+            .inFilter("team_id", teamIds);
+        for (final r in reqRows) {
+          final tid = (r["team_id"] ?? "").toString();
+          final uid = (r["user_id"] ?? "").toString();
+          final status = (r["status"] ?? "pending").toString().toLowerCase();
+          if (tid.isEmpty || uid.isEmpty || status != "pending") continue;
+          final list = pendingByTeam.putIfAbsent(tid, () => []);
+          if (!list.contains(uid)) list.add(uid);
+        }
+      } catch (e) {
+        debugPrint("[TeamService] team_join_requests batch fetch error: $e");
+      }
+    }
+
+    final leaderIds = rows
+        .map((r) => (r["leader_id"] ?? r["leaderId"] ?? "").toString())
+        .where((id) => id.isNotEmpty)
+        .toSet()
+        .toList();
+
+    final Map<String, String> leaderNameById = {};
+    final Map<String, String> leaderAvatarById = {};
+    if (leaderIds.isNotEmpty) {
+      try {
+        final userRows = await SupabaseService.client
+            .from("users")
+            .select("id, uid, display_name, username, avatar_url")
+            .inFilter("id", leaderIds);
+        for (final u in userRows) {
+          final id = (u["id"] ?? "").toString();
+          final uid = (u["uid"] ?? "").toString();
+          final d = (u["display_name"] ?? "").toString().trim();
+          final un = (u["username"] ?? "").toString().trim();
+          final name = (d.isNotEmpty && d.toLowerCase() != "null")
+              ? d
+              : ((un.isNotEmpty && un.toLowerCase() != "null") ? un : "Leader");
+          final avatar = (u["avatar_url"] ?? "").toString();
+          if (id.isNotEmpty) {
+            leaderNameById[id] = name;
+            leaderAvatarById[id] = avatar;
+          }
+          if (uid.isNotEmpty) {
+            leaderNameById[uid] = name;
+            leaderAvatarById[uid] = avatar;
+          }
+        }
+      } catch (e) {
+        debugPrint("[TeamService] leader fetch error: $e");
+      }
+    }
+
+    final enriched = rows.map((rawRow) {
+      final tid = (rawRow["id"] ?? "").toString();
+      final leaderId = (rawRow["leader_id"] ?? rawRow["leaderId"] ?? "").toString();
+
+      var members = List<String>.from(membersByTeam[tid] ?? <String>[]);
+      if (members.isEmpty && leaderId.isNotEmpty) {
+        members = [leaderId];
+      }
+
+      final pending = List<String>.from(pendingByTeam[tid] ?? <String>[]);
+      if (rawRow["pending_join_requests"] is List) {
+        for (final p in (rawRow["pending_join_requests"] as List)) {
+          final pStr = p.toString().trim();
+          if (pStr.isNotEmpty && !pending.contains(pStr) && !members.contains(pStr)) {
+            pending.add(pStr);
+          }
+        }
+      }
+
+      final fallbackLeaderName =
+          (rawRow["leader_name"] ?? rawRow["leaderName"] ?? "").toString().trim();
+      final leaderName = leaderNameById[leaderId] ??
+          (fallbackLeaderName.isNotEmpty ? fallbackLeaderName : "Leader");
+      final leaderAvatar = leaderAvatarById[leaderId] ??
+          (rawRow["leader_avatar"] ?? rawRow["leaderAvatar"] ?? "").toString();
+
+      final mapCopy = Map<String, dynamic>.from(rawRow);
+      mapCopy["members"] = members;
+      mapCopy["pending_join_requests"] = pending;
+      mapCopy["pendingJoinRequests"] = pending;
+      mapCopy["join_requests"] = pending;
+      mapCopy["leader_name"] = leaderName;
+      mapCopy["leaderName"] = leaderName;
+      mapCopy["leader_avatar"] = leaderAvatar;
+      mapCopy["leaderAvatar"] = leaderAvatar;
+
+      final t = TeamModel.fromSupabase(mapCopy);
+      return t.copyWith(
+        members: members,
+        leaderName: leaderName,
+        leaderAvatar: leaderAvatar,
+      );
+    }).toList();
+
+    var filtered = enriched;
+    if (gameFilter != null &&
+        gameFilter.isNotEmpty &&
+        gameFilter != "All") {
+      filtered = filtered
+          .where((t) => t.game.toLowerCase() == gameFilter.toLowerCase())
+          .toList();
+    }
+    if (searchQuery != null && searchQuery.trim().isNotEmpty) {
+      final q = searchQuery.trim().toLowerCase();
+      filtered = filtered
+          .where((t) =>
+              t.name.toLowerCase().contains(q) ||
+              t.tag.toLowerCase().contains(q))
+          .toList();
+    }
+    return filtered;
+  }
+
   /// Get stream of all teams with optional game filter and search query
-  Stream<List<TeamModel>> getTeamsStream(
-      {String? gameFilter, String? searchQuery}) {
-    try {
-      return SupabaseService.client
-          .from("teams")
-          .stream(primaryKey: ["id"])
-          .order("points", ascending: false)
-          .asyncMap((rows) async {
-            var teams = rows.map((r) => TeamModel.fromSupabase(r)).toList();
-
-            if (teams.isEmpty) return <TeamModel>[];
-
-            final teamIds = teams.map((t) => t.id).toList();
-            final Map<String, List<String>> membersByTeam = {};
-
-            try {
-              final memberRows = await SupabaseService.client
-                  .from("team_members")
-                  .select("team_id, user_id, role")
-                  .inFilter("team_id", teamIds);
-              for (final m in memberRows) {
-                final tid = (m["team_id"] ?? "").toString();
-                final uid = (m["user_id"] ?? "").toString();
-                if (tid.isEmpty || uid.isEmpty) continue;
-                membersByTeam.putIfAbsent(tid, () => []).add(uid);
-              }
-            } catch (e) {
-              debugPrint("[TeamService] members fetch error: $e");
-            }
-
-            final leaderIds = teams
-                .map((t) => t.leaderId)
-                .where((id) => id.isNotEmpty)
-                .toSet()
-                .toList();
-            final Map<String, String> leaderNameById = {};
-            final Map<String, String> leaderAvatarById = {};
-            if (leaderIds.isNotEmpty) {
-              try {
-                final userRows = await SupabaseService.client
-                    .from("users")
-                    .select("id, uid, display_name, username, avatar_url")
-                    .inFilter("id", leaderIds);
-                for (final u in userRows) {
-                  final id = (u["id"] ?? "").toString();
-                  final uid = (u["uid"] ?? "").toString();
-                  final d = (u["display_name"] ?? "").toString().trim();
-                  final un = (u["username"] ?? "").toString().trim();
-                  final name = (d.isNotEmpty && d.toLowerCase() != "null")
-                      ? d
-                      : ((un.isNotEmpty && un.toLowerCase() != "null") ? un : "Leader");
-                  final avatar = (u["avatar_url"] ?? "").toString();
-                  if (id.isNotEmpty) {
-                    leaderNameById[id] = name;
-                    leaderAvatarById[id] = avatar;
-                  }
-                  if (uid.isNotEmpty) {
-                    leaderNameById[uid] = name;
-                    leaderAvatarById[uid] = avatar;
-                  }
-                }
-              } catch (e) {
-                debugPrint("[TeamService] leader fetch error: $e");
-              }
-            }
-
-            final enriched = teams.map((t) {
-              var members = membersByTeam[t.id] ?? <String>[];
-              if (members.isEmpty && t.leaderId.isNotEmpty) {
-                members = [t.leaderId];
-              }
-              final leaderName = leaderNameById[t.leaderId] ?? (t.leaderName.isNotEmpty ? t.leaderName : 'Leader');
-              final leaderAvatar = leaderAvatarById[t.leaderId] ?? t.leaderAvatar;
-              return t.copyWith(
-                members: members,
-                leaderName: leaderName,
-                leaderAvatar: leaderAvatar,
-              );
-            }).toList();
-
-            var filtered = enriched;
-            if (gameFilter != null &&
-                gameFilter.isNotEmpty &&
-                gameFilter != "All") {
-              filtered = filtered
-                  .where((t) =>
-                      t.game.toLowerCase() == gameFilter.toLowerCase())
-                  .toList();
-            }
-            if (searchQuery != null && searchQuery.trim().isNotEmpty) {
-              final q = searchQuery.trim().toLowerCase();
-              filtered = filtered
-                  .where((t) =>
-                      t.name.toLowerCase().contains(q) ||
-                      t.tag.toLowerCase().contains(q))
-                  .toList();
-            }
-            return filtered;
-          });
-    } catch (e) {
-      debugPrint("[TeamService] getTeamsStream error: $e");
-      return Stream.value([]);
+  Stream<List<TeamModel>> getTeamsStream({
+    String? gameFilter,
+    String? searchQuery,
+  }) async* {
+    while (true) {
+      try {
+        final list = await _fetchAllTeamsEnriched(
+          gameFilter: gameFilter,
+          searchQuery: searchQuery,
+        );
+        yield list;
+      } catch (e) {
+        debugPrint("[TeamService] getTeamsStream error: $e");
+      }
+      await Future.delayed(const Duration(seconds: 4));
     }
   }
 
@@ -527,16 +587,93 @@ class TeamService {
     String? userName,
     String? teamName,
   }) async {
+    if (teamId.isEmpty || userId.isEmpty) return false;
     try {
       final teamUuid = SupabaseService.toUuid(teamId);
       final userUuid = SupabaseService.toUuid(userId);
+      final nowIso = DateTime.now().toIso8601String();
 
-      await SupabaseService.client.from("team_join_requests").insert({
-        "team_id": teamUuid,
-        "user_id": userUuid,
-        "status": "pending",
-        "created_at": DateTime.now().toIso8601String(),
-      });
+      // 1. Check if request already exists in team_join_requests
+      final existing = await SupabaseService.client
+          .from("team_join_requests")
+          .select("id")
+          .eq("team_id", teamUuid)
+          .eq("user_id", userUuid)
+          .maybeSingle();
+
+      if (existing == null) {
+        await SupabaseService.client.from("team_join_requests").insert({
+          "team_id": teamUuid,
+          "user_id": userUuid,
+          "status": "pending",
+          "created_at": nowIso,
+        });
+      } else {
+        await SupabaseService.client
+            .from("team_join_requests")
+            .update({"status": "pending", "created_at": nowIso})
+            .eq("team_id", teamUuid)
+            .eq("user_id", userUuid);
+      }
+
+      // 2. Sync pending_join_requests column on teams table (if column exists)
+      String leaderId = "";
+      String resolvedTeamName = teamName ?? "Team";
+      try {
+        final teamRow = await SupabaseService.client
+            .from("teams")
+            .select()
+            .or("id.eq.$teamUuid,id.eq.$teamId")
+            .maybeSingle();
+
+        if (teamRow != null) {
+          leaderId = (teamRow["leader_id"] ?? teamRow["leaderId"] ?? "").toString();
+          if (teamName == null || teamName.isEmpty) {
+            resolvedTeamName = (teamRow["name"] ?? "Team").toString();
+          }
+
+          if (teamRow.containsKey("pending_join_requests")) {
+            final currentList = List<String>.from(
+              (teamRow["pending_join_requests"] as List? ?? []).map((e) => e.toString()),
+            );
+            if (!currentList.contains(userUuid)) {
+              currentList.add(userUuid);
+            }
+            await SupabaseService.client
+                .from("teams")
+                .update({"pending_join_requests": currentList})
+                .eq("id", teamUuid);
+          }
+        }
+      } catch (e) {
+        debugPrint("[TeamService] teams pending_join_requests sync note: $e");
+      }
+
+      // 3. Send notification to Team Leader
+      if (leaderId.isNotEmpty && leaderId != userUuid && leaderId != userId) {
+        try {
+          final senderDisplay = (userName != null && userName.trim().isNotEmpty)
+              ? userName.trim()
+              : "A gamer";
+          await SupabaseService.client.from("notifications").insert({
+            "user_id": SupabaseService.toUuid(leaderId),
+            "sender_id": userUuid,
+            "sender_name": senderDisplay,
+            "type": "team_join_request",
+            "title": "New Team Join Request 🛡️",
+            "body": "$senderDisplay requested to join $resolvedTeamName.",
+            "is_read": false,
+            "data": {
+              "team_id": teamUuid,
+              "user_id": userUuid,
+            },
+            "created_at": nowIso,
+          });
+        } catch (e) {
+          debugPrint("[TeamService] join notification note: $e");
+        }
+      }
+
       return true;
     } catch (e) {
       debugPrint("[TeamService] requestToJoinTeam error: $e");
@@ -550,22 +687,86 @@ class TeamService {
     required String userId,
     String? userName,
   }) async {
+    if (teamId.isEmpty || userId.isEmpty) return false;
     try {
       final teamUuid = SupabaseService.toUuid(teamId);
       final userUuid = SupabaseService.toUuid(userId);
+      final nowIso = DateTime.now().toIso8601String();
 
-      await SupabaseService.client.from("team_members").insert({
-        "team_id": teamUuid,
-        "user_id": userUuid,
-        "role": "member",
-        "joined_at": DateTime.now().toIso8601String(),
-      });
+      // 1. Check if already in team_members
+      final existingMember = await SupabaseService.client
+          .from("team_members")
+          .select("user_id")
+          .eq("team_id", teamUuid)
+          .eq("user_id", userUuid)
+          .maybeSingle();
 
+      if (existingMember == null) {
+        await SupabaseService.client.from("team_members").insert({
+          "team_id": teamUuid,
+          "user_id": userUuid,
+          "role": "member",
+          "joined_at": nowIso,
+        });
+      }
+
+      // 2. Delete from team_join_requests
       await SupabaseService.client
           .from("team_join_requests")
           .delete()
-          .eq("team_id", teamUuid)
-          .eq("user_id", userUuid);
+          .or("team_id.eq.$teamUuid,team_id.eq.$teamId")
+          .or("user_id.eq.$userUuid,user_id.eq.$userId");
+
+      // 3. Sync teams table columns if present
+      String teamName = "Team";
+      try {
+        final teamRow = await SupabaseService.client
+            .from("teams")
+            .select()
+            .or("id.eq.$teamUuid,id.eq.$teamId")
+            .maybeSingle();
+        if (teamRow != null) {
+          teamName = (teamRow["name"] ?? "Team").toString();
+          final updates = <String, dynamic>{};
+
+          if (teamRow.containsKey("pending_join_requests")) {
+            final pendingList = List<String>.from(
+              (teamRow["pending_join_requests"] as List? ?? []).map((e) => e.toString()),
+            )..removeWhere((id) => id == userUuid || id == userId);
+            updates["pending_join_requests"] = pendingList;
+          }
+
+          if (teamRow.containsKey("members")) {
+            final membersList = List<String>.from(
+              (teamRow["members"] as List? ?? []).map((e) => e.toString()),
+            );
+            if (!membersList.contains(userUuid)) {
+              membersList.add(userUuid);
+            }
+            updates["members"] = membersList;
+          }
+
+          if (updates.isNotEmpty) {
+            await SupabaseService.client
+                .from("teams")
+                .update(updates)
+                .eq("id", teamUuid);
+          }
+        }
+      } catch (_) {}
+
+      // 4. Notify accepted player
+      try {
+        await SupabaseService.client.from("notifications").insert({
+          "user_id": userUuid,
+          "type": "team_join_accepted",
+          "title": "Team Request Accepted! 🎉",
+          "body": "You are now a member of $teamName.",
+          "is_read": false,
+          "data": {"team_id": teamUuid},
+          "created_at": nowIso,
+        });
+      } catch (_) {}
 
       return true;
     } catch (e) {
@@ -579,6 +780,7 @@ class TeamService {
     required String teamId,
     required String userId,
   }) async {
+    if (teamId.isEmpty || userId.isEmpty) return false;
     try {
       final teamUuid = SupabaseService.toUuid(teamId);
       final userUuid = SupabaseService.toUuid(userId);
@@ -586,8 +788,26 @@ class TeamService {
       await SupabaseService.client
           .from("team_join_requests")
           .delete()
-          .eq("team_id", teamUuid)
-          .eq("user_id", userUuid);
+          .or("team_id.eq.$teamUuid,team_id.eq.$teamId")
+          .or("user_id.eq.$userUuid,user_id.eq.$userId");
+
+      try {
+        final teamRow = await SupabaseService.client
+            .from("teams")
+            .select()
+            .or("id.eq.$teamUuid,id.eq.$teamId")
+            .maybeSingle();
+        if (teamRow != null && teamRow.containsKey("pending_join_requests")) {
+          final pendingList = List<String>.from(
+            (teamRow["pending_join_requests"] as List? ?? []).map((e) => e.toString()),
+          )..removeWhere((id) => id == userUuid || id == userId);
+          await SupabaseService.client
+              .from("teams")
+              .update({"pending_join_requests": pendingList})
+              .eq("id", teamUuid);
+        }
+      } catch (_) {}
+
       return true;
     } catch (e) {
       debugPrint("[TeamService] rejectJoinRequest error: $e");
