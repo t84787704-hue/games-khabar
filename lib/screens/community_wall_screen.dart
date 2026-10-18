@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
+import 'package:easy_localization/easy_localization.dart';
 import '../models/community_post_model.dart';
 import '../services/community_service.dart';
 import '../services/theme_service.dart';
@@ -80,7 +81,7 @@ class _CommunityWallScreenState extends State<CommunityWallScreen> {
     final text = _postController.text.trim();
 
     if (text.isEmpty) {
-      _showSnackBar('Apna squad ya tip share karne ke liye kuch likhein.', isError: true);
+      _showSnackBar('err_empty_post'.tr(), isError: true);
       return;
     }
 
@@ -92,17 +93,17 @@ class _CommunityWallScreenState extends State<CommunityWallScreen> {
     ];
 
     if (text.length < 5 || spamPhrases.contains(lower)) {
-      _showSnackBar('Thora detail se likho - Squad ID ya Tip share karo taake sab ko faida ho', isError: true);
+      _showSnackBar('err_short_spam_post'.tr(), isError: true);
       return;
     }
 
     if (text.length > 200) {
-      _showSnackBar('Text 200 characters se zyada nahi ho sakta.', isError: true);
+      _showSnackBar('err_max_chars'.tr(), isError: true);
       return;
     }
 
     if (_communityService.hasBadWords(text)) {
-      _showSnackBar('Tehzeeb se likho', isError: true);
+      _showSnackBar('err_bad_words'.tr(), isError: true);
       return;
     }
 
@@ -117,11 +118,11 @@ class _CommunityWallScreenState extends State<CommunityWallScreen> {
         gameName: postGame,
       );
       _postController.clear();
-      _showSnackBar('Post community wall par share ho gaya! 🎉');
+      _showSnackBar('msg_post_shared'.tr());
       CoinRewardService().onPostCreated(context, text.length);
     } catch (e) {
       final msg = e.toString().replaceAll('Exception:', '').trim();
-      _showSnackBar(msg.isNotEmpty ? msg : 'Post karne mein masla aya.', isError: true);
+      _showSnackBar(msg.isNotEmpty ? msg : 'err_post_failed'.tr(), isError: true);
     } finally {
       if (mounted) {
         setState(() {
@@ -146,7 +147,7 @@ class _CommunityWallScreenState extends State<CommunityWallScreen> {
             Icon(Icons.sports_esports, color: neonGreen, size: 22),
             const SizedBox(width: 8),
             Text(
-              'Gamer Tag Badlein',
+              'change_gamer_tag'.tr(),
               style: TextStyle(color: textWhite, fontSize: 16, fontWeight: FontWeight.bold),
             ),
           ],
@@ -156,7 +157,7 @@ class _CommunityWallScreenState extends State<CommunityWallScreen> {
           maxLength: 25,
           style: TextStyle(color: textWhite),
           decoration: InputDecoration(
-            hintText: 'Apna Gamer Tag likhein',
+            hintText: 'enter_gamer_tag_hint'.tr(),
             hintStyle: TextStyle(color: textGray),
             counterStyle: TextStyle(color: textGray),
             filled: true,
@@ -174,7 +175,7 @@ class _CommunityWallScreenState extends State<CommunityWallScreen> {
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(ctx),
-            child: Text('Cancel', style: TextStyle(color: textGray)),
+            child: Text('cancel'.tr(), style: TextStyle(color: textGray)),
           ),
           ElevatedButton(
             style: ElevatedButton.styleFrom(
@@ -190,7 +191,7 @@ class _CommunityWallScreenState extends State<CommunityWallScreen> {
               }
               Navigator.pop(ctx);
             },
-            child: const Text('Save', style: TextStyle(fontWeight: FontWeight.bold)),
+            child: Text('save'.tr(), style: const TextStyle(fontWeight: FontWeight.bold)),
           ),
         ],
       ),
@@ -206,24 +207,24 @@ class _CommunityWallScreenState extends State<CommunityWallScreen> {
           borderRadius: BorderRadius.circular(16),
           side: const BorderSide(color: Color(0xFFFF4655), width: 1.2),
         ),
-        title: const Row(
+        title: Row(
           children: [
-            Icon(Icons.flag_rounded, color: Color(0xFFFF4655), size: 22),
-            SizedBox(width: 8),
+            const Icon(Icons.flag_rounded, color: Color(0xFFFF4655), size: 22),
+            const SizedBox(width: 8),
             Text(
-              'Report Post?',
-              style: TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.bold),
+              'report_post_title'.tr(),
+              style: const TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.bold),
             ),
           ],
         ),
         content: Text(
-          'Kya aap is post ko inappropriate report karna chahte hain?\nAgar kisi post ko 3 reports mil jayen toh woh khud-ba-khud auto-hide ho jati hai.',
+          'report_post_desc'.tr(),
           style: TextStyle(color: textGray, fontSize: 13, height: 1.4),
         ),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(ctx),
-            child: Text('Cancel', style: TextStyle(color: textGray)),
+            child: Text('cancel'.tr(), style: TextStyle(color: textGray)),
           ),
           ElevatedButton(
             style: ElevatedButton.styleFrom(
@@ -235,12 +236,12 @@ class _CommunityWallScreenState extends State<CommunityWallScreen> {
               Navigator.pop(ctx);
               final autoHidden = await _communityService.reportPost(post.id, post.reportCount);
               if (autoHidden) {
-                _showSnackBar('Post ko 3 reports milne par auto-hide kar diya gaya hai.');
+                _showSnackBar('msg_post_auto_hidden'.tr());
               } else {
-                _showSnackBar('Report darj ho gayi hai. Shukriya.');
+                _showSnackBar('msg_report_submitted'.tr());
               }
             },
-            child: const Text('Report Karein', style: TextStyle(fontWeight: FontWeight.bold)),
+            child: Text('btn_report'.tr(), style: const TextStyle(fontWeight: FontWeight.bold)),
           ),
         ],
       ),
@@ -322,7 +323,7 @@ class _CommunityWallScreenState extends State<CommunityWallScreen> {
                             const SizedBox(width: 8),
                             Expanded(
                               child: Text(
-                                'Comments on ${post.userName}\'s post',
+                                'comments_sheet_title'.tr(args: [post.userName]),
                                 maxLines: 1,
                                 overflow: TextOverflow.ellipsis,
                                 style: TextStyle(
@@ -394,7 +395,7 @@ class _CommunityWallScreenState extends State<CommunityWallScreen> {
                                       Icon(Icons.forum_outlined, size: 32, color: textGray.withOpacity(0.5)),
                                       const SizedBox(height: 8),
                                       Text(
-                                        'Koi comments nahi hain abhi.\nPehla comment karein!',
+                                        'no_comments_yet'.tr(),
                                         textAlign: TextAlign.center,
                                         style: TextStyle(color: textGray, fontSize: 13),
                                       ),
@@ -465,7 +466,7 @@ class _CommunityWallScreenState extends State<CommunityWallScreen> {
                                 maxLength: 150,
                                 style: TextStyle(color: textWhite, fontSize: 13),
                                 decoration: InputDecoration(
-                                  hintText: 'Apna comment likhein...',
+                                  hintText: 'write_comment_hint'.tr(),
                                   hintStyle: TextStyle(color: textGray, fontSize: 13),
                                   filled: true,
                                   fillColor: cardDark2,
@@ -494,7 +495,7 @@ class _CommunityWallScreenState extends State<CommunityWallScreen> {
                                       final cText = commentController.text.trim();
                                       if (cText.isEmpty) return;
                                       if (_communityService.hasBadWords(cText)) {
-                                        _showSnackBar('Tehzeeb se likho', isError: true);
+                                        _showSnackBar('err_bad_words'.tr(), isError: true);
                                         return;
                                       }
                                       setModalState(() {
@@ -538,10 +539,10 @@ class _CommunityWallScreenState extends State<CommunityWallScreen> {
 
   String _formatTime(DateTime dt) {
     final diff = DateTime.now().difference(dt);
-    if (diff.inSeconds < 45) return 'Just now';
-    if (diff.inMinutes < 60) return '${diff.inMinutes}m ago';
-    if (diff.inHours < 24) return '${diff.inHours}h ago';
-    if (diff.inDays < 7) return '${diff.inDays}d ago';
+    if (diff.inSeconds < 45) return 'time_just_now'.tr();
+    if (diff.inMinutes < 60) return 'time_minutes_ago'.tr(args: ['${diff.inMinutes}']);
+    if (diff.inHours < 24) return 'time_hours_ago'.tr(args: ['${diff.inHours}']);
+    if (diff.inDays < 7) return 'time_days_ago'.tr(args: ['${diff.inDays}']);
     return DateFormat('dd MMM').format(dt);
   }
 
@@ -567,7 +568,7 @@ class _CommunityWallScreenState extends State<CommunityWallScreen> {
             ),
             const SizedBox(width: 10),
             Text(
-              'Community Wall',
+              'community_wall_title'.tr(),
               style: TextStyle(
                 color: textWhite,
                 fontWeight: FontWeight.w900,
@@ -578,7 +579,6 @@ class _CommunityWallScreenState extends State<CommunityWallScreen> {
           ],
         ),
         actions: [
-          // Gamer Tag / VIP profile badge button
           Center(
             child: Padding(
               padding: const EdgeInsets.only(right: 12),
@@ -629,16 +629,14 @@ class _CommunityWallScreenState extends State<CommunityWallScreen> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            // Subtitle
             Padding(
               padding: const EdgeInsets.fromLTRB(16, 14, 16, 8),
               child: Text(
-                'Apna squad banayein, gameplay tips share karein',
+                'community_wall_sub'.tr(),
                 style: TextStyle(color: textGray, fontSize: 12.5),
               ),
             ),
 
-            // Filters: All, BGMI, GTA VI, Valorant
             Padding(
               padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
               child: SingleChildScrollView(
@@ -647,11 +645,12 @@ class _CommunityWallScreenState extends State<CommunityWallScreen> {
                 child: Row(
                   children: _filters.map((filter) {
                     final isSelected = _selectedFilter == filter;
+                    final labelText = filter == 'All' ? 'category_all'.tr() : filter;
                     return Padding(
                       padding: const EdgeInsets.only(right: 8),
                       child: FilterChip(
                         label: Text(
-                          filter,
+                          labelText,
                           style: TextStyle(
                             color: isSelected ? const Color(0xFF05080D) : textWhite,
                             fontWeight: isSelected ? FontWeight.w900 : FontWeight.w600,
@@ -687,7 +686,6 @@ class _CommunityWallScreenState extends State<CommunityWallScreen> {
               ),
             ),
 
-            // Composer Card
             Padding(
               padding: const EdgeInsets.fromLTRB(16, 6, 16, 14),
               child: Container(
@@ -707,7 +705,6 @@ class _CommunityWallScreenState extends State<CommunityWallScreen> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    // Author & Game Selector Row
                     Row(
                       children: [
                         CircleAvatar(
@@ -765,14 +762,13 @@ class _CommunityWallScreenState extends State<CommunityWallScreen> {
                     ),
                     const SizedBox(height: 10),
 
-                    // 3 Quick Template Buttons
                     SingleChildScrollView(
                       scrollDirection: Axis.horizontal,
                       physics: const BouncingScrollPhysics(),
                       child: Row(
                         children: [
                           _buildTemplateChip(
-                            label: '👥 Squad Chahiye',
+                            label: 'template_squad'.tr(),
                             onTap: () {
                               final game = _selectedFilter == 'All' ? _selectedGameForPost : _selectedFilter;
                               _applyTemplate('$game Squad - ID: , Rank: , Mic: ');
@@ -780,14 +776,14 @@ class _CommunityWallScreenState extends State<CommunityWallScreen> {
                           ),
                           const SizedBox(width: 8),
                           _buildTemplateChip(
-                            label: '💡 Tip Do',
+                            label: 'template_tip'.tr(),
                             onTap: () {
                               _applyTemplate('💡 Pro Tip: ');
                             },
                           ),
                           const SizedBox(width: 8),
                           _buildTemplateChip(
-                            label: '😂 Meme',
+                            label: 'template_meme'.tr(),
                             onTap: () {
                               _applyTemplate('😂 Gamers be like: ');
                             },
@@ -797,7 +793,6 @@ class _CommunityWallScreenState extends State<CommunityWallScreen> {
                     ),
                     const SizedBox(height: 10),
 
-                    // Post Input Field (Max 200 chars)
                     TextField(
                       controller: _postController,
                       maxLength: 200,
@@ -805,7 +800,7 @@ class _CommunityWallScreenState extends State<CommunityWallScreen> {
                       minLines: 2,
                       style: TextStyle(color: textWhite, fontSize: 13, height: 1.3),
                       decoration: InputDecoration(
-                        hintText: 'BGMI Squad Chahiye? ID: 51... | Ya koi Tip? | Meme share karo...',
+                        hintText: 'community_post_hint'.tr(),
                         hintStyle: TextStyle(color: textGray.withOpacity(0.7), fontSize: 12),
                         filled: true,
                         fillColor: cardDark2,
@@ -829,12 +824,11 @@ class _CommunityWallScreenState extends State<CommunityWallScreen> {
                     ),
                     const SizedBox(height: 8),
 
-                    // Composer Footer
                     Row(
                       mainAxisAlignment: MainAxisAlignment.spaceBetween,
                       children: [
                         Text(
-                          'Max 200 chars • Friendly community',
+                          'community_composer_footer'.tr(),
                           style: TextStyle(color: textGray.withOpacity(0.6), fontSize: 10),
                         ),
                         ElevatedButton.icon(
@@ -859,7 +853,7 @@ class _CommunityWallScreenState extends State<CommunityWallScreen> {
                                 )
                               : const Icon(Icons.send_rounded, size: 14),
                           label: Text(
-                            _isPosting ? 'Posting...' : 'Post',
+                            _isPosting ? 'posting'.tr() : 'btn_post'.tr(),
                             style: const TextStyle(fontWeight: FontWeight.w900, fontSize: 12),
                           ),
                         ),
@@ -870,7 +864,6 @@ class _CommunityWallScreenState extends State<CommunityWallScreen> {
               ),
             ),
 
-            // StreamBuilder for community posts list
             StreamBuilder<List<CommunityPostModel>>(
               stream: _communityService.streamPosts(selectedFilter: _selectedFilter),
               builder: (context, snapshot) {
@@ -911,8 +904,8 @@ class _CommunityWallScreenState extends State<CommunityWallScreen> {
                           const SizedBox(height: 14),
                           Text(
                             _selectedFilter == 'All'
-                                ? 'No community posts yet'
-                                : 'No posts for $_selectedFilter yet',
+                                ? 'no_community_posts'.tr()
+                                : 'no_posts_for_filter'.tr(args: [_selectedFilter]),
                             style: TextStyle(
                               color: textWhite,
                               fontWeight: FontWeight.bold,
@@ -921,7 +914,7 @@ class _CommunityWallScreenState extends State<CommunityWallScreen> {
                           ),
                           const SizedBox(height: 6),
                           Text(
-                            'Apna squad requirement ya game tip uper share karein!',
+                            'share_squad_prompt'.tr(),
                             textAlign: TextAlign.center,
                             style: TextStyle(color: textGray, fontSize: 12.5),
                           ),
@@ -954,7 +947,6 @@ class _CommunityWallScreenState extends State<CommunityWallScreen> {
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          // Author Row
                           Row(
                             crossAxisAlignment: CrossAxisAlignment.center,
                             children: [
@@ -1037,7 +1029,6 @@ class _CommunityWallScreenState extends State<CommunityWallScreen> {
 
                           const SizedBox(height: 10),
 
-                          // Post Text
                           Text(
                             post.text,
                             style: TextStyle(
@@ -1051,13 +1042,11 @@ class _CommunityWallScreenState extends State<CommunityWallScreen> {
                           Divider(color: borderDark.withOpacity(0.5), height: 1),
                           const SizedBox(height: 6),
 
-                          // Action Buttons: Like, Comment & Report
                           Row(
                             mainAxisAlignment: MainAxisAlignment.spaceBetween,
                             children: [
                               Row(
                                 children: [
-                                  // Like Button (Green when liked)
                                   InkWell(
                                     onTap: () async {
                                       await _communityService.likePost(post.id);
@@ -1089,7 +1078,6 @@ class _CommunityWallScreenState extends State<CommunityWallScreen> {
 
                                   const SizedBox(width: 12),
 
-                                  // Comment Button (opens comment sheet)
                                   InkWell(
                                     onTap: () => _openCommentSheet(post),
                                     borderRadius: BorderRadius.circular(8),
@@ -1104,7 +1092,7 @@ class _CommunityWallScreenState extends State<CommunityWallScreen> {
                                           ),
                                           const SizedBox(width: 5),
                                           Text(
-                                            post.commentCount > 0 ? '${post.commentCount}' : 'Comment',
+                                            post.commentCount > 0 ? '${post.commentCount}' : 'comment'.tr(),
                                             style: TextStyle(
                                               color: textGray,
                                               fontWeight: FontWeight.bold,
@@ -1118,11 +1106,10 @@ class _CommunityWallScreenState extends State<CommunityWallScreen> {
 
                                   const SizedBox(width: 10),
 
-                                  // Helpful Button
                                   InkWell(
                                     onTap: () async {
                                       if (post.userId == CoinRewardService().userId) {
-                                        _showSnackBar('Aap apne post ko helpful mark nahi kar sakte');
+                                        _showSnackBar('err_self_helpful'.tr());
                                         return;
                                       }
                                       final rewarded = await CoinRewardService().rewardHelpfulReceived(
@@ -1130,9 +1117,9 @@ class _CommunityWallScreenState extends State<CommunityWallScreen> {
                                         postId: post.id,
                                       );
                                       if (rewarded) {
-                                        _showSnackBar('Marked as helpful! Post creator ko +5 GK Coins mile 💡');
+                                        _showSnackBar('msg_helpful_rewarded'.tr());
                                       } else {
-                                        _showSnackBar('Shukriya!');
+                                        _showSnackBar('msg_thank_you'.tr());
                                       }
                                     },
                                     borderRadius: BorderRadius.circular(8),
@@ -1143,7 +1130,7 @@ class _CommunityWallScreenState extends State<CommunityWallScreen> {
                                           const Icon(Icons.lightbulb_outline_rounded, size: 16, color: Colors.amber),
                                           const SizedBox(width: 4),
                                           Text(
-                                            post.helpfulCount > 0 ? '${post.helpfulCount}' : 'Helpful',
+                                            post.helpfulCount > 0 ? '${post.helpfulCount}' : 'btn_helpful'.tr(),
                                             style: const TextStyle(color: Colors.amber, fontWeight: FontWeight.bold, fontSize: 12),
                                           ),
                                         ],
@@ -1153,7 +1140,6 @@ class _CommunityWallScreenState extends State<CommunityWallScreen> {
                                 ],
                               ),
 
-                              // Report Button
                               InkWell(
                                 onTap: () => _confirmReport(post),
                                 borderRadius: BorderRadius.circular(8),
@@ -1164,7 +1150,7 @@ class _CommunityWallScreenState extends State<CommunityWallScreen> {
                                       Icon(Icons.flag_outlined, size: 16, color: textGray),
                                       const SizedBox(width: 4),
                                       Text(
-                                        'Report',
+                                        'btn_report_action'.tr(),
                                         style: TextStyle(color: textGray, fontSize: 11),
                                       ),
                                     ],
