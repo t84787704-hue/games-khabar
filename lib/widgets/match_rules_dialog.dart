@@ -69,7 +69,7 @@ class MatchRulesDialog {
                           ),
                         ),
                         Text(
-                          'Fair Play & Token Verification Rules',
+                          'فئیر پلے اور ٹوکن تصدیق کے اصول',
                           style: TextStyle(color: textGray, fontSize: 12),
                         ),
                       ],
@@ -82,8 +82,8 @@ class MatchRulesDialog {
               // 4 Verification Rules Cards
               _buildRuleTile(
                 number: '1',
-                title: 'In-Game Name (IGN) Match',
-                desc: 'Aapka Gamers ID profile name aur in-game kill feed naam bilkul match hona chahiye.',
+                title: 'ان-گیم نام (IGN) کا میچ ہونا',
+                desc: 'آپ کا گیمرز آئی ڈی پروفائل نام اور ان-گیم کل فیڈ نام بالکل میچ ہونا چاہیے۔',
                 primaryGreen: primaryGreen,
                 cardDark: cardDark,
                 borderDark: borderDark,
@@ -94,8 +94,8 @@ class MatchRulesDialog {
 
               _buildRuleTile(
                 number: '2',
-                title: 'Full Screen POV & Controls (HUD)',
-                desc: 'Screen recording mein on-screen game buttons aur controls saaf dikhna lazmi hain.',
+                title: 'فل اسکرین POV اور کنٹرولز (HUD)',
+                desc: 'اسکرین ریکارڈنگ میں اسکرین پر موجود گیم بٹنز اور کنٹرولز صاف نظر آنا لازمی ہیں۔',
                 primaryGreen: primaryGreen,
                 cardDark: cardDark,
                 borderDark: borderDark,
@@ -106,8 +106,8 @@ class MatchRulesDialog {
 
               _buildRuleTile(
                 number: '3',
-                title: 'No Cropped / Watermarked Clips',
-                desc: 'Internet se download ki gayi, cropped ya doosre creators ke watermark wali clip reject hogi.',
+                title: 'کوئی کراپ شدہ یا واٹر مارک والی کلپس نہیں',
+                desc: 'انٹرنیٹ سے ڈاؤن لوڈ کی گئی، کراپ شدہ یا دوسرے کریٹرز کے واٹر مارک والی کلپ مسترد کر دی جائے گی۔',
                 primaryGreen: primaryGreen,
                 cardDark: cardDark,
                 borderDark: borderDark,
@@ -118,8 +118,8 @@ class MatchRulesDialog {
 
               _buildRuleTile(
                 number: '4',
-                title: 'Career Results Proof (Dispute)',
-                desc: 'Kisi bhi lafray ya shak par in-game Career Results ka timestamp wala screenshot mangwaya jayega.',
+                title: 'کریئر رزلٹس کا ثبوت (تنازعہ)',
+                desc: 'کسی بھی مسئلے یا شک پر ان-گیم کریئر رزلٹس کا اسکرین شاٹ منگوایا جائے گا۔',
                 primaryGreen: primaryGreen,
                 cardDark: cardDark,
                 borderDark: borderDark,
@@ -147,8 +147,8 @@ class MatchRulesDialog {
                     onProceed(); // Agla action continue karein
                   },
                   child: const Text(
-                    'I Understand & Accept Rules',
-                    style: TextStyle(fontWeight: FontWeight.w900, fontSize: 14),
+                    'میں اصولوں کو سمجھ گیا ہوں اور قبول کرتا ہوں',
+                    style: TextStyle(fontWeight: FontWeight.w900, fontSize: 13.5),
                   ),
                 ),
               ),
