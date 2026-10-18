@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:url_launcher/url_launcher.dart';
+import 'package:easy_localization/easy_localization.dart';
 import '../services/theme_service.dart';
 
 class ContactUsScreen extends StatelessWidget {
@@ -15,7 +16,6 @@ class ContactUsScreen extends StatelessWidget {
   Color get textWhite => ThemeService.textPrimary;
   Color get textGray => ThemeService.textSecondary;
 
-  // ✅ Naya Email & Social Details:
   static const String contactEmail = 'gamersidofficial.help@gmail.com';
   static const String instagramHandle = '@gameskhabar';
   static const String instagramUrl = 'https://instagram.com/gameskhabar';
@@ -30,10 +30,10 @@ class ContactUsScreen extends StatelessWidget {
       if (await canLaunchUrl(emailUri)) {
         await launchUrl(emailUri, mode: LaunchMode.externalApplication);
       } else {
-        _copyToClipboard(context, contactEmail, 'Email copied to clipboard');
+        _copyToClipboard(context, contactEmail, 'msg_email_copied'.tr());
       }
     } catch (_) {
-      _copyToClipboard(context, contactEmail, 'Email copied to clipboard');
+      _copyToClipboard(context, contactEmail, 'msg_email_copied'.tr());
     }
   }
 
@@ -43,10 +43,10 @@ class ContactUsScreen extends StatelessWidget {
       if (await canLaunchUrl(instaUri)) {
         await launchUrl(instaUri, mode: LaunchMode.externalApplication);
       } else {
-        _copyToClipboard(context, instagramHandle, 'Instagram handle copied to clipboard');
+        _copyToClipboard(context, instagramHandle, 'msg_instagram_copied'.tr());
       }
     } catch (_) {
-      _copyToClipboard(context, instagramHandle, 'Instagram handle copied to clipboard');
+      _copyToClipboard(context, instagramHandle, 'msg_instagram_copied'.tr());
     }
   }
 
@@ -94,7 +94,7 @@ class ContactUsScreen extends StatelessWidget {
               onPressed: () => Navigator.pop(context),
             ),
             title: Text(
-              'Contact Us',
+              'title_contact_us'.tr(),
               style: TextStyle(
                 color: textWhite,
                 fontWeight: FontWeight.w900,
@@ -120,7 +120,7 @@ class ContactUsScreen extends StatelessWidget {
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Text(
-                        'Get in Touch with Gamers ID',
+                        'get_in_touch_title'.tr(),
                         style: TextStyle(
                           color: textWhite,
                           fontWeight: FontWeight.w900,
@@ -129,7 +129,7 @@ class ContactUsScreen extends StatelessWidget {
                       ),
                       const SizedBox(height: 6),
                       Text(
-                        'Have gaming news tips, partnership inquiries, or need support? Reach out to us directly through email or social media.',
+                        'get_in_touch_desc'.tr(),
                         style: TextStyle(
                           color: textGray,
                           fontSize: 13,
@@ -142,7 +142,7 @@ class ContactUsScreen extends StatelessWidget {
                 const SizedBox(height: 24),
 
                 Text(
-                  'Direct Channels',
+                  'direct_channels_title'.tr(),
                   style: TextStyle(
                     color: textWhite,
                     fontSize: 15,
@@ -155,11 +155,11 @@ class ContactUsScreen extends StatelessWidget {
                 _buildContactCard(
                   context: context,
                   icon: Icons.email_rounded,
-                  title: 'Official Email Support',
+                  title: 'official_email_support'.tr(),
                   subtitle: contactEmail,
-                  actionLabel: 'Send Email',
+                  actionLabel: 'btn_send_email'.tr(),
                   onAction: () => _launchEmail(context),
-                  onCopy: () => _copyToClipboard(context, contactEmail, 'Email copied to clipboard!'),
+                  onCopy: () => _copyToClipboard(context, contactEmail, 'msg_email_copied'.tr()),
                 ),
 
                 const SizedBox(height: 14),
@@ -168,16 +168,16 @@ class ContactUsScreen extends StatelessWidget {
                 _buildContactCard(
                   context: context,
                   icon: Icons.camera_alt_rounded,
-                  title: 'Instagram Official',
-                  subtitle: '$instagramHandle • Daily Gaming Updates & Reels',
-                  actionLabel: 'Open Instagram',
+                  title: 'instagram_official'.tr(),
+                  subtitle: '$instagramHandle • ${'daily_gaming_updates_reels'.tr()}',
+                  actionLabel: 'btn_open_instagram'.tr(),
                   onAction: () => _launchInstagram(context),
-                  onCopy: () => _copyToClipboard(context, instagramHandle, 'Instagram handle copied!'),
+                  onCopy: () => _copyToClipboard(context, instagramHandle, 'msg_instagram_copied'.tr()),
                 ),
 
                 const SizedBox(height: 28),
 
-                // Response Time Card (Promise removed)
+                // Response Time Card
                 Container(
                   padding: const EdgeInsets.all(16),
                   decoration: BoxDecoration(
@@ -194,7 +194,7 @@ class ContactUsScreen extends StatelessWidget {
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
                             Text(
-                              'Quick Response',
+                              'quick_response_title'.tr(),
                               style: TextStyle(
                                 color: textWhite,
                                 fontWeight: FontWeight.bold,
@@ -203,7 +203,7 @@ class ContactUsScreen extends StatelessWidget {
                             ),
                             const SizedBox(height: 2),
                             Text(
-                              'We typically respond to inquiries within 24 to 48 hours.',
+                              'quick_response_desc'.tr(),
                               style: TextStyle(color: textGray, fontSize: 11.5),
                             ),
                           ],
@@ -304,7 +304,7 @@ class ContactUsScreen extends StatelessWidget {
               const SizedBox(width: 10),
               IconButton(
                 icon: Icon(Icons.copy_rounded, color: textGray, size: 20),
-                tooltip: 'Copy',
+                tooltip: 'tooltip_copy'.tr(),
                 onPressed: onCopy,
                 style: IconButton.styleFrom(
                   backgroundColor: cardDark2,
