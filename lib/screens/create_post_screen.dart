@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:easy_localization/easy_localization.dart';
 import '../constants/gamer_theme.dart';
 import '../services/gamer_auth_service.dart';
 import '../services/gamer_social_service.dart';
@@ -39,8 +40,8 @@ class _CreatePostScreenState extends State<CreatePostScreen> {
     final text = _textController.text.trim();
     if (text.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Kuch likho to sahi! (Please write something)'),
+        SnackBar(
+          content: Text('err_write_something'.tr()),
           backgroundColor: GamerTheme.accentOrange,
         ),
       );
@@ -50,16 +51,14 @@ class _CreatePostScreenState extends State<CreatePostScreen> {
     setState(() => _isLoading = true);
 
     try {
-      // ============ FIX: Sirf Supabase Auth ID use karo ============
-      // Cached rawUid ya fake fallback bilkul nahi.
       final sbUserId = await SupabaseService.getCurrentUserId();
 
       if (sbUserId == null || sbUserId.isEmpty) {
         if (mounted) {
           setState(() => _isLoading = false);
           ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-              content: Text('Pehle login karein. Post publish nahi ho sakti.'),
+            SnackBar(
+              content: Text('err_login_required_post'.tr()),
               backgroundColor: GamerTheme.redAccent,
             ),
           );
@@ -92,8 +91,8 @@ class _CreatePostScreenState extends State<CreatePostScreen> {
 
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Post published successfully! 🚀'),
+          SnackBar(
+            content: Text('msg_post_published'.tr()),
             backgroundColor: GamerTheme.neonGreen,
           ),
         );
@@ -104,7 +103,7 @@ class _CreatePostScreenState extends State<CreatePostScreen> {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text('Post publish nahi ho saki: $e'),
+            content: Text('err_publish_failed'.tr(args: [e.toString()])),
             backgroundColor: GamerTheme.redAccent,
           ),
         );
@@ -132,9 +131,9 @@ class _CreatePostScreenState extends State<CreatePostScreen> {
           icon: const Icon(Icons.arrow_back_rounded, color: Colors.white),
           onPressed: () => Navigator.of(context).pop(),
         ),
-        title: const Text(
-          'Create Post',
-          style: TextStyle(
+        title: Text(
+          'create_post_title'.tr(),
+          style: const TextStyle(
               color: Colors.white, fontWeight: FontWeight.bold, fontSize: 18),
         ),
         actions: [
@@ -158,9 +157,9 @@ class _CreatePostScreenState extends State<CreatePostScreen> {
                       shape: RoundedRectangleBorder(
                           borderRadius: BorderRadius.circular(8)),
                     ),
-                    child: const Text(
-                      'POST',
-                      style: TextStyle(
+                    child: Text(
+                      'btn_post_caps'.tr(),
+                      style: const TextStyle(
                           fontWeight: FontWeight.w900,
                           fontSize: 13,
                           letterSpacing: 0.5),
@@ -224,19 +223,22 @@ class _CreatePostScreenState extends State<CreatePostScreen> {
                             color: Colors.white,
                             fontSize: 13,
                             fontWeight: FontWeight.bold),
-                        items: const [
+                        items: [
                           DropdownMenuItem(
-                              value: 'Mobile Games', child: Text('Mobile Games')),
-                          DropdownMenuItem(value: 'BGMI', child: Text('BGMI')),
-                          DropdownMenuItem(
+                              value: 'Mobile Games',
+                              child: Text('cat_mobile_games'.tr())),
+                          const DropdownMenuItem(
+                              value: 'BGMI', child: Text('BGMI')),
+                          const DropdownMenuItem(
                               value: 'Free Fire', child: Text('Free Fire')),
-                          DropdownMenuItem(
+                          const DropdownMenuItem(
                               value: 'COD Mobile', child: Text('COD Mobile')),
-                          DropdownMenuItem(
+                          const DropdownMenuItem(
                               value: 'PUBG PC', child: Text('PUBG PC')),
-                          DropdownMenuItem(
+                          const DropdownMenuItem(
                               value: 'Valorant', child: Text('Valorant')),
-                          DropdownMenuItem(value: 'GTA V', child: Text('GTA V')),
+                          const DropdownMenuItem(
+                              value: 'GTA V', child: Text('GTA V')),
                         ],
                         onChanged: (v) {
                           if (v != null) setState(() => _selectedGame = v);
@@ -255,10 +257,9 @@ class _CreatePostScreenState extends State<CreatePostScreen> {
                   textAlignVertical: TextAlignVertical.top,
                   style: const TextStyle(
                       color: Colors.white, fontSize: 16, height: 1.4),
-                  decoration: const InputDecoration(
-                    hintText:
-                        "What's on your gaming mind?\n\nShare clips, custom room codes, squad requests...",
-                    hintStyle: TextStyle(
+                  decoration: InputDecoration(
+                    hintText: 'create_post_composer_hint'.tr(),
+                    hintStyle: const TextStyle(
                         color: GamerTheme.textMuted, fontSize: 15),
                     border: InputBorder.none,
                   ),
