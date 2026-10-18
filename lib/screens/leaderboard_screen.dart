@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:easy_localization/easy_localization.dart';
 import '../services/supabase_service.dart';
 
 class LeaderboardScreen extends StatefulWidget {
@@ -108,9 +109,9 @@ class _LeaderboardScreenState extends State<LeaderboardScreen> {
           icon: const Icon(Icons.arrow_back_ios_new_rounded, color: Colors.white, size: 20),
           onPressed: () => Navigator.pop(context),
         ),
-        title: const Text(
-          '🏆 TOP 100 TEAMS - Most Wins',
-          style: TextStyle(
+        title: Text(
+          'leaderboard_top_teams_title'.tr(),
+          style: const TextStyle(
             color: Colors.white,
             fontWeight: FontWeight.w900,
             fontSize: 16,
@@ -138,7 +139,7 @@ class _LeaderboardScreenState extends State<LeaderboardScreen> {
                             const Icon(Icons.error_outline_rounded, color: Color(0xFFFF4655), size: 48),
                             const SizedBox(height: 12),
                             Text(
-                              'Failed to load leaderboard\n$_errorMessage',
+                              'err_failed_load_leaderboard'.tr(args: [_errorMessage ?? '']),
                               textAlign: TextAlign.center,
                               style: const TextStyle(color: Color(0xFF8B949E), fontSize: 13),
                             ),
@@ -149,7 +150,7 @@ class _LeaderboardScreenState extends State<LeaderboardScreen> {
                                 backgroundColor: const Color(0xFF00FF88),
                                 foregroundColor: Colors.black,
                               ),
-                              child: const Text('Try Again', style: TextStyle(fontWeight: FontWeight.bold)),
+                              child: Text('try_again'.tr(), style: const TextStyle(fontWeight: FontWeight.bold)),
                             ),
                           ],
                         ),
@@ -175,19 +176,19 @@ class _LeaderboardScreenState extends State<LeaderboardScreen> {
                                   child: const Text('🏆', style: TextStyle(fontSize: 40)),
                                 ),
                                 const SizedBox(height: 16),
-                                const Text(
-                                  'No Ranked Teams Yet',
-                                  style: TextStyle(
+                                Text(
+                                  'no_ranked_teams_yet'.tr(),
+                                  style: const TextStyle(
                                     color: Colors.white,
                                     fontSize: 18,
                                     fontWeight: FontWeight.bold,
                                   ),
                                 ),
                                 const SizedBox(height: 8),
-                                const Text(
-                                  'میچز جیت کر ونس حاصل کریں اور ٹاپ 100 لیڈر بورڈ میں شامل ہوں!',
+                                Text(
+                                  'no_ranked_teams_sub'.tr(),
                                   textAlign: TextAlign.center,
-                                  style: TextStyle(color: Color(0xFF8B949E), fontSize: 13),
+                                  style: const TextStyle(color: Color(0xFF8B949E), fontSize: 13),
                                 ),
                               ],
                             ),
@@ -205,7 +206,7 @@ class _LeaderboardScreenState extends State<LeaderboardScreen> {
                         itemBuilder: (context, index) {
                           final team = _topTeams[index];
                           final rank = index + 1;
-                          final teamName = team['name']?.toString() ?? 'Team';
+                          final teamName = team['name']?.toString() ?? 'label_team'.tr();
                           final tag = team['tag']?.toString() ?? '';
                           final displayName = tag.isNotEmpty ? '$teamName [$tag]' : teamName;
                           final wins = (team['wins'] as num?)?.toInt() ?? 0;
@@ -214,11 +215,8 @@ class _LeaderboardScreenState extends State<LeaderboardScreen> {
                             padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 4),
                             child: Row(
                               children: [
-                                // #Rank (Top 3 gold/silver/bronze)
                                 _buildRankBadge(rank),
                                 const SizedBox(width: 14),
-
-                                // Team Name [Tag] (e.g. J17 [TAG])
                                 Expanded(
                                   child: Text(
                                     displayName,
@@ -231,13 +229,9 @@ class _LeaderboardScreenState extends State<LeaderboardScreen> {
                                     overflow: TextOverflow.ellipsis,
                                   ),
                                 ),
-
-                                // Spacer
                                 const SizedBox(width: 10),
-
-                                // "X Wins" (e.g. "3 Wins") bold green right side pe
                                 Text(
-                                  '$wins Wins',
+                                  'wins_count'.tr(args: ['$wins']),
                                   style: const TextStyle(
                                     color: Color(0xFF00FF88),
                                     fontWeight: FontWeight.w900,
