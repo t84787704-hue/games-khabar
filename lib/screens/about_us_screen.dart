@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:easy_localization/easy_localization.dart';
 import '../services/theme_service.dart';
 
 class AboutUsScreen extends StatelessWidget {
@@ -28,7 +29,7 @@ class AboutUsScreen extends StatelessWidget {
               onPressed: () => Navigator.pop(context),
             ),
             title: Text(
-              'About Us',
+              'about_us_title'.tr(),
               style: TextStyle(
                 color: textWhite,
                 fontWeight: FontWeight.w900,
@@ -41,7 +42,7 @@ class AboutUsScreen extends StatelessWidget {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                // 1. Logo & Brand Header (Gamers ID Controller Icon)
+                // 1. Logo & Brand Header
                 Center(
                   child: Column(
                     children: [
@@ -87,7 +88,7 @@ class AboutUsScreen extends StatelessWidget {
                       ),
                       const SizedBox(height: 12),
                       Text(
-                        'Gamers ID',
+                        'app_name'.tr(),
                         style: TextStyle(
                           color: textWhite,
                           fontWeight: FontWeight.w900,
@@ -97,7 +98,8 @@ class AboutUsScreen extends StatelessWidget {
                       ),
                       const SizedBox(height: 4),
                       Text(
-                        'Your Ultimate Gaming & Esports Community Hub',
+                        'about_us_tagline'.tr(),
+                        textAlign: TextAlign.center,
                         style: TextStyle(
                           color: primaryGreen,
                           fontSize: 13,
@@ -118,7 +120,7 @@ class AboutUsScreen extends StatelessWidget {
                     border: Border.all(color: borderDark),
                   ),
                   child: Text(
-                    'Gamers ID is dedicated to bringing passionate gamers the ultimate competitive platform — create custom rooms, challenge opponents in 1v1 and squad battles, verify in-game ranks, connect with teammates, and get real-time tournament updates in one unified, modern experience.',
+                    'about_us_mission_desc'.tr(),
                     style: TextStyle(
                       color: textWhite,
                       fontSize: 14,
@@ -129,7 +131,7 @@ class AboutUsScreen extends StatelessWidget {
                 const SizedBox(height: 24),
 
                 Text(
-                  'What We Cover & Support',
+                  'about_us_coverage_title'.tr(),
                   style: TextStyle(
                     color: textWhite,
                     fontSize: 16,
@@ -141,32 +143,32 @@ class AboutUsScreen extends StatelessWidget {
                 _buildGameCategoryCard(
                   icon: Icons.sports_esports_rounded,
                   iconColor: const Color(0xFF38BDF8),
-                  title: 'BGMI & PUBG Mobile',
-                  description: 'Custom rooms, Erangel & TDM tournaments, rank verification, and pro player updates.',
+                  title: 'about_cat_bgmi_title'.tr(),
+                  description: 'about_cat_bgmi_desc'.tr(),
                 ),
                 _buildGameCategoryCard(
                   icon: Icons.local_fire_department_rounded,
                   iconColor: const Color(0xFFFF5252),
-                  title: 'Free Fire & Free Fire MAX',
-                  description: 'Clash Squad rooms, tournament prize matches, redeem codes, and guild battles.',
+                  title: 'about_cat_ff_title'.tr(),
+                  description: 'about_cat_ff_desc'.tr(),
                 ),
                 _buildGameCategoryCard(
                   icon: Icons.military_tech_rounded,
                   iconColor: const Color(0xFFFFD700),
-                  title: 'Call of Duty (COD & Warzone Mobile)',
-                  description: 'Multiplayer custom matches, meta loadouts, battle passes, and competitive leagues.',
+                  title: 'about_cat_cod_title'.tr(),
+                  description: 'about_cat_cod_desc'.tr(),
                 ),
                 _buildGameCategoryCard(
                   icon: Icons.shield_rounded,
                   iconColor: const Color(0xFF00FF88),
-                  title: 'Valorant & PC Gaming',
-                  description: 'Tactical team finder, competitive scrims, esports rankings, and match results.',
+                  title: 'about_cat_val_title'.tr(),
+                  description: 'about_cat_val_desc'.tr(),
                 ),
                 _buildGameCategoryCard(
                   icon: Icons.workspace_premium_rounded,
                   iconColor: const Color(0xFFFFA000),
-                  title: 'Custom Challenges & G-Coins',
-                  description: 'Host custom room challenges, earn G-Coins, climb leaderboards, and get verified blue tick.',
+                  title: 'about_cat_coins_title'.tr(),
+                  description: 'about_cat_coins_desc'.tr(),
                 ),
 
                 const SizedBox(height: 20),
@@ -183,7 +185,8 @@ class AboutUsScreen extends StatelessWidget {
                   child: Column(
                     children: [
                       Text(
-                        'Built for Gamers, by Gamers ❤️',
+                        'about_footer_built_by'.tr(),
+                        textAlign: TextAlign.center,
                         style: TextStyle(
                           color: primaryGreen,
                           fontWeight: FontWeight.bold,
@@ -192,7 +195,8 @@ class AboutUsScreen extends StatelessWidget {
                       ),
                       const SizedBox(height: 6),
                       Text(
-                        'Gamers ID Network • 24/7 Competitive Gaming Platform',
+                        'about_footer_network_info'.tr(),
+                        textAlign: TextAlign.center,
                         style: TextStyle(color: textGray, fontSize: 12),
                       ),
                     ],
