@@ -3,6 +3,7 @@
 // 1. Added auto Language Selection Dialog on screen load for new users (!isEditing).
 // 2. Added easy_localization, ThemeService, and LanguageService integrations.
 // 3. Replaced .eq('id', uid) with .or('id.eq.$uid,uid.eq.$uid') on users table.
+// 4. Fully localized into 7 languages via .tr().
 // ═══════════════════════════════════════════════════════════════════════════════
 import 'dart:async';
 import 'dart:io';
@@ -57,7 +58,6 @@ class _CreateGamerIdScreenState extends State<CreateGamerIdScreen> {
   String _rankRejectReason = '';
   bool _isSaving = false;
 
-  // Store perks: Profile Frame & Badge
   String _selectedFrame = '';
   List<String> _unlockedFrames = [];
   String _selectedBadge = '';
@@ -68,10 +68,11 @@ class _CreateGamerIdScreenState extends State<CreateGamerIdScreen> {
     final languages = [
       {'code': 'en', 'name': 'English', 'flag': '🇬🇧'},
       {'code': 'ur', 'name': 'اردو', 'flag': '🇵🇰'},
-      {'code': 'hi', 'name': 'हिंदी', 'flag': '🇮🇳'},
       {'code': 'ro', 'name': 'Roman', 'flag': '🌐'},
+      {'code': 'hi', 'name': 'हिंदी', 'flag': '🇮🇳'},
       {'code': 'ar', 'name': 'العربية', 'flag': '🇸🇦'},
       {'code': 'zh', 'name': '中文', 'flag': '🇨🇳'},
+      {'code': 'bn', 'name': 'বাংলা', 'flag': '🇧🇩'},
     ];
 
     showDialog(
@@ -95,18 +96,18 @@ class _CreateGamerIdScreenState extends State<CreateGamerIdScreen> {
                 child: const Icon(Icons.language_rounded, color: GamerTheme.neonGreen, size: 28),
               ),
               const SizedBox(height: 10),
-              const Text(
-                'Select Language',
-                style: TextStyle(
+              Text(
+                'choose_language'.tr(),
+                style: const TextStyle(
                   color: GamerTheme.textWhite,
                   fontWeight: FontWeight.bold,
                   fontSize: 18,
                 ),
               ),
               const SizedBox(height: 4),
-              const Text(
-                'Apni pasandeeda zuban muntakhib karein',
-                style: TextStyle(color: GamerTheme.textMuted, fontSize: 11),
+              Text(
+                'select_language_subtitle'.tr(),
+                style: const TextStyle(color: GamerTheme.textMuted, fontSize: 11),
                 textAlign: TextAlign.center,
               ),
             ],
@@ -184,12 +185,12 @@ class _CreateGamerIdScreenState extends State<CreateGamerIdScreen> {
     ScaffoldMessenger.of(context).hideCurrentSnackBar();
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
-        content: Text('$itemName is locked! Unlock it in the Coin Store.'),
+        content: Text('item_locked_banner'.tr(args: [itemName])),
         backgroundColor: const Color(0xFF1877F2),
         behavior: SnackBarBehavior.floating,
         duration: const Duration(seconds: 3),
         action: SnackBarAction(
-          label: 'STORE',
+          label: 'btn_store'.tr(),
           textColor: Colors.white,
           onPressed: () async {
             _lockedItemBannerTimer?.cancel();
@@ -212,37 +213,34 @@ class _CreateGamerIdScreenState extends State<CreateGamerIdScreen> {
   void _showRankComingSoonBanner() {
     ScaffoldMessenger.of(context).hideCurrentSnackBar();
     ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(
+      SnackBar(
         content: Row(
           children: [
-            Text('🚀', style: TextStyle(fontSize: 16)),
-            SizedBox(width: 8),
+            const Text('🚀', style: TextStyle(fontSize: 16)),
+            const SizedBox(width: 8),
             Expanded(
               child: Text(
-                'Advanced rank verification coming soon! Abhi ke liye skip karein.',
-                style: TextStyle(fontWeight: FontWeight.w600),
+                'rank_coming_soon_banner'.tr(),
+                style: const TextStyle(fontWeight: FontWeight.w600),
               ),
             ),
           ],
         ),
-        backgroundColor: Color(0xFF1877F2),
+        backgroundColor: const Color(0xFF1877F2),
         behavior: SnackBarBehavior.floating,
-        duration: Duration(seconds: 3),
+        duration: const Duration(seconds: 3),
       ),
     );
   }
 
-  // Live username availability check state
   Timer? _debounceTimer;
   bool _isCheckingUsername = false;
   bool? _isUsernameAvailable;
   String _usernameFeedback = '';
 
-  // BGMI Theme default cover image
   static const String _defaultBgmiCoverUrl =
       'https://images.unsplash.com/photo-1542751371-adc38448a05e?w=1200&auto=format&fit=crop&q=80';
 
-  // Gaming avatar presets
   final List<Map<String, dynamic>> _gamingPresets = [
     {
       'id': 'preset:helmet',
@@ -326,7 +324,6 @@ class _CreateGamerIdScreenState extends State<CreateGamerIdScreen> {
     }
     _loadStorePerks();
 
-    // Naye user ke liye screen load hote hi language popup open hoga
     if (!widget.isEditing) {
       WidgetsBinding.instance.addPostFrameCallback((_) {
         if (mounted) {
@@ -402,14 +399,14 @@ class _CreateGamerIdScreenState extends State<CreateGamerIdScreen> {
       setState(() {
         _isCheckingUsername = false;
         _isUsernameAvailable = false;
-        _usernameFeedback = '3-15 characters, lowercase letters, numbers & _ only (no spaces)';
+        _usernameFeedback = 'err_username_format'.tr();
       });
       return;
     }
 
     setState(() {
       _isCheckingUsername = true;
-      _usernameFeedback = 'Checking availability...';
+      _usernameFeedback = 'checking_availability'.tr();
     });
 
     _debounceTimer = Timer(const Duration(milliseconds: 400), () async {
@@ -427,7 +424,7 @@ class _CreateGamerIdScreenState extends State<CreateGamerIdScreen> {
       setState(() {
         _isCheckingUsername = false;
         _isUsernameAvailable = available;
-        _usernameFeedback = available ? 'Username is available! 🎉' : 'Username is already taken! ❌';
+        _usernameFeedback = available ? 'username_available'.tr() : 'username_taken'.tr();
       });
     });
   }
@@ -450,7 +447,7 @@ class _CreateGamerIdScreenState extends State<CreateGamerIdScreen> {
     } catch (e) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text('Could not pick image: $e'),
+          content: Text('err_pick_image'.tr(args: [e.toString()])),
           backgroundColor: GamerTheme.redAccent,
         ),
       );
@@ -475,37 +472,10 @@ class _CreateGamerIdScreenState extends State<CreateGamerIdScreen> {
     } catch (e) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text('Could not pick cover image: $e'),
+          content: Text('err_pick_cover'.tr(args: [e.toString()])),
           backgroundColor: GamerTheme.redAccent,
         ),
       );
-    }
-  }
-
-  Future<void> _pickRankScreenshot(ImageSource source) async {
-    try {
-      final picker = ImagePicker();
-      final picked = await picker.pickImage(
-        source: source,
-        maxWidth: 1600,
-        maxHeight: 1600,
-        imageQuality: 85,
-      );
-
-      if (picked != null) {
-        setState(() {
-          _pickedRankScreenshot = File(picked.path);
-        });
-      }
-    } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Could not pick screenshot: $e'),
-            backgroundColor: GamerTheme.redAccent,
-          ),
-        );
-      }
     }
   }
 
@@ -515,8 +485,8 @@ class _CreateGamerIdScreenState extends State<CreateGamerIdScreen> {
     final rawUsername = _usernameController.text.toLowerCase().trim();
     if (_isUsernameAvailable == false) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Please choose an available username'),
+        SnackBar(
+          content: Text('err_choose_available_username'.tr()),
           backgroundColor: GamerTheme.redAccent,
         ),
       );
@@ -526,8 +496,8 @@ class _CreateGamerIdScreenState extends State<CreateGamerIdScreen> {
     final uid = GamerAuthService().currentUid;
     if (uid == null) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Authentication session expired. Please log in again.'),
+        SnackBar(
+          content: Text('err_session_expired'.tr()),
           backgroundColor: GamerTheme.redAccent,
         ),
       );
@@ -546,8 +516,8 @@ class _CreateGamerIdScreenState extends State<CreateGamerIdScreen> {
         } else {
           if (mounted) {
             ScaffoldMessenger.of(context).showSnackBar(
-              const SnackBar(
-                content: Text('❌ Profile photo upload fail! Try again.'),
+              SnackBar(
+                content: Text('err_photo_upload_failed'.tr()),
                 backgroundColor: GamerTheme.redAccent,
               ),
             );
@@ -565,8 +535,8 @@ class _CreateGamerIdScreenState extends State<CreateGamerIdScreen> {
         } else {
           if (mounted) {
             ScaffoldMessenger.of(context).showSnackBar(
-              const SnackBar(
-                content: Text('❌ Cover photo upload fail! Try again.'),
+              SnackBar(
+                content: Text('err_cover_upload_failed'.tr()),
                 backgroundColor: GamerTheme.redAccent,
               ),
             );
@@ -702,7 +672,7 @@ class _CreateGamerIdScreenState extends State<CreateGamerIdScreen> {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text('Failed to save Gamer ID: $e'),
+            content: Text('err_save_gamer_id'.tr(args: [e.toString()])),
             backgroundColor: GamerTheme.redAccent,
           ),
         );
@@ -721,7 +691,9 @@ class _CreateGamerIdScreenState extends State<CreateGamerIdScreen> {
 
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text(widget.isEditing ? 'Gamer ID updated!' : 'Welcome to Gamers ID, @$rawUsername! 🎮'),
+          content: Text(widget.isEditing
+              ? 'msg_gamer_id_updated'.tr()
+              : 'msg_welcome_gamer'.tr(args: [rawUsername])),
           backgroundColor: GamerTheme.neonGreen,
         ),
       );
@@ -748,13 +720,13 @@ class _CreateGamerIdScreenState extends State<CreateGamerIdScreen> {
     return Scaffold(
       backgroundColor: GamerTheme.bgDark,
       appBar: AppBar(
-        title: Text(isEditing ? 'Edit Gamer ID' : 'Create Your Gamer ID'),
+        title: Text(isEditing ? 'title_edit_gamer_id'.tr() : 'title_create_gamer_id'.tr()),
         automaticallyImplyLeading: isEditing,
         actions: [
           if (isEditing)
             TextButton(
               onPressed: _isSaving ? null : _saveGamerId,
-              child: const Text('Save', style: TextStyle(color: GamerTheme.accentOrange, fontWeight: FontWeight.bold)),
+              child: Text('save'.tr(), style: const TextStyle(color: GamerTheme.accentOrange, fontWeight: FontWeight.bold)),
             ),
         ],
       ),
@@ -834,14 +806,14 @@ class _CreateGamerIdScreenState extends State<CreateGamerIdScreen> {
                               ),
                             ],
                           ),
-                          child: const Row(
+                          child: Row(
                             mainAxisSize: MainAxisSize.min,
                             children: [
-                              Icon(Icons.camera_alt_rounded, color: Colors.white, size: 14),
-                              SizedBox(width: 5),
+                              const Icon(Icons.camera_alt_rounded, color: Colors.white, size: 14),
+                              const SizedBox(width: 5),
                               Text(
-                                'Change Cover Photo',
-                                style: TextStyle(
+                                'change_cover_photo'.tr(),
+                                style: const TextStyle(
                                   color: Colors.white,
                                   fontSize: 11,
                                   fontWeight: FontWeight.w700,
@@ -913,9 +885,9 @@ class _CreateGamerIdScreenState extends State<CreateGamerIdScreen> {
                             TextButton.icon(
                               onPressed: _pickImageFromGallery,
                               icon: const Icon(Icons.photo_library_rounded, size: 16, color: GamerTheme.accentOrange),
-                              label: const Text(
-                                'Upload Photo From Gallery',
-                                style: TextStyle(
+                              label: Text(
+                                'upload_photo_gallery'.tr(),
+                                style: const TextStyle(
                                   color: GamerTheme.accentOrange,
                                   fontSize: 13,
                                   fontWeight: FontWeight.bold,
@@ -923,9 +895,9 @@ class _CreateGamerIdScreenState extends State<CreateGamerIdScreen> {
                               ),
                             ),
                             const SizedBox(height: 10),
-                            const Text(
-                              'PRO GAMER AVATAR PRESETS',
-                              style: TextStyle(
+                            Text(
+                              'pro_gamer_avatar_presets'.tr(),
+                              style: const TextStyle(
                                 color: GamerTheme.textMuted,
                                 fontSize: 11,
                                 fontWeight: FontWeight.w800,
@@ -1013,13 +985,13 @@ class _CreateGamerIdScreenState extends State<CreateGamerIdScreen> {
                             Row(
                               mainAxisAlignment: MainAxisAlignment.spaceBetween,
                               children: [
-                                const Row(
+                                Row(
                                   children: [
-                                    Icon(Icons.workspace_premium_rounded, color: Colors.amber, size: 18),
-                                    SizedBox(width: 6),
+                                    const Icon(Icons.workspace_premium_rounded, color: Colors.amber, size: 18),
+                                    const SizedBox(width: 6),
                                     Text(
-                                      'AVATAR FRAME',
-                                      style: TextStyle(
+                                      'avatar_frame_title'.tr(),
+                                      style: const TextStyle(
                                         color: GamerTheme.textWhite,
                                         fontSize: 12,
                                         fontWeight: FontWeight.w800,
@@ -1043,14 +1015,14 @@ class _CreateGamerIdScreenState extends State<CreateGamerIdScreen> {
                                       borderRadius: BorderRadius.circular(12),
                                       border: Border.all(color: GamerTheme.neonGreen.withOpacity(0.5)),
                                     ),
-                                    child: const Row(
+                                    child: Row(
                                       mainAxisSize: MainAxisSize.min,
                                       children: [
-                                        Icon(Icons.storefront_rounded, color: GamerTheme.neonGreen, size: 12),
-                                        SizedBox(width: 4),
+                                        const Icon(Icons.storefront_rounded, color: GamerTheme.neonGreen, size: 12),
+                                        const SizedBox(width: 4),
                                         Text(
-                                          'COIN STORE',
-                                          style: TextStyle(
+                                          'coin_store_caps'.tr(),
+                                          style: const TextStyle(
                                             color: GamerTheme.neonGreen,
                                             fontSize: 10,
                                             fontWeight: FontWeight.w900,
@@ -1069,7 +1041,7 @@ class _CreateGamerIdScreenState extends State<CreateGamerIdScreen> {
                                 children: [
                                   {
                                     'id': '',
-                                    'name': 'None',
+                                    'name': 'frame_none'.tr(),
                                     'emoji': '🚫',
                                     'color': Colors.white38,
                                   },
@@ -1155,13 +1127,13 @@ class _CreateGamerIdScreenState extends State<CreateGamerIdScreen> {
                             const SizedBox(height: 14),
                             const Divider(color: GamerTheme.borderDark, height: 1),
                             const SizedBox(height: 12),
-                            const Row(
+                            Row(
                               children: [
-                                Icon(Icons.military_tech_rounded, color: GamerTheme.accentBlue, size: 18),
-                                SizedBox(width: 6),
+                                const Icon(Icons.military_tech_rounded, color: GamerTheme.accentBlue, size: 18),
+                                const SizedBox(width: 6),
                                 Text(
-                                  'GAMER BADGE',
-                                  style: TextStyle(
+                                  'gamer_badge_title'.tr(),
+                                  style: const TextStyle(
                                     color: GamerTheme.textWhite,
                                     fontSize: 12,
                                     fontWeight: FontWeight.w800,
@@ -1177,7 +1149,7 @@ class _CreateGamerIdScreenState extends State<CreateGamerIdScreen> {
                                 children: [
                                   {
                                     'id': '',
-                                    'name': 'None',
+                                    'name': 'frame_none'.tr(),
                                   },
                                   {
                                     'id': 'pro_elite',
@@ -1224,7 +1196,7 @@ class _CreateGamerIdScreenState extends State<CreateGamerIdScreen> {
                                           mainAxisSize: MainAxisSize.min,
                                           children: [
                                             if (isNone)
-                                              const Text('None', style: TextStyle(color: Colors.white70, fontSize: 11))
+                                              Text('frame_none'.tr(), style: const TextStyle(color: Colors.white70, fontSize: 11))
                                             else
                                               GamerBadgeWidget(badgeId: id, scale: 0.9),
                                             if (!isUnlocked) ...[
@@ -1245,9 +1217,9 @@ class _CreateGamerIdScreenState extends State<CreateGamerIdScreen> {
                       const SizedBox(height: 24),
                       Row(
                         children: [
-                          const Text(
-                            'USERNAME (Unique Gamer Handle)',
-                            style: TextStyle(color: GamerTheme.accentOrange, fontSize: 12, fontWeight: FontWeight.w800, letterSpacing: 0.8),
+                          Text(
+                            'field_username_label'.tr(),
+                            style: const TextStyle(color: GamerTheme.accentOrange, fontSize: 12, fontWeight: FontWeight.w800, letterSpacing: 0.8),
                           ),
                           const SizedBox(width: 6),
                           const Icon(Icons.verified, color: Color(0xFF00E676), size: 16),
@@ -1260,7 +1232,7 @@ class _CreateGamerIdScreenState extends State<CreateGamerIdScreen> {
                         style: const TextStyle(color: GamerTheme.textWhite, fontWeight: FontWeight.bold),
                         decoration: InputDecoration(
                           prefixIcon: const Icon(Icons.alternate_email_rounded, color: GamerTheme.accentOrange),
-                          hintText: 'fua',
+                          hintText: 'gamer_handle',
                           suffixIcon: _isCheckingUsername
                               ? const Padding(
                                   padding: EdgeInsets.all(12),
@@ -1274,11 +1246,11 @@ class _CreateGamerIdScreenState extends State<CreateGamerIdScreen> {
                         ),
                         validator: (val) {
                           final clean = (val ?? '').toLowerCase().trim();
-                          if (clean.isEmpty) return 'Username is required';
-                          if (clean.length < 3) return 'Must be at least 3 characters';
-                          if (clean.length > 15) return 'Maximum 15 characters';
+                          if (clean.isEmpty) return 'err_username_required'.tr();
+                          if (clean.length < 3) return 'err_username_min'.tr();
+                          if (clean.length > 15) return 'err_username_max'.tr();
                           if (!RegExp(r'^[a-z0-9_]+$').hasMatch(clean)) {
-                            return 'Only lowercase letters, numbers, and _ are allowed';
+                            return 'err_username_chars'.tr();
                           }
                           return null;
                         },
@@ -1299,9 +1271,9 @@ class _CreateGamerIdScreenState extends State<CreateGamerIdScreen> {
                         ),
                       ],
                       const SizedBox(height: 20),
-                      const Text(
-                        'DISPLAY NAME',
-                        style: TextStyle(color: GamerTheme.textGray, fontSize: 12, fontWeight: FontWeight.w800, letterSpacing: 0.8),
+                      Text(
+                        'field_display_name_label'.tr(),
+                        style: const TextStyle(color: GamerTheme.textGray, fontSize: 12, fontWeight: FontWeight.w800, letterSpacing: 0.8),
                       ),
                       const SizedBox(height: 8),
                       TextFormField(
@@ -1312,14 +1284,14 @@ class _CreateGamerIdScreenState extends State<CreateGamerIdScreen> {
                           hintText: 'e.g. Fauji Gamer, Toxic Soul',
                         ),
                         validator: (val) {
-                          if ((val ?? '').trim().isEmpty) return 'Display Name is required';
+                          if ((val ?? '').trim().isEmpty) return 'err_display_name_required'.tr();
                           return null;
                         },
                       ),
                       const SizedBox(height: 20),
-                      const Text(
-                        'FAVORITE GAME',
-                        style: TextStyle(color: GamerTheme.textGray, fontSize: 12, fontWeight: FontWeight.w800, letterSpacing: 0.8),
+                      Text(
+                        'field_fav_game_label'.tr(),
+                        style: const TextStyle(color: GamerTheme.textGray, fontSize: 12, fontWeight: FontWeight.w800, letterSpacing: 0.8),
                       ),
                       const SizedBox(height: 8),
                       Container(
@@ -1378,9 +1350,9 @@ class _CreateGamerIdScreenState extends State<CreateGamerIdScreen> {
                             children: [
                               const Icon(Icons.military_tech_rounded, color: Color(0xFFFF8A00), size: 18),
                               const SizedBox(width: 6),
-                              const Text(
-                                'MY GAME RANK & PROOF',
-                                style: TextStyle(
+                              Text(
+                                'my_game_rank_proof'.tr(),
+                                style: const TextStyle(
                                   color: GamerTheme.textGray,
                                   fontSize: 12,
                                   fontWeight: FontWeight.w800,
@@ -1397,14 +1369,14 @@ class _CreateGamerIdScreenState extends State<CreateGamerIdScreen> {
                               ),
                               borderRadius: BorderRadius.circular(8),
                             ),
-                            child: const Row(
+                            child: Row(
                               mainAxisSize: MainAxisSize.min,
                               children: [
-                                Text('🚀', style: TextStyle(fontSize: 10)),
-                                SizedBox(width: 4),
+                                const Text('🚀', style: TextStyle(fontSize: 10)),
+                                const SizedBox(width: 4),
                                 Text(
-                                  'COMING SOON',
-                                  style: TextStyle(
+                                  'coming_soon_caps'.tr(),
+                                  style: const TextStyle(
                                     color: Colors.white,
                                     fontSize: 9.5,
                                     fontWeight: FontWeight.w900,
@@ -1424,14 +1396,14 @@ class _CreateGamerIdScreenState extends State<CreateGamerIdScreen> {
                           borderRadius: BorderRadius.circular(10),
                           border: Border.all(color: const Color(0xFF1877F2).withOpacity(0.4)),
                         ),
-                        child: const Row(
+                        child: Row(
                           children: [
-                            Icon(Icons.info_outline_rounded, color: Color(0xFF00E5FF), size: 18),
-                            SizedBox(width: 10),
+                            const Icon(Icons.info_outline_rounded, color: Color(0xFF00E5FF), size: 18),
+                            const SizedBox(width: 10),
                             Expanded(
                               child: Text(
-                                'Advanced rank verification aa raha hai! Abhi ke liye rank skip karein — profile pe sirf game tag dikhega.',
-                                style: TextStyle(
+                                'rank_verification_info'.tr(),
+                                style: const TextStyle(
                                   color: Colors.white70,
                                   fontSize: 11.5,
                                   height: 1.35,
@@ -1502,9 +1474,9 @@ class _CreateGamerIdScreenState extends State<CreateGamerIdScreen> {
                       Row(
                         mainAxisAlignment: MainAxisAlignment.spaceBetween,
                         children: [
-                          const Text(
-                            'SELECT RANK / رینک منتخب کریں (Top 10)',
-                            style: TextStyle(
+                          Text(
+                            'select_rank_label'.tr(),
+                            style: const TextStyle(
                               color: GamerTheme.textGray,
                               fontSize: 11,
                               fontWeight: FontWeight.w800,
@@ -1556,7 +1528,7 @@ class _CreateGamerIdScreenState extends State<CreateGamerIdScreen> {
                                     const SizedBox(width: 4),
                                   ],
                                   Text(
-                                    'Skip / No Rank (چھوڑ دیں)',
+                                    'skip_no_rank'.tr(),
                                     style: TextStyle(
                                       color: _rankController.text.trim().isEmpty ? GamerTheme.accentBlue : Colors.white70,
                                       fontSize: 12,
@@ -1629,14 +1601,14 @@ class _CreateGamerIdScreenState extends State<CreateGamerIdScreen> {
                                     borderRadius: BorderRadius.circular(10),
                                     border: Border.all(color: const Color(0xFFFFD700)),
                                   ),
-                                  child: const Row(
+                                  child: Row(
                                     children: [
-                                      Icon(Icons.hourglass_top_rounded, color: Color(0xFFFFD700), size: 16),
-                                      SizedBox(width: 8),
+                                      const Icon(Icons.hourglass_top_rounded, color: Color(0xFFFFD700), size: 16),
+                                      const SizedBox(width: 8),
                                       Expanded(
                                         child: Text(
-                                          'Rank Verification Pending ⏳ (تصدیق کے لیے زیر التواء)',
-                                          style: TextStyle(color: Color(0xFFFFD700), fontWeight: FontWeight.bold, fontSize: 11.5),
+                                          'rank_status_pending'.tr(),
+                                          style: const TextStyle(color: Color(0xFFFFD700), fontWeight: FontWeight.bold, fontSize: 11.5),
                                         ),
                                       ),
                                     ],
@@ -1651,14 +1623,14 @@ class _CreateGamerIdScreenState extends State<CreateGamerIdScreen> {
                                     borderRadius: BorderRadius.circular(10),
                                     border: Border.all(color: const Color(0xFF00FF88)),
                                   ),
-                                  child: const Row(
+                                  child: Row(
                                     children: [
-                                      Icon(Icons.verified_rounded, color: Color(0xFF00FF88), size: 16),
-                                      SizedBox(width: 8),
+                                      const Icon(Icons.verified_rounded, color: Color(0xFF00FF88), size: 16),
+                                      const SizedBox(width: 8),
                                       Expanded(
                                         child: Text(
-                                          'Verified ✓ (آپ کا رینک تصدیق شدہ ہے)',
-                                          style: TextStyle(color: Color(0xFF00FF88), fontWeight: FontWeight.bold, fontSize: 11.5),
+                                          'rank_status_verified'.tr(),
+                                          style: const TextStyle(color: Color(0xFF00FF88), fontWeight: FontWeight.bold, fontSize: 11.5),
                                         ),
                                       ),
                                     ],
@@ -1676,14 +1648,14 @@ class _CreateGamerIdScreenState extends State<CreateGamerIdScreen> {
                                   child: Column(
                                     crossAxisAlignment: CrossAxisAlignment.start,
                                     children: [
-                                      const Row(
+                                      Row(
                                         children: [
-                                          Icon(Icons.error_outline_rounded, color: Color(0xFFFF4655), size: 16),
-                                          SizedBox(width: 8),
+                                          const Icon(Icons.error_outline_rounded, color: Color(0xFFFF4655), size: 16),
+                                          const SizedBox(width: 8),
                                           Expanded(
                                             child: Text(
-                                              'آپ کا اسکرین شاٹ درست نہیں ہے، دوبارہ اپلوڈ کریں',
-                                              style: TextStyle(color: Color(0xFFFF4655), fontWeight: FontWeight.bold, fontSize: 12),
+                                              'rank_status_rejected_msg'.tr(),
+                                              style: const TextStyle(color: Color(0xFFFF4655), fontWeight: FontWeight.bold, fontSize: 12),
                                             ),
                                           ),
                                         ],
@@ -1691,7 +1663,7 @@ class _CreateGamerIdScreenState extends State<CreateGamerIdScreen> {
                                       if (_rankRejectReason.isNotEmpty) ...[
                                         const SizedBox(height: 4),
                                         Text(
-                                          'وجہ: $_rankRejectReason',
+                                          'reason_prefix'.tr(args: [_rankRejectReason]),
                                           style: const TextStyle(color: Colors.white70, fontSize: 11),
                                         ),
                                       ],
@@ -1707,14 +1679,14 @@ class _CreateGamerIdScreenState extends State<CreateGamerIdScreen> {
                                   borderRadius: BorderRadius.circular(10),
                                   border: Border.all(color: const Color(0xFF2E384D)),
                                 ),
-                                child: const Row(
+                                child: Row(
                                   children: [
-                                    Icon(Icons.info_outline_rounded, color: Color(0xFF38BDF8), size: 16),
-                                    SizedBox(width: 8),
+                                    const Icon(Icons.info_outline_rounded, color: Color(0xFF38BDF8), size: 16),
+                                    const SizedBox(width: 8),
                                     Expanded(
                                       child: Text(
-                                        'اسکرین شاٹ میں گیم کی اصل ID اور Rank صاف نظر آنا چاہیے',
-                                        style: TextStyle(color: Color(0xFF38BDF8), fontSize: 11.5, fontWeight: FontWeight.w600),
+                                        'screenshot_requirement_hint'.tr(),
+                                        style: const TextStyle(color: Color(0xFF38BDF8), fontSize: 11.5, fontWeight: FontWeight.w600),
                                       ),
                                     ),
                                   ],
@@ -1755,7 +1727,7 @@ class _CreateGamerIdScreenState extends State<CreateGamerIdScreen> {
                                       child: OutlinedButton.icon(
                                         onPressed: _showRankComingSoonBanner,
                                         icon: const Icon(Icons.edit_rounded, size: 14, color: Colors.white38),
-                                        label: const Text('تصویر تبدیل کریں (Coming Soon)', style: TextStyle(color: Colors.white38, fontSize: 11.5)),
+                                        label: Text('btn_change_photo_coming_soon'.tr(), style: const TextStyle(color: Colors.white38, fontSize: 11.5)),
                                         style: OutlinedButton.styleFrom(
                                           side: const BorderSide(color: Colors.white24),
                                           padding: const EdgeInsets.symmetric(vertical: 8),
@@ -1791,7 +1763,7 @@ class _CreateGamerIdScreenState extends State<CreateGamerIdScreen> {
                                       child: OutlinedButton.icon(
                                         onPressed: _showRankComingSoonBanner,
                                         icon: const Icon(Icons.refresh_rounded, size: 14, color: Colors.white38),
-                                        label: const Text('نیا اسکرین شاٹ (Coming Soon)', style: TextStyle(color: Colors.white38, fontSize: 11.5)),
+                                        label: Text('btn_new_screenshot_coming_soon'.tr(), style: const TextStyle(color: Colors.white38, fontSize: 11.5)),
                                         style: OutlinedButton.styleFrom(
                                           side: const BorderSide(color: Colors.white24),
                                           padding: const EdgeInsets.symmetric(vertical: 8),
@@ -1816,22 +1788,22 @@ class _CreateGamerIdScreenState extends State<CreateGamerIdScreen> {
                                         width: 1.5,
                                       ),
                                     ),
-                                    child: const Column(
+                                    child: Column(
                                       children: [
-                                        Icon(Icons.lock_clock_rounded, color: Colors.white38, size: 36),
-                                        SizedBox(height: 8),
+                                        const Icon(Icons.lock_clock_rounded, color: Colors.white38, size: 36),
+                                        const SizedBox(height: 8),
                                         Text(
-                                          'Rank Screenshot Upload — Coming Soon',
-                                          style: TextStyle(
+                                          'rank_upload_coming_soon_title'.tr(),
+                                          style: const TextStyle(
                                             color: Colors.white54,
                                             fontWeight: FontWeight.bold,
                                             fontSize: 13,
                                           ),
                                         ),
-                                        SizedBox(height: 4),
+                                        const SizedBox(height: 4),
                                         Text(
-                                          'Advanced verification feature aa raha hai',
-                                          style: TextStyle(
+                                          'rank_upload_coming_soon_sub'.tr(),
+                                          style: const TextStyle(
                                             color: Colors.white38,
                                             fontSize: 11,
                                             fontWeight: FontWeight.w600,
@@ -1850,9 +1822,9 @@ class _CreateGamerIdScreenState extends State<CreateGamerIdScreen> {
                       Row(
                         mainAxisAlignment: MainAxisAlignment.spaceBetween,
                         children: [
-                          const Text(
-                            'GAMER BIO',
-                            style: TextStyle(color: GamerTheme.textGray, fontSize: 12, fontWeight: FontWeight.w800, letterSpacing: 0.8),
+                          Text(
+                            'field_bio_label'.tr(),
+                            style: const TextStyle(color: GamerTheme.textGray, fontSize: 12, fontWeight: FontWeight.w800, letterSpacing: 0.8),
                           ),
                           ValueListenableBuilder<TextEditingValue>(
                             valueListenable: _bioController,
@@ -1877,34 +1849,34 @@ class _CreateGamerIdScreenState extends State<CreateGamerIdScreen> {
                         maxLines: 2,
                         buildCounter: (_, {required currentLength, required isFocused, maxLength}) => const SizedBox.shrink(),
                         style: const TextStyle(color: GamerTheme.textWhite),
-                        decoration: const InputDecoration(
-                          prefixIcon: Padding(
+                        decoration: InputDecoration(
+                          prefixIcon: const Padding(
                             padding: EdgeInsets.only(bottom: 24),
                             child: Icon(Icons.edit_note_rounded, color: GamerTheme.textMuted),
                           ),
-                          hintText: 'e.g. BGMI Conqueror | Clan Leader | Sniper Specialist',
+                          hintText: 'bio_hint'.tr(),
                         ),
                       ),
                       const SizedBox(height: 20),
                       Row(
-                        children: const [
+                        children: [
                           Text(
-                            'IN-GAME CHARACTER ID / UID',
-                            style: TextStyle(color: GamerTheme.textGray, fontSize: 12, fontWeight: FontWeight.w800, letterSpacing: 0.8),
+                            'field_character_id_label'.tr(),
+                            style: const TextStyle(color: GamerTheme.textGray, fontSize: 12, fontWeight: FontWeight.w800, letterSpacing: 0.8),
                           ),
-                          SizedBox(width: 8),
-                          Icon(Icons.lock_rounded, size: 14, color: GamerTheme.textMuted),
+                          const SizedBox(width: 8),
+                          const Icon(Icons.lock_rounded, size: 14, color: GamerTheme.textMuted),
                         ],
                       ),
                       const SizedBox(height: 8),
                       TextFormField(
                         controller: _gameIdController,
                         style: const TextStyle(color: GamerTheme.textWhite),
-                        decoration: const InputDecoration(
-                          prefixIcon: Icon(Icons.sports_esports_rounded, color: GamerTheme.accentOrange),
+                        decoration: InputDecoration(
+                          prefixIcon: const Icon(Icons.sports_esports_rounded, color: GamerTheme.accentOrange),
                           hintText: '12345',
-                          helperText: 'Enter your official in-game character UID',
-                          helperStyle: TextStyle(color: GamerTheme.textMuted, fontSize: 11),
+                          helperText: 'helper_character_uid'.tr(),
+                          helperStyle: const TextStyle(color: GamerTheme.textMuted, fontSize: 11),
                         ),
                       ),
                       const SizedBox(height: 32),
@@ -1947,7 +1919,7 @@ class _CreateGamerIdScreenState extends State<CreateGamerIdScreen> {
                                         const Icon(Icons.check_rounded, color: Colors.white, size: 20),
                                         const SizedBox(width: 8),
                                         Text(
-                                          isEditing ? 'Save Changes' : 'Save Changes & Join',
+                                          isEditing ? 'btn_save_changes'.tr() : 'btn_save_changes_join'.tr(),
                                           style: const TextStyle(
                                             color: Colors.white,
                                             fontWeight: FontWeight.w900,
@@ -2019,19 +1991,19 @@ class _AddVerifyGamerRankSheetState extends State<AddVerifyGamerRankSheet> {
     final gameId = _uidController.text.trim();
     if (_selectedRank.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Please select a rank'), backgroundColor: GamerTheme.redAccent),
+        SnackBar(content: Text('err_select_rank'.tr()), backgroundColor: GamerTheme.redAccent),
       );
       return;
     }
     if (gameId.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Please enter in-game Character ID / UID'), backgroundColor: GamerTheme.redAccent),
+        SnackBar(content: Text('err_enter_character_uid'.tr()), backgroundColor: GamerTheme.redAccent),
       );
       return;
     }
     if (_proofFile == null) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Please upload screenshot proof of your rank'), backgroundColor: GamerTheme.redAccent),
+        SnackBar(content: Text('err_upload_proof'.tr()), backgroundColor: GamerTheme.redAccent),
       );
       return;
     }
@@ -2073,7 +2045,7 @@ class _AddVerifyGamerRankSheetState extends State<AddVerifyGamerRankSheet> {
         Navigator.pop(context);
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text('$_selectedGame rank submitted for verification! 🎮'),
+            content: Text('msg_rank_submitted'.tr(args: [_selectedGame])),
             backgroundColor: GamerTheme.neonGreen,
           ),
         );
@@ -2111,9 +2083,9 @@ class _AddVerifyGamerRankSheetState extends State<AddVerifyGamerRankSheet> {
               children: [
                 const Icon(Icons.shield_rounded, color: Color(0xFF00E5FF), size: 22),
                 const SizedBox(width: 8),
-                const Text(
-                  'Add / Verify Game Rank',
-                  style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 16),
+                Text(
+                  'title_add_verify_rank'.tr(),
+                  style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 16),
                 ),
                 const Spacer(),
                 IconButton(
@@ -2157,7 +2129,7 @@ class _AddVerifyGamerRankSheetState extends State<AddVerifyGamerRankSheet> {
               ),
             ),
             const SizedBox(height: 14),
-            const Text('Select Your Rank:', style: TextStyle(color: Colors.white70, fontSize: 12, fontWeight: FontWeight.bold)),
+            Text('select_your_rank_label'.tr(), style: const TextStyle(color: Colors.white70, fontSize: 12, fontWeight: FontWeight.bold)),
             const SizedBox(height: 8),
             Wrap(
               spacing: 6,
@@ -2180,7 +2152,7 @@ class _AddVerifyGamerRankSheetState extends State<AddVerifyGamerRankSheet> {
               controller: _uidController,
               style: const TextStyle(color: Colors.white, fontSize: 13),
               decoration: InputDecoration(
-                hintText: 'In-Game Character ID / UID',
+                hintText: 'field_character_id_label'.tr(),
                 hintStyle: const TextStyle(color: GamerTheme.textMuted, fontSize: 12),
                 prefixIcon: const Icon(Icons.sports_esports_rounded, color: Color(0xFF00E5FF), size: 18),
                 filled: true,
@@ -2209,7 +2181,7 @@ class _AddVerifyGamerRankSheetState extends State<AddVerifyGamerRankSheet> {
                     const SizedBox(width: 10),
                     Expanded(
                       child: Text(
-                        _proofFile != null ? 'Screenshot Proof Attached' : 'Upload Rank Screenshot Proof',
+                        _proofFile != null ? 'proof_attached'.tr() : 'upload_rank_proof'.tr(),
                         style: TextStyle(
                           color: _proofFile != null ? const Color(0xFF00FF88) : Colors.white,
                           fontSize: 12.5,
@@ -2234,7 +2206,7 @@ class _AddVerifyGamerRankSheetState extends State<AddVerifyGamerRankSheet> {
                 ),
                 child: _isSubmitting
                     ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.black))
-                    : const Text('Submit for Verification', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14)),
+                    : Text('btn_submit_verification'.tr(), style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14)),
               ),
             ),
           ],
