@@ -5,13 +5,13 @@
 // ===============================================================================
 
 import 'package:flutter/material.dart';
+import 'package:easy_localization/easy_localization.dart';
 import '../constants/gamer_theme.dart';
 import '../models/gamer_user_model.dart';
 import '../services/gamer_auth_service.dart';
 import '../services/verification_service.dart';
 import '../services/coin_wallet_service.dart';
 import '../services/supabase_service.dart';
-import '../services/language_service.dart';
 import '../services/theme_service.dart';
 import 'create_gamer_id_screen.dart';
 import 'create_post_screen.dart';
@@ -31,9 +31,6 @@ class _VerificationScreenState extends State<VerificationScreen> {
   bool _isPurchasingVip = false;
   VerificationStats? _liveStats;
   GamerUser? _currentUser;
-
-  bool get _isUrdu => LanguageService.isUrdu;
-  bool get _isHindi => LanguageService.currentLanguage.value == 'hi';
 
   @override
   void initState() {
@@ -80,27 +77,21 @@ class _VerificationScreenState extends State<VerificationScreen> {
               const SizedBox(width: 8),
               Expanded(
                 child: Text(
-                  _isUrdu
-                      ? 'کوائنز کم ہیں!'
-                      : (_isHindi ? 'कॉइन्स कम हैं!' : 'Insufficient Coins!'),
+                  'dialog_insufficient_coins_title'.tr(),
                   style: TextStyle(color: ThemeService.textPrimary, fontSize: 17, fontWeight: FontWeight.bold),
                 ),
               ),
             ],
           ),
           content: Text(
-            _isUrdu
-                ? 'وی آئی پی بلیو ٹک کے لیے 2,000 کوائنز درکار ہیں۔ آپ کے والٹ میں اس وقت ${wallet.coins} کوائنز ہیں۔'
-                : (_isHindi
-                    ? 'वीआईपी ब्लू टिक के लिए 2,000 कॉइन्स चाहिए। आपके वॉलेट में अभी ${wallet.coins} कॉइन्स हैं।'
-                    : 'Instant VIP Blue Tick requires 2,000 coins. You currently have ${wallet.coins} coins.'),
+            'dialog_insufficient_coins_desc'.tr(args: ['${wallet.coins}']),
             style: TextStyle(color: ThemeService.textSecondary, fontSize: 13, height: 1.4),
           ),
           actions: [
             TextButton(
               onPressed: () => Navigator.pop(ctx),
               child: Text(
-                _isUrdu ? 'ٹھیک ہے' : (_isHindi ? 'ठीक है' : 'OK'),
+                'btn_ok'.tr(),
                 style: const TextStyle(color: Color(0xFF1877F2), fontWeight: FontWeight.bold),
               ),
             ),
@@ -121,27 +112,21 @@ class _VerificationScreenState extends State<VerificationScreen> {
             const SizedBox(width: 8),
             Expanded(
               child: Text(
-                _isUrdu
-                    ? 'وی آئی پی بلیو ٹک حاصل کریں؟'
-                    : (_isHindi ? 'वीआईपी ब्लू टिक अनलॉक?' : 'Unlock VIP Blue Tick?'),
+                'dialog_unlock_vip_title'.tr(),
                 style: TextStyle(color: ThemeService.textPrimary, fontSize: 17, fontWeight: FontWeight.bold),
               ),
             ),
           ],
         ),
         content: Text(
-          _isUrdu
-              ? 'کیا آپ 2,000 کوائنز ادا کر کے فوراً بلیو ٹک حاصل کرنا چاہتے ہیں؟ کسی بھی ٹاسک کی ضرورت نہیں ہوگی۔'
-              : (_isHindi
-                  ? 'क्या आप 2,000 कॉइन्स देकर तुरंत ब्लू टिक अनलॉक करना चाहते हैं?'
-                  : 'Do you want to unlock official Blue Tick instantly for 2,000 coins? No tasks required.'),
+          'dialog_unlock_vip_desc'.tr(),
           style: TextStyle(color: ThemeService.textSecondary, fontSize: 13, height: 1.4),
         ),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(ctx, false),
             child: Text(
-              _isUrdu ? 'منسوخ' : (_isHindi ? 'रद्द करें' : 'Cancel'),
+              'cancel'.tr(),
               style: TextStyle(color: ThemeService.textSecondary),
             ),
           ),
@@ -153,7 +138,7 @@ class _VerificationScreenState extends State<VerificationScreen> {
             ),
             onPressed: () => Navigator.pop(ctx, true),
             child: Text(
-              _isUrdu ? '2,000 کوائنز پے کریں' : (_isHindi ? '2,000 कॉइन्स दें' : 'Pay 2,000 Coins'),
+              'btn_pay_2000_coins'.tr(),
               style: const TextStyle(fontWeight: FontWeight.bold),
             ),
           ),
@@ -228,9 +213,7 @@ class _VerificationScreenState extends State<VerificationScreen> {
         SnackBar(
           backgroundColor: const Color(0xFFFF4655),
           content: Text(
-            _isUrdu
-                ? 'درخواست نہیں بھیجی جا سکتی: ${unmet.length} شرائط باقی ہیں۔'
-                : 'Cannot apply: ${unmet.length} requirement(s) missing.',
+            'err_cannot_apply_missing_reqs'.tr(args: ['${unmet.length}']),
           ),
         ),
       );
@@ -288,15 +271,13 @@ class _VerificationScreenState extends State<VerificationScreen> {
             const Icon(Icons.verified_rounded, color: Color(0xFF1877F2), size: 64),
             const SizedBox(height: 16),
             Text(
-              _isUrdu ? 'مبارک ہو! بلیو ٹک تصدیق شدہ' : 'Official Blue Tick Verified!',
+              'dialog_verified_celebration_title'.tr(),
               style: TextStyle(color: ThemeService.textPrimary, fontSize: 20, fontWeight: FontWeight.w900),
               textAlign: TextAlign.center,
             ),
             const SizedBox(height: 8),
             Text(
-              _isUrdu
-                  ? 'آپ کا بلیو ٹک فعال ہو چکا ہے۔ یہ بیج آپ کی پروفائل اور تمام پوسٹس پر نظر آئے گا۔'
-                  : 'Your official Blue Tick is now live across your profile and posts!',
+              'dialog_verified_celebration_desc'.tr(),
               style: TextStyle(color: ThemeService.textSecondary, fontSize: 13),
               textAlign: TextAlign.center,
             ),
@@ -312,7 +293,7 @@ class _VerificationScreenState extends State<VerificationScreen> {
                 ),
                 onPressed: () => Navigator.pop(ctx),
                 child: Text(
-                  _isUrdu ? 'بہترین! آگے بڑھیں' : 'LET\'S FLEX 🎮',
+                  'btn_lets_flex'.tr(),
                   style: const TextStyle(fontWeight: FontWeight.bold),
                 ),
               ),
@@ -336,7 +317,7 @@ class _VerificationScreenState extends State<VerificationScreen> {
           backgroundColor: ThemeService.card,
           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
           title: Text(
-            _isUrdu ? 'گیم یو آئی ڈی لنک کریں' : 'Link Game UID',
+            'dialog_link_game_uid_title'.tr(),
             style: TextStyle(color: ThemeService.textPrimary, fontSize: 18, fontWeight: FontWeight.bold),
           ),
           content: Column(
@@ -347,7 +328,7 @@ class _VerificationScreenState extends State<VerificationScreen> {
                 dropdownColor: ThemeService.card,
                 style: TextStyle(color: ThemeService.textPrimary),
                 decoration: InputDecoration(
-                  labelText: _isUrdu ? 'گیم منتخب کریں' : 'Game',
+                  labelText: 'label_select_game'.tr(),
                   labelStyle: TextStyle(color: ThemeService.textSecondary),
                 ),
                 items: supportedGames.map((g) => DropdownMenuItem(value: g, child: Text(g, style: TextStyle(color: ThemeService.textPrimary)))).toList(),
@@ -360,9 +341,9 @@ class _VerificationScreenState extends State<VerificationScreen> {
                 controller: controller,
                 style: TextStyle(color: ThemeService.textPrimary),
                 decoration: InputDecoration(
-                  labelText: _isUrdu ? 'کریکٹر یو آئی ڈی' : 'Character UID',
+                  labelText: 'label_character_uid'.tr(),
                   labelStyle: TextStyle(color: ThemeService.textSecondary),
-                  hintText: 'e.g. 5129384729',
+                  hintText: 'hint_character_uid'.tr(),
                   hintStyle: TextStyle(color: ThemeService.textSecondary.withOpacity(0.5)),
                 ),
               ),
@@ -372,7 +353,7 @@ class _VerificationScreenState extends State<VerificationScreen> {
             TextButton(
               onPressed: () => Navigator.pop(ctx),
               child: Text(
-                _isUrdu ? 'منسوخ' : LanguageService.t('Cancel'),
+                'cancel'.tr(),
                 style: TextStyle(color: ThemeService.textSecondary),
               ),
             ),
@@ -387,7 +368,7 @@ class _VerificationScreenState extends State<VerificationScreen> {
                 }
               },
               child: Text(
-                _isUrdu ? 'محفوظ کریں' : 'Save',
+                'save'.tr(),
                 style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
               ),
             ),
@@ -409,7 +390,7 @@ class _VerificationScreenState extends State<VerificationScreen> {
           backgroundColor: ThemeService.card,
           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
           title: Text(
-            _isUrdu ? '$selectedGame میں رینک منتخب کریں' : 'Rank in $selectedGame',
+            'dialog_rank_in_game_title'.tr(args: [selectedGame]),
             style: TextStyle(color: ThemeService.textPrimary, fontSize: 18, fontWeight: FontWeight.bold),
           ),
           content: DropdownButtonFormField<String>(
@@ -424,7 +405,7 @@ class _VerificationScreenState extends State<VerificationScreen> {
             TextButton(
               onPressed: () => Navigator.pop(ctx),
               child: Text(
-                _isUrdu ? 'منسوخ' : LanguageService.t('Cancel'),
+                'cancel'.tr(),
                 style: TextStyle(color: ThemeService.textSecondary),
               ),
             ),
@@ -436,7 +417,7 @@ class _VerificationScreenState extends State<VerificationScreen> {
                 _refreshData();
               },
               child: Text(
-                _isUrdu ? 'اپ ڈیٹ کریں' : 'Update',
+                'btn_update'.tr(),
                 style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
               ),
             ),
@@ -451,51 +432,46 @@ class _VerificationScreenState extends State<VerificationScreen> {
     return ValueListenableBuilder<ThemeMode>(
       valueListenable: ThemeService.themeModeNotifier,
       builder: (context, _, __) {
-        return ValueListenableBuilder<String>(
-          valueListenable: LanguageService.currentLanguage,
-          builder: (context, _, __) {
-            return StreamBuilder<GamerUser?>(
-              stream: _authService.userProfileStream(_currentUser?.uid ?? _authService.currentUid ?? ''),
-              builder: (context, snapshot) {
-                final user = snapshot.data ?? _currentUser;
+        return StreamBuilder<GamerUser?>(
+          stream: _authService.userProfileStream(_currentUser?.uid ?? _authService.currentUid ?? ''),
+          builder: (context, snapshot) {
+            final user = snapshot.data ?? _currentUser;
 
-                return Scaffold(
-                  backgroundColor: ThemeService.bg,
-                  appBar: AppBar(
-                    backgroundColor: ThemeService.appBarBg,
-                    elevation: ThemeService.isDarkMode ? 0 : 1,
-                    leading: IconButton(
-                      icon: Icon(Icons.arrow_back_ios_new_rounded, color: ThemeService.textPrimary, size: 20),
-                      onPressed: () => Navigator.pop(context),
-                    ),
-                    title: Row(
-                      children: [
-                        const Icon(Icons.verified_rounded, color: Color(0xFF1877F2), size: 22),
-                        const SizedBox(width: 8),
-                        Expanded(
-                          child: Text(
-                            _isUrdu ? 'بلیو ٹک تصدیق' : 'Blue Tick Verification',
-                            style: TextStyle(fontWeight: FontWeight.w900, fontSize: 17, color: ThemeService.textPrimary),
-                            overflow: TextOverflow.ellipsis,
-                          ),
-                        ),
-                      ],
-                    ),
-                    actions: [
-                      IconButton(
-                        icon: const Icon(Icons.refresh_rounded, color: Color(0xFF1877F2)),
-                        tooltip: 'Refresh',
-                        onPressed: _refreshData,
+            return Scaffold(
+              backgroundColor: ThemeService.bg,
+              appBar: AppBar(
+                backgroundColor: ThemeService.appBarBg,
+                elevation: ThemeService.isDarkMode ? 0 : 1,
+                leading: IconButton(
+                  icon: Icon(Icons.arrow_back_ios_new_rounded, color: ThemeService.textPrimary, size: 20),
+                  onPressed: () => Navigator.pop(context),
+                ),
+                title: Row(
+                  children: [
+                    const Icon(Icons.verified_rounded, color: Color(0xFF1877F2), size: 22),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: Text(
+                        'title_blue_tick_verification'.tr(),
+                        style: TextStyle(fontWeight: FontWeight.w900, fontSize: 17, color: ThemeService.textPrimary),
+                        overflow: TextOverflow.ellipsis,
                       ),
-                    ],
+                    ),
+                  ],
+                ),
+                actions: [
+                  IconButton(
+                    icon: const Icon(Icons.refresh_rounded, color: Color(0xFF1877F2)),
+                    tooltip: 'tooltip_refresh'.tr(),
+                    onPressed: _refreshData,
                   ),
-                  body: user == null
+                ],
+              ),
+              body: user == null
+                  ? const Center(child: CircularProgressIndicator(color: Color(0xFF1877F2)))
+                  : _isLoading
                       ? const Center(child: CircularProgressIndicator(color: Color(0xFF1877F2)))
-                      : _isLoading
-                          ? const Center(child: CircularProgressIndicator(color: Color(0xFF1877F2)))
-                          : _buildBody(user),
-                );
-              },
+                      : _buildBody(user),
             );
           },
         );
@@ -540,7 +516,7 @@ class _VerificationScreenState extends State<VerificationScreen> {
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
                 Text(
-                  _isUrdu ? 'لازمی شرائط' : 'MANDATORY REQUIREMENTS',
+                  'mandatory_requirements_title'.tr(),
                   style: TextStyle(color: ThemeService.textSecondary, fontSize: 12, fontWeight: FontWeight.w900),
                 ),
                 Container(
@@ -551,7 +527,7 @@ class _VerificationScreenState extends State<VerificationScreen> {
                     border: Border.all(color: allMet ? const Color(0xFF00FF88) : ThemeService.border),
                   ),
                   child: Text(
-                    '$metCount / ${reqs.length} Met',
+                    'reqs_met_count'.tr(args: ['$metCount', '${reqs.length}']),
                     style: TextStyle(
                       color: allMet ? const Color(0xFF00FF88) : ThemeService.textSecondary,
                       fontWeight: FontWeight.w900,
@@ -612,7 +588,7 @@ class _VerificationScreenState extends State<VerificationScreen> {
               const SizedBox(width: 8),
               Expanded(
                 child: Text(
-                  _isUrdu ? 'فوری وی آئی پی بلیو ٹک ⚡' : 'INSTANT VIP BLUE TICK ⚡',
+                  'instant_vip_blue_tick_title'.tr(),
                   style: const TextStyle(color: Color(0xFF1877F2), fontWeight: FontWeight.w900, fontSize: 15),
                 ),
               ),
@@ -620,9 +596,7 @@ class _VerificationScreenState extends State<VerificationScreen> {
           ),
           const SizedBox(height: 8),
           Text(
-            _isUrdu
-                ? 'ٹاسک مکمل کرنے کا انتظار نہیں کرنا چاہتے؟ آپ براہ راست 2,000 کوائنز ادا کر کے فوراً بلیو ٹک حاصل کر سکتے ہیں!'
-                : 'Skip the wait and requirements! Unlock your official Blue Tick immediately with 2,000 coins.',
+            'instant_vip_blue_tick_desc'.tr(),
             style: TextStyle(color: ThemeService.textPrimary, fontSize: 12.5, height: 1.35),
           ),
           const SizedBox(height: 12),
@@ -641,8 +615,8 @@ class _VerificationScreenState extends State<VerificationScreen> {
                   : const Icon(Icons.monetization_on_rounded, color: Color(0xFFFFD700), size: 18),
               label: Text(
                 _isPurchasingVip
-                    ? 'Processing...'
-                    : (_isUrdu ? 'فوراً حاصل کریں (2,000 کوائنز)' : 'Unlock Instantly (2,000 Coins)'),
+                    ? 'processing'.tr()
+                    : 'btn_unlock_instantly_coins'.tr(),
                 style: const TextStyle(fontWeight: FontWeight.bold),
               ),
               onPressed: _isPurchasingVip ? null : () => _handleInstantVipBuy(user),
@@ -667,9 +641,9 @@ class _VerificationScreenState extends State<VerificationScreen> {
           children: [
             const Icon(Icons.workspace_premium_rounded, color: Color(0xFFFFD700), size: 40),
             const SizedBox(height: 8),
-            const Text('OFFICIAL OWNER & CREATOR 👑', style: TextStyle(color: Color(0xFFFFD700), fontSize: 18, fontWeight: FontWeight.w900)),
+            Text('owner_creator_badge'.tr(), style: const TextStyle(color: Color(0xFFFFD700), fontSize: 18, fontWeight: FontWeight.w900)),
             const SizedBox(height: 4),
-            Text('LEGEND Badge 👑 • Official Blue Tick Verified ✅', style: TextStyle(color: ThemeService.textPrimary, fontSize: 13)),
+            Text('owner_creator_desc'.tr(), style: TextStyle(color: ThemeService.textPrimary, fontSize: 13)),
           ],
         ),
       );
@@ -689,12 +663,12 @@ class _VerificationScreenState extends State<VerificationScreen> {
             const Icon(Icons.verified_rounded, color: Color(0xFF1877F2), size: 44),
             const SizedBox(height: 8),
             Text(
-              _isUrdu ? 'تصدیق شدہ بلیو ٹک ✓' : 'Official Blue Tick Verified ✓',
+              'status_verified_blue_tick'.tr(),
               style: TextStyle(color: ThemeService.textPrimary, fontSize: 18, fontWeight: FontWeight.w900),
             ),
             const SizedBox(height: 4),
             Text(
-              '@${user.username} is an officially verified competitive gamer.',
+              'status_verified_gamer_desc'.tr(args: [user.username]),
               style: TextStyle(color: ThemeService.textSecondary, fontSize: 12.5),
               textAlign: TextAlign.center,
             ),
@@ -717,12 +691,12 @@ class _VerificationScreenState extends State<VerificationScreen> {
             const Icon(Icons.hourglass_top_rounded, color: Color(0xFFFF8A00), size: 40),
             const SizedBox(height: 8),
             Text(
-              _isUrdu ? '24 گھنٹے کے ریویو میں ہے' : 'Under Review 24h',
+              'status_under_review_24h'.tr(),
               style: TextStyle(color: ThemeService.textPrimary, fontSize: 18, fontWeight: FontWeight.w900),
             ),
             const SizedBox(height: 4),
             Text(
-              _isUrdu ? 'آپ کی درخواست 24 گھنٹے کے ریویو میں ہے۔' : 'Your application is currently under 24-hour review.',
+              'status_under_review_desc'.tr(),
               style: TextStyle(color: ThemeService.textSecondary, fontSize: 12),
               textAlign: TextAlign.center,
             ),
@@ -751,11 +725,11 @@ class _VerificationScreenState extends State<VerificationScreen> {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
-                      _isUrdu ? 'بلیو ٹک حاصل کریں' : 'Get The Official Blue Tick',
+                      'get_official_blue_tick_title'.tr(),
                       style: TextStyle(color: ThemeService.textPrimary, fontSize: 16, fontWeight: FontWeight.w900),
                     ),
                     Text(
-                      _isUrdu ? 'اپلائی کرنے کے لیے تمام شرائط پوری کریں' : 'User must meet ALL requirements to apply',
+                      'meet_all_requirements_sub'.tr(),
                       style: TextStyle(color: ThemeService.textSecondary, fontSize: 11),
                     ),
                   ],
@@ -778,7 +752,7 @@ class _VerificationScreenState extends State<VerificationScreen> {
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
               Text(
-                '$metCount of $totalCount Completed',
+                'completed_of_total'.tr(args: ['$metCount', '$totalCount']),
                 style: TextStyle(color: ThemeService.textSecondary, fontSize: 11, fontWeight: FontWeight.bold),
               ),
               Text(
@@ -860,7 +834,7 @@ class _VerificationScreenState extends State<VerificationScreen> {
                 ),
               ),
               Text(
-                'Target: ${item.targetFormatted}',
+                'target_label'.tr(args: [item.targetFormatted]),
                 style: TextStyle(color: ThemeService.textSecondary, fontSize: 10.5),
               ),
             ],
@@ -887,7 +861,7 @@ class _VerificationScreenState extends State<VerificationScreen> {
               const Icon(Icons.verified_rounded, color: Color(0xFF1877F2), size: 20),
               const SizedBox(width: 8),
               Text(
-                _isUrdu ? 'تصدیق شدہ بلیو ٹک ✓' : 'Official Blue Tick Verified ✓',
+                'status_verified_blue_tick'.tr(),
                 style: const TextStyle(color: Color(0xFF1877F2), fontWeight: FontWeight.w900, fontSize: 14),
               ),
             ],
@@ -908,7 +882,7 @@ class _VerificationScreenState extends State<VerificationScreen> {
           ),
           icon: _isSubmitting ? const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2)) : const Icon(Icons.hourglass_bottom_rounded, size: 18),
           label: Text(
-            _isUrdu ? 'زیر التوا (24 گھنٹے) ⏳' : 'Under Review 24h ⏳',
+            'btn_under_review_24h'.tr(),
             style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
           ),
           onPressed: _isSubmitting ? null : () => _handleApply(user),
@@ -932,8 +906,8 @@ class _VerificationScreenState extends State<VerificationScreen> {
         icon: _isSubmitting ? const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2)) : Icon(allMet ? Icons.verified_rounded : Icons.lock_outline_rounded, size: 18),
         label: Text(
           allMet
-              ? (_isUrdu ? 'درخواست جمع کروائیں' : 'APPLY FOR VERIFICATION')
-              : (_isUrdu ? 'درخواست بند ہے (شرائط باقی ہیں)' : 'Apply for Verification (Locked)'),
+              ? 'btn_apply_for_verification'.tr()
+              : 'btn_apply_locked'.tr(),
           style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13.5),
         ),
         onPressed: _isSubmitting ? null : () => _handleApply(user),
@@ -953,7 +927,7 @@ class _VerificationScreenState extends State<VerificationScreen> {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Text(
-            _isUrdu ? 'شرائط پوری کرنے کے لیے فوری راستے' : 'QUICK SHORTCUTS TO COMPLETE REQUIREMENTS',
+            'quick_shortcuts_title'.tr(),
             style: TextStyle(color: ThemeService.textSecondary, fontSize: 10.5, fontWeight: FontWeight.w900),
           ),
           const SizedBox(height: 10),
@@ -967,7 +941,7 @@ class _VerificationScreenState extends State<VerificationScreen> {
                   ),
                   icon: const Icon(Icons.sports_esports_rounded, color: Color(0xFF1877F2), size: 15),
                   label: Text(
-                    _isUrdu ? 'گیم یو آئی ڈی' : 'Link Game UID',
+                    'btn_shortcut_link_uid'.tr(),
                     style: const TextStyle(color: Color(0xFF1877F2), fontSize: 11, fontWeight: FontWeight.bold),
                   ),
                   onPressed: () => _showLinkGameUidDialog(user),
@@ -982,7 +956,7 @@ class _VerificationScreenState extends State<VerificationScreen> {
                   ),
                   icon: const Icon(Icons.military_tech_rounded, color: Color(0xFFFF6B00), size: 15),
                   label: Text(
-                    _isUrdu ? 'گیم رینک' : 'Set Game Rank',
+                    'btn_shortcut_set_rank'.tr(),
                     style: const TextStyle(color: Color(0xFFFF6B00), fontSize: 11, fontWeight: FontWeight.bold),
                   ),
                   onPressed: () => _showQuickRankKdDialog(user),
@@ -1001,7 +975,7 @@ class _VerificationScreenState extends State<VerificationScreen> {
                   ),
                   icon: Icon(Icons.edit_note_rounded, color: ThemeService.textPrimary, size: 15),
                   label: Text(
-                    _isUrdu ? 'بائیو اور اواتار' : 'Edit Bio & Avatar',
+                    'btn_shortcut_edit_bio'.tr(),
                     style: TextStyle(color: ThemeService.textPrimary, fontSize: 11, fontWeight: FontWeight.bold),
                   ),
                   onPressed: () {
@@ -1018,7 +992,7 @@ class _VerificationScreenState extends State<VerificationScreen> {
                   ),
                   icon: Icon(Icons.movie_creation_rounded, color: ThemeService.textPrimary, size: 15),
                   label: Text(
-                    _isUrdu ? 'پوسٹ کلپ' : 'Post Clip/Room',
+                    'btn_shortcut_post_clip'.tr(),
                     style: TextStyle(color: ThemeService.textPrimary, fontSize: 11, fontWeight: FontWeight.bold),
                   ),
                   onPressed: () {
