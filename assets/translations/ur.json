@@ -530,7 +530,7 @@
   "no_match_history_title": "ابھی تک کوئی میچ ہسٹری نہیں",
   "no_match_history_sub": "ثبوت کے ساتھ مکمل ہونے والے میچز یہاں نظر آئیں گے۔",
   "match_won_badge": "جیت 🏆",
-  "match_draw_badge": "ڈرا 🤝",
+  "match_draw_badge": "درا 🤝",
   "match_lost_badge": "شکست ❌",
   
   "network_title": "{} کا نیٹ ورک",
@@ -659,7 +659,7 @@
   "no_transactions_yet": "ابھی تک کوئی ٹرانزیکشن نہیں ہوئی",
   "tx_coins_amount": "{} کوائنز",
   "msg_daily_bonus_claimed": "ڈیلی بونس کامیابی کے ساتھ کلیم کر لیا گیا!",
-  "msg_daily_bonus_already_claimed": "آپ آج کا بونس پہلے ہی لے चुके ہیں!",
+  "msg_daily_bonus_already_claimed": "آپ آج کا بونس پہلے ہی لے چکے ہیں!",
   "err_failed_with_msg": "خرابی: {}",
 
   "title_coin_store": "کوائن اسٹور",
@@ -704,5 +704,20 @@
   "btn_shortcut_link_uid": "UID لنک کریں",
   "btn_shortcut_post_clip": "کلپ پوسٹ کریں",
   "btn_shortcut_edit_bio": "بائیو میں ترمیم کریں",
-  "btn_apply_locked": "درخواست مقفل ہے (شرائط پوری کریں)"
+  "btn_apply_locked": "درخواست مقفل ہے (شرائط پوری کریں)",
+
+  "title_download_my_data": "میرا ڈیٹا ڈاؤن لوڈ کریں",
+  "download_data_banner_text": "آپ اپنی گیمرز آئی ڈی سے متعلق تمام ڈیٹا کی ایک کاپی JSON فارمیٹ میں ڈاؤن لوڈ کر سکتے ہیں۔",
+  "download_data_included_title": "اس ڈاؤن لوڈ میں درج ذیل ڈیٹا شامل ہوگا:",
+  "download_bullet_profile": "پروفائل کی معلومات اور تفصیلات",
+  "download_bullet_posts": "آپ کی تمام پبلک پوسٹس",
+  "download_bullet_comments": "آپ کے کیے گئے تبصرے",
+  "download_bullet_followers": "فالوورز اور فالوئنگ کی فہرست",
+  "download_bullet_teams": "شامل ٹیمیں اور اسپورٹس ڈیٹا",
+  "download_bullet_challenges": "میچ اور چیلنجز کی ہسٹری",
+  "download_bullet_coins": "کوائنز اور والیٹ ٹرانزیکشنز",
+  "download_bullet_notifications": "نوٹیفکیشنز کا ریکارڈ",
+  "format_info_title": "JSON فائل فارمیٹ",
+  "format_info_desc": "ڈیٹا ایک معیاری JSON فائل کی شکل میں ڈاؤن لوڈ ہوگا جسے آپ آسانی سے ریڈ یا اوپن کر سکتے ہیں۔",
+  "btn_download_my_data": "ڈیٹا ڈاؤن لوڈ کریں"
 }
