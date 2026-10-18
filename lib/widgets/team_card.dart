@@ -1,6 +1,7 @@
 // ===============================================================================
 // EXACT DIFF — Full Adaptive Day & Night Mode Support for TeamCard
 // + Match Verification Rules Dialog on Challenge Action
+// + Frozen Team Challenge Blocking Logic (Both Sender & Receiver)
 // -------------------------------------------------------------------------------
 // File: lib/widgets/team_card.dart
 // ===============================================================================
@@ -16,6 +17,8 @@ import '../screens/team_profile_screen.dart';
 import '../screens/teams_screen.dart';
 import '../screens/private_match_room_screen.dart';
 import '../services/theme_service.dart';
+import '../services/coin_wallet_service.dart';
+import '../services/language_service.dart';
 import 'coin_or_ad_popup.dart';
 import 'match_rules_dialog.dart';
 
@@ -23,6 +26,7 @@ class TeamCard extends StatefulWidget {
   final TeamModel team;
   final String myTeamId;
   final String myTeamName;
+  final bool isMyTeamFrozen;
   final Map<String, dynamic>? pendingChallenge;
   final Future<void> Function(String challengeId)? onCancelChallenge;
 
@@ -31,6 +35,7 @@ class TeamCard extends StatefulWidget {
     required this.team,
     this.myTeamId = '',
     this.myTeamName = '',
+    this.isMyTeamFrozen = false,
     this.pendingChallenge,
     this.onCancelChallenge,
   });
@@ -156,6 +161,85 @@ class _TeamCardState extends State<TeamCard> {
   }
 
   Future<void> _handleChallenge(String currentUid) async {
+    // 🛑 CHECK 1: Agar meri apni team Frozen hai to main kisi ko challenge nahi bhej sakta
+    if (widget.isMyTeamFrozen) {
+      if (mounted) {
+        showDialog(
+          context: context,
+          builder: (ctx) => AlertDialog(
+            backgroundColor: ThemeService.card,
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+            title: const Row(
+              children: [
+                Icon(Icons.lock_clock_rounded, color: Color(0xFFFF4655), size: 24),
+                SizedBox(width: 8),
+                Text(
+                  'Team Frozen',
+                  style: TextStyle(color: Color(0xFFFF4655), fontWeight: FontWeight.bold, fontSize: 16),
+                ),
+              ],
+            ),
+            content: Text(
+              LanguageService.isUrdu
+                  ? 'آپ کی ٹیم منجمد ہے۔ چیلنج بھیجنے کے لیے پہلے اپنے والٹ میں 1,000 کوائنز کا بیلنس پورا کریں۔'
+                  : 'Your team is frozen because your balance is below 1,000 coins. Top up to 1,000 coins to send challenges.',
+              style: TextStyle(color: ThemeService.textSecondary, fontSize: 13.5, height: 1.4),
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(ctx),
+                child: const Text('OK', style: TextStyle(color: Color(0xFF1877F2), fontWeight: FontWeight.bold)),
+              ),
+            ],
+          ),
+        );
+      }
+      return;
+    }
+
+    // 🛑 CHECK 2: Agar samnay wali target team Frozen hai to usko bhi challenge nahi bhej sakte
+    if (widget.team.leaderId.isNotEmpty) {
+      try {
+        final targetWallet = await CoinWalletService().getOrCreateWallet(widget.team.leaderId);
+        if (targetWallet.coins < 1000) {
+          if (mounted) {
+            showDialog(
+              context: context,
+              builder: (ctx) => AlertDialog(
+                backgroundColor: ThemeService.card,
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                title: const Row(
+                  children: [
+                    Icon(Icons.lock_clock_rounded, color: Color(0xFFFF4655), size: 24),
+                    SizedBox(width: 8),
+                    Text(
+                      'Team Frozen',
+                      style: TextStyle(color: Color(0xFFFF4655), fontWeight: FontWeight.bold, fontSize: 16),
+                    ),
+                  ],
+                ),
+                content: Text(
+                  LanguageService.isUrdu
+                      ? 'یہ ٹیم اس وقت منجمد (Frozen) ہے کیونکہ ان کے لیڈر کا بیلنس 1,000 کوائنز سے کم ہے۔ آپ اس ٹیم کو چیلنج نہیں کر سکتے۔'
+                      : 'This team is frozen because their leader balance fell below 1,000 coins. You cannot challenge this team.',
+                  style: TextStyle(color: ThemeService.textSecondary, fontSize: 13.5, height: 1.4),
+                ),
+                actions: [
+                  TextButton(
+                    onPressed: () => Navigator.pop(ctx),
+                    child: const Text('OK', style: TextStyle(color: Color(0xFF1877F2), fontWeight: FontWeight.bold)),
+                  ),
+                ],
+              ),
+            );
+          }
+          return;
+        }
+      } catch (e) {
+        debugPrint('[TeamCard] Error checking target team wallet: $e');
+      }
+    }
+
     final myTeams = await _teamService.getUserTeams(currentUid);
     final myLeaderTeams =
         myTeams.where((t) => t.isLeader(currentUid)).toList();
@@ -597,8 +681,8 @@ class _TeamCardState extends State<TeamCard> {
         builder: (ctx, setDialogState) => AlertDialog(
           backgroundColor: const Color(0xFF131A29),
           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-          title: Row(
-            children: const [
+          title: const Row(
+            children: [
               Icon(Icons.edit_rounded, color: Color(0xFF00FF88), size: 22),
               SizedBox(width: 8),
               Expanded(
@@ -858,8 +942,8 @@ class _TeamCardState extends State<TeamCard> {
       builder: (ctx) => AlertDialog(
         backgroundColor: const Color(0xFF131A29),
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-        title: Row(
-          children: const [
+        title: const Row(
+          children: [
             Icon(Icons.warning_amber_rounded,
                 color: Color(0xFFFF4655), size: 24),
             SizedBox(width: 8),
