@@ -128,5 +128,21 @@
   "log_out_confirm": "Kya aap waqai Gamers ID se log out karna chahte hain?",
   "delete_account": "Delete Account",
   "delete_account_sub": "Apna Gamer ID hamesha ke liye delete karein (30-day grace)",
-  "unlocked": "UNLOCKED"
+  "unlocked": "UNLOCKED",
+  "nav_following": "Following",
+  "nav_community": "Community",
+  "bookmark_added": "Bookmarks mein save ho gaya! 🔖",
+  "bookmark_removed": "Bookmarks se hata diya gaya",
+  "tooltip_notifications": "Notifications",
+  "search_news_hint": "Gaming news, updates aur games search karein...",
+  "loading_khabar": "Khabrain load ho rahi hain...",
+  "btn_retry": "Dobara Koshish Karein",
+  "no_news_yet": "Abhi tak koi khabar nahi",
+  "badge_featured": "FEATURED",
+  "badge_video": "VIDEO",
+  "no_articles_found": "Koi khabar nahi mili",
+  "whats_on_mind": "Aap ke zehen mein kya hai?",
+  "like": "Like",
+  "comment": "Comment",
+  "comments": "comments"
 }
