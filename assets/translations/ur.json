@@ -640,5 +640,22 @@
   "esports_team_status": "ای اسپورٹس ٹیم کی حیثیت",
   "esports_status_leader": "ٹیم لیڈر اور ممبر کی حیثیت سے اہل",
   "esports_status_member": "صرف ٹیم ممبر کی حیثیت سے اہل",
-  "esports_status_ineligible": "ٹیم کے لیے نااہل (کم از کم 500 کوائنز درکار ہیں)"
-}
+  "esports_status_ineligible": "ٹیم کے لیے نااہل (کم از کم 500 کوائنز درکار ہیں)",
+
+  "title_my_wallet": "میرا والٹ",
+  "tooltip_coin_store": "کوائن اسٹور",
+  "current_balance_caps": "موجودہ بیلنس",
+  "in_escrow_coins": "اسکرو میں: {} کوائنز",
+  "total_net_worth": "کل مالیت: {}",
+  "btn_earn_coins": "کوائنز کمائیں",
+  "btn_history": "ہسٹری",
+  "next_claim_in": "اگلا کلیم: {}",
+  "claim_50_gcoins_now": "ابھی 50 جی-کوائنز کلیم کریں!",
+  "btn_claim_50": "کلیم کریں (+50)",
+  "stat_lifetime_earned": "کل کمائے گئے",
+  "stat_trust_score": "ٹرسٹ اسکور",
+  "recent_activity_title": "حالیہ سرگرمیاں",
+  "btn_view_all": "سب دیکھیں",
+  "no_transactions_yet": "ابھی تک کوئی ٹرانزیکشن نہیں ہوئی",
+  "tx_coins_amount": "{} کوائنز",
+  
