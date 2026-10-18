@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:cached_network_image/cached_network_image.dart';
+import 'package:easy_localization/easy_localization.dart';
 import '../constants/gamer_theme.dart';
 import '../services/block_service.dart';
 import '../services/gamer_auth_service.dart';
@@ -47,17 +48,22 @@ class _BlockedUsersScreenState extends State<BlockedUsersScreen> {
         backgroundColor: Colors.white,
         shape:
             RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-        title: const Text('Unblock User?',
-            style: TextStyle(
-                color: Color(0xFF050505), fontWeight: FontWeight.bold)),
+        title: Text(
+          'dialog_unblock_user_title'.tr(),
+          style: const TextStyle(
+              color: Color(0xFF050505), fontWeight: FontWeight.bold),
+        ),
         content: Text(
-            'Unblock $name? They will be able to see your profile and posts again.',
-            style: const TextStyle(color: Color(0xFF65676B))),
+          'dialog_unblock_user_desc'.tr(args: [name]),
+          style: const TextStyle(color: Color(0xFF65676B)),
+        ),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(ctx, false),
-            child: const Text('Cancel',
-                style: TextStyle(color: Color(0xFF65676B))),
+            child: Text(
+              'cancel'.tr(),
+              style: const TextStyle(color: Color(0xFF65676B)),
+            ),
           ),
           ElevatedButton(
             style: ElevatedButton.styleFrom(
@@ -68,9 +74,11 @@ class _BlockedUsersScreenState extends State<BlockedUsersScreen> {
                   borderRadius: BorderRadius.circular(8)),
             ),
             onPressed: () => Navigator.pop(ctx, true),
-            child: const Text('Unblock',
-                style: TextStyle(
-                    color: Colors.white, fontWeight: FontWeight.bold)),
+            child: Text(
+              'btn_unblock'.tr(),
+              style: const TextStyle(
+                  color: Colors.white, fontWeight: FontWeight.bold),
+            ),
           ),
         ],
       ),
@@ -90,15 +98,15 @@ class _BlockedUsersScreenState extends State<BlockedUsersScreen> {
       });
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text('Unblocked $name'),
+          content: Text('msg_unblocked_name'.tr(args: [name])),
           backgroundColor: GamerTheme.accentGreen,
         ),
       );
     } else {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Failed to unblock'),
-          backgroundColor: Color(0xFFFF4655),
+        SnackBar(
+          content: Text('err_failed_to_unblock'.tr()),
+          backgroundColor: const Color(0xFFFF4655),
         ),
       );
     }
@@ -112,9 +120,9 @@ class _BlockedUsersScreenState extends State<BlockedUsersScreen> {
         backgroundColor: Colors.white,
         elevation: 1,
         iconTheme: const IconThemeData(color: Color(0xFF050505)),
-        title: const Text(
-          'Blocked Users',
-          style: TextStyle(
+        title: Text(
+          'title_blocked_users'.tr(),
+          style: const TextStyle(
             color: Color(0xFF1877F2),
             fontWeight: FontWeight.bold,
             fontSize: 18,
@@ -139,21 +147,21 @@ class _BlockedUsersScreenState extends State<BlockedUsersScreen> {
                             size: 48, color: Color(0xFF65676B)),
                       ),
                       const SizedBox(height: 16),
-                      const Text(
-                        'No Blocked Users',
-                        style: TextStyle(
+                      Text(
+                        'no_blocked_users_title'.tr(),
+                        style: const TextStyle(
                           color: Color(0xFF050505),
                           fontSize: 17,
                           fontWeight: FontWeight.bold,
                         ),
                       ),
                       const SizedBox(height: 6),
-                      const Padding(
-                        padding: EdgeInsets.symmetric(horizontal: 40),
+                      Padding(
+                        padding: const EdgeInsets.symmetric(horizontal: 40),
                         child: Text(
-                          'Users you block will appear here. They won\'t be able to see your posts or profile.',
+                          'no_blocked_users_desc'.tr(),
                           textAlign: TextAlign.center,
-                          style: TextStyle(
+                          style: const TextStyle(
                               color: Color(0xFF65676B), fontSize: 13),
                         ),
                       ),
@@ -248,10 +256,12 @@ class _BlockedUsersScreenState extends State<BlockedUsersScreen> {
                                   horizontal: 14, vertical: 8),
                             ),
                             onPressed: () => _unblock(u),
-                            child: const Text('Unblock',
-                                style: TextStyle(
-                                    fontWeight: FontWeight.bold,
-                                    fontSize: 12.5)),
+                            child: Text(
+                              'btn_unblock'.tr(),
+                              style: const TextStyle(
+                                  fontWeight: FontWeight.bold,
+                                  fontSize: 12.5),
+                            ),
                           ),
                         ),
                       );
