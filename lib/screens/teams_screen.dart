@@ -937,6 +937,7 @@ class _TeamsScreenState extends State<TeamsScreen>
                               team: team,
                               myTeamId: myTeamId,
                               myTeamName: myTeamName,
+                              isMyTeamFrozen: isMyTeamFrozen, // 👈 Exact connection added here
                               pendingChallenge: matchingPending.isNotEmpty ? matchingPending : null,
                               onCancelChallenge: _handleCancelChallenge,
                             );
