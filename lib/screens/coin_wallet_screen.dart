@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
+import 'package:easy_localization/easy_localization.dart';
 import '../constants/gamer_theme.dart';
 import '../models/coin_transaction_model.dart';
 import '../models/coin_wallet_model.dart';
@@ -51,8 +52,8 @@ class _CoinWalletScreenState extends State<CoinWalletScreen> {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text(ok
-                ? '🎁 +50 G-Coins claimed!'
-                : '⏳ Daily bonus already claimed today.'),
+                ? 'msg_daily_bonus_claimed'.tr()
+                : 'msg_daily_bonus_already_claimed'.tr()),
             backgroundColor: ok ? GamerTheme.neonGreen : GamerTheme.accentOrange,
             behavior: SnackBarBehavior.floating,
           ),
@@ -62,7 +63,7 @@ class _CoinWalletScreenState extends State<CoinWalletScreen> {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text('Failed: $e'),
+            content: Text('err_failed_with_msg'.tr(args: [e.toString()])),
             backgroundColor: GamerTheme.redAccent,
             behavior: SnackBarBehavior.floating,
           ),
@@ -91,14 +92,14 @@ class _CoinWalletScreenState extends State<CoinWalletScreen> {
           icon: const Icon(Icons.arrow_back_rounded, color: Colors.white),
           onPressed: () => Navigator.pop(context),
         ),
-        title: const Text(
-          'My Wallet',
-          style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
+        title: Text(
+          'title_my_wallet'.tr(),
+          style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
         ),
         actions: [
           IconButton(
             icon: const Icon(Icons.storefront_rounded, color: GamerTheme.neonGreen),
-            tooltip: 'Coin Store',
+            tooltip: 'tooltip_coin_store'.tr(),
             onPressed: () {
               Navigator.push(
                 context,
@@ -165,9 +166,9 @@ class _CoinWalletScreenState extends State<CoinWalletScreen> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const Text(
-            'CURRENT BALANCE',
-            style: TextStyle(
+          Text(
+            'current_balance_caps'.tr(),
+            style: const TextStyle(
               color: GamerTheme.textMuted,
               fontSize: 11,
               fontWeight: FontWeight.bold,
@@ -189,11 +190,11 @@ class _CoinWalletScreenState extends State<CoinWalletScreen> {
                 ),
               ),
               const SizedBox(width: 8),
-              const Padding(
-                padding: EdgeInsets.only(top: 12),
+              Padding(
+                padding: const EdgeInsets.only(top: 12),
                 child: Text(
-                  'G-Coins',
-                  style: TextStyle(
+                  'g_coins_label'.tr(),
+                  style: const TextStyle(
                     color: GamerTheme.textMuted,
                     fontSize: 14,
                     fontWeight: FontWeight.w600,
@@ -212,7 +213,7 @@ class _CoinWalletScreenState extends State<CoinWalletScreen> {
                   borderRadius: BorderRadius.circular(6),
                 ),
                 child: Text(
-                  'In Escrow: ${NumberFormat('#,###').format(wallet.escrowCoins)} Coins',
+                  'in_escrow_coins'.tr(args: [NumberFormat('#,###').format(wallet.escrowCoins)]),
                   style: const TextStyle(
                     color: Colors.white70,
                     fontSize: 11,
@@ -222,7 +223,7 @@ class _CoinWalletScreenState extends State<CoinWalletScreen> {
               ),
               const SizedBox(width: 8),
               Text(
-                'Total Net: ${NumberFormat('#,###').format(wallet.totalNetWorth)}',
+                'total_net_worth'.tr(args: [NumberFormat('#,###').format(wallet.totalNetWorth)]),
                 style: const TextStyle(
                   color: GamerTheme.textMuted,
                   fontSize: 11,
@@ -241,7 +242,7 @@ class _CoinWalletScreenState extends State<CoinWalletScreen> {
         Expanded(
           child: _actionButton(
             icon: Icons.play_circle_fill_rounded,
-            label: 'Earn Coins',
+            label: 'btn_earn_coins'.tr(),
             color: GamerTheme.neonGreen,
             onTap: () {
               Navigator.push(
@@ -255,7 +256,7 @@ class _CoinWalletScreenState extends State<CoinWalletScreen> {
         Expanded(
           child: _actionButton(
             icon: Icons.history_rounded,
-            label: 'History',
+            label: 'btn_history'.tr(),
             color: GamerTheme.accentBlue,
             onTap: () {
               CoinHistorySheet.show(context, userId: _userId);
@@ -336,9 +337,9 @@ class _CoinWalletScreenState extends State<CoinWalletScreen> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                const Text(
-                  'Daily Login Bonus',
-                  style: TextStyle(
+                Text(
+                  'daily_login_bonus'.tr(),
+                  style: const TextStyle(
                     color: Colors.white,
                     fontSize: 14,
                     fontWeight: FontWeight.bold,
@@ -347,8 +348,8 @@ class _CoinWalletScreenState extends State<CoinWalletScreen> {
                 const SizedBox(height: 4),
                 Text(
                   canClaim
-                      ? 'Claim +50 G-Coins now!'
-                      : 'Next claim in ${_formatDuration(wallet.nextDailyBonusDuration)}',
+                      ? 'claim_50_gcoins_now'.tr()
+                      : 'next_claim_in'.tr(args: [_formatDuration(wallet.nextDailyBonusDuration)]),
                   style: const TextStyle(
                     color: GamerTheme.textMuted,
                     fontSize: 12,
@@ -376,8 +377,10 @@ class _CoinWalletScreenState extends State<CoinWalletScreen> {
                     child: CircularProgressIndicator(
                         strokeWidth: 2, color: Colors.black),
                   )
-                : const Text('CLAIM (+50)',
-                    style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12)),
+                : Text(
+                    'btn_claim_50'.tr(),
+                    style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 12),
+                  ),
           ),
         ],
       ),
@@ -396,7 +399,7 @@ class _CoinWalletScreenState extends State<CoinWalletScreen> {
       children: [
         Expanded(
           child: _statCard(
-            label: 'Lifetime Earned',
+            label: 'stat_lifetime_earned'.tr(),
             value: '+${NumberFormat('#,###').format(wallet.lifetimeEarned)}',
             color: GamerTheme.neonGreen,
             icon: Icons.trending_up_rounded,
@@ -405,7 +408,7 @@ class _CoinWalletScreenState extends State<CoinWalletScreen> {
         const SizedBox(width: 12),
         Expanded(
           child: _statCard(
-            label: 'Trust Score',
+            label: 'stat_trust_score'.tr(),
             value: '${wallet.trustScore}/100',
             color: GamerTheme.accentBlue,
             icon: Icons.verified_user_rounded,
@@ -458,9 +461,9 @@ class _CoinWalletScreenState extends State<CoinWalletScreen> {
         Row(
           mainAxisAlignment: MainAxisAlignment.spaceBetween,
           children: [
-            const Text(
-              'Recent Activity',
-              style: TextStyle(
+            Text(
+              'recent_activity_title'.tr(),
+              style: const TextStyle(
                 color: Colors.white,
                 fontSize: 16,
                 fontWeight: FontWeight.bold,
@@ -470,9 +473,9 @@ class _CoinWalletScreenState extends State<CoinWalletScreen> {
               onPressed: () {
                 CoinHistorySheet.show(context, userId: _userId);
               },
-              child: const Text(
-                'View All',
-                style: TextStyle(
+              child: Text(
+                'btn_view_all'.tr(),
+                style: const TextStyle(
                   color: GamerTheme.neonGreen,
                   fontSize: 13,
                   fontWeight: FontWeight.bold,
@@ -503,11 +506,11 @@ class _CoinWalletScreenState extends State<CoinWalletScreen> {
                   borderRadius: BorderRadius.circular(14),
                   border: Border.all(color: GamerTheme.borderDark),
                 ),
-                child: const Center(
+                child: Center(
                   child: Text(
-                    'No transactions yet. Complete matches or watch ads to earn coins!',
+                    'no_transactions_yet'.tr(),
                     textAlign: TextAlign.center,
-                    style: TextStyle(color: GamerTheme.textMuted, fontSize: 12),
+                    style: const TextStyle(color: GamerTheme.textMuted, fontSize: 12),
                   ),
                 ),
               );
@@ -573,7 +576,7 @@ class _CoinWalletScreenState extends State<CoinWalletScreen> {
             ),
           ),
           Text(
-            '${isCredit ? '+' : ''}${tx.amount} Coins',
+            'tx_coins_amount'.tr(args: ['${isCredit ? '+' : ''}${tx.amount}']),
             style: TextStyle(
               color: color,
               fontWeight: FontWeight.w900,
