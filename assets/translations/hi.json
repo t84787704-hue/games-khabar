@@ -128,5 +128,21 @@
   "log_out_confirm": "क्या आप वाकई गेमर्स आईडी से लॉग आउट करना चाहते हैं?",
   "delete_account": "खाता हटाएं",
   "delete_account_sub": "अपनी गेमर आईडी स्थायी रूप से हटाएं (30 दिन की छूट)",
-  "unlocked": "अनलॉक"
+  "unlocked": "अनलॉक",
+  "nav_following": "फ़ॉलोइंग",
+  "nav_community": "कम्युनिटी",
+  "bookmark_added": "बुकमार्क में सहेजा गया! 🔖",
+  "bookmark_removed": "बुकमार्क से हटाया गया",
+  "tooltip_notifications": "सूचनाएं",
+  "search_news_hint": "गेमिंग समाचार, अपडेट और गेम खोजें...",
+  "loading_khabar": "ख़बरें लोड हो रही हैं...",
+  "btn_retry": "पुनः प्रयास करें",
+  "no_news_yet": "अभी तक कोई ख़बर नहीं",
+  "badge_featured": "खास",
+  "badge_video": "वीडियो",
+  "no_articles_found": "कोई लेख नहीं मिला",
+  "whats_on_mind": "आपके मन में क्या है?",
+  "like": "पसंद",
+  "comment": "टिप्पणी",
+  "comments": "टिप्पणियाँ"
 }
