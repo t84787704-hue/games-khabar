@@ -1,5 +1,6 @@
 import 'dart:io';
 import 'package:flutter/material.dart';
+import 'package:easy_localization/easy_localization.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:share_plus/share_plus.dart';
 import '../services/gamer_auth_service.dart';
@@ -24,7 +25,7 @@ class _GamerDownloadDataScreenState extends State<GamerDownloadDataScreen> {
     final uid = authService.currentUid ?? '';
 
     if (uid.isEmpty) {
-      _showSnackBar('User not found. Please login again.', isError: true);
+      _showSnackBar('err_user_not_found_login'.tr(), isError: true);
       return;
     }
 
@@ -46,18 +47,18 @@ class _GamerDownloadDataScreenState extends State<GamerDownloadDataScreen> {
       // 3. Share the file
       await Share.shareXFiles(
         [XFile(file.path, mimeType: 'application/json')],
-        subject: 'My Gamers ID Data Export',
-        text: 'Here is my complete Gamers ID data export.',
+        subject: 'data_export_share_subject'.tr(),
+        text: 'data_export_share_text'.tr(),
       );
 
       if (!mounted) return;
       setState(() => _isExporting = false);
-      _showSnackBar('✅ Data exported successfully!', isError: false);
+      _showSnackBar('msg_data_exported_success'.tr(), isError: false);
     } catch (e) {
       debugPrint('[DownloadData] Error: $e');
       if (mounted) {
         setState(() => _isExporting = false);
-        _showSnackBar('Failed to export data: $e', isError: true);
+        _showSnackBar('err_failed_to_export_data'.tr(args: [e.toString()]), isError: true);
       }
     }
   }
@@ -81,9 +82,9 @@ class _GamerDownloadDataScreenState extends State<GamerDownloadDataScreen> {
       appBar: AppBar(
         backgroundColor: Colors.white,
         elevation: 1,
-        title: const Text(
-          'Download My Data',
-          style: TextStyle(
+        title: Text(
+          'title_download_my_data'.tr(),
+          style: const TextStyle(
             color: Color(0xFF1877F2),
             fontWeight: FontWeight.bold,
             fontSize: 18,
@@ -107,15 +108,15 @@ class _GamerDownloadDataScreenState extends State<GamerDownloadDataScreen> {
                     width: 1.2,
                   ),
                 ),
-                child: const Row(
+                child: Row(
                   children: [
-                    Icon(Icons.info_outline_rounded,
+                    const Icon(Icons.info_outline_rounded,
                         color: Color(0xFF1877F2), size: 28),
-                    SizedBox(width: 12),
+                    const SizedBox(width: 12),
                     Expanded(
                       child: Text(
-                        'Download a copy of all your data on Gamers ID',
-                        style: TextStyle(
+                        'download_data_banner_text'.tr(),
+                        style: const TextStyle(
                           color: Color(0xFF050505),
                           fontWeight: FontWeight.bold,
                           fontSize: 14,
@@ -128,23 +129,23 @@ class _GamerDownloadDataScreenState extends State<GamerDownloadDataScreen> {
               const SizedBox(height: 20),
 
               // What's included
-              const Text(
-                'What\'s included in your export:',
-                style: TextStyle(
+              Text(
+                'download_data_included_title'.tr(),
+                style: const TextStyle(
                   color: Color(0xFF050505),
                   fontWeight: FontWeight.bold,
                   fontSize: 16,
                 ),
               ),
               const SizedBox(height: 12),
-              _buildBulletPoint('Your profile and account information'),
-              _buildBulletPoint('All your posts and content'),
-              _buildBulletPoint('Your comments and likes'),
-              _buildBulletPoint('Your followers and following lists'),
-              _buildBulletPoint('Your teams and team memberships'),
-              _buildBulletPoint('Your 1v1 challenge history'),
-              _buildBulletPoint('Your G-Coins transaction history'),
-              _buildBulletPoint('Your notifications'),
+              _buildBulletPoint('download_bullet_profile'.tr()),
+              _buildBulletPoint('download_bullet_posts'.tr()),
+              _buildBulletPoint('download_bullet_comments'.tr()),
+              _buildBulletPoint('download_bullet_followers'.tr()),
+              _buildBulletPoint('download_bullet_teams'.tr()),
+              _buildBulletPoint('download_bullet_challenges'.tr()),
+              _buildBulletPoint('download_bullet_coins'.tr()),
+              _buildBulletPoint('download_bullet_notifications'.tr()),
 
               const SizedBox(height: 24),
 
@@ -156,28 +157,28 @@ class _GamerDownloadDataScreenState extends State<GamerDownloadDataScreen> {
                   borderRadius: BorderRadius.circular(12),
                   border: Border.all(color: const Color(0xFFCED0D4)),
                 ),
-                child: const Row(
+                child: Row(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Icon(Icons.file_present_rounded,
+                    const Icon(Icons.file_present_rounded,
                         color: Color(0xFF1877F2), size: 22),
-                    SizedBox(width: 12),
+                    const SizedBox(width: 12),
                     Expanded(
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
                           Text(
-                            'File Format: JSON',
-                            style: TextStyle(
+                            'format_info_title'.tr(),
+                            style: const TextStyle(
                               color: Color(0xFF050505),
                               fontWeight: FontWeight.bold,
                               fontSize: 14,
                             ),
                           ),
-                          SizedBox(height: 4),
+                          const SizedBox(height: 4),
                           Text(
-                            'You can open the file with any text editor or JSON viewer. Your data is machine-readable and portable.',
-                            style: TextStyle(
+                            'format_info_desc'.tr(),
+                            style: const TextStyle(
                               color: Color(0xFF65676B),
                               fontSize: 12,
                               height: 1.4,
@@ -218,7 +219,9 @@ class _GamerDownloadDataScreenState extends State<GamerDownloadDataScreen> {
                         )
                       : const Icon(Icons.download_rounded, size: 20),
                   label: Text(
-                    _isExporting ? 'Preparing your data...' : 'Download My Data',
+                    _isExporting
+                        ? 'btn_preparing_data'.tr()
+                        : 'btn_download_my_data'.tr(),
                     style: const TextStyle(
                       fontWeight: FontWeight.bold,
                       fontSize: 15,
@@ -242,9 +245,9 @@ class _GamerDownloadDataScreenState extends State<GamerDownloadDataScreen> {
                       borderRadius: BorderRadius.circular(12),
                     ),
                   ),
-                  child: const Text(
-                    'Cancel',
-                    style: TextStyle(
+                  child: Text(
+                    'cancel'.tr(),
+                    style: const TextStyle(
                       fontWeight: FontWeight.bold,
                       fontSize: 15,
                     ),
@@ -267,7 +270,7 @@ class _GamerDownloadDataScreenState extends State<GamerDownloadDataScreen> {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           const Padding(
-            padding: EdgeInsets.only(top: 6, right: 10),
+            padding: EdgeInsetsDirectional.only(top: 6, end: 10),
             child: Icon(
               Icons.check_circle,
               size: 14,
