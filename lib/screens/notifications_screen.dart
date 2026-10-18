@@ -599,7 +599,7 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
                 await ChallengeService().acceptChallenge(
                   challengeId.toString(),
                   challengerUid: notif.senderId ?? '',
-                  responderName: GamerAuthService().currentGamer?.displayName ?? 'Opponent',
+                  responderName: GamerAuthService().currentGamer?.displayName ?? 'default_opponent'.tr(),
                 );
                 await _notificationService.markAsRead(notif.id);
                 if (mounted) {
