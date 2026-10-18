@@ -28,13 +28,13 @@ class _GamerAuthScreenState extends State<GamerAuthScreen> {
         profile = await SupabaseService.client
             .from('users')
             .select('id, username, display_name, avatar_url, is_banned, banned_reason')
-            .eq('id', authUser.id)
+            .or('id.eq.${authUser.id},uid.eq.${authUser.id}')
             .maybeSingle();
       } catch (_) {
         profile = await SupabaseService.client
             .from('users')
             .select()
-            .eq('id', authUser.id)
+            .or('id.eq.${authUser.id},uid.eq.${authUser.id}')
             .maybeSingle();
       }
 
