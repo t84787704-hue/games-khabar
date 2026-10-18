@@ -1,5 +1,6 @@
 import 'dart:io';
 import 'package:flutter/material.dart';
+import 'package:easy_localization/easy_localization.dart';
 import 'package:image_picker/image_picker.dart';
 import '../constants/gamer_theme.dart';
 import '../services/win_proof_validator.dart';
@@ -67,7 +68,7 @@ class _CustomMatchDetailScreenState extends State<CustomMatchDetailScreen> {
       );
 
       if (uploadedUrl == null || uploadedUrl.isEmpty) {
-        throw Exception('Image upload failed');
+        throw Exception('err_image_upload_failed'.tr());
       }
 
       // 2. Validate win proof and match player name
@@ -116,7 +117,7 @@ class _CustomMatchDetailScreenState extends State<CustomMatchDetailScreen> {
         'senderId': widget.currentUserId,
         'senderName': widget.currentUserName,
         'senderInitial': widget.currentUserName.isNotEmpty ? widget.currentUserName[0].toUpperCase() : 'G',
-        'message': 'Submitted Match Win Proof',
+        'message': 'msg_submitted_match_win_proof'.tr(),
         'imageUrl': uploadedUrl,
         'type': 'win_proof',
         'ocrStatus': validationResult.status,
@@ -148,7 +149,7 @@ class _CustomMatchDetailScreenState extends State<CustomMatchDetailScreen> {
           SnackBar(
             content: Text(
               validationResult.isVerified
-                  ? '✅ Verified - Name Matched'
+                  ? 'msg_verified_name_matched'.tr()
                   : validationResult.message,
             ),
             backgroundColor: validationResult.isVerified ? _neonGreen : GamerTheme.redAccent,
@@ -162,7 +163,7 @@ class _CustomMatchDetailScreenState extends State<CustomMatchDetailScreen> {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text('Failed to submit proof: $e'),
+            content: Text('err_failed_submit_proof'.tr(args: [e.toString()])),
             backgroundColor: GamerTheme.redAccent,
           ),
         );
@@ -207,11 +208,12 @@ class _CustomMatchDetailScreenState extends State<CustomMatchDetailScreen> {
                       children: [
                         const Icon(Icons.warning_amber_rounded, color: GamerTheme.redAccent, size: 24),
                         const SizedBox(width: 8),
-                        const Text(
-                          'Raise Dispute & Upload Proof',
-                          style: TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.bold),
+                        Expanded(
+                          child: Text(
+                            'title_raise_dispute_proof'.tr(),
+                            style: const TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.bold),
+                          ),
                         ),
-                        const Spacer(),
                         IconButton(
                           icon: const Icon(Icons.close, color: Colors.white54),
                           onPressed: () => Navigator.pop(sheetContext),
@@ -219,9 +221,9 @@ class _CustomMatchDetailScreenState extends State<CustomMatchDetailScreen> {
                       ],
                     ),
                     const SizedBox(height: 6),
-                    const Text(
-                      'If you lost the match or the winner screenshot is fake/wrong, submit your own screenshot proof.',
-                      style: TextStyle(color: Colors.white70, fontSize: 12),
+                    Text(
+                      'desc_raise_dispute_proof'.tr(),
+                      style: const TextStyle(color: Colors.white70, fontSize: 12),
                     ),
                     const SizedBox(height: 16),
                     if (disputeImage == null)
@@ -250,19 +252,19 @@ class _CustomMatchDetailScreenState extends State<CustomMatchDetailScreen> {
                             borderRadius: BorderRadius.circular(10),
                             border: Border.all(color: GamerTheme.redAccent.withOpacity(0.6)),
                           ),
-                          child: const Column(
+                          child: Column(
                             mainAxisAlignment: MainAxisAlignment.center,
                             children: [
-                              Icon(Icons.add_photo_alternate_rounded, color: GamerTheme.redAccent, size: 32),
-                              SizedBox(height: 6),
+                              const Icon(Icons.add_photo_alternate_rounded, color: GamerTheme.redAccent, size: 32),
+                              const SizedBox(height: 6),
                               Text(
-                                '📷 Upload Your Result / Defeat Screenshot',
-                                style: TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.bold),
+                                'btn_upload_defeat_screenshot'.tr(),
+                                style: const TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.bold),
                               ),
-                              SizedBox(height: 2),
+                              const SizedBox(height: 2),
                               Text(
-                                'Select image showing match end or scoreboard',
-                                style: TextStyle(color: Colors.white54, fontSize: 10),
+                                'sub_select_defeat_screenshot'.tr(),
+                                style: const TextStyle(color: Colors.white54, fontSize: 10),
                               ),
                             ],
                           ),
@@ -308,11 +310,11 @@ class _CustomMatchDetailScreenState extends State<CustomMatchDetailScreen> {
                                 color: Colors.black.withOpacity(0.7),
                                 borderRadius: BorderRadius.circular(4),
                               ),
-                              child: const Row(
+                              child: Row(
                                 children: [
-                                  Icon(Icons.check_circle, color: GamerTheme.redAccent, size: 12),
-                                  SizedBox(width: 4),
-                                  Text('Dispute Proof Selected', style: TextStyle(color: Colors.white, fontSize: 10)),
+                                  const Icon(Icons.check_circle, color: GamerTheme.redAccent, size: 12),
+                                  const SizedBox(width: 4),
+                                  Text('label_dispute_proof_selected'.tr(), style: const TextStyle(color: Colors.white, fontSize: 10)),
                                 ],
                               ),
                             ),
@@ -320,9 +322,9 @@ class _CustomMatchDetailScreenState extends State<CustomMatchDetailScreen> {
                         ],
                       ),
                     const SizedBox(height: 14),
-                    const Text(
-                      'Reason for Dispute (Optional):',
-                      style: TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.bold),
+                    Text(
+                      'label_reason_for_dispute'.tr(),
+                      style: const TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.bold),
                     ),
                     const SizedBox(height: 6),
                     TextField(
@@ -330,14 +332,14 @@ class _CustomMatchDetailScreenState extends State<CustomMatchDetailScreen> {
                       enabled: !isSubmitting,
                       style: const TextStyle(color: Colors.white, fontSize: 13),
                       decoration: InputDecoration(
-                        hintText: 'e.g. Winner screenshot is fake / from different match',
+                        hintText: 'hint_dispute_reason'.tr(),
                         hintStyle: const TextStyle(color: Colors.white38, fontSize: 12),
                         filled: true,
                         fillColor: GamerTheme.cardDark,
                         contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
                         border: OutlineInputBorder(
                           borderRadius: BorderRadius.circular(8),
-                          borderSide: BorderSide(color: GamerTheme.borderDark),
+                          borderSide: const BorderSide(color: GamerTheme.borderDark),
                         ),
                         focusedBorder: OutlineInputBorder(
                           borderRadius: BorderRadius.circular(8),
@@ -360,8 +362,8 @@ class _CustomMatchDetailScreenState extends State<CustomMatchDetailScreen> {
                             : () async {
                                 if (disputeImage == null) {
                                   ScaffoldMessenger.of(context).showSnackBar(
-                                    const SnackBar(
-                                      content: Text('⚠️ Please select a dispute screenshot proof first!'),
+                                    SnackBar(
+                                      content: Text('err_select_dispute_screenshot'.tr()),
                                       backgroundColor: GamerTheme.redAccent,
                                     ),
                                   );
@@ -380,12 +382,12 @@ class _CustomMatchDetailScreenState extends State<CustomMatchDetailScreen> {
                                   );
 
                                   if (disputeUrl == null || disputeUrl.isEmpty) {
-                                    throw Exception('Dispute image upload failed');
+                                    throw Exception('err_dispute_image_upload_failed'.tr());
                                   }
 
                                   final reason = reasonController.text.trim().isNotEmpty
                                       ? reasonController.text.trim()
-                                      : 'Loser claims winner screenshot is fake/wrong';
+                                      : 'default_dispute_reason'.tr();
 
                                   final nowIso = DateTime.now().toIso8601String();
                                   final disputeData = {
@@ -424,7 +426,7 @@ class _CustomMatchDetailScreenState extends State<CustomMatchDetailScreen> {
                                     'senderId': 'system',
                                     'senderName': 'APP BOT',
                                     'senderInitial': '🤖',
-                                    'message': '⚠️ Dispute raised by ${widget.currentUserName} with evidence screenshot! Auto-approval paused. Under Admin Review.',
+                                    'message': 'msg_dispute_raised_announcement'.tr(args: [widget.currentUserName]),
                                     'type': 'system',
                                     'timestamp': nowIso,
                                     'createdAt': nowIso,
@@ -434,8 +436,8 @@ class _CustomMatchDetailScreenState extends State<CustomMatchDetailScreen> {
                                   if (context.mounted) {
                                     Navigator.pop(sheetContext);
                                     ScaffoldMessenger.of(context).showSnackBar(
-                                      const SnackBar(
-                                        content: Text('⚠️ Dispute submitted with proof screenshot. Admin will review.'),
+                                      SnackBar(
+                                        content: Text('msg_dispute_submitted_proof'.tr()),
                                         backgroundColor: GamerTheme.redAccent,
                                       ),
                                     );
@@ -447,7 +449,7 @@ class _CustomMatchDetailScreenState extends State<CustomMatchDetailScreen> {
                                   if (context.mounted) {
                                     ScaffoldMessenger.of(context).showSnackBar(
                                       SnackBar(
-                                        content: Text('Failed to submit dispute: $e'),
+                                        content: Text('err_failed_submit_dispute'.tr(args: [e.toString()])),
                                         backgroundColor: GamerTheme.redAccent,
                                       ),
                                     );
@@ -460,7 +462,7 @@ class _CustomMatchDetailScreenState extends State<CustomMatchDetailScreen> {
                                 width: 20,
                                 child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
                               )
-                            : const Text('Submit Dispute Proof', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14)),
+                            : Text('btn_submit_dispute_proof'.tr(), style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14)),
                       ),
                     ),
                   ],
@@ -478,8 +480,8 @@ class _CustomMatchDetailScreenState extends State<CustomMatchDetailScreen> {
     if (disputedBy != widget.currentUserId) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('⚠️ You cannot delete someone else\'s dispute proof!'),
+          SnackBar(
+            content: Text('err_cannot_delete_others_dispute'.tr()),
             backgroundColor: GamerTheme.redAccent,
           ),
         );
@@ -511,7 +513,7 @@ class _CustomMatchDetailScreenState extends State<CustomMatchDetailScreen> {
         'senderId': 'system',
         'senderName': 'APP BOT',
         'senderInitial': '🤖',
-        'message': '🗑️ Dispute proof was removed by ${widget.currentUserName}. 15-minute countdown resumed.',
+        'message': 'msg_dispute_proof_removed_announcement'.tr(args: [widget.currentUserName]),
         'type': 'system',
         'timestamp': nowIso,
         'createdAt': nowIso,
@@ -520,8 +522,8 @@ class _CustomMatchDetailScreenState extends State<CustomMatchDetailScreen> {
 
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('🗑️ Dispute proof removed. Countdown resumed.'),
+          SnackBar(
+            content: Text('msg_dispute_proof_removed'.tr()),
             backgroundColor: GamerTheme.cardElevated,
           ),
         );
@@ -529,7 +531,7 @@ class _CustomMatchDetailScreenState extends State<CustomMatchDetailScreen> {
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Failed to remove dispute: $e'), backgroundColor: GamerTheme.redAccent),
+          SnackBar(content: Text('err_failed_remove_dispute'.tr(args: [e.toString()])), backgroundColor: GamerTheme.redAccent),
         );
       }
     }
@@ -540,8 +542,8 @@ class _CustomMatchDetailScreenState extends State<CustomMatchDetailScreen> {
     if (proofUploaderId != widget.currentUserId) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('⚠️ You cannot delete someone else\'s win proof!'),
+          SnackBar(
+            content: Text('err_cannot_delete_others_win_proof'.tr()),
             backgroundColor: GamerTheme.redAccent,
           ),
         );
@@ -580,7 +582,7 @@ class _CustomMatchDetailScreenState extends State<CustomMatchDetailScreen> {
         'senderId': 'system',
         'senderName': 'APP BOT',
         'senderInitial': '🤖',
-        'message': '🗑️ Win proof was removed by ${widget.currentUserName}. You can now upload a fresh screenshot.',
+        'message': 'msg_win_proof_removed_announcement'.tr(args: [widget.currentUserName]),
         'type': 'system',
         'timestamp': nowIso,
         'createdAt': nowIso,
@@ -589,8 +591,8 @@ class _CustomMatchDetailScreenState extends State<CustomMatchDetailScreen> {
 
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('🗑️ Win proof removed. You can upload a new screenshot now.'),
+          SnackBar(
+            content: Text('msg_win_proof_removed'.tr()),
             backgroundColor: GamerTheme.cardElevated,
             behavior: SnackBarBehavior.floating,
           ),
@@ -601,7 +603,7 @@ class _CustomMatchDetailScreenState extends State<CustomMatchDetailScreen> {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text('Failed to remove proof: $e'),
+            content: Text('err_failed_remove_proof'.tr(args: [e.toString()])),
             backgroundColor: GamerTheme.redAccent,
           ),
         );
@@ -616,7 +618,7 @@ class _CustomMatchDetailScreenState extends State<CustomMatchDetailScreen> {
       appBar: AppBar(
         backgroundColor: GamerTheme.surfaceDark,
         elevation: 0,
-        title: const Text('Custom Match Details', style: TextStyle(color: Colors.white)),
+        title: Text('title_custom_match_details'.tr(), style: const TextStyle(color: Colors.white)),
       ),
       body: StreamBuilder<Map<String, dynamic>?>(
         stream: _roomStream(),
@@ -626,9 +628,9 @@ class _CustomMatchDetailScreenState extends State<CustomMatchDetailScreen> {
           }
           final data = snapshot.data ?? {};
           if (data.isEmpty) {
-            return const Center(child: Text('Match not found', style: TextStyle(color: Colors.white)));
+            return Center(child: Text('err_match_not_found'.tr(), style: const TextStyle(color: Colors.white)));
           }
-          final title = data['title'] ?? 'Custom Match';
+          final title = data['title'] ?? 'label_custom_match'.tr();
           final status = (data['status'] ?? 'OPEN').toString();
           final rewardStatus = (data['rewardStatus'] ?? 'idle').toString();
           final ocrStatus = (data['ocrStatus'] ?? '').toString();
@@ -732,12 +734,12 @@ class _CustomMatchDetailScreenState extends State<CustomMatchDetailScreen> {
                       ),
                       child: Text(
                         isCompleted
-                            ? 'COMPLETED'
+                            ? 'status_completed_caps'.tr()
                             : (isDisputed
-                                ? '⚠️ DISPUTED'
+                                ? 'status_disputed_caps'.tr()
                                 : (isProofRejected
-                                    ? '❌ PROOF REJECTED'
-                                    : (isRewardWaiting ? 'REWARD WAITING' : status.toUpperCase()))),
+                                    ? 'status_proof_rejected_caps'.tr()
+                                    : (isRewardWaiting ? 'status_reward_waiting_caps'.tr() : status.toUpperCase()))),
                         style: TextStyle(
                           color: isCompleted
                               ? Colors.tealAccent
@@ -755,7 +757,7 @@ class _CustomMatchDetailScreenState extends State<CustomMatchDetailScreen> {
                 ),
                 const SizedBox(height: 6),
                 Text(
-                  'Host: $hostName • $mapName',
+                  'label_host_map_format'.tr(args: [hostName, mapName]),
                   style: const TextStyle(color: Colors.white70, fontSize: 12),
                 ),
                 const SizedBox(height: 12),
@@ -768,26 +770,26 @@ class _CustomMatchDetailScreenState extends State<CustomMatchDetailScreen> {
                       borderRadius: BorderRadius.circular(10),
                       border: Border.all(color: GamerTheme.redAccent.withOpacity(0.6)),
                     ),
-                    child: const Row(
+                    child: Row(
                       children: [
-                        Icon(Icons.warning_amber_rounded, color: GamerTheme.redAccent, size: 22),
-                        SizedBox(width: 10),
+                        const Icon(Icons.warning_amber_rounded, color: GamerTheme.redAccent, size: 22),
+                        const SizedBox(width: 10),
                         Expanded(
                           child: Column(
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
                               Text(
-                                '⚠️ DISPUTE RAISED - UNDER REVIEW',
-                                style: TextStyle(
+                                'heading_dispute_raised'.tr(),
+                                style: const TextStyle(
                                   color: GamerTheme.redAccent,
                                   fontSize: 12,
                                   fontWeight: FontWeight.bold,
                                 ),
                               ),
-                              SizedBox(height: 2),
+                              const SizedBox(height: 2),
                               Text(
-                                'Dispute Raised! Under review by Admin. Loser claims winner screenshot is fake/wrong.',
-                                style: TextStyle(color: Colors.white70, fontSize: 11),
+                                'sub_dispute_raised_review'.tr(),
+                                style: const TextStyle(color: Colors.white70, fontSize: 11),
                               ),
                             ],
                           ),
@@ -804,26 +806,26 @@ class _CustomMatchDetailScreenState extends State<CustomMatchDetailScreen> {
                       borderRadius: BorderRadius.circular(10),
                       border: Border.all(color: GamerTheme.redAccent.withOpacity(0.6)),
                     ),
-                    child: const Row(
+                    child: Row(
                       children: [
-                        Icon(Icons.cancel_rounded, color: GamerTheme.redAccent, size: 22),
-                        SizedBox(width: 10),
+                        const Icon(Icons.cancel_rounded, color: GamerTheme.redAccent, size: 22),
+                        const SizedBox(width: 10),
                         Expanded(
                           child: Column(
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
                               Text(
-                                'PROOF REJECTED - NAME MISMATCH',
-                                style: TextStyle(
+                                'heading_proof_rejected_mismatch'.tr(),
+                                style: const TextStyle(
                                   color: GamerTheme.redAccent,
                                   fontSize: 12,
                                   fontWeight: FontWeight.bold,
                                 ),
                               ),
-                              SizedBox(height: 2),
+                              const SizedBox(height: 2),
                               Text(
-                                'Uploaded screenshot does not match player ID. Please remove the rejected proof or upload a new valid screenshot.',
-                                style: TextStyle(color: Colors.white70, fontSize: 11),
+                                'sub_proof_rejected_mismatch'.tr(),
+                                style: const TextStyle(color: Colors.white70, fontSize: 11),
                               ),
                             ],
                           ),
@@ -852,12 +854,15 @@ class _CustomMatchDetailScreenState extends State<CustomMatchDetailScreen> {
                                 autoApproveAt != null
                                     ? () {
                                         final remaining = autoApproveAt.difference(DateTime.now());
-                                        if (remaining.isNegative) return 'Auto-Approving Reward...';
+                                        if (remaining.isNegative) return 'status_auto_approving_reward'.tr();
                                         final mins = remaining.inMinutes;
                                         final secs = remaining.inSeconds % 60;
-                                        return 'Auto-Approve in ${mins.toString().padLeft(2, '0')}:${secs.toString().padLeft(2, '0')}';
+                                        return 'status_auto_approve_in'.tr(args: [
+                                          mins.toString().padLeft(2, '0'),
+                                          secs.toString().padLeft(2, '0')
+                                        ]);
                                       }()
-                                    : 'Awaiting Reward Confirmation',
+                                    : 'status_awaiting_reward_confirmation'.tr(),
                                 style: const TextStyle(color: Colors.amber, fontSize: 12, fontWeight: FontWeight.bold),
                               ),
                             ),
@@ -871,21 +876,21 @@ class _CustomMatchDetailScreenState extends State<CustomMatchDetailScreen> {
                                   tapTargetSize: MaterialTapTargetSize.shrinkWrap,
                                 ),
                                 onPressed: _disputeResult,
-                                child: const Row(
+                                child: Row(
                                   mainAxisSize: MainAxisSize.min,
                                   children: [
-                                    Icon(Icons.warning_amber_rounded, size: 12, color: Colors.white),
-                                    SizedBox(width: 4),
-                                    Text('⚠️ Dispute', style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold)),
+                                    const Icon(Icons.warning_amber_rounded, size: 12, color: Colors.white),
+                                    const SizedBox(width: 4),
+                                    Text('btn_dispute'.tr(), style: const TextStyle(fontSize: 11, fontWeight: FontWeight.bold)),
                                   ],
                                 ),
                               ),
                           ],
                         ),
                         const SizedBox(height: 6),
-                        const Text(
-                          'Winner has uploaded proof. Awaiting confirmation. Once reward sent, room will complete and auto delete in 5 mins.',
-                          style: TextStyle(color: Colors.white70, fontSize: 11),
+                        Text(
+                          'desc_reward_waiting_explanation'.tr(),
+                          style: const TextStyle(color: Colors.white70, fontSize: 11),
                         ),
                       ],
                     ),
@@ -901,7 +906,7 @@ class _CustomMatchDetailScreenState extends State<CustomMatchDetailScreen> {
                     children: [
                       const Icon(Icons.badge_rounded, color: _neonGreen, size: 20),
                       const SizedBox(width: 8),
-                      Text('Your Match ID: $slotName', style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+                      Text('label_your_match_id'.tr(args: [slotName]), style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
                     ],
                   ),
                 ),
@@ -921,7 +926,7 @@ class _CustomMatchDetailScreenState extends State<CustomMatchDetailScreen> {
                             ),
                             onPressed: () => _removeProof(proofUploaderId: proofUploadedBy),
                             icon: const Icon(Icons.delete_outline_rounded, size: 18, color: GamerTheme.redAccent),
-                            label: const Text('🗑️ Remove Proof', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12)),
+                            label: Text('btn_remove_proof'.tr(), style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 12)),
                           ),
                         ),
                         const SizedBox(width: 10),
@@ -937,7 +942,7 @@ class _CustomMatchDetailScreenState extends State<CustomMatchDetailScreen> {
                             icon: _isUploadingProof
                                 ? const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.black))
                                 : const Icon(Icons.camera_alt_rounded, size: 18, color: Colors.black),
-                            label: const Text('📷 Upload New', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12)),
+                            label: Text('btn_upload_new'.tr(), style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 12)),
                           ),
                         ),
                       ],
@@ -954,13 +959,13 @@ class _CustomMatchDetailScreenState extends State<CustomMatchDetailScreen> {
                         ),
                         onPressed: _disputeResult,
                         icon: const Icon(Icons.warning_amber_rounded, size: 20, color: Colors.white),
-                        label: const Text('⚠️ Raise Dispute (Upload Your Proof)', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
+                        label: Text('btn_raise_dispute_with_proof'.tr(), style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
                       ),
                       const SizedBox(height: 6),
-                      const Center(
+                      Center(
                         child: Text(
-                          '15-minute dispute window active. You cannot delete the winner\'s proof.',
-                          style: TextStyle(color: Colors.white54, fontSize: 11),
+                          'sub_dispute_window_notice'.tr(),
+                          style: const TextStyle(color: Colors.white54, fontSize: 11),
                         ),
                       ),
                     ] else if (isMyDispute) ...[
@@ -973,7 +978,7 @@ class _CustomMatchDetailScreenState extends State<CustomMatchDetailScreen> {
                         ),
                         onPressed: () => _removeDisputeProof(disputedBy: data['disputedBy']),
                         icon: const Icon(Icons.delete_outline_rounded, size: 18, color: GamerTheme.redAccent),
-                        label: const Text('🗑️ Remove Dispute Proof', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
+                        label: Text('btn_remove_dispute_proof'.tr(), style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
                       ),
                     ] else ...[
                       Container(
@@ -984,10 +989,10 @@ class _CustomMatchDetailScreenState extends State<CustomMatchDetailScreen> {
                           borderRadius: BorderRadius.circular(8),
                           border: Border.all(color: GamerTheme.borderDark),
                         ),
-                        child: const Center(
+                        child: Center(
                           child: Text(
-                            'Win proof is under review. Only the uploader can remove or re-upload it.',
-                            style: TextStyle(color: Colors.white70, fontSize: 12),
+                            'sub_win_proof_under_review'.tr(),
+                            style: const TextStyle(color: Colors.white70, fontSize: 12),
                           ),
                         ),
                       ),
@@ -1005,7 +1010,7 @@ class _CustomMatchDetailScreenState extends State<CustomMatchDetailScreen> {
                     icon: _isUploadingProof
                         ? const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.black))
                         : const Icon(Icons.upload_file_rounded),
-                    label: Text(_isUploadingProof ? 'Validating Proof...' : 'Upload Win Proof Screenshot'),
+                    label: Text(_isUploadingProof ? 'status_validating_proof'.tr() : 'btn_upload_win_proof_screenshot'.tr()),
                   ),
                 ],
               ],
