@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:easy_localization/easy_localization.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../services/gamer_auth_service.dart';
 import '../services/supabase_service.dart';
@@ -38,7 +39,6 @@ class _GamerAgeGateScreenState extends State<GamerAgeGateScreen> {
       try {
         final uid = GamerAuthService().currentUid ?? '';
         if (uid.isNotEmpty) {
-          final uuid = SupabaseService.toUuid(uid);
           await SupabaseService.client
               .from('users')
               .update({
@@ -48,7 +48,7 @@ class _GamerAgeGateScreenState extends State<GamerAgeGateScreen> {
             'privacy_accepted': true,
             'privacy_accepted_at': DateTime.now().toIso8601String(),
             'updated_at': DateTime.now().toIso8601String(),
-          }).eq('id', uuid);
+          }).or('id.eq.$uid,uid.eq.$uid');
         }
       } catch (e) {
         debugPrint('[AgeGate] Supabase update error (ignored): $e');
@@ -65,36 +65,37 @@ class _GamerAgeGateScreenState extends State<GamerAgeGateScreen> {
   }
 
   Future<void> _handleUnderage() async {
-    // Show dialog explaining that the app is for 13+ only
     if (!mounted) return;
     showDialog(
       context: context,
       barrierDismissible: false,
-      builder: (ctx) => WillPopScope(
-        onWillPop: () async => false,
+      builder: (ctx) => PopScope(
+        canPop: false,
         child: AlertDialog(
           backgroundColor: Colors.white,
           shape: RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(16),
           ),
-          title: const Row(
+          title: Row(
             children: [
-              Icon(Icons.info_outline_rounded,
+              const Icon(Icons.info_outline_rounded,
                   color: Color(0xFF1877F2), size: 24),
-              SizedBox(width: 8),
-              Text(
-                'Age Restriction',
-                style: TextStyle(
-                  color: Color(0xFF050505),
-                  fontWeight: FontWeight.bold,
-                  fontSize: 17,
+              const SizedBox(width: 8),
+              Expanded(
+                child: Text(
+                  'dialog_age_restriction_title'.tr(),
+                  style: const TextStyle(
+                    color: Color(0xFF050505),
+                    fontWeight: FontWeight.bold,
+                    fontSize: 17,
+                  ),
                 ),
               ),
             ],
           ),
-          content: const Text(
-            'Games Khabar is designed for users 13 years and older. We do not knowingly collect data from children under 13.\n\nIf you are under 13, please close the app and do not use it.',
-            style: TextStyle(
+          content: Text(
+            'dialog_age_restriction_desc'.tr(),
+            style: const TextStyle(
               color: Color(0xFF65676B),
               fontSize: 14,
               height: 1.5,
@@ -112,12 +113,10 @@ class _GamerAgeGateScreenState extends State<GamerAgeGateScreen> {
               ),
               onPressed: () {
                 Navigator.pop(ctx);
-                // Optionally close the app
-                // exit(0);  // Uncomment to close app on Android
               },
-              child: const Text(
-                'I Understand',
-                style: TextStyle(fontWeight: FontWeight.bold),
+              child: Text(
+                'btn_i_understand'.tr(),
+                style: const TextStyle(fontWeight: FontWeight.bold),
               ),
             ),
           ],
@@ -177,9 +176,9 @@ class _GamerAgeGateScreenState extends State<GamerAgeGateScreen> {
                   ),
                 ),
                 const SizedBox(height: 6),
-                const Text(
-                  'Mini Facebook for Gamers',
-                  style: TextStyle(
+                Text(
+                  'tagline_mini_facebook'.tr(),
+                  style: const TextStyle(
                     color: Color(0xFF8B949E),
                     fontSize: 14,
                     fontWeight: FontWeight.w600,
@@ -214,19 +213,19 @@ class _GamerAgeGateScreenState extends State<GamerAgeGateScreen> {
                         ),
                       ),
                       const SizedBox(height: 18),
-                      const Text(
-                        'Age Verification',
-                        style: TextStyle(
+                      Text(
+                        'age_verification_title'.tr(),
+                        style: const TextStyle(
                           color: Colors.white,
                           fontSize: 20,
                           fontWeight: FontWeight.w900,
                         ),
                       ),
                       const SizedBox(height: 10),
-                      const Text(
-                        'Kya aap 13 saal ya usse zyada ke hain?',
+                      Text(
+                        'age_verification_question'.tr(),
                         textAlign: TextAlign.center,
-                        style: TextStyle(
+                        style: const TextStyle(
                           color: Colors.white,
                           fontSize: 16,
                           fontWeight: FontWeight.bold,
@@ -234,10 +233,10 @@ class _GamerAgeGateScreenState extends State<GamerAgeGateScreen> {
                         ),
                       ),
                       const SizedBox(height: 8),
-                      const Text(
-                        'Are you 13 years or older?',
+                      Text(
+                        'age_verification_sub'.tr(),
                         textAlign: TextAlign.center,
-                        style: TextStyle(
+                        style: const TextStyle(
                           color: Color(0xFF8B949E),
                           fontSize: 13,
                           height: 1.4,
@@ -269,14 +268,14 @@ class _GamerAgeGateScreenState extends State<GamerAgeGateScreen> {
                                     color: Colors.white,
                                   ),
                                 )
-                              : const Row(
+                              : Row(
                                   mainAxisAlignment: MainAxisAlignment.center,
                                   children: [
-                                    Icon(Icons.check_circle_rounded, size: 20),
-                                    SizedBox(width: 8),
+                                    const Icon(Icons.check_circle_rounded, size: 20),
+                                    const SizedBox(width: 8),
                                     Text(
-                                      'Haan, main 13+ hoon',
-                                      style: TextStyle(
+                                      'btn_yes_13_plus'.tr(),
+                                      style: const TextStyle(
                                         fontWeight: FontWeight.w900,
                                         fontSize: 15,
                                       ),
@@ -300,9 +299,9 @@ class _GamerAgeGateScreenState extends State<GamerAgeGateScreen> {
                               borderRadius: BorderRadius.circular(12),
                             ),
                           ),
-                          child: const Text(
-                            'Nahi, main 13 se chota hoon',
-                            style: TextStyle(
+                          child: Text(
+                            'btn_no_under_13'.tr(),
+                            style: const TextStyle(
                               fontWeight: FontWeight.bold,
                               fontSize: 14,
                             ),
@@ -323,9 +322,9 @@ class _GamerAgeGateScreenState extends State<GamerAgeGateScreen> {
                       onPressed: () {
                         Navigator.pushNamed(context, '/privacy-policy');
                       },
-                      child: const Text(
-                        'Privacy Policy',
-                        style: TextStyle(
+                      child: Text(
+                        'privacy_policy'.tr(),
+                        style: const TextStyle(
                           color: Color(0xFF8B949E),
                           fontSize: 12,
                           decoration: TextDecoration.underline,
@@ -340,9 +339,9 @@ class _GamerAgeGateScreenState extends State<GamerAgeGateScreen> {
                       onPressed: () {
                         Navigator.pushNamed(context, '/terms');
                       },
-                      child: const Text(
-                        'Terms of Service',
-                        style: TextStyle(
+                      child: Text(
+                        'terms_of_service'.tr(),
+                        style: const TextStyle(
                           color: Color(0xFF8B949E),
                           fontSize: 12,
                           decoration: TextDecoration.underline,
@@ -355,12 +354,12 @@ class _GamerAgeGateScreenState extends State<GamerAgeGateScreen> {
                 const SizedBox(height: 12),
 
                 // COPPA Notice
-                const Padding(
-                  padding: EdgeInsets.symmetric(horizontal: 20),
+                Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 20),
                   child: Text(
-                    'This app complies with COPPA. We do not knowingly collect data from children under 13.',
+                    'coppa_compliance_notice'.tr(),
                     textAlign: TextAlign.center,
-                    style: TextStyle(
+                    style: const TextStyle(
                       color: Color(0xFF65676B),
                       fontSize: 11,
                       height: 1.4,
