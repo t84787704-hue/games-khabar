@@ -1,9 +1,5 @@
 // ═══════════════════════════════════════════════════════════════════════════════
-// EXACT DIFF:
-// 1. Added auto Language Selection Dialog on screen load for new users (!isEditing).
-// 2. Added easy_localization, ThemeService, and LanguageService integrations.
-// 3. Replaced .eq('id', uid) with .or('id.eq.$uid,uid.eq.$uid') on users table.
-// 4. Fully localized into 7 languages via .tr().
+// CREATE / EDIT GAMER ID SCREEN — Full Multi-Language Support via easy_localization
 // ═══════════════════════════════════════════════════════════════════════════════
 import 'dart:async';
 import 'dart:io';
@@ -244,35 +240,35 @@ class _CreateGamerIdScreenState extends State<CreateGamerIdScreen> {
   final List<Map<String, dynamic>> _gamingPresets = [
     {
       'id': 'preset:helmet',
-      'label': 'Helmet',
+      'label_key': 'preset_helmet',
       'icon': Icons.sports_motorsports_rounded,
       'color': const Color(0xFF60A5FA),
       'bg': const [Color(0xFF1E293B), Color(0xFF0F172A)],
     },
     {
       'id': 'preset:skull',
-      'label': 'Skull',
+      'label_key': 'preset_skull',
       'icon': Icons.dangerous_rounded,
       'color': const Color(0xFFFF5252),
       'bg': const [Color(0xFF3B0764), Color(0xFF180322)],
     },
     {
       'id': 'preset:ninja',
-      'label': 'Ninja',
+      'label_key': 'preset_ninja',
       'icon': Icons.masks_rounded,
       'color': const Color(0xFFC084FC),
       'bg': const [Color(0xFF1E1B4B), Color(0xFF0F0E2A)],
     },
     {
       'id': 'preset:crown',
-      'label': 'Crown',
+      'label_key': 'preset_crown',
       'icon': Icons.workspace_premium_rounded,
       'color': const Color(0xFFFFD700),
       'bg': const [Color(0xFF312E81), Color(0xFF18181B)],
     },
     {
       'id': 'preset:crosshair',
-      'label': 'Crosshair',
+      'label_key': 'preset_crosshair',
       'icon': Icons.filter_center_focus_rounded,
       'color': const Color(0xFF00E676),
       'bg': const [Color(0xFF064E3B), Color(0xFF022C22)],
@@ -955,7 +951,7 @@ class _CreateGamerIdScreenState extends State<CreateGamerIdScreen> {
                                         ),
                                         const SizedBox(height: 4),
                                         Text(
-                                          preset['label'] as String,
+                                          (preset['label_key'] as String).tr(),
                                           style: TextStyle(
                                             color: isSelected ? GamerTheme.accentOrange : Colors.white70,
                                             fontSize: 10,
@@ -1047,25 +1043,25 @@ class _CreateGamerIdScreenState extends State<CreateGamerIdScreen> {
                                   },
                                   {
                                     'id': 'neon_fire',
-                                    'name': 'Neon Fire',
+                                    'name': 'frame_neon_fire'.tr(),
                                     'emoji': '🔥',
                                     'color': Colors.deepOrangeAccent,
                                   },
                                   {
                                     'id': 'royal_crown',
-                                    'name': 'Royal Crown',
+                                    'name': 'frame_royal_crown'.tr(),
                                     'emoji': '👑',
                                     'color': Colors.amber,
                                   },
                                   {
                                     'id': 'cyber_glitch',
-                                    'name': 'Cyber Grid',
+                                    'name': 'frame_cyber_grid'.tr(),
                                     'emoji': '⚡',
                                     'color': GamerTheme.neonGreen,
                                   },
                                   {
                                     'id': 'cosmic_void',
-                                    'name': 'Cosmic Nebula',
+                                    'name': 'frame_cosmic_nebula'.tr(),
                                     'emoji': '🌌',
                                     'color': const Color(0xFFC084FC),
                                   },
@@ -1153,15 +1149,15 @@ class _CreateGamerIdScreenState extends State<CreateGamerIdScreen> {
                                   },
                                   {
                                     'id': 'pro_elite',
-                                    'name': 'PRO ELITE',
+                                    'name': 'badge_pro_elite'.tr(),
                                   },
                                   {
                                     'id': 'kd_assassin',
-                                    'name': 'ASSASSIN 💀',
+                                    'name': 'badge_assassin'.tr(),
                                   },
                                   {
                                     'id': 'room_champion',
-                                    'name': 'CHAMPION 🏆',
+                                    'name': 'badge_champion'.tr(),
                                   },
                                 ].map((b) {
                                   final id = b['id'] as String;
@@ -1232,7 +1228,7 @@ class _CreateGamerIdScreenState extends State<CreateGamerIdScreen> {
                         style: const TextStyle(color: GamerTheme.textWhite, fontWeight: FontWeight.bold),
                         decoration: InputDecoration(
                           prefixIcon: const Icon(Icons.alternate_email_rounded, color: GamerTheme.accentOrange),
-                          hintText: 'gamer_handle',
+                          hintText: 'hint_gamer_handle'.tr(),
                           suffixIcon: _isCheckingUsername
                               ? const Padding(
                                   padding: EdgeInsets.all(12),
@@ -1279,9 +1275,9 @@ class _CreateGamerIdScreenState extends State<CreateGamerIdScreen> {
                       TextFormField(
                         controller: _displayNameController,
                         style: const TextStyle(color: GamerTheme.textWhite),
-                        decoration: const InputDecoration(
-                          prefixIcon: Icon(Icons.person_rounded, color: GamerTheme.textMuted),
-                          hintText: 'e.g. Fauji Gamer, Toxic Soul',
+                        decoration: InputDecoration(
+                          prefixIcon: const Icon(Icons.person_rounded, color: GamerTheme.textMuted),
+                          hintText: 'hint_display_name_example'.tr(),
                         ),
                         validator: (val) {
                           if ((val ?? '').trim().isEmpty) return 'err_display_name_required'.tr();
@@ -2053,7 +2049,7 @@ class _AddVerifyGamerRankSheetState extends State<AddVerifyGamerRankSheet> {
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Error: $e'), backgroundColor: GamerTheme.redAccent),
+          SnackBar(content: Text('err_failed_with_msg'.tr(args: [e.toString()])), backgroundColor: GamerTheme.redAccent),
         );
       }
     } finally {
