@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:easy_localization/easy_localization.dart';
 import '../services/theme_service.dart';
 
 class PrivacyPolicyScreen extends StatelessWidget {
@@ -28,7 +29,7 @@ class PrivacyPolicyScreen extends StatelessWidget {
               onPressed: () => Navigator.pop(context),
             ),
             title: Text(
-              'Privacy Policy',
+              'privacy_policy_title'.tr(),
               style: TextStyle(
                 color: textWhite,
                 fontWeight: FontWeight.w900,
@@ -65,7 +66,7 @@ class PrivacyPolicyScreen extends StatelessWidget {
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
                             Text(
-                              'Games Khabar Privacy Policy',
+                              'privacy_header_title'.tr(),
                               style: TextStyle(
                                 color: textWhite,
                                 fontWeight: FontWeight.bold,
@@ -74,7 +75,7 @@ class PrivacyPolicyScreen extends StatelessWidget {
                             ),
                             const SizedBox(height: 4),
                             Text(
-                              'Last updated: August 2026',
+                              'privacy_last_updated'.tr(),
                               style: TextStyle(color: textGray, fontSize: 12),
                             ),
                           ],
@@ -86,51 +87,43 @@ class PrivacyPolicyScreen extends StatelessWidget {
                 const SizedBox(height: 24),
 
                 _buildSection(
-                  title: '1. Introduction',
-                  content:
-                      'Welcome to Games Khabar. We respect your privacy and are committed to protecting it. This Privacy Policy explains how our application functions and handles information when you use our mobile gaming news platform.',
+                  title: 'privacy_sec1_title'.tr(),
+                  content: 'privacy_sec1_content'.tr(),
                 ),
 
                 _buildSection(
-                  title: '2. No Personal Data Collection',
-                  content:
-                      'Games Khabar is purely an informational gaming news application. We DO NOT collect, store, or sell any personal identifiable information (PII) such as your real name, phone number, physical address, or contacts. You can read news, reward codes, and esports updates completely anonymously without creating a personal user account.',
+                  title: 'privacy_sec2_title'.tr(),
+                  content: 'privacy_sec2_content'.tr(),
                 ),
 
                 _buildSection(
-                  title: '3. Cloud & Notification Services',
-                  content:
-                      'Our application uses secure cloud infrastructure solely to provide real-time gaming news updates and notifications for breaking esports events and game updates. Anonymous device tokens may be processed strictly to deliver notifications.',
+                  title: 'privacy_sec3_title'.tr(),
+                  content: 'privacy_sec3_content'.tr(),
                 ),
 
                 _buildSection(
-                  title: '4. Advertising (Google AdMob)',
-                  content:
-                      'Games Khabar may display third-party advertisements served by Google AdMob to support free content delivery. AdMob may use anonymous advertising identifiers (such as Android Advertising ID) and cookies to serve relevant, non-personalized or personalized ads subject to Google\'s Privacy Policy.',
+                  title: 'privacy_sec4_title'.tr(),
+                  content: 'privacy_sec4_content'.tr(),
                 ),
 
                 _buildSection(
-                  title: '5. Bookmarks and Local Storage',
-                  content:
-                      'Any news articles or reward codes that you save/bookmark are stored locally on your own device using local storage (SharedPreferences). This data stays entirely on your phone and is never uploaded to our servers.',
+                  title: 'privacy_sec5_title'.tr(),
+                  content: 'privacy_sec5_content'.tr(),
                 ),
 
                 _buildSection(
-                  title: '6. Children\'s Privacy',
-                  content:
-                      'Games Khabar is suitable for general gaming audiences and does not knowingly collect any personal information from children under the age of 13.',
+                  title: 'privacy_sec6_title'.tr(),
+                  content: 'privacy_sec6_content'.tr(),
                 ),
 
                 _buildSection(
-                  title: '7. Policy Changes',
-                  content:
-                      'We may update our Privacy Policy periodically. Any modifications will be posted directly within the app on this screen with an updated effective date.',
+                  title: 'privacy_sec7_title'.tr(),
+                  content: 'privacy_sec7_content'.tr(),
                 ),
 
                 _buildSection(
-                  title: '8. Contact Us',
-                  content:
-                      'If you have any questions, suggestions, or concerns regarding this Privacy Policy, feel free to contact our support team at:\n\nEmail: gameskhabar.help@gmail.com',
+                  title: 'privacy_sec8_title'.tr(),
+                  content: 'privacy_sec8_content'.tr(),
                 ),
                 const SizedBox(height: 20),
               ],
