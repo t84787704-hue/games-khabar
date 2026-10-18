@@ -1,7 +1,11 @@
+// ===============================================================================
+// COIN WALLET SCREEN — 100% Urdu Localization
+// File: lib/screens/coin_wallet_screen.dart
+// ===============================================================================
+
 import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
-import 'package:easy_localization/easy_localization.dart';
 import '../constants/gamer_theme.dart';
 import '../models/coin_transaction_model.dart';
 import '../models/coin_wallet_model.dart';
@@ -52,8 +56,8 @@ class _CoinWalletScreenState extends State<CoinWalletScreen> {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text(ok
-                ? 'msg_daily_bonus_claimed'.tr()
-                : 'msg_daily_bonus_already_claimed'.tr()),
+                ? 'ڈیلی بونس کامیابی سے کلیم کر لیا گیا!'
+                : 'آپ آج کا بونس پہلے ہی لے چکے ہیں!'),
             backgroundColor: ok ? GamerTheme.neonGreen : GamerTheme.accentOrange,
             behavior: SnackBarBehavior.floating,
           ),
@@ -63,7 +67,7 @@ class _CoinWalletScreenState extends State<CoinWalletScreen> {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text('err_failed_with_msg'.tr(args: [e.toString()])),
+            content: Text('خرابی: $e'),
             backgroundColor: GamerTheme.redAccent,
             behavior: SnackBarBehavior.floating,
           ),
@@ -92,14 +96,14 @@ class _CoinWalletScreenState extends State<CoinWalletScreen> {
           icon: const Icon(Icons.arrow_back_rounded, color: Colors.white),
           onPressed: () => Navigator.pop(context),
         ),
-        title: Text(
-          'title_my_wallet'.tr(),
-          style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
+        title: const Text(
+          'میرا والٹ',
+          style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
         ),
         actions: [
           IconButton(
             icon: const Icon(Icons.storefront_rounded, color: GamerTheme.neonGreen),
-            tooltip: 'tooltip_coin_store'.tr(),
+            tooltip: 'کوائن اسٹور',
             onPressed: () {
               Navigator.push(
                 context,
@@ -166,9 +170,9 @@ class _CoinWalletScreenState extends State<CoinWalletScreen> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(
-            'current_balance_caps'.tr(),
-            style: const TextStyle(
+          const Text(
+            'موجودہ بیلنس',
+            style: TextStyle(
               color: GamerTheme.textMuted,
               fontSize: 11,
               fontWeight: FontWeight.bold,
@@ -190,11 +194,11 @@ class _CoinWalletScreenState extends State<CoinWalletScreen> {
                 ),
               ),
               const SizedBox(width: 8),
-              Padding(
-                padding: const EdgeInsets.only(top: 12),
+              const Padding(
+                padding: EdgeInsets.only(top: 12),
                 child: Text(
-                  'g_coins_label'.tr(),
-                  style: const TextStyle(
+                  'جی-کوائنز',
+                  style: TextStyle(
                     color: GamerTheme.textMuted,
                     fontSize: 14,
                     fontWeight: FontWeight.w600,
@@ -213,7 +217,7 @@ class _CoinWalletScreenState extends State<CoinWalletScreen> {
                   borderRadius: BorderRadius.circular(6),
                 ),
                 child: Text(
-                  'in_escrow_coins'.tr(args: [NumberFormat('#,###').format(wallet.escrowCoins)]),
+                  'اسکرو میں: ${NumberFormat('#,###').format(wallet.escrowCoins)}',
                   style: const TextStyle(
                     color: Colors.white70,
                     fontSize: 11,
@@ -223,7 +227,7 @@ class _CoinWalletScreenState extends State<CoinWalletScreen> {
               ),
               const SizedBox(width: 8),
               Text(
-                'total_net_worth'.tr(args: [NumberFormat('#,###').format(wallet.totalNetWorth)]),
+                'کل مالیت: ${NumberFormat('#,###').format(wallet.totalNetWorth)}',
                 style: const TextStyle(
                   color: GamerTheme.textMuted,
                   fontSize: 11,
@@ -242,7 +246,7 @@ class _CoinWalletScreenState extends State<CoinWalletScreen> {
         Expanded(
           child: _actionButton(
             icon: Icons.play_circle_fill_rounded,
-            label: 'btn_earn_coins'.tr(),
+            label: 'کوائنز کمائیں',
             color: GamerTheme.neonGreen,
             onTap: () {
               Navigator.push(
@@ -256,7 +260,7 @@ class _CoinWalletScreenState extends State<CoinWalletScreen> {
         Expanded(
           child: _actionButton(
             icon: Icons.history_rounded,
-            label: 'btn_history'.tr(),
+            label: 'ہسٹری',
             color: GamerTheme.accentBlue,
             onTap: () {
               CoinHistorySheet.show(context, userId: _userId);
@@ -337,9 +341,9 @@ class _CoinWalletScreenState extends State<CoinWalletScreen> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(
-                  'daily_login_bonus'.tr(),
-                  style: const TextStyle(
+                const Text(
+                  'ڈیلی لاگ ان بونس',
+                  style: TextStyle(
                     color: Colors.white,
                     fontSize: 14,
                     fontWeight: FontWeight.bold,
@@ -348,8 +352,8 @@ class _CoinWalletScreenState extends State<CoinWalletScreen> {
                 const SizedBox(height: 4),
                 Text(
                   canClaim
-                      ? 'claim_50_gcoins_now'.tr()
-                      : 'next_claim_in'.tr(args: [_formatDuration(wallet.nextDailyBonusDuration)]),
+                      ? 'ابھی 50 جی-کوائنز کلیم کریں!'
+                      : 'اگلا کلیم: ${_formatDuration(wallet.nextDailyBonusDuration)}',
                   style: const TextStyle(
                     color: GamerTheme.textMuted,
                     fontSize: 12,
@@ -377,9 +381,9 @@ class _CoinWalletScreenState extends State<CoinWalletScreen> {
                     child: CircularProgressIndicator(
                         strokeWidth: 2, color: Colors.black),
                   )
-                : Text(
-                    'btn_claim_50'.tr(),
-                    style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 12),
+                : const Text(
+                    'کلیم کریں (+50)',
+                    style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12),
                   ),
           ),
         ],
@@ -389,9 +393,9 @@ class _CoinWalletScreenState extends State<CoinWalletScreen> {
 
   String _formatDuration(Duration d) {
     if (d.inHours > 0) {
-      return '${d.inHours}h ${d.inMinutes % 60}m';
+      return '${d.inHours} گھنٹے ${d.inMinutes % 60} منٹ';
     }
-    return '${d.inMinutes}m ${d.inSeconds % 60}s';
+    return '${d.inMinutes} منٹ ${d.inSeconds % 60} سیکنڈ';
   }
 
   Widget _buildStatsRow(CoinWallet wallet) {
@@ -399,7 +403,7 @@ class _CoinWalletScreenState extends State<CoinWalletScreen> {
       children: [
         Expanded(
           child: _statCard(
-            label: 'stat_lifetime_earned'.tr(),
+            label: 'کل کمائے گئے',
             value: '+${NumberFormat('#,###').format(wallet.lifetimeEarned)}',
             color: GamerTheme.neonGreen,
             icon: Icons.trending_up_rounded,
@@ -408,7 +412,7 @@ class _CoinWalletScreenState extends State<CoinWalletScreen> {
         const SizedBox(width: 12),
         Expanded(
           child: _statCard(
-            label: 'stat_trust_score'.tr(),
+            label: 'ٹرسٹ اسکور',
             value: '${wallet.trustScore}/100',
             color: GamerTheme.accentBlue,
             icon: Icons.verified_user_rounded,
@@ -461,9 +465,9 @@ class _CoinWalletScreenState extends State<CoinWalletScreen> {
         Row(
           mainAxisAlignment: MainAxisAlignment.spaceBetween,
           children: [
-            Text(
-              'recent_activity_title'.tr(),
-              style: const TextStyle(
+            const Text(
+              'حالیہ سرگرمیاں',
+              style: TextStyle(
                 color: Colors.white,
                 fontSize: 16,
                 fontWeight: FontWeight.bold,
@@ -473,9 +477,9 @@ class _CoinWalletScreenState extends State<CoinWalletScreen> {
               onPressed: () {
                 CoinHistorySheet.show(context, userId: _userId);
               },
-              child: Text(
-                'btn_view_all'.tr(),
-                style: const TextStyle(
+              child: const Text(
+                'سب دیکھیں',
+                style: TextStyle(
                   color: GamerTheme.neonGreen,
                   fontSize: 13,
                   fontWeight: FontWeight.bold,
@@ -506,11 +510,11 @@ class _CoinWalletScreenState extends State<CoinWalletScreen> {
                   borderRadius: BorderRadius.circular(14),
                   border: Border.all(color: GamerTheme.borderDark),
                 ),
-                child: Center(
+                child: const Center(
                   child: Text(
-                    'no_transactions_yet'.tr(),
+                    'ابھی تک کوئی ٹرانزیکشن نہیں ہوئی',
                     textAlign: TextAlign.center,
-                    style: const TextStyle(color: GamerTheme.textMuted, fontSize: 12),
+                    style: TextStyle(color: GamerTheme.textMuted, fontSize: 12),
                   ),
                 ),
               );
@@ -576,7 +580,7 @@ class _CoinWalletScreenState extends State<CoinWalletScreen> {
             ),
           ),
           Text(
-            'tx_coins_amount'.tr(args: ['${isCredit ? '+' : ''}${tx.amount}']),
+            '${isCredit ? '+' : ''}${tx.amount} کوائنز',
             style: TextStyle(
               color: color,
               fontWeight: FontWeight.w900,
