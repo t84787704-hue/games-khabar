@@ -1,20 +1,11 @@
-// ═══════════════════════════════════════════════════════════════════════════════
-// EXACT DIFF:
-// - Replaced .eq('id', uuid) with .or('id.eq.$uid,uid.eq.$uid') on users table
-// ═══════════════════════════════════════════════════════════════════════════════
 import 'dart:async';
 import 'package:flutter/material.dart';
+import 'package:easy_localization/easy_localization.dart';
 import '../services/gamer_auth_service.dart';
 import '../services/supabase_service.dart';
 import 'gamer_auth_screen.dart';
 
 /// Play Store compliant Delete Account Screen
-/// 
-/// - User ke 2-step confirmation ke baad account soft-delete hoga
-/// - `users.deleted_at` timestamp set hoga
-/// - User logout ho jaayega
-/// - 30 din baad Supabase cron job permanent delete karega
-/// - GDPR / DPDP Act compliant
 class GamerDeleteAccountScreen extends StatefulWidget {
   const GamerDeleteAccountScreen({super.key});
 
@@ -40,12 +31,12 @@ class _GamerDeleteAccountScreenState extends State<GamerDeleteAccountScreen> {
     final uid = authService.currentUid ?? '';
 
     if (uid.isEmpty) {
-      _showSnackBar('User not found. Please login again.', isError: true);
+      _showSnackBar('err_user_not_found_login'.tr(), isError: true);
       return;
     }
 
     if (_confirmController.text.trim().toUpperCase() != 'DELETE') {
-      _showSnackBar('Please type DELETE to confirm.', isError: true);
+      _showSnackBar('err_type_delete_to_confirm'.tr(), isError: true);
       return;
     }
 
@@ -69,7 +60,7 @@ class _GamerDeleteAccountScreenState extends State<GamerDeleteAccountScreen> {
 
       // 3. Show success and redirect
       _showSnackBar(
-        '✅ Account scheduled for deletion. Logged out.',
+        'msg_account_scheduled_deletion'.tr(),
         isError: false,
       );
 
@@ -87,7 +78,7 @@ class _GamerDeleteAccountScreenState extends State<GamerDeleteAccountScreen> {
       debugPrint('[DeleteAccount] Error: $e');
       if (mounted) {
         setState(() => _isDeleting = false);
-        _showSnackBar('Failed to delete account: $e', isError: true);
+        _showSnackBar('err_failed_to_delete_account'.tr(args: [e.toString()]), isError: true);
       }
     }
   }
@@ -115,9 +106,9 @@ class _GamerDeleteAccountScreenState extends State<GamerDeleteAccountScreen> {
       appBar: AppBar(
         backgroundColor: Colors.white,
         elevation: 1,
-        title: const Text(
-          'Delete Account',
-          style: TextStyle(
+        title: Text(
+          'title_delete_account'.tr(),
+          style: const TextStyle(
             color: Color(0xFFDC2626),
             fontWeight: FontWeight.bold,
             fontSize: 18,
@@ -138,15 +129,15 @@ class _GamerDeleteAccountScreenState extends State<GamerDeleteAccountScreen> {
                   borderRadius: BorderRadius.circular(14),
                   border: Border.all(color: const Color(0xFFFF4655), width: 1.5),
                 ),
-                child: const Row(
+                child: Row(
                   children: [
-                    Icon(Icons.warning_amber_rounded,
+                    const Icon(Icons.warning_amber_rounded,
                         color: Color(0xFFFF4655), size: 28),
-                    SizedBox(width: 12),
+                    const SizedBox(width: 12),
                     Expanded(
                       child: Text(
-                        'Warning: This action cannot be undone after 30 days',
-                        style: TextStyle(
+                        'warning_delete_account_undo'.tr(),
+                        style: const TextStyle(
                           color: Color(0xFFDC2626),
                           fontWeight: FontWeight.bold,
                           fontSize: 14,
@@ -159,21 +150,21 @@ class _GamerDeleteAccountScreenState extends State<GamerDeleteAccountScreen> {
               const SizedBox(height: 20),
 
               // What will be deleted
-              const Text(
-                'What will be permanently deleted:',
-                style: TextStyle(
+              Text(
+                'delete_account_what_deleted_title'.tr(),
+                style: const TextStyle(
                   color: Color(0xFF050505),
                   fontWeight: FontWeight.bold,
                   fontSize: 16,
                 ),
               ),
               const SizedBox(height: 12),
-              _buildBulletPoint('Your profile and all personal information'),
-              _buildBulletPoint('All your posts, comments, and likes'),
-              _buildBulletPoint('Your teams and team memberships'),
-              _buildBulletPoint('Your 1v1 challenge history'),
-              _buildBulletPoint('Your G-Coins balance and transaction history'),
-              _buildBulletPoint('Your followers and following lists'),
+              _buildBulletPoint('delete_bullet_profile'.tr()),
+              _buildBulletPoint('delete_bullet_posts'.tr()),
+              _buildBulletPoint('delete_bullet_teams'.tr()),
+              _buildBulletPoint('delete_bullet_challenges'.tr()),
+              _buildBulletPoint('delete_bullet_coins'.tr()),
+              _buildBulletPoint('delete_bullet_followers'.tr()),
 
               const SizedBox(height: 20),
 
@@ -185,16 +176,16 @@ class _GamerDeleteAccountScreenState extends State<GamerDeleteAccountScreen> {
                   borderRadius: BorderRadius.circular(12),
                   border: Border.all(color: const Color(0xFF1877F2), width: 1.2),
                 ),
-                child: const Row(
+                child: Row(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Icon(Icons.info_outline_rounded,
+                    const Icon(Icons.info_outline_rounded,
                         color: Color(0xFF1877F2), size: 22),
-                    SizedBox(width: 12),
+                    const SizedBox(width: 12),
                     Expanded(
                       child: Text(
-                        'You have a 30-day grace period. If you log back in within 30 days, your account will be restored automatically.',
-                        style: TextStyle(
+                        'delete_grace_period_info'.tr(),
+                        style: const TextStyle(
                           color: Color(0xFF050505),
                           fontSize: 13,
                           height: 1.4,
@@ -212,7 +203,7 @@ class _GamerDeleteAccountScreenState extends State<GamerDeleteAccountScreen> {
               // Step 1: I understand
               _buildCheckboxTile(
                 value: _step1Accepted,
-                title: 'I understand this action cannot be undone after 30 days',
+                title: 'delete_checkbox_understand'.tr(),
                 onChanged: (v) => setState(() => _step1Accepted = v ?? false),
               ),
               const SizedBox(height: 8),
@@ -220,16 +211,16 @@ class _GamerDeleteAccountScreenState extends State<GamerDeleteAccountScreen> {
               // Step 2: I want to delete
               _buildCheckboxTile(
                 value: _step2Accepted,
-                title: 'I want to permanently delete my account',
+                title: 'delete_checkbox_confirm'.tr(),
                 onChanged: (v) => setState(() => _step2Accepted = v ?? false),
               ),
 
               const SizedBox(height: 24),
 
               // Confirm Text Field
-              const Text(
-                'Type DELETE to confirm:',
-                style: TextStyle(
+              Text(
+                'delete_type_confirm_label'.tr(),
+                style: const TextStyle(
                   color: Color(0xFF050505),
                   fontWeight: FontWeight.bold,
                   fontSize: 14,
@@ -247,7 +238,7 @@ class _GamerDeleteAccountScreenState extends State<GamerDeleteAccountScreen> {
                 textCapitalization: TextCapitalization.characters,
                 onChanged: (_) => setState(() {}),
                 decoration: InputDecoration(
-                  hintText: 'DELETE',
+                  hintText: 'hint_delete_word'.tr(),
                   hintStyle: const TextStyle(color: Color(0xFF8A8D91)),
                   filled: true,
                   fillColor: Colors.white,
@@ -300,8 +291,8 @@ class _GamerDeleteAccountScreenState extends State<GamerDeleteAccountScreen> {
                       : const Icon(Icons.delete_forever_rounded, size: 20),
                   label: Text(
                     _isDeleting
-                        ? 'Deleting Account...'
-                        : 'Permanently Delete My Account',
+                        ? 'btn_deleting_account'.tr()
+                        : 'btn_permanently_delete_account'.tr(),
                     style: const TextStyle(
                       fontWeight: FontWeight.bold,
                       fontSize: 15,
@@ -325,9 +316,9 @@ class _GamerDeleteAccountScreenState extends State<GamerDeleteAccountScreen> {
                       borderRadius: BorderRadius.circular(12),
                     ),
                   ),
-                  child: const Text(
-                    'Cancel',
-                    style: TextStyle(
+                  child: Text(
+                    'cancel'.tr(),
+                    style: const TextStyle(
                       fontWeight: FontWeight.bold,
                       fontSize: 15,
                     ),
@@ -350,7 +341,7 @@ class _GamerDeleteAccountScreenState extends State<GamerDeleteAccountScreen> {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           const Padding(
-            padding: EdgeInsets.only(top: 6, right: 10),
+            padding: EdgeInsetsDirectional.only(top: 6, end: 10),
             child: Icon(
               Icons.circle,
               size: 6,
