@@ -358,7 +358,7 @@ class _SquadChatScreenState extends State<SquadChatScreen> {
       await SupabaseService.client.from('chats').upsert({
         'id': widget.postId,
         'postId': widget.postId,
-        'lastMessage': '$senderName:$text',
+        'lastMessage': '$senderName: $text',
         'lastMessageTime': nowIso,
         'updatedAt': nowIso,
       }).catchError((_) => null);
@@ -756,4 +756,1084 @@ class _SquadChatScreenState extends State<SquadChatScreen> {
                                   'senderName': senderName,
                                   'senderUsername': senderUsername,
                                   'senderAvatar': senderAvatar,
-                                  'type':
+                                  'type': 'win_proof',
+                                  'status': 'pending',
+                                  'submittedBy': currentUid,
+                                  'inGameUid': characterUid,
+                                  'characterUid': characterUid,
+                                  'proofImageUrl': url,
+                                  'proofUrl': url,
+                                  'imageUrl': url,
+                                  'text': note.isNotEmpty ? note : 'میچ جیت گئے!',
+                                  'createdAt': nowIso,
+                                }).catchError((_) => null);
+
+                                await SupabaseService.client.from('chats').upsert({
+                                  'id': widget.postId,
+                                  'postId': widget.postId,
+                                  'lastMessage': '$senderName submitted Win Proof 🏆',
+                                  'lastMessageTime': nowIso,
+                                  'updatedAt': nowIso,
+                                }).catchError((_) => null);
+
+                                if (mounted) {
+                                  Navigator.pop(ctx);
+                                  ScaffoldMessenger.of(context).showSnackBar(
+                                    const SnackBar(
+                                      content: Text('🏆 جیت کا ثبوت جمع ہو گیا! ہوسٹ کی منظوری کا انتظار کریں۔'),
+                                      backgroundColor: GamerTheme.accentBlue,
+                                      duration: Duration(seconds: 3),
+                                    ),
+                                  );
+                                  Future.delayed(const Duration(milliseconds: 100), _scrollToBottom);
+                                }
+                              } catch (e) {
+                                debugPrint('Error submitting win proof: $e');
+                                if (mounted) {
+                                  setModalState(() => isSubmitting = false);
+                                  ScaffoldMessenger.of(context).showSnackBar(
+                                    SnackBar(
+                                      content: Text('بھیجنے میں ناکامی: $e'),
+                                      backgroundColor: GamerTheme.redAccent,
+                                    ),
+                                  );
+                                }
+                              }
+                            },
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          );
+        },
+      ),
+    );
+  }
+
+  Future<void> _handleRejectWinProof({
+    required BuildContext context,
+    required String messageDocId,
+    required String winnerTag,
+    required String squadId,
+  }) async {
+    final cleanTag = winnerTag.trim().startsWith('@')
+        ? winnerTag.trim().substring(1)
+        : winnerTag.trim();
+
+    final confirm = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: GamerTheme.cardElevated,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(18),
+          side: BorderSide(color: GamerTheme.redAccent.withOpacity(0.5)),
+        ),
+        title: const Row(
+          children: [
+            Icon(Icons.cancel_outlined, color: GamerTheme.redAccent, size: 22),
+            SizedBox(width: 8),
+            Text(
+              'جیت کا ثبوت مسترد کریں',
+              style: TextStyle(color: GamerTheme.textWhite, fontWeight: FontWeight.bold, fontSize: 17),
+            ),
+          ],
+        ),
+        content: Text(
+          'کیا آپ واقعی @$cleanTag کا ثبوت مسترد کرنا چاہتے ہیں؟',
+          style: const TextStyle(color: GamerTheme.textWhite, fontSize: 14, height: 1.4),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('منسوخ', style: TextStyle(color: GamerTheme.textMuted)),
+          ),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(
+              backgroundColor: GamerTheme.redAccent,
+              foregroundColor: Colors.white,
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+            ),
+            onPressed: () => Navigator.pop(ctx, true),
+            child: const Text('ہاں، مسترد کریں', style: TextStyle(fontWeight: FontWeight.w900)),
+          ),
+        ],
+      ),
+    );
+
+    if (confirm != true) return;
+
+    final currentUid = GamerAuthService().currentUid ?? '';
+    final nowIso = DateTime.now().toIso8601String();
+
+    try {
+      await SupabaseService.client.from('messages').update({
+        'status': 'rejected',
+        'rejectedAt': nowIso,
+        'rejectedBy': currentUid,
+      }).eq('id', messageDocId).catchError((_) => null);
+
+      await SupabaseService.client.from('win_proofs').update({
+        'status': 'rejected',
+        'rejectedAt': nowIso,
+        'rejectedBy': currentUid,
+      }).eq('id', messageDocId).catchError((_) => null);
+
+      await SupabaseService.client.from('messages').insert({
+        'chatId': squadId,
+        'squadId': squadId,
+        'senderId': 'system',
+        'senderUid': 'system',
+        'senderName': 'System',
+        'text': 'Host rejected win proof submitted by @$cleanTag',
+        'type': 'system',
+        'createdAt': nowIso,
+      }).catchError((_) => null);
+
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('@$cleanTag کا ثبوت مسترد کر دیا گیا۔'),
+            backgroundColor: GamerTheme.redAccent,
+            duration: const Duration(seconds: 2),
+          ),
+        );
+      }
+    } catch (e) {
+      debugPrint('[RejectProof] Error: $e');
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('کارروائی ناکام: $e'),
+            backgroundColor: Colors.redAccent,
+          ),
+        );
+      }
+    }
+  }
+
+  Future<void> _handleReward100Coins({
+    required BuildContext context,
+    required String messageDocId,
+    required String hostId,
+    required String winnerId,
+    required String winnerTag,
+    required String squadId,
+  }) async {
+    final cleanTag = winnerTag.trim().startsWith('@')
+        ? winnerTag.trim().substring(1)
+        : winnerTag.trim();
+
+    final confirm = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: GamerTheme.cardElevated,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(18),
+          side: BorderSide(color: const Color(0xFFFFD700).withOpacity(0.5)),
+        ),
+        title: const Row(
+          children: [
+            Text('🪙', style: TextStyle(fontSize: 22)),
+            SizedBox(width: 8),
+            Text(
+              'فاتح کو انعام دیں',
+              style: TextStyle(color: GamerTheme.textWhite, fontWeight: FontWeight.bold, fontSize: 17),
+            ),
+          ],
+        ),
+        content: Text(
+          'کیا @$cleanTag کو 100 کوائنز انعام دینا چاہتے ہیں؟',
+          style: const TextStyle(color: GamerTheme.textWhite, fontSize: 14.5, height: 1.4),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('منسوخ', style: TextStyle(color: GamerTheme.textMuted)),
+          ),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(
+              backgroundColor: const Color(0xFFFFD700),
+              foregroundColor: Colors.black,
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+            ),
+            onPressed: () => Navigator.pop(ctx, true),
+            child: const Text('ہاں، انعام دیں', style: TextStyle(fontWeight: FontWeight.w900)),
+          ),
+        ],
+      ),
+    );
+
+    if (confirm != true) return;
+
+    final nowIso = DateTime.now().toIso8601String();
+
+    try {
+      final hostData = await SupabaseService.getUser(hostId);
+      final int hostCoins = (hostData?['coins'] as num?)?.toInt() ?? 100;
+
+      if (hostCoins < 100) {
+        throw 'Not enough coins';
+      }
+
+      await SupabaseService.client.from('users').update({
+        'coins': hostCoins - 100,
+        'updatedAt': nowIso,
+      }).eq('id', hostId);
+
+      final winnerData = await SupabaseService.getUser(winnerId);
+      final int winnerCoins = (winnerData?['coins'] as num?)?.toInt() ?? 0;
+      await SupabaseService.client.from('users').update({
+        'coins': winnerCoins + 100,
+        'updatedAt': nowIso,
+      }).eq('id', winnerId);
+
+      await SupabaseService.recordCoinTransaction(
+        userId: hostId,
+        amount: -100,
+        type: 'squad_reward_given',
+        description: 'Rewarded squad match winner 100 coins',
+      );
+      await SupabaseService.recordCoinTransaction(
+        userId: winnerId,
+        amount: 100,
+        type: 'squad_reward_won',
+        description: 'Won squad match reward 100 coins',
+      );
+
+      await SupabaseService.client.from('messages').update({
+        'status': 'rewarded',
+        'rewardedAt': nowIso,
+        'rewardedBy': hostId,
+      }).eq('id', messageDocId).catchError((_) => null);
+
+      await SupabaseService.client.from('win_proofs').update({
+        'status': 'rewarded',
+        'rewardedAt': nowIso,
+        'rewardedBy': hostId,
+      }).eq('id', messageDocId).catchError((_) => null);
+
+      await SupabaseService.client.from('messages').insert({
+        'chatId': squadId,
+        'squadId': squadId,
+        'senderId': 'system',
+        'senderUid': 'system',
+        'senderName': 'System',
+        'text': 'Host rewarded 100 coins to @$cleanTag 🏆',
+        'type': 'system',
+        'createdAt': nowIso,
+      }).catchError((_) => null);
+
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('🎉 کامیابی سے @$cleanTag کو 100 کوائنز بھیج دیے گئے!'),
+            backgroundColor: GamerTheme.neonGreen,
+            duration: const Duration(seconds: 3),
+          ),
+        );
+      }
+    } catch (e) {
+      debugPrint('[RewardCoins] Error: $e');
+      if (context.mounted) {
+        final isInsufficient = e.toString().contains('Not enough coins');
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(isInsufficient ? 'والیٹ میں کوائنز ناکافی ہیں' : 'ٹرانزیکشن ناکام: $e'),
+            backgroundColor: Colors.redAccent,
+            duration: const Duration(seconds: 3),
+          ),
+        );
+      }
+    }
+  }
+
+  void _showFullScreenImage(BuildContext context, String imageUrl) {
+    showDialog(
+      context: context,
+      barrierColor: Colors.black.withOpacity(0.92),
+      builder: (dialogContext) {
+        return Dialog(
+          backgroundColor: Colors.transparent,
+          insetPadding: EdgeInsets.zero,
+          child: Stack(
+            children: [
+              Positioned.fill(
+                child: InteractiveViewer(
+                  panEnabled: true,
+                  minScale: 0.5,
+                  maxScale: 4.0,
+                  child: Center(
+                    child: imageUrl.startsWith('data:image')
+                        ? Image.memory(
+                            base64Decode(imageUrl.split(',').last),
+                            fit: BoxFit.contain,
+                          )
+                        : Image.network(
+                            imageUrl,
+                            fit: BoxFit.contain,
+                            loadingBuilder: (context, child, progress) {
+                              if (progress == null) return child;
+                              return const Center(
+                                child: CircularProgressIndicator(color: GamerTheme.neonGreen),
+                              );
+                            },
+                            errorBuilder: (_, __, ___) => const Center(
+                              child: Icon(Icons.broken_image, color: Colors.white54, size: 50),
+                            ),
+                          ),
+                  ),
+                ),
+              ),
+              Positioned(
+                top: MediaQuery.of(dialogContext).padding.top + 10,
+                right: 16,
+                child: IconButton(
+                  icon: const Icon(Icons.close, color: Colors.white, size: 28),
+                  onPressed: () => Navigator.of(dialogContext).pop(),
+                  style: IconButton.styleFrom(
+                    backgroundColor: Colors.black54,
+                  ),
+                ),
+              ),
+            ],
+          ),
+        );
+      },
+    );
+  }
+
+  Widget _buildWinProofCard({
+    required BuildContext context,
+    required Map<String, dynamic> data,
+    required String messageDocId,
+    required bool isOwner,
+    required String currentUid,
+  }) {
+    final senderUid = (data['senderId'] ?? data['senderUid'] ?? data['submittedBy']) as String? ?? '';
+    final senderName = data['senderName'] as String? ?? 'Gamer';
+    final senderUsername = (data['senderUsername'] ?? data['username'] ?? data['senderTag'] ?? data['tag'] ?? senderName).toString().trim();
+    final senderAvatar = data['senderAvatar'] as String? ?? '';
+    final status = (data['status'] as String? ?? 'pending').toLowerCase();
+    final inGameUid = (data['inGameUid'] ?? data['characterUid'] ?? data['bgmiUid'] ?? data['gameId'] ?? '').toString();
+    final proofUrl = (data['proofImageUrl'] ?? data['proofUrl'] ?? data['imageUrl'] ?? '').toString();
+    final text = (data['text'] ?? data['note'] as String? ?? '').trim();
+    final isPending = status == 'pending';
+    final isRewarded = status == 'rewarded';
+    final isRejected = status == 'rejected';
+
+    final cleanTag = senderUsername.startsWith('@') ? senderUsername.substring(1) : senderUsername;
+
+    final Color statusColor = isRewarded
+        ? GamerTheme.neonGreen
+        : (isRejected ? GamerTheme.redAccent : const Color(0xFFFFD700));
+
+    final String statusLabel = isRewarded
+        ? 'انعام مل گیا'
+        : (isRejected ? 'مسترد' : 'منظوری کا انتظار');
+
+    final IconData statusIcon = isRewarded
+        ? Icons.check_circle_rounded
+        : (isRejected ? Icons.cancel_rounded : Icons.hourglass_top_rounded);
+
+    final String statusSubtitle = isRewarded
+        ? 'انعام یافتہ • 100 کوائنز ادا کر دیے گئے'
+        : (isRejected ? 'مسترد شدہ • ثبوت منظور نہیں ہوا' : 'منظوری کا انتظار • ہوسٹ کا انتظار ہے');
+
+    return Container(
+      margin: const EdgeInsets.symmetric(vertical: 8, horizontal: 4),
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: const Color(0xFF161C26),
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(
+          color: statusColor.withOpacity(0.8),
+          width: 1.5,
+        ),
+        boxShadow: [
+          BoxShadow(
+            color: statusColor.withOpacity(0.12),
+            blurRadius: 12,
+            spreadRadius: 1,
+          ),
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Container(
+                padding: const EdgeInsets.all(6),
+                decoration: BoxDecoration(
+                  color: statusColor.withOpacity(0.15),
+                  shape: BoxShape.circle,
+                ),
+                child: Icon(
+                  Icons.emoji_events_rounded,
+                  size: 20,
+                  color: statusColor,
+                ),
+              ),
+              const SizedBox(width: 8),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Text(
+                      'میچ جیت کا ثبوت',
+                      style: TextStyle(
+                        color: GamerTheme.textWhite,
+                        fontWeight: FontWeight.w900,
+                        fontSize: 13,
+                        letterSpacing: 0.5,
+                      ),
+                    ),
+                    Text(
+                      statusSubtitle,
+                      style: TextStyle(
+                        color: statusColor,
+                        fontSize: 10.5,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                decoration: BoxDecoration(
+                  color: statusColor.withOpacity(0.18),
+                  borderRadius: BorderRadius.circular(8),
+                  border: Border.all(
+                    color: statusColor,
+                    width: 1,
+                  ),
+                ),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Icon(
+                      statusIcon,
+                      size: 12,
+                      color: statusColor,
+                    ),
+                    const SizedBox(width: 4),
+                    Text(
+                      statusLabel,
+                      style: TextStyle(
+                        color: statusColor,
+                        fontSize: 10,
+                        fontWeight: FontWeight.w900,
+                        letterSpacing: 0.5,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 12),
+
+          Container(
+            padding: const EdgeInsets.all(10),
+            decoration: BoxDecoration(
+              color: GamerTheme.bgDark.withOpacity(0.6),
+              borderRadius: BorderRadius.circular(10),
+              border: Border.all(color: GamerTheme.borderDark),
+            ),
+            child: Row(
+              children: [
+                GamerAvatar(
+                  photoUrl: senderAvatar,
+                  displayName: senderName,
+                  radius: 18,
+                ),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Row(
+                        children: [
+                          Flexible(
+                            child: Text(
+                              senderName,
+                              style: const TextStyle(
+                                color: GamerTheme.textWhite,
+                                fontWeight: FontWeight.bold,
+                                fontSize: 13,
+                              ),
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                          ),
+                          const SizedBox(width: 4),
+                          Text(
+                            '@$cleanTag',
+                            style: const TextStyle(
+                              color: GamerTheme.accentCyan,
+                              fontSize: 11.5,
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 2),
+                      Text(
+                        'کریکٹر UID: ${inGameUid.isNotEmpty ? inGameUid : (senderUid.isNotEmpty ? senderUid : 'ویریفائیڈ پروفائل UID')}',
+                        style: const TextStyle(
+                          color: GamerTheme.textMuted,
+                          fontSize: 11,
+                          fontFamily: 'monospace',
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+          ),
+
+          if (text.isNotEmpty) ...[
+            const SizedBox(height: 8),
+            Text(
+              text,
+              style: const TextStyle(
+                color: GamerTheme.textWhite,
+                fontSize: 12.5,
+                fontStyle: FontStyle.italic,
+              ),
+            ),
+          ],
+
+          if (proofUrl.isNotEmpty) ...[
+            const SizedBox(height: 8),
+            GestureDetector(
+              onTap: () => _showFullScreenImage(context, proofUrl),
+              child: ClipRRect(
+                borderRadius: BorderRadius.circular(10),
+                child: proofUrl.startsWith('data:image')
+                    ? Image.memory(
+                        base64Decode(proofUrl.split(',').last),
+                        height: 140,
+                        width: double.infinity,
+                        fit: BoxFit.cover,
+                        errorBuilder: (_, __, ___) => const SizedBox.shrink(),
+                      )
+                    : Image.network(
+                        proofUrl,
+                        height: 140,
+                        width: double.infinity,
+                        fit: BoxFit.cover,
+                        errorBuilder: (_, __, ___) => const SizedBox.shrink(),
+                      ),
+              ),
+            ),
+          ],
+
+          if (isOwner && isPending) ...[
+            const SizedBox(height: 12),
+            Row(
+              children: [
+                Expanded(
+                  flex: 3,
+                  child: OutlinedButton.icon(
+                    style: OutlinedButton.styleFrom(
+                      foregroundColor: GamerTheme.neonGreen,
+                      side: const BorderSide(color: GamerTheme.neonGreen, width: 1.2),
+                      padding: const EdgeInsets.symmetric(vertical: 10),
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                    ),
+                    icon: const Icon(Icons.copy_rounded, size: 13),
+                    label: const Text(
+                      'UID کاپی کریں',
+                      style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold),
+                    ),
+                    onPressed: () {
+                      final uidToCopy = inGameUid.isNotEmpty ? inGameUid : senderUid;
+                      _copyToClipboard(uidToCopy, 'Winner UID');
+                    },
+                  ),
+                ),
+                const SizedBox(width: 6),
+                Expanded(
+                  flex: 3,
+                  child: OutlinedButton.icon(
+                    style: OutlinedButton.styleFrom(
+                      foregroundColor: GamerTheme.redAccent,
+                      side: const BorderSide(color: GamerTheme.redAccent, width: 1.2),
+                      padding: const EdgeInsets.symmetric(vertical: 10),
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                    ),
+                    icon: const Icon(Icons.close_rounded, size: 14),
+                    label: const Text(
+                      'مسترد کریں',
+                      style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold),
+                    ),
+                    onPressed: () => _handleRejectWinProof(
+                      context: context,
+                      messageDocId: messageDocId,
+                      winnerTag: cleanTag,
+                      squadId: widget.postId,
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 6),
+                Expanded(
+                  flex: 4,
+                  child: ElevatedButton.icon(
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: const Color(0xFFFFD700),
+                      foregroundColor: Colors.black,
+                      padding: const EdgeInsets.symmetric(vertical: 10),
+                      elevation: 3,
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                    ),
+                    icon: const Text('🪙', style: TextStyle(fontSize: 13)),
+                    label: const Text(
+                      'منظور کریں',
+                      style: TextStyle(
+                        color: Colors.black,
+                        fontSize: 11.5,
+                        fontWeight: FontWeight.w900,
+                      ),
+                    ),
+                    onPressed: () => _handleReward100Coins(
+                      context: context,
+                      messageDocId: messageDocId,
+                      hostId: currentUid,
+                      winnerId: senderUid,
+                      winnerTag: cleanTag,
+                      squadId: widget.postId,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+
+  @override
+  void dispose() {
+    _textController.dispose();
+    _scrollController.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final currentUid = GamerAuthService().currentUid ?? '';
+
+    return StreamBuilder<Map<String, dynamic>?>(
+      stream: _chatStream(),
+      builder: (context, chatSnap) {
+        final chatData = chatSnap.data ?? {};
+        final leaderUid = (chatData['leaderUid'] ?? widget.squad?.ownerId ?? widget.squad?.userId ?? '').toString();
+        final isOwner = currentUid.isNotEmpty && (leaderUid == currentUid || (widget.squad != null && (widget.squad!.ownerId == currentUid || widget.squad!.userId == currentUid)));
+        final rawMembers = List<dynamic>.from(chatData['members'] ?? widget.squad?.members ?? []);
+        final members = rawMembers.map((e) => e.toString()).toList();
+        final isMember = members.contains(currentUid) || isOwner;
+
+        final title = chatData['title'] as String? ??
+            widget.squad?.title ??
+            (widget.squad?.displayName.isNotEmpty == true
+                ? "${widget.squad!.displayName}'s Squad"
+                : 'اسکواڈ چیٹ');
+        final mode = chatData['mode'] as String? ?? widget.squad?.mode ?? 'کلاسک اسکواڈ';
+        final inGameUid = chatData['inGameUid'] as String? ?? widget.squad?.inGameUid ?? '';
+        final memberCount = members.length;
+
+        return Scaffold(
+          backgroundColor: GamerTheme.bgDark,
+          appBar: AppBar(
+            backgroundColor: GamerTheme.cardDark,
+            elevation: 1,
+            titleSpacing: 0,
+            leading: IconButton(
+              icon: const Icon(Icons.arrow_back_ios_new_rounded, color: GamerTheme.textWhite, size: 20),
+              onPressed: () => Navigator.pop(context),
+            ),
+            title: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Row(
+                  children: [
+                    Flexible(
+                      child: Text(
+                        title,
+                        style: const TextStyle(
+                          color: GamerTheme.textWhite,
+                          fontSize: 15,
+                          fontWeight: FontWeight.bold,
+                        ),
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ),
+                    const SizedBox(width: 6),
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 1.5),
+                      decoration: BoxDecoration(
+                        color: GamerTheme.accentCyan.withOpacity(0.2),
+                        borderRadius: BorderRadius.circular(4),
+                        border: Border.all(color: GamerTheme.accentCyan, width: 0.8),
+                      ),
+                      child: Text(
+                        mode,
+                        style: const TextStyle(
+                          color: GamerTheme.accentCyan,
+                          fontSize: 9.5,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 2),
+                Row(
+                  children: [
+                    Text(
+                      '$memberCount/4 ممبرز',
+                      style: const TextStyle(color: GamerTheme.textMuted, fontSize: 11, fontWeight: FontWeight.w500),
+                    ),
+                    if (inGameUid.isNotEmpty) ...[
+                      const SizedBox(width: 8),
+                      InkWell(
+                        onTap: () => _copyToClipboard(inGameUid, 'Leader BGMI UID'),
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Text(
+                              'UID: $inGameUid',
+                              style: const TextStyle(color: GamerTheme.neonGreen, fontSize: 11, fontWeight: FontWeight.w600),
+                            ),
+                            const SizedBox(width: 3),
+                            const Icon(Icons.copy_rounded, size: 10, color: GamerTheme.neonGreen),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ],
+                ),
+              ],
+            ),
+            actions: [
+              Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  if (isOwner)
+                    Padding(
+                      padding: const EdgeInsets.only(right: 4),
+                      child: _isLeaving
+                          ? const SizedBox(
+                              width: 20,
+                              height: 20,
+                              child: CircularProgressIndicator(strokeWidth: 2, color: Colors.redAccent),
+                            )
+                          : TextButton.icon(
+                              style: TextButton.styleFrom(
+                                foregroundColor: Colors.redAccent,
+                                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                                visualDensity: VisualDensity.compact,
+                              ),
+                              icon: const Icon(Icons.power_settings_new_rounded, size: 16),
+                              label: const Text(
+                                'اسکواڈ ختم کریں',
+                                style: TextStyle(fontSize: 11.5, fontWeight: FontWeight.bold),
+                              ),
+                              onPressed: () => _handleEndSquad(leaderUid),
+                            ),
+                    )
+                  else if (isMember)
+                    Padding(
+                      padding: const EdgeInsets.only(right: 4),
+                      child: _isLeaving
+                          ? const SizedBox(
+                              width: 20,
+                              height: 20,
+                              child: CircularProgressIndicator(strokeWidth: 2, color: Colors.redAccent),
+                            )
+                          : TextButton.icon(
+                              style: TextButton.styleFrom(
+                                foregroundColor: Colors.redAccent,
+                                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                                visualDensity: VisualDensity.compact,
+                              ),
+                              icon: const Icon(Icons.exit_to_app_rounded, size: 16),
+                              label: const Text(
+                                'چھوڑ دیں',
+                                style: TextStyle(fontSize: 11.5, fontWeight: FontWeight.bold),
+                              ),
+                              onPressed: () => _handleLeaveSquad(leaderUid, members),
+                            ),
+                    ),
+
+                  IconButton(
+                    tooltip: 'اسکواڈ ممبرز',
+                    icon: const Icon(Icons.people_alt_rounded, color: GamerTheme.accentCyan),
+                    onPressed: () async {
+                      SquadPost? currentSquad = widget.squad;
+                      if (currentSquad == null) {
+                        final map = await SupabaseService.client
+                            .from('lfg_posts')
+                            .select()
+                            .eq('id', widget.postId)
+                            .maybeSingle();
+                        if (map != null) {
+                          currentSquad = SquadPost.fromSupabase(map);
+                        }
+                      }
+                      if (currentSquad != null && mounted) {
+                        SquadMembersBottomSheet.show(context, currentSquad);
+                      }
+                    },
+                  ),
+                ],
+              ),
+            ],
+          ),
+          body: SafeArea(
+            child: Column(
+              children: [
+                Expanded(
+                  child: StreamBuilder<List<Map<String, dynamic>>>(
+                    stream: _messagesStream(),
+                    builder: (context, snapshot) {
+                      if (snapshot.connectionState == ConnectionState.waiting && !snapshot.hasData) {
+                        return const Center(
+                          child: CircularProgressIndicator(color: GamerTheme.accentCyan),
+                        );
+                      }
+
+                      final docs = snapshot.data ?? [];
+                      if (docs.isEmpty) {
+                        return const Center(
+                          child: Column(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Icon(Icons.forum_outlined, size: 48, color: GamerTheme.textMuted),
+                              SizedBox(height: 12),
+                              Text(
+                                'اسکواڈ چیٹ تیار ہے!\nساتھیوں کو سلام کریں۔',
+                                textAlign: TextAlign.center,
+                                style: TextStyle(color: GamerTheme.textMuted, fontSize: 13),
+                              ),
+                            ],
+                          ),
+                        );
+                      }
+
+                      WidgetsBinding.instance.addPostFrameCallback((_) => _scrollToBottom());
+
+                      return ListView.builder(
+                        controller: _scrollController,
+                        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                        itemCount: docs.length,
+                        itemBuilder: (context, index) {
+                          final data = docs[index];
+                          final messageDocId = (data['id'] ?? '').toString();
+                          final senderUid = (data['senderId'] ?? data['senderUid']) as String? ?? '';
+                          final senderName = data['senderName'] as String? ?? 'Gamer';
+                          final senderAvatar = data['senderAvatar'] as String? ?? '';
+                          final senderFrame = data['senderFrame'] as String? ?? '';
+                          final senderBadge = data['senderBadge'] as String? ?? '';
+                          final senderChatColorHex = data['senderChatColor'] as String? ?? '';
+                          final text = data['text'] as String? ?? '';
+                          final type = data['type'] as String? ?? 'text';
+                          final isMe = senderUid == currentUid;
+                          final isSystem = type == 'system' || senderUid == 'system';
+
+                          if (isSystem) {
+                            return Center(
+                              child: Container(
+                                margin: const EdgeInsets.symmetric(vertical: 8),
+                                padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
+                                decoration: BoxDecoration(
+                                  color: GamerTheme.cardElevated.withOpacity(0.7),
+                                  borderRadius: BorderRadius.circular(16),
+                                  border: Border.all(color: GamerTheme.borderDark),
+                                ),
+                                child: Row(
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    const Icon(Icons.info_outline_rounded, size: 14, color: GamerTheme.accentCyan),
+                                    const SizedBox(width: 6),
+                                    Flexible(
+                                      child: Text(
+                                        text,
+                                        style: const TextStyle(
+                                          color: GamerTheme.textMuted,
+                                          fontSize: 11.5,
+                                          fontWeight: FontWeight.w500,
+                                        ),
+                                        textAlign: TextAlign.center,
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            );
+                          }
+
+                          if (type == 'win_proof') {
+                            return _buildWinProofCard(
+                              context: context,
+                              data: data,
+                              messageDocId: messageDocId,
+                              isOwner: isOwner,
+                              currentUid: currentUid,
+                            );
+                          }
+
+                          return Padding(
+                            padding: const EdgeInsets.symmetric(vertical: 4),
+                            child: Row(
+                              mainAxisAlignment: isMe ? MainAxisAlignment.end : MainAxisAlignment.start,
+                              crossAxisAlignment: CrossAxisAlignment.end,
+                              children: [
+                                if (!isMe) ...[
+                                  GamerAvatar(
+                                    photoUrl: senderAvatar,
+                                    displayName: senderName,
+                                    radius: 14,
+                                    frameId: senderFrame,
+                                  ),
+                                  const SizedBox(width: 8),
+                                ],
+                                Flexible(
+                                  child: Container(
+                                    constraints: BoxConstraints(
+                                      maxWidth: MediaQuery.of(context).size.width * 0.72,
+                                    ),
+                                    padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                                    decoration: BoxDecoration(
+                                      color: isMe
+                                          ? GamerTheme.accentCyan.withOpacity(0.18)
+                                          : GamerTheme.cardElevated,
+                                      borderRadius: BorderRadius.only(
+                                        topLeft: const Radius.circular(14),
+                                        topRight: const Radius.circular(14),
+                                        bottomLeft: Radius.circular(isMe ? 14 : 2),
+                                        bottomRight: Radius.circular(isMe ? 2 : 14),
+                                      ),
+                                      border: Border.all(
+                                        color: isMe
+                                            ? GamerTheme.accentCyan.withOpacity(0.5)
+                                            : GamerTheme.borderDark,
+                                        width: 1,
+                                      ),
+                                    ),
+                                    child: Column(
+                                      crossAxisAlignment: isMe ? CrossAxisAlignment.end : CrossAxisAlignment.start,
+                                      children: [
+                                        if (!isMe)
+                                          Padding(
+                                            padding: const EdgeInsets.only(bottom: 4),
+                                            child: Row(
+                                              mainAxisSize: MainAxisSize.min,
+                                              children: [
+                                                Text(
+                                                  senderName,
+                                                  style: const TextStyle(
+                                                    color: GamerTheme.accentOrange,
+                                                    fontSize: 11,
+                                                    fontWeight: FontWeight.bold,
+                                                  ),
+                                                ),
+                                                if (senderBadge.isNotEmpty) ...[
+                                                  const SizedBox(width: 4),
+                                                  GamerBadgeWidget(badgeId: senderBadge, scale: 0.75),
+                                                ],
+                                              ],
+                                            ),
+                                          ),
+                                        () {
+                                          Color msgColor = GamerTheme.textWhite;
+                                          if (senderChatColorHex.isNotEmpty) {
+                                            try {
+                                              final hex = senderChatColorHex.replaceAll('#', '');
+                                              msgColor = Color(int.parse('FF$hex', radix: 16));
+                                            } catch (_) {}
+                                          }
+                                          return Text(
+                                            text,
+                                            style: TextStyle(
+                                              color: msgColor,
+                                              fontSize: 13.5,
+                                              height: 1.3,
+                                            ),
+                                          );
+                                        }(),
+                                      ],
+                                    ),
+                                  ),
+                                ),
+                              ],
+                            ),
+                          );
+                        },
+                      );
+                    },
+                  ),
+                ),
+
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+                  decoration: const BoxDecoration(
+                    color: GamerTheme.cardDark,
+                    border: Border(top: BorderSide(color: GamerTheme.borderDark)),
+                  ),
+                  child: Row(
+                    children: [
+                      Expanded(
+                        child: Container(
+                          decoration: BoxDecoration(
+                            color: GamerTheme.bgDark,
+                            borderRadius: BorderRadius.circular(22),
+                            border: Border.all(color: GamerTheme.borderLight.withOpacity(0.4)),
+                          ),
+                          child: TextField(
+                            controller: _textController,
+                            style: const TextStyle(color: GamerTheme.textWhite, fontSize: 13.5),
+                            textInputAction: TextInputAction.send,
+                            onSubmitted: (_) => _sendMessage(),
+                            decoration: const InputDecoration(
+                              hintText: 'پیغام لکھیں...',
+                              hintStyle: TextStyle(color: GamerTheme.textMuted, fontSize: 13),
+                              border: InputBorder.none,
+                              contentPadding: EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+                            ),
+                          ),
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                      Container(
+                        decoration: const BoxDecoration(
+                          color: GamerTheme.accentCyan,
+                          shape: BoxShape.circle,
+                        ),
+                        child: IconButton(
+                          icon: _isSending
+                              ? const SizedBox(
+                                  width: 18,
+                                  height: 18,
+                                  child: CircularProgressIndicator(color: Colors.black, strokeWidth: 2),
+                                )
+                              : const Icon(Icons.send_rounded, color: Colors.black, size: 18),
+                          onPressed: _sendMessage,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+          ),
+        );
+      },
+    );
+  }
+}
