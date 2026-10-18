@@ -1,5 +1,5 @@
 // ===============================================================================
-// EXACT UPDATE — Real YouTube & TikTok Channel Links Added
+// EXACT UPDATE — Real YouTube & TikTok Channel Links Added (100% Urdu Localization)
 // -------------------------------------------------------------------------------
 // File: lib/screens/follow_us_screen.dart
 // ===============================================================================
@@ -57,7 +57,7 @@ class FollowUsScreen extends StatelessWidget {
                   const SizedBox(width: 10),
                   Expanded(
                     child: Text(
-                      '$title link copied to clipboard!',
+                      '$title کا لنک کلپ بورڈ پر کاپی ہو گیا!',
                       style: TextStyle(color: textWhite, fontWeight: FontWeight.bold, fontSize: 13),
                     ),
                   ),
@@ -85,7 +85,7 @@ class FollowUsScreen extends StatelessWidget {
               onPressed: () => Navigator.pop(context),
             ),
             title: Text(
-              'Follow Us',
+              'ہمیں فالو کریں',
               style: TextStyle(
                 color: textWhite,
                 fontSize: 18,
@@ -136,7 +136,7 @@ class FollowUsScreen extends StatelessWidget {
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
                             Text(
-                              'Join Our Gaming Community',
+                              'ہماری گیمنگ کمیونٹی میں شامل ہوں',
                               style: TextStyle(
                                 color: textWhite,
                                 fontSize: 16,
@@ -145,7 +145,7 @@ class FollowUsScreen extends StatelessWidget {
                             ),
                             const SizedBox(height: 4),
                             Text(
-                              'Follow us across official channels for daily updates, tournaments, and gaming news.',
+                              'روزانہ کی اپڈیٹس، ٹورنامنٹ اور گیمنگ نیوز کے لیے ہمارے آفیشل چینلز کو فالو کریں۔',
                               style: TextStyle(
                                 color: textGray,
                                 fontSize: 12.5,
@@ -162,7 +162,7 @@ class FollowUsScreen extends StatelessWidget {
                 const SizedBox(height: 28),
 
                 Text(
-                  'Official Channels',
+                  'آفیشل چینلز',
                   style: TextStyle(
                     color: textWhite,
                     fontSize: 15,
@@ -171,7 +171,7 @@ class FollowUsScreen extends StatelessWidget {
                 ),
                 const SizedBox(height: 14),
 
-                // 1. YouTube Option (Updated with @_Official)
+                // 1. YouTube Option
                 _buildSocialItem(
                   context: context,
                   iconWidget: Container(
@@ -182,9 +182,9 @@ class FollowUsScreen extends StatelessWidget {
                     ),
                     child: const Icon(Icons.play_arrow_rounded, color: Color(0xFFFF0000), size: 24),
                   ),
-                  title: 'YouTube',
-                  subtitle: 'Subscribe for tournament streams & guides',
-                  badgeText: 'SUBSCRIBE',
+                  title: 'یوٹیوب',
+                  subtitle: 'ٹورنامنٹ اسٹریمز اور گائیڈز کے لیے سبسکرائب کریں',
+                  badgeText: 'سبسکرائب',
                   badgeColor: const Color(0xFFFF0000),
                   onTap: () => _launchSocialUrl(context, youtubeUrl, 'YouTube'),
                 ),
@@ -202,16 +202,16 @@ class FollowUsScreen extends StatelessWidget {
                     ),
                     child: const Icon(Icons.camera_alt_rounded, color: Color(0xFFE1306C), size: 24),
                   ),
-                  title: 'Instagram',
-                  subtitle: 'Follow for daily gaming reels & highlights',
-                  badgeText: 'FOLLOW',
+                  title: 'انسٹاگرام',
+                  subtitle: 'روزانہ گیمنگ ریلز اور ہائی لائٹس کے لیے فالو کریں',
+                  badgeText: 'فالو',
                   badgeColor: const Color(0xFFE1306C),
                   onTap: () => _launchSocialUrl(context, instagramUrl, 'Instagram'),
                 ),
 
                 const SizedBox(height: 14),
 
-                // 3. TikTok Option (Updated)
+                // 3. TikTok Option
                 _buildSocialItem(
                   context: context,
                   iconWidget: Container(
@@ -222,9 +222,9 @@ class FollowUsScreen extends StatelessWidget {
                     ),
                     child: const Icon(Icons.music_note_rounded, color: Color(0xFF00F2FE), size: 24),
                   ),
-                  title: 'TikTok',
-                  subtitle: 'Watch short clips & viral gameplay',
-                  badgeText: 'WATCH',
+                  title: 'ٹک ٹاک',
+                  subtitle: 'شارٹ کلپس اور وائرل گیم پلے دیکھیں',
+                  badgeText: 'دیکھیں',
                   badgeColor: const Color(0xFF00F2FE),
                   onTap: () => _launchSocialUrl(context, tiktokUrl, 'TikTok'),
                 ),
@@ -242,9 +242,9 @@ class FollowUsScreen extends StatelessWidget {
                     ),
                     child: const Icon(Icons.facebook_rounded, color: Color(0xFF1877F2), size: 24),
                   ),
-                  title: 'Facebook',
-                  subtitle: 'Connect with community discussions & events',
-                  badgeText: 'CONNECT',
+                  title: 'فیس بک',
+                  subtitle: 'کمیونٹی ڈسکشنز اور ایونٹس سے جڑیں',
+                  badgeText: 'رابطہ',
                   badgeColor: const Color(0xFF1877F2),
                   onTap: () => _launchSocialUrl(context, facebookUrl, 'Facebook'),
                 ),
@@ -265,7 +265,7 @@ class FollowUsScreen extends StatelessWidget {
                       const SizedBox(width: 12),
                       Expanded(
                         child: Text(
-                          'No payment or subscription required. Following is completely optional.',
+                          'کوئی فیس یا سبسکرپشن درکار نہیں۔ فالو کرنا بالکل اختیاری ہے۔',
                           style: TextStyle(color: textGray, fontSize: 11.5, height: 1.35),
                         ),
                       ),
