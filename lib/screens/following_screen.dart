@@ -83,7 +83,7 @@ class _FollowingScreenState extends State<FollowingScreen> {
             ),
             const SizedBox(width: 10),
             Text(
-              'FOLLOWING',
+              'nav_following'.tr().toUpperCase(),
               style: TextStyle(
                 color: textWhite,
                 fontWeight: FontWeight.w900,
@@ -104,7 +104,7 @@ class _FollowingScreenState extends State<FollowingScreen> {
                 },
                 icon: Icon(Icons.clear_all_rounded, color: textGray, size: 16),
                 label: Text(
-                  'Clear',
+                  'btn_clear'.tr(),
                   style: TextStyle(color: textGray, fontSize: 12),
                 ),
               );
@@ -119,7 +119,6 @@ class _FollowingScreenState extends State<FollowingScreen> {
           return CustomScrollView(
             physics: const BouncingScrollPhysics(),
             slivers: [
-              // Header & Selector section
               SliverToBoxAdapter(
                 child: Padding(
                   padding: const EdgeInsets.fromLTRB(16, 14, 16, 8),
@@ -130,7 +129,7 @@ class _FollowingScreenState extends State<FollowingScreen> {
                         mainAxisAlignment: MainAxisAlignment.spaceBetween,
                         children: [
                           Text(
-                            'Select Games to Follow',
+                            'select_games_to_follow'.tr(),
                             style: TextStyle(
                               color: textWhite,
                               fontWeight: FontWeight.w800,
@@ -138,7 +137,7 @@ class _FollowingScreenState extends State<FollowingScreen> {
                             ),
                           ),
                           Text(
-                            '${followedGames.length} followed',
+                            'games_followed_count'.tr(args: ['${followedGames.length}']),
                             style: TextStyle(
                               color: neonGreen,
                               fontWeight: FontWeight.bold,
@@ -149,12 +148,11 @@ class _FollowingScreenState extends State<FollowingScreen> {
                       ),
                       const SizedBox(height: 6),
                       Text(
-                        'Tap games to follow their latest news, updates and patches.',
+                        'select_games_sub'.tr(),
                         style: TextStyle(color: textGray, fontSize: 12),
                       ),
                       const SizedBox(height: 12),
 
-                      // Games Choice Chips
                       Wrap(
                         spacing: 8,
                         runSpacing: 8,
@@ -199,7 +197,6 @@ class _FollowingScreenState extends State<FollowingScreen> {
                             );
                           }),
 
-                          // Add Custom Game Button
                           ActionChip(
                             avatar: Icon(
                               _isAddingCustom ? Icons.close : Icons.add,
@@ -207,7 +204,7 @@ class _FollowingScreenState extends State<FollowingScreen> {
                               color: neonGreen,
                             ),
                             label: Text(
-                              _isAddingCustom ? 'Cancel' : 'Add Other Game',
+                              _isAddingCustom ? 'cancel'.tr() : 'add_other_game'.tr(),
                               style: TextStyle(
                                 color: neonGreen,
                                 fontWeight: FontWeight.bold,
@@ -228,7 +225,6 @@ class _FollowingScreenState extends State<FollowingScreen> {
                         ],
                       ),
 
-                      // Custom game textfield if expanded
                       if (_isAddingCustom) ...[
                         const SizedBox(height: 12),
                         Container(
@@ -246,7 +242,7 @@ class _FollowingScreenState extends State<FollowingScreen> {
                                   autofocus: true,
                                   style: TextStyle(color: textWhite, fontSize: 13),
                                   decoration: InputDecoration(
-                                    hintText: 'Enter game name (e.g. Hollow Knight, FIFA)',
+                                    hintText: 'enter_game_hint'.tr(),
                                     hintStyle: TextStyle(color: textGray, fontSize: 12),
                                     border: InputBorder.none,
                                   ),
@@ -266,7 +262,6 @@ class _FollowingScreenState extends State<FollowingScreen> {
                       Divider(color: borderDark, thickness: 1),
                       const SizedBox(height: 8),
 
-                      // Section Title
                       Row(
                         children: [
                           Container(
@@ -279,7 +274,7 @@ class _FollowingScreenState extends State<FollowingScreen> {
                           ),
                           const SizedBox(width: 8),
                           Text(
-                            'Followed Games Feed',
+                            'followed_games_feed'.tr(),
                             style: TextStyle(
                               color: textWhite,
                               fontWeight: FontWeight.w900,
@@ -295,7 +290,6 @@ class _FollowingScreenState extends State<FollowingScreen> {
                 ),
               ),
 
-              // News Stream for Followed Games
               StreamBuilder<List<NewsModel>>(
                 initialData: _storeService.currentNews,
                 stream: _storeService.getNewsStream(),
@@ -326,7 +320,7 @@ class _FollowingScreenState extends State<FollowingScreen> {
                               ),
                               const SizedBox(height: 16),
                               Text(
-                                'No Games Followed Yet',
+                                'no_games_followed_yet'.tr(),
                                 style: TextStyle(
                                   color: textWhite,
                                   fontSize: 16,
@@ -335,7 +329,7 @@ class _FollowingScreenState extends State<FollowingScreen> {
                               ),
                               const SizedBox(height: 8),
                               Text(
-                                'Select your favorite games above to get an exclusive news feed tailored just for you.',
+                                'no_games_followed_desc'.tr(),
                                 textAlign: TextAlign.center,
                                 style: TextStyle(color: textGray, fontSize: 13),
                               ),
@@ -350,9 +344,9 @@ class _FollowingScreenState extends State<FollowingScreen> {
                                   padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 10),
                                 ),
                                 icon: const Icon(Icons.flash_on_rounded, size: 18),
-                                label: const Text(
-                                  'Follow Top 5 Games',
-                                  style: TextStyle(fontWeight: FontWeight.w800),
+                                label: Text(
+                                  'follow_top_games'.tr(),
+                                  style: const TextStyle(fontWeight: FontWeight.w800),
                                 ),
                                 onPressed: () {
                                   _followingService.setFollowedGames({
@@ -381,7 +375,7 @@ class _FollowingScreenState extends State<FollowingScreen> {
                               Icon(Icons.feed_outlined, color: textGray, size: 40),
                               const SizedBox(height: 12),
                               Text(
-                                'No recent stories for followed games',
+                                'no_recent_stories'.tr(),
                                 style: TextStyle(
                                   color: textWhite,
                                   fontSize: 14,
@@ -390,7 +384,7 @@ class _FollowingScreenState extends State<FollowingScreen> {
                               ),
                               const SizedBox(height: 6),
                               Text(
-                                'Try following more games from the list above.',
+                                'try_following_more'.tr(),
                                 style: TextStyle(color: textGray, fontSize: 12),
                               ),
                             ],
@@ -417,7 +411,6 @@ class _FollowingScreenState extends State<FollowingScreen> {
                 },
               ),
 
-              // Price Tracker Section for Followed Paid Games
               Builder(
                 builder: (context) {
                   final followedPaidGames =
@@ -441,7 +434,7 @@ class _FollowingScreenState extends State<FollowingScreen> {
                           ),
                           const SizedBox(width: 8),
                           Text(
-                            'Price Tracker - Sasta Hua Alert',
+                            'price_tracker_title'.tr(),
                             style: TextStyle(
                               color: textWhite,
                               fontWeight: FontWeight.w900,
@@ -457,7 +450,7 @@ class _FollowingScreenState extends State<FollowingScreen> {
                               borderRadius: BorderRadius.circular(6),
                             ),
                             child: Text(
-                              '${followedPaidGames.length} Tracked',
+                              'tracked_count'.tr(args: ['${followedPaidGames.length}']),
                               style: TextStyle(
                                 color: neonGreen,
                                 fontWeight: FontWeight.bold,
@@ -472,7 +465,6 @@ class _FollowingScreenState extends State<FollowingScreen> {
                 },
               ),
 
-              // PriceTrackerCard for each followed paid game
               Builder(
                 builder: (context) {
                   final followedPaidGames =
