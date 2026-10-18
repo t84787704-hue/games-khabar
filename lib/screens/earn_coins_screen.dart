@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:intl/intl.dart';
 import 'package:share_plus/share_plus.dart';
+import 'package:easy_localization/easy_localization.dart';
 import '../constants/gamer_theme.dart';
 import '../models/coin_wallet_model.dart';
 import '../services/coin_wallet_service.dart';
@@ -46,14 +47,14 @@ class _EarnCoinsScreenState extends State<EarnCoinsScreen> {
     try {
       await AdFreeService().showRewardedAdForAction(
         context: context,
-        actionTitle: 'Watch Ad to Earn 100 Coins',
+        actionTitle: 'action_watch_ad_100_coins'.tr(),
         onRewardEarned: () async {
           await _walletService.rewardAdCoins(_userId);
           if (mounted) {
             setState(() {});
             ScaffoldMessenger.of(context).showSnackBar(
-              const SnackBar(
-                content: Text('🎉 +100 G-Coins added to your wallet!'),
+              SnackBar(
+                content: Text('msg_100_gcoins_added'.tr()),
                 backgroundColor: GamerTheme.neonGreen,
                 behavior: SnackBarBehavior.floating,
               ),
@@ -65,7 +66,7 @@ class _EarnCoinsScreenState extends State<EarnCoinsScreen> {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text('Ad failed to load: $e'),
+            content: Text('err_ad_failed_load'.tr(args: [e.toString()])),
             backgroundColor: GamerTheme.redAccent,
             behavior: SnackBarBehavior.floating,
           ),
@@ -81,7 +82,7 @@ class _EarnCoinsScreenState extends State<EarnCoinsScreen> {
     if (!wallet.canClaimDailyBonus) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text('⏳ Next daily bonus in ${_formatDuration(wallet.nextDailyBonusDuration)}'),
+          content: Text('msg_next_daily_bonus_in'.tr(args: [_formatDuration(wallet.nextDailyBonusDuration)])),
           backgroundColor: GamerTheme.accentOrange,
           behavior: SnackBarBehavior.floating,
         ),
@@ -96,16 +97,16 @@ class _EarnCoinsScreenState extends State<EarnCoinsScreen> {
         setState(() {});
         if (success) {
           ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-              content: Text('🎁 +50 G-Coins Daily Bonus claimed!'),
+            SnackBar(
+              content: Text('msg_50_gcoins_daily_bonus_claimed'.tr()),
               backgroundColor: GamerTheme.neonGreen,
               behavior: SnackBarBehavior.floating,
             ),
           );
         } else {
           ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-              content: Text('⏳ Daily bonus already claimed today.'),
+            SnackBar(
+              content: Text('msg_daily_bonus_already_claimed'.tr()),
               backgroundColor: GamerTheme.accentOrange,
               behavior: SnackBarBehavior.floating,
             ),
@@ -116,7 +117,7 @@ class _EarnCoinsScreenState extends State<EarnCoinsScreen> {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text('Failed to claim bonus: $e'),
+            content: Text('err_failed_to_claim_bonus'.tr(args: [e.toString()])),
             backgroundColor: GamerTheme.redAccent,
             behavior: SnackBarBehavior.floating,
           ),
@@ -131,8 +132,8 @@ class _EarnCoinsScreenState extends State<EarnCoinsScreen> {
     final code = _referralInputController.text.trim().toUpperCase();
     if (code.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Please enter a referral code'),
+        SnackBar(
+          content: Text('msg_enter_referral_code'.tr()),
           backgroundColor: GamerTheme.accentOrange,
           behavior: SnackBarBehavior.floating,
         ),
@@ -143,8 +144,8 @@ class _EarnCoinsScreenState extends State<EarnCoinsScreen> {
     final myCode = _walletService.getReferralCode(_userId);
     if (code == myCode) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('You cannot use your own referral code!'),
+        SnackBar(
+          content: Text('err_cannot_use_own_referral'.tr()),
           backgroundColor: GamerTheme.redAccent,
           behavior: SnackBarBehavior.floating,
         ),
@@ -160,16 +161,16 @@ class _EarnCoinsScreenState extends State<EarnCoinsScreen> {
         if (ok) {
           _referralInputController.clear();
           ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-              content: Text('✅ Referral code linked! Play 5 tournaments to earn +100 Coins for both!'),
+            SnackBar(
+              content: Text('msg_referral_linked_success'.tr()),
               backgroundColor: GamerTheme.neonGreen,
               behavior: SnackBarBehavior.floating,
             ),
           );
         } else {
           ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-              content: Text('⚠️ You have already linked a referral code or code is invalid.'),
+            SnackBar(
+              content: Text('err_referral_already_linked_or_invalid'.tr()),
               backgroundColor: GamerTheme.accentOrange,
               behavior: SnackBarBehavior.floating,
             ),
@@ -180,7 +181,7 @@ class _EarnCoinsScreenState extends State<EarnCoinsScreen> {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text('Failed: $e'),
+            content: Text('err_failed_with_msg'.tr(args: [e.toString()])),
             backgroundColor: GamerTheme.redAccent,
             behavior: SnackBarBehavior.floating,
           ),
@@ -209,9 +210,9 @@ class _EarnCoinsScreenState extends State<EarnCoinsScreen> {
           icon: const Icon(Icons.arrow_back_rounded, color: Colors.white),
           onPressed: () => Navigator.pop(context),
         ),
-        title: const Text(
-          'Earn G-Coins',
-          style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
+        title: Text(
+          'title_earn_g_coins'.tr(),
+          style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
         ),
       ),
       body: StreamBuilder<CoinWallet>(
@@ -226,9 +227,9 @@ class _EarnCoinsScreenState extends State<EarnCoinsScreen> {
               children: [
                 _buildBalanceBanner(wallet.coins),
                 const SizedBox(height: 20),
-                const Text(
-                  'Ways to Earn',
-                  style: TextStyle(
+                Text(
+                  'ways_to_earn_title'.tr(),
+                  style: const TextStyle(
                     color: Colors.white,
                     fontSize: 16,
                     fontWeight: FontWeight.bold,
@@ -240,10 +241,10 @@ class _EarnCoinsScreenState extends State<EarnCoinsScreen> {
                 _buildActionCard(
                   icon: Icons.play_circle_fill_rounded,
                   iconColor: GamerTheme.neonGreen,
-                  badgeText: '+100 COINS',
-                  title: 'Watch Sponsored Ad 📺',
-                  subtitle: '+100 G-Coins per ad • No daily limit',
-                  buttonText: _isWatchingAd ? 'LOADING...' : 'WATCH AD (+100)',
+                  badgeText: 'badge_plus_100_coins'.tr(),
+                  title: 'watch_sponsored_ad_title'.tr(),
+                  subtitle: 'watch_sponsored_ad_sub'.tr(),
+                  buttonText: _isWatchingAd ? 'btn_loading'.tr() : 'btn_watch_ad_100'.tr(),
                   isLoading: _isWatchingAd,
                   onTap: _isWatchingAd ? null : _watchAd,
                 ),
@@ -253,14 +254,14 @@ class _EarnCoinsScreenState extends State<EarnCoinsScreen> {
                 _buildActionCard(
                   icon: Icons.calendar_today_rounded,
                   iconColor: GamerTheme.accentOrange,
-                  badgeText: '+50 COINS',
-                  title: 'Daily Login Bonus 🎁',
+                  badgeText: 'badge_plus_50_coins'.tr(),
+                  title: 'daily_login_bonus_gift_title'.tr(),
                   subtitle: wallet.canClaimDailyBonus
-                      ? '+50 G-Coins available to claim now!'
-                      : 'Next bonus in ${_formatDuration(wallet.nextDailyBonusDuration)}',
+                      ? 'daily_bonus_available_now'.tr()
+                      : 'daily_bonus_next_in'.tr(args: [_formatDuration(wallet.nextDailyBonusDuration)]),
                   buttonText: _isClaimingDaily
-                      ? 'CLAIMING...'
-                      : (wallet.canClaimDailyBonus ? 'CLAIM (+50)' : 'LOCKED ⏳'),
+                      ? 'btn_claiming'.tr()
+                      : (wallet.canClaimDailyBonus ? 'btn_claim_50'.tr() : 'btn_locked_wait'.tr()),
                   isLoading: _isClaimingDaily,
                   onTap: wallet.canClaimDailyBonus && !_isClaimingDaily
                       ? () => _claimDailyBonus(wallet)
@@ -269,9 +270,9 @@ class _EarnCoinsScreenState extends State<EarnCoinsScreen> {
                 const SizedBox(height: 20),
 
                 // 3. REFERRAL SECTION (+100 COINS)
-                const Text(
-                  'Refer & Earn (+100 Coins)',
-                  style: TextStyle(
+                Text(
+                  'refer_and_earn_title'.tr(),
+                  style: const TextStyle(
                     color: Colors.white,
                     fontSize: 16,
                     fontWeight: FontWeight.bold,
@@ -315,9 +316,9 @@ class _EarnCoinsScreenState extends State<EarnCoinsScreen> {
           Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              const Text(
-                'YOUR WALLET BALANCE',
-                style: TextStyle(
+              Text(
+                'your_wallet_balance_caps'.tr(),
+                style: const TextStyle(
                   color: GamerTheme.textMuted,
                   fontSize: 10,
                   fontWeight: FontWeight.bold,
@@ -326,7 +327,7 @@ class _EarnCoinsScreenState extends State<EarnCoinsScreen> {
               ),
               const SizedBox(height: 2),
               Text(
-                '${NumberFormat('#,###').format(coins)} G-Coins',
+                'coins_formatted_gcoins'.tr(args: [NumberFormat('#,###').format(coins)]),
                 style: const TextStyle(
                   color: Color(0xFFFFD700),
                   fontSize: 26,
@@ -470,22 +471,22 @@ class _EarnCoinsScreenState extends State<EarnCoinsScreen> {
                 ),
               ),
               const SizedBox(width: 12),
-              const Expanded(
+              Expanded(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
-                      'Invite & Earn Together',
-                      style: TextStyle(
+                      'invite_earn_together_title'.tr(),
+                      style: const TextStyle(
                         color: Colors.white,
                         fontSize: 14,
                         fontWeight: FontWeight.bold,
                       ),
                     ),
-                    SizedBox(height: 2),
+                    const SizedBox(height: 2),
                     Text(
-                      'Both get +100 G-Coins after 5 matches!',
-                      style: TextStyle(
+                      'invite_earn_together_sub'.tr(),
+                      style: const TextStyle(
                         color: GamerTheme.textMuted,
                         fontSize: 12,
                       ),
@@ -507,9 +508,9 @@ class _EarnCoinsScreenState extends State<EarnCoinsScreen> {
             ),
             child: Row(
               children: [
-                const Text(
-                  'YOUR CODE:',
-                  style: TextStyle(
+                Text(
+                  'your_code_caps'.tr(),
+                  style: const TextStyle(
                     color: GamerTheme.textMuted,
                     fontSize: 11,
                     fontWeight: FontWeight.bold,
@@ -531,8 +532,8 @@ class _EarnCoinsScreenState extends State<EarnCoinsScreen> {
                   onTap: () {
                     Clipboard.setData(ClipboardData(text: myCode));
                     ScaffoldMessenger.of(context).showSnackBar(
-                      const SnackBar(
-                        content: Text('Referral code copied to clipboard!'),
+                      SnackBar(
+                        content: Text('msg_referral_code_copied'.tr()),
                         backgroundColor: GamerTheme.neonGreen,
                         behavior: SnackBarBehavior.floating,
                       ),
@@ -559,13 +560,13 @@ class _EarnCoinsScreenState extends State<EarnCoinsScreen> {
                 shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
               ),
               icon: const Icon(Icons.share_rounded, size: 16),
-              label: const Text(
-                'SHARE INVITE CODE',
-                style: TextStyle(fontWeight: FontWeight.w900, fontSize: 12),
+              label: Text(
+                'btn_share_invite_code'.tr(),
+                style: const TextStyle(fontWeight: FontWeight.w900, fontSize: 12),
               ),
               onPressed: () {
                 Share.share(
-                  'Join me on Games Khabar (Gamers ID)! Use my invite code "$myCode" to earn +100 bonus G-Coins! https://gameskhabar.com',
+                  'share_invite_earn_msg'.tr(args: [myCode]),
                 );
               },
             ),
@@ -575,14 +576,14 @@ class _EarnCoinsScreenState extends State<EarnCoinsScreen> {
           const SizedBox(height: 14),
 
           // Friend's referral entry field
-          const Text(
-            'Have a friend\'s referral code?',
-            style: TextStyle(color: Colors.white, fontSize: 13, fontWeight: FontWeight.bold),
+          Text(
+            'have_friend_referral_title'.tr(),
+            style: const TextStyle(color: Colors.white, fontSize: 13, fontWeight: FontWeight.bold),
           ),
           const SizedBox(height: 6),
-          const Text(
-            'Enter their code below to link accounts and receive +100 bonus G-Coins upon playing 5 tournaments.',
-            style: TextStyle(color: GamerTheme.textMuted, fontSize: 11),
+          Text(
+            'have_friend_referral_sub'.tr(),
+            style: const TextStyle(color: GamerTheme.textMuted, fontSize: 11),
           ),
           const SizedBox(height: 10),
           Row(
@@ -593,7 +594,7 @@ class _EarnCoinsScreenState extends State<EarnCoinsScreen> {
                   textCapitalization: TextCapitalization.characters,
                   style: const TextStyle(color: Colors.white, fontSize: 13, fontWeight: FontWeight.bold),
                   decoration: InputDecoration(
-                    hintText: 'Enter code (e.g. GK1234)',
+                    hintText: 'hint_enter_referral_code'.tr(),
                     hintStyle: const TextStyle(color: GamerTheme.textMuted, fontSize: 12),
                     filled: true,
                     fillColor: const Color(0xFF0B101B),
@@ -624,9 +625,9 @@ class _EarnCoinsScreenState extends State<EarnCoinsScreen> {
                         height: 14,
                         child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
                       )
-                    : const Text(
-                        'APPLY',
-                        style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12),
+                    : Text(
+                        'btn_apply'.tr(),
+                        style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 12),
                       ),
               ),
             ],
