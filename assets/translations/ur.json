@@ -957,5 +957,18 @@
   "tab_spent": "(-) خرچ ہوئے",
   "tag_spent": "خرچ ہوا",
   "tag_earned": "کمایا گیا",
-  "coins_amount_format": "کوائنز {}"
+  "coins_amount_format": "کوائنز {}",  "create_game_room": "گیم روم بنائیں",
+  "game_label": "گیم",
+  "mode_map_label": "موڈ / میپ",
+  "match_format_slots": "میچ فارمیٹ / سلاٹس",
+  "room_id_label": "روم آئی ڈی",
+  "room_password_label": "پاس ورڈ",
+  "prize_pool_coins_label": "پرائز پول (کوائنز)",
+  "btn_cancel": "منسوخ",
+  "btn_create": "بنائیں",
+  "room_id_and_pass_required": "⚠️ روم آئی ڈی اور پاس ورڈ دونوں درج کریں!",
+  "max_2_rooms_allowed": "⚠️ زیادہ سے زیادہ 2 رومز کی اجازت ہے! پرانے رومز ڈیلیٹ ہونے کا انتظار کریں۔",
+  "room_created_success": "✅ گیم روم کامیابی کے ساتھ بن گیا!",
+  "room_creation_failed": "روم بنانے میں خرابی"
+
 }
