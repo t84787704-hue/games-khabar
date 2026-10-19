@@ -1306,7 +1306,6 @@ class _CommentSheetState extends State<CommentSheet> {
             child: SizedBox(
               height: 500,
               child: Column(
-                container: false,
                 children: [
                   const SizedBox(height: 12),
                   Container(
@@ -1381,7 +1380,7 @@ class _CommentSheetState extends State<CommentSheet> {
                                           size: 16,
                                           color: ThemeService.textSecondary,
                                         ),
-                                        onPressed: () => _appReportCommentHelper(
+                                        onPressed: () => _reportComment(
                                           (c['id'] ?? '').toString(),
                                           content,
                                         ),
@@ -1394,7 +1393,6 @@ class _CommentSheetState extends State<CommentSheet> {
                   Padding(
                     padding: const EdgeInsets.all(8),
                     child: Row(
-                      postsRow: false,
                       children: [
                         Expanded(
                           child: TextField(
