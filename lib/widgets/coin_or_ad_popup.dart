@@ -1,19 +1,11 @@
 // lib/widgets/coin_or_ad_popup.dart
 //
-// WHAT CHANGED (ISSUE #3):
-// - Created CoinOrAdPopup dialog for the 5 key actions:
-//   1. Team Create
-//   2. Team Join
-//   3. Room Create
-//   4. Room Join
-//   5. Proof Upload
-// - Shows user balance and options:
-//   * Use 100 Coins (deducts 100 coins via CoinWalletService.updateCoins with type 'action_fee')
-//   * Watch Ad (30 seconds) via AdFreeService.showRewardedAdForAction (executes action, no coins cut)
-//   * Cancel (aborts action, user stays on same screen)
-// - If coins < 100: "Use Coins" option is disabled, only ad option is active
+// WHAT CHANGED:
+// - Full easy_localization integration (.tr())
+// - Replaced all hardcoded text and Roman Urdu with translation keys
 
 import 'package:flutter/material.dart';
+import 'package:easy_localization/easy_localization.dart';
 import '../services/gamer_auth_service.dart';
 import '../services/coin_wallet_service.dart';
 import '../services/ad_free_service.dart';
@@ -170,10 +162,10 @@ class _CoinOrAdPopupState extends State<CoinOrAdPopup> {
                 const Icon(Icons.verified_user_rounded,
                     color: Color(0xFF00FF88), size: 22),
                 const SizedBox(width: 8),
-                const Expanded(
+                Expanded(
                   child: Text(
-                    'Confirm Action',
-                    style: TextStyle(
+                    'confirm_action_title'.tr(),
+                    style: const TextStyle(
                       color: Colors.white,
                       fontSize: 18,
                       fontWeight: FontWeight.bold,
@@ -194,9 +186,9 @@ class _CoinOrAdPopupState extends State<CoinOrAdPopup> {
               ),
               child: Row(
                 children: [
-                  const Text(
-                    'Action: ',
-                    style: TextStyle(
+                  Text(
+                    '${'action_label'.tr()}: ',
+                    style: const TextStyle(
                       color: Color(0xFF8B949E),
                       fontSize: 13,
                       fontWeight: FontWeight.w600,
@@ -215,7 +207,7 @@ class _CoinOrAdPopupState extends State<CoinOrAdPopup> {
             ),
             const SizedBox(height: 16),
 
-            // Option 1: Use 100 Coins
+            // Option 1: Use Coins
             ElevatedButton(
               onPressed: (_isLoading || !canAffordCoins || _isProcessing)
                   ? null
@@ -239,7 +231,7 @@ class _CoinOrAdPopupState extends State<CoinOrAdPopup> {
                       const Icon(Icons.monetization_on_rounded, size: 18),
                       const SizedBox(width: 6),
                       Text(
-                        'Use ${widget.coinCost} Coins',
+                        'use_coins_btn'.tr(args: [widget.coinCost.toString()]),
                         style: const TextStyle(
                           fontSize: 14,
                           fontWeight: FontWeight.w900,
@@ -250,8 +242,8 @@ class _CoinOrAdPopupState extends State<CoinOrAdPopup> {
                   const SizedBox(height: 2),
                   Text(
                     _isLoading
-                        ? 'Checking balance...'
-                        : '(Aapka balance: $_userCoins)${!canAffordCoins ? ' — Kam az kam 100 coins darkar' : ''}',
+                        ? 'checking_balance_label'.tr()
+                        : '(${'your_balance_label'.tr(args: [_userCoins.toString()])})${!canAffordCoins ? ' — ${'min_coins_required_label'.tr(args: [widget.coinCost.toString()])}' : ''}',
                     style: TextStyle(
                       fontSize: 11,
                       fontWeight: FontWeight.w600,
@@ -278,9 +270,9 @@ class _CoinOrAdPopupState extends State<CoinOrAdPopup> {
                 elevation: 0,
               ),
               icon: const Icon(Icons.play_circle_fill_rounded, size: 20),
-              label: const Text(
-                'Watch Ad (30 seconds)',
-                style: TextStyle(
+              label: Text(
+                'watch_ad_btn'.tr(),
+                style: const TextStyle(
                   fontSize: 14,
                   fontWeight: FontWeight.bold,
                 ),
@@ -297,9 +289,9 @@ class _CoinOrAdPopupState extends State<CoinOrAdPopup> {
                 foregroundColor: const Color(0xFF8B949E),
                 padding: const EdgeInsets.symmetric(vertical: 10),
               ),
-              child: const Text(
-                'Cancel',
-                style: TextStyle(
+              child: Text(
+                'btn_cancel'.tr(),
+                style: const TextStyle(
                   fontSize: 13,
                   fontWeight: FontWeight.w600,
                 ),
