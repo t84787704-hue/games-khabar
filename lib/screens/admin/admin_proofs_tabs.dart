@@ -1,3 +1,4 @@
+import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:intl/intl.dart';
@@ -56,11 +57,17 @@ class AdminUnderReviewTab extends StatelessWidget {
               final st = (r['status'] ?? '').toString().toLowerCase();
               final rst = (r['reward_status'] ?? '').toString().toLowerCase();
               final proof = (r['win_proof_url'] ?? '').toString();
+              final hasProofs = (r['proofs'] is List && (r['proofs'] as List).isNotEmpty) ||
+                  ((r['host_proof_url'] ?? '').toString().isNotEmpty) ||
+                  ((r['opponent_proof_url'] ?? '').toString().isNotEmpty);
+
               final isPending = st == 'review_pending' ||
                   st == 'under_review' ||
                   st == 'proof_submitted' ||
+                  st == 'disputed' ||
                   rst == 'pending_approval';
-              return isPending && proof.isNotEmpty && st != 'completed';
+
+              return isPending && (proof.isNotEmpty || hasProofs) && st != 'completed';
             }).map((r) => {...r, 'is_room': true}).toList();
 
             final underReview = [...underReviewMatches, ...underReviewRooms];
@@ -101,7 +108,6 @@ class AdminUnderReviewTab extends StatelessWidget {
 
 // ============================================================
 // TAB 2: HISTORY (Accepted + Rejected)
-// Jo proofs accept ya reject ho chuke
 // ============================================================
 class AdminProofHistoryTab extends StatefulWidget {
   const AdminProofHistoryTab({super.key});
@@ -111,29 +117,24 @@ class AdminProofHistoryTab extends StatefulWidget {
 }
 
 class _AdminProofHistoryTabState extends State<AdminProofHistoryTab> {
-  String _filter = 'All'; // All, Accepted, Rejected
+  String _filter = 'All';
 
   @override
   Widget build(BuildContext context) {
     return Column(
       children: [
-        // Filter chips
         Container(
           padding: const EdgeInsets.fromLTRB(16, 12, 16, 8),
           child: Row(
             children: [
-              _buildFilterChip(
-                  'All', Icons.list_alt_rounded, const Color(0xFF8B949E)),
+              _buildFilterChip('All', Icons.list_alt_rounded, const Color(0xFF8B949E)),
               const SizedBox(width: 8),
-              _buildFilterChip(
-                  'Accepted', Icons.check_circle_rounded, const Color(0xFF00FF88)),
+              _buildFilterChip('Accepted', Icons.check_circle_rounded, const Color(0xFF00FF88)),
               const SizedBox(width: 8),
-              _buildFilterChip(
-                  'Rejected', Icons.cancel_rounded, const Color(0xFFFF4655)),
+              _buildFilterChip('Rejected', Icons.cancel_rounded, const Color(0xFFFF4655)),
             ],
           ),
         ),
-
         Expanded(
           child: StreamBuilder<List<Map<String, dynamic>>>(
             stream: SupabaseService.client
@@ -161,7 +162,6 @@ class _AdminProofHistoryTabState extends State<AdminProofHistoryTab> {
                     );
                   }
 
-                  // 1. Team Matches History
                   final matchData = matchSnap.data ?? [];
                   final matchHistory = matchData.where((m) {
                     final st = (m['status'] ?? '').toString().toLowerCase();
@@ -171,7 +171,6 @@ class _AdminProofHistoryTabState extends State<AdminProofHistoryTab> {
                     return isAccepted || isRejected;
                   }).map((m) => {...m, 'is_room': false}).toList();
 
-                  // 2. Custom Game Rooms History
                   final roomData = roomSnap.data ?? [];
                   final roomHistory = roomData.where((r) {
                     final st = (r['status'] ?? '').toString().toLowerCase();
@@ -183,7 +182,6 @@ class _AdminProofHistoryTabState extends State<AdminProofHistoryTab> {
 
                   var history = [...matchHistory, ...roomHistory];
 
-                  // Apply filter
                   if (_filter == 'Accepted') {
                     history = history.where((m) {
                       final st = (m['status'] ?? '').toString().toLowerCase();
@@ -209,9 +207,7 @@ class _AdminProofHistoryTabState extends State<AdminProofHistoryTab> {
                   if (history.isEmpty) {
                     return _buildEmptyState(
                       icon: Icons.history_rounded,
-                      title: _filter == 'All'
-                          ? 'No Proof History'
-                          : 'No $_filter Proofs',
+                      title: _filter == 'All' ? 'No Proof History' : 'No $_filter Proofs',
                       subtitle: _filter == 'All'
                           ? 'Accepted and rejected proofs will appear here.'
                           : 'No proofs match this filter.',
@@ -272,8 +268,7 @@ class _AdminProofHistoryTabState extends State<AdminProofHistoryTab> {
     );
   }
 
-  Future<void> _confirmDelete(
-      BuildContext context, Map<String, dynamic> match) async {
+  Future<void> _confirmDelete(BuildContext context, Map<String, dynamic> match) async {
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
@@ -284,10 +279,7 @@ class _AdminProofHistoryTabState extends State<AdminProofHistoryTab> {
             Icon(Icons.warning_amber_rounded, color: Color(0xFFFF4655)),
             SizedBox(width: 8),
             Text('Delete Proof?',
-                style: TextStyle(
-                    color: Colors.white,
-                    fontSize: 16,
-                    fontWeight: FontWeight.bold)),
+                style: TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.bold)),
           ],
         ),
         content: const Text(
@@ -297,8 +289,7 @@ class _AdminProofHistoryTabState extends State<AdminProofHistoryTab> {
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(ctx, false),
-            child: const Text('Cancel',
-                style: TextStyle(color: Colors.white70)),
+            child: const Text('Cancel', style: TextStyle(color: Colors.white70)),
           ),
           ElevatedButton(
             onPressed: () => Navigator.pop(ctx, true),
@@ -306,8 +297,7 @@ class _AdminProofHistoryTabState extends State<AdminProofHistoryTab> {
               backgroundColor: const Color(0xFFFF4655),
               foregroundColor: Colors.white,
             ),
-            child: const Text('Delete',
-                style: TextStyle(fontWeight: FontWeight.bold)),
+            child: const Text('Delete', style: TextStyle(fontWeight: FontWeight.bold)),
           ),
         ],
       ),
@@ -321,15 +311,9 @@ class _AdminProofHistoryTabState extends State<AdminProofHistoryTab> {
 
       final isRoom = match['is_room'] == true;
       if (isRoom) {
-        await SupabaseService.client
-            .from('rooms')
-            .delete()
-            .eq('id', matchId);
+        await SupabaseService.client.from('rooms').delete().eq('id', matchId);
       } else {
-        await SupabaseService.client
-            .from('active_matches')
-            .delete()
-            .eq('id', matchId);
+        await SupabaseService.client.from('active_matches').delete().eq('id', matchId);
       }
 
       if (context.mounted) {
@@ -354,13 +338,12 @@ class _AdminProofHistoryTabState extends State<AdminProofHistoryTab> {
 }
 
 // ============================================================
-// REUSABLE CARD: AdminProofCard
-// Dono tabs mein use hota hai (Team Matches + Custom Rooms)
+// REUSABLE CARD: AdminProofCard (Auto Single/Dual Proof Support)
 // ============================================================
 class AdminProofCard extends StatefulWidget {
   final Map<String, dynamic> match;
-  final bool showActions; // Accept/Reject buttons
-  final bool showDelete; // Delete button
+  final bool showActions;
+  final bool showDelete;
   final VoidCallback? onDelete;
 
   const AdminProofCard({
@@ -386,8 +369,7 @@ class _AdminProofCardState extends State<AdminProofCard> {
     super.dispose();
   }
 
-  // ---- Full-screen proof viewer ----
-  void _showProofViewer(BuildContext context, String imageUrl) {
+  void _showProofViewer(BuildContext context, String imageUrl, String title) {
     showDialog(
       context: context,
       builder: (ctx) => Dialog(
@@ -401,18 +383,15 @@ class _AdminProofCardState extends State<AdminProofCard> {
               padding: const EdgeInsets.fromLTRB(16, 12, 8, 12),
               child: Row(
                 children: [
-                  const Expanded(
+                  Expanded(
                     child: Text(
-                      'Proof Screenshot 📸',
-                      style: TextStyle(
-                          color: Colors.white,
-                          fontWeight: FontWeight.bold,
-                          fontSize: 14),
+                      '$title 📸',
+                      style: const TextStyle(
+                          color: Colors.white, fontWeight: FontWeight.bold, fontSize: 14),
                     ),
                   ),
                   IconButton(
-                    icon: const Icon(Icons.close,
-                        color: Colors.white70, size: 20),
+                    icon: const Icon(Icons.close, color: Colors.white70, size: 20),
                     onPressed: () => Navigator.pop(ctx),
                   ),
                 ],
@@ -431,13 +410,11 @@ class _AdminProofCardState extends State<AdminProofCard> {
                     fit: BoxFit.contain,
                     placeholder: (_, __) => const Padding(
                       padding: EdgeInsets.all(48),
-                      child: CircularProgressIndicator(
-                          color: Color(0xFF00FF88)),
+                      child: CircularProgressIndicator(color: Color(0xFF00FF88)),
                     ),
                     errorWidget: (_, __, ___) => const Padding(
                       padding: EdgeInsets.all(48),
-                      child: Icon(Icons.broken_image_rounded,
-                          color: Colors.red, size: 48),
+                      child: Icon(Icons.broken_image_rounded, color: Colors.red, size: 48),
                     ),
                   ),
                 ),
@@ -449,121 +426,126 @@ class _AdminProofCardState extends State<AdminProofCard> {
     );
   }
 
-  // ---- Accept handler ----
-  Future<void> _handleAccept() async {
+  // Accept specific winner for room
+  Future<void> _handleAcceptSpecificWinner({
+    required String winnerId,
+    required String winnerName,
+  }) async {
     if (_isProcessing) return;
     setState(() => _isProcessing = true);
 
     try {
-      final isRoom = widget.match['is_room'] == true;
+      final roomId = widget.match['id']?.toString() ?? '';
+      final prize = (widget.match['prize_pool'] is num)
+          ? (widget.match['prize_pool'] as num).toInt()
+          : int.tryParse(widget.match['prize_pool']?.toString() ?? '0') ?? 0;
 
-      // ──────────────────────────────────────────────────────────
-      // 1. CUSTOM ROOM ACCEPT LOGIC (Triggers 5-Min Golden Banner)
-      // ──────────────────────────────────────────────────────────
-      if (isRoom) {
-        final roomId = widget.match['id']?.toString() ?? '';
-        final winnerId = widget.match['winner_id']?.toString() ?? '';
-        final winnerName = widget.match['winner_name']?.toString() ?? 'Winner';
-        final prize = (widget.match['prize_pool'] is num)
-            ? (widget.match['prize_pool'] as num).toInt()
-            : int.tryParse(widget.match['prize_pool']?.toString() ?? '0') ?? 0;
-
-        // A. Coins to winner
-        if (winnerId.isNotEmpty && winnerId != 'guest') {
-          try {
-            await CoinWalletService.updateCoins(
-              userId: winnerId,
-              amount: prize,
-              type: 'win_prize',
-              roomId: roomId,
-              description: 'Room win prize: ${widget.match['game']} ${widget.match['mode']}',
-            );
-          } catch (e) {
-            debugPrint('[AdminProofs] Room updateCoins error: $e');
-          }
-
-          try {
-            final winnerRow = await SupabaseService.client
-                .from('users')
-                .select('wins, total_winnings')
-                .or('id.eq.$winnerId,uid.eq.$winnerId')
-                .maybeSingle();
-            if (winnerRow != null) {
-              final currentWins = (winnerRow['wins'] as num?)?.toInt() ?? 0;
-              final currentWinnings = (winnerRow['total_winnings'] as num?)?.toInt() ?? 0;
-              await SupabaseService.client.from('users').update({
-                'wins': currentWins + 1,
-                'total_winnings': currentWinnings + prize,
-              }).or('id.eq.$winnerId,uid.eq.$winnerId');
-            }
-          } catch (_) {}
-        }
-
-        // B. Update room to completed + completed_at = now()
-        // (Yeh line GamerRoomsScreen ke andar 5-Minute Golden Banner activate karti hai)
-        await SupabaseService.client.from('rooms').update({
-          'status': 'completed',
-          'reward_status': 'sent',
-          'completed_at': DateTime.now().toIso8601String(),
-        }).eq('id', roomId);
-
-        // C. Chat bot message
+      if (winnerId.isNotEmpty && winnerId != 'guest') {
         try {
-          await SupabaseService.client.from('messages').insert({
-            'room_id': roomId,
-            'sender_id': 'system',
-            'sender_name': 'ADMIN BOT',
-            'message': '🏆 Proof APPROVED by Admin! $winnerName won +$prize coins! Room will close in 5 minutes.',
-            'type': 'system_reward',
-            'created_at': DateTime.now().toIso8601String(),
-          });
-        } catch (_) {}
-
-        // D. Notification
-        try {
-          if (winnerId.isNotEmpty && winnerId != 'guest') {
-            await NotificationService().sendNotification(
-              userId: winnerId,
-              type: 'match_result',
-              title: '🏆 Proof Approved! +$prize coins',
-              body: 'Admin approved your win proof for ${widget.match['game']}! +$prize coins added.',
-              data: {'room_id': roomId, 'prize': prize},
-              priority: 'high',
-            );
-          }
-        } catch (_) {}
-
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-              content: Text('✅ Room Proof accepted! 5-min winner banner started.'),
-              backgroundColor: Color(0xFF00FF88),
-            ),
+          await CoinWalletService.updateCoins(
+            userId: winnerId,
+            amount: prize,
+            type: 'win_prize',
+            roomId: roomId,
+            description: 'Room win prize: ${widget.match['game']} ${widget.match['mode']}',
           );
+        } catch (e) {
+          debugPrint('[AdminProofs] Room updateCoins error: $e');
         }
-        return;
+
+        try {
+          final winnerRow = await SupabaseService.client
+              .from('users')
+              .select('wins, total_winnings')
+              .or('id.eq.$winnerId,uid.eq.$winnerId')
+              .maybeSingle();
+          if (winnerRow != null) {
+            final currentWins = (winnerRow['wins'] as num?)?.toInt() ?? 0;
+            final currentWinnings = (winnerRow['total_winnings'] as num?)?.toInt() ?? 0;
+            await SupabaseService.client.from('users').update({
+              'wins': currentWins + 1,
+              'total_winnings': currentWinnings + prize,
+            }).or('id.eq.$winnerId,uid.eq.$winnerId');
+          }
+        } catch (_) {}
       }
 
-      // ──────────────────────────────────────────────────────────
-      // 2. EXISTING TEAM MATCH ACCEPT LOGIC (Untouched)
-      // ──────────────────────────────────────────────────────────
+      await SupabaseService.client.from('rooms').update({
+        'status': 'completed',
+        'reward_status': 'sent',
+        'winner_id': winnerId,
+        'winner_name': winnerName,
+        'completed_at': DateTime.now().toUtc().toIso8601String(),
+      }).eq('id', roomId);
+
+      try {
+        await SupabaseService.client.from('messages').insert({
+          'room_id': roomId,
+          'sender_id': 'system',
+          'sender_name': 'ADMIN BOT',
+          'message': '🏆 Proof APPROVED by Admin! $winnerName won +$prize coins! Room will close in 5 minutes.',
+          'type': 'system_reward',
+          'created_at': DateTime.now().toUtc().toIso8601String(),
+        });
+      } catch (_) {}
+
+      try {
+        if (winnerId.isNotEmpty && winnerId != 'guest') {
+          await NotificationService().sendNotification(
+            userId: winnerId,
+            type: 'match_result',
+            title: '🏆 Proof Approved! +$prize coins',
+            body: 'Admin approved your win proof for ${widget.match['game']}! +$prize coins added.',
+            data: {'room_id': roomId, 'prize': prize},
+            priority: 'high',
+          );
+        }
+      } catch (_) {}
+
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('✅ $winnerName verified as Winner! 5-min countdown started.'),
+            backgroundColor: const Color(0xFF00FF88),
+          ),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Error: $e'), backgroundColor: const Color(0xFFFF4655)),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _isProcessing = false);
+    }
+  }
+
+  Future<void> _handleAcceptDefault() async {
+    final isRoom = widget.match['is_room'] == true;
+    if (isRoom) {
+      final winnerId = widget.match['winner_id']?.toString() ?? '';
+      final winnerName = widget.match['winner_name']?.toString() ?? 'Winner';
+      await _handleAcceptSpecificWinner(winnerId: winnerId, winnerName: winnerName);
+      return;
+    }
+
+    if (_isProcessing) return;
+    setState(() => _isProcessing = true);
+
+    try {
       final matchId = widget.match['id'];
-      final submittedByRaw =
-          (widget.match['submitted_by_team_id'] ??
-                  widget.match['winner_team_id'])
-              ?.toString();
+      final submittedByRaw = (widget.match['submitted_by_team_id'] ?? widget.match['winner_team_id'])?.toString();
       final winnerId = (submittedByRaw != null && submittedByRaw.isNotEmpty)
           ? submittedByRaw
           : (widget.match['winner_team_id'] ?? '').toString();
-      final winnerUuid =
-          winnerId.isNotEmpty ? SupabaseService.toUuid(winnerId) : '';
+      final winnerUuid = winnerId.isNotEmpty ? SupabaseService.toUuid(winnerId) : '';
 
       final ok = await SupabaseService.approveProof(
         matchId: matchId.toString(),
         winnerTeamId: winnerUuid,
       );
 
-      // Send proof-accepted notification to winner team
       if (ok) {
         try {
           final team = await _teamService.getTeam(winnerUuid);
@@ -574,29 +556,21 @@ class _AdminProofCardState extends State<AdminProofCard> {
               roomTitle: 'Team Match',
             );
           }
-        } catch (e) {
-          debugPrint('[AdminProofs] accept notification error: $e');
-        }
+        } catch (_) {}
       }
 
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text(ok
-                ? '✅ Proof accepted! Moved to History.'
-                : 'Error accepting proof'),
-            backgroundColor:
-                ok ? const Color(0xFF00FF88) : const Color(0xFFFF4655),
+            content: Text(ok ? '✅ Proof accepted! Moved to History.' : 'Error accepting proof'),
+            backgroundColor: ok ? const Color(0xFF00FF88) : const Color(0xFFFF4655),
           ),
         );
       }
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Error accepting proof: $e'),
-            backgroundColor: const Color(0xFFFF4655),
-          ),
+          SnackBar(content: Text('Error: $e'), backgroundColor: const Color(0xFFFF4655)),
         );
       }
     } finally {
@@ -604,7 +578,6 @@ class _AdminProofCardState extends State<AdminProofCard> {
     }
   }
 
-  // ---- Reject handler ----
   Future<void> _handleReject() async {
     if (_isProcessing) return;
     setState(() => _isProcessing = true);
@@ -612,13 +585,8 @@ class _AdminProofCardState extends State<AdminProofCard> {
     try {
       final isRoom = widget.match['is_room'] == true;
       final reason = _reasonController.text.trim();
-      final finalReason = reason.isNotEmpty
-          ? reason
-          : 'Proof screenshot was unclear or invalid';
+      final finalReason = reason.isNotEmpty ? reason : 'Proof screenshot was unclear or invalid';
 
-      // ──────────────────────────────────────────────────────────
-      // 1. CUSTOM ROOM REJECT LOGIC
-      // ──────────────────────────────────────────────────────────
       if (isRoom) {
         final roomId = widget.match['id']?.toString() ?? '';
         await SupabaseService.client.from('rooms').update({
@@ -633,7 +601,7 @@ class _AdminProofCardState extends State<AdminProofCard> {
             'sender_name': 'ADMIN BOT',
             'message': '❌ Proof REJECTED by Admin. Reason: $finalReason',
             'type': 'system',
-            'created_at': DateTime.now().toIso8601String(),
+            'created_at': DateTime.now().toUtc().toIso8601String(),
           });
         } catch (_) {}
 
@@ -661,21 +629,15 @@ class _AdminProofCardState extends State<AdminProofCard> {
         return;
       }
 
-      // ──────────────────────────────────────────────────────────
-      // 2. EXISTING TEAM MATCH REJECT LOGIC (Untouched)
-      // ──────────────────────────────────────────────────────────
       final matchId = widget.match['id'];
       final ok = await SupabaseService.rejectProof(
         matchId: matchId.toString(),
         reason: finalReason,
       );
 
-      // Send proof-rejected notification to submitter team
       if (ok) {
         try {
-          final submittedByRaw = (widget.match['submitted_by_team_id'] ??
-                  widget.match['winner_team_id'])
-              ?.toString();
+          final submittedByRaw = (widget.match['submitted_by_team_id'] ?? widget.match['winner_team_id'])?.toString();
           if (submittedByRaw != null && submittedByRaw.isNotEmpty) {
             final teamUuid = SupabaseService.toUuid(submittedByRaw);
             final team = await _teamService.getTeam(teamUuid);
@@ -688,29 +650,21 @@ class _AdminProofCardState extends State<AdminProofCard> {
               );
             }
           }
-        } catch (e) {
-          debugPrint('[AdminProofs] reject notification error: $e');
-        }
+        } catch (_) {}
       }
 
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text(ok
-                ? '❌ Proof rejected. Moved to History.'
-                : 'Error rejecting proof'),
-            backgroundColor:
-                ok ? const Color(0xFFFF4655) : const Color(0xFFFF4655),
+            content: Text(ok ? '❌ Proof rejected. Moved to History.' : 'Error rejecting proof'),
+            backgroundColor: const Color(0xFFFF4655),
           ),
         );
       }
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Error rejecting proof: $e'),
-            backgroundColor: const Color(0xFFFF4655),
-          ),
+          SnackBar(content: Text('Error: $e'), backgroundColor: const Color(0xFFFF4655)),
         );
       }
     } finally {
@@ -718,7 +672,6 @@ class _AdminProofCardState extends State<AdminProofCard> {
     }
   }
 
-  // ---- Status badge ----
   Widget _buildStatusBadge(String status, String proofStatus) {
     Color color;
     String label;
@@ -732,6 +685,10 @@ class _AdminProofCardState extends State<AdminProofCard> {
       color = const Color(0xFFFF4655);
       label = 'REJECTED';
       icon = Icons.cancel_rounded;
+    } else if (status == 'disputed') {
+      color = Colors.orange;
+      label = 'DISPUTED';
+      icon = Icons.warning_amber_rounded;
     } else {
       color = const Color(0xFFFFB800);
       label = 'UNDER REVIEW';
@@ -752,8 +709,69 @@ class _AdminProofCardState extends State<AdminProofCard> {
           const SizedBox(width: 4),
           Text(
             label,
-            style: TextStyle(
-                color: color, fontWeight: FontWeight.w900, fontSize: 10),
+            style: TextStyle(color: color, fontWeight: FontWeight.w900, fontSize: 10),
+          ),
+        ],
+      ),
+    );
+  }
+
+  // Single thumbnail component
+  Widget _buildSingleThumbnail(String url, String label) {
+    return Expanded(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            label,
+            style: const TextStyle(color: Colors.white, fontSize: 11, fontWeight: FontWeight.bold),
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+          ),
+          const SizedBox(height: 4),
+          GestureDetector(
+            onTap: () => _showProofViewer(context, url, label),
+            child: ClipRRect(
+              borderRadius: BorderRadius.circular(8),
+              child: Stack(
+                children: [
+                  CachedNetworkImage(
+                    imageUrl: url,
+                    height: 70,
+                    width: double.infinity,
+                    fit: BoxFit.cover,
+                    placeholder: (_, __) => Container(
+                      height: 70,
+                      color: const Color(0xFF10141D),
+                      child: const Center(
+                        child: SizedBox(
+                          width: 16,
+                          height: 16,
+                          child: CircularProgressIndicator(strokeWidth: 2, color: Color(0xFF00FF88)),
+                        ),
+                      ),
+                    ),
+                    errorWidget: (_, __, ___) => Container(
+                      height: 70,
+                      color: const Color(0xFF10141D),
+                      child: const Icon(Icons.broken_image, color: Colors.white30, size: 24),
+                    ),
+                  ),
+                  Positioned(
+                    bottom: 4,
+                    right: 4,
+                    child: Container(
+                      padding: const EdgeInsets.all(4),
+                      decoration: BoxDecoration(
+                        color: Colors.black.withOpacity(0.6),
+                        borderRadius: BorderRadius.circular(4),
+                      ),
+                      child: const Icon(Icons.zoom_in, color: Colors.white, size: 14),
+                    ),
+                  ),
+                ],
+              ),
+            ),
           ),
         ],
       ),
@@ -766,10 +784,8 @@ class _AdminProofCardState extends State<AdminProofCard> {
     final t1 = (widget.match['team1_id'] ?? '').toString();
     final t2 = (widget.match['team2_id'] ?? '').toString();
     final result = (widget.match['result'] ?? 'WIN').toString().toUpperCase();
-    final proofUrl = (widget.match['win_proof_url'] ?? widget.match['proof_url'])?.toString();
     final status = (widget.match['status'] ?? '').toString().toLowerCase();
-    final proofStatus =
-        (widget.match['proof_status'] ?? '').toString().toLowerCase();
+    final proofStatus = (widget.match['proof_status'] ?? '').toString().toLowerCase();
     final adminNote = widget.match['admin_note']?.toString() ?? '';
 
     final dateRaw = widget.match['ended_at'] ?? widget.match['win_proof_uploaded_at'] ?? widget.match['created_at'];
@@ -783,18 +799,76 @@ class _AdminProofCardState extends State<AdminProofCard> {
       }
     }
 
+    // Extract proofs (Single OR Dual)
+    final List<Map<String, dynamic>> proofEntries = [];
+    final rawProofs = widget.match['proofs'];
+    if (rawProofs is List) {
+      for (final p in rawProofs) {
+        if (p is Map && (p['proof_url'] ?? '').toString().isNotEmpty) {
+          proofEntries.add(Map<String, dynamic>.from(p));
+        }
+      }
+    } else if (rawProofs is String && rawProofs.isNotEmpty) {
+      try {
+        final dec = jsonDecode(rawProofs);
+        if (dec is List) {
+          for (final p in dec) {
+            if (p is Map && (p['proof_url'] ?? '').toString().isNotEmpty) {
+              proofEntries.add(Map<String, dynamic>.from(p));
+            }
+          }
+        }
+      } catch (_) {}
+    }
+
+    // Fallback on legacy columns if proofs array is empty
+    if (proofEntries.isEmpty) {
+      final hostProof = (widget.match['host_proof_url'] ?? '').toString();
+      final opponentProof = (widget.match['opponent_proof_url'] ?? '').toString();
+      final legacyProof = (widget.match['win_proof_url'] ?? widget.match['proof_url'])?.toString() ?? '';
+
+      if (hostProof.isNotEmpty) {
+        proofEntries.add({
+          'user_id': widget.match['host_id'] ?? '',
+          'user_name': widget.match['host_name'] ?? 'Host',
+          'is_host': true,
+          'proof_url': hostProof,
+        });
+      }
+      if (opponentProof.isNotEmpty) {
+        proofEntries.add({
+          'user_id': widget.match['winner_id'] ?? '',
+          'user_name': widget.match['winner_name'] ?? 'Opponent',
+          'is_host': false,
+          'proof_url': opponentProof,
+        });
+      }
+      if (proofEntries.isEmpty && legacyProof.isNotEmpty) {
+        proofEntries.add({
+          'user_id': widget.match['winner_id'] ?? '',
+          'user_name': widget.match['winner_name'] ?? 'Winner',
+          'is_host': false,
+          'proof_url': legacyProof,
+        });
+      }
+    }
+
+    final bool isDualProof = proofEntries.length >= 2;
+
     return Container(
       margin: const EdgeInsets.only(bottom: 12),
       padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
         color: const Color(0xFF1B2436),
         borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: const Color(0xFF2A3447)),
+        border: Border.all(
+          color: isDualProof ? Colors.amber.withOpacity(0.6) : const Color(0xFF2A3447),
+          width: isDualProof ? 1.5 : 1.0,
+        ),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // Header Row: Teams OR Room Name + Status
           Row(
             children: [
               Expanded(
@@ -815,12 +889,8 @@ class _AdminProofCardState extends State<AdminProofCard> {
                           _teamService.getTeam(t2),
                         ]),
                         builder: (context, snap) {
-                          final t1Name = snap.data?[0]?.name ??
-                              widget.match['team1_name'] ??
-                              'Team 1';
-                          final t2Name = snap.data?[1]?.name ??
-                              widget.match['team2_name'] ??
-                              'Team 2';
+                          final t1Name = snap.data?[0]?.name ?? widget.match['team1_name'] ?? 'Team 1';
+                          final t2Name = snap.data?[1]?.name ?? widget.match['team2_name'] ?? 'Team 2';
                           return Text(
                             '$t1Name  ⚔️  $t2Name',
                             style: const TextStyle(
@@ -838,32 +908,32 @@ class _AdminProofCardState extends State<AdminProofCard> {
             ],
           ),
 
-          // Date + Claim / Winner
           if (isRoom) ...[
             const SizedBox(height: 4),
             Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
                 Container(
-                  padding:
-                      const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                  padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
                   decoration: BoxDecoration(
-                    color: Colors.amber.withOpacity(0.15),
+                    color: isDualProof ? Colors.orange.withOpacity(0.18) : Colors.amber.withOpacity(0.15),
                     borderRadius: BorderRadius.circular(4),
                   ),
                   child: Text(
-                    'Winner: ${widget.match['winner_name'] ?? "Gamer"} (${widget.match['prize_pool'] ?? 0} Coins)',
-                    style: const TextStyle(
-                        color: Colors.amber,
-                        fontWeight: FontWeight.bold,
-                        fontSize: 10.5),
+                    isDualProof
+                        ? '⚠️ 2 Players Uploaded Proofs (${widget.match['prize_pool'] ?? 0} Coins)'
+                        : 'Winner: ${widget.match['winner_name'] ?? "Gamer"} (${widget.match['prize_pool'] ?? 0} Coins)',
+                    style: TextStyle(
+                      color: isDualProof ? Colors.orange : Colors.amber,
+                      fontWeight: FontWeight.bold,
+                      fontSize: 10.5,
+                    ),
                   ),
                 ),
                 if (formattedDate.isNotEmpty)
                   Text(
                     'Date: $formattedDate',
-                    style: const TextStyle(
-                        color: Color(0xFF8B949E), fontSize: 11),
+                    style: const TextStyle(color: Color(0xFF8B949E), fontSize: 11),
                   ),
               ],
             ),
@@ -873,8 +943,7 @@ class _AdminProofCardState extends State<AdminProofCard> {
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
                 Container(
-                  padding:
-                      const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                  padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
                   decoration: BoxDecoration(
                     color: const Color(0xFF00FF88).withOpacity(0.15),
                     borderRadius: BorderRadius.circular(4),
@@ -882,21 +951,17 @@ class _AdminProofCardState extends State<AdminProofCard> {
                   child: Text(
                     'Claim: $result',
                     style: const TextStyle(
-                        color: Color(0xFF00FF88),
-                        fontWeight: FontWeight.bold,
-                        fontSize: 10.5),
+                        color: Color(0xFF00FF88), fontWeight: FontWeight.bold, fontSize: 10.5),
                   ),
                 ),
                 Text(
                   'Date: $formattedDate',
-                  style: const TextStyle(
-                      color: Color(0xFF8B949E), fontSize: 11),
+                  style: const TextStyle(color: Color(0xFF8B949E), fontSize: 11),
                 ),
               ],
             ),
           ],
 
-          // Reject reason (if rejected)
           if (adminNote.isNotEmpty && (proofStatus == 'rejected' || status == 'proof_rejected')) ...[
             const SizedBox(height: 8),
             Container(
@@ -904,19 +969,16 @@ class _AdminProofCardState extends State<AdminProofCard> {
               decoration: BoxDecoration(
                 color: const Color(0xFFFF4655).withOpacity(0.12),
                 borderRadius: BorderRadius.circular(6),
-                border: Border.all(
-                    color: const Color(0xFFFF4655).withOpacity(0.3)),
+                border: Border.all(color: const Color(0xFFFF4655).withOpacity(0.3)),
               ),
               child: Row(
                 children: [
-                  const Icon(Icons.info_outline_rounded,
-                      color: Color(0xFFFF4655), size: 14),
+                  const Icon(Icons.info_outline_rounded, color: Color(0xFFFF4655), size: 14),
                   const SizedBox(width: 6),
                   Expanded(
                     child: Text(
                       'Reason: $adminNote',
-                      style: const TextStyle(
-                          color: Color(0xFFFF4655), fontSize: 11),
+                      style: const TextStyle(color: Color(0xFFFF4655), fontSize: 11),
                     ),
                   ),
                 ],
@@ -926,84 +988,110 @@ class _AdminProofCardState extends State<AdminProofCard> {
 
           const SizedBox(height: 10),
 
-          // Proof thumbnail + actions
-          if (proofUrl != null && proofUrl.isNotEmpty) ...[
-            Row(
-              children: [
-                GestureDetector(
-                  onTap: () => _showProofViewer(context, proofUrl),
-                  child: ClipRRect(
-                    borderRadius: BorderRadius.circular(8),
-                    child: CachedNetworkImage(
-                      imageUrl: proofUrl,
-                      height: 56,
-                      width: 56,
-                      fit: BoxFit.cover,
-                      placeholder: (c, u) => Container(
+          // 📸 DYNAMIC PROOFS DISPLAY (1 or 2 Screenshots)
+          if (proofEntries.isNotEmpty) ...[
+            if (isDualProof) ...[
+              // 2 Proofs: Side-by-Side comparison
+              Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  _buildSingleThumbnail(
+                    proofEntries[0]['proof_url'],
+                    '${proofEntries[0]['user_name']} (${proofEntries[0]['is_host'] == true ? "Host" : "P1"})',
+                  ),
+                  const SizedBox(width: 10),
+                  _buildSingleThumbnail(
+                    proofEntries[1]['proof_url'],
+                    '${proofEntries[1]['user_name']} (${proofEntries[1]['is_host'] == true ? "Host" : "P2"})',
+                  ),
+                  if (widget.showDelete && widget.onDelete != null)
+                    IconButton(
+                      onPressed: widget.onDelete,
+                      icon: const Icon(Icons.delete_outline_rounded, color: Color(0xFFFF4655), size: 22),
+                      tooltip: 'Delete from history',
+                    ),
+                ],
+              ),
+            ] else ...[
+              // 1 Proof: Standard layout
+              Row(
+                children: [
+                  GestureDetector(
+                    onTap: () => _showProofViewer(
+                      context,
+                      proofEntries.first['proof_url'],
+                      proofEntries.first['user_name'] ?? 'Proof Screenshot',
+                    ),
+                    child: ClipRRect(
+                      borderRadius: BorderRadius.circular(8),
+                      child: CachedNetworkImage(
+                        imageUrl: proofEntries.first['proof_url'],
                         height: 56,
                         width: 56,
-                        color: const Color(0xFF10141D),
-                        child: const Center(
-                          child: SizedBox(
-                            width: 16,
-                            height: 16,
-                            child: CircularProgressIndicator(
-                                strokeWidth: 2, color: Color(0xFF00FF88)),
+                        fit: BoxFit.cover,
+                        placeholder: (c, u) => Container(
+                          height: 56,
+                          width: 56,
+                          color: const Color(0xFF10141D),
+                          child: const Center(
+                            child: SizedBox(
+                              width: 16,
+                              height: 16,
+                              child: CircularProgressIndicator(strokeWidth: 2, color: Color(0xFF00FF88)),
+                            ),
                           ),
                         ),
-                      ),
-                      errorWidget: (c, u, e) => Container(
-                        height: 56,
-                        width: 56,
-                        color: const Color(0xFF10141D),
-                        child: const Icon(Icons.broken_image,
-                            color: Colors.white30, size: 20),
+                        errorWidget: (c, u, e) => Container(
+                          height: 56,
+                          width: 56,
+                          color: const Color(0xFF10141D),
+                          child: const Icon(Icons.broken_image, color: Colors.white30, size: 20),
+                        ),
                       ),
                     ),
                   ),
-                ),
-                const SizedBox(width: 10),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      const Text(
-                        'Proof Screenshot',
-                        style: TextStyle(
-                            color: Colors.white,
-                            fontSize: 12.5,
-                            fontWeight: FontWeight.bold),
-                      ),
-                      const SizedBox(height: 2),
-                      InkWell(
-                        onTap: () => _showProofViewer(context, proofUrl),
-                        child: const Row(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            Icon(Icons.zoom_in_rounded,
-                                color: Color(0xFF38BDF8), size: 14),
-                            SizedBox(width: 4),
-                            Text('Tap to View Full',
-                                style: TextStyle(
-                                    color: Color(0xFF38BDF8),
-                                    fontSize: 11,
-                                    fontWeight: FontWeight.bold)),
-                          ],
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          '${proofEntries.first['user_name'] ?? "Player"} Proof',
+                          style: const TextStyle(
+                              color: Colors.white, fontSize: 12.5, fontWeight: FontWeight.bold),
                         ),
-                      ),
-                    ],
+                        const SizedBox(height: 2),
+                        InkWell(
+                          onTap: () => _showProofViewer(
+                            context,
+                            proofEntries.first['proof_url'],
+                            proofEntries.first['user_name'] ?? 'Proof Screenshot',
+                          ),
+                          child: const Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Icon(Icons.zoom_in_rounded, color: Color(0xFF38BDF8), size: 14),
+                              SizedBox(width: 4),
+                              Text('Tap to View Full',
+                                  style: TextStyle(
+                                      color: Color(0xFF38BDF8),
+                                      fontSize: 11,
+                                      fontWeight: FontWeight.bold)),
+                            ],
+                          ),
+                        ),
+                      ],
+                    ),
                   ),
-                ),
-                // Delete button (History tab)
-                if (widget.showDelete && widget.onDelete != null)
-                  IconButton(
-                    onPressed: widget.onDelete,
-                    icon: const Icon(Icons.delete_outline_rounded,
-                        color: Color(0xFFFF4655), size: 22),
-                    tooltip: 'Delete from history',
-                  ),
-              ],
-            ),
+                  if (widget.showDelete && widget.onDelete != null)
+                    IconButton(
+                      onPressed: widget.onDelete,
+                      icon: const Icon(Icons.delete_outline_rounded, color: Color(0xFFFF4655), size: 22),
+                      tooltip: 'Delete from history',
+                    ),
+                ],
+              ),
+            ],
           ] else ...[
             Container(
               height: 56,
@@ -1026,12 +1114,10 @@ class _AdminProofCardState extends State<AdminProofCard> {
               style: const TextStyle(color: Colors.white, fontSize: 12.5),
               decoration: InputDecoration(
                 hintText: 'Reject reason (zaruri agar Reject karna ho)...',
-                hintStyle:
-                    const TextStyle(color: Colors.white38, fontSize: 12),
+                hintStyle: const TextStyle(color: Colors.white38, fontSize: 12),
                 filled: true,
                 fillColor: const Color(0xFF10141D),
-                contentPadding: const EdgeInsets.symmetric(
-                    horizontal: 12, vertical: 10),
+                contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
                 border: OutlineInputBorder(
                   borderRadius: BorderRadius.circular(8),
                   borderSide: const BorderSide(color: Color(0xFF2A3447)),
@@ -1052,11 +1138,84 @@ class _AdminProofCardState extends State<AdminProofCard> {
               const Center(
                 child: Padding(
                   padding: EdgeInsets.all(8),
-                  child:
-                      CircularProgressIndicator(color: Color(0xFF00FF88)),
+                  child: CircularProgressIndicator(color: Color(0xFF00FF88)),
                 ),
               )
-            else
+            else if (isDualProof && isRoom) ...[
+              // 2 PLAYERS UPLOADED PROOFS: Action Buttons with player names
+              Column(
+                children: [
+                  Row(
+                    children: [
+                      Expanded(
+                        child: SizedBox(
+                          height: 38,
+                          child: ElevatedButton(
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor: const Color(0xFF00FF88),
+                              foregroundColor: Colors.black,
+                              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                              elevation: 0,
+                              padding: const EdgeInsets.symmetric(horizontal: 6),
+                            ),
+                            onPressed: () => _handleAcceptSpecificWinner(
+                              winnerId: proofEntries[0]['user_id'].toString(),
+                              winnerName: proofEntries[0]['user_name'].toString(),
+                            ),
+                            child: Text(
+                              '✅ Win: ${proofEntries[0]['user_name']}',
+                              style: const TextStyle(fontWeight: FontWeight.w900, fontSize: 11),
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                          ),
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: SizedBox(
+                          height: 38,
+                          child: ElevatedButton(
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor: const Color(0xFF1877F2),
+                              foregroundColor: Colors.white,
+                              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                              elevation: 0,
+                              padding: const EdgeInsets.symmetric(horizontal: 6),
+                            ),
+                            onPressed: () => _handleAcceptSpecificWinner(
+                              winnerId: proofEntries[1]['user_id'].toString(),
+                              winnerName: proofEntries[1]['user_name'].toString(),
+                            ),
+                            child: Text(
+                              '✅ Win: ${proofEntries[1]['user_name']}',
+                              style: const TextStyle(fontWeight: FontWeight.w900, fontSize: 11),
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 8),
+                  SizedBox(
+                    width: double.infinity,
+                    height: 36,
+                    child: OutlinedButton.icon(
+                      style: OutlinedButton.styleFrom(
+                        foregroundColor: const Color(0xFFFF4655),
+                        side: const BorderSide(color: Color(0xFFFF4655)),
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                      ),
+                      icon: const Icon(Icons.close_rounded, size: 16),
+                      label: const Text('Reject Both ❌',
+                          style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12)),
+                      onPressed: _handleReject,
+                    ),
+                  ),
+                ],
+              ),
+            ] else ...[
+              // 1 PLAYER PROOF: Standard Single Accept / Reject
               Row(
                 children: [
                   Expanded(
@@ -1066,15 +1225,13 @@ class _AdminProofCardState extends State<AdminProofCard> {
                         style: ElevatedButton.styleFrom(
                           backgroundColor: const Color(0xFFFF4655),
                           foregroundColor: Colors.white,
-                          shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(8)),
+                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
                           elevation: 0,
                         ),
                         icon: const Icon(Icons.close_rounded, size: 16),
                         label: const Text(
                           'Reject ❌',
-                          style: TextStyle(
-                              fontWeight: FontWeight.bold, fontSize: 12),
+                          style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12),
                         ),
                         onPressed: _handleReject,
                       ),
@@ -1088,23 +1245,21 @@ class _AdminProofCardState extends State<AdminProofCard> {
                         style: ElevatedButton.styleFrom(
                           backgroundColor: const Color(0xFF00FF88),
                           foregroundColor: Colors.black,
-                          shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(8)),
+                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
                           elevation: 0,
                         ),
-                        icon: const Icon(Icons.check_rounded,
-                            size: 16, color: Colors.black),
+                        icon: const Icon(Icons.check_rounded, size: 16, color: Colors.black),
                         label: const Text(
                           'Accept ✅',
-                          style: TextStyle(
-                              fontWeight: FontWeight.w900, fontSize: 12),
+                          style: TextStyle(fontWeight: FontWeight.w900, fontSize: 12),
                         ),
-                        onPressed: _handleAccept,
+                        onPressed: _handleAcceptDefault,
                       ),
                     ),
                   ),
                 ],
               ),
+            ],
           ],
         ],
       ),
@@ -1113,7 +1268,7 @@ class _AdminProofCardState extends State<AdminProofCard> {
 }
 
 // ============================================================
-// HELPER: Empty State
+// HELPERS: Empty & Error States
 // ============================================================
 Widget _buildEmptyState({
   required IconData icon,
@@ -1139,10 +1294,7 @@ Widget _buildEmptyState({
           const SizedBox(height: 14),
           Text(
             title,
-            style: const TextStyle(
-                color: Colors.white,
-                fontWeight: FontWeight.bold,
-                fontSize: 15),
+            style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 15),
             textAlign: TextAlign.center,
           ),
           const SizedBox(height: 6),
@@ -1157,9 +1309,6 @@ Widget _buildEmptyState({
   );
 }
 
-// ============================================================
-// HELPER: Error State
-// ============================================================
 Widget _buildErrorState(String title, Object? error) {
   return Center(
     child: Padding(
@@ -1167,15 +1316,11 @@ Widget _buildErrorState(String title, Object? error) {
       child: Column(
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
-          const Icon(Icons.error_outline_rounded,
-              color: Color(0xFFFF4655), size: 48),
+          const Icon(Icons.error_outline_rounded, color: Color(0xFFFF4655), size: 48),
           const SizedBox(height: 14),
           Text(
             title,
-            style: const TextStyle(
-                color: Colors.white,
-                fontWeight: FontWeight.bold,
-                fontSize: 15),
+            style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 15),
             textAlign: TextAlign.center,
           ),
           const SizedBox(height: 6),
