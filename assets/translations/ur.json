@@ -944,5 +944,18 @@
   "rule_3_desc": "انٹرنیٹ سے ڈاؤن لوڈ کی گئی، کراپ شدہ یا دوسرے کریئٹرز کے واٹر مارک والی کلپ مسترد کر دی جائے گی۔",
   "rule_4_title": "کریئر رزلٹس کا ثبوت (تنازعہ)",
   "rule_4_desc": "کسی بھی مسئلے یا شک پر ان-گیم کریئر رزلٹس کا اسکرین شاٹ منگوایا جائے گا۔",
-  "btn_accept_rules": "میں اصولوں کو سمجھ گیا ہوں اور قبول کرتا ہوں"
+  "btn_accept_rules": "میں اصولوں کو سمجھ گیا ہوں اور قبول کرتا ہوں",
+  "passbook_sheet_title": "کوائن ہسٹری اور پاس بک",
+  "passbook_sheet_subtitle": "تفصیلی کمائی، انٹری فیس، انعامات اور اسٹور خریداری",
+  "label_current_balance": "موجودہ بیلنس",
+  "label_escrow_hold": "اسکرو ہولڈ",
+  "label_total_credited": "کل شامل شدہ",
+  "label_total_spent": "کل کٹے ہوئے",
+  "btn_open_coin_store_sheet": "کوائن اسٹور کھولیں 🛒",
+  "tab_all_activities": "تمام سرگرمیاں",
+  "tab_earned": "(+) کمائے گئے",
+  "tab_spent": "(-) خرچ ہوئے",
+  "tag_spent": "خرچ ہوا",
+  "tag_earned": "کمایا گیا",
+  "coins_amount_format": "کوائنز {}"
 }
