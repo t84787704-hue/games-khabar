@@ -2,7 +2,7 @@
 // TEAMS SCREEN — Full Adaptive Day & Night Mode
 // + Strict 1,000 Coins Rule for Team Creation & Maintenance
 // + Wallet-based Live Frozen Team Detection & Warning Banner
-// + Multi-Language Translation via LanguageService
+// + Multi-Language Translation via easy_localization
 // -------------------------------------------------------------------------------
 // File: lib/screens/teams_screen.dart
 // ===============================================================================
@@ -124,7 +124,7 @@ class _TeamsScreenState extends State<TeamsScreen>
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(ctx),
-            child: Text(LanguageService.t('Accept'), style: const TextStyle(color: Color(0xFF1877F2), fontWeight: FontWeight.bold)),
+            child: Text('btn_accept'.tr(), style: const TextStyle(color: Color(0xFF1877F2), fontWeight: FontWeight.bold)),
           ),
         ],
       ),
@@ -141,7 +141,7 @@ class _TeamsScreenState extends State<TeamsScreen>
           mainAxisSize: MainAxisSize.min,
           children: [
             ListTile(
-              title: const Text("میچ کا ثبوت 📸", style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+              title: Text("match_proof".tr(), style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
               trailing: IconButton(icon: const Icon(Icons.close, color: Colors.white54), onPressed: () => Navigator.pop(ctx)),
             ),
             InteractiveViewer(
@@ -170,10 +170,8 @@ class _TeamsScreenState extends State<TeamsScreen>
   }) async {
     if (isMyTeamFrozen) {
       _showCoinRequirementDialog(
-        title: LanguageService.isUrdu ? 'ٹیم منجمد ہے (Frozen)' : 'Team Frozen',
-        message: LanguageService.isUrdu
-            ? 'آپ کی ٹیم منجمد ہے۔ چیلنج قبول کرنے کے لیے پہلے اپنے والٹ میں 1,000 کوائنز کا بیلنس پورا کریں۔'
-            : 'Your team is frozen because your wallet has less than 1,000 coins. Top up to 1,000 coins to accept challenges.',
+        title: 'team_frozen_title'.tr(),
+        message: 'team_frozen_desc'.tr(),
       );
       return;
     }
@@ -248,7 +246,7 @@ class _TeamsScreenState extends State<TeamsScreen>
       if (mounted) {
         setState(() => _acceptedChallengeIds.add(cId));
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text("میچ شروع ہو گیا! لائیو ہو گیا"), backgroundColor: Color(0xFF2E7D32), duration: Duration(seconds: 3)),
+          SnackBar(content: Text('match_started_live'.tr()), backgroundColor: const Color(0xFF2E7D32), duration: const Duration(seconds: 3)),
         );
       }
     } catch (e) {
@@ -264,7 +262,7 @@ class _TeamsScreenState extends State<TeamsScreen>
     setState(() => _acceptedChallengeIds.add(cId));
     try {
       await SupabaseService.client.from("challenges").update({"status": "rejected"}).eq("id", cId);
-      if (mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("چیلنج مسترد کر دیا گیا")));
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('challenge_rejected'.tr())));
     } catch (e) {
       debugPrint("[TeamsScreen] Error rejecting challenge: $e");
     }
@@ -277,7 +275,7 @@ class _TeamsScreenState extends State<TeamsScreen>
       await Future.delayed(const Duration(milliseconds: 500));
       if (mounted) setState(() {});
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("چیلنج منسوخ ہو گیا"), backgroundColor: Color(0xFF1877F2)));
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('challenge_cancelled'.tr()), backgroundColor: const Color(0xFF1877F2)));
       }
     } catch (e) {
       debugPrint("[TeamsScreen] Error cancelling challenge: $e");
@@ -290,10 +288,8 @@ class _TeamsScreenState extends State<TeamsScreen>
       final wallet = await CoinWalletService().getOrCreateWallet(currentUid);
       if (wallet.coins < 1000) {
         _showCoinRequirementDialog(
-          title: LanguageService.isUrdu ? 'ناکافی بیلنس' : 'Insufficient Coins',
-          message: LanguageService.isUrdu
-              ? 'ٹیم بنانے کے لیے آپ کے والٹ میں کم از کم 1,000 کوائنز ہونا لازمی ہیں۔ آپ کے پاس اس وقت ${wallet.coins} کوائنز ہیں۔ کوائنز حاصل کر کے 1,000 بیلنس پورا کریں۔'
-              : 'You need at least 1,000 coins in your wallet to create a team. Your current balance is ${wallet.coins} coins.',
+          title: 'insufficient_coins'.tr(),
+          message: 'team_min_coins_required'.tr(args: [wallet.coins.toString()]),
         );
         return;
       }
@@ -351,90 +347,84 @@ class _TeamsScreenState extends State<TeamsScreen>
     return ValueListenableBuilder<ThemeMode>(
       valueListenable: ThemeService.themeModeNotifier,
       builder: (context, _, __) {
-        return ValueListenableBuilder<String>(
-          valueListenable: LanguageService.currentLanguage,
-          builder: (context, langCode, _) {
-            return StreamBuilder<List<TeamModel>>(
-              stream: currentUid.isNotEmpty ? _teamService.getUserTeamsStream(currentUid) : Stream.value([]),
-              builder: (context, userTeamsSnap) {
-                final userTeams = userTeamsSnap.data ?? [];
-                final myLeaderTeams = userTeams.where((t) => t.isLeader(currentUid)).toList();
-                final myTeam = myLeaderTeams.isNotEmpty ? myLeaderTeams.first : null;
-                final String myTeamId = myTeam?.id ?? "";
-                final String myTeamName = myTeam?.name ?? "";
-                final String myTeamUuid = SupabaseService.toUuid(myTeamId);
+        return StreamBuilder<List<TeamModel>>(
+          stream: currentUid.isNotEmpty ? _teamService.getUserTeamsStream(currentUid) : Stream.value([]),
+          builder: (context, userTeamsSnap) {
+            final userTeams = userTeamsSnap.data ?? [];
+            final myLeaderTeams = userTeams.where((t) => t.isLeader(currentUid)).toList();
+            final myTeam = myLeaderTeams.isNotEmpty ? myLeaderTeams.first : null;
+            final String myTeamId = myTeam?.id ?? "";
+            final String myTeamName = myTeam?.name ?? "";
+            final String myTeamUuid = SupabaseService.toUuid(myTeamId);
 
-                // ✅ Realtime wallet balance listener for Frozen status check
-                return StreamBuilder<CoinWallet>(
-                  stream: currentUid.isNotEmpty
-                      ? CoinWalletService().walletStream(currentUid)
-                      : Stream.value(const CoinWallet(userId: 'guest', coins: 1000)),
-                  builder: (context, walletSnap) {
-                    final myCoins = walletSnap.data?.coins ??
-                        CoinWalletService().currentWallet?.coins ??
-                        1000;
-                    final bool isMyTeamFrozen = myTeam != null && myCoins < 1000;
+            return StreamBuilder<CoinWallet>(
+              stream: currentUid.isNotEmpty
+                  ? CoinWalletService().walletStream(currentUid)
+                  : Stream.value(const CoinWallet(userId: 'guest', coins: 1000)),
+              builder: (context, walletSnap) {
+                final myCoins = walletSnap.data?.coins ??
+                    CoinWalletService().currentWallet?.coins ??
+                    1000;
+                final bool isMyTeamFrozen = myTeam != null && myCoins < 1000;
 
-                    return StreamBuilder<List<Map<String, dynamic>>>(
-                      stream: myTeamId.isNotEmpty
-                          ? SupabaseService.client.from("active_matches").stream(primaryKey: ["id"])
-                          : Stream.value([]),
-                      builder: (context, matchSnap) {
-                        final rawMatches = matchSnap.data ?? [];
-                        final myActiveMatches = _filterMyActiveMatches(rawMatches, myTeamId, myTeamUuid);
-                        final liveCount = myActiveMatches.length;
+                return StreamBuilder<List<Map<String, dynamic>>>(
+                  stream: myTeamId.isNotEmpty
+                      ? SupabaseService.client.from("active_matches").stream(primaryKey: ["id"])
+                      : Stream.value([]),
+                  builder: (context, matchSnap) {
+                    final rawMatches = matchSnap.data ?? [];
+                    final myActiveMatches = _filterMyActiveMatches(rawMatches, myTeamId, myTeamUuid);
+                    final liveCount = myActiveMatches.length;
 
-                        return Scaffold(
-                          backgroundColor: ThemeService.bg,
-                          appBar: AppBar(
-                            backgroundColor: ThemeService.appBarBg,
-                            elevation: ThemeService.isDarkMode ? 0 : 1,
-                            title: Text(
-                              LanguageService.t("Teams"),
-                              style: const TextStyle(color: Color(0xFF1877F2), fontWeight: FontWeight.bold, fontSize: 22),
-                            ),
-                            actions: [
-                              IconButton(
-                                tooltip: "ٹاپ 100 ٹیمیں لیڈر بورড",
-                                icon: Icon(Icons.emoji_events_rounded, color: ThemeService.textSecondary),
-                                onPressed: () => Navigator.push(
-                                  context,
-                                  MaterialPageRoute(builder: (_) => const LeaderboardScreen()),
-                                ),
-                              ),
-                            ],
-                            bottom: TabBar(
-                              controller: _tabController,
-                              indicatorColor: const Color(0xFF1877F2),
-                              indicatorWeight: 3,
-                              labelColor: const Color(0xFF1877F2),
-                              unselectedLabelColor: ThemeService.textSecondary,
-                              labelStyle: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
-                              tabs: [
-                                Tab(text: LanguageService.t("Teams")),
-                                Tab(text: liveCount > 0 ? "${LanguageService.t('Live')} 🔴 $liveCount" : LanguageService.t("Live")),
-                              ],
+                    return Scaffold(
+                      backgroundColor: ThemeService.bg,
+                      appBar: AppBar(
+                        backgroundColor: ThemeService.appBarBg,
+                        elevation: ThemeService.isDarkMode ? 0 : 1,
+                        title: Text(
+                          'nav_teams'.tr(),
+                          style: const TextStyle(color: Color(0xFF1877F2), fontWeight: FontWeight.bold, fontSize: 22),
+                        ),
+                        actions: [
+                          IconButton(
+                            tooltip: "leaderboard".tr(),
+                            icon: Icon(Icons.emoji_events_rounded, color: ThemeService.textSecondary),
+                            onPressed: () => Navigator.push(
+                              context,
+                              MaterialPageRoute(builder: (_) => const LeaderboardScreen()),
                             ),
                           ),
-                          body: TabBarView(
-                            controller: _tabController,
-                            children: [
-                              _buildTeamsTab(
-                                myTeamId: myTeamId,
-                                myTeamUuid: myTeamUuid,
-                                myTeamName: myTeamName,
-                                isMyTeamFrozen: isMyTeamFrozen,
-                              ),
-                              _buildLiveMatchesTab(
-                                myActiveMatches: myActiveMatches,
-                                myTeamId: myTeamId,
-                                myTeamUuid: myTeamUuid,
-                                myTeamName: myTeamName,
-                              ),
-                            ],
+                        ],
+                        bottom: TabBar(
+                          controller: _tabController,
+                          indicatorColor: const Color(0xFF1877F2),
+                          indicatorWeight: 3,
+                          labelColor: const Color(0xFF1877F2),
+                          unselectedLabelColor: ThemeService.textSecondary,
+                          labelStyle: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
+                          tabs: [
+                            Tab(text: 'tab_teams'.tr()),
+                            Tab(text: liveCount > 0 ? "${'tab_live'.tr()} 🔴 $liveCount" : 'tab_live'.tr()),
+                          ],
+                        ),
+                      ),
+                      body: TabBarView(
+                        controller: _tabController,
+                        children: [
+                          _buildTeamsTab(
+                            myTeamId: myTeamId,
+                            myTeamUuid: myTeamUuid,
+                            myTeamName: myTeamName,
+                            isMyTeamFrozen: isMyTeamFrozen,
                           ),
-                        );
-                      },
+                          _buildLiveMatchesTab(
+                            myActiveMatches: myActiveMatches,
+                            myTeamId: myTeamId,
+                            myTeamUuid: myTeamUuid,
+                            myTeamName: myTeamName,
+                          ),
+                        ],
+                      ),
                     );
                   },
                 );
@@ -454,7 +444,6 @@ class _TeamsScreenState extends State<TeamsScreen>
   }) {
     return Column(
       children: [
-        // ⚠️ FROZEN TEAM ALERT BANNER (If Leader Balance < 1,000 Coins)
         if (isMyTeamFrozen)
           Container(
             width: double.infinity,
@@ -474,14 +463,12 @@ class _TeamsScreenState extends State<TeamsScreen>
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Text(
-                        LanguageService.isUrdu ? 'ٹیم منجمد ہے (Frozen)' : 'Team Frozen (Leader Balance Low)',
+                        'team_frozen_title'.tr(),
                         style: const TextStyle(color: Color(0xFFFF4655), fontWeight: FontWeight.w900, fontSize: 13),
                       ),
                       const SizedBox(height: 2),
                       Text(
-                        LanguageService.isUrdu
-                            ? 'آپ کی ٹیم منجمد ہے۔ چیلنجز اور میچز بحال کرنے کے لیے والٹ میں 1,000 کوائنز پورے کریں۔'
-                            : 'Your team is frozen because your balance fell below 1,000 coins. Top up to 1,000 coins to unfreeze.',
+                        'team_frozen_desc'.tr(),
                         style: TextStyle(color: ThemeService.textSecondary, fontSize: 11),
                       ),
                     ],
@@ -491,7 +478,6 @@ class _TeamsScreenState extends State<TeamsScreen>
             ),
           ),
 
-        // Top Bar: Search, Create Team, Game Filter
         Container(
           padding: const EdgeInsets.fromLTRB(16, 12, 16, 10),
           decoration: BoxDecoration(
@@ -513,7 +499,7 @@ class _TeamsScreenState extends State<TeamsScreen>
                         controller: _searchController,
                         style: TextStyle(color: ThemeService.textPrimary, fontSize: 14),
                         decoration: InputDecoration(
-                          hintText: LanguageService.t("Search teams by name or tag..."),
+                          hintText: 'search_teams_hint'.tr(),
                           hintStyle: TextStyle(color: ThemeService.textSecondary, fontSize: 13),
                           prefixIcon: Icon(Icons.search, size: 20, color: ThemeService.textSecondary),
                           suffixIcon: _searchQuery.isNotEmpty
@@ -544,7 +530,7 @@ class _TeamsScreenState extends State<TeamsScreen>
                       elevation: 0,
                     ),
                     icon: const Icon(Icons.add_rounded, size: 18),
-                    label: Text(LanguageService.t("Create Team"), style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
+                    label: Text('btn_create_team'.tr(), style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
                   ),
                 ],
               ),
@@ -558,7 +544,7 @@ class _TeamsScreenState extends State<TeamsScreen>
                       padding: const EdgeInsets.only(right: 8),
                       child: ChoiceChip(
                         label: Text(
-                          game,
+                          game == "All" ? 'filter_all'.tr() : game,
                           style: TextStyle(
                             color: isSel ? Colors.white : ThemeService.textPrimary,
                             fontWeight: isSel ? FontWeight.bold : FontWeight.w600,
@@ -582,7 +568,6 @@ class _TeamsScreenState extends State<TeamsScreen>
           ),
         ),
 
-        // Incoming Challenges
         if (myTeamId.isNotEmpty)
           StreamBuilder<List<Map<String, dynamic>>>(
             stream: SupabaseService.client
@@ -629,7 +614,7 @@ class _TeamsScreenState extends State<TeamsScreen>
                         const SizedBox(width: 8),
                         Expanded(
                           child: Text(
-                            LanguageService.t("Incoming Challenges"),
+                            'incoming_challenges'.tr(),
                             style: TextStyle(color: ThemeService.textPrimary, fontWeight: FontWeight.bold, fontSize: 15),
                           ),
                         ),
@@ -637,7 +622,7 @@ class _TeamsScreenState extends State<TeamsScreen>
                           padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
                           decoration: BoxDecoration(color: const Color(0xFFFF4655), borderRadius: BorderRadius.circular(12)),
                           child: Text(
-                            "${docs.length} نئے",
+                            "${docs.length} ${'new_badge'.tr()}",
                             style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 11),
                           ),
                         ),
@@ -646,7 +631,7 @@ class _TeamsScreenState extends State<TeamsScreen>
                     const SizedBox(height: 10),
                     ...docs.map((doc) {
                       final challengeId = doc["id"];
-                      final fromTeamName = doc["from_team_name"]?.toString() ?? "مخالف ٹیم";
+                      final fromTeamName = doc["from_team_name"]?.toString() ?? 'opponent_team'.tr();
                       final fromTeamId = doc["from_team_id"]?.toString() ?? "";
                       final toTeamId = doc["to_team_id"]?.toString() ?? myTeamId;
                       final isAccepting = _acceptingChallengeIds.contains(challengeId.toString());
@@ -672,7 +657,7 @@ class _TeamsScreenState extends State<TeamsScreen>
                                 const SizedBox(width: 10),
                                 Expanded(
                                   child: Text(
-                                    "$fromTeamName کی طرف سے چیلنج",
+                                    'challenge_from_team'.tr(args: [fromTeamName]),
                                     style: TextStyle(
                                       fontWeight: FontWeight.bold,
                                       fontSize: 14,
@@ -697,7 +682,7 @@ class _TeamsScreenState extends State<TeamsScreen>
                                       minimumSize: const Size(0, 34),
                                       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
                                     ),
-                                    child: Text(LanguageService.t("Reject"), style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 12)),
+                                    child: Text('btn_reject'.tr(), style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 12)),
                                   ),
                                 ),
                                 const SizedBox(width: 10),
@@ -708,7 +693,7 @@ class _TeamsScreenState extends State<TeamsScreen>
                                         : () {
                                             MatchRulesDialog.show(
                                               context,
-                                              title: "میچ کے اصول ($fromTeamName)",
+                                              title: 'match_rules_title'.tr(args: [fromTeamName]),
                                               onProceed: () => _handleAcceptChallenge(
                                                 challengeId: challengeId.toString(),
                                                 fromTeamId: fromTeamId,
@@ -737,7 +722,7 @@ class _TeamsScreenState extends State<TeamsScreen>
                                               valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
                                             ),
                                           )
-                                        : Text(LanguageService.t("Accept"), style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 12)),
+                                        : Text('btn_accept'.tr(), style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 12)),
                                   ),
                                 ),
                               ],
@@ -752,7 +737,6 @@ class _TeamsScreenState extends State<TeamsScreen>
             },
           ),
 
-        // Sender Side: Pending challenge banner & All Teams List
         Expanded(
           child: StreamBuilder<List<Map<String, dynamic>>>(
             stream: myTeamId.isNotEmpty
@@ -773,7 +757,7 @@ class _TeamsScreenState extends State<TeamsScreen>
                   if (activePendingList.isNotEmpty)
                     ...activePendingList.map((doc) {
                       final challengeId = doc["id"]?.toString() ?? "";
-                      final toTeamName = doc["to_team_name"]?.toString() ?? "مخالف ٹیم";
+                      final toTeamName = doc["to_team_name"]?.toString() ?? 'opponent_team'.tr();
 
                       return Container(
                         margin: const EdgeInsets.fromLTRB(16, 4, 16, 8),
@@ -789,7 +773,7 @@ class _TeamsScreenState extends State<TeamsScreen>
                             const SizedBox(width: 8),
                             Expanded(
                               child: Text(
-                                "✅ چیلنج بھیج دیا گیا ہے - $toTeamName کے جواب کا انتظار ہے",
+                                'challenge_sent_waiting'.tr(args: [toTeamName]),
                                 style: const TextStyle(
                                   color: Color(0xFF1877F2),
                                   fontWeight: FontWeight.bold,
@@ -808,14 +792,13 @@ class _TeamsScreenState extends State<TeamsScreen>
                                 shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
                                 backgroundColor: ThemeService.card,
                               ),
-                              child: const Text("منسوخ", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 11)),
+                              child: Text('btn_cancel'.tr(), style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 11)),
                             ),
                           ],
                         ),
                       );
                     }),
 
-                  // All Teams List
                   Expanded(
                     child: StreamBuilder<List<TeamModel>>(
                       key: ValueKey("teams_stream_${_selectedGameFilter}_${_searchQuery}_$_teamsRetryKey"),
@@ -844,7 +827,7 @@ class _TeamsScreenState extends State<TeamsScreen>
                                   const Icon(Icons.wifi_off_rounded, size: 44, color: Color(0xFFFF4655)),
                                   const SizedBox(height: 12),
                                   Text(
-                                    "کنکشن کا مسئلہ",
+                                    'connection_issue'.tr(),
                                     style: TextStyle(
                                       color: ThemeService.textPrimary,
                                       fontSize: 16,
@@ -853,7 +836,7 @@ class _TeamsScreenState extends State<TeamsScreen>
                                   ),
                                   const SizedBox(height: 6),
                                   Text(
-                                    "ڈیٹا بیس سرور سے کنیکٹ ہونے میں وقت لگ رہا ہے۔ براہ-کرم دوبارہ کوشش کریں۔",
+                                    'connection_issue_desc'.tr(),
                                     textAlign: TextAlign.center,
                                     style: TextStyle(color: ThemeService.textSecondary, fontSize: 13),
                                   ),
@@ -867,7 +850,7 @@ class _TeamsScreenState extends State<TeamsScreen>
                                       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
                                     ),
                                     icon: const Icon(Icons.refresh_rounded, color: Colors.white),
-                                    label: const Text("دوبارہ کوشش کریں", style: TextStyle(fontWeight: FontWeight.bold)),
+                                    label: Text('btn_retry'.tr(), style: const TextStyle(fontWeight: FontWeight.bold)),
                                   ),
                                 ],
                               ),
@@ -887,8 +870,8 @@ class _TeamsScreenState extends State<TeamsScreen>
                                   const SizedBox(height: 12),
                                   Text(
                                     _selectedGameFilter != "All"
-                                        ? "$_selectedGameFilter کے لیے کوئی ٹیم نہیں ملی"
-                                        : "ابھی تک کوئی ٹیم نہیں",
+                                        ? 'no_teams_found_for_game'.tr(args: [_selectedGameFilter])
+                                        : 'no_teams_yet'.tr(),
                                     style: TextStyle(
                                       color: ThemeService.textPrimary,
                                       fontSize: 16,
@@ -897,7 +880,7 @@ class _TeamsScreenState extends State<TeamsScreen>
                                   ),
                                   const SizedBox(height: 6),
                                   Text(
-                                    "سب سے پہلے اپنی ٹیم بنائیں اور دوسری ٹیموں کے ساتھ مقابلہ کریں!",
+                                    'no_teams_desc'.tr(),
                                     textAlign: TextAlign.center,
                                     style: TextStyle(color: ThemeService.textSecondary, fontSize: 13),
                                   ),
@@ -911,7 +894,7 @@ class _TeamsScreenState extends State<TeamsScreen>
                                       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
                                     ),
                                     icon: const Icon(Icons.add, color: Colors.white),
-                                    label: Text(LanguageService.t("Create Team"), style: const TextStyle(fontWeight: FontWeight.bold)),
+                                    label: Text('btn_create_team'.tr(), style: const TextStyle(fontWeight: FontWeight.bold)),
                                   ),
                                 ],
                               ),
@@ -983,7 +966,7 @@ class _TeamsScreenState extends State<TeamsScreen>
               ),
               const SizedBox(height: 16),
               Text(
-                "کوئی لائیو میچ نہیں ہے",
+                'no_live_matches'.tr(),
                 style: TextStyle(
                   color: ThemeService.textPrimary,
                   fontSize: 18,
@@ -992,7 +975,7 @@ class _TeamsScreenState extends State<TeamsScreen>
               ),
               const SizedBox(height: 8),
               Text(
-                "آپ کا فی الحال کوئی جاری میچ نہیں ہے۔\nلائیو میچ شروع کرنے کے لیے کسی ٹیم کو چیلنج کریں!",
+                'no_live_matches_desc'.tr(),
                 textAlign: TextAlign.center,
                 style: TextStyle(color: ThemeService.textSecondary, fontSize: 13, height: 1.4),
               ),
@@ -1010,7 +993,7 @@ class _TeamsScreenState extends State<TeamsScreen>
                 ),
                 icon: const Icon(Icons.shield_outlined, size: 18),
                 label: Text(
-                  LanguageService.t("Teams"),
+                  'nav_teams'.tr(),
                   style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
                 ),
               ),
@@ -1031,7 +1014,7 @@ class _TeamsScreenState extends State<TeamsScreen>
             Padding(
               padding: const EdgeInsets.fromLTRB(16, 8, 16, 2),
               child: Text(
-                "میچ #${index + 1}",
+                "${'match_hash'.tr()} #${index + 1}",
                 style: TextStyle(
                   fontWeight: FontWeight.bold,
                   fontSize: 12,
@@ -1089,8 +1072,8 @@ class _ActiveMatchBothTeamsBannerState
   DateTime? _bannerMountedTime;
   TeamModel? _myTeam;
   TeamModel? _oppTeam;
-  String _myLeaderName = "लीडर";
-  String _oppLeaderName = "लीडर";
+  String _myLeaderName = "team_leader".tr();
+  String _oppLeaderName = "team_leader".tr();
   int _myMemberCount = 1;
   int _oppMemberCount = 1;
   bool _isLoading = true;
@@ -1126,8 +1109,8 @@ class _ActiveMatchBothTeamsBannerState
       final myT = await widget.teamService.getTeam(myTId);
       final oppT = await widget.teamService.getTeam(oppTId);
 
-      String myLeader = "لیڈر";
-      String oppLeader = "لیڈر";
+      String myLeader = "team_leader".tr();
+      String oppLeader = "team_leader".tr();
 
       if (myT?.leaderId != null && myT!.leaderId.isNotEmpty) {
         try {
@@ -1136,7 +1119,7 @@ class _ActiveMatchBothTeamsBannerState
               .select('display_name, username')
               .eq('id', myT.leaderId)
               .maybeSingle();
-          myLeader = u?['display_name'] ?? u?['username'] ?? 'لیڈر';
+          myLeader = u?['display_name'] ?? u?['username'] ?? 'team_leader'.tr();
         } catch (_) {}
       }
 
@@ -1147,7 +1130,7 @@ class _ActiveMatchBothTeamsBannerState
               .select('display_name, username')
               .eq('id', oppT.leaderId)
               .maybeSingle();
-          oppLeader = u?['display_name'] ?? u?['username'] ?? 'لیڈر';
+          oppLeader = u?['display_name'] ?? u?['username'] ?? 'team_leader'.tr();
         } catch (_) {}
       }
 
@@ -1269,8 +1252,7 @@ class _ActiveMatchBothTeamsBannerState
               'room_id': rId,
               'sender_id': 'system',
               'sender_name': 'ROOM BOT',
-              'message':
-                  '❌ پروف کی حد ختم ہو گئی۔ میچ منسوخ کر دیا گیا اور کوائنز واپس کر دیے گئے۔',
+              'message': 'match_cancelled_coins_refunded'.tr(),
               'type': 'system',
               'created_at': DateTime.now().toIso8601String(),
             });
@@ -1294,9 +1276,8 @@ class _ActiveMatchBothTeamsBannerState
           await NotificationService().sendNotification(
             userId: winnerTeamLeader,
             type: 'match_cancelled',
-            title: 'میچ منسوخ ہو گیا',
-            body:
-                '❌ آپ کی 3 پروف کوششیں ختم ہو گئی ہیں۔ میچ ادھورا رہ گیا۔',
+            title: 'match_cancelled'.tr(),
+            body: 'proof_attempts_exhausted'.tr(),
             data: {'match_id': matchId},
           );
         }
@@ -1305,9 +1286,8 @@ class _ActiveMatchBothTeamsBannerState
           await NotificationService().sendNotification(
             userId: loserTeamLeader,
             type: 'match_cancelled',
-            title: 'میچ منسوخ ہو گیا',
-            body:
-                '❌ میچ بغیر نتیجہ ختم ہو گیا۔ پروف کی حد ختم ہو چکی ہے۔',
+            title: 'match_cancelled'.tr(),
+            body: 'match_ended_no_result'.tr(),
             data: {'match_id': matchId},
           );
         }
@@ -1319,15 +1299,13 @@ class _ActiveMatchBothTeamsBannerState
           await NotificationService().sendNotification(
             userId: hostId,
             type: 'match_cancelled',
-            title: 'میچ منسوخ ہو گیا',
-            body:
-                '❌ میچ #$shortId منسوخ کر دیا گیا — پروف کی حد پوری ہو گئی۔',
+            title: 'match_cancelled'.tr(),
+            body: 'match_cancelled_admin_note'.tr(args: [shortId]),
             data: {'match_id': matchId},
           );
         }
       } catch (e) {
-        debugPrint(
-            '[TeamsScreen] Proof limit cancellation error: $e');
+        debugPrint('[TeamsScreen] Proof limit cancellation error: $e');
       }
     }
   }
@@ -1372,8 +1350,7 @@ class _ActiveMatchBothTeamsBannerState
         : t1;
     final status = (match["status"] ?? "").toString().toLowerCase();
     final proofStatus = (match["proof_status"] ?? "").toString().toLowerCase();
-    final adminNote =
-        match["admin_note"]?.toString() ?? "غلط پروف اسکرین شاٹ";
+    final adminNote = match["admin_note"]?.toString() ?? "invalid_proof".tr();
 
     final submittedBy = (match["submitted_by_team_id"] ??
             match["winner_team_id"] ??
@@ -1411,9 +1388,9 @@ class _ActiveMatchBothTeamsBannerState
             const Icon(Icons.emoji_events_rounded,
                 color: Color(0xFF2E7D32), size: 22),
             const SizedBox(width: 8),
-            const Expanded(
-              child: Text("✅ آپ کا پروف منظور ہو گیا - آپ جیت گئے! 🏆",
-                  style: TextStyle(
+            Expanded(
+              child: Text("proof_accepted_you_won".tr(),
+                  style: const TextStyle(
                       color: Color(0xFF2E7D32),
                       fontWeight: FontWeight.bold,
                       fontSize: 13.5)),
@@ -1423,8 +1400,8 @@ class _ActiveMatchBothTeamsBannerState
               decoration: BoxDecoration(
                   color: const Color(0xFF2E7D32),
                   borderRadius: BorderRadius.circular(10)),
-              child: const Text("جیتے 🏆",
-                  style: TextStyle(
+              child: Text("badge_won".tr(),
+                  style: const TextStyle(
                       color: Colors.white,
                       fontWeight: FontWeight.w900,
                       fontSize: 10)),
@@ -1443,11 +1420,11 @@ class _ActiveMatchBothTeamsBannerState
     final elapsed = now.isAfter(startTime) ? now.difference(startTime) : Duration.zero;
     final mins = elapsed.inMinutes;
     final secs = elapsed.inSeconds % 60;
-    final timerLabel = "جاری ہے: ${mins} منٹ ${secs} سیکنڈ";
+    final timerLabel = "${'ongoing_label'.tr()}: $mins ${'minutes'.tr()} $secs ${'seconds'.tr()}";
 
     final myTeamDisplay = _myTeam?.name ?? widget.myTeamName;
     final oppTeamDisplay =
-        _oppTeam?.name ?? match["opponent_name"]?.toString() ?? "مخالف ٹیم";
+        _oppTeam?.name ?? match["opponent_name"]?.toString() ?? 'opponent_team'.tr();
 
     final proofCount =
         (match["proof_upload_count"] as num?)?.toInt() ?? 0;
@@ -1495,10 +1472,10 @@ class _ActiveMatchBothTeamsBannerState
               Expanded(
                 child: Text(
                   isRejected
-                      ? "❌ پروف مسترد ہو گیا"
+                      ? "proof_rejected_title".tr()
                       : isUnderReview
-                          ? "⏳ زیرِ جائزہ ہے"
-                          : "🔥 لائیو میچ",
+                          ? "under_review_title".tr()
+                          : "live_match_title".tr(),
                   style: TextStyle(
                     color: isRejected
                         ? const Color(0xFFFF4655)
@@ -1544,12 +1521,12 @@ class _ActiveMatchBothTeamsBannerState
                 ),
                 child: Text(
                   isRejected
-                      ? "مسترد"
+                      ? "status_rejected".tr()
                       : isUnderReview
-                          ? "ریویو"
+                          ? "status_review".tr()
                           : isRunning
                               ? "${mins}m ${secs}s"
-                              : "لائیو",
+                              : "status_live".tr(),
                   style: const TextStyle(
                     color: Colors.white,
                     fontWeight: FontWeight.w900,
@@ -1586,7 +1563,7 @@ class _ActiveMatchBothTeamsBannerState
                       ),
                       const SizedBox(height: 2),
                       Text(
-                        "لیڈر: $_myLeaderName",
+                        "${'team_leader'.tr()}: $_myLeaderName",
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
                         style: TextStyle(
@@ -1595,7 +1572,7 @@ class _ActiveMatchBothTeamsBannerState
                         ),
                       ),
                       Text(
-                        "$_myMemberCount ممبرز",
+                        "$_myMemberCount ${'team_members'.tr()}",
                         style: const TextStyle(
                           fontSize: 10.5,
                           color: Color(0xFF1877F2),
@@ -1613,9 +1590,9 @@ class _ActiveMatchBothTeamsBannerState
                     color: const Color(0xFFFF4655).withOpacity(0.12),
                     borderRadius: BorderRadius.circular(6),
                   ),
-                  child: const Text(
-                    "بمقابلہ",
-                    style: TextStyle(
+                  child: Text(
+                    'versus_vs'.tr(),
+                    style: const TextStyle(
                       fontWeight: FontWeight.w900,
                       color: Color(0xFFFF4655),
                       fontSize: 11,
@@ -1639,7 +1616,7 @@ class _ActiveMatchBothTeamsBannerState
                       ),
                       const SizedBox(height: 2),
                       Text(
-                        "لیڈر: $_oppLeaderName",
+                        "${'team_leader'.tr()}: $_oppLeaderName",
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
                         textAlign: TextAlign.right,
@@ -1649,7 +1626,7 @@ class _ActiveMatchBothTeamsBannerState
                         ),
                       ),
                       Text(
-                        "$_oppMemberCount ممبرز",
+                        "$_oppMemberCount ${'team_members'.tr()}",
                         textAlign: TextAlign.right,
                         style: const TextStyle(
                           fontSize: 10.5,
@@ -1682,7 +1659,7 @@ class _ActiveMatchBothTeamsBannerState
               const Spacer(),
               if (isRejected)
                 Text(
-                  "کوششیں: $proofCount/3",
+                  "${'attempts_label'.tr()}: $proofCount/3",
                   style: const TextStyle(
                     fontSize: 10.5,
                     color: Color(0xFFFF4655),
@@ -1695,7 +1672,7 @@ class _ActiveMatchBothTeamsBannerState
           if (isRejected && adminNote.isNotEmpty) ...[
             const SizedBox(height: 4),
             Text(
-              "نوٹ: $adminNote",
+              "${'note_label'.tr()}: $adminNote",
               style: const TextStyle(fontSize: 11, color: Color(0xFFFF4655)),
             ),
           ],
@@ -1709,9 +1686,9 @@ class _ActiveMatchBothTeamsBannerState
                 onPressed: () {
                   if (matchId.trim().isEmpty) {
                     ScaffoldMessenger.of(context).showSnackBar(
-                      const SnackBar(
-                        content: Text("میچ نہیں ملا"),
-                        backgroundColor: Color(0xFFFF4655),
+                      SnackBar(
+                        content: Text('match_not_found'.tr()),
+                        backgroundColor: const Color(0xFFFF4655),
                       ),
                     );
                     return;
@@ -1740,7 +1717,7 @@ class _ActiveMatchBothTeamsBannerState
                 ),
                 icon: const Icon(Icons.forum_rounded, size: 13),
                 label: Text(
-                  LanguageService.t("Team DM"),
+                  'btn_team_dm'.tr(),
                   style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 11),
                 ),
               ),
@@ -1758,9 +1735,9 @@ class _ActiveMatchBothTeamsBannerState
                           );
                           if (ended == true && mounted) {
                             ScaffoldMessenger.of(context).showSnackBar(
-                              const SnackBar(
-                                content: Text("نیا پروف بھیج دیا گیا!"),
-                                backgroundColor: Color(0xFFFFB800),
+                              SnackBar(
+                                content: Text('new_proof_submitted'.tr()),
+                                backgroundColor: const Color(0xFFFFB800),
                               ),
                             );
                           }
@@ -1780,8 +1757,8 @@ class _ActiveMatchBothTeamsBannerState
                   icon: const Icon(Icons.upload_file_rounded, size: 14),
                   label: Text(
                     canAddMore
-                        ? "پروف شامل کریں ($proofCount/3)"
-                        : "❌ پروف کی حد ختم ہو گئی (3/3)",
+                        ? "${'add_proof'.tr()} ($proofCount/3)"
+                        : 'proof_limit_reached'.tr(),
                     style: const TextStyle(
                         fontWeight: FontWeight.bold, fontSize: 11),
                   ),
@@ -1804,9 +1781,9 @@ class _ActiveMatchBothTeamsBannerState
                         borderRadius: BorderRadius.circular(8)),
                   ),
                   icon: const Icon(Icons.visibility_rounded, size: 13),
-                  label: const Text(
-                    "پروف دیکھیں",
-                    style: TextStyle(
+                  label: Text(
+                    'view_proof'.tr(),
+                    style: const TextStyle(
                         fontWeight: FontWeight.bold, fontSize: 11),
                   ),
                 )
@@ -1822,11 +1799,10 @@ class _ActiveMatchBothTeamsBannerState
                     );
                     if (ended == true && mounted) {
                       ScaffoldMessenger.of(context).showSnackBar(
-                        const SnackBar(
-                          content: Text(
-                              "میچ ختم کرنے کی درخواست بھیج دی گئی! اسٹیٹس زیرِ جائزہ ہے۔"),
-                          backgroundColor: Color(0xFFFFB800),
-                          duration: Duration(seconds: 4),
+                        SnackBar(
+                          content: Text('end_match_request_sent'.tr()),
+                          backgroundColor: const Color(0xFFFFB800),
+                          duration: const Duration(seconds: 4),
                         ),
                       );
                     }
@@ -1843,7 +1819,7 @@ class _ActiveMatchBothTeamsBannerState
                   ),
                   icon: const Icon(Icons.check_circle_rounded, size: 14),
                   label: Text(
-                    LanguageService.t("END MATCH"),
+                    'btn_end_match'.tr(),
                     style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 11),
                   ),
                 ),
