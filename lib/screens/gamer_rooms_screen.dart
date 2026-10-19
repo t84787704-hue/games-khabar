@@ -1,6 +1,7 @@
 // ═══════════════════════════════════════════════════════════════════════════════
 // COMPLETE GAMER ROOMS SCREEN (WITH DYNAMIC DAY & NIGHT MODE SUPPORT)
 // - Multi-Proof Preservation: Both Host & Opponent proofs saved without overwrite
+// - Max 3 Proof Upload Attempts per user with live button state (1/3, 2/3, 3/3)
 // - Max 2 Active Rooms per user limit (auto-enforced on '+' click & save)
 // - 5-Minute Golden Winner Banner with Live Countdown Timer
 // - Auto-delete room from database after 5 minutes of completion
@@ -58,6 +59,7 @@ class GamerRoom {
   final String? hostProofUrl;
   final String? opponentProofUrl;
   final List<Map<String, dynamic>> proofs;
+  final Map<String, int> uploadAttempts;
   final DateTime? winProofUploadedAt;
   final DateTime? completedAt;
   final DateTime? autoApproveAt;
@@ -91,6 +93,7 @@ class GamerRoom {
     this.hostProofUrl,
     this.opponentProofUrl,
     this.proofs = const [],
+    this.uploadAttempts = const {},
     this.winProofUploadedAt,
     this.completedAt,
     this.autoApproveAt,
@@ -110,7 +113,7 @@ class GamerRoom {
       disputed || status.toLowerCase() == 'disputed' || status.toLowerCase() == 'under_review';
 
   bool get isRejected =>
-      status.toLowerCase() == 'rejected' || rewardStatus.toLowerCase() == 'rejected';
+      status.toLowerCase() == 'rejected' || rewardStatus.toLowerCase() == 'rejected' || status.toLowerCase() == 'proof_rejected';
 
   bool get isProofSubmitted =>
       !isCompleted &&
@@ -173,6 +176,23 @@ class GamerRoom {
       } catch (_) {}
     }
 
+    final uploadAttempts = <String, int>{};
+    final rawAttempts = row['upload_attempts'];
+    if (rawAttempts is Map) {
+      rawAttempts.forEach((k, v) {
+        uploadAttempts[k.toString()] = (v is num) ? v.toInt() : int.tryParse(v.toString()) ?? 0;
+      });
+    } else if (rawAttempts is String && rawAttempts.isNotEmpty) {
+      try {
+        final dec = jsonDecode(rawAttempts);
+        if (dec is Map) {
+          dec.forEach((k, v) {
+            uploadAttempts[k.toString()] = (v is num) ? v.toInt() : int.tryParse(v.toString()) ?? 0;
+          });
+        }
+      } catch (_) {}
+    }
+
     DateTime? winProofUploadedAt;
     if (row['win_proof_uploaded_at'] is String) {
       winProofUploadedAt = DateTime.tryParse(row['win_proof_uploaded_at']);
@@ -227,6 +247,7 @@ class GamerRoom {
       hostProofUrl: row['host_proof_url']?.toString(),
       opponentProofUrl: row['opponent_proof_url']?.toString(),
       proofs: proofsList,
+      uploadAttempts: uploadAttempts,
       winProofUploadedAt: winProofUploadedAt,
       completedAt: completedAt,
       autoApproveAt: autoApproveAt,
@@ -1060,6 +1081,7 @@ class _GamerRoomsScreenState extends State<GamerRoomsScreen> {
                             }
                           ],
                           'proofs': [],
+                          'upload_attempts': {},
                           'created_at': DateTime.now().toUtc().toIso8601String(),
                         };
 
@@ -1281,8 +1303,21 @@ class _RoomDetailsSheetState extends State<_RoomDetailsSheet> {
     }
   }
 
-  /// ✅ MULTI-PROOF UPLOAD: Pehle wale ka proof overwrite hone se bachata hai
-  Future<void> _uploadWinScreenshot() async {
+  /// ✅ MULTI-PROOF UPLOAD WITH STRICT 3-ATTEMPTS LIMIT
+  Future<void> _uploadWinScreenshot(GamerRoom room) async {
+    final currentAttempts = room.uploadAttempts[widget.currentUserId] ?? 0;
+    if (currentAttempts >= 3) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('⚠️ زیادہ سے زیادہ 3 کوششیں مکمل ہو چکی ہیں! اب آپ مزید ثبوت اپلوڈ نہیں کر سکتے، مسئلہ ہونے پر تنازعہ اٹھائیں۔'),
+            backgroundColor: Color(0xFFFF4655),
+          ),
+        );
+      }
+      return;
+    }
+
     final XFile? file = await _picker.pickImage(
       source: ImageSource.gallery,
       imageQuality: 80,
@@ -1304,10 +1339,9 @@ class _RoomDetailsSheetState extends State<_RoomDetailsSheet> {
           .from('match_proofs')
           .getPublicUrl(fileName);
 
-      // 1. Current room data fetch karein taake existing proofs array mil sake
       final currentRoomRow = await SupabaseService.client
           .from('rooms')
-          .select('host_id, proofs, host_proof_url, opponent_proof_url')
+          .select('host_id, proofs, upload_attempts, host_proof_url, opponent_proof_url')
           .eq('id', widget.roomId)
           .maybeSingle();
 
@@ -1325,7 +1359,24 @@ class _RoomDetailsSheetState extends State<_RoomDetailsSheet> {
         } catch (_) {}
       }
 
-      // Is user ka proof list mein add ya update karein
+      // Upload count track karein
+      Map<String, dynamic> attemptsMap = {};
+      final rawAttempts = currentRoomRow?['upload_attempts'];
+      if (rawAttempts is Map) {
+        attemptsMap = Map<String, dynamic>.from(rawAttempts);
+      } else if (rawAttempts is String && rawAttempts.isNotEmpty) {
+        try {
+          final decAtt = jsonDecode(rawAttempts);
+          if (decAtt is Map) attemptsMap = Map<String, dynamic>.from(decAtt);
+        } catch (_) {}
+      }
+
+      final int newAttemptCount = (attemptsMap[widget.currentUserId] is num)
+          ? ((attemptsMap[widget.currentUserId] as num).toInt() + 1)
+          : (int.tryParse(attemptsMap[widget.currentUserId]?.toString() ?? '0') ?? 0) + 1;
+
+      attemptsMap[widget.currentUserId] = newAttemptCount;
+
       existingProofs.removeWhere((p) => (p is Map && p['user_id']?.toString() == widget.currentUserId));
       existingProofs.add({
         'user_id': widget.currentUserId,
@@ -1333,10 +1384,10 @@ class _RoomDetailsSheetState extends State<_RoomDetailsSheet> {
         'avatar': widget.currentUserPhoto,
         'is_host': isHost,
         'proof_url': proofUrl,
+        'attempt': newAttemptCount,
         'uploaded_at': DateTime.now().toUtc().toIso8601String(),
       });
 
-      // Status check: Agar dono parties ne claim kar diya hai to disputed / multi-claim ban jaye
       final bool hasMultipleClaims = existingProofs.length > 1;
       final String nextStatus = hasMultipleClaims ? 'disputed' : 'review_pending';
 
@@ -1348,6 +1399,7 @@ class _RoomDetailsSheetState extends State<_RoomDetailsSheet> {
         'win_proof_url': proofUrl,
         'win_proof_uploaded_at': DateTime.now().toUtc().toIso8601String(),
         'proofs': existingProofs,
+        'upload_attempts': attemptsMap,
       };
 
       if (isHost) {
@@ -1368,7 +1420,7 @@ class _RoomDetailsSheetState extends State<_RoomDetailsSheet> {
         'room_id': widget.roomId,
         'sender_id': 'system',
         'sender_name': 'ROOM BOT',
-        'message': '📸 ${widget.currentUserName} uploaded win proof! Waiting for admin review.',
+        'message': '📸 ${widget.currentUserName} uploaded proof (Attempt $newAttemptCount/3)! Waiting for admin review.',
         'type': 'system',
         'created_at': DateTime.now().toUtc().toIso8601String(),
       });
@@ -1376,7 +1428,7 @@ class _RoomDetailsSheetState extends State<_RoomDetailsSheet> {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text('proof_uploaded_success'.tr()),
+            content: Text('proof_uploaded_success'.tr() + ' ($newAttemptCount/3)'),
             backgroundColor: Colors.green,
           ),
         );
@@ -1478,6 +1530,8 @@ class _RoomDetailsSheetState extends State<_RoomDetailsSheet> {
 
           final room = GamerRoom.fromSupabase(snapshot.data!.first);
           final bool isJoined = room.joinedUserIds.contains(widget.currentUserId);
+          final int userAttempts = room.uploadAttempts[widget.currentUserId] ?? 0;
+          final bool isLimitReached = userAttempts >= 3;
 
           if (room.isCompleted && _countdownTimer == null) {
             final compTime = room.completedAt ?? room.winProofUploadedAt ?? room.createdAt;
@@ -1650,7 +1704,9 @@ class _RoomDetailsSheetState extends State<_RoomDetailsSheet> {
                       const SizedBox(width: 8),
                       Expanded(
                         child: Text(
-                          'proof_rejected_reupload'.tr(),
+                          isLimitReached
+                              ? '❌ ثبوت مسترد کر دیا گیا! آپ کی 3 کوششیں ختم ہو چکی ہیں، براہ کرم تنازعہ اٹھائیں[span_0](start_span)[span_0](end_span)۔'
+                              : '${'proof_rejected_reupload'.tr()} (${3 - userAttempts} کوششیں باقی)',
                           style: const TextStyle(
                             color: Colors.red,
                             fontWeight: FontWeight.bold,
@@ -1677,7 +1733,7 @@ class _RoomDetailsSheetState extends State<_RoomDetailsSheet> {
                       const SizedBox(width: 8),
                       Expanded(
                         child: Text(
-                          'proof_under_review_banner'.tr(),
+                          'proof_under_review_banner'.tr() + (userAttempts > 0 ? ' (کوشش: $userAttempts/3)' : ''),
                           style: const TextStyle(
                             color: Colors.deepOrange,
                             fontWeight: FontWeight.bold,
@@ -2077,6 +2133,7 @@ class _RoomDetailsSheetState extends State<_RoomDetailsSheet> {
                 ),
               ),
 
+              // ACTION BUTTONS (Join Match / Claim Win / Re-Upload / Max Attempts)
               if (!room.isCompleted) ...[
                 if (!isJoined) ...[
                   Padding(
@@ -2122,42 +2179,57 @@ class _RoomDetailsSheetState extends State<_RoomDetailsSheet> {
                     child: Row(
                       children: [
                         Expanded(
-                          child: ElevatedButton.icon(
-                            style: ElevatedButton.styleFrom(
-                              backgroundColor: room.isRejected
-                                  ? const Color(0xFFFF4655)
-                                  : (room.isProofSubmitted
-                                      ? const Color(0xFF1877F2)
-                                      : Colors.amber[700]),
-                              foregroundColor: Colors.white,
-                              padding: const EdgeInsets.symmetric(vertical: 10),
-                              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-                            ),
-                            icon: _isUploadingProof
-                                ? const SizedBox(
-                                    width: 16,
-                                    height: 16,
-                                    child: CircularProgressIndicator(
-                                        strokeWidth: 2, color: Colors.white))
-                                : Icon(
-                                    room.isRejected
-                                        ? Icons.refresh_rounded
-                                        : (room.isProofSubmitted
-                                            ? Icons.hourglass_top_rounded
-                                            : Icons.emoji_events),
-                                    size: 18,
-                                  ),
-                            label: Text(
-                              _isUploadingProof
-                                  ? 'uploading_label'.tr()
-                                  : (room.isRejected
-                                      ? 'reupload_proof_button'.tr()
-                                      : (room.isProofSubmitted
-                                          ? 'proof_submitted_tap_to_change'.tr()
-                                          : 'end_match_claim_win'.tr())),
-                              style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13),
-                            ),
-                            onPressed: _isUploadingProof ? null : _uploadWinScreenshot,
+                          child: Builder(
+                            builder: (context) {
+                              String label;
+                              Color btnColor;
+                              IconData iconData;
+
+                              if (_isUploadingProof) {
+                                label = 'uploading_label'.tr();
+                                btnColor = const Color(0xFF1877F2);
+                                iconData = Icons.upload_rounded;
+                              } else if (isLimitReached) {
+                                label = '⚠️ حد ختم ہو گئی (3/3) — مزید اجازت نہیں';
+                                btnColor = Colors.grey.shade700;
+                                iconData = Icons.block_rounded;
+                              } else if (room.isRejected) {
+                                label = 'ثبوت دوبارہ اپلوڈ کریں ($userAttempts/3) 🔄';
+                                btnColor = const Color(0xFFFF4655);
+                                iconData = Icons.refresh_rounded;
+                              } else if (room.isProofSubmitted) {
+                                label = 'ثبوت جمع ہو چکا ($userAttempts/3) ⏳';
+                                btnColor = const Color(0xFF1877F2);
+                                iconData = Icons.hourglass_top_rounded;
+                              } else {
+                                label = 'end_match_claim_win'.tr();
+                                btnColor = Colors.amber.shade700;
+                                iconData = Icons.emoji_events;
+                              }
+
+                              return ElevatedButton.icon(
+                                style: ElevatedButton.styleFrom(
+                                  backgroundColor: btnColor,
+                                  foregroundColor: Colors.white,
+                                  padding: const EdgeInsets.symmetric(vertical: 10),
+                                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                                ),
+                                icon: _isUploadingProof
+                                    ? const SizedBox(
+                                        width: 16,
+                                        height: 16,
+                                        child: CircularProgressIndicator(
+                                            strokeWidth: 2, color: Colors.white))
+                                    : Icon(iconData, size: 18),
+                                label: Text(
+                                  label,
+                                  style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13),
+                                ),
+                                onPressed: (_isUploadingProof || isLimitReached)
+                                    ? null
+                                    : () => _uploadWinScreenshot(room),
+                              );
+                            },
                           ),
                         ),
                       ],
