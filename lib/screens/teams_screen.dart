@@ -568,18 +568,29 @@ class _TeamsScreenState extends State<TeamsScreen>
           ),
         ),
 
+        // INCOMING CHALLENGES STREAM: Checks both raw ID and UUID
         if (myTeamId.isNotEmpty)
           StreamBuilder<List<Map<String, dynamic>>>(
             stream: SupabaseService.client
                 .from("challenges")
-                .stream(primaryKey: ["id"])
-                .eq("to_team_id", myTeamUuid),
+                .stream(primaryKey: ["id"]),
             builder: (context, challengesSnap) {
               if (!challengesSnap.hasData) return const SizedBox.shrink();
-              final docs = challengesSnap.data!
-                  .where((d) => (d["status"] ?? "").toString().toLowerCase() == "pending")
-                  .where((d) => !_acceptedChallengeIds.contains(d["id"]?.toString()))
-                  .toList();
+              final myIdLower = myTeamId.trim().toLowerCase();
+              final myUuidLower = myTeamUuid.trim().toLowerCase();
+
+              final docs = challengesSnap.data!.where((d) {
+                final toId = (d["to_team_id"] ?? "").toString().trim().toLowerCase();
+                final status = (d["status"] ?? "").toString().trim().toLowerCase();
+                final id = d["id"]?.toString() ?? "";
+
+                final isForMyTeam = (toId == myIdLower || toId == myUuidLower);
+                final isPending = (status == "pending" || status == "requested");
+                final notAcceptedYet = !_acceptedChallengeIds.contains(id);
+
+                return isForMyTeam && isPending && notAcceptedYet;
+              }).toList();
+
               if (docs.isEmpty) return const SizedBox.shrink();
 
               return Container(
@@ -743,11 +754,17 @@ class _TeamsScreenState extends State<TeamsScreen>
                 ? SupabaseService.client
                     .from("challenges")
                     .stream(primaryKey: ["id"])
-                    .eq("from_team_id", myTeamUuid)
                 : Stream.value([]),
             builder: (context, sentSnap) {
+              final myIdLower = myTeamId.trim().toLowerCase();
+              final myUuidLower = myTeamUuid.trim().toLowerCase();
+
               final sentDocs = sentSnap.data ?? [];
               final activePendingList = sentDocs
+                  .where((d) {
+                    final fromId = (d["from_team_id"] ?? "").toString().trim().toLowerCase();
+                    return fromId == myIdLower || fromId == myUuidLower;
+                  })
                   .where((d) => (d["status"] ?? "").toString().toLowerCase() == "pending")
                   .where((d) => !_cancelledChallengeIds.contains(d["id"]?.toString()))
                   .toList();
