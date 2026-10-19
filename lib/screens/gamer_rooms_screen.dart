@@ -746,7 +746,9 @@ class _GamerRoomsScreenState extends State<GamerRoomsScreen> {
                     if (filtered.isEmpty) {
                       return Center(
                         child: Text(
-                          'کوئی فعال روم نہیں ملا۔ نیا روم بنانے کے لیے + پر ٹیپ کریں!',
+                          
+  'no_active_rooms'.tr(),
+
                           style: TextStyle(color: ThemeService.textSecondary),
                         ),
                       );
