@@ -18,6 +18,7 @@ import '../screens/teams_screen.dart';
 import '../screens/private_match_room_screen.dart';
 import '../services/theme_service.dart';
 import '../services/coin_wallet_service.dart';
+import '../services/notification_service.dart';
 import '../services/language_service.dart';
 import 'coin_or_ad_popup.dart';
 import 'match_rules_dialog.dart';
@@ -272,8 +273,8 @@ class _TeamCardState extends State<TeamCard> {
         existing = await SupabaseService.client
             .from('challenges')
             .select()
-            .eq('from_team_id', effectiveMyTeamId)
-            .eq('to_team_id', effectiveTargetId)
+            .or('from_team_id.eq.$effectiveMyTeamId,from_team_id.eq.${effectiveMyTeam.id}')
+            .or('to_team_id.eq.$effectiveTargetId,to_team_id.eq.${widget.team.id}')
             .inFilter('status',
                 ['pending', 'requested', 'active', 'under_review']);
       } catch (_) {
@@ -340,23 +341,50 @@ class _TeamCardState extends State<TeamCard> {
         title: 'Challenge Rules (${widget.team.name})',
         onProceed: () async {
           try {
+            Map<String, dynamic>? insertedChallenge;
             try {
-              await SupabaseService.client.from('challenges').insert({
+              insertedChallenge = await SupabaseService.client.from('challenges').insert({
                 'from_team_id': effectiveMyTeamId,
                 'to_team_id': effectiveTargetId,
                 'from_team_name': effectiveMyTeamName,
                 'to_team_name': widget.team.name,
                 'status': 'pending',
-                'game': 'BGMI',
-              });
+                'game': widget.team.game.isNotEmpty ? widget.team.game : 'BGMI',
+              }).select().maybeSingle();
             } catch (_) {
-              await SupabaseService.client.from('challenges').insert({
-                'from_team_id': effectiveMyTeamId,
-                'to_team_id': effectiveTargetId,
-                'from_team_name': effectiveMyTeamName,
-                'to_team_name': widget.team.name,
-                'status': 'pending',
-              });
+              try {
+                insertedChallenge = await SupabaseService.client.from('challenges').insert({
+                  'from_team_id': effectiveMyTeamId,
+                  'to_team_id': effectiveTargetId,
+                  'from_team_name': effectiveMyTeamName,
+                  'to_team_name': widget.team.name,
+                  'status': 'pending',
+                }).select().maybeSingle();
+              } catch (_) {
+                insertedChallenge = await SupabaseService.client.from('challenges').insert({
+                  'from_team_id': effectiveMyTeamId,
+                  'to_team_id': widget.team.id,
+                  'from_team_name': effectiveMyTeamName,
+                  'to_team_name': widget.team.name,
+                  'status': 'pending',
+                }).select().maybeSingle();
+              }
+            }
+
+            // Opponent team ke leader ko instant Notification send karein
+            if (widget.team.leaderId.isNotEmpty) {
+              try {
+                await NotificationService().sendNotification(
+                  userId: widget.team.leaderId,
+                  type: 'team_challenge',
+                  title: 'New Challenge! ⚡',
+                  body: '$effectiveMyTeamName ne aapki team ko challenge kiya hai!',
+                  data: {
+                    'challenge_id': insertedChallenge?['id']?.toString() ?? '',
+                    'from_team_id': effectiveMyTeamId,
+                  },
+                );
+              } catch (_) {}
             }
 
             if (mounted) {
@@ -474,7 +502,7 @@ class _TeamCardState extends State<TeamCard> {
             border: Border.all(color: ThemeService.border),
           ),
           child: Row(
-            mainAxisSize: MainAxisSize.min,
+            mainAxisSize: min(MainAxisSize.min),
             children: [
               Icon(Icons.hourglass_top_rounded,
                   size: 12, color: ThemeService.textSecondary),
@@ -539,11 +567,13 @@ class _TeamCardState extends State<TeamCard> {
       return _buildChallengeButton(currentUid);
     }
 
+    final myUuid = SupabaseService.toUuid(widget.myTeamId).toLowerCase();
+    final myRawId = widget.myTeamId.toLowerCase();
+
     return StreamBuilder<List<Map<String, dynamic>>>(
       stream: SupabaseService.client
           .from('challenges')
-          .stream(primaryKey: ['id'])
-          .eq('from_team_id', SupabaseService.toUuid(widget.myTeamId)),
+          .stream(primaryKey: ['id']),
       builder: (context, cSnap) {
         final challenges = cSnap.data ?? [];
         final targetUuid = SupabaseService.toUuid(widget.team.id).toLowerCase();
@@ -551,11 +581,17 @@ class _TeamCardState extends State<TeamCard> {
 
         final pendingDoc = challenges.firstWhere(
           (d) {
-            final toId = d['to_team_id']?.toString().toLowerCase();
+            final fromId = (d['from_team_id'] ?? '').toString().toLowerCase();
+            final toId = (d['to_team_id'] ?? '').toString().toLowerCase();
             final st = (d['status'] ?? '').toString().toLowerCase();
             final id = d['id']?.toString() ?? '';
-            return (toId == targetUuid || toId == rawTeamId) &&
-                st == 'pending' &&
+
+            final isFromMe = (fromId == myUuid || fromId == myRawId);
+            final isToTarget = (toId == targetUuid || toId == rawTeamId);
+
+            return isFromMe &&
+                isToTarget &&
+                (st == 'pending' || st == 'requested') &&
                 !_localCancelledIds.contains(id);
           },
           orElse: () => {},
@@ -1333,24 +1369,27 @@ class _TeamCardState extends State<TeamCard> {
                       StreamBuilder<List<Map<String, dynamic>>>(
                         stream: SupabaseService.client
                             .from('challenges')
-                            .stream(primaryKey: ['id'])
-                            .eq('from_team_id',
-                                SupabaseService.toUuid(widget.myTeamId)),
+                            .stream(primaryKey: ['id']),
                         builder: (context, cSnap) {
                           final challenges = cSnap.data ?? [];
-                          final targetUuid =
-                              SupabaseService.toUuid(team.id).toLowerCase();
+                          final myUuid = SupabaseService.toUuid(widget.myTeamId).toLowerCase();
+                          final myRawId = widget.myTeamId.toLowerCase();
+                          final targetUuid = SupabaseService.toUuid(team.id).toLowerCase();
                           final rawTeamId = team.id.toLowerCase();
+
                           final pendingDoc = challenges.firstWhere(
                             (d) {
-                              final toId =
-                                  d['to_team_id']?.toString().toLowerCase();
-                              final st =
-                                  (d['status'] ?? '').toString().toLowerCase();
+                              final fromId = (d['from_team_id'] ?? '').toString().toLowerCase();
+                              final toId = (d['to_team_id'] ?? '').toString().toLowerCase();
+                              final st = (d['status'] ?? '').toString().toLowerCase();
                               final id = d['id']?.toString() ?? '';
-                              return (toId == targetUuid ||
-                                      toId == rawTeamId) &&
-                                  st == 'pending' &&
+
+                              final isFromMe = (fromId == myUuid || fromId == myRawId);
+                              final isToTarget = (toId == targetUuid || toId == rawTeamId);
+
+                              return isFromMe &&
+                                  isToTarget &&
+                                  (st == 'pending' || st == 'requested') &&
                                   !_localCancelledIds.contains(id);
                             },
                             orElse: () => {},
