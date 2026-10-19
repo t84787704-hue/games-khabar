@@ -945,5 +945,18 @@
   "rule_3_desc": "Downloaded, cropped, or watermarked clips from other creators will be rejected.",
   "rule_4_title": "Career Results Proof (Disputes)",
   "rule_4_desc": "In case of any doubt or dispute, in-game career results screenshot will be required.",
-  "btn_accept_rules": "I understand and accept the rules"
+  "btn_accept_rules": "I understand and accept the rules",
+  "passbook_sheet_title": "Coin History & Passbook",
+  "passbook_sheet_subtitle": "Detailed earnings, entry fees, rewards & store purchases",
+  "label_current_balance": "Current Balance",
+  "label_escrow_hold": "Escrow Hold",
+  "label_total_credited": "Total Credited",
+  "label_total_spent": "Total Debited",
+  "btn_open_coin_store_sheet": "Open Coin Store 🛒",
+  "tab_all_activities": "All Activity",
+  "tab_earned": "(+) Earned",
+  "tab_spent": "(-) Spent",
+  "tag_spent": "Spent",
+  "tag_earned": "Earned",
+  "coins_amount_format": "{} Coins"
 }
