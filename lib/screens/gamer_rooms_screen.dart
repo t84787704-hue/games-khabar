@@ -15,6 +15,8 @@
 // - "End Match / Claim Win" Screenshot Proof Upload to Supabase Storage
 // - Dispute management & Admin approval flow
 // ═══════════════════════════════════════════════════════════════════════════════
+
+import 'package:easy_localization/easy_localization.dart';
 import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
