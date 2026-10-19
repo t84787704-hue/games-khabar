@@ -679,7 +679,8 @@ class _GamerRoomsScreenState extends State<GamerRoomsScreen> {
             backgroundColor: ThemeService.appBarBg,
             elevation: 0.5,
             title: Text(
-              'رومز',
+  'nav_rooms'.tr(),
+
               style: TextStyle(
                 color: ThemeService.textPrimary,
                 fontWeight: FontWeight.bold,
