@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:easy_localization/easy_localization.dart';
 import '../services/theme_service.dart';
 
 class MatchRulesDialog {
@@ -69,7 +70,7 @@ class MatchRulesDialog {
                           ),
                         ),
                         Text(
-                          'فئیر پلے اور ٹوکن تصدیق کے اصول',
+                          'room_rules_subtitle'.tr(),
                           style: TextStyle(color: textGray, fontSize: 12),
                         ),
                       ],
@@ -82,8 +83,8 @@ class MatchRulesDialog {
               // 4 Verification Rules Cards
               _buildRuleTile(
                 number: '1',
-                title: 'ان-گیم نام (IGN) کا میچ ہونا',
-                desc: 'آپ کا گیمرز آئی ڈی پروفائل نام اور ان-گیم کل فیڈ نام بالکل میچ ہونا چاہیے۔',
+                title: 'rule_1_title'.tr(),
+                desc: 'rule_1_desc'.tr(),
                 primaryGreen: primaryGreen,
                 cardDark: cardDark,
                 borderDark: borderDark,
@@ -94,8 +95,8 @@ class MatchRulesDialog {
 
               _buildRuleTile(
                 number: '2',
-                title: 'فل اسکرین POV اور کنٹرولز (HUD)',
-                desc: 'اسکرین ریکارڈنگ میں اسکرین پر موجود گیم بٹنز اور کنٹرولز صاف نظر آنا لازمی ہیں۔',
+                title: 'rule_2_title'.tr(),
+                desc: 'rule_2_desc'.tr(),
                 primaryGreen: primaryGreen,
                 cardDark: cardDark,
                 borderDark: borderDark,
@@ -106,8 +107,8 @@ class MatchRulesDialog {
 
               _buildRuleTile(
                 number: '3',
-                title: 'کوئی کراپ شدہ یا واٹر مارک والی کلپس نہیں',
-                desc: 'انٹرنیٹ سے ڈاؤن لوڈ کی گئی، کراپ شدہ یا دوسرے کریٹرز کے واٹر مارک والی کلپ مسترد کر دی جائے گی۔',
+                title: 'rule_3_title'.tr(),
+                desc: 'rule_3_desc'.tr(),
                 primaryGreen: primaryGreen,
                 cardDark: cardDark,
                 borderDark: borderDark,
@@ -118,8 +119,8 @@ class MatchRulesDialog {
 
               _buildRuleTile(
                 number: '4',
-                title: 'کریئر رزلٹس کا ثبوت (تنازعہ)',
-                desc: 'کسی بھی مسئلے یا شک پر ان-گیم کریئر رزلٹس کا اسکرین شاٹ منگوایا جائے گا۔',
+                title: 'rule_4_title'.tr(),
+                desc: 'rule_4_desc'.tr(),
                 primaryGreen: primaryGreen,
                 cardDark: cardDark,
                 borderDark: borderDark,
@@ -146,9 +147,9 @@ class MatchRulesDialog {
                     Navigator.pop(ctx);
                     onProceed(); // Agla action continue karein
                   },
-                  child: const Text(
-                    'میں اصولوں کو سمجھ گیا ہوں اور قبول کرتا ہوں',
-                    style: TextStyle(fontWeight: FontWeight.w900, fontSize: 13.5),
+                  child: Text(
+                    'btn_accept_rules'.tr(),
+                    style: const TextStyle(fontWeight: FontWeight.w900, fontSize: 13.5),
                   ),
                 ),
               ),
