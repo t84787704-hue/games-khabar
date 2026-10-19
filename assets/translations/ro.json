@@ -945,5 +945,19 @@
   "rule_3_desc": "Internet se download ki gayi, cropped ya doosre creators ke watermark wali clip reject kar di jayegi.",
   "rule_4_title": "Career results ka proof (Tanaza)",
   "rule_4_desc": "Kisi bhi masle ya shaq par in-game career results ka screenshot mangwaya jayega.",
-  "btn_accept_rules": "Main usoolon ko samajh gaya hoon aur qabool karta hoon"
+    "btn_accept_rules": "Main usoolon ko samajh gaya hoon aur qabool karta hoon",
+    "passbook_sheet_title": "Coins History aur Passbook",
+    "passbook_sheet_subtitle": "Tafseeli kamai, entry fees, rewards aur store khareedari",
+    "label_current_balance": "Mojooda Balance",
+    "label_escrow_hold": "Escrow Hold",
+    "label_total_credited": "Kul Shamil Shuda",
+    "label_total_spent": "Kul Kate Hue",
+    "btn_open_coin_store_sheet": "Coin Store Kholein 🛒",
+    "tab_all_activities": "Tamam Sargarmiyan",
+    "tab_earned": "(+) Kamaye Gaye",
+    "tab_spent": "(-) Kharch Hue",
+    "tag_spent": "Kharch Hua",
+    "tag_earned": "Kamaya Gaya",
+    "coins_amount_format": "Coins {}"
 }
+
