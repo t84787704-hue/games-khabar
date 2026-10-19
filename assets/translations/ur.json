@@ -861,4 +861,20 @@
 
   "btn_open_hosted_version": "آن لائن ورژن کھولیں",
   "btn_i_agree": "میں متفق ہوں اور آگے بڑھیں"
+  "title_delete_account": "اکاؤنٹ ڈیلیٹ کریں",
+  "warning_delete_account_undo": "⚠️ انتباہ: یہ عمل ہمیشہ کے لیے ہے اور اس کے بعد اکاؤنٹ واپس نہیں لایا جا سکتا۔",
+  "delete_account_what_let_title": "اکاؤنٹ حذف کرنے پر درج ذیل ڈیٹا ضائع ہو جائے گا:",
+  "delete_account_what_deleted_title": "اکاؤنٹ حذف کرنے پر درج ذیل ڈیٹا ضائع ہو جائے گا:",
+  "delete_bullet_profile": "گیمر پروفائل، بائیو اور یوزر نیم ہمیشہ کے لیے ختم",
+  "delete_bullet_posts": "تمام پبلک پوسٹس، کلپس اور تبصرے",
+  "delete_bullet_teams": "ای اسپورٹس ٹیموں کی رکنیت اور لیڈرشپ",
+  "delete_bullet_challenges": "میچ ہسٹری، فتوحات اور چیلنجز کا ریکارڈ",
+  "delete_bullet_coins": "والیٹ میں موجود تمام جی-کوائنز اور انعامات",
+  "delete_bullet_followers": "فالوورز، فالوئنگ اور نیٹ ورک کنکشنز",
+  "delete_grace_period_info": "ℹ️ اکاؤنٹ ڈیلیٹ کرنے کی درخواست کے بعد 30 دن کی مہلت دی جاتی ہے جس دوران آپ لاگ ان کر کے عمل منسوخ کر سکتے ہیں۔",
+  "delete_checkbox_understand": "میں سمجھتا/سمجھتی ہوں کہ یہ عمل میرے تمام ڈیٹا کو مٹا دے گا",
+  "delete_checkbox_confirm": "ہاں، میں اپنا اکاؤنٹ مستقل طور پر ختم کرنا چاہتا/چاہتی ہوں",
+  "delete_type_confirm_label": "تصدیق کے لیے نیچے \"DELETE\" لکھیں:",
+  "hint_delete_word": "DELETE لکھیں",
+  "btn_permanently_delete_account": "میرا اکاؤنٹ مستقل طور پر حذف کریں"
 }
