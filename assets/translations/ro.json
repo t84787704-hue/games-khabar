@@ -1071,7 +1071,13 @@
   "btn_cancel": "Cancel",
   "btn_ok": "Theek Hai",
   "room_limit_reached": "Room Ki Limit Poori Ho Gayi (Max 2)",
-  "room_limit_desc": "Aap ek waqt mein sirf 2 active rooms host kar sakte hain.\n\nMatch khatam hone par winner banner 5 minutes ke liye show hoga, phir room automatically delete ho jayega. Uske baad aap foran naya room bana sakein ge."
+  "room_limit_desc": "Aap ek waqt mein sirf 2 active rooms host kar sakte hain.\n\nMatch khatam hone par winner banner 5 minutes ke liye show hoga, phir room automatically delete ho jayega. Uske baad aap foran naya room bana sakein ge.",  "max_proof_attempts_reached_warning": "⚠️ Zyada se zyada 3 koshishein poori ho chuki hain! Ab aap mazeed proof upload nahi kar sakte, masla ho toh dispute karein.",
+  "proof_rejected_max_attempts_reached": "❌ Proof reject ho gaya! Aapki 3 koshishein khatam ho chuki hain, barah-e-karam dispute karein.",
+  "proof_rejected_with_remaining": "Proof reject ho gaya! Dobara proof upload karein ({} koshishein baqi)",
+  "proof_under_review_attempt": "Proof check ho raha hai (Koshish: {}/3) ⏳",
+  "proof_limit_reached_btn": "⚠️ Limit Khatam (3/3) — Mazeed Ijazat Nahi",
+  "reupload_proof_btn": "Proof Dobara Upload Karein ({}/3) 🔄",
+  "proof_submitted_btn": "Proof Jama Ho Chuka ({}/3) ⏳"
 
 }
 
