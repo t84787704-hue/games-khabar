@@ -1070,7 +1070,11 @@
   "btn_cancel": "Cancel",
   "btn_ok": "OK",
   "room_limit_reached": "Room Limit Reached (Max 2)",
-  "room_limit_desc": "You can only host 2 active rooms at a time.\n\nOnce a match ends, the winner banner displays for 5 minutes, then the room is automatically deleted. You can create a new room immediately after."
-
-
+  "room_limit_desc": "You can only host 2 active rooms at a time.\n\nOnce a match ends, the winner banner displays for 5 minutes, then the room is automatically deleted. You can create a new room immediately after.",  "max_proof_attempts_reached_warning": "⚠️ Maximum 3 attempts completed! You cannot upload more proof. Please raise a dispute if there is an issue.",
+  "proof_rejected_max_attempts_reached": "❌ Proof rejected! Your 3 attempts are over, please raise a dispute.",
+  "proof_rejected_with_remaining": "Proof rejected! Re-upload proof ({} attempts remaining)",
+  "proof_under_review_attempt": "Proof under review (Attempt: {}/3) ⏳",
+  "proof_limit_reached_btn": "⚠️ Limit Reached (3/3) — Not Allowed",
+  "reupload_proof_btn": "Re-upload Proof ({}/3) 🔄",
+  "proof_submitted_btn": "Proof Submitted ({}/3) ⏳"
 }
