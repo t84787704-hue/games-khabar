@@ -27,6 +27,7 @@
   "nav_teams": "الفرق",
   "nav_messages": "الرسائل",
   "nav_rooms": "الغرف",
+  "no_active_rooms": "لا توجد غرف نشطة. انقر على + لإنشاء غرفة جديدة!",
   "nav_admin": "المشرف",
   
   "latest_news": "آخر الأخبار",
@@ -145,7 +146,7 @@
   "verified_admin": "مسؤول معتمد",
   "official_verified_gamer": "لاعب معتمد رسمي",
   "under_review_24h": "قيد المراجعة 24 ساعة",
-  "apply_verification": "التقدم بطلب للتحقق",
+  "apply_for_verification": "التقدم بطلب للتحقق",
   "review_24h_tag": "مراجعة خلال 24 ساعة",
   "blue_tick_active_desc": "العلامة الزرقاء مفعلة على معرف اللاعب وجميع منشوراتك.",
   "app_under_review_desc": "الطلب قيد المراجعة • التحقق خلال 24 ساعة.",
@@ -189,6 +190,7 @@
   "dark_theme_sub": "الوضع الداكن (الليلي)",
   "light_theme_sub": "الوضع الفاتح (النهاري)",
   "clear_cache": "مسح ذاكرة التخزين المؤقت للصور",
+  "clear_cache_sub": "تصاویر کا لوکل ڈیٹا صاف کر کے جگہ بنائیں",
   "cache_cleared": "تم مسح الذاكرة المؤقتة بنجاح",
   "download_my_data": "تنزيل بياناتي",
   "download_my_data_sub": "احصل على نسخة من بيانات معرف اللاعب الخاص بك (JSON)",
@@ -196,6 +198,8 @@
   "about_us_sub": "تغطية جيمز خبر ومعلومات الألعاب",
   "contact_us": "اتصل بنا",
   "contact_us_sub": "قنوات الدعم عبر البريد وإنستغرام",
+  "follow_us": "تابعنا",
+  "follow_us_sub": "تواصل مع مجتمع الألعاب الخاص بنا على وسائل التواصل الاجتماعي",
   "privacy_policy": "سياسة الخصوصية",
   "privacy_policy_sub": "شروط بيانات AdMob و Firebase",
   "terms_of_service": "شروط الخدمة",
@@ -602,7 +606,5 @@
   "yesterday": "أمس",
   "yesterday_at": "أمس {}",
   "say_hi_start_chat": "قل مرحبًا لبدء المحادثة",
-  "message_input_hint": "رسالة...",
-  "nav_rooms": "الغرف",
-  "no_active_rooms": "لا توجد غرف نشطة. انقر على + لإنشاء غرفة جديدة!"
+  "message_input_hint": "رسالة..."
 }
