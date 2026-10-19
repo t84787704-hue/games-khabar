@@ -7,6 +7,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:url_launcher/url_launcher.dart';
+import 'package:easy_localization/easy_localization.dart';
 import '../services/theme_service.dart';
 
 class FollowUsScreen extends StatelessWidget {
@@ -57,7 +58,7 @@ class FollowUsScreen extends StatelessWidget {
                   const SizedBox(width: 10),
                   Expanded(
                     child: Text(
-                      '$title کا لنک کلپ بورڈ پر کاپی ہو گیا!',
+                      'msg_copied_to_clipboard'.tr(args: [title]),
                       style: TextStyle(color: textWhite, fontWeight: FontWeight.bold, fontSize: 13),
                     ),
                   ),
@@ -85,7 +86,7 @@ class FollowUsScreen extends StatelessWidget {
               onPressed: () => Navigator.pop(context),
             ),
             title: Text(
-              'ہمیں فالو کریں',
+              'title_follow_us'.tr(),
               style: TextStyle(
                 color: textWhite,
                 fontSize: 18,
@@ -136,7 +137,7 @@ class FollowUsScreen extends StatelessWidget {
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
                             Text(
-                              'ہماری گیمنگ کمیونٹی میں شامل ہوں',
+                              'follow_us_banner_title'.tr(),
                               style: TextStyle(
                                 color: textWhite,
                                 fontSize: 16,
@@ -145,7 +146,7 @@ class FollowUsScreen extends StatelessWidget {
                             ),
                             const SizedBox(height: 4),
                             Text(
-                              'روزانہ کی اپڈیٹس، ٹورنامنٹ اور گیمنگ نیوز کے لیے ہمارے آفیشل چینلز کو فالو کریں۔',
+                              'follow_us_banner_sub'.tr(),
                               style: TextStyle(
                                 color: textGray,
                                 fontSize: 12.5,
@@ -162,7 +163,7 @@ class FollowUsScreen extends StatelessWidget {
                 const SizedBox(height: 28),
 
                 Text(
-                  'آفیشل چینلز',
+                  'official_channels_title'.tr(),
                   style: TextStyle(
                     color: textWhite,
                     fontSize: 15,
@@ -182,9 +183,9 @@ class FollowUsScreen extends StatelessWidget {
                     ),
                     child: const Icon(Icons.play_arrow_rounded, color: Color(0xFFFF0000), size: 24),
                   ),
-                  title: 'یوٹیوب',
-                  subtitle: 'ٹورنامنٹ اسٹریمز اور گائیڈز کے لیے سبسکرائب کریں',
-                  badgeText: 'سبسکرائب',
+                  title: 'YouTube',
+                  subtitle: 'youtube_subtitle'.tr(),
+                  badgeText: 'badge_subscribe'.tr(),
                   badgeColor: const Color(0xFFFF0000),
                   onTap: () => _launchSocialUrl(context, youtubeUrl, 'YouTube'),
                 ),
@@ -202,9 +203,9 @@ class FollowUsScreen extends StatelessWidget {
                     ),
                     child: const Icon(Icons.camera_alt_rounded, color: Color(0xFFE1306C), size: 24),
                   ),
-                  title: 'انسٹاگرام',
-                  subtitle: 'روزانہ گیمنگ ریلز اور ہائی لائٹس کے لیے فالو کریں',
-                  badgeText: 'فالو',
+                  title: 'Instagram',
+                  subtitle: 'instagram_subtitle'.tr(),
+                  badgeText: 'badge_follow'.tr(),
                   badgeColor: const Color(0xFFE1306C),
                   onTap: () => _launchSocialUrl(context, instagramUrl, 'Instagram'),
                 ),
@@ -222,9 +223,9 @@ class FollowUsScreen extends StatelessWidget {
                     ),
                     child: const Icon(Icons.music_note_rounded, color: Color(0xFF00F2FE), size: 24),
                   ),
-                  title: 'ٹک ٹاک',
-                  subtitle: 'شارٹ کلپس اور وائرل گیم پلے دیکھیں',
-                  badgeText: 'دیکھیں',
+                  title: 'TikTok',
+                  subtitle: 'tiktok_subtitle'.tr(),
+                  badgeText: 'badge_watch'.tr(),
                   badgeColor: const Color(0xFF00F2FE),
                   onTap: () => _launchSocialUrl(context, tiktokUrl, 'TikTok'),
                 ),
@@ -242,9 +243,9 @@ class FollowUsScreen extends StatelessWidget {
                     ),
                     child: const Icon(Icons.facebook_rounded, color: Color(0xFF1877F2), size: 24),
                   ),
-                  title: 'فیس بک',
-                  subtitle: 'کمیونٹی ڈسکشنز اور ایونٹس سے جڑیں',
-                  badgeText: 'رابطہ',
+                  title: 'Facebook',
+                  subtitle: 'facebook_subtitle'.tr(),
+                  badgeText: 'badge_connect'.tr(),
                   badgeColor: const Color(0xFF1877F2),
                   onTap: () => _launchSocialUrl(context, facebookUrl, 'Facebook'),
                 ),
@@ -265,7 +266,7 @@ class FollowUsScreen extends StatelessWidget {
                       const SizedBox(width: 12),
                       Expanded(
                         child: Text(
-                          'کوئی فیس یا سبسکرپشن درکار نہیں۔ فالو کرنا بالکل اختیاری ہے۔',
+                          'follow_optional_notice'.tr(),
                           style: TextStyle(color: textGray, fontSize: 11.5, height: 1.35),
                         ),
                       ),
