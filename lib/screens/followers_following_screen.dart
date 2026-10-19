@@ -48,7 +48,8 @@ class _FollowersFollowingScreenState extends State<FollowersFollowingScreen> wit
   }
 
   bool _isSelfUser(GamerUser u, String currentUid, String pageOwnerId) {
-    final targetId = (u.uid.isNotEmpty ? u.uid : (u.id ?? '')).trim().toLowerCase();
+    // GamerUser model mein sirf 'uid' hai
+    final targetId = u.uid.trim().toLowerCase();
     final curId = currentUid.trim().toLowerCase();
     final ownerId = pageOwnerId.trim().toLowerCase();
     final curUuid = SupabaseService.toUuid(curId).toLowerCase();
@@ -117,7 +118,7 @@ class _FollowersFollowingScreenState extends State<FollowersFollowingScreen> wit
       separatorBuilder: (_, __) => const Divider(color: GamerTheme.borderDark, height: 1),
       itemBuilder: (context, index) {
         final user = list[index];
-        final effectiveUserId = user.uid.isNotEmpty ? user.uid : (user.id ?? '');
+        final effectiveUserId = user.uid;
         final isSelf = _isSelfUser(user, currentUid, widget.userId);
         final gameColor = GamerTheme.gameColors[user.favoriteGame] ?? GamerTheme.accentBlue;
         final gameEmoji = GamerTheme.gameEmojis[user.favoriteGame] ?? '🎮';
