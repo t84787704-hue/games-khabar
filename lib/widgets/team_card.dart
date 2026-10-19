@@ -2,6 +2,7 @@
 // EXACT DIFF — Full Adaptive Day & Night Mode Support for TeamCard
 // + Match Verification Rules Dialog on Challenge Action
 // + Frozen Team Challenge Blocking Logic (Both Sender & Receiver)
+// + Full Localization (easy_localization) Support - No Hardcoded Urdu
 // -------------------------------------------------------------------------------
 // File: lib/widgets/team_card.dart
 // ===============================================================================
@@ -9,6 +10,7 @@
 import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
+import 'package:easy_localization/easy_localization.dart';
 import '../models/team_model.dart';
 import '../services/team_service.dart';
 import '../services/supabase_service.dart';
@@ -19,7 +21,6 @@ import '../screens/private_match_room_screen.dart';
 import '../services/theme_service.dart';
 import '../services/coin_wallet_service.dart';
 import '../services/notification_service.dart';
-import '../services/language_service.dart';
 import 'coin_or_ad_popup.dart';
 import 'match_rules_dialog.dart';
 
@@ -109,9 +110,9 @@ class _TeamCardState extends State<TeamCard> {
     if (effectiveUid.isEmpty) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('براہ کرم پہلے لاگ ان کریں'),
-            backgroundColor: Color(0xFFFF4655),
+          SnackBar(
+            content: Text('please_login_first'.tr()),
+            backgroundColor: const Color(0xFFFF4655),
           ),
         );
       }
@@ -143,16 +144,16 @@ class _TeamCardState extends State<TeamCard> {
         if (mounted) {
           if (success) {
             ScaffoldMessenger.of(context).showSnackBar(
-              const SnackBar(
-                content: Text('✅ شمولیت کی درخواست بھیج دی گئی ہے!'),
-                backgroundColor: Color(0xFF1877F2),
+              SnackBar(
+                content: Text('team_join_request_sent'.tr()),
+                backgroundColor: const Color(0xFF1877F2),
               ),
             );
           } else {
             ScaffoldMessenger.of(context).showSnackBar(
-              const SnackBar(
-                content: Text('درخواست بھیجنے میں مسئلہ ہوا، دوبارہ کوشش کریں'),
-                backgroundColor: Color(0xFFFF4655),
+              SnackBar(
+                content: Text('team_join_request_error'.tr()),
+                backgroundColor: const Color(0xFFFF4655),
               ),
             );
           }
@@ -162,7 +163,7 @@ class _TeamCardState extends State<TeamCard> {
   }
 
   Future<void> _handleChallenge(String currentUid) async {
-    // 🛑 CHECK 1: Agar meri apni team Frozen hai to main kisi ko challenge nahi bhej sakta
+    // 🛑 CHECK 1: Agar meri apni team Frozen hai
     if (widget.isMyTeamFrozen) {
       if (mounted) {
         showDialog(
@@ -170,26 +171,24 @@ class _TeamCardState extends State<TeamCard> {
           builder: (ctx) => AlertDialog(
             backgroundColor: ThemeService.card,
             shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-            title: const Row(
+            title: Row(
               children: [
-                Icon(Icons.lock_clock_rounded, color: Color(0xFFFF4655), size: 24),
-                SizedBox(width: 8),
+                const Icon(Icons.lock_clock_rounded, color: Color(0xFFFF4655), size: 24),
+                const SizedBox(width: 8),
                 Text(
-                  'Team Frozen',
-                  style: TextStyle(color: Color(0xFFFF4655), fontWeight: FontWeight.bold, fontSize: 16),
+                  'team_frozen_title'.tr(),
+                  style: const TextStyle(color: Color(0xFFFF4655), fontWeight: FontWeight.bold, fontSize: 16),
                 ),
               ],
             ),
             content: Text(
-              LanguageService.isUrdu
-                  ? 'آپ کی ٹیم منجمد ہے۔ چیلنج بھیجنے کے لیے پہلے اپنے والٹ میں 1,000 کوائنز کا بیلنس پورا کریں۔'
-                  : 'Your team is frozen because your balance is below 1,000 coins. Top up to 1,000 coins to send challenges.',
+              'team_frozen_my_balance_warning'.tr(),
               style: TextStyle(color: ThemeService.textSecondary, fontSize: 13.5, height: 1.4),
             ),
             actions: [
               TextButton(
                 onPressed: () => Navigator.pop(ctx),
-                child: const Text('OK', style: TextStyle(color: Color(0xFF1877F2), fontWeight: FontWeight.bold)),
+                child: Text('btn_ok'.tr(), style: const TextStyle(color: Color(0xFF1877F2), fontWeight: FontWeight.bold)),
               ),
             ],
           ),
@@ -198,7 +197,7 @@ class _TeamCardState extends State<TeamCard> {
       return;
     }
 
-    // 🛑 CHECK 2: Agar samnay wali target team Frozen hai to usko bhi challenge nahi bhej sakte
+    // 🛑 CHECK 2: Agar target team Frozen hai
     if (widget.team.leaderId.isNotEmpty) {
       try {
         final targetWallet = await CoinWalletService().getOrCreateWallet(widget.team.leaderId);
@@ -209,26 +208,24 @@ class _TeamCardState extends State<TeamCard> {
               builder: (ctx) => AlertDialog(
                 backgroundColor: ThemeService.card,
                 shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-                title: const Row(
+                title: Row(
                   children: [
-                    Icon(Icons.lock_clock_rounded, color: Color(0xFFFF4655), size: 24),
-                    SizedBox(width: 8),
+                    const Icon(Icons.lock_clock_rounded, color: Color(0xFFFF4655), size: 24),
+                    const SizedBox(width: 8),
                     Text(
-                      'Team Frozen',
-                      style: TextStyle(color: Color(0xFFFF4655), fontWeight: FontWeight.bold, fontSize: 16),
+                      'team_frozen_title'.tr(),
+                      style: const TextStyle(color: Color(0xFFFF4655), fontWeight: FontWeight.bold, fontSize: 16),
                     ),
                   ],
                 ),
                 content: Text(
-                  LanguageService.isUrdu
-                      ? 'یہ ٹیم اس وقت منجمد (Frozen) ہے کیونکہ ان کے لیڈر کا بیلنس 1,000 کوائنز سے کم ہے۔ آپ اس ٹیم کو چیلنج نہیں کر سکتے۔'
-                      : 'This team is frozen because their leader balance fell below 1,000 coins. You cannot challenge this team.',
+                  'team_frozen_target_balance_warning'.tr(),
                   style: TextStyle(color: ThemeService.textSecondary, fontSize: 13.5, height: 1.4),
                 ),
                 actions: [
                   TextButton(
                     onPressed: () => Navigator.pop(ctx),
-                    child: const Text('OK', style: TextStyle(color: Color(0xFF1877F2), fontWeight: FontWeight.bold)),
+                    child: Text('btn_ok'.tr(), style: const TextStyle(color: Color(0xFF1877F2), fontWeight: FontWeight.bold)),
                   ),
                 ],
               ),
@@ -249,10 +246,9 @@ class _TeamCardState extends State<TeamCard> {
 
     if (myLeaderTeams.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text(
-              'چیلنج بھیجنے کے لیے پہلے اپنی ٹیم بنائیں (Create Team)!'),
-          backgroundColor: Color(0xFF65676B),
+        SnackBar(
+          content: Text('create_team_first_to_challenge'.tr()),
+          backgroundColor: const Color(0xFF65676B),
         ),
       );
       return;
@@ -290,27 +286,27 @@ class _TeamCardState extends State<TeamCard> {
               backgroundColor: const Color(0xFF131A29),
               shape: RoundedRectangleBorder(
                   borderRadius: BorderRadius.circular(16)),
-              title: const Row(
+              title: Row(
                 children: [
-                  Icon(Icons.warning_amber_rounded,
+                  const Icon(Icons.warning_amber_rounded,
                       color: Color(0xFFFF4655), size: 24),
-                  SizedBox(width: 8),
-                  Text('Challenge Already Sent',
-                      style: TextStyle(
+                  const SizedBox(width: 8),
+                  Text('challenge_already_sent_title'.tr(),
+                      style: const TextStyle(
                           color: Color(0xFFFF4655),
                           fontWeight: FontWeight.bold,
                           fontSize: 16)),
                 ],
               ),
               content: Text(
-                '⚠️ Aap ne pehle hi challenge bheja hai - Aap ${widget.team.name} ko pehle se challenge bhej chuke hain, isko complete ya cancel kiye baghair dubara nahi bhej sakte',
+                'challenge_already_sent_desc'.tr(args: [widget.team.name]),
                 style: const TextStyle(color: Colors.white, fontSize: 13),
               ),
               actions: [
                 TextButton(
                   onPressed: () => Navigator.pop(ctx),
-                  child: const Text('Close',
-                      style: TextStyle(color: Color(0xFF8B949E))),
+                  child: Text('btn_close'.tr(),
+                      style: const TextStyle(color: Color(0xFF8B949E))),
                 ),
                 ElevatedButton(
                   onPressed: () {
@@ -325,8 +321,8 @@ class _TeamCardState extends State<TeamCard> {
                     backgroundColor: const Color(0xFFFF4655),
                     foregroundColor: Colors.white,
                   ),
-                  child: const Text('CANCEL',
-                      style: TextStyle(fontWeight: FontWeight.bold)),
+                  child: Text('btn_cancel'.tr(),
+                      style: const TextStyle(fontWeight: FontWeight.bold)),
                 ),
               ],
             ),
@@ -335,10 +331,9 @@ class _TeamCardState extends State<TeamCard> {
         return;
       }
 
-      // Verification Rules dialog show karein challenge bhejte waqt
       MatchRulesDialog.show(
         context,
-        title: 'Challenge Rules (${widget.team.name})',
+        title: '${'challenge_rules_title'.tr()} (${widget.team.name})',
         onProceed: () async {
           try {
             Map<String, dynamic>? insertedChallenge;
@@ -371,14 +366,13 @@ class _TeamCardState extends State<TeamCard> {
               }
             }
 
-            // Opponent team ke leader ko instant Notification send karein
             if (widget.team.leaderId.isNotEmpty) {
               try {
                 await NotificationService().sendNotification(
                   userId: widget.team.leaderId,
                   type: 'team_challenge',
                   title: 'New Challenge! ⚡',
-                  body: '$effectiveMyTeamName ne aapki team ko challenge kiya hai!',
+                  body: '$effectiveMyTeamName challenged your team!',
                   data: {
                     'challenge_id': insertedChallenge?['id']?.toString() ?? '',
                     'from_team_id': effectiveMyTeamId,
@@ -390,8 +384,7 @@ class _TeamCardState extends State<TeamCard> {
             if (mounted) {
               ScaffoldMessenger.of(context).showSnackBar(
                 SnackBar(
-                  content: Text(
-                      '✅ Aapka challenge bhej diya gaya hai - ${widget.team.name} ko challenge bhej diya gaya hai, jawab ka intezar hai'),
+                  content: Text('challenge_sent_success'.tr(args: [widget.team.name])),
                   backgroundColor: const Color(0xFF1877F2),
                   duration: const Duration(seconds: 4),
                 ),
@@ -402,7 +395,7 @@ class _TeamCardState extends State<TeamCard> {
             if (mounted) {
               ScaffoldMessenger.of(context).showSnackBar(
                 SnackBar(
-                  content: Text('Error sending challenge: $e'),
+                  content: Text('${'error_sending_challenge'.tr()}: $e'),
                   backgroundColor: const Color(0xFFFF4655),
                 ),
               );
@@ -428,9 +421,9 @@ class _TeamCardState extends State<TeamCard> {
       if (mounted) setState(() {});
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Challenge Cancel ho gaya'),
-            backgroundColor: Color(0xFF1877F2),
+          SnackBar(
+            content: Text('challenge_cancelled_success'.tr()),
+            backgroundColor: const Color(0xFF1877F2),
           ),
         );
       }
@@ -454,10 +447,10 @@ class _TeamCardState extends State<TeamCard> {
           const Icon(Icons.hourglass_top_rounded,
               color: Color(0xFF1877F2), size: 14),
           const SizedBox(width: 6),
-          const Expanded(
+          Expanded(
             child: Text(
-              'Challenge bhej diya hai - Jawab ka intezar hai',
-              style: TextStyle(
+              'challenge_sent_waiting_reply'.tr(),
+              style: const TextStyle(
                   color: Color(0xFF1877F2),
                   fontSize: 11,
                   fontWeight: FontWeight.bold),
@@ -471,11 +464,11 @@ class _TeamCardState extends State<TeamCard> {
                 _cancelChallengeLocally(challengeId);
               }
             },
-            child: const Padding(
-              padding: EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
               child: Text(
-                'Cancel',
-                style: TextStyle(
+                'btn_cancel'.tr(),
+                style: const TextStyle(
                   color: Color(0xFFFF4655),
                   fontSize: 11.5,
                   fontWeight: FontWeight.w900,
@@ -508,7 +501,7 @@ class _TeamCardState extends State<TeamCard> {
                   size: 12, color: ThemeService.textSecondary),
               const SizedBox(width: 4),
               Text(
-                'Requested',
+                'requested_label'.tr(),
                 style: TextStyle(
                   color: ThemeService.textSecondary,
                   fontWeight: FontWeight.bold,
@@ -531,8 +524,8 @@ class _TeamCardState extends State<TeamCard> {
           ),
           icon: const Icon(Icons.close_rounded,
               size: 13, color: Color(0xFFFF4655)),
-          label: const Text('Cancel',
-              style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold)),
+          label: Text('btn_cancel'.tr(),
+              style: const TextStyle(fontSize: 11, fontWeight: FontWeight.bold)),
           onPressed: () {
             if (widget.onCancelChallenge != null) {
               widget.onCancelChallenge!(challengeId);
@@ -556,8 +549,8 @@ class _TeamCardState extends State<TeamCard> {
         elevation: 0,
       ),
       icon: const Icon(Icons.flash_on_rounded, size: 14, color: Colors.white),
-      label: const Text('CHALLENGE',
-          style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold)),
+      label: Text('challenge_button'.tr(),
+          style: const TextStyle(fontSize: 11, fontWeight: FontWeight.bold)),
       onPressed: () => _handleChallenge(currentUid),
     );
   }
@@ -623,14 +616,14 @@ class _TeamCardState extends State<TeamCard> {
           ),
         ],
       ),
-      child: const Row(
+      child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
-          Text('👑', style: TextStyle(fontSize: 11)),
-          SizedBox(width: 3),
+          const Text('👑', style: TextStyle(fontSize: 11)),
+          const SizedBox(width: 3),
           Text(
-            'OWNER',
-            style: TextStyle(
+            'badge_owner'.tr(),
+            style: const TextStyle(
               color: Colors.white,
               fontWeight: FontWeight.w900,
               fontSize: 10,
@@ -656,14 +649,14 @@ class _TeamCardState extends State<TeamCard> {
           ),
         ],
       ),
-      child: const Row(
+      child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
-          Text('🛡️', style: TextStyle(fontSize: 11)),
-          SizedBox(width: 3),
+          const Text('🛡️', style: TextStyle(fontSize: 11)),
+          const SizedBox(width: 3),
           Text(
-            'MEMBER',
-            style: TextStyle(
+            'badge_member'.tr(),
+            style: const TextStyle(
               color: Colors.white,
               fontWeight: FontWeight.w900,
               fontSize: 10,
@@ -686,9 +679,9 @@ class _TeamCardState extends State<TeamCard> {
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
       ),
       icon: const Icon(Icons.login_rounded, size: 14, color: Colors.white),
-      label: const Text(
-        'Open Team',
-        style: TextStyle(fontWeight: FontWeight.bold, fontSize: 11.5),
+      label: Text(
+        'open_team_button'.tr(),
+        style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 11.5),
       ),
       onPressed: () {
         Navigator.push(
@@ -717,14 +710,14 @@ class _TeamCardState extends State<TeamCard> {
         builder: (ctx, setDialogState) => AlertDialog(
           backgroundColor: const Color(0xFF131A29),
           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-          title: const Row(
+          title: Row(
             children: [
-              Icon(Icons.edit_rounded, color: Color(0xFF00FF88), size: 22),
-              SizedBox(width: 8),
+              const Icon(Icons.edit_rounded, color: Color(0xFF00FF88), size: 22),
+              const SizedBox(width: 8),
               Expanded(
                 child: Text(
-                  'Edit Team',
-                  style: TextStyle(
+                  'edit_team_title'.tr(),
+                  style: const TextStyle(
                       color: Colors.white,
                       fontWeight: FontWeight.bold,
                       fontSize: 17),
@@ -794,10 +787,10 @@ class _TeamCardState extends State<TeamCard> {
                   ),
                 ),
                 const SizedBox(height: 6),
-                const Center(
+                Center(
                   child: Text(
-                    'Tap to change logo',
-                    style: TextStyle(color: Color(0xFF8B949E), fontSize: 11),
+                    'tap_to_change_logo'.tr(),
+                    style: const TextStyle(color: Color(0xFF8B949E), fontSize: 11),
                   ),
                 ),
                 const SizedBox(height: 14),
@@ -806,7 +799,7 @@ class _TeamCardState extends State<TeamCard> {
                   controller: nameCtrl,
                   style: const TextStyle(color: Colors.white, fontSize: 13),
                   decoration: InputDecoration(
-                    labelText: 'Team Name',
+                    labelText: 'team_name_label'.tr(),
                     labelStyle:
                         const TextStyle(color: Color(0xFF8B949E), fontSize: 12),
                     filled: true,
@@ -825,7 +818,7 @@ class _TeamCardState extends State<TeamCard> {
                   controller: tagCtrl,
                   style: const TextStyle(color: Colors.white, fontSize: 13),
                   decoration: InputDecoration(
-                    labelText: 'Team Tag',
+                    labelText: 'team_tag_label'.tr(),
                     labelStyle:
                         const TextStyle(color: Color(0xFF8B949E), fontSize: 12),
                     filled: true,
@@ -844,7 +837,7 @@ class _TeamCardState extends State<TeamCard> {
                   controller: gameCtrl,
                   style: const TextStyle(color: Colors.white, fontSize: 13),
                   decoration: InputDecoration(
-                    labelText: 'Game (e.g. BGMI)',
+                    labelText: 'game_label'.tr(),
                     labelStyle:
                         const TextStyle(color: Color(0xFF8B949E), fontSize: 12),
                     filled: true,
@@ -864,7 +857,7 @@ class _TeamCardState extends State<TeamCard> {
                   maxLines: 2,
                   style: const TextStyle(color: Colors.white, fontSize: 13),
                   decoration: InputDecoration(
-                    labelText: 'Description',
+                    labelText: 'description_label'.tr(),
                     labelStyle:
                         const TextStyle(color: Color(0xFF8B949E), fontSize: 12),
                     filled: true,
@@ -884,7 +877,7 @@ class _TeamCardState extends State<TeamCard> {
                   maxLines: 2,
                   style: const TextStyle(color: Colors.white, fontSize: 13),
                   decoration: InputDecoration(
-                    labelText: 'Requirements',
+                    labelText: 'requirements_label'.tr(),
                     labelStyle:
                         const TextStyle(color: Color(0xFF8B949E), fontSize: 12),
                     filled: true,
@@ -903,8 +896,8 @@ class _TeamCardState extends State<TeamCard> {
           actions: [
             TextButton(
               onPressed: isSaving ? null : () => Navigator.pop(ctx),
-              child: const Text('Cancel',
-                  style: TextStyle(color: Color(0xFF8B949E))),
+              child: Text('btn_cancel'.tr(),
+                  style: const TextStyle(color: Color(0xFF8B949E))),
             ),
             ElevatedButton.icon(
               onPressed: isSaving
@@ -913,9 +906,9 @@ class _TeamCardState extends State<TeamCard> {
                       if (nameCtrl.text.trim().isEmpty ||
                           tagCtrl.text.trim().isEmpty) {
                         ScaffoldMessenger.of(ctx).showSnackBar(
-                          const SnackBar(
-                            content: Text('Name aur Tag zaroori hain'),
-                            backgroundColor: Color(0xFFFF4655),
+                          SnackBar(
+                            content: Text('name_tag_required'.tr()),
+                            backgroundColor: const Color(0xFFFF4655),
                           ),
                         );
                         return;
@@ -940,8 +933,8 @@ class _TeamCardState extends State<TeamCard> {
                         ScaffoldMessenger.of(context).showSnackBar(
                           SnackBar(
                             content: Text(ok
-                                ? '✅ Team updated successfully!'
-                                : '❌ Team update fail ho gaya'),
+                                ? 'team_updated_success'.tr()
+                                : 'team_update_failed'.tr()),
                             backgroundColor: ok
                                 ? const Color(0xFF00FF88)
                                 : const Color(0xFFFF4655),
@@ -962,7 +955,7 @@ class _TeamCardState extends State<TeamCard> {
                     )
                   : const Icon(Icons.save_rounded, size: 16),
               label: Text(
-                isSaving ? 'Saving...' : 'Save Changes',
+                isSaving ? 'saving_label'.tr() : 'save_changes_btn'.tr(),
                 style: const TextStyle(fontWeight: FontWeight.bold),
               ),
             ),
@@ -978,15 +971,15 @@ class _TeamCardState extends State<TeamCard> {
       builder: (ctx) => AlertDialog(
         backgroundColor: const Color(0xFF131A29),
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-        title: const Row(
+        title: Row(
           children: [
-            Icon(Icons.warning_amber_rounded,
+            const Icon(Icons.warning_amber_rounded,
                 color: Color(0xFFFF4655), size: 24),
-            SizedBox(width: 8),
+            const SizedBox(width: 8),
             Expanded(
               child: Text(
-                'Delete Team?',
-                style: TextStyle(
+                'delete_team_title'.tr(),
+                style: const TextStyle(
                     color: Color(0xFFFF4655),
                     fontWeight: FontWeight.bold,
                     fontSize: 17),
@@ -998,9 +991,9 @@ class _TeamCardState extends State<TeamCard> {
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            const Text(
-              'Kya aap waqai apni team delete karna chahte hain?',
-              style: TextStyle(color: Colors.white, fontSize: 13.5),
+            Text(
+              'delete_team_confirm'.tr(),
+              style: const TextStyle(color: Colors.white, fontSize: 13.5),
             ),
             const SizedBox(height: 10),
             Container(
@@ -1028,17 +1021,17 @@ class _TeamCardState extends State<TeamCard> {
               ),
             ),
             const SizedBox(height: 10),
-            const Text(
-              '⚠️ Ye action permanent hai. Team ke saare members, challenges, aur join requests delete ho jayenge.',
-              style: TextStyle(color: Color(0xFFFF4655), fontSize: 11.5),
+            Text(
+              'delete_team_warning'.tr(),
+              style: const TextStyle(color: Color(0xFFFF4655), fontSize: 11.5),
             ),
           ],
         ),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(ctx, false),
-            child: const Text('Cancel',
-                style: TextStyle(color: Color(0xFF8B949E))),
+            child: Text('btn_cancel'.tr(),
+                style: const TextStyle(color: Color(0xFF8B949E))),
           ),
           ElevatedButton.icon(
             style: ElevatedButton.styleFrom(
@@ -1046,8 +1039,8 @@ class _TeamCardState extends State<TeamCard> {
               foregroundColor: Colors.white,
             ),
             icon: const Icon(Icons.delete_forever_rounded, size: 16),
-            label: const Text('Delete Team',
-                style: TextStyle(fontWeight: FontWeight.bold)),
+            label: Text('delete_team_title'.tr(),
+                style: const TextStyle(fontWeight: FontWeight.bold)),
             onPressed: () => Navigator.pop(ctx, true),
           ),
         ],
@@ -1062,9 +1055,9 @@ class _TeamCardState extends State<TeamCard> {
     if (currentUid.isEmpty) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('User not logged in'),
-            backgroundColor: Color(0xFFFF4655),
+          SnackBar(
+            content: Text('user_not_logged_in'.tr()),
+            backgroundColor: const Color(0xFFFF4655),
           ),
         );
       }
@@ -1082,19 +1075,19 @@ class _TeamCardState extends State<TeamCard> {
     Color bg;
     switch (result) {
       case 'ok':
-        msg = '✅ Team deleted successfully';
+        msg = 'team_deleted_success'.tr();
         bg = const Color(0xFF00FF88);
         break;
       case 'not_owner':
-        msg = '❌ Aap team ke owner nahi hain';
+        msg = 'not_team_owner_error'.tr();
         bg = const Color(0xFFFF4655);
         break;
       case 'active_match':
-        msg = '❌ Team ka active match chal raha hai. Pehle match end karein.';
+        msg = 'active_match_exists_error'.tr();
         bg = const Color(0xFFFF4655);
         break;
       default:
-        msg = '❌ Team delete fail ho gayi';
+        msg = 'team_delete_failed'.tr();
         bg = const Color(0xFFFF4655);
     }
 
@@ -1258,7 +1251,7 @@ class _TeamCardState extends State<TeamCard> {
 
                               const SizedBox(height: 3),
                               Text(
-                                'Leader: ${team.leaderName}',
+                                '${'leader_label'.tr()}: ${team.leaderName}',
                                 style: TextStyle(
                                     color: ThemeService.textSecondary, fontSize: 12),
                               ),
@@ -1290,7 +1283,7 @@ class _TeamCardState extends State<TeamCard> {
                                           size: 14, color: ThemeService.textSecondary),
                                       const SizedBox(width: 4),
                                       Text(
-                                        '${team.memberCount} Members',
+                                        '${team.memberCount} ${'members_count_label'.tr()}',
                                         style: TextStyle(
                                             color: ThemeService.textSecondary,
                                             fontSize: 11.5,
@@ -1319,28 +1312,28 @@ class _TeamCardState extends State<TeamCard> {
                               }
                             },
                             itemBuilder: (ctx) => [
-                              const PopupMenuItem(
+                              PopupMenuItem(
                                 value: 'edit',
                                 child: Row(
                                   children: [
-                                    Icon(Icons.edit_rounded,
+                                    const Icon(Icons.edit_rounded,
                                         color: Color(0xFF00FF88), size: 18),
-                                    SizedBox(width: 10),
-                                    Text('Edit Team',
-                                        style: TextStyle(
+                                    const SizedBox(width: 10),
+                                    Text('edit_team_title'.tr(),
+                                        style: const TextStyle(
                                             color: Colors.white, fontSize: 13)),
                                   ],
                                 ),
                               ),
-                              const PopupMenuItem(
+                              PopupMenuItem(
                                 value: 'delete',
                                 child: Row(
                                   children: [
-                                    Icon(Icons.delete_forever_rounded,
+                                    const Icon(Icons.delete_forever_rounded,
                                         color: Color(0xFFFF4655), size: 18),
-                                    SizedBox(width: 10),
-                                    Text('Delete Team',
-                                        style: TextStyle(
+                                    const SizedBox(width: 10),
+                                    Text('delete_team_title'.tr(),
+                                        style: const TextStyle(
                                             color: Color(0xFFFF4655),
                                             fontSize: 13)),
                                   ],
@@ -1442,7 +1435,7 @@ class _TeamCardState extends State<TeamCard> {
                                       ),
                                     );
                                   },
-                                  child: Text('View Team',
+                                  child: Text('view_team_button'.tr(),
                                       style: TextStyle(
                                           color: ThemeService.textPrimary,
                                           fontSize: 11.5,
@@ -1545,8 +1538,8 @@ class _TeamCardState extends State<TeamCard> {
                                               icon: const Icon(
                                                   Icons.chat_bubble_rounded,
                                                   size: 14),
-                                              label: const Text('Team DM 💬',
-                                                  style: TextStyle(
+                                              label: Text('team_dm_button'.tr(),
+                                                  style: const TextStyle(
                                                       fontSize: 11.5,
                                                       fontWeight: FontWeight.bold)),
                                               onPressed: () {
@@ -1606,7 +1599,7 @@ class _TeamCardState extends State<TeamCard> {
                                             : Colors.white,
                                       ),
                                       label: Text(
-                                        isRequested ? 'Requested ⏳' : 'Join',
+                                        isRequested ? 'requested_label'.tr() : 'join_btn'.tr(),
                                         style: TextStyle(
                                           fontWeight: FontWeight.bold,
                                           fontSize: 11.5,
