@@ -14,6 +14,7 @@ import '../services/notification_service.dart';
 import 'notifications_screen.dart';
 import '../widgets/gamer_avatar.dart';
 import '../services/theme_service.dart';
+import '../utils/post_translator.dart';
 
 class GamerFeedScreen extends StatefulWidget {
   const GamerFeedScreen({super.key});
@@ -860,13 +861,19 @@ https://play.google.com/store/apps/details?id=com.gamersid.app
                             if (content.isNotEmpty)
                               Padding(
                                 padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
-                                child: Text(
-                                  content,
-                                  style: TextStyle(
-                                    fontSize: 15,
-                                    color: ThemeService.textPrimary,
-                                    height: 1.3,
-                                  ),
+                                child: FutureBuilder<String>(
+                                  future: PostTranslator.translatePost(content, context.locale.languageCode),
+                                  builder: (context, snapshot) {
+                                    final displayText = snapshot.hasData ? snapshot.data! : content;
+                                    return Text(
+                                      displayText,
+                                      style: TextStyle(
+                                        fontSize: 15,
+                                        color: ThemeService.textPrimary,
+                                        height: 1.3,
+                                      ),
+                                    );
+                                  },
                                 ),
                               ),
                             if (imageUrl.isNotEmpty)
@@ -1299,6 +1306,7 @@ class _CommentSheetState extends State<CommentSheet> {
             child: SizedBox(
               height: 500,
               child: Column(
+                container: false,
                 children: [
                   const SizedBox(height: 12),
                   Container(
@@ -1373,7 +1381,7 @@ class _CommentSheetState extends State<CommentSheet> {
                                           size: 16,
                                           color: ThemeService.textSecondary,
                                         ),
-                                        onPressed: () => _reportComment(
+                                        onPressed: () => _appReportCommentHelper(
                                           (c['id'] ?? '').toString(),
                                           content,
                                         ),
@@ -1386,6 +1394,7 @@ class _CommentSheetState extends State<CommentSheet> {
                   Padding(
                     padding: const EdgeInsets.all(8),
                     child: Row(
+                      postsRow: false,
                       children: [
                         Expanded(
                           child: TextField(
