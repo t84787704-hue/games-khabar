@@ -958,5 +958,19 @@
   "tab_spent": "(-) المصروفة",
   "tag_spent": "مصروف",
   "tag_earned": "مكتسب",
-  "coins_amount_format": "{} عملة"
+  "coins_amount_format": "{} عملة",  "create_game_room": "إنشاء غرفة ألعاب",
+  "game_label": "اللعبة",
+  "mode_map_label": "الوضع / الخريطة",
+  "match_format_slots": "تنسيق المباراة / الخانات",
+  "room_id_label": "معرّف الغرفة",
+  "room_password_label": "كلمة المرور",
+  "prize_pool_coins_label": "مجموع الجوائز (عملات)",
+  "btn_cancel": "إلغاء",
+  "btn_create": "إنشاء",
+  "btn_ok": "حسناً",
+  "room_id_and_pass_required": "⚠️ يرجى إدخال معرّف الغرفة وكلمة المرور معاً!",
+  "max_2_rooms_allowed": "⚠️ يُسمح بغرفتين نشطتين كحد أقصى! يرجى انتظار انتهاء الغرف القديمة.",
+  "room_created_success": "✅ تم إنشاء غرفة اللعبة بنجاح!",
+  "room_creation_failed": "فشل إنشاء الغرفة"
+
 }
