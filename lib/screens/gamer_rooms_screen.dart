@@ -1,9 +1,9 @@
 // ═══════════════════════════════════════════════════════════════════════════════
 // COMPLETE GAMER ROOMS SCREEN (WITH DYNAMIC DAY & NIGHT MODE SUPPORT)
+// - Multi-Proof Preservation: Both Host & Opponent proofs saved without overwrite
 // - Max 2 Active Rooms per user limit (auto-enforced on '+' click & save)
 // - 5-Minute Golden Winner Banner with Live Countdown Timer
 // - Auto-delete room from database after 5 minutes of completion
-// - Once auto-deleted, user can immediately create a new room
 // - Realtime Joined Players List with Avatars, Names, IGN & Game UID
 // - 1-Time Game ID & IGN Auto-Save Popup (Multi-Game Ready)
 // - Join Match Button for non-host players with slot reservation
@@ -12,7 +12,6 @@
 // - Match Verification Rules Dialog Integrated (Create, Join & In-Room)
 // - Accurate Under Review vs Rejected Proof States & Banners
 // - Flexible Match Formats (1v1, 2v2, 4v4 TDM)
-// - "End Match / Claim Win" Screenshot Proof Upload to Supabase Storage
 // - Dispute management & Admin approval flow
 // ═══════════════════════════════════════════════════════════════════════════════
 
@@ -56,6 +55,9 @@ class GamerRoom {
   final String? winnerId;
   final String? winnerName;
   final String? winProofUrl;
+  final String? hostProofUrl;
+  final String? opponentProofUrl;
+  final List<Map<String, dynamic>> proofs;
   final DateTime? winProofUploadedAt;
   final DateTime? completedAt;
   final DateTime? autoApproveAt;
@@ -86,6 +88,9 @@ class GamerRoom {
     this.winnerId,
     this.winnerName,
     this.winProofUrl,
+    this.hostProofUrl,
+    this.opponentProofUrl,
+    this.proofs = const [],
     this.winProofUploadedAt,
     this.completedAt,
     this.autoApproveAt,
@@ -104,17 +109,16 @@ class GamerRoom {
   bool get isDisputed =>
       disputed || status.toLowerCase() == 'disputed' || status.toLowerCase() == 'under_review';
 
-  // ✅ Check if proof was actually rejected by admin
   bool get isRejected =>
       status.toLowerCase() == 'rejected' || rewardStatus.toLowerCase() == 'rejected';
 
-  // ✅ Only true when submitted and still under review (NOT rejected, NOT completed)
   bool get isProofSubmitted =>
       !isCompleted &&
       !isRejected &&
       (status.toLowerCase() == 'proof_submitted' ||
           status.toLowerCase() == 'review_pending' ||
-          (winProofUrl != null && winProofUrl!.isNotEmpty));
+          (winProofUrl != null && winProofUrl!.isNotEmpty) ||
+          proofs.isNotEmpty);
 
   factory GamerRoom.fromSupabase(Map<String, dynamic> row) {
     DateTime created = DateTime.now();
@@ -150,6 +154,23 @@ class GamerRoom {
       if (item is Map) {
         joinedUsers.add(Map<String, dynamic>.from(item));
       }
+    }
+
+    final proofsList = <Map<String, dynamic>>[];
+    final rawProofs = row['proofs'];
+    if (rawProofs is List) {
+      for (final p in rawProofs) {
+        if (p is Map) proofsList.add(Map<String, dynamic>.from(p));
+      }
+    } else if (rawProofs is String && rawProofs.trim().isNotEmpty) {
+      try {
+        final decoded = jsonDecode(rawProofs);
+        if (decoded is List) {
+          for (final p in decoded) {
+            if (p is Map) proofsList.add(Map<String, dynamic>.from(p));
+          }
+        }
+      } catch (_) {}
     }
 
     DateTime? winProofUploadedAt;
@@ -203,6 +224,9 @@ class GamerRoom {
       winnerId: row['winner_id']?.toString(),
       winnerName: row['winner_name']?.toString(),
       winProofUrl: row['win_proof_url']?.toString(),
+      hostProofUrl: row['host_proof_url']?.toString(),
+      opponentProofUrl: row['opponent_proof_url']?.toString(),
+      proofs: proofsList,
       winProofUploadedAt: winProofUploadedAt,
       completedAt: completedAt,
       autoApproveAt: autoApproveAt,
@@ -523,7 +547,6 @@ class _GamerRoomsScreenState extends State<GamerRoomsScreen> {
               elapsed = now.difference(reinterpreted).inSeconds;
             }
 
-            // 5 minutes (300 seconds) pass hote hi auto delete
             if (elapsed >= 300) {
               final roomId = row['id'];
               await SupabaseService.client.from('rooms').delete().eq('id', roomId);
@@ -535,7 +558,6 @@ class _GamerRoomsScreenState extends State<GamerRoomsScreen> {
     } catch (_) {}
   }
 
-  /// ✅ Check limit before opening Create Room dialog (Max 2 rooms per user)
   Future<void> _handleCreateRoomTap() async {
     if (currentUserId == 'guest') {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -544,7 +566,6 @@ class _GamerRoomsScreenState extends State<GamerRoomsScreen> {
       return;
     }
 
-    // Pehle expired rooms ko saaf karein taake actual count mile
     await _purgeExpiredCompletedRooms();
 
     try {
@@ -568,7 +589,6 @@ class _GamerRoomsScreenState extends State<GamerRoomsScreen> {
                 final reinterpreted = DateTime(comp.year, comp.month, comp.day, comp.hour, comp.minute, comp.second);
                 elapsed = now.difference(reinterpreted).inSeconds;
               }
-              // Agar 300 seconds (5 min) guzar chuke hain to abhi delete karein aur count na karein
               if (elapsed >= 300) {
                 try {
                   await SupabaseService.client.from('rooms').delete().eq('id', r['id']);
@@ -582,7 +602,6 @@ class _GamerRoomsScreenState extends State<GamerRoomsScreen> {
         activeHostedRooms++;
       }
 
-      // 🛑 Max 2 Rooms Limit Alert
       if (activeHostedRooms >= 2) {
         if (!mounted) return;
         showDialog(
@@ -628,7 +647,6 @@ class _GamerRoomsScreenState extends State<GamerRoomsScreen> {
         return;
       }
 
-      // Agar limit ke andar hai to pehle Rules Dialog show karein, phir room banayein
       if (mounted) {
         MatchRulesDialog.show(
           context,
@@ -689,7 +707,7 @@ class _GamerRoomsScreenState extends State<GamerRoomsScreen> {
             actions: [
               IconButton(
                 icon: const Icon(Icons.add_circle_outline, color: Color(0xFF1877F2), size: 28),
-                onPressed: _handleCreateRoomTap, // ✅ Limit Check + Verification Rules Dialog
+                onPressed: _handleCreateRoomTap,
               ),
               const SizedBox(width: 8),
             ],
@@ -771,7 +789,6 @@ class _GamerRoomsScreenState extends State<GamerRoomsScreen> {
                           ),
                           child: Column(
                             children: [
-                              // 🏆 Room Card Golden Winner Strip (If Completed)
                               if (room.isCompleted) ...[
                                 Container(
                                   width: double.infinity,
@@ -984,7 +1001,6 @@ class _GamerRoomsScreenState extends State<GamerRoomsScreen> {
                       setDialogState(() => isCreating = true);
 
                       try {
-                        // Double check limit before actual DB insert
                         final currentRooms = await SupabaseService.client
                             .from('rooms')
                             .select('id')
@@ -1043,6 +1059,7 @@ class _GamerRoomsScreenState extends State<GamerRoomsScreen> {
                               'game_uid': myUid,
                             }
                           ],
+                          'proofs': [],
                           'created_at': DateTime.now().toUtc().toIso8601String(),
                         };
 
@@ -1264,6 +1281,7 @@ class _RoomDetailsSheetState extends State<_RoomDetailsSheet> {
     }
   }
 
+  /// ✅ MULTI-PROOF UPLOAD: Pehle wale ka proof overwrite hone se bachata hai
   Future<void> _uploadWinScreenshot() async {
     final XFile? file = await _picker.pickImage(
       source: ImageSource.gallery,
@@ -1276,7 +1294,7 @@ class _RoomDetailsSheetState extends State<_RoomDetailsSheet> {
     try {
       final bytes = await file.readAsBytes();
       final ext = file.path.split('.').last;
-      final fileName = 'proof_${widget.roomId}_${DateTime.now().millisecondsSinceEpoch}.$ext';
+      final fileName = 'proof_${widget.roomId}_${widget.currentUserId}_${DateTime.now().millisecondsSinceEpoch}.$ext';
 
       await SupabaseService.client.storage
           .from('match_proofs')
@@ -1286,14 +1304,65 @@ class _RoomDetailsSheetState extends State<_RoomDetailsSheet> {
           .from('match_proofs')
           .getPublicUrl(fileName);
 
-      await SupabaseService.client.from('rooms').update({
-        'status': 'review_pending',
+      // 1. Current room data fetch karein taake existing proofs array mil sake
+      final currentRoomRow = await SupabaseService.client
+          .from('rooms')
+          .select('host_id, proofs, host_proof_url, opponent_proof_url')
+          .eq('id', widget.roomId)
+          .maybeSingle();
+
+      final hostId = (currentRoomRow?['host_id'] ?? '').toString();
+      final bool isHost = widget.currentUserId == hostId;
+
+      List<dynamic> existingProofs = [];
+      final rawProofs = currentRoomRow?['proofs'];
+      if (rawProofs is List) {
+        existingProofs = List.from(rawProofs);
+      } else if (rawProofs is String && rawProofs.isNotEmpty) {
+        try {
+          final dec = jsonDecode(rawProofs);
+          if (dec is List) existingProofs = List.from(dec);
+        } catch (_) {}
+      }
+
+      // Is user ka proof list mein add ya update karein
+      existingProofs.removeWhere((p) => (p is Map && p['user_id']?.toString() == widget.currentUserId));
+      existingProofs.add({
+        'user_id': widget.currentUserId,
+        'user_name': widget.currentUserName,
+        'avatar': widget.currentUserPhoto,
+        'is_host': isHost,
+        'proof_url': proofUrl,
+        'uploaded_at': DateTime.now().toUtc().toIso8601String(),
+      });
+
+      // Status check: Agar dono parties ne claim kar diya hai to disputed / multi-claim ban jaye
+      final bool hasMultipleClaims = existingProofs.length > 1;
+      final String nextStatus = hasMultipleClaims ? 'disputed' : 'review_pending';
+
+      final Map<String, dynamic> updateData = {
+        'status': nextStatus,
         'reward_status': 'pending_approval',
         'winner_id': widget.currentUserId,
         'winner_name': widget.currentUserName,
         'win_proof_url': proofUrl,
         'win_proof_uploaded_at': DateTime.now().toUtc().toIso8601String(),
-      }).eq('id', widget.roomId);
+        'proofs': existingProofs,
+      };
+
+      if (isHost) {
+        updateData['host_proof_url'] = proofUrl;
+      } else {
+        updateData['opponent_proof_url'] = proofUrl;
+      }
+
+      if (hasMultipleClaims) {
+        updateData['disputed'] = true;
+        updateData['dispute_reason'] = 'Both players claimed win. Admin verification required.';
+        updateData['disputed_at'] = DateTime.now().toUtc().toIso8601String();
+      }
+
+      await SupabaseService.client.from('rooms').update(updateData).eq('id', widget.roomId);
 
       await SupabaseService.client.from('messages').insert({
         'room_id': widget.roomId,
@@ -1431,7 +1500,6 @@ class _RoomDetailsSheetState extends State<_RoomDetailsSheet> {
                 ),
               ),
 
-              // Title Bar
               Padding(
                 padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
                 child: Row(
@@ -1463,7 +1531,6 @@ class _RoomDetailsSheetState extends State<_RoomDetailsSheet> {
               ),
               Divider(height: 1, color: ThemeService.border),
 
-              // 5-MINUTE GOLDEN WINNER BANNER (WITH LIVE TIMER & OPPONENT DETAILS)
               if (room.isCompleted) ...[
                 Builder(builder: (context) {
                   final opponents = room.joinedUsers
@@ -1568,7 +1635,6 @@ class _RoomDetailsSheetState extends State<_RoomDetailsSheet> {
                   ),
                 ),
               ] else if (room.isRejected) ...[
-                // ❌ ADMIN NE PROOF REJECT KIYA HO TAB YEH AAYEGA
                 Container(
                   width: double.infinity,
                   margin: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
@@ -1596,7 +1662,6 @@ class _RoomDetailsSheetState extends State<_RoomDetailsSheet> {
                   ),
                 ),
               ] else if (room.isProofSubmitted) ...[
-                // ⏳ JAB SIRF UNDER REVIEW HO
                 Container(
                   width: double.infinity,
                   margin: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
@@ -1625,7 +1690,6 @@ class _RoomDetailsSheetState extends State<_RoomDetailsSheet> {
                 ),
               ],
 
-              // ROOM CREDENTIALS + RULES BUTTON
               Container(
                 margin: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
                 padding: const EdgeInsets.all(12),
@@ -1730,7 +1794,6 @@ class _RoomDetailsSheetState extends State<_RoomDetailsSheet> {
                 ),
               ),
 
-              // PLAYERS LIST (WITH WINNER & DEFEATED BADGES)
               Container(
                 margin: const EdgeInsets.symmetric(horizontal: 14, vertical: 4),
                 padding: const EdgeInsets.all(10),
@@ -1908,7 +1971,6 @@ class _RoomDetailsSheetState extends State<_RoomDetailsSheet> {
                 ),
               ),
 
-              // CHAT MESSAGES STREAM
               Expanded(
                 child: StreamBuilder<List<Map<String, dynamic>>>(
                   stream: SupabaseService.client
@@ -1986,7 +2048,6 @@ class _RoomDetailsSheetState extends State<_RoomDetailsSheet> {
                 ),
               ),
 
-              // CHAT INPUT
               Padding(
                 padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
                 child: Row(
@@ -2016,7 +2077,6 @@ class _RoomDetailsSheetState extends State<_RoomDetailsSheet> {
                 ),
               ),
 
-              // ACTION BUTTONS: Join Match OR End Match & Dispute
               if (!room.isCompleted) ...[
                 if (!isJoined) ...[
                   Padding(
