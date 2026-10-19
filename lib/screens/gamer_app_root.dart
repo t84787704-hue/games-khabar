@@ -10,11 +10,6 @@ import 'create_gamer_id_screen.dart';
 import 'gamer_main_navigation_screen.dart';
 import 'banned_screen.dart';
 
-/// Root navigator that decides which screen to show on app start:
-/// 
-/// 1. First check: Age gate (13+) — if not verified, show AgeGate
-/// 2. Then check auth state (Supabase)
-/// 3. Then check profile + banned state
 class GamerAppRoot extends StatefulWidget {
   const GamerAppRoot({super.key});
 
@@ -25,34 +20,28 @@ class GamerAppRoot extends StatefulWidget {
 class _GamerAppRootState extends State<GamerAppRoot> {
   final GamerAuthService _authService = GamerAuthService();
 
-  bool _ageGateChecked = false;
+  bool _initialCheckDone = false;
   bool _ageVerified = false;
 
   @override
   void initState() {
     super.initState();
-    _checkAgeGate();
+    _initializeApp();
   }
 
-  Future<void> _checkAgeGate() async {
+  Future<void> _initializeApp() async {
     try {
       final prefs = await SharedPreferences.getInstance();
-      final verified = prefs.getBool('age_verified') ?? false;
-      if (mounted) {
-        setState(() {
-          _ageVerified = verified;
-          _ageGateChecked = true;
-        });
-      }
+      _ageVerified = prefs.getBool('age_verified') ?? false;
 
-      // Now start auth listener
+      // Initialize auth once on startup
       await _authService.init();
     } catch (e) {
-      debugPrint('[AppRoot] AgeGate check error: $e');
+      debugPrint('[AppRoot] Init error: $e');
+    } finally {
       if (mounted) {
         setState(() {
-          _ageGateChecked = true;
-          _ageVerified = false;
+          _initialCheckDone = true;
         });
       }
     }
@@ -66,51 +55,46 @@ class _GamerAppRootState extends State<GamerAppRoot> {
 
   @override
   Widget build(BuildContext context) {
-    // 1. Age Gate not yet checked → loading
-    if (!_ageGateChecked) {
+    // 1. Initial startup loading (Sirf ek dafa chalega app start hone par)
+    if (!_initialCheckDone) {
       return const _GamerLoadingScreen();
     }
 
-    // 2. Age Gate not verified → show age gate
+    // 2. Age Gate check
     if (!_ageVerified) {
       return GamerAgeGateScreen(onVerified: _onAgeVerified);
     }
 
-    // 3. Age verified → proceed to normal auth flow
-    return ValueListenableBuilder<bool>(
-      valueListenable: _authService.isLoadingNotifier,
-      builder: (context, isLoading, _) {
-        return ValueListenableBuilder<User?>(
-          valueListenable: _authService.authUserNotifier,
-          builder: (context, user, _) {
-            // 1. App opens → Splash / Loading screen
-            if (isLoading) {
+    // 3. Auth & Profile State (Background refresh hone par app unmount nahi hogi)
+    return ValueListenableBuilder<User?>(
+      valueListenable: _authService.authUserNotifier,
+      builder: (context, user, _) {
+        // Not logged in → Auth Screen
+        if (user == null) {
+          return const GamerAuthScreen();
+        }
+
+        // Logged in → Check profile & banned status
+        return ValueListenableBuilder<GamerUser?>(
+          valueListenable: _authService.currentGamerNotifier,
+          builder: (context, gamer, _) {
+            // Profile abhi fetch nahi hui pehli dafa to chota loader
+            if (gamer == null) {
               return const _GamerLoadingScreen();
             }
 
-            // 2. Not logged in → GamerAuthScreen (Google Sign In)
-            if (user == null) {
-              return const GamerAuthScreen();
+            // Banned check
+            if (gamer.isBanned) {
+              return BannedScreen(reason: gamer.bannedReason);
             }
 
-            // 3. Logged in → Check public.users profile:
-            return ValueListenableBuilder<GamerUser?>(
-              valueListenable: _authService.currentGamerNotifier,
-              builder: (context, gamer, _) {
-                // Profile exists + is_banned → BannedScreen
-                if (gamer != null && gamer.isBanned) {
-                  return BannedScreen(reason: gamer.bannedReason);
-                }
+            // User Profile complete
+            if (gamer.username.trim().isNotEmpty) {
+              return const GamerMainNavigationScreen();
+            }
 
-                // Profile exists + username not empty → GamerMainNavigationScreen
-                if (gamer != null && gamer.username.trim().isNotEmpty) {
-                  return const GamerMainNavigationScreen();
-                }
-
-                // Profile missing OR username empty → CreateGamerIdScreen
-                return const CreateGamerIdScreen();
-              },
-            );
+            // Profile missing username
+            return const CreateGamerIdScreen();
           },
         );
       },
