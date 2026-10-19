@@ -4,6 +4,7 @@ import '../constants/gamer_theme.dart';
 import '../models/gamer_user_model.dart';
 import '../services/gamer_auth_service.dart';
 import '../services/gamer_social_service.dart';
+import '../services/supabase_service.dart';
 import '../widgets/gamer_avatar.dart';
 import 'gamer_profile_screen.dart';
 
@@ -46,20 +47,43 @@ class _FollowersFollowingScreenState extends State<FollowersFollowingScreen> wit
     super.dispose();
   }
 
+  bool _isSelfUser(GamerUser u, String currentUid, String pageOwnerId) {
+    final targetId = (u.uid.isNotEmpty ? u.uid : (u.id ?? '')).trim().toLowerCase();
+    final curId = currentUid.trim().toLowerCase();
+    final ownerId = pageOwnerId.trim().toLowerCase();
+    final curUuid = SupabaseService.toUuid(curId).toLowerCase();
+    final ownerUuid = SupabaseService.toUuid(ownerId).toLowerCase();
+
+    // Check by ID and UUID
+    if (targetId.isNotEmpty) {
+      if (targetId == curId || targetId == ownerId) return true;
+      if (targetId == curUuid || targetId == ownerUuid) return true;
+    }
+
+    // Check by Username if available
+    final curUsername = (_authService.currentGamer?.username ?? '').trim().toLowerCase();
+    if (curUsername.isNotEmpty && u.username.trim().toLowerCase() == curUsername) {
+      return true;
+    }
+
+    return false;
+  }
+
   Future<void> _loadData() async {
     setState(() {
       _loadingFollowers = true;
       _loadingFollowing = true;
     });
 
+    final currentUid = _authService.currentUid ?? '';
     final followers = await _socialService.getFollowers(widget.userId);
     final following = await _socialService.getFollowing(widget.userId);
 
     if (mounted) {
       setState(() {
-        // Khud ko list se exclude karna
-        _followers = followers.where((u) => u.uid != widget.userId).toList();
-        _following = following.where((u) => u.uid != widget.userId).toList();
+        // Strict Filter: Self-follow user ko list se baahar nikaalna
+        _followers = followers.where((u) => !_isSelfUser(u, currentUid, widget.userId)).toList();
+        _following = following.where((u) => !_isSelfUser(u, currentUid, widget.userId)).toList();
 
         _loadingFollowers = false;
         _loadingFollowing = false;
@@ -93,7 +117,8 @@ class _FollowersFollowingScreenState extends State<FollowersFollowingScreen> wit
       separatorBuilder: (_, __) => const Divider(color: GamerTheme.borderDark, height: 1),
       itemBuilder: (context, index) {
         final user = list[index];
-        final isSelf = user.uid == currentUid;
+        final effectiveUserId = user.uid.isNotEmpty ? user.uid : (user.id ?? '');
+        final isSelf = _isSelfUser(user, currentUid, widget.userId);
         final gameColor = GamerTheme.gameColors[user.favoriteGame] ?? GamerTheme.accentBlue;
         final gameEmoji = GamerTheme.gameEmojis[user.favoriteGame] ?? '🎮';
 
@@ -105,7 +130,7 @@ class _FollowersFollowingScreenState extends State<FollowersFollowingScreen> wit
             radius: 22,
             onTap: () {
               Navigator.of(context).push(
-                MaterialPageRoute(builder: (_) => GamerProfileScreen(userId: user.uid)),
+                MaterialPageRoute(builder: (_) => GamerProfileScreen(userId: effectiveUserId)),
               );
             },
           ),
@@ -147,7 +172,7 @@ class _FollowersFollowingScreenState extends State<FollowersFollowingScreen> wit
           trailing: isSelf
               ? null
               : StreamBuilder<bool>(
-                  stream: _socialService.isFollowingStream(currentUid, user.uid),
+                  stream: _socialService.isFollowingStream(currentUid, effectiveUserId),
                   builder: (context, snap) {
                     final isFollowing = snap.data ?? false;
                     return SizedBox(
@@ -167,9 +192,9 @@ class _FollowersFollowingScreenState extends State<FollowersFollowingScreen> wit
                         ),
                         onPressed: () async {
                           if (isFollowing) {
-                            await _socialService.unfollowUser(currentUid: currentUid, targetUid: user.uid);
+                            await _socialService.unfollowUser(currentUid: currentUid, targetUid: effectiveUserId);
                           } else {
-                            await _socialService.followUser(currentUid: currentUid, targetUid: user.uid);
+                            await _socialService.followUser(currentUid: currentUid, targetUid: effectiveUserId);
                           }
                           _loadData();
                         },
@@ -187,7 +212,7 @@ class _FollowersFollowingScreenState extends State<FollowersFollowingScreen> wit
                 ),
           onTap: () {
             Navigator.of(context).push(
-              MaterialPageRoute(builder: (_) => GamerProfileScreen(userId: user.uid)),
+              MaterialPageRoute(builder: (_) => GamerProfileScreen(userId: effectiveUserId)),
             );
           },
         );
