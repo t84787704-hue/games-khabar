@@ -945,5 +945,18 @@
   "rule_3_desc": "网络搬运、二次裁剪或携带其他创作者水印的视频片段一律作废处理。",
   "rule_4_title": "生涯结算战报凭据（争议复核）",
   "rule_4_desc": "出现争议或存疑时，官方有权要求调取当局游戏内生涯结算大图复核。",
-  "btn_accept_rules": "我已熟知上述守则并确认遵守"
+  "btn_accept_rules": "我已熟知上述守则并确认遵守",
+  "passbook_sheet_title": "金币流水与存折",
+  "passbook_sheet_subtitle": "详细收益、入场费、赛事奖励及商城消费明细",
+  "label_current_balance": "当前余额",
+  "label_escrow_hold": "托管冻结",
+  "label_total_credited": "累计入账",
+  "label_total_spent": "累计支出",
+  "btn_open_coin_store_sheet": "前往金币商城 🛒",
+  "tab_all_activities": "全部明细",
+  "tab_earned": "(+) 已获得",
+  "tab_spent": "(-) 已支出",
+  "tag_spent": "支出",
+  "tag_earned": "获得",
+  "coins_amount_format": "{} 金币"
 }
