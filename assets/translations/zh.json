@@ -1070,5 +1070,12 @@
   "btn_cancel": "取消",
   "btn_ok": "确定",
   "room_limit_reached": "已达房间上限（最多 2 个）",
-  "room_limit_desc": "您同一时间只能创建 2 个活跃房间。\n\n比赛结束后，获胜者横幅将展示 5 分钟，随后房间会自动删除。此后您便可立即创建新房间。"
+  "room_limit_desc": "您同一时间只能创建 2 个活跃房间。\n\n比赛结束后，获胜者横幅将展示 5 分钟，随后房间会自动删除。此后您便可立即创建新房间。",  "max_proof_attempts_reached_warning": "⚠️ 已达最大尝试次数（3次）！您无法再上传凭证，如有异议请发起争议。",
+  "proof_rejected_max_attempts_reached": "❌ 凭证已被驳回！您的3次尝试机会已用完，请发起争议。",
+  "proof_rejected_with_remaining": "凭证已被驳回！请重新上传凭证（还剩 {} 次机会）",
+  "proof_under_review_attempt": "凭证正在审核中（第 {}/3 次尝试）⏳",
+  "proof_limit_reached_btn": "⚠️ 已达上限 (3/3) — 不可再试",
+  "reupload_proof_btn": "重新上传凭证 ({}/3) 🔄",
+  "proof_submitted_btn": "凭证已提交 ({}/3) ⏳"
+
 }
