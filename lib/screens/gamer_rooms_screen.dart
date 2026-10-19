@@ -1309,9 +1309,9 @@ class _RoomDetailsSheetState extends State<_RoomDetailsSheet> {
     if (currentAttempts >= 3) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('⚠️ زیادہ سے زیادہ 3 کوششیں مکمل ہو چکی ہیں! اب آپ مزید ثبوت اپلوڈ نہیں کر سکتے، مسئلہ ہونے پر تنازعہ اٹھائیں۔'),
-            backgroundColor: Color(0xFFFF4655),
+          SnackBar(
+            content: Text('max_proof_attempts_reached_warning'.tr()),
+            backgroundColor: const Color(0xFFFF4655),
           ),
         );
       }
@@ -1428,7 +1428,7 @@ class _RoomDetailsSheetState extends State<_RoomDetailsSheet> {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text('proof_uploaded_success'.tr() + ' ($newAttemptCount/3)'),
+            content: Text('${'proof_uploaded_success'.tr()} ($newAttemptCount/3)'),
             backgroundColor: Colors.green,
           ),
         );
@@ -1705,8 +1705,8 @@ class _RoomDetailsSheetState extends State<_RoomDetailsSheet> {
                       Expanded(
                         child: Text(
                           isLimitReached
-                              ? '❌ ثبوت مسترد کر دیا گیا! آپ کی 3 کوششیں ختم ہو چکی ہیں، براہ کرم تنازعہ اٹھائیں[span_0](start_span)[span_0](end_span)۔'
-                              : '${'proof_rejected_reupload'.tr()} (${3 - userAttempts} کوششیں باقی)',
+                              ? 'proof_rejected_max_attempts_reached'.tr()
+                              : 'proof_rejected_with_remaining'.tr(args: [(3 - userAttempts).toString()]),
                           style: const TextStyle(
                             color: Colors.red,
                             fontWeight: FontWeight.bold,
@@ -1733,7 +1733,9 @@ class _RoomDetailsSheetState extends State<_RoomDetailsSheet> {
                       const SizedBox(width: 8),
                       Expanded(
                         child: Text(
-                          'proof_under_review_banner'.tr() + (userAttempts > 0 ? ' (کوشش: $userAttempts/3)' : ''),
+                          userAttempts > 0
+                              ? 'proof_under_review_attempt'.tr(args: [userAttempts.toString()])
+                              : 'proof_under_review_banner'.tr(),
                           style: const TextStyle(
                             color: Colors.deepOrange,
                             fontWeight: FontWeight.bold,
@@ -2190,15 +2192,15 @@ class _RoomDetailsSheetState extends State<_RoomDetailsSheet> {
                                 btnColor = const Color(0xFF1877F2);
                                 iconData = Icons.upload_rounded;
                               } else if (isLimitReached) {
-                                label = '⚠️ حد ختم ہو گئی (3/3) — مزید اجازت نہیں';
+                                label = 'proof_limit_reached_btn'.tr();
                                 btnColor = Colors.grey.shade700;
                                 iconData = Icons.block_rounded;
                               } else if (room.isRejected) {
-                                label = 'ثبوت دوبارہ اپلوڈ کریں ($userAttempts/3) 🔄';
+                                label = 'reupload_proof_btn'.tr(args: [userAttempts.toString()]);
                                 btnColor = const Color(0xFFFF4655);
                                 iconData = Icons.refresh_rounded;
                               } else if (room.isProofSubmitted) {
-                                label = 'ثبوت جمع ہو چکا ($userAttempts/3) ⏳';
+                                label = 'proof_submitted_btn'.tr(args: [userAttempts.toString()]);
                                 btnColor = const Color(0xFF1877F2);
                                 iconData = Icons.hourglass_top_rounded;
                               } else {
