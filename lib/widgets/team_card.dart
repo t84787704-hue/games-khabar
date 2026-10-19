@@ -502,7 +502,7 @@ class _TeamCardState extends State<TeamCard> {
             border: Border.all(color: ThemeService.border),
           ),
           child: Row(
-            mainAxisSize: min(MainAxisSize.min),
+            mainAxisSize: MainAxisSize.min,
             children: [
               Icon(Icons.hourglass_top_rounded,
                   size: 12, color: ThemeService.textSecondary),
