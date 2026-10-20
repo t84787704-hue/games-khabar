@@ -86,7 +86,6 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
 
     final data = notif.data ?? {};
     final matchId = data['match_id'] ?? data['matchId'];
-    final roomId = data['room_id'] ?? data['roomId'];
     final senderId = notif.senderId;
 
     if (!mounted) return;
@@ -143,19 +142,19 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
             const Icon(Icons.delete_sweep_rounded, color: Color(0xFFFF4655), size: 22),
             const SizedBox(width: 8),
             Text(
-              'تمام سرگرمیاں صاف کریں؟',
+              'clear_all_activities_title'.tr(),
               style: const TextStyle(color: Color(0xFFFF4655), fontSize: 16, fontWeight: FontWeight.bold),
             ),
           ],
         ),
         content: Text(
-          'کیا آپ واقعی اپنی تمام سرگرمیاں اور نوٹیفیکیشنز کو حذف کرنا چاہتے ہیں؟',
+          'clear_all_activities_desc'.tr(),
           style: TextStyle(color: ThemeService.textSecondary, fontSize: 13),
         ),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(ctx, false),
-            child: Text('منسوخ', style: TextStyle(color: ThemeService.textSecondary)),
+            child: Text('btn_cancel'.tr(), style: TextStyle(color: ThemeService.textSecondary)),
           ),
           ElevatedButton(
             style: ElevatedButton.styleFrom(
@@ -164,7 +163,7 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
               shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
             ),
             onPressed: () => Navigator.pop(ctx, true),
-            child: const Text('سب صاف کریں', style: TextStyle(fontWeight: FontWeight.bold)),
+            child: Text('btn_clear_all'.tr(), style: const TextStyle(fontWeight: FontWeight.bold)),
           ),
         ],
       ),
@@ -186,9 +185,9 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
           _streamKey = UniqueKey();
         });
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('تمام نوٹیفیکیشنز صاف کر دیے گئے'),
-            backgroundColor: Color(0xFF1877F2),
+          SnackBar(
+            content: Text('all_notifs_cleared_msg'.tr()),
+            backgroundColor: const Color(0xFF1877F2),
             behavior: SnackBarBehavior.floating,
           ),
         );
@@ -207,7 +206,7 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
             backgroundColor: ThemeService.appBarBg,
             elevation: ThemeService.isDarkMode ? 0 : 1,
             title: Text(
-              'سرگرمیاں اور نوٹیفیکیشنز',
+              'activities_and_notifications_title'.tr(),
               style: TextStyle(
                 color: ThemeService.textPrimary,
                 fontWeight: FontWeight.bold,
@@ -215,7 +214,7 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
             ),
             actions: [
               IconButton(
-                tooltip: 'تمام کو پڑھا ہوا نشان زد کریں',
+                tooltip: 'mark_all_read_tooltip'.tr(),
                 icon: const Icon(Icons.done_all_rounded, color: Color(0xFF1877F2), size: 22),
                 onPressed: () async {
                   setState(() {
@@ -228,9 +227,9 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
                   await _notificationService.markAllAsRead(_currentUid);
                   if (mounted) {
                     ScaffoldMessenger.of(context).showSnackBar(
-                      const SnackBar(
-                        content: Text('تمام نوٹیفیکیشنز پڑھے ہوئے کے طور پر نشان زد ہو گئے'),
-                        backgroundColor: Color(0xFF00FF88),
+                      SnackBar(
+                        content: Text('all_marked_read_msg'.tr()),
+                        backgroundColor: const Color(0xFF00FF88),
                         behavior: SnackBarBehavior.floating,
                       ),
                     );
@@ -238,7 +237,7 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
                 },
               ),
               IconButton(
-                tooltip: 'سب صاف کریں',
+                tooltip: 'clear_all_tooltip'.tr(),
                 icon: Icon(Icons.delete_outline_rounded, color: ThemeService.textSecondary, size: 22),
                 onPressed: _confirmClearAll,
               ),
@@ -290,11 +289,11 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
 
   Widget _buildFilterTabs() {
     final tabs = [
-      {'key': 'تمام', 'icon': Icons.all_inbox_rounded},
-      {'key': 'ان پڑھ', 'icon': Icons.mark_email_unread_rounded},
-      {'key': 'سوشل', 'icon': Icons.people_rounded},
-      {'key': 'میچز', 'icon': Icons.sports_esports_rounded},
-      {'key': 'کوائنز', 'icon': Icons.monetization_on_rounded},
+      {'key': 'filter_tab_all'.tr(), 'icon': Icons.all_inbox_rounded},
+      {'key': 'filter_tab_unread'.tr(), 'icon': Icons.mark_email_unread_rounded},
+      {'key': 'filter_tab_social'.tr(), 'icon': Icons.people_rounded},
+      {'key': 'filter_tab_matches'.tr(), 'icon': Icons.sports_esports_rounded},
+      {'key': 'filter_tab_coins'.tr(), 'icon': Icons.monetization_on_rounded},
     ];
 
     return Container(
@@ -439,7 +438,7 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
 
   Widget _buildNotificationCard(InAppNotification notif) {
     final isRead = notif.isRead || _locallyReadIds.contains(notif.id);
-    final senderName = notif.senderName ?? 'سسٹم نوٹیفیکیشن';
+    final senderName = notif.senderName ?? 'system_notification_label'.tr();
     final senderPhoto = notif.senderAvatar ?? '';
     final senderId = notif.senderId ?? '';
 
@@ -599,22 +598,22 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
                 await ChallengeService().acceptChallenge(
                   challengeId.toString(),
                   challengerUid: notif.senderId ?? '',
-                  responderName: GamerAuthService().currentGamer?.displayName ?? 'ساتھی',
+                  responderName: GamerAuthService().currentGamer?.displayName ?? 'default_mate_label'.tr(),
                 );
                 await _notificationService.markAsRead(notif.id);
                 if (mounted) {
                   ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(
-                      content: Text('چیلنج قبول کر لیا گیا!'),
-                      backgroundColor: Color(0xFF00FF88),
+                    SnackBar(
+                      content: Text('challenge_accepted_msg'.tr()),
+                      backgroundColor: const Color(0xFF00FF88),
                       behavior: SnackBarBehavior.floating,
                     ),
                   );
                 }
               },
-              child: const Text(
-                'قبول کریں',
-                style: TextStyle(fontWeight: FontWeight.w900, fontSize: 11),
+              child: Text(
+                'btn_accept'.tr(),
+                style: const TextStyle(fontWeight: FontWeight.w900, fontSize: 11),
               ),
             ),
             const SizedBox(width: 8),
@@ -633,9 +632,9 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
                 await ChallengeService().declineChallenge(challengeId.toString());
                 await _notificationService.markAsRead(notif.id);
               },
-              child: const Text(
-                'مسترد کریں',
-                style: TextStyle(fontWeight: FontWeight.bold, fontSize: 11),
+              child: Text(
+                'btn_reject'.tr(),
+                style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 11),
               ),
             ),
           ],
@@ -658,7 +657,7 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
             minimumSize: Size.zero,
           ),
           icon: const Icon(Icons.meeting_room_rounded, size: 12),
-          label: const Text('رومز کھولیں', style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold)),
+          label: Text('btn_open_rooms'.tr(), style: const TextStyle(fontSize: 11, fontWeight: FontWeight.bold)),
           onPressed: () {
             setState(() {
               _locallyReadIds.add(notif.id);
@@ -682,7 +681,7 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
             minimumSize: Size.zero,
           ),
           icon: const Icon(Icons.open_in_new_rounded, size: 12),
-          label: const Text('میچ روم کھولیں', style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold)),
+          label: Text('btn_open_match_room'.tr(), style: const TextStyle(fontSize: 11, fontWeight: FontWeight.bold)),
           onPressed: () {
             setState(() {
               _locallyReadIds.add(notif.id);
@@ -709,7 +708,7 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
             minimumSize: Size.zero,
           ),
           icon: const Text('🪙', style: TextStyle(fontSize: 12)),
-          label: const Text('والٹ دیکھیں', style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold)),
+          label: Text('btn_view_wallet'.tr(), style: const TextStyle(fontSize: 11, fontWeight: FontWeight.bold)),
           onPressed: () {
             setState(() {
               _locallyReadIds.add(notif.id);
@@ -733,7 +732,7 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
             minimumSize: Size.zero,
           ),
           icon: const Icon(Icons.storefront_rounded, size: 12),
-          label: const Text('اسٹور کھولیں', style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold)),
+          label: Text('btn_open_store'.tr(), style: const TextStyle(fontSize: 11, fontWeight: FontWeight.bold)),
           onPressed: () {
             setState(() {
               _locallyReadIds.add(notif.id);
@@ -767,13 +766,13 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
             const SizedBox(height: 16),
             Text(
               _selectedFilterIndex == 1
-                  ? 'کوئی ان پڑھ نوٹیفیکیشن نہیں ہے'
-                  : 'ابھی تک کوئی نوٹیفیکیشن نہیں ہے',
+                  ? 'no_unread_notifications'.tr()
+                  : 'no_notifications_yet'.tr(),
               style: TextStyle(color: ThemeService.textPrimary, fontSize: 16, fontWeight: FontWeight.bold),
             ),
             const SizedBox(height: 6),
             Text(
-              'جب آپ کو کوئی نئی سرگرمی یا اپڈیٹ ملے گی، وہ یہاں شو ہوگی۔',
+              'notifications_empty_sub'.tr(),
               textAlign: TextAlign.center,
               style: TextStyle(color: ThemeService.textSecondary, fontSize: 12, height: 1.4),
             ),
