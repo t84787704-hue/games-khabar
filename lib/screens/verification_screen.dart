@@ -155,8 +155,8 @@ class _VerificationScreenState extends State<VerificationScreen> {
         userId: user.uid,
         amount: -2000,
         type: 'store_purchase',
-        title: 'VIP Blue Tick Verification ✨',
-        description: 'Instant Blue Tick unlocked via 2,000 Coins',
+        title: 'vip_blue_tick_tx_title'.tr(),
+        description: 'vip_blue_tick_tx_desc'.tr(),
       );
 
       await SupabaseService.client.from('users').update({
@@ -181,7 +181,10 @@ class _VerificationScreenState extends State<VerificationScreen> {
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(backgroundColor: const Color(0xFFFF4655), content: Text('Error: $e')),
+          SnackBar(
+            backgroundColor: const Color(0xFFFF4655),
+            content: Text('err_failed_with_msg'.tr(args: [e.toString()])),
+          ),
         );
       }
     } finally {
@@ -248,7 +251,10 @@ class _VerificationScreenState extends State<VerificationScreen> {
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(backgroundColor: const Color(0xFFFF4655), content: Text('Error: $e')),
+          SnackBar(
+            backgroundColor: const Color(0xFFFF4655),
+            content: Text('err_failed_with_msg'.tr(args: [e.toString()])),
+          ),
         );
       }
     } finally {
