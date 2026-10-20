@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
+import 'package:easy_localization/easy_localization.dart';
 import '../constants/gamer_theme.dart';
 import '../models/gamer_user_model.dart';
 import '../services/gamer_auth_service.dart';
@@ -177,7 +178,7 @@ class _GamerSearchScreenState extends State<GamerSearchScreen> {
                       }
                     },
                     child: Text(
-                      isFollowing ? 'Following' : 'Follow',
+                      isFollowing ? 'btn_following'.tr() : 'btn_follow'.tr(),
                       style: TextStyle(
                         fontWeight: FontWeight.w800,
                         fontSize: 12,
@@ -198,7 +199,7 @@ class _GamerSearchScreenState extends State<GamerSearchScreen> {
     return Scaffold(
       backgroundColor: GamerTheme.bgDark,
       appBar: AppBar(
-        title: const Text('Find Gamers'),
+        title: Text('find_gamers_title'.tr()),
         elevation: 0,
       ),
       body: SafeArea(
@@ -212,7 +213,7 @@ class _GamerSearchScreenState extends State<GamerSearchScreen> {
                 onChanged: _onSearchChanged,
                 style: const TextStyle(color: GamerTheme.textWhite),
                 decoration: InputDecoration(
-                  hintText: 'Search by @username or display name...',
+                  hintText: 'search_gamers_hint'.tr(),
                   prefixIcon: const Icon(Icons.search_rounded, color: GamerTheme.accentBlue),
                   suffixIcon: _activeQuery.isNotEmpty
                       ? IconButton(
@@ -240,13 +241,13 @@ class _GamerSearchScreenState extends State<GamerSearchScreen> {
                                   const Icon(Icons.person_search_rounded, color: GamerTheme.textMuted, size: 54),
                                   const SizedBox(height: 12),
                                   Text(
-                                    'No gamers found for "$_activeQuery"',
+                                    'no_gamers_found_query'.tr(args: [_activeQuery]),
                                     style: const TextStyle(color: GamerTheme.textGray, fontSize: 14),
                                   ),
                                   const SizedBox(height: 6),
-                                  const Text(
-                                    'Check spelling or search by unique username',
-                                    style: TextStyle(color: GamerTheme.textMuted, fontSize: 12),
+                                  Text(
+                                    'check_spelling_hint'.tr(),
+                                    style: const TextStyle(color: GamerTheme.textMuted, fontSize: 12),
                                   ),
                                 ],
                               ),
@@ -258,15 +259,15 @@ class _GamerSearchScreenState extends State<GamerSearchScreen> {
                       : Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            const Padding(
-                              padding: EdgeInsets.fromLTRB(16, 12, 16, 6),
+                            Padding(
+                              padding: const EdgeInsets.fromLTRB(16, 12, 16, 6),
                               child: Row(
                                 children: [
-                                  Icon(Icons.whatshot_rounded, color: GamerTheme.accentOrange, size: 18),
-                                  SizedBox(width: 6),
+                                  const Icon(Icons.whatshot_rounded, color: GamerTheme.accentOrange, size: 18),
+                                  const SizedBox(width: 6),
                                   Text(
-                                    'SUGGESTED GAMERS & SQUADS',
-                                    style: TextStyle(
+                                    'suggested_gamers_title'.tr(),
+                                    style: const TextStyle(
                                       color: GamerTheme.accentOrange,
                                       fontSize: 12,
                                       fontWeight: FontWeight.w900,
@@ -289,12 +290,12 @@ class _GamerSearchScreenState extends State<GamerSearchScreen> {
                                     return Center(
                                       child: Column(
                                         mainAxisAlignment: MainAxisAlignment.center,
-                                        children: const [
-                                          Icon(Icons.sports_esports_rounded, color: GamerTheme.textMuted, size: 48),
-                                          SizedBox(height: 10),
-                                          Text('Welcome to Gamers ID!', style: TextStyle(color: GamerTheme.textWhite)),
-                                          SizedBox(height: 4),
-                                          Text('Start typing above to discover gaming IDs.', style: TextStyle(color: GamerTheme.textMuted, fontSize: 12)),
+                                        children: [
+                                          const Icon(Icons.sports_esports_rounded, color: GamerTheme.textMuted, size: 48),
+                                          const SizedBox(height: 10),
+                                          Text('welcome_gamers_id'.tr(), style: const TextStyle(color: GamerTheme.textWhite)),
+                                          const SizedBox(height: 4),
+                                          Text('start_typing_discover'.tr(), style: const TextStyle(color: GamerTheme.textMuted, fontSize: 12)),
                                         ],
                                       ),
                                     );
