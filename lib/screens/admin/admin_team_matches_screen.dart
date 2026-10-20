@@ -996,7 +996,7 @@ class _AdminTeamMatchesScreenState extends State<AdminTeamMatchesScreen> {
                         if (match.isVerified && match.winnerName != null) ...[
                           const SizedBox(height: 6),
                           Text(
-                            '🏆 ${'winner_label'.tr()}: ${match.winnerName} (${'verified_by_label'.tr(args: [match.verifiedBy])})',
+                            '🏆 ${'winner_label'.tr()}: ${match.winnerName} (${'verified_by_label'.tr(args: [match.verifiedBy ?? ''])})',
                             style: const TextStyle(color: Color(0xFF00FF88), fontWeight: FontWeight.bold, fontSize: 12),
                           ),
                         ],
