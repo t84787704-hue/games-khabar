@@ -251,7 +251,7 @@ class _TeamsScreenState extends State<TeamsScreen>
       }
     } catch (e) {
       debugPrint("[TeamsScreen] Error accepting challenge: $e");
-      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("خرابی: $e"), backgroundColor: const Color(0xFFFF4655)));
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('err_prefix'.tr(args: [e.toString()])), backgroundColor: const Color(0xFFFF4655)));
     } finally {
       if (mounted) setState(() => _acceptingChallengeIds.remove(cId));
     }
@@ -297,7 +297,7 @@ class _TeamsScreenState extends State<TeamsScreen>
 
     await CoinOrAdPopup.show(
       context: context,
-      actionName: "Team Create",
+      actionName: 'btn_create_team'.tr(),
       onConfirm: () async {
         final created = await CreateTeamDialog.show(context);
         if (created == true && mounted) setState(() {});
@@ -568,7 +568,7 @@ class _TeamsScreenState extends State<TeamsScreen>
           ),
         ),
 
-        // INCOMING CHALLENGES STREAM: Checks both raw ID and UUID
+        // INCOMING CHALLENGES STREAM
         if (myTeamId.isNotEmpty)
           StreamBuilder<List<Map<String, dynamic>>>(
             stream: SupabaseService.client
@@ -1208,7 +1208,7 @@ class _ActiveMatchBothTeamsBannerState
       try {
         await SupabaseService.client.from('active_matches').update({
           'status': 'cancelled',
-          'admin_note': 'Proof limit reached - no valid winner',
+          'admin_note': 'proof_limit_cancelled_note'.tr(),
         }).eq('id', matchId);
 
         Map<String, dynamic>? roomRow;
@@ -1235,8 +1235,7 @@ class _ActiveMatchBothTeamsBannerState
             userId: hostId,
             amount: prizePool,
             type: 'refund',
-            description:
-                'Match cancelled - proof limit reached (Prize refunded)',
+            description: 'proof_limit_refund_prize'.tr(),
             inEscrowChange: -prizePool,
             roomId: matchId,
           );
@@ -1249,7 +1248,7 @@ class _ActiveMatchBothTeamsBannerState
               userId: joinerId,
               amount: entryFee,
               type: 'refund',
-              description: 'Match cancelled - entry fee refunded',
+              description: 'proof_limit_refund_entry'.tr(),
               inEscrowChange: -entryFee,
               roomId: matchId,
             );
@@ -1260,7 +1259,7 @@ class _ActiveMatchBothTeamsBannerState
           final rId = roomRow['id']?.toString() ?? matchId;
           await SupabaseService.client.from('rooms').update({
             'status': 'cancelled',
-            'dispute_reason': 'Proof limit reached - no valid winner',
+            'dispute_reason': 'proof_limit_cancelled_note'.tr(),
             'completed_at': DateTime.now().toIso8601String(),
           }).eq('id', rId);
 
