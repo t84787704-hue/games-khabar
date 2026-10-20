@@ -2,6 +2,7 @@ import 'package:flutter/foundation.dart';
 import '../models/challenge_model.dart';
 import 'supabase_service.dart';
 import 'notification_service.dart';
+import 'package:easy_localization/easy_localization.dart';
 
 class ChallengeService {
   static final ChallengeService _instance = ChallengeService._internal();
@@ -63,11 +64,11 @@ class ChallengeService {
 
       if (challengerUid != null && challengerUid.isNotEmpty) {
         try {
+          final opponentName = responderName ?? 'default_opponent'.tr();
           await SupabaseService.sendNotification({
             'userId': SupabaseService.toUuid(challengerUid),
-            'title': '✅ 1v1 Challenge Accepted',
-            'message':
-                '${responderName ?? "Opponent"} accepted your 1v1 challenge! Room is ON.',
+            'title': 'challenge_accepted_title'.tr(),
+            'message': 'challenge_accepted_message'.tr(args: [opponentName]),
             'type': 'challenge_accepted',
           });
         } catch (e) {
