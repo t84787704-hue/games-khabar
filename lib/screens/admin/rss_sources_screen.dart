@@ -2,6 +2,7 @@ import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 import 'package:xml/xml.dart';
+import 'package:easy_localization/easy_localization.dart';
 import '../../services/supabase_service.dart';
 import '../../services/auto_news_scraper.dart';
 
@@ -26,6 +27,7 @@ class _RssSourcesScreenState extends State<RssSourcesScreen> {
       await Future.delayed(const Duration(seconds: 4));
     }
   }
+
   static const Color bgDark = Color(0xFF0A0A0F);
   static const Color cardDark = Color(0xFF1E1E24);
   static const Color cardDark2 = Color(0xFF15151A);
@@ -75,8 +77,8 @@ class _RssSourcesScreenState extends State<RssSourcesScreen> {
       if (snap.isEmpty) {
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-              content: Text('Koi active source nahi hai'),
+            SnackBar(
+              content: Text('no_active_rss_sources'.tr()),
               backgroundColor: Colors.orange,
             ),
           );
@@ -99,7 +101,7 @@ class _RssSourcesScreenState extends State<RssSourcesScreen> {
           if (mounted) {
             ScaffoldMessenger.of(context).showSnackBar(
               SnackBar(
-                content: Text('Invalid URL removed for $name'),
+                content: Text('invalid_url_removed'.tr(args: [name])),
                 backgroundColor: alertRed,
                 duration: const Duration(seconds: 2),
               ),
@@ -219,8 +221,8 @@ class _RssSourcesScreenState extends State<RssSourcesScreen> {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text(published > 0
-                ? 'SUCCESS: $published news published!'
-                : '0 news - Saare feeds up to date hain ya URL galat hai'),
+                ? 'rss_published_success'.tr(args: [published.toString()])
+                : 'rss_published_none'.tr()),
             backgroundColor: published > 0 ? Colors.green : Colors.orange,
             duration: const Duration(seconds: 5),
           ),
@@ -257,13 +259,13 @@ class _RssSourcesScreenState extends State<RssSourcesScreen> {
           borderRadius: BorderRadius.circular(16),
           side: const BorderSide(color: borderDark),
         ),
-        title: const Row(
+        title: Row(
           children: [
-            Icon(Icons.rss_feed_rounded, color: neonGreen, size: 22),
-            SizedBox(width: 8),
+            const Icon(Icons.rss_feed_rounded, color: neonGreen, size: 22),
+            const SizedBox(width: 8),
             Text(
-              'Add RSS Source',
-              style: TextStyle(color: textWhite, fontWeight: FontWeight.bold, fontSize: 18),
+              'add_rss_source_title'.tr(),
+              style: const TextStyle(color: textWhite, fontWeight: FontWeight.bold, fontSize: 18),
             ),
           ],
         ),
@@ -275,7 +277,7 @@ class _RssSourcesScreenState extends State<RssSourcesScreen> {
                 controller: nameCtrl,
                 style: const TextStyle(color: textWhite, fontSize: 13),
                 decoration: InputDecoration(
-                  labelText: 'Source Name (e.g. Sportskeeda / IGN)',
+                  labelText: 'source_name_label'.tr(),
                   labelStyle: const TextStyle(color: textGray, fontSize: 12),
                   filled: true,
                   fillColor: cardDark2,
@@ -290,7 +292,7 @@ class _RssSourcesScreenState extends State<RssSourcesScreen> {
                 controller: urlCtrl,
                 style: const TextStyle(color: textWhite, fontSize: 13),
                 decoration: InputDecoration(
-                  labelText: 'RSS Feed URL (https://...)',
+                  labelText: 'rss_url_label'.tr(),
                   labelStyle: const TextStyle(color: textGray, fontSize: 12),
                   filled: true,
                   fillColor: cardDark2,
@@ -305,7 +307,7 @@ class _RssSourcesScreenState extends State<RssSourcesScreen> {
                 controller: hintCtrl,
                 style: const TextStyle(color: textWhite, fontSize: 13),
                 decoration: InputDecoration(
-                  labelText: 'Category (e.g. Free Fire / BGMI / GTA)',
+                  labelText: 'category_label'.tr(),
                   labelStyle: const TextStyle(color: textGray, fontSize: 12),
                   filled: true,
                   fillColor: cardDark2,
@@ -321,7 +323,7 @@ class _RssSourcesScreenState extends State<RssSourcesScreen> {
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(dCtx),
-            child: const Text('Cancel', style: TextStyle(color: textGray)),
+            child: Text('btn_cancel'.tr(), style: const TextStyle(color: textGray)),
           ),
           ElevatedButton(
             style: ElevatedButton.styleFrom(
@@ -332,9 +334,9 @@ class _RssSourcesScreenState extends State<RssSourcesScreen> {
               final url = urlCtrl.text.trim();
               if (url.isEmpty || (!url.startsWith('http://') && !url.startsWith('https://'))) {
                 ScaffoldMessenger.of(ctx).showSnackBar(
-                  const SnackBar(
+                  SnackBar(
                     backgroundColor: alertRed,
-                    content: Text('Please enter a valid RSS feed URL starting with https://'),
+                    content: Text('enter_valid_rss_url_warning'.tr()),
                   ),
                 );
                 return;
@@ -347,14 +349,14 @@ class _RssSourcesScreenState extends State<RssSourcesScreen> {
               if (dCtx.mounted) Navigator.pop(dCtx);
               if (ctx.mounted) {
                 ScaffoldMessenger.of(ctx).showSnackBar(
-                  const SnackBar(
+                  SnackBar(
                     backgroundColor: cardDark,
-                    content: Text('RSS Source Added Successfully!', style: TextStyle(color: neonGreen)),
+                    content: Text('rss_source_added_success'.tr(), style: const TextStyle(color: neonGreen)),
                   ),
                 );
               }
             },
-            child: const Text('Add Source', style: TextStyle(fontWeight: FontWeight.bold)),
+            child: Text('add_source_btn'.tr(), style: const TextStyle(fontWeight: FontWeight.bold)),
           ),
         ],
       ),
@@ -368,14 +370,14 @@ class _RssSourcesScreenState extends State<RssSourcesScreen> {
       appBar: AppBar(
         backgroundColor: cardDark,
         elevation: 0,
-        title: const Text(
-          'Active RSS Sources',
-          style: TextStyle(color: textWhite, fontWeight: FontWeight.bold, fontSize: 18),
+        title: Text(
+          'active_rss_sources_title'.tr(),
+          style: const TextStyle(color: textWhite, fontWeight: FontWeight.bold, fontSize: 18),
         ),
         actions: [
           IconButton(
             icon: const Icon(Icons.add, color: neonGreen),
-            tooltip: 'Add Source',
+            tooltip: 'add_source_btn'.tr(),
             onPressed: () => _showAddSourceDialog(context),
           ),
         ],
@@ -412,8 +414,8 @@ class _RssSourcesScreenState extends State<RssSourcesScreen> {
                         Expanded(
                           child: Text(
                             _isSyncing
-                                ? 'Syncing feeds directly from client...'
-                                : 'Client-Side Auto RSS Engine',
+                                ? 'syncing_feeds_client_label'.tr()
+                                : 'client_side_rss_engine_label'.tr(),
                             style: TextStyle(
                               color: _isSyncing ? Colors.orange : textWhite,
                               fontSize: 13,
@@ -438,10 +440,10 @@ class _RssSourcesScreenState extends State<RssSourcesScreen> {
                               ),
                             ),
                             child: _isSyncing
-                                ? const Row(
+                                ? Row(
                                     mainAxisSize: MainAxisSize.min,
                                     children: [
-                                      SizedBox(
+                                      const SizedBox(
                                         width: 18,
                                         height: 18,
                                         child: CircularProgressIndicator(
@@ -449,17 +451,17 @@ class _RssSourcesScreenState extends State<RssSourcesScreen> {
                                           strokeWidth: 2,
                                         ),
                                       ),
-                                      SizedBox(width: 10),
+                                      const SizedBox(width: 10),
                                       Text(
-                                        'Syncing...',
-                                        style: TextStyle(fontWeight: FontWeight.bold),
+                                        'syncing_label'.tr(),
+                                        style: const TextStyle(fontWeight: FontWeight.bold),
                                       ),
                                     ],
                                   )
                                 : Text(
                                     _publishedCount > 0
-                                        ? 'Sync Feeds Now ($_publishedCount)'
-                                        : 'Sync Feeds Now',
+                                        ? 'sync_feeds_now_with_count'.tr(args: [_publishedCount.toString()])
+                                        : 'sync_feeds_now_btn'.tr(),
                                     style: const TextStyle(fontWeight: FontWeight.w900),
                                   ),
                           ),
@@ -476,7 +478,7 @@ class _RssSourcesScreenState extends State<RssSourcesScreen> {
                           ),
                           onPressed: () => _showAddSourceDialog(context),
                           icon: const Icon(Icons.add, size: 18),
-                          label: const Text('Add Source', style: TextStyle(fontWeight: FontWeight.bold)),
+                          label: Text('add_source_btn'.tr(), style: const TextStyle(fontWeight: FontWeight.bold)),
                         ),
                       ],
                     ),
@@ -493,9 +495,9 @@ class _RssSourcesScreenState extends State<RssSourcesScreen> {
                           children: [
                             const Icon(Icons.rss_feed, color: textGray, size: 40),
                             const SizedBox(height: 12),
-                            const Text(
-                              'No RSS Sources found',
-                              style: TextStyle(color: textWhite, fontWeight: FontWeight.bold),
+                            Text(
+                              'no_rss_sources_found'.tr(),
+                              style: const TextStyle(color: textWhite, fontWeight: FontWeight.bold),
                             ),
                             const SizedBox(height: 12),
                             ElevatedButton(
@@ -504,7 +506,7 @@ class _RssSourcesScreenState extends State<RssSourcesScreen> {
                                 foregroundColor: Colors.black,
                               ),
                               onPressed: () async => await AutoNewsScraper.seedDefaultSourcesIfEmpty(),
-                              child: const Text('Seed 10 Default Sources'),
+                              child: Text('seed_default_sources_btn'.tr()),
                             ),
                           ],
                         ),
