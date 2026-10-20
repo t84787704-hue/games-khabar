@@ -1,3 +1,4 @@
+import 'package:easy_localization/easy_localization.dart';
 import 'dart:math';
 import 'gamer_auth_service.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -113,15 +114,15 @@ class CommunityService {
     final trimmed = text.trim();
 
     if (trimmed.isEmpty) {
-      throw 'Please enter a message';
+      throw 'err_write_something'.tr();
     }
 
     if (trimmed.length > 200) {
-      throw 'Text cannot exceed 200 characters';
+      throw 'err_post_max_length'.tr();
     }
 
     if (hasBadWords(trimmed)) {
-      throw 'Tehzeeb se likho';
+      throw 'err_bad_words_warning'.tr();
     }
 
     await init();
@@ -238,7 +239,7 @@ class CommunityService {
     final trimmed = text.trim();
     if (trimmed.isEmpty) return;
     if (hasBadWords(trimmed)) {
-      throw 'Tehzeeb se likho';
+      throw 'err_bad_words_warning'.tr();
     }
 
     await init();
