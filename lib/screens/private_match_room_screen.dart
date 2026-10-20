@@ -6,6 +6,7 @@ import "package:image_picker/image_picker.dart";
 import "package:intl/intl.dart";
 import "package:shared_preferences/shared_preferences.dart";
 import "package:cached_network_image/cached_network_image.dart";
+import "package:easy_localization/easy_localization.dart";
 import "../services/supabase_service.dart";
 import "../models/team_model.dart";
 import "../services/team_service.dart";
@@ -53,13 +54,13 @@ class _PrivateMatchRoomScreenState extends State<PrivateMatchRoomScreen> {
   @override
   void initState() {
     super.initState();
-    _myTeamName = widget.myTeamName.isNotEmpty ? widget.myTeamName : 'My Team';
-    _opponentName = widget.opponentName.isNotEmpty ? widget.opponentName : 'Opponent';
+    _myTeamName = widget.myTeamName.isNotEmpty ? widget.myTeamName : 'my_team_fallback'.tr();
+    _opponentName = widget.opponentName.isNotEmpty ? widget.opponentName : 'opponent_team_fallback'.tr();
 
     if (widget.matchId.trim().isEmpty) {
       _isLoading = false;
       _isRoomInfoLoading = false;
-      _errorMessage = 'Match not found';
+      _errorMessage = 'match_not_found_title'.tr();
       return;
     }
 
@@ -173,12 +174,12 @@ class _PrivateMatchRoomScreenState extends State<PrivateMatchRoomScreen> {
 
   Future<void> _resolveTeamNames() async {
     final teamService = TeamService();
-    if ((_myTeamName == 'My Team' || _myTeamName.isEmpty) &&
+    if ((_myTeamName == 'my_team_fallback'.tr() || _myTeamName.isEmpty) &&
         widget.myTeamId.isNotEmpty) {
       final t = await teamService.getTeam(widget.myTeamId);
       if (t != null && mounted) setState(() => _myTeamName = t.name);
     }
-    if ((_opponentName == 'Opponent' || _opponentName.isEmpty) &&
+    if ((_opponentName == 'opponent_team_fallback'.tr() || _opponentName.isEmpty) &&
         widget.opponentId.isNotEmpty) {
       final t = await teamService.getTeam(widget.opponentId);
       if (t != null && mounted) setState(() => _opponentName = t.name);
@@ -227,7 +228,7 @@ class _PrivateMatchRoomScreenState extends State<PrivateMatchRoomScreen> {
       if (mounted && _isLoading) {
         setState(() {
           _isLoading = false;
-          _errorMessage = "Match not found";
+          _errorMessage = 'match_not_found_title'.tr();
         });
       }
       return;
@@ -249,7 +250,7 @@ class _PrivateMatchRoomScreenState extends State<PrivateMatchRoomScreen> {
       debugPrint("[PrivateMatchRoom] fetch error: $e");
       if (mounted && _messages.isEmpty) {
         setState(() {
-          _errorMessage = "Failed to load messages. Please tap refresh.";
+          _errorMessage = 'failed_load_messages'.tr();
         });
       }
     } finally {
@@ -324,8 +325,9 @@ class _PrivateMatchRoomScreenState extends State<PrivateMatchRoomScreen> {
       List<Map<String, dynamic>> a, List<Map<String, dynamic>> b) {
     if (a.length != b.length) return false;
     for (int i = 0; i < a.length; i++) {
-      if (a[i]["id"] != b[i]["id"] || a[i]["message"] != b[i]["message"])
+      if (a[i]["id"] != b[i]["id"] || a[i]["message"] != b[i]["message"]) {
         return false;
+      }
     }
     return true;
   }
@@ -412,7 +414,7 @@ class _PrivateMatchRoomScreenState extends State<PrivateMatchRoomScreen> {
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(
-                content: Text("Message bhejne me masla: $err2"),
+                content: Text('msg_send_error'.tr(args: [err2.toString()])),
                 backgroundColor: const Color(0xFFFF4655)),
           );
         }
@@ -467,9 +469,9 @@ class _PrivateMatchRoomScreenState extends State<PrivateMatchRoomScreen> {
             _isUploadingImage = false;
           });
           ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-                content: Text("Image upload fail ho gayi. Dobara try karen."),
-                backgroundColor: Color(0xFFFF4655)),
+            SnackBar(
+                content: Text('img_upload_failed'.tr()),
+                backgroundColor: const Color(0xFFFF4655)),
           );
         }
         return;
@@ -512,7 +514,7 @@ class _PrivateMatchRoomScreenState extends State<PrivateMatchRoomScreen> {
         setState(() => _isUploadingImage = false);
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-              content: Text("Photo bhejne me masla: $e"),
+              content: Text('photo_send_error'.tr(args: [e.toString()])),
               backgroundColor: const Color(0xFFFF4655)),
         );
       }
@@ -539,8 +541,8 @@ class _PrivateMatchRoomScreenState extends State<PrivateMatchRoomScreen> {
                     color: const Color(0xFF2A3447),
                     borderRadius: BorderRadius.circular(2)),
               ),
-              const Text("Screenshot ya Photo Bhejo 📸",
-                  style: TextStyle(
+              Text('send_screenshot_photo_title'.tr(),
+                  style: const TextStyle(
                       color: Colors.white,
                       fontWeight: FontWeight.bold,
                       fontSize: 16)),
@@ -551,7 +553,7 @@ class _PrivateMatchRoomScreenState extends State<PrivateMatchRoomScreen> {
                   _buildPickerOption(
                     icon: Icons.photo_library_rounded,
                     color: const Color(0xFF1877F2),
-                    label: "Gallery",
+                    label: 'gallery_label'.tr(),
                     onTap: () {
                       Navigator.pop(ctx);
                       _pickAndSendImage(ImageSource.gallery);
@@ -560,7 +562,7 @@ class _PrivateMatchRoomScreenState extends State<PrivateMatchRoomScreen> {
                   _buildPickerOption(
                     icon: Icons.camera_alt_rounded,
                     color: const Color(0xFF00FF88),
-                    label: "Camera",
+                    label: 'camera_label'.tr(),
                     onTap: () {
                       Navigator.pop(ctx);
                       _pickAndSendImage(ImageSource.camera);
@@ -617,9 +619,9 @@ class _PrivateMatchRoomScreenState extends State<PrivateMatchRoomScreen> {
       _fetchMessages(silent: true);
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-              content: Text("Message delete ho gaya"),
-              duration: Duration(seconds: 1)),
+          SnackBar(
+              content: Text('msg_deleted_success'.tr()),
+              duration: const Duration(seconds: 1)),
         );
       }
     } catch (e) {
@@ -633,27 +635,27 @@ class _PrivateMatchRoomScreenState extends State<PrivateMatchRoomScreen> {
       builder: (ctx) => AlertDialog(
         backgroundColor: const Color(0xFF131A29),
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-        title: const Row(
+        title: Row(
           children: [
-            Icon(Icons.delete_sweep_rounded,
+            const Icon(Icons.delete_sweep_rounded,
                 color: Color(0xFFFF4655), size: 22),
-            SizedBox(width: 8),
-            Text("Clear Chat?",
-                style: TextStyle(
+            const SizedBox(width: 8),
+            Text('clear_chat_title'.tr(),
+                style: const TextStyle(
                     color: Colors.white,
                     fontWeight: FontWeight.bold,
                     fontSize: 16)),
           ],
         ),
-        content: const Text(
-          "Kya aap is match ke tamam messages delete karna chahte hain? Dono teams ke liye chat clear ho jayegi.",
-          style: TextStyle(color: Color(0xFF8B949E), fontSize: 13),
+        content: Text(
+          'clear_chat_confirm_desc'.tr(),
+          style: const TextStyle(color: Color(0xFF8B949E), fontSize: 13),
         ),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(ctx),
-            child: const Text("Cancel",
-                style: TextStyle(color: Color(0xFF8B949E))),
+            child: Text('btn_cancel'.tr(),
+                style: const TextStyle(color: Color(0xFF8B949E))),
           ),
           ElevatedButton(
             onPressed: () async {
@@ -669,9 +671,9 @@ class _PrivateMatchRoomScreenState extends State<PrivateMatchRoomScreen> {
                     .eq("match_id", cleanId);
                 if (mounted) {
                   ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(
-                        content: Text("Chat clear ho gayi!"),
-                        backgroundColor: Color(0xFF2E7D32)),
+                    SnackBar(
+                        content: Text('chat_cleared_success'.tr()),
+                        backgroundColor: const Color(0xFF2E7D32)),
                   );
                 }
               } catch (e) {
@@ -683,8 +685,8 @@ class _PrivateMatchRoomScreenState extends State<PrivateMatchRoomScreen> {
                 foregroundColor: Colors.white,
                 shape: RoundedRectangleBorder(
                     borderRadius: BorderRadius.circular(8))),
-            child: const Text("CLEAR CHAT",
-                style: TextStyle(fontWeight: FontWeight.bold)),
+            child: Text('clear_chat_btn'.tr(),
+                style: const TextStyle(fontWeight: FontWeight.bold)),
           ),
         ],
       ),
@@ -717,22 +719,22 @@ class _PrivateMatchRoomScreenState extends State<PrivateMatchRoomScreen> {
             if (!isImage)
               ListTile(
                 leading: const Icon(Icons.copy_rounded, color: Colors.white70),
-                title: const Text("Copy Text",
-                    style: TextStyle(color: Colors.white)),
+                title: Text('copy_text_label'.tr(),
+                    style: const TextStyle(color: Colors.white)),
                 onTap: () {
                   Navigator.pop(ctx);
                   Clipboard.setData(ClipboardData(text: msgText));
-                  ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
-                      content: Text("Copied!"),
-                      duration: Duration(seconds: 1)));
+                  ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+                      content: Text('text_copied'.tr()),
+                      duration: const Duration(seconds: 1)));
                 },
               ),
             if (isMyTeam) ...[
               ListTile(
                 leading: const Icon(Icons.delete_outline_rounded,
                     color: Color(0xFFFF4655)),
-                title: const Text("Delete Message 🗑️",
-                    style: TextStyle(
+                title: Text('delete_msg_label'.tr(),
+                    style: const TextStyle(
                         color: Color(0xFFFF4655),
                         fontWeight: FontWeight.bold)),
                 onTap: () {
@@ -799,8 +801,8 @@ class _PrivateMatchRoomScreenState extends State<PrivateMatchRoomScreen> {
     final today = DateTime(now.year, now.month, now.day);
     final yesterday = today.subtract(const Duration(days: 1));
     final msgDate = DateTime(dt.year, dt.month, dt.day);
-    if (msgDate == today) return "Today";
-    if (msgDate == yesterday) return "Yesterday";
+    if (msgDate == today) return 'today_label'.tr();
+    if (msgDate == yesterday) return 'yesterday_label'.tr();
     return DateFormat("dd MMMM, yyyy").format(dt);
   }
 
@@ -822,9 +824,9 @@ class _PrivateMatchRoomScreenState extends State<PrivateMatchRoomScreen> {
 
       if (myUid == null || myUid.isEmpty) {
         if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
-              content: Text("Login required"),
-              backgroundColor: Color(0xFFFF4655)));
+          ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+              content: Text('login_required_error'.tr()),
+              backgroundColor: const Color(0xFFFF4655)));
         }
         return;
       }
@@ -845,9 +847,9 @@ class _PrivateMatchRoomScreenState extends State<PrivateMatchRoomScreen> {
 
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-              content: Text("✅ Room info save ho gayi!"),
-              backgroundColor: Color(0xFF2E7D32)),
+          SnackBar(
+              content: Text('room_info_saved'.tr()),
+              backgroundColor: const Color(0xFF2E7D32)),
         );
       }
     } catch (e) {
@@ -855,7 +857,7 @@ class _PrivateMatchRoomScreenState extends State<PrivateMatchRoomScreen> {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-              content: Text("Room info save nahi hui: $e"),
+              content: Text('room_info_save_failed'.tr(args: [e.toString()])),
               backgroundColor: const Color(0xFFFF4655)),
         );
       }
@@ -863,18 +865,19 @@ class _PrivateMatchRoomScreenState extends State<PrivateMatchRoomScreen> {
   }
 
   String _timeAgo(String? dateStr) {
-    if (dateStr == null || dateStr.isEmpty) return "recently";
+    if (dateStr == null || dateStr.isEmpty) return 'just_now_label'.tr();
     try {
       final dt = DateTime.parse(dateStr).toLocal();
       final diff = DateTime.now().difference(dt);
-      if (diff.inSeconds < 60) return "just now";
-      if (diff.inMinutes < 60) return "${diff.inMinutes} min ago";
-      if (diff.inHours < 24) return "${diff.inHours} hr ago";
-      if (diff.inDays < 7)
-        return "${diff.inDays} day${diff.inDays > 1 ? "s" : ""} ago";
+      if (diff.inSeconds < 60) return 'just_now_label'.tr();
+      if (diff.inMinutes < 60) return 'min_ago_label'.tr(args: [diff.inMinutes.toString()]);
+      if (diff.inHours < 24) return 'hr_ago_label'.tr(args: [diff.inHours.toString()]);
+      if (diff.inDays < 7) {
+        return 'days_ago_label'.tr(args: [diff.inDays.toString()]);
+      }
       return DateFormat("dd MMM, hh:mm a").format(dt);
     } catch (_) {
-      return "recently";
+      return 'just_now_label'.tr();
     }
   }
 
@@ -890,7 +893,7 @@ class _PrivateMatchRoomScreenState extends State<PrivateMatchRoomScreen> {
             icon: const Icon(Icons.arrow_back_ios_new_rounded, color: Colors.white, size: 20),
             onPressed: () => Navigator.pop(context),
           ),
-          title: const Text('Team DM', style: TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.bold)),
+          title: Text('team_dm_button'.tr(), style: const TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.bold)),
         ),
         body: Center(
           child: Padding(
@@ -900,21 +903,21 @@ class _PrivateMatchRoomScreenState extends State<PrivateMatchRoomScreen> {
               children: [
                 const Icon(Icons.error_outline_rounded, size: 48, color: Color(0xFFFF4655)),
                 const SizedBox(height: 12),
-                const Text(
-                  'Match not found',
-                  style: TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.bold),
+                Text(
+                  'match_not_found_title'.tr(),
+                  style: const TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.bold),
                 ),
                 const SizedBox(height: 8),
-                const Text(
-                  'Invalid ya missing match ID. Match private room load nahi ho saka.',
+                Text(
+                  'match_not_found_desc'.tr(),
                   textAlign: TextAlign.center,
-                  style: TextStyle(color: Color(0xFF8B949E), fontSize: 13),
+                  style: const TextStyle(color: Color(0xFF8B949E), fontSize: 13),
                 ),
                 const SizedBox(height: 16),
                 ElevatedButton(
                   style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF1877F2)),
                   onPressed: () => Navigator.pop(context),
-                  child: const Text('Go Back', style: TextStyle(color: Colors.white)),
+                  child: Text('go_back_btn'.tr(), style: const TextStyle(color: Colors.white)),
                 ),
               ],
             ),
@@ -923,7 +926,7 @@ class _PrivateMatchRoomScreenState extends State<PrivateMatchRoomScreen> {
       );
     }
 
-    final title = "$_myTeamName VS $_opponentName - Private Room";
+    final title = "$_myTeamName VS $_opponentName - ${'private_room_title'.tr()}";
     final myTeamUuid = SupabaseService.toUuid(widget.myTeamId).toLowerCase();
     final myTeamRaw = widget.myTeamId.toLowerCase();
     final oppUuid = SupabaseService.toUuid(widget.opponentId).toLowerCase();
@@ -949,8 +952,8 @@ class _PrivateMatchRoomScreenState extends State<PrivateMatchRoomScreen> {
                     fontSize: 15),
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis),
-            const Text("Private Room • UID / Password Share",
-                style: TextStyle(
+            Text('private_room_header_subtitle'.tr(),
+                style: const TextStyle(
                     color: Color(0xFFFFD600),
                     fontWeight: FontWeight.w600,
                     fontSize: 11)),
@@ -960,7 +963,7 @@ class _PrivateMatchRoomScreenState extends State<PrivateMatchRoomScreen> {
           IconButton(
             icon: const Icon(Icons.refresh_rounded,
                 color: Colors.white70, size: 20),
-            tooltip: "Refresh messages",
+            tooltip: 'refresh_chat_menu'.tr(),
             onPressed: () => _fetchMessages(silent: false),
           ),
           PopupMenuButton<String>(
@@ -977,28 +980,28 @@ class _PrivateMatchRoomScreenState extends State<PrivateMatchRoomScreen> {
               }
             },
             itemBuilder: (ctx) => [
-              const PopupMenuItem(
+              PopupMenuItem(
                 value: "refresh",
                 child: Row(
                   children: [
-                    Icon(Icons.refresh_rounded,
+                    const Icon(Icons.refresh_rounded,
                         color: Colors.white70, size: 18),
-                    SizedBox(width: 8),
-                    Text("Refresh Chat",
+                    const SizedBox(width: 8),
+                    Text('refresh_chat_menu'.tr(),
                         style:
-                            TextStyle(color: Colors.white, fontSize: 13)),
+                            const TextStyle(color: Colors.white, fontSize: 13)),
                   ],
                 ),
               ),
-              const PopupMenuItem(
+              PopupMenuItem(
                 value: "clear",
                 child: Row(
                   children: [
-                    Icon(Icons.delete_sweep_rounded,
+                    const Icon(Icons.delete_sweep_rounded,
                         color: Color(0xFFFF4655), size: 18),
-                    SizedBox(width: 8),
-                    Text("Clear Chat 🧹",
-                        style: TextStyle(
+                    const SizedBox(width: 8),
+                    Text('clear_chat_title'.tr(),
+                        style: const TextStyle(
                             color: Color(0xFFFF4655),
                             fontWeight: FontWeight.bold,
                             fontSize: 13)),
@@ -1013,22 +1016,20 @@ class _PrivateMatchRoomScreenState extends State<PrivateMatchRoomScreen> {
         children: [
           Column(
             children: [
-              // ============ Room Info Card REMOVED ============
-
               // Top info banner
               Container(
                 padding:
                     const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
                 color: const Color(0xFF131A29),
-                child: const Row(
+                child: Row(
                   children: [
-                    Icon(Icons.lock_rounded,
+                    const Icon(Icons.lock_rounded,
                         color: Color(0xFFFFD600), size: 14),
-                    SizedBox(width: 8),
+                    const SizedBox(width: 8),
                     Expanded(
                       child: Text(
-                          "Ye chat bilkul private hai dono teams ke darmiyan.",
-                          style: TextStyle(
+                          'private_chat_disclaimer'.tr(),
+                          style: const TextStyle(
                               color: Color(0xFF8B949E), fontSize: 11)),
                     ),
                   ],
@@ -1059,7 +1060,7 @@ class _PrivateMatchRoomScreenState extends State<PrivateMatchRoomScreen> {
                                   ElevatedButton.icon(
                                     style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF1877F2)),
                                     icon: const Icon(Icons.refresh_rounded, size: 16, color: Colors.white),
-                                    label: const Text('Retry', style: TextStyle(color: Colors.white)),
+                                    label: Text('btn_retry'.tr(), style: const TextStyle(color: Colors.white)),
                                     onPressed: () {
                                       setState(() {
                                         _isLoading = true;
@@ -1111,18 +1112,18 @@ class _PrivateMatchRoomScreenState extends State<PrivateMatchRoomScreen> {
                                                 size: 36),
                                           ),
                                           const SizedBox(height: 12),
-                                          const Text("No Messages Yet",
-                                              style: TextStyle(
+                                          Text('no_messages_yet_title'.tr(),
+                                              style: const TextStyle(
                                                   color: Colors.white,
                                                   fontWeight:
                                                       FontWeight.bold,
                                                   fontSize: 16)),
                                           const SizedBox(height: 4),
-                                          const Text(
-                                              "Opponent ke sath room ID, screenshot ya bat cheet shuru karen!",
+                                          Text(
+                                              'no_messages_yet_desc'.tr(),
                                               textAlign:
                                                   TextAlign.center,
-                                              style: TextStyle(
+                                              style: const TextStyle(
                                                   color:
                                                       Color(0xFF8B949E),
                                                   fontSize: 12)),
@@ -1332,13 +1333,13 @@ class _PrivateMatchRoomScreenState extends State<PrivateMatchRoomScreen> {
                                                                         msgText));
                                                             ScaffoldMessenger.of(
                                                                     context)
-                                                                .showSnackBar(const SnackBar(
+                                                                .showSnackBar(SnackBar(
                                                                     content: Text(
-                                                                        "Room UID & Pass Copied!"),
+                                                                        'room_uid_pass_copied'.tr()),
                                                                     backgroundColor:
-                                                                        Color(
+                                                                        const Color(
                                                                             0xFF1877F2),
-                                                                    duration: Duration(
+                                                                    duration: const Duration(
                                                                         seconds:
                                                                             2)));
                                                           },
@@ -1653,7 +1654,7 @@ class _PrivateMatchRoomScreenState extends State<PrivateMatchRoomScreen> {
                                 Icons.add_photo_alternate_rounded,
                                 color: Color(0xFFFFD600),
                                 size: 24),
-                        tooltip: "Screenshot / Photo",
+                        tooltip: 'send_screenshot_photo_title'.tr(),
                         onPressed:
                             _isUploadingImage ? null : _showImagePickerSheet,
                       ),
@@ -1669,12 +1670,12 @@ class _PrivateMatchRoomScreenState extends State<PrivateMatchRoomScreen> {
                             controller: _messageController,
                             style: const TextStyle(
                                 color: Colors.white, fontSize: 13.5),
-                            decoration: const InputDecoration(
-                                hintText: "Message likho...",
-                                hintStyle: TextStyle(
+                            decoration: InputDecoration(
+                                hintText: 'type_message_input_hint'.tr(),
+                                hintStyle: const TextStyle(
                                     color: Color(0xFF8B949E), fontSize: 13),
                                 border: InputBorder.none,
-                                contentPadding: EdgeInsets.symmetric(
+                                contentPadding: const EdgeInsets.symmetric(
                                     vertical: 10)),
                             onSubmitted: (val) => _sendMessage(val),
                           ),
@@ -1737,8 +1738,8 @@ class _PrivateMatchRoomScreenState extends State<PrivateMatchRoomScreen> {
                       const SizedBox(width: 6),
                       Text(
                         _newMessagesCountWhileScrolled > 0
-                            ? "Naya Message ($_newMessagesCountWhileScrolled)"
-                            : "Neeche Jao",
+                            ? 'new_messages_scroll_label'.tr(args: [_newMessagesCountWhileScrolled.toString()])
+                            : 'scroll_down_btn'.tr(),
                         style: const TextStyle(
                             color: Colors.white,
                             fontWeight: FontWeight.bold,
