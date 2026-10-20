@@ -2,6 +2,7 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:easy_localization/easy_localization.dart';
 import '../services/supabase_service.dart';
 import 'coin_or_ad_popup.dart';
 
@@ -93,7 +94,7 @@ class _EndMatchBottomSheetState extends State<EndMatchBottomSheet> {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text('Error selecting image: $e'),
+            content: Text('${'error_selecting_image'.tr()}: $e'),
             backgroundColor: const Color(0xFFFF4655),
           ),
         );
@@ -108,7 +109,6 @@ class _EndMatchBottomSheetState extends State<EndMatchBottomSheet> {
     required int addD,
     required int addPts,
   }) async {
-    // 1. Supabase teams table
     try {
       final tUuid = SupabaseService.toUuid(teamId);
       final res = await SupabaseService.client
@@ -141,7 +141,6 @@ class _EndMatchBottomSheetState extends State<EndMatchBottomSheet> {
     setState(() => _isSubmitting = true);
 
     try {
-      // ✅ NAYA: Proof upload limit check (max 3)
       int currentProofCount = 0;
       try {
         final matchRow = await SupabaseService.client
@@ -159,18 +158,16 @@ class _EndMatchBottomSheetState extends State<EndMatchBottomSheet> {
         if (mounted) {
           setState(() => _isSubmitting = false);
           ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-              content: Text(
-                  '❌ Aap 3 baar proof upload kar chuke ho. Aage upload nahi kar sakte.'),
-              backgroundColor: Color(0xFFFF4655),
-              duration: Duration(seconds: 5),
+            SnackBar(
+              content: Text('proof_limit_exceeded_error'.tr()),
+              backgroundColor: const Color(0xFFFF4655),
+              duration: const Duration(seconds: 5),
             ),
           );
         }
         return;
       }
 
-      // 1. Ensure bucket 'match_proofs' exists if possible
       try {
         await SupabaseService.client.storage.createBucket(
           'match_proofs',
@@ -178,7 +175,6 @@ class _EndMatchBottomSheetState extends State<EndMatchBottomSheet> {
         );
       } catch (_) {}
 
-      // 2. Upload image to 'match_proofs' with fallback to screenshots
       String? proofUrl;
       final timestamp = DateTime.now().millisecondsSinceEpoch;
       final fileName = '${widget.activeMatchId}_$timestamp.jpg';
@@ -201,7 +197,6 @@ class _EndMatchBottomSheetState extends State<EndMatchBottomSheet> {
         );
       }
 
-      // 3. Determine winner id
       final myUuid = SupabaseService.toUuid(widget.myTeamId);
       final opponentUuid = SupabaseService.toUuid(widget.opponentId);
       String? winnerTeamId;
@@ -210,10 +205,9 @@ class _EndMatchBottomSheetState extends State<EndMatchBottomSheet> {
       } else if (_selectedResult == 'loss') {
         winnerTeamId = opponentUuid;
       } else {
-        winnerTeamId = null; // draw
+        winnerTeamId = null;
       }
 
-      // 4. Update active_matches table in Supabase to under_review with proof_status pending
       try {
         await SupabaseService.client.from('active_matches').update({
           'status': 'under_review',
@@ -237,9 +231,6 @@ class _EndMatchBottomSheetState extends State<EndMatchBottomSheet> {
         }).eq('id', widget.activeMatchId);
       }
 
-      // Note: Team points update has been removed from user side as instructed.
-      // Points/Win/Loss are now verified and updated by Admin on Accept in Admin Panel.
-
       if (mounted) {
         Navigator.pop(context, true);
       }
@@ -249,7 +240,7 @@ class _EndMatchBottomSheetState extends State<EndMatchBottomSheet> {
         setState(() => _isSubmitting = false);
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text('Error submitting proof: $e'),
+            content: Text('${'error_submitting_proof'.tr()}: $e'),
             backgroundColor: const Color(0xFFFF4655),
           ),
         );
@@ -306,22 +297,22 @@ class _EndMatchBottomSheetState extends State<EndMatchBottomSheet> {
                   child: const Icon(Icons.military_tech_rounded, color: Color(0xFFFF4655), size: 24),
                 ),
                 const SizedBox(width: 12),
-                const Expanded(
+                Expanded(
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Text(
-                        'Match Khatam - Winning Proof',
-                        style: TextStyle(
+                        'match_end_proof_title'.tr(),
+                        style: const TextStyle(
                           color: Colors.white,
                           fontWeight: FontWeight.bold,
                           fontSize: 18,
                         ),
                       ),
-                      SizedBox(height: 2),
+                      const SizedBox(height: 2),
                       Text(
-                        'Match ka result aur screenshot submit karein',
-                        style: TextStyle(color: Color(0xFF8B949E), fontSize: 12),
+                        'match_end_proof_subtitle'.tr(),
+                        style: const TextStyle(color: Color(0xFF8B949E), fontSize: 12),
                       ),
                     ],
                   ),
@@ -331,32 +322,32 @@ class _EndMatchBottomSheetState extends State<EndMatchBottomSheet> {
             const SizedBox(height: 20),
 
             // Result selection label
-            const Text(
-              'Select Result (Nateeja):',
-              style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 14),
+            Text(
+              'select_result_heading'.tr(),
+              style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 14),
             ),
             const SizedBox(height: 10),
 
             // Radio options
             _buildResultOption(
-              label: 'We Won (Hum Jeete)',
-              sublabel: 'Winner +1 Win, +3 Points',
+              label: 'result_we_won'.tr(),
+              sublabel: 'result_we_won_sublabel'.tr(),
               value: 'win',
               color: const Color(0xFF00FF88),
               icon: Icons.emoji_events_rounded,
             ),
             const SizedBox(height: 8),
             _buildResultOption(
-              label: 'We Lost (Hum Hare)',
-              sublabel: 'Opponent +1 Win, +3 Points',
+              label: 'result_we_lost'.tr(),
+              sublabel: 'result_we_lost_sublabel'.tr(),
               value: 'loss',
               color: const Color(0xFFFF4655),
               icon: Icons.thumb_down_rounded,
             ),
             const SizedBox(height: 8),
             _buildResultOption(
-              label: 'Draw',
-              sublabel: 'Dono Teams +1 Draw, +1 Point',
+              label: 'result_draw'.tr(),
+              sublabel: 'result_draw_sublabel'.tr(),
               value: 'draw',
               color: const Color(0xFFFFB800),
               icon: Icons.handshake_rounded,
@@ -364,9 +355,9 @@ class _EndMatchBottomSheetState extends State<EndMatchBottomSheet> {
             const SizedBox(height: 20),
 
             // Upload proof screenshot section
-            const Text(
-              'Winning Proof Screenshot:',
-              style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 14),
+            Text(
+              'winning_proof_screenshot_label'.tr(),
+              style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 14),
             ),
             const SizedBox(height: 10),
 
@@ -393,14 +384,14 @@ class _EndMatchBottomSheetState extends State<EndMatchBottomSheet> {
                         child: const Icon(Icons.add_photo_alternate_rounded, color: Color(0xFF1877F2), size: 32),
                       ),
                       const SizedBox(height: 12),
-                      const Text(
-                        'Upload Proof Screenshot',
-                        style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 14),
+                      Text(
+                        'upload_proof_screenshot_box'.tr(),
+                        style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 14),
                       ),
                       const SizedBox(height: 4),
-                      const Text(
-                        'Scoreboard ya result screen ka screenshot select karein',
-                        style: TextStyle(color: Color(0xFF8B949E), fontSize: 11),
+                      Text(
+                        'scoreboard_screenshot_hint'.tr(),
+                        style: const TextStyle(color: Color(0xFF8B949E), fontSize: 11),
                         textAlign: TextAlign.center,
                       ),
                     ],
@@ -431,17 +422,17 @@ class _EndMatchBottomSheetState extends State<EndMatchBottomSheet> {
                     Row(
                       mainAxisAlignment: MainAxisAlignment.spaceBetween,
                       children: [
-                        const Row(
+                        Row(
                           children: [
-                            Icon(Icons.check_circle_rounded, color: Color(0xFF00FF88), size: 16),
-                            SizedBox(width: 6),
-                            Text('Screenshot Selected', style: TextStyle(color: Color(0xFF00FF88), fontSize: 12, fontWeight: FontWeight.bold)),
+                            const Icon(Icons.check_circle_rounded, color: Color(0xFF00FF88), size: 16),
+                            const SizedBox(width: 6),
+                            Text('screenshot_selected_label'.tr(), style: const TextStyle(color: Color(0xFF00FF88), fontSize: 12, fontWeight: FontWeight.bold)),
                           ],
                         ),
                         TextButton.icon(
                           onPressed: _isSubmitting ? null : _pickImage,
                           icon: const Icon(Icons.sync_rounded, size: 14, color: Colors.white70),
-                          label: const Text('Change', style: TextStyle(color: Colors.white70, fontSize: 12)),
+                          label: Text('btn_change'.tr(), style: const TextStyle(color: Colors.white70, fontSize: 12)),
                         ),
                       ],
                     ),
@@ -460,7 +451,7 @@ class _EndMatchBottomSheetState extends State<EndMatchBottomSheet> {
                     ? () async {
                         await CoinOrAdPopup.show(
                           context: context,
-                          actionName: 'Proof Upload',
+                          actionName: 'btn_upload_proof'.tr(),
                           onConfirm: _handleSubmit,
                         );
                       }
@@ -474,10 +465,10 @@ class _EndMatchBottomSheetState extends State<EndMatchBottomSheet> {
                   elevation: 0,
                 ),
                 child: _isSubmitting
-                    ? const Row(
+                    ? Row(
                         mainAxisAlignment: MainAxisAlignment.center,
                         children: [
-                          SizedBox(
+                          const SizedBox(
                             width: 18,
                             height: 18,
                             child: CircularProgressIndicator(
@@ -485,14 +476,14 @@ class _EndMatchBottomSheetState extends State<EndMatchBottomSheet> {
                               valueColor: AlwaysStoppedAnimation<Color>(Colors.black),
                             ),
                           ),
-                          SizedBox(width: 10),
-                          Text('Submitting Proof...', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14)),
+                          const SizedBox(width: 10),
+                          Text('submitting_proof_progress'.tr(), style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14)),
                         ],
                       )
                     : Text(
                         isLimitReached
-                            ? '❌ Proof Limit Reached (3/3)'
-                            : 'Submit Proof (Attempts: $_proofUploadCount/3)',
+                            ? 'proof_limit_reached_3_3'.tr()
+                            : 'submit_proof_attempts'.tr(args: ['$_proofUploadCount', '3']),
                         style: const TextStyle(
                             fontWeight: FontWeight.bold, fontSize: 14),
                       ),
