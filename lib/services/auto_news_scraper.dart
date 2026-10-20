@@ -8,6 +8,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import '../data/fallback_images.dart';
 import '../services/translation_service.dart';
 import '../services/supabase_store_service.dart';
+import 'package:easy_localization/easy_localization.dart';
 
 class RssSource {
   final String id;
@@ -55,11 +56,11 @@ class AutoNewsScraper {
   bool _isScraping = false;
   DateTime? _lastScrapeTime;
   int _lastScrapedCount = 0;
-  String _statusMessage = 'Idle';
+  String _statusMessage = 'scraper_status_idle';
 
   // ValueNotifier so UI in Admin Panel updates live
   final ValueNotifier<bool> isScrapingNotifier = ValueNotifier<bool>(false);
-  final ValueNotifier<String> statusNotifier = ValueNotifier<String>('Idle');
+  final ValueNotifier<String> statusNotifier = ValueNotifier<String>('scraper_status_idle');
   final ValueNotifier<DateTime?> lastScrapeTimeNotifier = ValueNotifier<DateTime?>(null);
   final ValueNotifier<int> lastScrapedCountNotifier = ValueNotifier<int>(0);
   final ValueNotifier<List<RssSource>> sourcesNotifier = ValueNotifier<List<RssSource>>([]);
@@ -304,7 +305,7 @@ class AutoNewsScraper {
     sourcesNotifier.value = List.from(defaultSources);
   }
 
-  Future<void> addSource({
+  Future<void> addSourceInstance({
     required String name,
     required String url,
     required String categoryHint,
@@ -348,7 +349,7 @@ class AutoNewsScraper {
 
     _isScraping = true;
     isScrapingNotifier.value = true;
-    _statusMessage = 'Scraping RSS sources...';
+    _statusMessage = 'scraper_status_scraping'.tr();
     statusNotifier.value = _statusMessage;
 
     int totalAdded = 0;
@@ -361,7 +362,7 @@ class AutoNewsScraper {
 
       for (final source in activeSources) {
         try {
-          _statusMessage = 'Fetching ${source.name}...';
+          _statusMessage = 'scraper_status_fetching'.tr(args: [source.name]);
           statusNotifier.value = _statusMessage;
 
           final items = await _fetchFeedItems(source.url);
@@ -430,11 +431,11 @@ class AutoNewsScraper {
       lastScrapedCountNotifier.value = _lastScrapedCount;
 
       _statusMessage = totalAdded > 0
-          ? 'Added $totalAdded new articles'
-          : 'Feeds checked. All up to date';
+          ? 'scraper_status_added_articles'.tr(args: ['$totalAdded'])
+          : 'scraper_status_up_to_date'.tr();
       statusNotifier.value = _statusMessage;
     } catch (e) {
-      _statusMessage = 'Scraping error: $e';
+      _statusMessage = 'scraper_status_error'.tr(args: ['$e']);
       statusNotifier.value = _statusMessage;
     } finally {
       _isScraping = false;
@@ -911,7 +912,7 @@ class AutoNewsScraper {
         'views': 0,
         'isFree': false,
         'isFeatured': false,
-        'timeAgo': 'Just now',
+        'timeAgo': 'time_just_now'.tr(),
         'sourceUrl': sourceUrl,
       }).timeout(const Duration(seconds: 4));
 
