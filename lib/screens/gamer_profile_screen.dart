@@ -1,16 +1,37 @@
 // ===============================================================================
 // GAMER PROFILE SCREEN — With eSports 500/1000 Coins Team Eligibility Badges
-// + Full Localization (.tr())
+// + Multi-Language Live Translation Sync via LanguageService
+// + Adaptive Dark & Light Mode + 100% Clean Compilation
+// -------------------------------------------------------------------------------
+// File: lib/screens/gamer_profile_screen.dart
 // ===============================================================================
 
-import 'package:flutter/material.dart';
+import 'dart:async';
 import 'package:easy_localization/easy_localization.dart' hide TextDirection;
+import 'dart:io';
+import 'package:flutter/material.dart';
+import 'package:image_picker/image_picker.dart';
+import 'package:cached_network_image/cached_network_image.dart';
+import 'package:intl/intl.dart';
 import 'package:share_plus/share_plus.dart';
-import '../services/gamer_auth_service.dart';
-import '../services/theme_service.dart';
+import '../constants/gamer_theme.dart';
 import '../models/gamer_user_model.dart';
-import 'create_gamer_id_screen.dart';
+import '../services/theme_service.dart';
+import '../services/gamer_auth_service.dart';
+import '../services/gamer_social_service.dart';
+import '../services/supabase_service.dart';
+import '../services/language_service.dart';
 import '../widgets/gamer_avatar.dart';
+import '../widgets/rank_badge_widget.dart';
+import '../services/profile_service.dart';
+import '../services/block_service.dart';
+import '../widgets/posts_tab.dart';
+import 'create_gamer_id_screen.dart';
+import 'followers_following_screen.dart';
+import 'gamer_auth_screen.dart';
+import 'profile_screen.dart';
+import 'blocked_users_screen.dart';
+import '../widgets/coin_history_sheet.dart';
 
 class GamerProfileScreen extends StatefulWidget {
   final String? userId;
@@ -21,383 +42,270 @@ class GamerProfileScreen extends StatefulWidget {
   State<GamerProfileScreen> createState() => _GamerProfileScreenState();
 }
 
-class _GamerProfileScreenState extends State<GamerProfileScreen> {
-  final GamerAuthService _auth = GamerAuthService();
-  bool _isLoading = true;
-  GamerUser? _profileUser;
-  bool _isOwnProfile = false;
+class _GamerProfileScreenState extends State<GamerProfileScreen>
+    with SingleTickerProviderStateMixin {
+  late TabController _tabController;
+  final GamerAuthService _authService = GamerAuthService();
+  final BlockService _blockService = BlockService();
+
+  bool _isBlockedByMe = false;
+  bool _isBlockedByThem = false;
+
+  GamerUser? _cachedUser;
+  bool _initialFetchDone = false;
+  Timer? _refreshTimer;
 
   @override
   void initState() {
     super.initState();
-    _loadProfile();
+    _tabController = TabController(length: 2, vsync: this);
+    _checkBlockStatus();
+    _prefetchCurrentUser();
+
+    GamerAuthService().currentGamerNotifier.addListener(_onGamerChanged);
+
+    _refreshTimer = Timer.periodic(const Duration(seconds: 10), (_) {
+      _refreshSilently();
+    });
   }
 
-  Future<void> _loadProfile() async {
-    setState(() => _isLoading = true);
+  void _onGamerChanged() {
+    if (!mounted) return;
+    final updated = GamerAuthService().currentGamer;
+    if (updated != null) {
+      setState(() {
+        _cachedUser = updated;
+      });
+    }
+  }
 
-    final currentUid = _auth.currentGamer?.uid ?? _auth.currentUid;
-
-    if (widget.userId == null || widget.userId == currentUid) {
-      _isOwnProfile = true;
-      if (_auth.currentGamer != null) {
-        _profileUser = _auth.currentGamer;
-      } else {
-        _profileUser = await _auth.refreshCurrentGamer();
+  Future<void> _refreshSilently() async {
+    if (!mounted) return;
+    final uid = widget.userId ?? (_authService.currentUid ?? '');
+    if (uid.isEmpty) return;
+    try {
+      final user = await _fetchGamerFromSupabase(uid);
+      if (user != null && mounted) {
+        setState(() {
+          _cachedUser = user;
+        });
       }
-    } else {
-      _isOwnProfile = false;
-      _profileUser = await _auth.getGamerProfile(widget.userId!);
-    }
-
-    if (mounted) {
-      setState(() => _isLoading = false);
-    }
-  }
-
-  void _shareProfile(GamerUser user) {
-    final shareText = '''
-🎮 Gamers ID Profile: ${user.displayName} (@${user.username})
-🏆 Main Game: ${user.favoriteGame}
-🎯 Rank: ${user.gameRank}
-💰 G-Coins: ${user.coins}
-
-Gamers ID App par mujhe follow karein!
-Download: https://play.google.com/store/apps/details?id=com.gamersid.app
-''';
-    Share.share(shareText.trim(), subject: 'Gamers ID - ${user.displayName}');
+    } catch (_) {}
   }
 
   @override
-  Widget build(BuildContext context) {
-    return ValueListenableBuilder<ThemeMode>(
-      valueListenable: ThemeService.themeModeNotifier,
-      builder: (context, _, __) {
-        return Scaffold(
-          backgroundColor: ThemeService.bg,
-          appBar: AppBar(
-            backgroundColor: ThemeService.appBarBg,
-            elevation: 0,
-            title: Text(
-              _isOwnProfile ? 'my_profile'.tr() : 'user_profile'.tr(),
-              style: TextStyle(
-                color: ThemeService.textPrimary,
-                fontWeight: FontWeight.bold,
-                fontSize: 20,
-              ),
-            ),
-            actions: [
-              if (_profileUser != null)
-                IconButton(
-                  icon: const Icon(Icons.share_outlined, color: Color(0xFF1877F2)),
-                  tooltip: 'share_profile'.tr(),
-                  onPressed: () => _shareProfile(_profileUser!),
-                ),
-              const SizedBox(width: 8),
-            ],
-          ),
-          body: _isLoading
-              ? const Center(child: CircularProgressIndicator())
-              : _profileUser == null
-                  ? _buildEmptyProfile()
-                  : RefreshIndicator(
-                      onRefresh: _loadProfile,
-                      child: SingleChildScrollView(
-                        physics: const AlwaysScrollableScrollPhysics(),
-                        child: Column(
-                          children: [
-                            _buildProfileHeader(_profileUser!),
-                            const SizedBox(height: 16),
-                            _buildStatsCard(_profileUser!),
-                            const SizedBox(height: 16),
-                            _buildGameDetailsCard(_profileUser!),
-                            const SizedBox(height: 16),
-                            _buildTeamEligibilityCard(_profileUser!),
-                            const SizedBox(height: 30),
-                          ],
-                        ),
-                      ),
-                    ),
-        );
-      },
-    );
+  void dispose() {
+    GamerAuthService().currentGamerNotifier.removeListener(_onGamerChanged);
+    _refreshTimer?.cancel();
+    _tabController.dispose();
+    super.dispose();
   }
 
-  Widget _buildEmptyProfile() {
-    return Center(
-      child: Padding(
-        padding: const EdgeInsets.all(24),
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Icon(Icons.person_off_outlined, size: 64, color: ThemeService.textSecondary.withOpacity(0.5)),
-            const SizedBox(height: 16),
-            Text(
-              'gamer_id_not_found'.tr(),
-              style: TextStyle(color: ThemeService.textPrimary, fontSize: 18, fontWeight: FontWeight.bold),
-            ),
-            const SizedBox(height: 8),
-            Text(
-              'Gamer ID not created yet.',
-              textAlign: TextAlign.center,
-              style: TextStyle(color: ThemeService.textSecondary, fontSize: 14),
-            ),
-            const SizedBox(height: 20),
-            if (_isOwnProfile)
-              ElevatedButton.icon(
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: const Color(0xFF1877F2),
-                  foregroundColor: Colors.white,
-                  padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-                ),
-                icon: const Icon(Icons.add),
-                label: Text('create_your_gamer_id'.tr()),
-                onPressed: () {
-                  Navigator.of(context).push(
-                    MaterialPageRoute(builder: (_) => const CreateGamerIdScreen()),
-                  ).then((_) => _loadProfile());
-                },
-              ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _buildProfileHeader(GamerUser user) {
-    return Container(
-      color: ThemeService.card,
-      padding: const EdgeInsets.symmetric(vertical: 24, horizontal: 16),
-      child: Column(
-        children: [
-          GamerAvatar(
-            photoUrl: user.avatarUrl,
-            displayName: user.displayName,
-            radius: 46,
-            showBorder: true,
-            borderColor: const Color(0xFF1877F2),
-          ),
-          const SizedBox(height: 12),
-          Row(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              Text(
-                user.displayName,
-                style: TextStyle(
-                  color: ThemeService.textPrimary,
-                  fontSize: 20,
-                  fontWeight: FontWeight.bold,
-                ),
-              ),
-              if (user.isVerified) ...[
-                const SizedBox(width: 6),
-                const Icon(Icons.verified, color: Color(0xFF1877F2), size: 18),
-              ],
-            ],
-          ),
-          const SizedBox(height: 4),
-          Text(
-            '@${user.username}',
-            style: TextStyle(color: ThemeService.textSecondary, fontSize: 14),
-          ),
-          if (user.bio.isNotEmpty) ...[
-            const SizedBox(height: 12),
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 20),
-              child: Text(
-                user.bio,
-                textAlign: TextAlign.center,
-                style: TextStyle(color: ThemeService.textPrimary, fontSize: 14),
-              ),
-            ),
-          ],
-          const SizedBox(height: 18),
-          if (_isOwnProfile)
-            ElevatedButton.icon(
-              style: ElevatedButton.styleFrom(
-                backgroundColor: ThemeService.cardSecondary,
-                foregroundColor: ThemeService.textPrimary,
-                elevation: 0,
-                side: BorderSide(color: ThemeService.border),
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-                padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 10),
-              ),
-              icon: const Icon(Icons.edit_outlined, size: 18),
-              label: Text('edit_profile'.tr(), style: const TextStyle(fontWeight: FontWeight.bold)),
-              onPressed: () {
-                Navigator.of(context).push(
-                  MaterialPageRoute(builder: (_) => const CreateGamerIdScreen(isEditing: true)),
-                ).then((_) => _loadProfile());
-              },
-            ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildStatsCard(GamerUser user) {
-    return Container(
-      margin: const EdgeInsets.symmetric(horizontal: 16),
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: ThemeService.card,
-        borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: ThemeService.border),
-      ),
-      child: Row(
-        mainAxisAlignment: MainAxisAlignment.spaceAround,
-        children: [
-          _buildStatItem('G-Coins', '${user.coins}', Icons.monetization_on, Colors.amber),
-          _buildDivider(),
-          _buildStatItem('Rank', user.gameRank, Icons.military_tech, const Color(0xFF1877F2)),
-          _buildDivider(),
-          _buildStatItem('Followers', '${user.followersCount}', Icons.people_outline, Colors.green),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildStatItem(String label, String value, IconData icon, Color color) {
-    return Column(
-      children: [
-        Icon(icon, color: color, size: 24),
-        const SizedBox(height: 6),
-        Text(
-          value,
-          style: TextStyle(
-            color: ThemeService.textPrimary,
-            fontSize: 16,
-            fontWeight: FontWeight.bold,
-          ),
-        ),
-        const SizedBox(height: 2),
-        Text(
-          label,
-          style: TextStyle(color: ThemeService.textSecondary, fontSize: 12),
-        ),
-      ],
-    );
-  }
-
-  Widget _buildDivider() {
-    return Container(
-      height: 36,
-      width: 1,
-      color: ThemeService.border,
-    );
-  }
-
-  Widget _buildGameDetailsCard(GamerUser user) {
-    return Container(
-      margin: const EdgeInsets.symmetric(horizontal: 16),
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: ThemeService.card,
-        borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: ThemeService.border),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(
-            'Game Details',
-            style: TextStyle(
-              color: ThemeService.textPrimary,
-              fontSize: 16,
-              fontWeight: FontWeight.bold,
-            ),
-          ),
-          const SizedBox(height: 14),
-          _buildDetailRow('main_game'.tr(), user.favoriteGame),
-          const SizedBox(height: 10),
-          _buildDetailRow('game_uid'.tr(), user.gameUid.isNotEmpty ? user.gameUid : '---'),
-          const SizedBox(height: 10),
-          _buildDetailRow('In-Game Name', user.inGameName.isNotEmpty ? user.inGameName : '---'),
-          const SizedBox(height: 10),
-          _buildDetailRow('Rank Tier', user.gameRank),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildDetailRow(String label, String value) {
-    return Row(
-      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-      children: [
-        Text(label, style: TextStyle(color: ThemeService.textSecondary, fontSize: 14)),
-        Text(
-          value,
-          style: TextStyle(
-            color: ThemeService.textPrimary,
-            fontSize: 14,
-            fontWeight: FontWeight.bold,
-          ),
-        ),
-      ],
-    );
-  }
-
-  Widget _buildTeamEligibilityCard(GamerUser user) {
-    final isLeaderEligible = user.coins >= 1000;
-    final isMemberEligible = user.coins >= 500;
-
-    Color badgeColor;
-    String badgeText;
-    IconData badgeIcon;
-
-    if (isLeaderEligible) {
-      badgeColor = Colors.green;
-      badgeText = 'esports_leader_eligible'.tr();
-      badgeIcon = Icons.shield_rounded;
-    } else if (isMemberEligible) {
-      badgeColor = Colors.amber;
-      badgeText = 'esports_member_eligible'.tr();
-      badgeIcon = Icons.shield_outlined;
-    } else {
-      badgeColor = Colors.red;
-      badgeText = 'esports_ineligible'.tr();
-      badgeIcon = Icons.warning_amber_rounded;
+  Future<void> _prefetchCurrentUser() async {
+    final uid = widget.userId ?? (_authService.currentUid ?? '');
+    if (uid.isEmpty) {
+      if (mounted) setState(() => _initialFetchDone = true);
+      return;
     }
 
+    final user = await _fetchGamerFromSupabase(uid);
+    if (!mounted) return;
+    setState(() {
+      _cachedUser = user;
+      _initialFetchDone = true;
+    });
+  }
+
+  Future<void> _checkBlockStatus() async {
+    final currentUid = _authService.currentUid ?? '';
+    final targetUid = widget.userId ?? currentUid;
+    if (currentUid.isEmpty || currentUid == targetUid) return;
+
+    final blocked = await _blockService.isBlocked(
+        currentUid: currentUid, targetUid: targetUid);
+    final blockedBy = await _blockService.isBlockedBy(
+        currentUid: currentUid, targetUid: targetUid);
+    if (!mounted) return;
+    setState(() {
+      _isBlockedByMe = blocked;
+      _isBlockedByThem = blockedBy;
+    });
+  }
+
+  Future<GamerUser?> _fetchGamerFromSupabase(String userId) async {
+    if (userId.isEmpty) return null;
+    try {
+      final row = await SupabaseService.client
+          .from('users')
+          .select()
+          .or('id.eq.$userId,uid.eq.$userId')
+          .maybeSingle();
+
+      if (row != null) {
+        return GamerUser.fromMap(row, userId);
+      }
+    } catch (e) {
+      debugPrint('[GamerProfile] Fetch error: $e');
+    }
+    return null;
+  }
+
+  void _shareProfile(GamerUser user) {
+    final displayName = user.displayName.isNotEmpty ? user.displayName : user.username;
+    final game = user.favoriteGame.isNotEmpty ? user.favoriteGame : 'BGMI';
+
+    final bool hasValidRank = user.isRankApproved &&
+        user.rank.isNotEmpty &&
+        user.rank.toLowerCase() != 'none' &&
+        user.rank.toLowerCase() != 'skip';
+    final String rankText = hasValidRank ? ' | Rank: ${user.rank}' : '';
+
+    final bio = user.bio.trim();
+    final String bioText = bio.isNotEmpty ? '\n💬 "$bio"' : '';
+
+    const String appLink = 'https://play.google.com/store/apps/details?id=com.gameskhabar.gamersid';
+
+    final String shareMessage = '''
+🔥 Check out $displayName on Gamers ID!
+
+🎮 Handle: @${user.username}
+🎯 Game: $game$rankText
+📊 Stats: ${user.followersCount} Followers • ${user.postsCount} Posts$bioText
+
+⚔️ Mujhe custom rooms aur 1v1 matches mein challenge karein!
+📲 Download Gamers ID App:
+👉 $appLink
+'''.trim();
+
+    Share.share(
+      shareMessage,
+      subject: 'Follow $displayName on Gamers ID',
+    );
+  }
+
+  Widget _buildStatColumn(String count, String label, VoidCallback? onTap) {
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(8),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+        child: Column(
+          children: [
+            Text(
+              count,
+              style: TextStyle(
+                color: ThemeService.textPrimary,
+                fontWeight: FontWeight.w900,
+                fontSize: 18,
+              ),
+            ),
+            const SizedBox(height: 2),
+            Text(
+              label,
+              style: TextStyle(
+                color: ThemeService.textSecondary,
+                fontSize: 12,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  /// ✅ eSports Team Eligibility Badge (1,000 / 500 Coins Rule)
+  Widget _buildTeamEligibilityCard(int coins) {
+    final isLeaderEligible = coins >= 1000;
+    final isMemberEligible = coins >= 500;
+
+    final Color badgeColor = isLeaderEligible
+        ? const Color(0xFF00FF88)
+        : isMemberEligible
+            ? const Color(0xFFFFB800)
+            : const Color(0xFFFF4655);
+
+    final String title = isLeaderEligible
+        ? (LanguageService.isUrdu ? 'اہل: ٹیم لیڈر اور ممبر' : 'Leader & Member Eligible')
+        : isMemberEligible
+            ? (LanguageService.isUrdu ? 'اہل: صرف ٹیم ممبر' : 'Team Member Eligible')
+            : (LanguageService.isUrdu ? 'نااہل: کم بیلنس (<500)' : 'Not Eligible for Teams');
+
+    final String subtitle = isLeaderEligible
+        ? (LanguageService.isUrdu
+            ? 'آپ ٹیم بنا سکتے ہیں اور میچز میں حصہ لے سکتے ہیں۔'
+            : 'Can create teams and play tournaments.')
+        : isMemberEligible
+            ? (LanguageService.isUrdu
+                ? 'ٹیم میں شامل ہو سکتے ہیں؛ نئی ٹیم بنانے کے لیے 1,000 کوائنز درکار ہیں۔'
+                : 'Can join teams. Need 1,000 coins to create a team.')
+            : (LanguageService.isUrdu
+                ? 'ٹیم میں شامل ہونے یا رہنے کے لیے کم از کم 500 کوائنز درکار ہیں۔'
+                : 'Need 500+ coins to join or maintain team membership.');
+
+    final IconData icon = isLeaderEligible
+        ? Icons.verified_user_rounded
+        : isMemberEligible
+            ? Icons.shield_outlined
+            : Icons.warning_amber_rounded;
+
     return Container(
-      margin: const EdgeInsets.symmetric(horizontal: 16),
-      padding: const EdgeInsets.all(16),
+      width: double.infinity,
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
       decoration: BoxDecoration(
-        color: ThemeService.card,
-        borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: badgeColor.withOpacity(0.4)),
+        color: badgeColor.withOpacity(0.08),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: badgeColor.withOpacity(0.4), width: 1.2),
       ),
       child: Row(
         children: [
           Container(
-            padding: const EdgeInsets.all(10),
+            padding: const EdgeInsets.all(7),
             decoration: BoxDecoration(
-              color: badgeColor.withOpacity(0.15),
+              color: badgeColor.withOpacity(0.18),
               shape: BoxShape.circle,
             ),
-            child: Icon(badgeIcon, color: badgeColor, size: 24),
+            child: Icon(icon, color: badgeColor, size: 20),
           ),
-          const SizedBox(width: 14),
+          const SizedBox(width: 12),
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(
-                  'esports_team_status'.tr(),
-                  style: TextStyle(
-                    color: ThemeService.textPrimary,
-                    fontSize: 14,
-                    fontWeight: FontWeight.bold,
-                  ),
+                Row(
+                  children: [
+                    Text(
+                      title,
+                      style: TextStyle(
+                        color: badgeColor,
+                        fontWeight: FontWeight.w900,
+                        fontSize: 12.5,
+                      ),
+                    ),
+                    const Spacer(),
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                      decoration: BoxDecoration(
+                        color: badgeColor.withOpacity(0.2),
+                        borderRadius: BorderRadius.circular(6),
+                      ),
+                      child: Text(
+                        'coins_count_label'.tr(args: ['$coins']),
+                        style: TextStyle(
+                          color: badgeColor,
+                          fontSize: 10,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                    ),
+                  ],
                 ),
-                const SizedBox(height: 3),
+                const SizedBox(height: 2),
                 Text(
-                  badgeText,
+                  subtitle,
                   style: TextStyle(
-                    color: badgeColor,
-                    fontSize: 12,
-                    fontWeight: FontWeight.w600,
+                    color: ThemeService.textSecondary,
+                    fontSize: 11,
                   ),
                 ),
               ],
@@ -407,4 +315,386 @@ Download: https://play.google.com/store/apps/details?id=com.gamersid.app
       ),
     );
   }
+
+  @override
+  Widget build(BuildContext context) {
+    final currentUid = _authService.currentUid ?? '';
+    final targetUid = widget.userId ?? currentUid;
+    final isOwnProfile = currentUid == targetUid;
+
+    return ValueListenableBuilder<ThemeMode>(
+      valueListenable: ThemeService.themeModeNotifier,
+      builder: (context, _, __) {
+        return ValueListenableBuilder<String>(
+          valueListenable: LanguageService.currentLanguage,
+          builder: (context, langCode, _) {
+            if (!isOwnProfile && _isBlockedByThem) {
+              return Scaffold(
+                backgroundColor: ThemeService.bg,
+                appBar: AppBar(
+                  backgroundColor: ThemeService.appBarBg,
+                  elevation: 1,
+                  iconTheme: IconThemeData(color: ThemeService.textPrimary),
+                ),
+                body: Center(
+                  child: Text(
+                    'This profile isn\'t available right now.',
+                    style: TextStyle(color: ThemeService.textSecondary, fontSize: 13),
+                  ),
+                ),
+              );
+            }
+
+            if (_cachedUser == null) {
+              if (!_initialFetchDone) {
+                return Scaffold(
+                  backgroundColor: ThemeService.bg,
+                  body: const Center(child: CircularProgressIndicator(color: Color(0xFF1877F2))),
+                );
+              }
+
+              return Scaffold(
+                backgroundColor: ThemeService.bg,
+                appBar: AppBar(
+                  backgroundColor: ThemeService.appBarBg,
+                  elevation: 1,
+                  title: Text(LanguageService.t('Profile')),
+                ),
+                body: Center(
+                  child: isOwnProfile
+                      ? ElevatedButton(
+                          onPressed: () {
+                            Navigator.of(context).push(
+                              MaterialPageRoute(builder: (_) => const CreateGamerIdScreen()),
+                            );
+                          },
+                          child: const Text('create_your_gamer_id'.tr()),
+                        )
+                      : Text('gamer_id_not_found'.tr(), style: TextStyle(color: ThemeService.textPrimary)),
+                ),
+              );
+            }
+
+            final user = _cachedUser!;
+            final gameColor = GamerTheme.gameColors[user.favoriteGame] ?? const Color(0xFF1877F2);
+            final gameEmoji = GamerTheme.gameEmojis[user.favoriteGame] ?? '🎮';
+
+            return Scaffold(
+              backgroundColor: ThemeService.bg,
+              body: NestedScrollView(
+                headerSliverBuilder: (context, innerBoxIsScrolled) {
+                  return [
+                    SliverAppBar(
+                      expandedHeight: 250,
+                      pinned: true,
+                      backgroundColor: ThemeService.card,
+                      elevation: 1,
+                      automaticallyImplyLeading: !isOwnProfile,
+                      iconTheme: IconThemeData(color: ThemeService.textPrimary),
+                      actions: [
+                        if (isOwnProfile)
+                          IconButton(
+                            icon: Icon(Icons.settings_rounded, color: ThemeService.textSecondary),
+                            onPressed: () {
+                              Navigator.of(context).push(
+                                MaterialPageRoute(builder: (_) => const ProfileScreen()),
+                              );
+                            },
+                          ),
+                      ],
+                      flexibleSpace: FlexibleSpaceBar(
+                        background: Stack(
+                          clipBehavior: Clip.none,
+                          children: [
+                            Container(
+                              height: 175,
+                              width: double.infinity,
+                              decoration: BoxDecoration(color: ThemeService.cardSecondary),
+                              child: CachedNetworkImage(
+                                imageUrl: user.coverUrl.isNotEmpty
+                                    ? user.coverUrl
+                                    : 'https://images.unsplash.com/photo-1542751371-adc38448a05e?w=1200&auto=format&fit=crop&q=80',
+                                fit: BoxFit.cover,
+                              ),
+                            ),
+                            Positioned(
+                              top: 129,
+                              left: 20,
+                              child: Container(
+                                decoration: BoxDecoration(
+                                  shape: BoxShape.circle,
+                                  border: Border.all(color: ThemeService.card, width: 4),
+                                ),
+                                child: GamerAvatar(
+                                  key: ValueKey('avatar_${user.uid}_${user.photoUrl}'),
+                                  photoUrl: user.photoUrl,
+                                  displayName: user.displayName,
+                                  radius: 46,
+                                  borderColor: Colors.transparent,
+                                  frameId: user.activeFrame,
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                    SliverToBoxAdapter(
+                      child: Padding(
+                        padding: const EdgeInsets.fromLTRB(20, 8, 20, 12),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Row(
+                              children: [
+                                Flexible(
+                                  child: Text(
+                                    user.displayName,
+                                    style: TextStyle(
+                                      color: ThemeService.textPrimary,
+                                      fontSize: 22,
+                                      fontWeight: FontWeight.w900,
+                                    ),
+                                    overflow: TextOverflow.ellipsis,
+                                  ),
+                                ),
+                                if (user.hasBlueTick) ...[
+                                  const SizedBox(width: 5),
+                                  const Icon(Icons.verified, color: Color(0xFF1877F2), size: 18),
+                                ],
+                              ],
+                            ),
+                            const SizedBox(height: 2),
+                            Text(
+                              '@${user.username}',
+                              style: TextStyle(
+                                color: ThemeService.textSecondary,
+                                fontSize: 14,
+                                fontWeight: FontWeight.w700,
+                              ),
+                            ),
+                            if (user.bio.isNotEmpty) ...[
+                              const SizedBox(height: 10),
+                              Text(
+                                user.bio,
+                                style: TextStyle(
+                                  color: ThemeService.textPrimary,
+                                  fontSize: 13.5,
+                                  height: 1.35,
+                                ),
+                              ),
+                            ],
+
+                            const SizedBox(height: 14),
+
+                            // ✅ eSports Team Eligibility Card
+                            _buildTeamEligibilityCard(user.coins),
+
+                            const SizedBox(height: 14),
+
+                            Container(
+                              padding: const EdgeInsets.symmetric(vertical: 12),
+                              decoration: BoxDecoration(
+                                color: ThemeService.card,
+                                borderRadius: BorderRadius.circular(12),
+                                border: Border.all(color: ThemeService.border),
+                              ),
+                              child: Row(
+                                mainAxisAlignment: MainAxisAlignment.spaceAround,
+                                children: [
+                                  _buildStatColumn('${user.postsCount}', LanguageService.t('Post'), () {
+                                    _tabController.animateTo(0);
+                                  }),
+                                  Container(height: 24, width: 1, color: ThemeService.border),
+                                  _buildStatColumn('${user.followersCount}', 'Followers', () {
+                                    Navigator.of(context).push(
+                                      MaterialPageRoute(
+                                        builder: (_) => FollowersFollowingScreen(
+                                          userId: user.uid,
+                                          displayName: user.displayName,
+                                          initialTabIndex: 0,
+                                        ),
+                                      ),
+                                    );
+                                  }),
+                                  Container(height: 24, width: 1, color: ThemeService.border),
+                                  _buildStatColumn('${user.followingCount}', 'Following', () {
+                                    Navigator.of(context).push(
+                                      MaterialPageRoute(
+                                        builder: (_) => FollowersFollowingScreen(
+                                          userId: user.uid,
+                                          displayName: user.displayName,
+                                          initialTabIndex: 1,
+                                        ),
+                                      ),
+                                    );
+                                  }),
+                                ],
+                              ),
+                            ),
+                            const SizedBox(height: 16),
+                            Row(
+                              children: [
+                                if (isOwnProfile) ...[
+                                  Expanded(
+                                    child: ElevatedButton.icon(
+                                      style: ElevatedButton.styleFrom(
+                                        backgroundColor: const Color(0xFF1877F2),
+                                        foregroundColor: Colors.white,
+                                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                                        padding: const EdgeInsets.symmetric(vertical: 12),
+                                      ),
+                                      icon: const Icon(Icons.edit_rounded, size: 18),
+                                      label: Text('edit_profile'.tr(), style: TextStyle(fontWeight: FontWeight.bold)),
+                                      onPressed: () async {
+                                        await Navigator.of(context).push(
+                                          MaterialPageRoute(
+                                            builder: (_) => CreateGamerIdScreen(
+                                              isEditing: true,
+                                              existingUser: user,
+                                            ),
+                                          ),
+                                        );
+                                        _refreshSilently();
+                                      },
+                                    ),
+                                  ),
+                                  const SizedBox(width: 8),
+                                  OutlinedButton.icon(
+                                    style: OutlinedButton.styleFrom(
+                                      backgroundColor: ThemeService.cardSecondary,
+                                      foregroundColor: ThemeService.textPrimary,
+                                      side: BorderSide(color: ThemeService.border),
+                                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                                      padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 14),
+                                    ),
+                                    icon: Icon(Icons.share_rounded, size: 18, color: ThemeService.textSecondary),
+                                    label: Text(LanguageService.t('Share'), style: const TextStyle(fontWeight: FontWeight.bold)),
+                                    onPressed: () => _shareProfile(user),
+                                  ),
+                                ] else ...[
+                                  Expanded(
+                                    child: ElevatedButton.icon(
+                                      style: ElevatedButton.styleFrom(
+                                        backgroundColor: const Color(0xFF1877F2),
+                                        foregroundColor: Colors.white,
+                                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                                        padding: const EdgeInsets.symmetric(vertical: 12),
+                                      ),
+                                      icon: const Icon(Icons.share_rounded, size: 16),
+                                      label: Text('share_profile'.tr(), style: TextStyle(fontWeight: FontWeight.bold)),
+                                      onPressed: () => _shareProfile(user),
+                                    ),
+                                  ),
+                                ],
+                              ],
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                    SliverPersistentHeader(
+                      pinned: true,
+                      delegate: _SliverTabBarDelegate(
+                        TabBar(
+                          controller: _tabController,
+                          indicatorColor: const Color(0xFF1877F2),
+                          indicatorWeight: 3,
+                          labelColor: const Color(0xFF1877F2),
+                          unselectedLabelColor: ThemeService.textSecondary,
+                          tabs: const [
+                            Tab(icon: Icon(Icons.grid_view_rounded, size: 18), text: 'Posts'),
+                            Tab(icon: Icon(Icons.info_outline_rounded, size: 18), text: 'About'),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ];
+                },
+                body: TabBarView(
+                  controller: _tabController,
+                  children: [
+                    PostsTab(user: user, isOwnProfile: isOwnProfile),
+                    SingleChildScrollView(
+                      padding: const EdgeInsets.all(20),
+                      child: Column(
+                        children: [
+                          ListTile(
+                            leading: const Icon(Icons.sports_esports, color: Color(0xFF1877F2)),
+                            title: const Text('main_game'.tr()),
+                            subtitle: Text('$gameEmoji ${user.favoriteGame}'),
+                          ),
+                          if (user.gameId.isNotEmpty)
+                            ListTile(
+                              leading: const Icon(Icons.tag, color: Color(0xFF1877F2)),
+                              title: const Text('game_uid'.tr()),
+                              subtitle: Text(user.gameId),
+                            ),
+                          ListTile(
+                            leading: const Icon(Icons.monetization_on, color: Color(0xFFFFD700)),
+                            title: const Text('g_coins'.tr()),
+                            subtitle: Text('coins_count_label'.tr(args: ['${user.coins}'])),
+                            trailing: const Icon(Icons.history_rounded, size: 20),
+                            onTap: () {
+                              showModalBottomSheet(
+                                context: context,
+                                isScrollControlled: true,
+                                backgroundColor: Colors.transparent,
+                                builder: (_) => CoinHistorySheet(userId: user.uid),
+                              );
+                            },
+                          ),
+                          ListTile(
+                            leading: Icon(
+                              user.coins >= 1000
+                                  ? Icons.verified_user_rounded
+                                  : user.coins >= 500
+                                      ? Icons.shield_outlined
+                                      : Icons.warning_amber_rounded,
+                              color: user.coins >= 1000
+                                  ? const Color(0xFF00FF88)
+                                  : user.coins >= 500
+                                      ? const Color(0xFFFFB800)
+                                      : const Color(0xFFFF4655),
+                            ),
+                            title: Text('esports_team_status'.tr()),
+                            subtitle: Text(
+                              user.coins >= 1000
+                                  ? 'esports_leader_eligible'.tr()
+                                  : user.coins >= 500
+                                      ? 'esports_member_eligible'.tr()
+                                      : 'esports_ineligible'.tr(),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            );
+          },
+        );
+      },
+    );
+  }
+}
+
+class _SliverTabBarDelegate extends SliverPersistentHeaderDelegate {
+  final TabBar tabBar;
+  _SliverTabBarDelegate(this.tabBar);
+
+  @override
+  double get minExtent => tabBar.preferredSize.height;
+
+  @override
+  double get maxExtent => tabBar.preferredSize.height;
+
+  @override
+  Widget build(BuildContext context, double shrinkOffset, bool overlapsContent) {
+    return Container(color: ThemeService.card, child: tabBar);
+  }
+
+  @override
+  bool shouldRebuild(covariant _SliverTabBarDelegate oldDelegate) => true;
 }
