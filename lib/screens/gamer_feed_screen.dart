@@ -1,11 +1,12 @@
 // ===============================================================================
-// GAMER FEED SCREEN — Adaptive Day & Night Mode + Full easy_localization (.tr())
+// EXACT DIFF — Full Adaptive Day & Night Mode Support for GamerFeedScreen
+// + Updated App Branding to "Gamers ID" + Full Localization (.tr())
 // -------------------------------------------------------------------------------
 // File: lib/screens/gamer_feed_screen.dart
 // ===============================================================================
 
 import 'package:flutter/material.dart';
-import 'package:easy_localization/easy_localization.dart';
+import 'package:easy_localization/easy_localization.dart' hide TextDirection;
 import 'package:share_plus/share_plus.dart';
 import '../services/supabase_service.dart';
 import 'gamer_profile_screen.dart';
@@ -14,7 +15,6 @@ import '../services/notification_service.dart';
 import 'notifications_screen.dart';
 import '../widgets/gamer_avatar.dart';
 import '../services/theme_service.dart';
-import '../utils/post_translator.dart';
 
 class GamerFeedScreen extends StatefulWidget {
   const GamerFeedScreen({super.key});
@@ -191,16 +191,16 @@ class _GamerFeedScreenState extends State<GamerFeedScreen> {
         setState(() => isLoading = false);
         final errText = e.toString();
         final snackMsg = errText.contains('521')
-            ? 'err_server_unavailable'.tr()
+            ? 'Server temporarily unavailable (521). Please retry.'
             : (errText.contains('PGRST200')
-                ? 'err_db_schema_updated'.tr()
-                : 'err_could_not_load_feed'.tr(args: [e.toString()]));
+                ? 'Database schema updated. Retrying feed...'
+                : 'Could not load feed: $e');
 
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text(snackMsg),
             duration: const Duration(seconds: 4),
-            action: SnackBarAction(label: 'retry'.tr(), onPressed: _loadFeed),
+            action: SnackBarAction(label: 'Retry', onPressed: _loadFeed),
           ),
         );
       }
@@ -210,7 +210,7 @@ class _GamerFeedScreenState extends State<GamerFeedScreen> {
   void _openUserProfile(String userId, String username) {
     if (userId.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('err_user_not_found'.tr())),
+        SnackBar(content: Text('user_not_found'.tr())),
       );
       return;
     }
@@ -292,8 +292,8 @@ class _GamerFeedScreenState extends State<GamerFeedScreen> {
           post['likes_count'] = previousLikes;
         });
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('err_could_not_update_like'.tr()),
+          const SnackBar(
+            content: Text('Could not update like. Try again.'),
             backgroundColor: Colors.red,
           ),
         );
@@ -308,15 +308,15 @@ class _GamerFeedScreenState extends State<GamerFeedScreen> {
     final username = userProfile?['username'] ?? post['username'] ?? 'Gamer';
 
     final shareText = '''
-🎮 ${'share_post_header'.tr(args: [username])}
+🎮 Gamers ID - $username ki post
 
 "$content"
 
-👤 ${'label_posted_by'.tr()}: $username
+👤 Posted by: $username
 
-🔥 ${'share_post_cta'.tr()}
+🔥 Dekho aur bhi gaming updates Gamers ID App par!
 
-📲 ${'share_download_app'.tr()}:
+📲 Download App:
 https://play.google.com/store/apps/details?id=com.gamersid.app
 
 #GamersID #PUBG #BGMI #FreeFire #Esports
@@ -367,8 +367,8 @@ https://play.google.com/store/apps/details?id=com.gamersid.app
       builder: (c) => AlertDialog(
         backgroundColor: ThemeService.card,
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-        title: Text('report_post_dialog_title'.tr(), style: TextStyle(color: ThemeService.textPrimary, fontWeight: FontWeight.bold)),
-        content: Text('report_post_dialog_content'.tr(), style: TextStyle(color: ThemeService.textSecondary)),
+        title: Text('report_post_q'.tr(), style: TextStyle(color: ThemeService.textPrimary, fontWeight: FontWeight.bold)),
+        content: Text('confirm_report_post_desc'.tr(), style: TextStyle(color: ThemeService.textSecondary)),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(c, false),
@@ -377,7 +377,7 @@ https://play.google.com/store/apps/details?id=com.gamersid.app
           ElevatedButton(
             style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
             onPressed: () => Navigator.pop(c, true),
-            child: Text('btn_report'.tr(), style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+            child: Text('report'.tr(), style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
           ),
         ],
       ),
@@ -401,8 +401,8 @@ https://play.google.com/store/apps/details?id=com.gamersid.app
 
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('msg_post_reported_success'.tr()),
+          const SnackBar(
+            content: Text('✅ Post report ho gayi — Admin review karega'),
             backgroundColor: Colors.green,
           ),
         );
@@ -412,7 +412,7 @@ https://play.google.com/store/apps/details?id=com.gamersid.app
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text('err_report_failed'.tr(args: [e.toString()])),
+            content: Text('Report failed: $e'),
             backgroundColor: Colors.red,
           ),
         );
@@ -447,7 +447,7 @@ https://play.google.com/store/apps/details?id=com.gamersid.app
               ListTile(
                 leading: const Icon(Icons.delete_outline, color: Colors.red),
                 title: Text(
-                  'btn_delete_post'.tr(),
+                  'delete_post'.tr(),
                   style: const TextStyle(color: Colors.red, fontWeight: FontWeight.bold),
                 ),
                 onTap: () async {
@@ -457,8 +457,8 @@ https://play.google.com/store/apps/details?id=com.gamersid.app
                     builder: (c) => AlertDialog(
                       backgroundColor: ThemeService.card,
                       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-                      title: Text('delete_post_dialog_title'.tr(), style: TextStyle(color: ThemeService.textPrimary, fontWeight: FontWeight.bold)),
-                      content: Text('delete_post_dialog_content'.tr(), style: TextStyle(color: ThemeService.textSecondary)),
+                      title: Text('delete_post_q'.tr(), style: TextStyle(color: ThemeService.textPrimary, fontWeight: FontWeight.bold)),
+                      content: Text('confirm_delete_post_desc'.tr(), style: TextStyle(color: ThemeService.textSecondary)),
                       actions: [
                         TextButton(
                           onPressed: () => Navigator.pop(c, false),
@@ -498,7 +498,7 @@ https://play.google.com/store/apps/details?id=com.gamersid.app
                     } catch (e) {
                       if (mounted) {
                         ScaffoldMessenger.of(context).showSnackBar(
-                          SnackBar(content: Text('err_delete_failed'.tr(args: [e.toString()])), backgroundColor: Colors.red),
+                          SnackBar(content: Text('Delete failed: $e'), backgroundColor: Colors.red),
                         );
                       }
                     }
@@ -508,7 +508,7 @@ https://play.google.com/store/apps/details?id=com.gamersid.app
             ] else ...[
               ListTile(
                 leading: Icon(Icons.flag_outlined, color: ThemeService.textSecondary),
-                title: Text('btn_report_post'.tr(), style: TextStyle(color: ThemeService.textPrimary, fontWeight: FontWeight.w600)),
+                title: Text('report_post'.tr(), style: TextStyle(color: ThemeService.textPrimary, fontWeight: FontWeight.w600)),
                 onTap: () {
                   final targetPost = posts.firstWhere(
                     (p) => p['id'].toString() == postId,
@@ -589,8 +589,8 @@ https://play.google.com/store/apps/details?id=com.gamersid.app
 
                               if (currentUserId.isEmpty || !_uuidRegex.hasMatch(currentUserId)) {
                                 ScaffoldMessenger.of(context).showSnackBar(
-                                  SnackBar(
-                                    content: Text('err_login_required_post'.tr()),
+                                  const SnackBar(
+                                    content: Text('Cannot post: user not logged in properly.'),
                                     backgroundColor: Colors.red,
                                   ),
                                 );
@@ -615,7 +615,7 @@ https://play.google.com/store/apps/details?id=com.gamersid.app
                                 if (mounted) {
                                   ScaffoldMessenger.of(context).showSnackBar(
                                     SnackBar(
-                                      content: Text('msg_post_published'.tr()),
+                                      content: Text('msg_post_created'.tr()),
                                       backgroundColor: const Color(0xFF1877F2),
                                     ),
                                   );
@@ -629,7 +629,7 @@ https://play.google.com/store/apps/details?id=com.gamersid.app
                                 if (mounted) {
                                   ScaffoldMessenger.of(context).showSnackBar(
                                     SnackBar(
-                                      content: Text('err_publish_failed'.tr(args: [e.toString()])),
+                                      content: Text('Failed to create post: $e'),
                                       backgroundColor: Colors.red,
                                     ),
                                   );
@@ -645,7 +645,7 @@ https://play.google.com/store/apps/details?id=com.gamersid.app
                                 color: Colors.white,
                               ),
                             )
-                          : Text('btn_post'.tr(), style: const TextStyle(fontWeight: FontWeight.bold)),
+                          : Text('post'.tr(), style: const TextStyle(fontWeight: FontWeight.bold)),
                     ),
                   ],
                 ),
@@ -657,7 +657,7 @@ https://play.google.com/store/apps/details?id=com.gamersid.app
                   minLines: 3,
                   style: TextStyle(color: ThemeService.textPrimary, fontSize: 16),
                   decoration: InputDecoration(
-                    hintText: 'hint_whats_on_your_mind'.tr(),
+                    hintText: 'whats_on_your_mind'.tr(),
                     hintStyle: TextStyle(color: ThemeService.textSecondary, fontSize: 16),
                     border: InputBorder.none,
                   ),
@@ -681,10 +681,10 @@ https://play.google.com/store/apps/details?id=com.gamersid.app
     if (dt == null) return 'time_just_now'.tr();
 
     final diff = DateTime.now().difference(dt);
-    if (diff.inSeconds < 60) return 'time_just_now'.tr();
-    if (diff.inMinutes < 60) return '${diff.inMinutes}m';
-    if (diff.inHours < 24) return '${diff.inHours}h';
-    if (diff.inDays < 7) return '${diff.inDays}d';
+    if (diff.inSeconds < 60) return 'time_now'.tr();
+    if (diff.inMinutes < 60) return 'time_minutes_ago'.tr(args: ['${diff.inMinutes}']);
+    if (diff.inHours < 24) return 'time_hours_ago'.tr(args: ['${diff.inHours}']);
+    if (diff.inDays < 7) return 'time_days_ago'.tr(args: ['${diff.inDays}']);
     return '${dt.day}/${dt.month}/${dt.year}';
   }
 
@@ -698,9 +698,9 @@ https://play.google.com/store/apps/details?id=com.gamersid.app
           appBar: AppBar(
             backgroundColor: ThemeService.appBarBg,
             elevation: ThemeService.isDarkMode ? 0 : 1,
-            title: Text(
-              'app_name'.tr(),
-              style: const TextStyle(
+            title: const Text(
+              'Gamers ID',
+              style: TextStyle(
                 color: Color(0xFF1877F2),
                 fontWeight: FontWeight.bold,
                 fontSize: 22,
@@ -710,7 +710,7 @@ https://play.google.com/store/apps/details?id=com.gamersid.app
               IconButton(
                 icon: const Icon(Icons.search_rounded,
                     color: Color(0xFF1877F2), size: 26),
-                tooltip: 'tooltip_search_gamers'.tr(),
+                tooltip: 'search_gamers'.tr(),
                 onPressed: () {
                   Navigator.of(context).push(
                     MaterialPageRoute(
@@ -723,7 +723,7 @@ https://play.google.com/store/apps/details?id=com.gamersid.app
                 valueListenable: NotificationService().unreadCountNotifier,
                 builder: (context, unreadCount, _) {
                   return IconButton(
-                    tooltip: 'tooltip_notifications'.tr(),
+                    tooltip: 'activity_and_notifications'.tr(),
                     icon: Badge(
                       isLabelVisible: unreadCount > 0,
                       label: Text(
@@ -791,7 +791,7 @@ https://play.google.com/store/apps/details?id=com.gamersid.app
                                         borderRadius: BorderRadius.circular(20),
                                       ),
                                       child: Text(
-                                        'hint_whats_on_your_mind'.tr(),
+                                        'whats_on_your_mind'.tr(),
                                         style: TextStyle(color: ThemeService.textSecondary, fontSize: 14),
                                       ),
                                     ),
@@ -861,19 +861,13 @@ https://play.google.com/store/apps/details?id=com.gamersid.app
                             if (content.isNotEmpty)
                               Padding(
                                 padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
-                                child: FutureBuilder<String>(
-                                  future: PostTranslator.translatePost(content, context.locale.languageCode),
-                                  builder: (context, snapshot) {
-                                    final displayText = snapshot.hasData ? snapshot.data! : content;
-                                    return Text(
-                                      displayText,
-                                      style: TextStyle(
-                                        fontSize: 15,
-                                        color: ThemeService.textPrimary,
-                                        height: 1.3,
-                                      ),
-                                    );
-                                  },
+                                child: Text(
+                                  content,
+                                  style: TextStyle(
+                                    fontSize: 15,
+                                    color: ThemeService.textPrimary,
+                                    height: 1.3,
+                                  ),
                                 ),
                               ),
                             if (imageUrl.isNotEmpty)
@@ -909,7 +903,7 @@ https://play.google.com/store/apps/details?id=com.gamersid.app
                                     ],
                                   ),
                                   Text(
-                                    'comments_count'.tr(args: ['$commentsCount']),
+                                    'comments'.tr() + ' ($commentsCount)',
                                     style: TextStyle(fontSize: 13, color: ThemeService.textSecondary),
                                   ),
                                 ],
@@ -933,7 +927,7 @@ https://play.google.com/store/apps/details?id=com.gamersid.app
                                           ),
                                           const SizedBox(width: 6),
                                           Text(
-                                            'btn_like'.tr(),
+                                            'like'.tr(),
                                             style: TextStyle(
                                               color: isLiked ? const Color(0xFF1877F2) : ThemeService.textSecondary,
                                               fontWeight: isLiked ? FontWeight.bold : FontWeight.normal,
@@ -955,7 +949,7 @@ https://play.google.com/store/apps/details?id=com.gamersid.app
                                         children: [
                                           Icon(Icons.chat_bubble_outline, size: 18, color: ThemeService.textSecondary),
                                           const SizedBox(width: 6),
-                                          Text('btn_comment'.tr(), style: TextStyle(color: ThemeService.textSecondary, fontSize: 13)),
+                                          Text('comment'.tr(), style: TextStyle(color: ThemeService.textSecondary, fontSize: 13)),
                                         ],
                                       ),
                                     ),
@@ -971,7 +965,7 @@ https://play.google.com/store/apps/details?id=com.gamersid.app
                                         children: [
                                           Icon(Icons.share_outlined, size: 18, color: ThemeService.textSecondary),
                                           const SizedBox(width: 6),
-                                          Text('btn_share'.tr(), style: TextStyle(color: ThemeService.textSecondary, fontSize: 13)),
+                                          Text('share'.tr(), style: TextStyle(color: ThemeService.textSecondary, fontSize: 13)),
                                         ],
                                       ),
                                     ),
@@ -1149,7 +1143,7 @@ class _CommentSheetState extends State<CommentSheet> {
       debugPrint('Comment insert error: $e');
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('err_could_not_post_comment'.tr(args: [e.toString()]))),
+          SnackBar(content: Text('Could not post comment: $e')),
         );
       }
     } finally {
@@ -1163,8 +1157,8 @@ class _CommentSheetState extends State<CommentSheet> {
       builder: (c) => AlertDialog(
         backgroundColor: ThemeService.card,
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-        title: Text('report_comment_dialog_title'.tr(), style: TextStyle(color: ThemeService.textPrimary, fontWeight: FontWeight.bold)),
-        content: Text('report_comment_dialog_content'.tr(), style: TextStyle(color: ThemeService.textSecondary)),
+        title: Text('report_comment_q'.tr(), style: TextStyle(color: ThemeService.textPrimary, fontWeight: FontWeight.bold)),
+        content: Text('confirm_report_comment_desc'.tr(), style: TextStyle(color: ThemeService.textSecondary)),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(c, false),
@@ -1173,7 +1167,7 @@ class _CommentSheetState extends State<CommentSheet> {
           ElevatedButton(
             style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
             onPressed: () => Navigator.pop(c, true),
-            child: Text('btn_report'.tr(), style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+            child: Text('report'.tr(), style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
           ),
         ],
       ),
@@ -1197,8 +1191,8 @@ class _CommentSheetState extends State<CommentSheet> {
 
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('msg_comment_reported_success'.tr()),
+          const SnackBar(
+            content: Text('✅ Comment report ho gayi — Admin review karega'),
             backgroundColor: Colors.green,
           ),
         );
@@ -1208,7 +1202,7 @@ class _CommentSheetState extends State<CommentSheet> {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text('err_report_failed'.tr(args: [e.toString()])),
+            content: Text('Report failed: $e'),
             backgroundColor: Colors.red,
           ),
         );
@@ -1250,7 +1244,7 @@ class _CommentSheetState extends State<CommentSheet> {
               ListTile(
                 leading: const Icon(Icons.delete_outline, color: Colors.red),
                 title: Text(
-                  'btn_delete_comment'.tr(),
+                  'delete_comment'.tr(),
                   style: const TextStyle(color: Colors.red, fontWeight: FontWeight.bold),
                 ),
                 onTap: () async {
@@ -1276,7 +1270,7 @@ class _CommentSheetState extends State<CommentSheet> {
             ] else ...[
               ListTile(
                 leading: Icon(Icons.flag_outlined, color: ThemeService.textSecondary),
-                title: Text('btn_report_comment'.tr(), style: TextStyle(color: ThemeService.textPrimary, fontWeight: FontWeight.w600)),
+                title: Text('report_comment'.tr(), style: TextStyle(color: ThemeService.textPrimary, fontWeight: FontWeight.w600)),
                 onTap: () {
                   Navigator.pop(ctx);
                   final commentId = (comment['id'] ?? '').toString();
@@ -1318,7 +1312,7 @@ class _CommentSheetState extends State<CommentSheet> {
                   ),
                   const SizedBox(height: 12),
                   Text(
-                    'sheet_comments_title'.tr(),
+                    'comments'.tr(),
                     style: TextStyle(
                       fontWeight: FontWeight.bold,
                       fontSize: 16,
@@ -1332,7 +1326,7 @@ class _CommentSheetState extends State<CommentSheet> {
                         : comments.isEmpty
                             ? Center(
                                 child: Text(
-                                  'no_comments_yet'.tr(),
+                                  'no_comments_be_first'.tr(),
                                   style: TextStyle(color: ThemeService.textSecondary),
                                 ),
                               )
@@ -1400,7 +1394,7 @@ class _CommentSheetState extends State<CommentSheet> {
                             enabled: !_isPosting,
                             style: TextStyle(color: ThemeService.textPrimary),
                             decoration: InputDecoration(
-                              hintText: 'hint_write_comment'.tr(),
+                              hintText: 'write_comment_hint'.tr(),
                               hintStyle: TextStyle(color: ThemeService.textSecondary),
                               filled: true,
                               fillColor: ThemeService.cardSecondary,
